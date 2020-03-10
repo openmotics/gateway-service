@@ -28,9 +28,10 @@ def toolbox_session():
 @fixture
 def toolbox(toolbox_session):
     toolbox = toolbox_session
+    toolbox.tester.get('/plugins/syslog_receiver/reset', success=False)
     yield toolbox
     try:
-        data = toolbox.tester.get('/plugins/syslog_receiver/logs')
+        data = toolbox.tester.get('/plugins/syslog_receiver/logs', success=False)
         for log in data['logs']:
             print(log)
     except Exception:
