@@ -22,6 +22,9 @@ from hypothesis.strategies import booleans, composite, integers, just, one_of
 
 logger = logging.getLogger('openmotics')
 
+DEFAULT_OUTPUT_CONFIG = {'timer': 2**16 - 1}
+DEFAULT_INPUT_CONFIG = {'invert': 255}
+
 
 @composite
 def next_input(draw):
@@ -51,13 +54,13 @@ def test_actions(toolbox, next_input, next_output, output_status):
     input_id, output_id = (next_input(toolbox), next_output(toolbox))
     logger.info('input action i#{} to o#{}, expect event {} -> {}'.format(input_id, output_id, not output_status, output_status))
 
-    input_config = json.dumps({'id': input_id, 'action': output_id, 'invert': 255})
-    toolbox.dut.get('/set_input_configuration', {'config': input_config})
+    input_config = {'id': input_id, 'action': output_id}
+    input_config.update(DEFAULT_INPUT_CONFIG)
+    toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
 
     # NOTE ensure output status _after_ input configuration, changing
     # inputs can impact the output status for some reason.
-    output_config = {'timer': 2**16 - 1}
-    toolbox.ensure_output(output_id, not output_status, output_config)
+    toolbox.ensure_output(output_id, not output_status, DEFAULT_OUTPUT_CONFIG)
 
     toolbox.press_input(input_id)
     toolbox.assert_output_changed(output_id, output_status)
@@ -71,13 +74,13 @@ def test_motion_sensor(toolbox, next_input, next_output, output_status):
 
     logger.info('motion sensor i#{} to o#{}, expect event {} -> {} after 2m30s'.format(input_id, output_id, output_status, not output_status))
     actions = ['195', str(output_id)]  # output timeout of 2m30s
-    input_config = json.dumps({'id': input_id, 'basic_actions': ','.join(actions), 'action': 240, 'invert': 255})
-    toolbox.dut.get('/set_input_configuration', {'config': input_config})
+    input_config = {'id': input_id, 'basic_actions': ','.join(actions), 'action': 240}
+    input_config.update(DEFAULT_INPUT_CONFIG)
+    toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
 
     # NOTE ensure output status _after_ input configuration, changing
     # inputs can impact the output status for some reason.
-    output_config = {'timer': 2**16 - 1}
-    toolbox.ensure_output(output_id, not output_status, output_config)
+    toolbox.ensure_output(output_id, not output_status, DEFAULT_OUTPUT_CONFIG)
 
     toolbox.press_input(input_id)
     toolbox.assert_output_changed(output_id, output_status)
@@ -92,16 +95,16 @@ def test_group_action_toggle(toolbox, next_input, next_output, group_action_id, 
     logger.info('group action a#{} for i#{} to o#{} o#{}, expect event {} -> {}'.format(group_action_id, input_id, output_id, other_output_id, not output_status, output_status))
 
     actions = ['2', str(group_action_id)]
-    input_config = json.dumps({'id': input_id, 'basic_actions': ','.join(actions), 'action': 240, 'invert': 255})
-    toolbox.dut.get('/set_input_configuration', {'config': input_config})
+    input_config = {'id': input_id, 'basic_actions': ','.join(actions), 'action': 240}
+    input_config.update(DEFAULT_INPUT_CONFIG)
+    toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
 
     actions = ['162', str(output_id), '162', str(other_output_id)]  # toggle both outputs
     config = {'id': group_action_id, 'actions': ','.join(actions)}
     toolbox.dut.get('/set_group_action_configuration', params={'config': json.dumps(config)})
 
-    output_config = {'type': 0, 'timer': 2**16 - 1}
-    toolbox.ensure_output(output_id, not output_status, output_config)
-    toolbox.ensure_output(other_output_id, not output_status, output_config)
+    toolbox.ensure_output(output_id, not output_status, DEFAULT_OUTPUT_CONFIG)
+    toolbox.ensure_output(other_output_id, not output_status, DEFAULT_OUTPUT_CONFIG)
 
     toolbox.press_input(input_id)
     toolbox.assert_output_changed(output_id, output_status)

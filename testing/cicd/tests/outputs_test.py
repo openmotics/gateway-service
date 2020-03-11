@@ -22,6 +22,9 @@ from hypothesis.strategies import booleans, composite, integers, just, one_of
 
 logger = logging.getLogger('openmotics')
 
+DEFAULT_OUTPUT_CONFIG = {'type': 0, 'timer': 2**16 - 1}
+DEFAULT_LIGHT_CONFIG = {'type': 255, 'timer': 2**16 - 1}
+
 
 @composite
 def next_output(draw):
@@ -39,8 +42,7 @@ def next_output(draw):
 def test_events(toolbox, next_output, output_status):
     output_id = next_output(toolbox)
     logger.info('output status o#{}, expect event {} -> {}'.format(output_id, not output_status, output_status))
-    output_config = {'type': 0, 'timer': 2**16 - 1}
-    toolbox.ensure_output(output_id, not output_status, output_config)
+    toolbox.ensure_output(output_id, not output_status, DEFAULT_OUTPUT_CONFIG)
 
     toolbox.set_output(output_id, output_status)
     toolbox.assert_output_changed(output_id, output_status)
@@ -51,8 +53,7 @@ def test_events(toolbox, next_output, output_status):
 def test_status(toolbox, next_output, previous_output_status, output_status):
     output_id = next_output(toolbox)
     logger.info('output status o#{}, expect status {} -> {}'.format(output_id, previous_output_status, output_status))
-    output_config = {'type': 0, 'timer': 2**16 - 1}
-    toolbox.configure_output(output_id, output_config)
+    toolbox.configure_output(output_id, DEFAULT_OUTPUT_CONFIG)
 
     toolbox.set_output(output_id, previous_output_status)
     time.sleep(2)
@@ -65,12 +66,12 @@ def test_status(toolbox, next_output, previous_output_status, output_status):
 def test_timers(toolbox, next_output, output_status):
     output_id = next_output(toolbox)
     logger.info('output timer o#{}, expect event {} -> {}'.format(output_id, output_status, not output_status))
-    output_config = {'type': 0, 'timer': 10}  # FIXME: event reordering with timer of <2s
+    output_config = {'type': 0, 'timer': 5}  # FIXME: event reordering with timer of <2s
     toolbox.ensure_output(output_id, False, output_config)
 
     toolbox.set_output(output_id, output_status)
     toolbox.assert_output_changed(output_id, output_status)
-    toolbox.assert_output_changed(output_id, not output_status, between=(8, 12))
+    toolbox.assert_output_changed(output_id, not output_status, between=(3, 7))
 
 
 @pytest.mark.smoke
@@ -79,11 +80,14 @@ def test_floor_lights(toolbox, next_output, floor_id, output_status):
     light_id, other_light_id, other_output_id = (next_output(toolbox), next_output(toolbox), next_output(toolbox))
     logger.info('light o#{} on floor {}, expect event {} -> {}'.format(light_id, floor_id, not output_status, output_status))
 
-    output_config = {'type': 255, 'floor': floor_id, 'timer': 2**16 - 1}
+    output_config = {'floor': floor_id}
+    output_config.update(DEFAULT_LIGHT_CONFIG)
     toolbox.ensure_output(light_id, not output_status, output_config)
-    output_config = {'type': 255, 'floor': 255, 'timer': 2**16 - 1}  # no floor
+    output_config = {'floor': 255}  # no floor
+    output_config.update(DEFAULT_LIGHT_CONFIG)
     toolbox.ensure_output(other_light_id, not output_status, output_config)
-    output_config = {'type': 0, 'floor': floor_id, 'timer': 2**16 - 1}  # not a light
+    output_config = {'floor': floor_id}
+    output_config.update(DEFAULT_OUTPUT_CONFIG)  # not a light
     toolbox.ensure_output(other_output_id, not output_status, output_config)
     time.sleep(2)
 
@@ -112,9 +116,8 @@ def test_group_action_toggle(toolbox, next_output, group_action_id, output_statu
     toolbox.dut.get('/set_group_action_configuration', params={'config': json.dumps(config)})
     time.sleep(2)
 
-    output_config = {'type': 0, 'timer': 2**16 - 1}
-    toolbox.ensure_output(output_id, not output_status, output_config)
-    toolbox.ensure_output(other_output_id, not output_status, output_config)
+    toolbox.ensure_output(output_id, not output_status, DEFAULT_OUTPUT_CONFIG)
+    toolbox.ensure_output(other_output_id, not output_status, DEFAULT_OUTPUT_CONFIG)
 
     toolbox.dut.get('/do_group_action', {'group_action_id': group_action_id})
     toolbox.assert_output_changed(output_id, output_status)
