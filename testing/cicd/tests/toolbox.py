@@ -73,7 +73,7 @@ class Client(object):
                     assert data['success'], 'content={}'.format(response.content)
                 return data
             except (AssertionError, ConnectionError, RequestException) as exc:
-                logger.error('request {} failed {}, retrying...'.format(path, exc))
+                logger.debug('request {} failed {}, retrying...'.format(path, exc))
                 time.sleep(16)
                 pass
         raise AssertionError('request {} failed after {:.2f}s'.format(path, time.time() - since))
@@ -233,29 +233,34 @@ class Toolbox(object):
         # type: () -> None
         self.press_input(self.DEBIAN_DISCOVER_OUTPUT)
 
-    def power_cycle(self):
+    def power_off(self):
         # type: () -> None
-        logger.info('start power cycle')
+        logger.info('power off')
         self.observer.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': False})
-        time.sleep(30)
-        self.ensure_power_on()
-        logger.info('waiting 5m for system to stabilize')
-        time.sleep(300)
-        self.target.login()
+        time.sleep(2)
 
-    def ensure_power_on(self, timeout=120):
-        # type: (float) -> None
+    def ensure_power_on(self):
+        # type: () -> None
+        logger.info('power on')
         self.observer.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': True})
-        self.target.login(timeout=timeout)
+        logger.info('wait for gateway api to respond')
+        self.target.get('/health_check', success=False, use_token=False, timeout=300)
+        self.target.login(timeout=120)
+        logger.info('wait for health check')
+        pending = self.health_check(timeout=60)
+        if pending:
+            raise AssertionError('health check failed {}'.format(pending))
+
+    def health_check(self, timeout=30):
         since = time.time()
         while since > time.time() - timeout:
             data = self.target.get('/health_check', timeout=timeout)
             pending = [k for k, v in data['health'].items() if not v['state']]
             if pending == []:
-                return
-            logger.info('wait for health check, {}'.format(pending))
+                return pending
+            logger.debug('wait for health check, {}'.format(pending))
             time.sleep(10)
-        raise AssertionError('health check failed {}'.format(pending))
+        return pending
 
     def configure_output(self, output_id, config):
         # type: (int, Dict[str,Any]) -> None

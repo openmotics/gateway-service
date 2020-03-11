@@ -49,7 +49,11 @@ def authorized_mode(request, toolbox):
 
 @pytest.mark.slow
 def test_power_cycle(toolbox, power_on):
-    toolbox.power_cycle()
+    toolbox.power_off()
+    toolbox.ensure_power_on()
+    data = toolbox.target.get('/health_check')
+    assert 'openmotics' in data['health']
+    assert data['health']['openmotics']['state']
 
 
 @pytest.mark.smoke
