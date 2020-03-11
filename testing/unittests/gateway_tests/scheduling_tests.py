@@ -225,9 +225,9 @@ class SchedulingControllerTest(unittest.TestCase):
         start1_datetime = datetime.fromtimestamp(start1, timezone1)
         cron = croniter(schedule1.repeat, start1_datetime)
         next_execution1 = cron.get_next(ret_type=float)
+        next_execution2 = cron.get_next(ret_type=float)
         self.assertEqual(schedule1.is_due, False)
         self.assertEqual(schedule1.next_execution, next_execution1)
-        next_execution2 = cron.get_next(ret_type=float)
         self.assertEqual(next_execution2 - next_execution1, timedelta(days=3).total_seconds())
 
         start2 = start - timedelta(days=10).total_seconds()
