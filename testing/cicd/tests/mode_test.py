@@ -123,6 +123,7 @@ def test_authorized_mode(toolbox, authorized_mode):
 
 
 @pytest.mark.slow
+@pytest.mark.skip(reason='factory reset is currently not fully functional')
 def test_factory_reset(toolbox, authorized_mode, discover_mode):
     logger.info('factory reset')
     toolbox.dut.get('/factory_reset')
