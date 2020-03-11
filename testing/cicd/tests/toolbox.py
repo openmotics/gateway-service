@@ -79,7 +79,7 @@ class Client(object):
         raise AssertionError('request {} failed after {:.2f}s'.format(path, time.time() - since))
 
 
-class Observer(object):
+class TesterGateway(object):
     def __init__(self, client):
         # type: (Client) -> None
         self._client = client
@@ -154,47 +154,47 @@ class Toolbox(object):
 
     def __init__(self):
         # type: () -> None
-        self._observer = None  # type: Optional[Observer]
-        self._target = None  # type: Optional[Client]
-        self._target_inputs = None  # type: Optional[List[int]]
-        self._target_outputs = None  # type: Optional[List[int]]
+        self._tester = None  # type: Optional[TesterGateway]
+        self._dut = None  # type: Optional[Client]
+        self._dut_inputs = None  # type: Optional[List[int]]
+        self._dut_outputs = None  # type: Optional[List[int]]
 
     @property
-    def observer(self):
-        # type: () -> Observer
-        if self._observer is None:
-            observer_auth = os.environ['OPENMOTICS_OBSERVER_AUTH'].split(':')
-            observer_host = os.environ['OPENMOTICS_OBSERVER_HOST']
-            self._observer = Observer(Client(observer_host, auth=observer_auth))
-        return self._observer
+    def tester(self):
+        # type: () -> TesterGateway
+        if self._tester is None:
+            tester_auth = os.environ['OPENMOTICS_TESTER_AUTH'].split(':')
+            tester_host = os.environ['OPENMOTICS_TESTER_HOST']
+            self._tester = TesterGateway(Client(tester_host, auth=tester_auth))
+        return self._tester
 
     @property
-    def target(self):
+    def dut(self):
         # type: () -> Client
-        if self._target is None:
-            target_auth = os.environ['OPENMOTICS_TARGET_AUTH'].split(':')
-            target_host = os.environ['OPENMOTICS_TARGET_HOST']
-            self._target = Client(target_host, auth=target_auth)
-        return self._target
+        if self._dut is None:
+            dut_auth = os.environ['OPENMOTICS_DUT_AUTH'].split(':')
+            dut_host = os.environ['OPENMOTICS_DUT_HOST']
+            self._dut = Client(dut_host, auth=dut_auth)
+        return self._dut
 
     @property
-    def target_inputs(self):
+    def dut_inputs(self):
         # type: () -> List[int]
-        if self._target_inputs is None:
+        if self._dut_inputs is None:
             input_modules = self.list_modules('I')
-            self._target_inputs = range(0, len(input_modules) * 8 - 1)
-        return self._target_inputs
+            self._dut_inputs = range(0, len(input_modules) * 8 - 1)
+        return self._dut_inputs
 
     @property
-    def target_outputs(self):
-        if self._target_outputs is None:
+    def dut_outputs(self):
+        if self._dut_outputs is None:
             output_modules = self.list_modules('O')
-            self._target_outputs = range(0, len(output_modules) * 8 - 1)
-        return self._target_outputs
+            self._dut_outputs = range(0, len(output_modules) * 8 - 1)
+        return self._dut_outputs
 
     def list_modules(self, module_type, min_modules=1):
         # type: (str, int) -> List[Dict[str,Any]]
-        data = self.target.get('/get_modules_information')
+        data = self.dut.get('/get_modules_information')
         modules = [x for x in data['modules']['master'].values() if x['type'] == module_type and x['firmware']]
         assert len(modules) >= min_modules, 'Not enough modules of type {} available'.format(module_type)
         return modules
@@ -202,16 +202,16 @@ class Toolbox(object):
     def start_authorized_mode(self):
         # type: () -> None
         logger.info('start authorized mode')
-        self.observer.get('/set_output', {'id': self.DEBIAN_AUTHORIZED_MODE, 'is_on': True})
+        self.tester.get('/set_output', {'id': self.DEBIAN_AUTHORIZED_MODE, 'is_on': True})
         time.sleep(15)
-        self.observer.get('/set_output', {'id': self.DEBIAN_AUTHORIZED_MODE, 'is_on': False})
+        self.tester.get('/set_output', {'id': self.DEBIAN_AUTHORIZED_MODE, 'is_on': False})
 
     def wait_authorized_mode(self, timeout=240):
         # type: (float) -> None
         logger.debug('wait for authorized mode timeout')
         since = time.time()
         while since > time.time() - timeout:
-            data = self.target.get('/get_usernames', success=False)
+            data = self.dut.get('/get_usernames', success=False)
             if not data['success'] and data.get('msg') == 'unauthorized':
                 return
             logger.debug('authorized mode still active, waiting {}'.format(data))
@@ -221,9 +221,9 @@ class Toolbox(object):
     def create_or_update_user(self, success=True):
         # type: (bool) -> None
         logger.info('create or update test user')
-        assert self.target._auth
-        user_data = {'username': self.target._auth[0], 'password': self.target._auth[1]}
-        self.target.get('/create_user', params=user_data, use_token=False, success=success)
+        assert self.dut._auth
+        user_data = {'username': self.dut._auth[0], 'password': self.dut._auth[1]}
+        self.dut.get('/create_user', params=user_data, use_token=False, success=success)
 
     def discover_input_module(self):
         # type: () -> None
@@ -236,16 +236,16 @@ class Toolbox(object):
     def power_off(self):
         # type: () -> None
         logger.info('power off')
-        self.observer.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': False})
+        self.tester.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': False})
         time.sleep(2)
 
     def ensure_power_on(self):
         # type: () -> None
         logger.info('power on')
-        self.observer.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': True})
+        self.tester.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': True})
         logger.info('wait for gateway api to respond')
-        self.target.get('/health_check', success=False, use_token=False, timeout=300)
-        self.target.login(timeout=120)
+        self.dut.get('/health_check', success=False, use_token=False, timeout=300)
+        self.dut.login(timeout=120)
         logger.info('wait for health check')
         pending = self.health_check(timeout=60)
         if pending:
@@ -254,7 +254,7 @@ class Toolbox(object):
     def health_check(self, timeout=30):
         since = time.time()
         while since > time.time() - timeout:
-            data = self.target.get('/health_check', timeout=timeout)
+            data = self.dut.get('/health_check', timeout=timeout)
             pending = [k for k, v in data['health'].items() if not v['state']]
             if pending == []:
                 return pending
@@ -267,35 +267,35 @@ class Toolbox(object):
         config_data = {'id': output_id}
         config_data.update(**config)
         logger.info('configure output o#{} with {}'.format(output_id, config))
-        self.target.get('/set_output_configuration', {'config': json.dumps(config_data)})
+        self.dut.get('/set_output_configuration', {'config': json.dumps(config_data)})
 
     def ensure_output(self, output_id, status, config=None):
         # type: (int, int, Optional[Dict[str,Any]]) -> None
         if config:
             self.configure_output(output_id, config)
-        state = ' '.join(self.observer.get_last_outputs())
+        state = ' '.join(self.tester.get_last_outputs())
         logger.info('ensure output o#{} is {}    outputs={}'.format(output_id, status, state))
         time.sleep(0.2)
         self.set_output(output_id, status)
-        self.observer.reset()
+        self.tester.reset()
 
     def set_output(self, output_id, status):
         # type: (int, int) -> None
         logger.info('set output o#{} -> {}'.format(output_id, status))
-        self.target.get('/set_output', {'id': output_id, 'is_on': status})
+        self.dut.get('/set_output', {'id': output_id, 'is_on': status})
 
     def press_input(self, input_id):
         # type: (int) -> None
-        self.observer.get('/set_output', {'id': input_id, 'is_on': False})  # ensure start status
-        self.observer.reset()
-        self.observer.get('/set_output', {'id': input_id, 'is_on': True})
+        self.tester.get('/set_output', {'id': input_id, 'is_on': False})  # ensure start status
+        self.tester.reset()
+        self.tester.get('/set_output', {'id': input_id, 'is_on': True})
         time.sleep(0.2)
-        self.observer.get('/set_output', {'id': input_id, 'is_on': False})
+        self.tester.get('/set_output', {'id': input_id, 'is_on': False})
         logger.info('toggled i#{} -> True -> False'.format(input_id))
 
     def assert_output_changed(self, output_id, status, between=(0, 30)):
         # type: (int, bool, Tuple[float,float]) -> None
-        if self.observer.receive_output_event(output_id, status, between=between):
+        if self.tester.receive_output_event(output_id, status, between=between):
             return
         raise AssertionError('expected event o#{} status={}'.format(output_id, status))
 
@@ -303,13 +303,13 @@ class Toolbox(object):
         # type: (int, bool, **Any) -> None
         since = time.time()
         while since > time.time() - timeout:
-            data = self.target.get('/get_output_status')
+            data = self.dut.get('/get_output_status')
             current_status = data['status'][output_id]['status']
             if bool(status) == bool(current_status):
                 logger.info('get output status o#{} status={}, after {:.2f}s'.format(output_id, status, time.time() - since))
                 return
             time.sleep(0.2)
-        state = ' '.join(self.observer.get_last_outputs())
+        state = ' '.join(self.tester.get_last_outputs())
         logger.error('get status o#{} status={} != expected {}, timeout after {:.2f}s    outputs={}'.format(output_id, bool(current_status), status, time.time() - since, state))
-        self.observer.log_events()
+        self.tester.log_events()
         raise AssertionError('get status o#{} status={} != expected {}, timeout after {:.2f}s'.format(output_id, bool(current_status), status, time.time() - since))

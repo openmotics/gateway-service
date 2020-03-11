@@ -23,7 +23,7 @@ logger = logging.getLogger('openmotics')
 
 @pytest.mark.smoke
 def test_health_check(toolbox):
-    data = toolbox.target.get('/health_check')
+    data = toolbox.dut.get('/health_check')
     assert 'health' in data
     assert data['health']['led_service']['state']
     assert data['health']['vpn_service']['state']
@@ -32,47 +32,47 @@ def test_health_check(toolbox):
 
 @pytest.mark.smoke
 def test_features(toolbox):
-    data = toolbox.target.get('/get_features')
+    data = toolbox.dut.get('/get_features')
     assert 'features' in data
     assert 'input_states' in data['features']
 
 
 @pytest.mark.smoke
 def test_version(toolbox):
-    data = toolbox.target.get('/get_version')
+    data = toolbox.dut.get('/get_version')
     assert 'version' in data
     assert 'gateway' in data
 
 
 @pytest.fixture
 def set_timezone(request, toolbox):
-    toolbox.target.get('/set_timezone', params={'timezone': 'UTC'})
+    toolbox.dut.get('/set_timezone', params={'timezone': 'UTC'})
     yield
-    toolbox.target.get('/set_timezone', params={'timezone': 'UTC'})
+    toolbox.dut.get('/set_timezone', params={'timezone': 'UTC'})
 
 
 @pytest.mark.smoke
 def test_status_timezone(toolbox, set_timezone):
-    data = toolbox.target.get('/get_timezone')
+    data = toolbox.dut.get('/get_timezone')
     assert 'timezone' in data
     assert data['timezone'] == 'UTC'
 
     now = datetime.utcnow()
-    data = toolbox.target.get('/get_status')
+    data = toolbox.dut.get('/get_status')
     assert 'time' in data
     assert data['time'] == now.strftime('%H:%M')
 
 
 @pytest.mark.smoke
 def test_timezone_change(toolbox, set_timezone):
-    toolbox.target.get('/set_timezone', params={'timezone': 'America/Bahia'})
+    toolbox.dut.get('/set_timezone', params={'timezone': 'America/Bahia'})
 
-    data = toolbox.target.get('/get_timezone')
+    data = toolbox.dut.get('/get_timezone')
     assert 'timezone' in data
     assert data['timezone'] == 'America/Bahia'
 
     bahia_timezone = timezone('America/Bahia')
     now = datetime.now(bahia_timezone)
-    data = toolbox.target.get('/get_status')
+    data = toolbox.dut.get('/get_status')
     assert 'time' in data
     assert data['time'] == now.strftime('%H:%M')

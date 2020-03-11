@@ -27,7 +27,7 @@ logger = logging.getLogger('openmotics')
 def next_input(draw):
     used_values = []
     def f(toolbox):
-        value = draw(one_of(map(just, toolbox.target_inputs)).filter(lambda x: x not in used_values))
+        value = draw(one_of(map(just, toolbox.dut_inputs)).filter(lambda x: x not in used_values))
         used_values.append(value)
         hypothesis.note('module i#{}'.format(value))
         return value
@@ -38,7 +38,7 @@ def next_input(draw):
 def next_output(draw):
     used_values = []
     def f(toolbox):
-        value = draw(one_of(map(just, toolbox.target_outputs)).filter(lambda x: x not in used_values))
+        value = draw(one_of(map(just, toolbox.dut_outputs)).filter(lambda x: x not in used_values))
         used_values.append(value)
         hypothesis.note('module o#{}'.format(value))
         return value
@@ -52,7 +52,7 @@ def test_actions(toolbox, next_input, next_output, output_status):
     logger.info('input action i#{} to o#{}, expect event {} -> {}'.format(input_id, output_id, not output_status, output_status))
 
     input_config = json.dumps({'id': input_id, 'action': output_id, 'invert': 255})
-    toolbox.target.get('/set_input_configuration', {'config': input_config})
+    toolbox.dut.get('/set_input_configuration', {'config': input_config})
 
     # NOTE ensure output status _after_ input configuration, changing
     # inputs can impact the output status for some reason.
@@ -72,7 +72,7 @@ def test_motion_sensor(toolbox, next_input, next_output, output_status):
     logger.info('motion sensor i#{} to o#{}, expect event {} -> {} after 2m30s'.format(input_id, output_id, output_status, not output_status))
     actions = ['195', str(output_id)]  # output timeout of 2m30s
     input_config = json.dumps({'id': input_id, 'basic_actions': ','.join(actions), 'action': 240, 'invert': 255})
-    toolbox.target.get('/set_input_configuration', {'config': input_config})
+    toolbox.dut.get('/set_input_configuration', {'config': input_config})
 
     # NOTE ensure output status _after_ input configuration, changing
     # inputs can impact the output status for some reason.
@@ -93,11 +93,11 @@ def test_group_action_toggle(toolbox, next_input, next_output, group_action_id, 
 
     actions = ['2', str(group_action_id)]
     input_config = json.dumps({'id': input_id, 'basic_actions': ','.join(actions), 'action': 240, 'invert': 255})
-    toolbox.target.get('/set_input_configuration', {'config': input_config})
+    toolbox.dut.get('/set_input_configuration', {'config': input_config})
 
     actions = ['162', str(output_id), '162', str(other_output_id)]  # toggle both outputs
     config = {'id': group_action_id, 'actions': ','.join(actions)}
-    toolbox.target.get('/set_group_action_configuration', params={'config': json.dumps(config)})
+    toolbox.dut.get('/set_group_action_configuration', params={'config': json.dumps(config)})
 
     output_config = {'type': 0, 'timer': 2**16 - 1}
     toolbox.ensure_output(output_id, not output_status, output_config)

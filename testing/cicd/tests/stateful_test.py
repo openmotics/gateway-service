@@ -44,8 +44,8 @@ class IOComparison(RuleBasedStateMachine):
         self.changed = False
         self.toolbox = Toolbox()
 
-        self.inputs = self.toolbox.target_inputs
-        self.outputs = self.toolbox.target_outputs
+        self.inputs = self.toolbox.dut_inputs
+        self.outputs = self.toolbox.dut_outputs
 
     inputs = Bundle('inputs')
     outputs = Bundle('outputs')
@@ -77,7 +77,7 @@ class IOComparison(RuleBasedStateMachine):
         self.changed = True
         input_id = self.inputs.pop()
         input_config = {'id': input_id, 'action': o.output_id}
-        self.toolbox.target.get('/set_input_configuration', {'config': json.dumps(input_config)})
+        self.toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
 
         # FIXME: workaround
         time.sleep(1)
@@ -98,7 +98,7 @@ class IOComparison(RuleBasedStateMachine):
         self.changed = True
         o.status = not o.status
         time.sleep(1)
-        self.toolbox.observer.reset()
+        self.toolbox.tester.reset()
         self.toolbox.set_output(o.output_id, o.status)
         self.toolbox.assert_output_changed(o.output_id, o.status)
 

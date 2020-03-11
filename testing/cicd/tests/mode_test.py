@@ -38,7 +38,7 @@ def power_on(request, toolbox):
 @pytest.fixture
 def discover_mode(request, toolbox):
     yield
-    toolbox.target.get('/module_discover_stop')
+    toolbox.dut.get('/module_discover_stop')
 
 
 @pytest.fixture
@@ -51,7 +51,7 @@ def authorized_mode(request, toolbox):
 def test_power_cycle(toolbox, power_on):
     toolbox.power_off()
     toolbox.ensure_power_on()
-    data = toolbox.target.get('/health_check')
+    data = toolbox.dut.get('/health_check')
     assert 'openmotics' in data['health']
     assert data['health']['openmotics']['state']
 
@@ -59,18 +59,18 @@ def test_power_cycle(toolbox, power_on):
 @pytest.mark.smoke
 def test_module_discover(toolbox, discover_mode):
     logger.info('start module discovery')
-    toolbox.target.get('/module_discover_start')
+    toolbox.dut.get('/module_discover_start')
     time.sleep(2)
 
-    data = toolbox.target.get('/module_discover_status')
+    data = toolbox.dut.get('/module_discover_status')
     assert data['running'] == True
     toolbox.discover_input_module()
     toolbox.discover_output_module()
     time.sleep(2)
 
-    toolbox.target.get('/module_discover_stop')
+    toolbox.dut.get('/module_discover_stop')
 
-    data = toolbox.target.get('/get_modules')
+    data = toolbox.dut.get('/get_modules')
     assert 'inputs' in data
     assert 'I' in data['inputs']
     assert 'outputs' in data
@@ -81,11 +81,11 @@ def test_module_discover(toolbox, discover_mode):
 @pytest.mark.skipif(check_ip_range(), reason='the maintenance ports are not accessible on jenkins')
 def test_maintenance(toolbox):
     # TODO: ensure maintenance mode is disabled afterwards
-    data = toolbox.target.get('/get_status')
+    data = toolbox.dut.get('/get_status')
     expected_version = 'F{} H{}'.format(data['version'], data['hw_version'])
 
     logger.info('start maintenance')
-    data = toolbox.target.get('/open_maintenance')
+    data = toolbox.dut.get('/open_maintenance')
     assert 'port' in data
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -98,7 +98,7 @@ def test_maintenance(toolbox):
         do_handshake_on_connect=False,
         suppress_ragged_eofs=False
     )
-    ssl_sock.connect((toolbox.target._host, data['port']))
+    ssl_sock.connect((toolbox.dut._host, data['port']))
 
     data = ''
     while data != 'OK':
@@ -114,34 +114,34 @@ def test_maintenance(toolbox):
 
 @pytest.mark.slow
 def test_authorized_mode(toolbox, authorized_mode):
-    data = toolbox.target.get('/get_usernames', success=False)
+    data = toolbox.dut.get('/get_usernames', success=False)
     assert not data['success'] and data['msg'] == 'unauthorized'
 
     toolbox.start_authorized_mode()
-    data = toolbox.target.get('/get_usernames')
+    data = toolbox.dut.get('/get_usernames')
     assert 'openmotics' in data['usernames']
 
 
 @pytest.mark.slow
 def test_factory_reset(toolbox, authorized_mode, discover_mode):
     logger.info('factory reset')
-    toolbox.target.get('/factory_reset')
+    toolbox.dut.get('/factory_reset')
     time.sleep(2)
 
     toolbox.start_authorized_mode()
-    data = toolbox.target.get('/get_usernames', use_token=False)
+    data = toolbox.dut.get('/get_usernames', use_token=False)
     logger.info('users after reset {}'.format(data['usernames']))
 
     toolbox.create_or_update_user()
     time.sleep(2)
-    data = toolbox.target.get('/get_usernames', use_token=False)
+    data = toolbox.dut.get('/get_usernames', use_token=False)
     assert 'openmotics' in data['usernames']
-    toolbox.target.login()
+    toolbox.dut.login()
 
     logger.info('start module discover')
-    toolbox.target.get('/module_discover_start')
+    toolbox.dut.get('/module_discover_start')
     time.sleep(2)
-    data = toolbox.target.get('/get_modules')
+    data = toolbox.dut.get('/get_modules')
     assert 'inputs' in data
     assert data['inputs'] == []
     assert 'outputs' in data
@@ -150,14 +150,14 @@ def test_factory_reset(toolbox, authorized_mode, discover_mode):
     toolbox.discover_input_module()
     toolbox.discover_output_module()
     time.sleep(2)
-    data = toolbox.target.get('/get_modules')
+    data = toolbox.dut.get('/get_modules')
     assert 'inputs' in data
     assert 'I' in data['inputs']
     assert 'outputs' in data
     assert 'O' in data['outputs']
 
-    toolbox.target.get('/module_discover_stop')
-    data = toolbox.target.get('/get_modules_information')
+    toolbox.dut.get('/module_discover_stop')
+    data = toolbox.dut.get('/get_modules_information')
     modules = data['modules']['master'].values()
     assert set(['I', 'O']) == set(x['type'] for x in modules)
     assert None not in [x['firmware'] for x in modules]
