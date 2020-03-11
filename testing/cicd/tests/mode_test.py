@@ -47,6 +47,17 @@ def authorized_mode(request, toolbox):
     toolbox.wait_authorized_mode()
 
 
+@pytest.fixture
+def maintenance_mode(request, toolbox):
+    yield
+    for _ in xrange(10):
+        data = toolbox.dut.get('/get_status', success=False)
+        if data['success']:
+            break
+        time.sleep(0.2)
+    assert data['success']
+
+
 @pytest.mark.slow
 def test_power_cycle(toolbox, power_on):
     toolbox.power_off()
@@ -85,8 +96,7 @@ def test_module_discover_noop(toolbox, discover_mode):
 
 @pytest.mark.slow
 @pytest.mark.skipif(check_ip_range(), reason='the maintenance ports are not accessible on jenkins')
-def test_maintenance(toolbox):
-    # TODO: ensure maintenance mode is disabled afterwards
+def test_maintenance(toolbox, maintenance_mode):
     data = toolbox.dut.get('/get_status')
     expected_version = 'F{} H{}'.format(data['version'], data['hw_version'])
 
@@ -121,6 +131,11 @@ def test_maintenance(toolbox):
     ssl_sock.send('firmware version\r\n')
     assert readline() == 'firmware version'
     assert readline() == expected_version
+
+    # not allowed during maintenance
+    data = toolbox.dut.get('/get_status', success=False)
+    assert data['msg'] == 'maintenance_mode'
+
     ssl_sock.send('exit\r\n')
     ssl_sock.close()
 
