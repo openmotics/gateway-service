@@ -17,4 +17,6 @@ settings.load_profile(os.getenv('HYPOTHESIS_PROFILE', 'default'))
 
 @fixture(scope='session')
 def toolbox():
-    return Toolbox()
+    toolbox = Toolbox()
+    toolbox.ensure_power_on()
+    return toolbox
