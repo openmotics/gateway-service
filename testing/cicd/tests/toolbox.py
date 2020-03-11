@@ -241,24 +241,28 @@ class Toolbox(object):
 
     def ensure_power_on(self):
         # type: () -> None
+        if self.health_check(timeout=0.2) == []:
+            return
         logger.info('power on')
         self.tester.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': True})
         logger.info('wait for gateway api to respond')
-        self.dut.get('/health_check', success=False, use_token=False, timeout=300)
-        self.dut.login(timeout=120)
-        logger.info('wait for health check')
-        pending = self.health_check(timeout=60)
-        if pending:
-            raise AssertionError('health check failed {}'.format(pending))
+        self.health_check(timeout=300)
+        self.dut.login()
+        logger.info('health check done')
 
     def health_check(self, timeout=30):
+        # type: (float) -> List[str]
         since = time.time()
+        pending = ['unknown']
         while since > time.time() - timeout:
-            data = self.dut.get('/health_check', timeout=timeout)
-            pending = [k for k, v in data['health'].items() if not v['state']]
-            if pending == []:
-                return pending
-            logger.debug('wait for health check, {}'.format(pending))
+            try:
+                data = self.dut.get('/health_check', use_token=False, timeout=timeout)
+                pending = [k for k, v in data['health'].items() if not v['state']]
+                if pending == []:
+                    return pending
+                logger.debug('wait for health check, {}'.format(pending))
+            except Exception:
+                pass
             time.sleep(10)
         return pending
 
@@ -300,7 +304,7 @@ class Toolbox(object):
         raise AssertionError('expected event o#{} status={}'.format(output_id, status))
 
     def assert_output_status(self, output_id, status, timeout=30):
-        # type: (int, bool, **Any) -> None
+        # type: (int, bool, float) -> None
         since = time.time()
         while since > time.time() - timeout:
             data = self.dut.get('/get_output_status')

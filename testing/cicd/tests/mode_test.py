@@ -62,9 +62,8 @@ def maintenance_mode(request, toolbox):
 def test_power_cycle(toolbox, power_on):
     toolbox.power_off()
     toolbox.ensure_power_on()
-    data = toolbox.dut.get('/health_check')
-    assert 'openmotics' in data['health']
-    assert data['health']['openmotics']['state']
+    pending = toolbox.health_check()
+    assert pending == []
 
 
 @pytest.mark.smoke
