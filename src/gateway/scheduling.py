@@ -66,24 +66,18 @@ class Schedule(object):
             return self.start <= time.time()
         # Repeating
         timezone = pytz.timezone(Schedule.timezone)
-        start_date = datetime.fromtimestamp(self.start, timezone)
-        cron = croniter(self.repeat, start_date)
+        base_date = datetime.fromtimestamp(self.start, timezone)
+        if self.start < time.time():
+            base_date = datetime.now(timezone)
+        cron = croniter(self.repeat, base_date)
+        next_execution = cron.get_next(ret_type=float)
         if self.next_execution is None:
-            if self.start < time.time():
-                self.next_execution = self.get_next_execution(self.start, cron)
-            else:
-                self.next_execution = self.start
+            self.next_execution = next_execution
             return False
         if self.next_execution < time.time():
-            self.next_execution = self.get_next_execution(self.next_execution, cron)
+            self.next_execution = next_execution
             return True
         return False
-
-    @staticmethod
-    def get_next_execution(next_execution, cron):
-        while next_execution <= time.time():
-            next_execution = cron.get_next(ret_type=float)
-        return next_execution
 
     @property
     def has_ended(self):
