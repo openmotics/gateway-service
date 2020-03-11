@@ -49,14 +49,12 @@ def test_events(toolbox, next_output, output_status):
 
 
 @pytest.mark.smoke
-@hypothesis.given(next_output(), booleans(), booleans())
-def test_status(toolbox, next_output, previous_output_status, output_status):
+@hypothesis.given(next_output(), booleans())
+def test_status(toolbox, next_output, output_status):
     output_id = next_output(toolbox)
-    logger.info('output status o#{}, expect status {} -> {}'.format(output_id, previous_output_status, output_status))
+    logger.info('output status o#{}, expect status ? -> {}'.format(output_id, output_status))
     toolbox.configure_output(output_id, DEFAULT_OUTPUT_CONFIG)
 
-    toolbox.set_output(output_id, previous_output_status)
-    time.sleep(2)
     toolbox.set_output(output_id, output_status)
     toolbox.assert_output_status(output_id, output_status)
 
