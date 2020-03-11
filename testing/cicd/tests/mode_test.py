@@ -100,14 +100,21 @@ def test_maintenance(toolbox):
     )
     ssl_sock.connect((toolbox.dut._host, data['port']))
 
+    def readline():
+        c, buf = ('', '')
+        while c != '\n':
+            c = ssl_sock.recv(1)
+            buf += c
+        return buf.strip()
+
     data = ''
     while data != 'OK':
-        data = ssl_sock.recv(1024).strip()
+        data = readline()
         logger.debug('received data "{}"'.format(data))
 
     ssl_sock.send('firmware version\r\n')
-    assert ssl_sock.recv(1024).strip() == 'firmware version'
-    assert ssl_sock.recv(1024).strip() == expected_version
+    assert readline() == 'firmware version'
+    assert readline() == expected_version
     ssl_sock.send('exit\r\n')
     ssl_sock.close()
 
