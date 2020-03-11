@@ -43,7 +43,7 @@ def test_events(toolbox, next_output, output_status):
     toolbox.ensure_output(output_id, not output_status, output_config)
 
     toolbox.set_output(output_id, output_status)
-    toolbox.assert_output_event(output_id, output_status)
+    toolbox.assert_output_changed(output_id, output_status)
 
 
 @pytest.mark.smoke
@@ -69,8 +69,8 @@ def test_timers(toolbox, next_output, output_status):
     toolbox.ensure_output(output_id, False, output_config)
 
     toolbox.set_output(output_id, output_status)
-    toolbox.assert_output_event(output_id, output_status)
-    toolbox.assert_output_event(output_id, not output_status)
+    toolbox.assert_output_changed(output_id, output_status)
+    toolbox.assert_output_changed(output_id, not output_status, between=(8, 12))
 
 
 @pytest.mark.smoke
@@ -89,13 +89,13 @@ def test_floor_lights(toolbox, next_output, floor_id, output_status):
 
     logger.info('enable all lights on floor {}'.format(floor_id))
     toolbox.target.get('/set_all_lights_floor_on', params={'floor': floor_id})
-    toolbox.assert_output_event(light_id, output_status)
+    toolbox.assert_output_changed(light_id, output_status)
     toolbox.assert_output_status(other_light_id, not output_status)
     toolbox.assert_output_status(other_output_id, not output_status)
 
     logger.info('disable all lights on floor {}'.format(floor_id))
     toolbox.target.get('/set_all_lights_floor_off', params={'floor': floor_id})
-    toolbox.assert_output_event(light_id, not output_status)
+    toolbox.assert_output_changed(light_id, not output_status)
     toolbox.assert_output_status(other_light_id, not output_status)
     toolbox.assert_output_status(other_output_id, not output_status)
 
@@ -117,5 +117,5 @@ def test_group_action_toggle(toolbox, next_output, group_action_id, output_statu
     toolbox.ensure_output(other_output_id, not output_status, output_config)
 
     toolbox.target.get('/do_group_action', {'group_action_id': group_action_id})
-    toolbox.assert_output_event(output_id, output_status)
-    toolbox.assert_output_event(other_output_id, output_status)
+    toolbox.assert_output_changed(output_id, output_status)
+    toolbox.assert_output_changed(other_output_id, output_status)

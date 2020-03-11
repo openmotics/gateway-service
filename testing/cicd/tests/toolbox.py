@@ -24,7 +24,7 @@ from requests.exceptions import ConnectionError, RequestException
 logger = logging.getLogger('openmotics')
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Optional
+    from typing import Any, Dict, List, Optional, Tuple
 
 
 class Client(object):
@@ -125,8 +125,14 @@ class Observer(object):
         # type: () -> None
         self._outputs = {}
 
-    def receive_output_event(self, output_id, output_status, timeout):
-        # type: (int, bool, float) -> bool
+    def receive_output_event(self, output_id, output_status, between):
+        # type: (int, bool, Tuple[float, float]) -> bool
+        cooldown, deadline = between
+        timeout = deadline - cooldown
+        if cooldown > 0:
+            logger.info('waiting {:.2f}s before event'.format(cooldown))
+            self.reset()
+            time.sleep(cooldown)
         since = time.time()
         while since > time.time() - timeout:
             if output_id in self._outputs and output_status == self._outputs[output_id]:
@@ -282,9 +288,9 @@ class Toolbox(object):
         self.observer.get('/set_output', {'id': input_id, 'is_on': False})
         logger.info('toggled i#{} -> True -> False'.format(input_id))
 
-    def assert_output_event(self, output_id, status, timeout=30):
-        # type: (int, bool, **Any) -> None
-        if self.observer.receive_output_event(output_id, status, timeout=timeout):
+    def assert_output_changed(self, output_id, status, between=(0, 30)):
+        # type: (int, bool, Tuple[float,float]) -> None
+        if self.observer.receive_output_event(output_id, status, between=between):
             return
         raise AssertionError('expected event o#{} status={}'.format(output_id, status))
 

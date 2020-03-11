@@ -100,7 +100,7 @@ class IOComparison(RuleBasedStateMachine):
         time.sleep(1)
         self.toolbox.observer.reset()
         self.toolbox.set_output(o.output_id, o.status)
-        self.toolbox.assert_output_event(o.output_id, o.status)
+        self.toolbox.assert_output_changed(o.output_id, o.status)
 
     @rule(o=outputs)
     @precondition(lambda self: self.changed)

@@ -60,7 +60,7 @@ def test_actions(toolbox, next_input, next_output, output_status):
     toolbox.ensure_output(output_id, not output_status, output_config)
 
     toolbox.press_input(input_id)
-    toolbox.assert_output_event(output_id, output_status)
+    toolbox.assert_output_changed(output_id, output_status)
 
 
 @pytest.mark.slow
@@ -80,10 +80,9 @@ def test_motion_sensor(toolbox, next_input, next_output, output_status):
     toolbox.ensure_output(output_id, not output_status, output_config)
 
     toolbox.press_input(input_id)
-    toolbox.assert_output_event(output_id, output_status)
-    logger.warning('should use a shorter timeout, waiting for 2m30s')
-    time.sleep(180)
-    toolbox.assert_output_event(output_id, not output_status)
+    toolbox.assert_output_changed(output_id, output_status)
+    logger.warning('should use a shorter timeout')
+    toolbox.assert_output_changed(output_id, not output_status, between=(130, 180))
 
 
 @pytest.mark.smoke
@@ -100,12 +99,10 @@ def test_group_action_toggle(toolbox, next_input, next_output, group_action_id, 
     config = {'id': group_action_id, 'actions': ','.join(actions)}
     toolbox.target.get('/set_group_action_configuration', params={'config': json.dumps(config)})
 
-    time.sleep(2)
-
     output_config = {'type': 0, 'timer': 2**16 - 1}
     toolbox.ensure_output(output_id, not output_status, output_config)
     toolbox.ensure_output(other_output_id, not output_status, output_config)
 
     toolbox.press_input(input_id)
-    toolbox.assert_output_event(output_id, output_status)
-    toolbox.assert_output_event(other_output_id, output_status)
+    toolbox.assert_output_changed(output_id, output_status)
+    toolbox.assert_output_changed(other_output_id, output_status)
