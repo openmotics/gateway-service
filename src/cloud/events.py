@@ -65,6 +65,8 @@ class EventSender(object):
             return True
         elif event.type == Event.Types.INPUT_CHANGE:
             input_id = event.data['id']
+            # TODO: Below entry needs to be cached. But caching needs invalidation, so lets fix this
+            #       when we have decent cache invalidation events to subscribe on
             config = self._gateway_api.get_input_configuration(input_id)
             return config['event_enabled']
         else:
