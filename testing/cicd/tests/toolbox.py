@@ -270,7 +270,7 @@ class Toolbox(object):
             self.configure_output(output_id, config)
         state = ' '.join(self.observer.get_last_outputs())
         logger.info('ensure output o#{} is {}    outputs={}'.format(output_id, status, state))
-        time.sleep(2)
+        time.sleep(0.2)
         self.set_output(output_id, status)
         self.observer.reset()
 
