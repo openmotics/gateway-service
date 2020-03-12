@@ -16,6 +16,11 @@ class ThermostatController(object):
         self._event_subscriptions = []
 
     def start(self):
+        # type: () -> None
+        raise NotImplementedError()
+
+    def stop(self):
+        # type: () -> None
         raise NotImplementedError()
 
     def subscribe_events(self, callback):
