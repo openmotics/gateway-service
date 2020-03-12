@@ -37,7 +37,12 @@ class ThermostatControllerMaster(ThermostatController):
         self._thermostats_config = {}
 
     def start(self):
+        # type: () -> None
         self._monitor_thread.start()
+
+    def stop(self):
+        # type: () -> None
+        pass
 
     ################################
     # v1 APIs
