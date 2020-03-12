@@ -253,7 +253,7 @@ class PluginRunner:
                 command = self._async_command_queue.get(block=True, timeout=10)
                 self._do_command(command['action'], command['fields'])
             except Empty:
-                pass
+                self._do_async('ping', {})
             except Exception as exception:
                 self.logger('[Runner] Failed to perform async command: {0}'.format(exception))
 
