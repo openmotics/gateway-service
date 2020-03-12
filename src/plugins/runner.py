@@ -89,6 +89,7 @@ class PluginRunner:
         self._async_command_thread.start()
 
         self._running = True
+        self.logger('[Runner] Started')
 
     def logger(self, message):
         self._logger(message)
@@ -156,6 +157,7 @@ class PluginRunner:
                         self._proc.kill()
                     except Exception as exception:
                         self.logger('[Runner] Exception during killing plugin: {0}'.format(exception))
+            self.logger('[Runner] Stopped')
 
     def process_input_status(self, input_event):
         event_json = input_event.serialize()
@@ -251,7 +253,7 @@ class PluginRunner:
                 command = self._async_command_queue.get(block=True, timeout=10)
                 self._do_command(command['action'], command['fields'])
             except Empty:
-                pass
+                self._do_async('ping', {})
             except Exception as exception:
                 self.logger('[Runner] Failed to perform async command: {0}'.format(exception))
 
@@ -266,9 +268,13 @@ class PluginRunner:
             raise Exception('Plugin was stopped')
 
         with self._command_lock:
-            command = self._create_command(action, fields)
-            self._proc.stdin.write(PluginIPCStream.write(command))
-            self._proc.stdin.flush()
+            try:
+                command = self._create_command(action, fields)
+                self._proc.stdin.write(PluginIPCStream.write(command))
+                self._proc.stdin.flush()
+            except Exception:
+                self._commands_failed += 1
+                raise
 
             try:
                 response = self._response_queue.get(block=True, timeout=timeout)
@@ -279,7 +285,10 @@ class PluginRunner:
                     raise RuntimeError(exception)
                 return response
             except Empty:
-                self.logger('[Runner] No response within {0}s ({1})'.format(timeout, action))
+                metadata = ''
+                if action == 'request':
+                    metadata = ' {0}'.format(fields['method'])
+                self.logger('[Runner] No response within {0}s ({1}{2})'.format(timeout, action, metadata))
                 self._commands_failed += 1
                 raise Exception('Plugin did not respond')
 
@@ -319,11 +328,13 @@ class RunnerWatchdog:
         self._stopped = True
 
     def start(self):
+        self._stopped = False
         thread = Thread(target=self.run, name='RunnerWatchdog for {0}'.format(self._plugin_runner.plugin_path))
         thread.daemon = True
         thread.start()
 
     def run(self):
+        self._plugin_runner.logger('[Watchdog] Started')
         while not self._stopped:
             try:
                 score = self._plugin_runner.error_score()
@@ -336,4 +347,9 @@ class RunnerWatchdog:
             except Exception as e:
                 self._plugin_runner.logger('[Watchdog] Exception in watchdog: {0}'.format(e))
 
-            time.sleep(self._check_interval)
+            for _ in xrange(self._check_interval):
+                # Small sleep cycles, to be able to finish the thread quickly
+                time.sleep(1)
+                if self._stopped:
+                    break
+        self._plugin_runner.logger('[Watchdog] Stopped')

@@ -157,6 +157,8 @@ class PluginRuntime:
                     ret = self._handle_request(command['method'], command['args'], command['kwargs'])
                 elif action == 'remove_callback':
                     ret = self._handle_remove_callback()
+                elif action == 'ping':
+                    pass  # noop
                 else:
                     raise RuntimeError('Unknown action: {0}'.format(action))
 
