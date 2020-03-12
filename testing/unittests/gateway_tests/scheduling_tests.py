@@ -17,9 +17,13 @@ Tests for the scheduling module.
 """
 import os
 import unittest
+
+import pytz
+from croniter import croniter
 import xmlrunner
 import time
 import fakesleep
+from datetime import datetime, timedelta
 from threading import Lock, Semaphore
 from ioc import SetTestMode, SetUpTestInjections
 from gateway.webservice import WebInterface
@@ -208,6 +212,33 @@ class SchedulingControllerTest(unittest.TestCase):
                 controller.remove_schedule(s.id)
         self.assertEquals(len(controller.schedules), 1)
         self.assertEquals(controller.schedules[0].name, 'basic_action')
+
+    def test_schedule_is_due(self):
+        start = time.time()
+        start1 = start + timedelta(days=10).total_seconds()
+        end1 = start + timedelta(days=10).total_seconds()
+        controller = self._get_controller()
+        controller.add_schedule('group_action', start1, 'GROUP_ACTION', 1, '0 0 */3 * *', None, end1)
+        schedule1 = controller.schedules[0]
+        self.assertIsNone(schedule1.next_execution)
+        timezone1 = pytz.timezone(controller.schedules[0].timezone)
+        start1_datetime = datetime.fromtimestamp(start1, timezone1)
+        cron = croniter(schedule1.repeat, start1_datetime)
+        next_execution1 = cron.get_next(ret_type=float)
+        self.assertEqual(schedule1.is_due, False)
+        self.assertEqual(schedule1.next_execution, next_execution1)
+        
+        start2 = start - timedelta(days=10).total_seconds()
+        end2 = start + timedelta(days=10).total_seconds()
+        controller.add_schedule('group_action', start2, 'GROUP_ACTION', 1, '0 0 * * *', None, end2)
+        schedule2 = controller.schedules[1]
+        timezone2 = pytz.timezone(schedule2.timezone)
+        now = datetime.now(timezone2)
+        cron = croniter(schedule2.repeat, now)
+        next_execution2 = cron.get_next(ret_type=float)
+        self.assertIsNone(schedule2.next_execution)
+        self.assertEqual(schedule2.is_due, False)
+        self.assertEqual(schedule2.next_execution, next_execution2)
 
 
 if __name__ == "__main__":
