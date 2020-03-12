@@ -285,7 +285,10 @@ class PluginRunner:
                     raise RuntimeError(exception)
                 return response
             except Empty:
-                self.logger('[Runner] No response within {0}s ({1})'.format(timeout, action))
+                metadata = ''
+                if action == 'request':
+                    metadata = ' {0}'.format(fields['method'])
+                self.logger('[Runner] No response within {0}s ({1}{2})'.format(timeout, action, metadata))
                 self._commands_failed += 1
                 raise Exception('Plugin did not respond')
 
