@@ -524,10 +524,16 @@ class MasterClassicController(MasterController):
     def _input_changed(self, input_id, status):
         # type: (int, str) -> None
         """ Executed by the Input Status tracker when an input changed state """
+        input_configuration = self._input_config.get(input_id)
+        if input_configuration is None:
+            # An event was received from an input for which the configuration was not yet loaded. As
+            # configuraion should not be loaded inside an event handler, the event is discarded.
+            # TODO: Detach input even processing from event handler so it can load the configuration if needed
+            return
         for callback in self._event_callbacks:
             event_data = {'id': input_id,
                           'status': status,
-                          'location': {'room_id': self._input_config[input_id].get('room', 255)}}
+                          'location': {'room_id': input_configuration.get('room', 255)}}
             callback(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
 
     def _refresh_outputs(self):
