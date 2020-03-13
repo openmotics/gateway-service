@@ -2330,8 +2330,7 @@ class WebInterface(object):
 
     @openmotics_api(auth=True, plugin_exposed=False)
     def factory_reset(self):
-        self._gateway_api.factory_reset()
-        return {}
+        return self._gateway_api.factory_reset()
 
     @openmotics_api(auth=False)
     def health_check(self):
