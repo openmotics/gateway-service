@@ -247,7 +247,6 @@ class Toolbox(object):
         self.tester.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': True})
         logger.info('wait for gateway api to respond')
         self.health_check(timeout=300)
-        self.dut.login()
         logger.info('health check done')
 
     def health_check(self, timeout=30):

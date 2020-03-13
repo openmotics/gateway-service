@@ -33,6 +33,7 @@ def check_ip_range():
 def power_on(request, toolbox):
     yield
     toolbox.ensure_power_on()
+    toolbox.dut.login()
 
 
 @pytest.fixture
