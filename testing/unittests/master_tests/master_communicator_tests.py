@@ -306,8 +306,8 @@ class MasterCommunicatorTest(unittest.TestCase):
         self.assertEquals("OK", comm.do_command(action, in_fields)["resp"])
         self.assertEquals("hello", comm.get_passthrough_data())
 
-        self.assertEquals(21, comm.get_bytes_written())
-        self.assertEquals(5 + 18, comm.get_bytes_read())
+        self.assertEquals(21, comm.get_communication_statistics()['bytes_written'])
+        self.assertEquals(5 + 18, comm.get_communication_statistics()['bytes_read'])
 
     def test_crc_checking(self):
         """ Test the crc checking in the MasterCommunciator. """

@@ -37,11 +37,14 @@ class CommunicationLedController(object):
         power = (0, 0)
 
         while True:
-            new_master = (self._master_communicator.get_bytes_read(), self._master_communicator.get_bytes_written())
+            stats = self._master_communicator.get_communication_statistics()
+            new_master = (stats['bytes_read'], stats['bytes_written'])
+
             if self._power_communicator is None:
                 new_power = (0, 0)
             else:
-                new_power = (self._power_communicator.get_bytes_read(), self._power_communicator.get_bytes_written())
+                stats = self._power_communicator.get_communication_statistics()
+                new_power = (stats['bytes_read'], stats['bytes_written'])
 
             if master[0] != new_master[0] or master[1] != new_master[1]:
                 self._message_client.send_event(OMBusEvents.SERIAL_ACTIVITY, 5)

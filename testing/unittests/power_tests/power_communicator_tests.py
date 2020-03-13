@@ -73,8 +73,8 @@ class PowerCommunicatorTest(unittest.TestCase):
 
         self.assertEquals((49.5, ), output)
 
-        self.assertEquals(14, comm.get_bytes_written())
-        self.assertEquals(18, comm.get_bytes_read())
+        self.assertEquals(14, comm.get_communication_statistics()['bytes_written'])
+        self.assertEquals(18, comm.get_communication_statistics()['bytes_read'])
 
     def test_do_command_timeout_once(self):
         """ Test for timeout in PowerCommunicator.do_command. """

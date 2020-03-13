@@ -55,8 +55,6 @@ class MasterCommunicator(object):
         self.__serial = controller_serial
         self.__serial_write_lock = Lock()
         self.__command_lock = Lock()
-        self.__serial_bytes_written = 0
-        self.__serial_bytes_read = 0
 
         self.__cid = 1
 
@@ -117,14 +115,6 @@ class MasterCommunicator(object):
     def enable_passthrough(self):
         self.__passthrough_enabled = True
 
-    def get_bytes_written(self):
-        """ Get the number of bytes written to the Master. """
-        return self.__serial_bytes_written
-
-    def get_bytes_read(self):
-        """ Get the number of bytes read from the Master. """
-        return self.__serial_bytes_read
-
     def get_communication_statistics(self):
         return self.__communication_stats
 
@@ -160,7 +150,6 @@ class MasterCommunicator(object):
                     del self.__debug_buffer['write'][t]
 
             self.__serial.write(data)
-            self.__serial_bytes_written += len(data)
             self.__communication_stats['bytes_written'] += len(data)
 
     def register_consumer(self, consumer):
@@ -415,7 +404,6 @@ class MasterCommunicator(object):
             if num_bytes > 0:
                 data += self.__serial.read(num_bytes)
             if data is not None and len(data) > 0:
-                self.__serial_bytes_read += (1 + num_bytes)
                 self.__communication_stats['bytes_read'] += (1 + num_bytes)
 
                 threshold = time.time() - self.__debug_buffer_duration

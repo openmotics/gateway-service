@@ -46,8 +46,6 @@ class PowerCommunicator(object):
         """
         self.__serial = power_serial
         self.__serial_lock = RLock()
-        self.__serial_bytes_written = 0
-        self.__serial_bytes_read = 0
         self.__cid = 1
 
         self.__address_mode = False
@@ -63,6 +61,14 @@ class PowerCommunicator(object):
         else:
             self.__time_keeper = None
 
+        self.__communication_stats = {'calls_succeeded': [],
+                                      'calls_timedout': [],
+                                      'bytes_written': 0,
+                                      'bytes_read': 0}
+        self.__debug_buffer = {'read': {},
+                               'write': {}}
+        self.__debug_buffer_duration = 300
+
         self.__verbose = verbose
 
     def start(self):
@@ -70,13 +76,11 @@ class PowerCommunicator(object):
         if self.__time_keeper is not None:
             self.__time_keeper.start()
 
-    def get_bytes_written(self):
-        """ Get the number of bytes written to the power modules. """
-        return self.__serial_bytes_written
+    def get_communication_statistics(self):
+        return self.__communication_stats
 
-    def get_bytes_read(self):
-        """ Get the number of bytes read from the power modules. """
-        return self.__serial_bytes_read
+    def get_debug_buffer(self):
+        return self.__debug_buffer
 
     def get_seconds_since_last_success(self):
         """ Get the number of seconds since the last successful communication. """
@@ -104,7 +108,12 @@ class PowerCommunicator(object):
         if self.__verbose:
             PowerCommunicator.__log('writing to', data)
         self.__serial.write(data)
-        self.__serial_bytes_written += len(data)
+        self.__communication_stats['bytes_written'] += len(data)
+        threshold = time.time() - self.__debug_buffer_duration
+        self.__debug_buffer['write'][time.time()] = printable(data)
+        for t in self.__debug_buffer['write'].keys():
+            if t < threshold:
+                del self.__debug_buffer['write'][t]
 
     def do_command(self, address, cmd, *data):
         """ Send a command over the serial port and block until an answer is received.
@@ -125,32 +134,42 @@ class PowerCommunicator(object):
 
         def do_once(_address, _cmd, *_data):
             """ Send the command once. """
-            cid = self.__get_cid()
-            send_data = _cmd.create_input(_address, cid, *_data)
-            self.__write_to_serial(send_data)
+            try:
+                cid = self.__get_cid()
+                send_data = _cmd.create_input(_address, cid, *_data)
+                self.__write_to_serial(send_data)
 
-            if _address == power_api.BROADCAST_ADDRESS:
-                return None  # No reply on broadcast messages !
-            else:
-                tries = 0
-                while True:
-                    # In this loop we might receive data that didn't match the expected header. This might happen
-                    # if we for some reason had a timeout on the previous call, and we now read the response
-                    # to that call. In this case, we just re-try (up to 3 times), as the correct data might be
-                    # next in line.
-                    header, response_data = self.__read_from_serial()
-                    if not _cmd.check_header(header, _address, cid):
-                        if _cmd.is_nack(header, _address, cid) and response_data == "\x02":
-                            raise UnkownCommandException('Unknown command')
-                        tries += 1
-                        logger.warning("Header did not match command ({0})".format(tries))
-                        if tries == 3:
-                            raise Exception("Header did not match command ({0})".format(tries))
-                    else:
-                        break
+                if _address == power_api.BROADCAST_ADDRESS:
+                    self.__communication_stats['calls_succeeded'].append(time.time())
+                    self.__communication_stats['calls_succeeded'] = self.__communication_stats['calls_succeeded'][-50:]
+                    return None  # No reply on broadcast messages !
+                else:
+                    tries = 0
+                    while True:
+                        # In this loop we might receive data that didn't match the expected header. This might happen
+                        # if we for some reason had a timeout on the previous call, and we now read the response
+                        # to that call. In this case, we just re-try (up to 3 times), as the correct data might be
+                        # next in line.
+                        header, response_data = self.__read_from_serial()
+                        if not _cmd.check_header(header, _address, cid):
+                            if _cmd.is_nack(header, _address, cid) and response_data == "\x02":
+                                raise UnkownCommandException('Unknown command')
+                            tries += 1
+                            logger.warning("Header did not match command ({0})".format(tries))
+                            if tries == 3:
+                                raise Exception("Header did not match command ({0})".format(tries))
+                        else:
+                            break
 
-                self.__last_success = time.time()
-                return _cmd.read_output(response_data)
+                    self.__last_success = time.time()
+                    return_data = _cmd.read_output(response_data)
+                    self.__communication_stats['calls_succeeded'].append(time.time())
+                    self.__communication_stats['calls_succeeded'] = self.__communication_stats['calls_succeeded'][-50:]
+                    return return_data
+            except CommunicationTimedOutException:
+                self.__communication_stats['calls_timedout'].append(time.time())
+                self.__communication_stats['calls_timedout'] = self.__communication_stats['calls_timedout'][-50:]
+                raise
 
         with self.__serial_lock:
             try:
@@ -294,7 +313,8 @@ class PowerCommunicator(object):
             while phase < 8:
                 byte = self.__serial.read_queue.get(True, 0.25)
                 command += byte
-                self.__serial_bytes_read += 1
+                self.__communication_stats['bytes_read'] += 1
+
                 if phase == 0:  # Skip non 'R' bytes
                     if byte == 'R':
                         phase = 1
@@ -347,6 +367,12 @@ class PowerCommunicator(object):
         finally:
             if self.__verbose:
                 PowerCommunicator.__log('reading from', command)
+
+        threshold = time.time() - self.__debug_buffer_duration
+        self.__debug_buffer['read'][time.time()] = printable(command)
+        for t in self.__debug_buffer['read'].keys():
+            if t < threshold:
+                del self.__debug_buffer['read'][t]
 
         return header, data
 
