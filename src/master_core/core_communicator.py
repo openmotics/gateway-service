@@ -80,14 +80,6 @@ class CoreCommunicator(object):
         self._stop = False
         self._read_thread.start()
 
-    def get_bytes_written(self):
-        """ Get the number of bytes written to the Core. """
-        return self._serial_bytes_written
-
-    def get_bytes_read(self):
-        """ Get the number of bytes read from the Core. """
-        return self._serial_bytes_read
-
     def get_communication_statistics(self):
         return self._communication_stats
 

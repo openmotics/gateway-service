@@ -445,6 +445,11 @@ class MasterCoreController(MasterController):
     def add_virtual_input_module(self):
         raise NotImplementedError()
 
+    # Generic
+
+    def power_cycle_bus(self):
+        raise NotImplementedError()
+
     def get_status(self):
         # TODO: implement
         return {'time': '%02d:%02d' % (0, 0),
