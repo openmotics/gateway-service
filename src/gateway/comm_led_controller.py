@@ -12,14 +12,14 @@ logger = logging.getLogger("openmotics")
 class CommunicationLedController(object):
 
     @Inject
-    def __init__(self, master_communicator=INJECTED, power_communicator=INJECTED, message_client=INJECTED):
+    def __init__(self, master_controller=INJECTED, power_communicator=INJECTED, message_client=INJECTED):
         """
         Blink the serial leds if necessary.
         :type message_client: bus.om_bus_client.MessageClient
-        :type master_communicator: master.master_communicator.MasterCommunicator
+        :type master_controller: gateway.hal.master_controller.MasterController
         :type power_communicator: power.power_communicator.PowerCommunicator
         """
-        self._master_communicator = master_communicator
+        self._master_controller = master_controller
         self._power_communicator = power_communicator
         self._message_client = message_client
 
@@ -37,7 +37,7 @@ class CommunicationLedController(object):
         power = (0, 0)
 
         while True:
-            stats = self._master_communicator.get_communication_statistics()
+            stats = self._master_controller.get_communication_statistics()
             new_master = (stats['bytes_read'], stats['bytes_written'])
 
             if self._power_communicator is None:
