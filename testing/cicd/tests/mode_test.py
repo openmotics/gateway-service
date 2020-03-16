@@ -164,7 +164,7 @@ def create_user(request, toolbox):
 @pytest.mark.slow
 def test_factory_reset(toolbox, create_user):
     logger.info('factory reset')
-    data = toolbox.dut.get('/factory_reset')
+    data = toolbox.factory_reset()
     assert data['factory_reset'] == 'pending'
     time.sleep(60)
     toolbox.health_check(timeout=300)

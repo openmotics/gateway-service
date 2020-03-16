@@ -2328,8 +2328,15 @@ class WebInterface(object):
         self._gateway_api.cleanup_eeprom()
         return {}
 
-    @openmotics_api(auth=True, plugin_exposed=False)
-    def factory_reset(self):
+    @openmotics_api(check=types(confirm=bool), auth=True, plugin_exposed=False)
+    def factory_reset(self, username, password, confirm=False):
+        success, _ = self._user_controller.login(username, password)
+        if not success:
+            raise cherrypy.HTTPError(401, 'invalid_credentials')
+        if self._user_controller.get_role(username) != 'admin':
+            raise cherrypy.HTTPError(401, 'user_unauthorized')
+        if not confirm:
+            raise cherrypy.HTTPError(401, 'not_confirmed')
         return self._gateway_api.factory_reset()
 
     @openmotics_api(auth=False)

@@ -192,6 +192,12 @@ class Toolbox(object):
             self._dut_outputs = range(0, len(output_modules) * 8 - 1)
         return self._dut_outputs
 
+    def factory_reset(self, confirm=True):
+        # type: (bool) -> Dict[str,Any]
+        assert self.dut._auth
+        params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm}
+        return self.dut.get('/factory_reset', params=params, success=confirm)
+
     def list_modules(self, module_type, min_modules=1):
         # type: (str, int) -> List[Dict[str,Any]]
         data = self.dut.get('/get_modules_information')
