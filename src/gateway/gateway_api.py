@@ -685,7 +685,7 @@ class GatewayApi(object):
 
     def factory_reset(self):
         # type: () -> Dict[str,Any]
-        lock_file = '/tmp/openmotics_init.lock'
+        lock_file = constants.get_init_lockfile()
         if os.path.isfile(lock_file):
             return {'success': False, 'factory_reset': 'already_in_progress'}
         with open(lock_file, 'w') as fd:

@@ -96,7 +96,7 @@ if __name__ == '__main__':
         from master import maintenance, master_communicator, eeprom_extension  # type: ignore
         _ = master_controller_classic, maintenance, master_communicator, eeprom_extension  # type: ignore
 
-    lock_file = '/tmp/openmotics_init.lock'
+    lock_file = constants.get_init_lockfile()
     if os.path.isfile(lock_file):
         with open(lock_file) as fd:
             content = fd.read()

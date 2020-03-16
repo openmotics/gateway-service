@@ -140,3 +140,9 @@ def get_plugin_configfiles():
 def get_update_log_location():
     """ Gets the update logfile location """
     return "/var/log/openmotics_update.log"
+
+
+def get_init_lockfile():
+    # type: () -> str
+    """ Returns the lock file used by openmotics_init.py """
+    return "/tmp/openmotics_init.lock"
