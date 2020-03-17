@@ -35,7 +35,7 @@ from bus.om_bus_events import OMBusEvents
 from gateway.hal.master_controller import MasterController
 from gateway.observer import Observer
 from ioc import INJECTED, Inject, Injectable, Singleton
-from platform_utils import Platform
+from platform_utils import Platform, System
 from power import power_api
 from serial_utils import CommunicationTimedOutException
 
@@ -692,8 +692,10 @@ class GatewayApi(object):
             fd.write('factory_reset')
 
         def _restart():
+            # type: () -> None
             logger.info('Restarting for factory reset...')
-            subprocess.Popen(['systemctl', 'restart', '--no-block', 'openmotics.service'])
+            System.restart_service('openmotics.service')
+
         threading.Timer(2, _restart).start()
         return {'factory_reset': 'pending'}
 

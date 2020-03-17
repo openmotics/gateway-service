@@ -117,6 +117,20 @@ class System(object):
         DEBIAN = 'debian'
 
     @staticmethod
+    def restart_service(service):
+        # type: (str) -> None
+        try:
+            subprocess.check_output(['systemctl', 'is-enabled', service])
+            is_systemd = True
+        except subprocess.CalledProcessError:
+            is_systemd = False
+
+        if is_systemd:
+            subprocess.Popen(['systemctl', 'restart', '--no-block', service])
+        else:
+            raise NotImplementedError('only implemented for systemd services')
+
+    @staticmethod
     def _get_operating_system():
         operating_system = {}
         with open('/etc/os-release', 'r') as osfh:
