@@ -142,7 +142,7 @@ class Cloud(object):
                 configuration_changed = cmp(self.__configuration, data['configuration']) != 0
                 if configuration_changed:
                     for setting, value in data['configuration'].iteritems():
-                        self.__config.set_setting(setting, value)
+                        self.__config.set(setting, value)
                     logger.info('configuration changed: {0}'.format(data['configuration']))
 
                 # update __configuration when storing config is successful
@@ -412,7 +412,7 @@ class VPNService(object):
         return False
 
     def _get_debug_dumps(self, dump_type):
-        if not self._config_controller.get_setting('cloud_support', False):
+        if not self._config_controller.get('cloud_support', False):
             return {}
         debug_data = self._debug_data[dump_type]
         found_timestamps = []
@@ -491,7 +491,7 @@ class VPNService(object):
                 start_time = time.time()
 
                 # Check whether connection to the Cloud is enabled/disabled
-                cloud_enabled = self._config_controller.get_setting('cloud_enabled')
+                cloud_enabled = self._config_controller.get('cloud_enabled')
                 if cloud_enabled is False:
                     self._sleep_time = None
                     self._set_vpn(False)

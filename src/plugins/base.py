@@ -390,7 +390,7 @@ class PluginController(object):
 
     def __get_cherrypy_mounts(self):
         mounts = []
-        cors_enabled = self.__config_controller.get_setting('cors_enabled', False)
+        cors_enabled = self.__config_controller.get('cors_enabled', False)
         for runner in self.__iter_running_runners():
             mounts.append({'root': runner.get_webservice(self.__webinterface),
                            'script_name': '/plugins/{0}'.format(runner.name),

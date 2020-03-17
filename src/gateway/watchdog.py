@@ -54,7 +54,7 @@ class Watchdog(object):
 
     def _watch(self):
         # Cleanup legacy
-        self._config_controller.remove_setting('communication_recovery')
+        self._config_controller.remove('communication_recovery')
 
         # Start actual watching
         while not self._stopped:
@@ -83,7 +83,7 @@ class Watchdog(object):
 
     def _controller_check(self, name, controller):
         recovery_setting_key = 'communication_recovery_{0}'.format(name)
-        recovery_setting = self._config_controller.get_setting(recovery_setting_key, {})
+        recovery_setting = self._config_controller.get(recovery_setting_key, {})
 
         calls_timedout = controller.get_communication_statistics()['calls_timedout']
         calls_succeeded = controller.get_communication_statistics()['calls_succeeded']
@@ -92,7 +92,7 @@ class Watchdog(object):
         if len(calls_timedout) == 0:
             # If there are no timeouts at all
             if len(calls_succeeded) > 30:
-                self._config_controller.remove_setting(recovery_setting_key)
+                self._config_controller.remove(recovery_setting_key)
             return
         if len(all_calls) <= 10:
             # Not enough calls made to have a decent view on what's going on
@@ -152,11 +152,11 @@ class Watchdog(object):
             recovery_setting['service_restart'] = {'reason': service_restart,
                                                    'time': time.time(),
                                                    'backoff': backoff}
-            self._config_controller.set_setting(recovery_setting_key, recovery_setting)
+            self._config_controller.set(recovery_setting_key, recovery_setting)
             return 'service'
         if device_reset is not None:
             logger.fatal('Major issues in communication with {0}. Resetting {0} & service'.format(name))
             recovery_setting['device_reset'] = {'reason': device_reset,
                                                 'time': time.time()}
-            self._config_controller.set_setting(recovery_setting_key, recovery_setting)
+            self._config_controller.set(recovery_setting_key, recovery_setting)
             return 'device'
