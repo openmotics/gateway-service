@@ -82,8 +82,8 @@ class Watchdog(object):
                 time.sleep(1)
 
     def _controller_check(self, name, controller):
-        recovery_setting_key = 'communication_recovery_{0}'.format(name)
-        recovery_setting = self._config_controller.get(recovery_setting_key, {})
+        recovery_data_key = 'communication_recovery_{0}'.format(name)
+        recovery_data = self._config_controller.get(recovery_data_key, {})
 
         calls_timedout = controller.get_communication_statistics()['calls_timedout']
         calls_succeeded = controller.get_communication_statistics()['calls_succeeded']
@@ -92,7 +92,7 @@ class Watchdog(object):
         if len(calls_timedout) == 0:
             # If there are no timeouts at all
             if len(calls_succeeded) > 30:
-                self._config_controller.remove(recovery_setting_key)
+                self._config_controller.remove(recovery_data_key)
             return
         if len(all_calls) <= 10:
             # Not enough calls made to have a decent view on what's going on
@@ -113,10 +113,10 @@ class Watchdog(object):
         device_reset = None
         backoff = 300
         # There's no successful communication.
-        if len(recovery_setting) == 0:
+        if len(recovery_data) == 0:
             service_restart = 'communication_errors'
         else:
-            last_service_restart = recovery_setting.get('service_restart')
+            last_service_restart = recovery_data.get('service_restart')
             if last_service_restart is None:
                 service_restart = 'communication_errors'
             else:
@@ -125,7 +125,7 @@ class Watchdog(object):
                     service_restart = 'communication_errors'
                     backoff = min(1200, backoff * 2)
                 else:
-                    last_device_reset = recovery_setting.get('device_reset')
+                    last_device_reset = recovery_data.get('device_reset')
                     if last_device_reset is None or last_device_reset['time'] < last_service_restart['time']:
                         device_reset = 'communication_errors'
 
@@ -149,14 +149,14 @@ class Watchdog(object):
 
         if service_restart is not None:
             logger.fatal('Major issues in communication with {0}. Restarting service...'.format(name))
-            recovery_setting['service_restart'] = {'reason': service_restart,
-                                                   'time': time.time(),
-                                                   'backoff': backoff}
-            self._config_controller.set(recovery_setting_key, recovery_setting)
+            recovery_data['service_restart'] = {'reason': service_restart,
+                                                'time': time.time(),
+                                                'backoff': backoff}
+            self._config_controller.set(recovery_data_key, recovery_data)
             return 'service'
         if device_reset is not None:
             logger.fatal('Major issues in communication with {0}. Resetting {0} & service'.format(name))
-            recovery_setting['device_reset'] = {'reason': device_reset,
-                                                'time': time.time()}
-            self._config_controller.set(recovery_setting_key, recovery_setting)
+            recovery_data['device_reset'] = {'reason': device_reset,
+                                             'time': time.time()}
+            self._config_controller.set(recovery_data_key, recovery_data)
             return 'device'
