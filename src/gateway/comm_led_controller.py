@@ -33,24 +33,24 @@ class CommunicationLedController(object):
         logger.info("Starting commmunications led controller... Done")
 
     def led_driver(self):
-        master = (0, 0)
-        power = (0, 0)
+        master_stats = (0, 0)
+        power_stats = (0, 0)
 
         while True:
             stats = self._master_controller.get_communication_statistics()
-            new_master = (stats['bytes_read'], stats['bytes_written'])
+            new_master_stats = (stats['bytes_read'], stats['bytes_written'])
 
             if self._power_communicator is None:
-                new_power = (0, 0)
+                new_power_stats = (0, 0)
             else:
                 stats = self._power_communicator.get_communication_statistics()
-                new_power = (stats['bytes_read'], stats['bytes_written'])
+                new_power_stats = (stats['bytes_read'], stats['bytes_written'])
 
-            if master[0] != new_master[0] or master[1] != new_master[1]:
+            if master_stats[0] != new_master_stats[0] or master_stats[1] != new_master_stats[1]:
                 self._message_client.send_event(OMBusEvents.SERIAL_ACTIVITY, 5)
-            if power[0] != new_power[0] or power[1] != new_power[1]:
+            if power_stats[0] != new_power_stats[0] or power_stats[1] != new_power_stats[1]:
                 self._message_client.send_event(OMBusEvents.SERIAL_ACTIVITY, 4)
 
-            master = new_master
-            power = new_power
+            master_stats = new_master_stats
+            power_stats = new_power_stats
             time.sleep(0.1)
