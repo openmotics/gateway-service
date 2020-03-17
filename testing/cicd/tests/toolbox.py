@@ -312,7 +312,7 @@ class Toolbox(object):
             if bool(status) == bool(current_status):
                 logger.info('get output status o#{} status={}, after {:.2f}s'.format(output_id, status, time.time() - since))
                 return
-            time.sleep(0.2)
+            time.sleep(2)
         state = ' '.join(self.tester.get_last_outputs())
         logger.error('get status o#{} status={} != expected {}, timeout after {:.2f}s    outputs={}'.format(output_id, bool(current_status), status, time.time() - since, state))
         self.tester.log_events()
