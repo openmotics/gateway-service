@@ -2494,11 +2494,26 @@ class WebService(object):
         logger.info('Stopping webserver... Done')
 
     def update_tree(self, mounts):
-        self._http_server.stop()
-        self._https_server.stop()
-        for mount in mounts:
-            cherrypy.tree.mount(**mount)
-        self._http_server.start()
-        self._https_server.start()
-        self._https_server.httpserver.error_log = WebService._http_server_logger
-        self._http_server.httpserver.error_log = WebService._http_server_logger
+        try:
+            self._http_server.stop()
+        except Exception as ex:
+            logger.error('Could not stop non-secure webserver: {0}'.format(ex))
+        try:
+            self._https_server.stop()
+        except Exception as ex:
+            logger.error('Could not stop secure webserver: {0}'.format(ex))
+        try:
+            for mount in mounts:
+                cherrypy.tree.mount(**mount)
+        except Exception as ex:
+            logger.error('Could not mount updated tree: {0}'.format(ex))
+        try:
+            self._http_server.start()
+            self._http_server.httpserver.error_log = WebService._http_server_logger
+        except Exception as ex:
+            logger.error('Could not restart non-secure webserver: {0}'.format(ex))
+        try:
+            self._https_server.start()
+            self._https_server.httpserver.error_log = WebService._http_server_logger
+        except Exception as ex:
+            logger.error('Could not restart secure webserver: {0}'.format(ex))
