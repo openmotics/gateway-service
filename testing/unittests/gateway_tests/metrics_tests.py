@@ -95,19 +95,19 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(MetricsTest.intervals.get('energy'), 300)
         metrics_controller.set_cloud_interval('energy', 900)
         self.assertEqual(MetricsTest.intervals.get('energy'), 900)
-        self.assertEqual(config_controller.get_setting('cloud_metrics_interval|energy'), 900)
+        self.assertEqual(config_controller.get('cloud_metrics_interval|energy'), 900)
 
     def test_needs_upload(self):
         # 0. the boring stuff
-        def get_setting(setting, fallback=None):
-            return config.get(setting, fallback)
+        def get(key, fallback=None):
+            return config.get(key, fallback)
 
         def load_buffer(before=None):
             _ = before
             return []
 
         config_controller = Mock()
-        config_controller.get_setting = get_setting
+        config_controller.get = get
         metrics_cache_mock = Mock()
         metrics_cache_mock.load_buffer = load_buffer
         metrics_collector_mock = Mock()
@@ -189,8 +189,8 @@ class MetricsTest(unittest.TestCase):
         send_metrics = []
         response_data = {}
 
-        def get_setting(setting, fallback=None):
-            return config.get(setting, fallback)
+        def get(key, fallback=None):
+            return config.get(key, fallback)
 
         def post(url, data, timeout):
             _ = url, timeout
@@ -215,7 +215,7 @@ class MetricsTest(unittest.TestCase):
 
         metrics_cache = MetricsCacheController()
         config_controller = Mock()
-        config_controller.get_setting = get_setting
+        config_controller.get = get
         metrics_collector_mock = Mock()
         metrics_collector_mock.intervals = []
 

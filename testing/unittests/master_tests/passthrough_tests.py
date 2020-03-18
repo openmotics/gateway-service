@@ -56,8 +56,8 @@ class PassthroughServiceTest(unittest.TestCase):
 
         time.sleep(1)
 
-        self.assertEquals(33, master_communicator.get_bytes_read())
-        self.assertEquals(21, master_communicator.get_bytes_written())
+        self.assertEquals(33, master_communicator.get_communication_statistics()['bytes_read'])
+        self.assertEquals(21, master_communicator.get_communication_statistics()['bytes_written'])
 
         self.assertEquals(33, master_mock.bytes_read)
         self.assertEquals(21, master_mock.bytes_written)

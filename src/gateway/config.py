@@ -59,31 +59,31 @@ class ConfigurationController(object):
         Creates tables and execute migrations
         """
         self.__execute('CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY, setting TEXT UNIQUE, data TEXT);')
-        for setting, default_setting in {'cloud_enabled': True,
-                                         'cloud_endpoint': 'cloud.openmotics.com',
-                                         'cloud_endpoint_metrics': 'portal/metrics/',
-                                         'cloud_metrics_types': [],
-                                         'cloud_metrics_sources': [],
-                                         'cloud_metrics_enabled|energy': True,
-                                         'cloud_metrics_enabled|counter': True,
-                                         'cloud_metrics_batch_size': 50,
-                                         'cloud_metrics_min_interval': 300,
-                                         'cloud_support': False,
-                                         'cors_enabled': False}.iteritems():
-            if self.get_setting(setting) is None:
-                self.set_setting(setting, default_setting)
+        for key, default_value in {'cloud_enabled': True,
+                                   'cloud_endpoint': 'cloud.openmotics.com',
+                                   'cloud_endpoint_metrics': 'portal/metrics/',
+                                   'cloud_metrics_types': [],
+                                   'cloud_metrics_sources': [],
+                                   'cloud_metrics_enabled|energy': True,
+                                   'cloud_metrics_enabled|counter': True,
+                                   'cloud_metrics_batch_size': 50,
+                                   'cloud_metrics_min_interval': 300,
+                                   'cloud_support': False,
+                                   'cors_enabled': False}.iteritems():
+            if self.get(key) is None:
+                self.get(key, default_value)
 
-    def get_setting(self, setting, fallback=None):
-        for setting in self.__execute('SELECT data FROM settings WHERE setting=?;', (setting.lower(),)):
-            return json.loads(setting[0])
+    def get(self, key, fallback=None):
+        for entry in self.__execute('SELECT data FROM settings WHERE setting=?;', (key.lower(),)):
+            return json.loads(entry[0])
         return fallback
 
-    def set_setting(self, setting, value):
+    def set(self, key, value):
         self.__execute('INSERT OR REPLACE INTO settings (setting, data) VALUES (?, ?);',
-                       (setting.lower(), json.dumps(value)))
+                       (key.lower(), json.dumps(value)))
 
-    def remove_setting(self, setting):
-        self.__execute('DELETE FROM settings WHERE setting=?;', (setting.lower(),))
+    def remove(self, key):
+        self.__execute('DELETE FROM settings WHERE setting=?;', (key.lower(),))
 
     def close(self):
         """ Close the database connection. """

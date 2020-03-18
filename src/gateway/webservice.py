@@ -2284,7 +2284,7 @@ class WebInterface(object):
         """
         values = {}
         for setting in settings:
-            value = self._config_controller.get_setting(setting)
+            value = self._config_controller.get(setting)
             if value is not None:
                 values[setting] = value
         return {'values': values}
@@ -2297,7 +2297,7 @@ class WebInterface(object):
         if setting not in ['cloud_enabled', 'cloud_metrics_enabled|energy', 'cloud_metrics_enabled|counter',
                            'cloud_support']:
             raise RuntimeError('Setting {0} cannot be set'.format(setting))
-        self._config_controller.set_setting(setting, value)
+        self._config_controller.set(setting, value)
         return {}
 
     @openmotics_api(auth=True)
@@ -2424,7 +2424,7 @@ class WebService(object):
                       '/ws_maintenance': {'tools.websocket.on': True,
                                           'tools.websocket.handler_cls': MaintenanceSocket},
                       '/': {'tools.timestamp_filter.on': True,
-                            'tools.cors.on': self._config_controller.get_setting('cors_enabled', False),
+                            'tools.cors.on': self._config_controller.get('cors_enabled', False),
                             'tools.sessions.on': False}}
 
             cherrypy.tree.mount(root=self._webinterface,

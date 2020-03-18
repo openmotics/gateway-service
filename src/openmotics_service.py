@@ -73,11 +73,11 @@ class OpenmoticsService(object):
         from plugins import base
         from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
                              maintenance_controller, comm_led_controller, users, pulses, config as config_controller,
-                             metrics_caching)
+                             metrics_caching, watchdog)
         from cloud import events
         _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
              maintenance_controller, base, events, power_communicator, comm_led_controller, users,
-             power_controller, pulses, config_controller, metrics_caching)
+             power_controller, pulses, config_controller, metrics_caching, watchdog)
         if Platform.get_platform() == Platform.Type.CORE_PLUS:
             from gateway.hal import master_controller_core
             from master_core import maintenance, core_communicator, ucan_communicator
@@ -205,7 +205,7 @@ class OpenmoticsService(object):
     @Inject
     def start(master_controller=INJECTED, maintenance_controller=INJECTED,
               observer=INJECTED, power_communicator=INJECTED, metrics_controller=INJECTED, passthrough_service=INJECTED,
-              scheduling_controller=INJECTED, metrics_collector=INJECTED, web_service=INJECTED, gateway_api=INJECTED, plugin_controller=INJECTED,
+              scheduling_controller=INJECTED, metrics_collector=INJECTED, web_service=INJECTED, watchdog=INJECTED, plugin_controller=INJECTED,
               communication_led_controller=INJECTED, event_sender=INJECTED, thermostat_controller=INJECTED):
         """ Main function. """
         logger.info('Starting OM core service...')
@@ -224,6 +224,7 @@ class OpenmoticsService(object):
         plugin_controller.start()
         communication_led_controller.start()
         event_sender.start()
+        watchdog.start()
 
         signal_request = {'stop': False}
 
@@ -231,6 +232,7 @@ class OpenmoticsService(object):
             """ This function is called on SIGTERM. """
             _ = signum, frame
             logger.info('Stopping OM core service...')
+            watchdog.stop()
             master_controller.stop()
             maintenance_controller.stop()
             web_service.stop()

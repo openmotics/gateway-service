@@ -95,6 +95,12 @@ class MasterController(object):
     # Public API #
     ##############
 
+    def get_communication_statistics(self):
+        return self._master_communicator.get_communication_statistics()
+
+    def get_debug_buffer(self):
+        return self._master_communicator.get_debug_buffer()
+
     # TODO: Currently the objects returned here are classic-format dicts. This needs to be changed to intermediate transport objects
 
     def invalidate_caches(self):
@@ -249,6 +255,9 @@ class MasterController(object):
         raise NotImplementedError()
 
     # Generic
+
+    def power_cycle_bus(self):
+        raise NotImplementedError()
 
     def get_status(self):
         raise NotImplementedError()
