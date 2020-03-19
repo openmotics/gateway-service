@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from pytz import timezone
@@ -57,10 +57,11 @@ def test_status_timezone(toolbox, set_timezone):
     assert 'timezone' in data
     assert data['timezone'] == 'UTC'
 
-    now = datetime.utcnow()
+    now = datetime.strptime(datetime.now().strftime('%H:%M'), '%H:%M')
     data = toolbox.dut.get('/get_status')
     assert 'time' in data
-    assert data['time'] == now.strftime('%H:%M')
+    time = datetime.strptime(data['time'], '%H:%M')
+    assert now - timedelta(minutes=1) <= time <= now + timedelta(minutes=1)
 
 
 @pytest.mark.smoke
@@ -72,7 +73,8 @@ def test_timezone_change(toolbox, set_timezone):
     assert data['timezone'] == 'America/Bahia'
 
     bahia_timezone = timezone('America/Bahia')
-    now = datetime.now(bahia_timezone)
+    now = datetime.strptime(datetime.now(bahia_timezone).strftime('%H:%M'), '%H:%M')
     data = toolbox.dut.get('/get_status')
     assert 'time' in data
-    assert data['time'] == now.strftime('%H:%M')
+    time = datetime.strptime(data['time'], '%H:%M')
+    assert now - timedelta(minutes=1) <= time <= now + timedelta(minutes=1)
