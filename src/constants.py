@@ -64,6 +64,19 @@ def get_pulse_counter_database_file():
     return "/opt/openmotics/etc/pulse.db"
 
 
+def get_all_database_files():
+    return [
+        get_config_database_file(),
+        get_power_database_file(),
+        get_scheduling_database_file(),
+        get_gateway_database_file(),
+        get_thermostats_scheduler_database_file(),
+        get_eeprom_extension_database_file(),
+        get_metrics_database_file(),
+        get_pulse_counter_database_file(),
+    ]
+
+
 def get_ssl_certificate_file():
     """ Get the filename of the ssl certificate. """
     return "/opt/openmotics/etc/https.crt"
@@ -127,3 +140,9 @@ def get_plugin_configfiles():
 def get_update_log_location():
     """ Gets the update logfile location """
     return "/var/log/openmotics_update.log"
+
+
+def get_init_lockfile():
+    # type: () -> str
+    """ Returns the lock file used by openmotics_init.py """
+    return "/tmp/openmotics_init.lock"

@@ -1,6 +1,8 @@
 [Unit]
-Description=OpenMotics VPN
-After=network.target
+Description=OpenMotics Gateway VPN
+After=openmotics.service network-online.target
+PartOf=openmotics.service
+Requires=openmotics.service
 
 [Service]
 User=root
@@ -10,4 +12,4 @@ Restart=always
 RestartSec=10
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=openmotics.service

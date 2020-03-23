@@ -1,6 +1,8 @@
 [Unit]
 Description=OpenMotics LEDs
-After=network.target
+After=openmotics.service
+PartOf=openmotics.service
+Requires=openmotics.service
 
 [Service]
 User=root
@@ -10,4 +12,4 @@ Restart=always
 RestartSec=10
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=openmotics.service

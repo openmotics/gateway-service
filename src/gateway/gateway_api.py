@@ -25,15 +25,17 @@ import os
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import threading
+import time
 
 import constants
 from bus.om_bus_events import OMBusEvents
 from gateway.hal.master_controller import MasterController
 from gateway.observer import Observer
 from ioc import INJECTED, Inject, Injectable, Singleton
-from platform_utils import Platform
+from platform_utils import Platform, System
 from power import power_api
 from serial_utils import CommunicationTimedOutException
 
@@ -682,45 +684,20 @@ class GatewayApi(object):
             threading.Timer(1, lambda: os._exit(0)).start()
 
     def factory_reset(self):
-        """ Perform a factory reset deleting all sql lite databases and wiping the master eeprom
+        # type: () -> Dict[str,Any]
+        lock_file = constants.get_init_lockfile()
+        if os.path.isfile(lock_file):
+            return {'success': False, 'factory_reset': 'already_in_progress'}
+        with open(lock_file, 'w') as fd:
+            fd.write('factory_reset')
 
-        :returns: dict with 'output' key.
-        """
-        import glob
-        import shutil
-        try:
-            self.__master_controller.factory_reset()
+        def _restart():
+            # type: () -> None
+            logger.info('Restarting for factory reset...')
+            System.restart_service('openmotics.service')
 
-            # Delete sql lite databases
-            filenames = [constants.get_config_database_file(),
-                         constants.get_scheduling_database_file(),
-                         constants.get_power_database_file(),
-                         constants.get_eeprom_extension_database_file(),
-                         constants.get_metrics_database_file(),
-                         constants.get_pulse_counter_database_file()]
-
-            for filename in filenames:
-                if os.path.exists(filename):
-                    os.remove(filename)
-
-            # Delete plugins
-            plugin_dir = constants.get_plugin_dir()
-            plugins = [name for name in os.listdir(plugin_dir) if os.path.isdir(os.path.join(plugin_dir, name))]
-            for plugin in plugins:
-                shutil.rmtree(plugin_dir + plugin)
-
-            config_files = constants.get_plugin_configfiles()
-            for config_file in glob.glob(config_files):
-                os.remove(config_file)
-
-            # reset the master
-            self.__master_controller.reset()
-
-            return {'output': 'Factory reset complete'}
-
-        finally:
-            # Restart the Cherrypy server after 1 second. Lets the current request terminate.
-            threading.Timer(1, lambda: os._exit(0)).start()
+        threading.Timer(2, _restart).start()
+        return {'factory_reset': 'pending'}
 
     def get_master_backup(self):
         return self.__master_controller.get_backup()

@@ -33,6 +33,7 @@ def check_ip_range():
 def power_on(request, toolbox):
     yield
     toolbox.ensure_power_on()
+    toolbox.dut.login()
 
 
 @pytest.fixture
@@ -149,33 +150,42 @@ def test_authorized_mode(toolbox, authorized_mode):
     assert 'openmotics' in data['usernames']
 
 
+@pytest.fixture
+def create_user(request, toolbox):
+    try:
+        toolbox.dut.login(success=False)
+    except Exception:
+        toolbox.start_authorized_mode()
+        toolbox.create_or_update_user()
+        toolbox.dut.login()
+    yield
+
+
 @pytest.mark.slow
-@pytest.mark.skip(reason='factory reset is currently not fully functional')
-def test_factory_reset(toolbox, authorized_mode, discover_mode):
+def test_factory_reset(toolbox, create_user):
     logger.info('factory reset')
-    toolbox.dut.get('/factory_reset')
-    time.sleep(2)
+    data = toolbox.factory_reset()
+    assert data['factory_reset'] == 'pending'
+    time.sleep(60)
+    toolbox.health_check(timeout=300)
 
     toolbox.start_authorized_mode()
     data = toolbox.dut.get('/get_usernames', use_token=False)
     logger.info('users after reset {}'.format(data['usernames']))
-
     toolbox.create_or_update_user()
-    time.sleep(2)
-    data = toolbox.dut.get('/get_usernames', use_token=False)
-    assert 'openmotics' in data['usernames']
     toolbox.dut.login()
 
-    logger.info('start module discover')
-    toolbox.dut.get('/module_discover_start')
-    time.sleep(2)
     data = toolbox.dut.get('/get_modules')
     assert 'inputs' in data
     assert data['inputs'] == []
     assert 'outputs' in data
     assert data['outputs'] == []
 
+    logger.info('start module discover')
+    toolbox.dut.get('/module_discover_start')
+    time.sleep(2)
     toolbox.discover_input_module()
+    time.sleep(0.2)
     toolbox.discover_output_module()
     time.sleep(2)
     data = toolbox.dut.get('/get_modules')
@@ -185,6 +195,7 @@ def test_factory_reset(toolbox, authorized_mode, discover_mode):
     assert 'O' in data['outputs']
 
     toolbox.dut.get('/module_discover_stop')
+    time.sleep(2)
     data = toolbox.dut.get('/get_modules_information')
     modules = data['modules']['master'].values()
     assert set(['I', 'O']) == set(x['type'] for x in modules)

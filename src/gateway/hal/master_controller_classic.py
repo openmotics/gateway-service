@@ -62,6 +62,7 @@ class MasterClassicController(MasterController):
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
         self._synchronization_thread = Thread(target=self._synchronize, name='ClassicMasterSynchronization')
+        self._synchronization_thread.daemon = True
         self._master_version = None
         self._master_online = False
         self._input_interval = 300

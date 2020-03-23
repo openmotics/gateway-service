@@ -22,6 +22,12 @@ settings.load_profile(os.getenv('HYPOTHESIS_PROFILE', 'default'))
 def toolbox_session():
     toolbox = Toolbox()
     toolbox.ensure_power_on()
+    try:
+        toolbox.dut.login(success=False)
+    except Exception:
+        toolbox.start_authorized_mode()
+        toolbox.create_or_update_user()
+        toolbox.dut.login()
     return toolbox
 
 
