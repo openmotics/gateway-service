@@ -102,11 +102,11 @@ class IOComparison(RuleBasedStateMachine):
         self.toolbox.set_output(o.output_id, o.status)
         self.toolbox.assert_output_changed(o.output_id, o.status)
 
-    @rule(o=outputs)
-    @precondition(lambda self: self.changed)
-    def get_output_status(self, o):
-        self.changed = False
-        self.toolbox.assert_output_status(o.output_id, o.status)
+    # @rule(o=outputs)
+    # @precondition(lambda self: self.changed)
+    # def get_output_status(self, o):
+    #     self.changed = False
+    #     self.toolbox.assert_output_status(o.output_id, o.status)
 
 
 class TestIOComparison(IOComparison.TestCase):  # type: ignore
