@@ -268,10 +268,12 @@ def main():
                         help='bootload for the P1 concentrator modules')
     parser.add_argument('--verbose', dest='verbose', action='store_true',
                         help='show the serial output')
+    parser.add_argument('--scan', dest='scan', action='store_true',
+                        help='Scan the energy bus for modules')
 
     args = parser.parse_args()
 
-    if not args.file:
+    if not args.file and not args.scan:
         parser.print_help()
         return
 
@@ -287,6 +289,20 @@ def main():
     power_controller = PowerController()
     power_communicator = PowerCommunicator(time_keeper_period=0, verbose=args.verbose)
     power_communicator.start()
+
+    if args.scan:
+        logger.info('Scanning addresses 0-255...')
+        for address in xrange(256):
+            for module_type, version in {'E/P': power_api.ENERGY_MODULE,
+                                         'C': power_api.P1_CONCENTRATOR}.iteritems():
+                try:
+                    logger.info('{0}{1} - Version: {2}'.format(
+                        module_type, address, get_module_firmware_version(address, version, power_communicator)
+                    ))
+                except Exception:
+                    pass
+        logger.info('Scan completed')
+        return
 
     version = power_api.ENERGY_MODULE
     if args.old:
