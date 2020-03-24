@@ -1310,7 +1310,6 @@ class GatewayApi(object):
                                                       float(raw_current_ph3[port * 5:(port + 1) * 6][:3]))
                                 except ValueError:
                                     pass
-
                         except ValueError:
                             pass
                 else:
