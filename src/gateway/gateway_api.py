@@ -1300,11 +1300,16 @@ class GatewayApi(object):
                         try:
                             if status & 1 << port:
                                 volt[port] = float(raw_volt[port * 7:(port + 1) * 7][:5])
-                                current[port] = (float(raw_current_ph1[port * 5:(port + 1) * 6][:3]) +
-                                                 float(raw_current_ph2[port * 5:(port + 1) * 6][:3]) +
-                                                 float(raw_current_ph3[port * 5:(port + 1) * 6][:3]))
                                 power[port] = (float(delivered_power[port * 9:(port + 1) * 9][:6]) -
                                                float(received_power[port * 9:(port + 1) * 9][:6])) * 1000
+                                current[port] = float(raw_current_ph1[port * 5:(port + 1) * 6][:3])
+                                try:
+                                    # Phase 2 and 3 might be available on 3-phase meters. If not, the data will be
+                                    # empty and generate a ValueError. In such case, ignore the exception and move on
+                                    current[port] += (float(raw_current_ph2[port * 5:(port + 1) * 6][:3]) +
+                                                      float(raw_current_ph3[port * 5:(port + 1) * 6][:3]))
+                                except ValueError:
+                                    pass
                         except ValueError:
                             pass
                 else:
