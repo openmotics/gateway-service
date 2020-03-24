@@ -29,7 +29,6 @@ import sys
 import tempfile
 import threading
 import time
-from exceptions import ValueError
 
 import constants
 from bus.om_bus_events import OMBusEvents
