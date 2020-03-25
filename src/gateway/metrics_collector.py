@@ -16,17 +16,20 @@
 This module collects OpenMotics metrics and makes them available to the MetricsController
 """
 
-import time
 import logging
-import psutil
-from threading import Thread, Event
+import time
 from collections import deque
-from ioc import Injectable, Inject, INJECTED, Singleton
-from models import Database
-from serial_utils import CommunicationTimedOutException
-from gateway.observer import Event as ObserverEvent
+from threading import Event, Thread
+
+import psutil
+
 from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.observer import Event as ObserverEvent
+from ioc import INJECTED, Inject, Injectable, Singleton
+from models import Database
+from platform_utils import Hardware
 from power import power_api
+from serial_utils import CommunicationTimedOutException
 
 logger = logging.getLogger("openmotics")
 
@@ -319,6 +322,12 @@ class MetricsCollector(object):
                             logger.error('Error loading disk io metric: {0}'.format(ex))
                 except Exception as ex:
                     logger.error('Error loading disk metrics: {0}'.format(ex))
+
+                try:
+                    for key, val in Hardware.read_mmc_ext_csd():
+                        values['disk_{}'.format(key)] = val
+                except Exception as ex:
+                    logger.error('Error loading disk eMMC metrics: {0}'.format(ex))
 
                 try:
                     network = dict(psutil.net_io_counters()._asdict())
@@ -896,6 +905,18 @@ class MetricsCollector(object):
                           'description': 'Disk write bytes',
                           'type': 'gauge',
                           'unit': 'bytes'},
+                         {'name': 'disk_life_time_est_typ_b',
+                          'description': 'Disk eMMC Life Time Estimation B',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'disk_life_time_est_typ_a',
+                          'description': 'Disk eMMC Life Time Estimation A',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'disk_eol_info',
+                          'description': 'eMMC Pre EOL information',
+                          'type': 'gauge',
+                          'unit': ''},
                          {'name': 'net_bytes_sent',
                           'description': 'Network bytes sent',
                           'type': 'gauge',

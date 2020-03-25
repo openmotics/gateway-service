@@ -47,6 +47,28 @@ class Hardware(object):
     BoardTypes = [BoardType.BB, BoardType.BBB, BoardType.BBGW]
     IOCTL_I2C_SLAVE = 0x0703
 
+    # eMMC registers
+    EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B = 269
+    EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_A = 268
+    EXT_CSD_PRE_EOL_INFO = 267
+
+    @staticmethod
+    def read_mmc_ext_csd():
+        registers = {
+            'life_time_est_typ_b': Hardware.EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B,
+            'life_time_est_typ_a': Hardware.EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_A,
+            'eol_info': Hardware.EXT_CSD_PRE_EOL_INFO,
+        }
+        with open('/sys/kernel/debug/mmc1/mmc1:0001/ext_csd') as fd:
+            ecsd = fd.read()
+
+        ecsd_info = {}
+        # NOTE: this only works for fields with length 1
+        for reg, i in registers.items():
+            pos = i * 2
+            ecsd_info[reg] = int(ecsd[pos:pos + 2], 16)
+        return ecsd_info.iteritems()
+
     @staticmethod
     def get_board_type():
         try:
