@@ -220,6 +220,47 @@ class MemoryTypesTest(unittest.TestCase):
         child.save()
         self.assertEqual([20, 0b0110], memory_map[4])
 
+    def test_factor_composition(self):
+        memory_map = {0: [0]}
+
+        def _read(addresses):
+            data_ = {}
+            for address in addresses:
+                data_[address] = memory_map[address.page][address.offset:address.offset + address.length]
+            return data_
+
+        def _write(data_map):
+            for address, data_ in data_map.iteritems():
+                for index, data_byte in enumerate(data_):
+                    memory_map[address.page][address.offset + index] = data_byte
+
+        memory_file_mock = Mock(MemoryFile)
+        memory_file_mock.read = _read
+        memory_file_mock.write = _write
+
+        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: memory_file_mock})
+
+        class Object(MemoryModelDefinition):
+            class _Composed(CompositeMemoryModelDefinition):
+                field_0 = CompositeNumberField(start_bit=0, width=8, value_factor=2)
+                field_1 = CompositeNumberField(start_bit=0, width=8, value_offset=-1, value_factor=2)
+
+            composed = _Composed(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (id, 0)))
+
+        instance = Object(0)
+        self.assertEqual(0, instance.composed.field_0)
+        self.assertEqual(1, instance.composed.field_1)
+
+        instance.composed.field_0 = 14
+        self.assertEqual(15, instance.composed.field_1)
+        instance.save()
+        self.assertEqual(7, memory_map[0][0])
+
+        memory_map[0][0] = 100
+        instance = Object(0)
+        self.assertEqual(200, instance.composed.field_0)
+        self.assertEqual(201, instance.composed.field_1)
+
 
 if __name__ == "__main__":
     unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

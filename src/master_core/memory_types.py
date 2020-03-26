@@ -469,7 +469,7 @@ class CompositeField(object):
 
 
 class CompositeNumberField(CompositeField):
-    def __init__(self, start_bit, width, value_offset=0, max_value=None):
+    def __init__(self, start_bit, width, value_offset=0, value_factor=1, max_value=None):
         super(CompositeNumberField, self).__init__()
         self._mask = 2 ** width - 1 << start_bit
         self._start_bit = start_bit
@@ -478,12 +478,13 @@ class CompositeNumberField(CompositeField):
         else:
             self._max_value = max_value
         self._value_offset = value_offset
+        self._value_factor = value_factor
 
     def decompose(self, value):
         return self._decompose(value)
 
     def _decompose(self, value):
-        value = ((value & self._mask) >> self._start_bit) - self._value_offset
+        value = (((value & self._mask) >> self._start_bit) * self._value_factor) - self._value_offset
         if self._max_value is None or 0 <= value <= self._max_value:
             return value
         return None
@@ -497,7 +498,7 @@ class CompositeNumberField(CompositeField):
             return current_composition
         if self._max_value is not None and not (0 <= value <= self._max_value):
             raise ValueError('Value out of limits: 0 <= value <= {0}'.format(self._max_value))
-        value = ((value + self._value_offset) << self._start_bit) & self._mask
+        value = (((value + self._value_offset) / self._value_factor) << self._start_bit) & self._mask
         current_composition = current_composition & ~self._mask & (2 ** composition_width - 1)
         return current_composition | value
 

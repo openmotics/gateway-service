@@ -45,9 +45,20 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
 
 
 class OutputModuleConfiguration(MemoryModelDefinition):
+    class _ShutterComposition(CompositeMemoryModelDefinition):
+        set_01_direction = CompositeBitField(bit=0)
+        set_23_direction = CompositeBitField(bit=1)
+        set_45_direction = CompositeBitField(bit=2)
+        set_67_direction = CompositeBitField(bit=3)
+        set_01_outputs = CompositeBitField(bit=4)
+        set_23_outputs = CompositeBitField(bit=5)
+        set_45_outputs = CompositeBitField(bit=6)
+        set_67_outputs = CompositeBitField(bit=7)
+
     device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 0), length=1)  # 1-80, 0-3
     address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 0))  # 1-80, 0-3
     firmware_version = MemoryVersionField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 4))  # 1-80, 4-6
+    shutter_config = _ShutterComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (392, id)))  # 392, 0-79
 
 
 class OutputConfiguration(MemoryModelDefinition):
@@ -118,6 +129,36 @@ class SensorConfiguration(MemoryModelDefinition):
     aqi_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id / 8, 56 + (id % 8) * 2))  # 239-254, 56-71
     dali_mapping = _DALISensorComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id / 8, 72 + (id % 8))))  # 239-254, 72-79
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id / 8, 128 + id * 16), length=16)  # 239-254, 128-255
+
+
+class ShutterConfiguration(MemoryModelDefinition):
+    class _OutputMappingComposition(CompositeMemoryModelDefinition):
+        output_0 = CompositeNumberField(start_bit=0, width=8, value_factor=2)
+        output_1 = CompositeNumberField(start_bit=0, width=8, value_offset=-1, value_factor=2)
+
+    class _ShutterGroupMembershipComposition(CompositeMemoryModelDefinition):
+        group_0 = CompositeBitField(bit=0)
+        group_1 = CompositeBitField(bit=1)
+        group_2 = CompositeBitField(bit=2)
+        group_3 = CompositeBitField(bit=3)
+        group_4 = CompositeBitField(bit=4)
+        group_5 = CompositeBitField(bit=5)
+        group_6 = CompositeBitField(bit=6)
+        group_7 = CompositeBitField(bit=7)
+        group_8 = CompositeBitField(bit=8)
+        group_9 = CompositeBitField(bit=9)
+        group_10 = CompositeBitField(bit=10)
+        group_11 = CompositeBitField(bit=11)
+        group_12 = CompositeBitField(bit=12)
+        group_13 = CompositeBitField(bit=13)
+        group_14 = CompositeBitField(bit=14)
+        group_15 = CompositeBitField(bit=15)
+
+    outputs = _OutputMappingComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (391, id)))  # 391, 0-255
+    timer_up = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (393 + id / 128, id % 128 * 2))  # 393-394, 0-255
+    timer_down = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (395 + id / 128, id % 128 * 2))  # 395-396, 0-255
+    name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (397 + id / 16, id % 16 * 16), length=16)  # 397-412, 0-255
+    groups = _ShutterGroupMembershipComposition(field=MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (413 + id / 128, id % 128 * 2)))  # 413-414, 0-255
 
 
 class CanControlModuleConfiguration(MemoryModelDefinition):
