@@ -2081,7 +2081,7 @@ class WebInterface(object):
     @openmotics_api(auth=True)
     def get_system_info(self):
         return {'model': Hardware.get_board_type(),
-                'operating_systen': System._get_operating_system()['ID'],
+                'operating_systen': System.get_operating_system()['ID'],
                 'platform': Platform.get_platform()}
 
     @openmotics_api(auth=True, plugin_exposed=False)
