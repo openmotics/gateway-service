@@ -245,7 +245,7 @@ class System(object):
     @staticmethod
     def import_libs():
         operating_system = System.get_operating_system()['ID']
-        sys.path.insert(0, '/opt/openmotics/dist-packages/')
+        sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:
