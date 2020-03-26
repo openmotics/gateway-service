@@ -37,8 +37,8 @@ logger = logging.getLogger('openmotics')
 
 
 def migrate(migrator, database, fake=False, **kwargs):
-    ThermostatGroup.create(id=1, number=0, name='default', on=True)
-    Feature.create(id=1, name='thermostats_gateway', enabled=False)
+    ThermostatGroup.get_or_create(number=0, name='default', on=True)
+    Feature.get_or_create(name='thermostats_gateway', enabled=False)
 
 
 def rollback(migrator, database, fake=False, **kwargs):
