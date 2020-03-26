@@ -84,7 +84,7 @@ class MasterCoreController(MasterController):
             output_id = core_event.data['output']
             self._output_states[output_id] = {'id': output_id,
                                               'status': 1 if core_event.data['status'] else 0,
-                                              'ctimer': core_event.data['timer_value'],
+                                              'ctimer': core_event.data['timer_value'] * core_event.data['timer_factor'],
                                               'dimmer': core_event.data['dimmer_value']}
             # Generate generic event
             event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE,
@@ -280,7 +280,7 @@ class MasterCoreController(MasterController):
         if output.timer_type == 2:
             timer = output.timer_value
         elif output.timer_type == 1:
-            timer = output.timer_value / 10
+            timer = output.timer_value / 10.0
         data = {'id': output.id,
                 'module_type': output.module.device_type,  # TODO: Proper translation
                 'name': output.name,
