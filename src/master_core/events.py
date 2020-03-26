@@ -29,6 +29,8 @@ class Event(object):
         SENSOR = 'SENSOR'
         THERMOSTAT = 'THERMOSTAT'
         SYSTEM = 'SYSTEM'
+        POWER = 'POWER'
+        LED = 'LED'
         UNKNOWN = 'UNKNOWN'
 
     class SensorType(object):
@@ -47,6 +49,33 @@ class Event(object):
         MASTER = 'MASTER'
         UNKNOWN = 'UNKNOWN'
 
+    class Bus(object):
+        RS485 = 'RS485'
+        CAN = 'CAN'
+
+    class Leds(object):
+        LED_0 = 0  # TODO: Rename these enums to more relevant names once known
+        LED_1 = 1
+        LED_2 = 2
+        LED_3 = 3
+        LED_4 = 4
+        LED_5 = 5
+        LED_6 = 6
+        LED_7 = 7
+        LED_8 = 8
+        LED_9 = 9
+        LED_10 = 10
+        LED_11 = 11
+        LED_12 = 12
+        LED_13 = 13
+        LED_14 = 14
+        LED_15 = 15
+
+    class LedStates(object):
+        OFF = 'OFF'
+        BLINKING = 'BLINKING'
+        ON = 'ON'
+
     def __init__(self, data):
         self._type = data['type']
         self._action = data['action']
@@ -59,29 +88,29 @@ class Event(object):
                     1: Event.Types.INPUT,
                     2: Event.Types.SENSOR,
                     20: Event.Types.THERMOSTAT,
+                    252: Event.Types.LED,
+                    253: Event.Types.POWER,
                     254: Event.Types.SYSTEM}
         return type_map.get(self._type, Event.Types.UNKNOWN)
 
     @property
     def data(self):
         if self.type == Event.Types.OUTPUT:
-            timer_type = 'NO_TIMER'
             timer_factor = None
-            if self._data[1] == 1:
-                timer_type = '100_MS'
+            timer_value = Event._word_decode(self._data[2:])
+            if self._data[1] == 0:
+                timer_value = None
+            elif self._data[1] == 1:
                 timer_factor = 0.1
             elif self._data[1] == 2:
-                timer_type = '1_S'
                 timer_factor = 1
-            elif self._data[2] == 2:
-                timer_type = '1_M'
+            elif self._data[2] == 3:
                 timer_factor = 60
             return {'output': self._device_nr,
                     'status': self._action == 1,
                     'dimmer_value': self._data[0],
-                    'timer_type': timer_type,
                     'timer_factor': timer_factor,
-                    'timer_value': Event._word_decode(self._data[2:])}
+                    'timer_value': timer_value}
         if self.type == Event.Types.INPUT:
             return {'input': self._device_nr,
                     'status': self._action == 1}
@@ -107,6 +136,20 @@ class Event(object):
                     'thermostat': self._device_nr,
                     'mode': self._data[0],
                     'setpoint': self._data[1]}
+        if self.type == Event.Types.LED:
+            word_on = Event._word_decode(self._data[0:2])
+            word_blinking = Event._word_decode(self._data[2:4])
+            leds = {}
+            for i in xrange(16):
+                state = Event.LedStates.OFF
+                if word_on & (1 << i):
+                    state = Event.LedStates.BLINKING if word_blinking & (1 << i) else Event.LedStates.ON
+                leds[i] = state
+            return {'chip': self._device_nr,
+                    'leds': leds}
+        if self.type == Event.Types.POWER:
+            return {'bus': Event.Bus.RS485 if self._device_nr == 0 else Event.Bus.CAN,
+                    'power': self._data[0 > 1]}
         if self.type == Event.Types.SYSTEM:
             type_map = {0: Event.SystemEventTypes.EEPROM_ACTIVATE,
                         1: Event.SystemEventTypes.ONBOARD_TEMP_CHANGED}

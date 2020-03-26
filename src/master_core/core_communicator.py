@@ -80,6 +80,9 @@ class CoreCommunicator(object):
         self._stop = False
         self._read_thread.start()
 
+    def stop(self):
+        self._stop = True
+
     def get_communication_statistics(self):
         return self._communication_stats
 
