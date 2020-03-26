@@ -82,9 +82,12 @@ class MasterCoreController(MasterController):
         if core_event.type == MasterCoreEvent.Types.OUTPUT:
             # Update internal state cache
             output_id = core_event.data['output']
+            timer_value = core_event.data['timer_value']
+            if timer_value is not None:
+                timer_value *= core_event.data['timer_factor']
             self._output_states[output_id] = {'id': output_id,
                                               'status': 1 if core_event.data['status'] else 0,
-                                              'ctimer': core_event.data['timer_value'] * core_event.data['timer_factor'],
+                                              'ctimer': timer_value,
                                               'dimmer': core_event.data['dimmer_value']}
             # Generate generic event
             event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE,

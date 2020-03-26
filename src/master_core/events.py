@@ -97,7 +97,10 @@ class Event(object):
     def data(self):
         if self.type == Event.Types.OUTPUT:
             timer_factor = None
-            if self._data[1] == 1:
+            timer_value = Event._word_decode(self._data[2:])
+            if self._data[1] == 0:
+                timer_value = None
+            elif self._data[1] == 1:
                 timer_factor = 0.1
             elif self._data[1] == 2:
                 timer_factor = 1
@@ -107,7 +110,7 @@ class Event(object):
                     'status': self._action == 1,
                     'dimmer_value': self._data[0],
                     'timer_factor': timer_factor,
-                    'timer_value': Event._word_decode(self._data[2:])}
+                    'timer_value': timer_value}
         if self.type == Event.Types.INPUT:
             return {'input': self._device_nr,
                     'status': self._action == 1}
