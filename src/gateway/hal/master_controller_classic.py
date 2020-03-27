@@ -20,6 +20,7 @@ import time
 from datetime import datetime
 from threading import Thread, Timer
 
+from gateway.dto.output import OutputDTO
 from gateway.hal.master_controller import MasterController, MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -413,11 +414,13 @@ class MasterClassicController(MasterController):
             {'action_type': master_api.BA_LIGHT_TOGGLE, 'action_number': output_id}
         )
 
-    def load_output(self, output_id, fields=None):
-        return self._eeprom_controller.read(eeprom_models.OutputConfiguration, output_id, fields).serialize()
+    def load_output(self, output_id):
+        classic_object = self._eeprom_controller.read(eeprom_models.OutputConfiguration, output_id)
+        return OutputDTO.read_from_classic_orm(classic_object)
 
-    def load_outputs(self, fields=None):
-        return [o.serialize() for o in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration, fields)]
+    def load_outputs(self):
+        return [OutputDTO.read_from_classic_orm(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration)]
 
     def save_outputs(self, outputs, fields=None):
         self._eeprom_controller.write_batch([eeprom_models.OutputConfiguration.deserialize(output)
@@ -453,7 +456,7 @@ class MasterClassicController(MasterController):
             callback(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
 
     def _refresh_outputs(self):
-        self._output_config = self.load_outputs()
+        self._output_config = self.load_outputs()  # TODO: Handle OutputDTO
         number_of_outputs = self._master_communicator.do_command(master_api.number_of_io_modules())['out'] * 8
         outputs = []
         for i in xrange(number_of_outputs):

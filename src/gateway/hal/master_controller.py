@@ -16,8 +16,8 @@
 Module for communicating with the Master
 """
 from exceptions import NotImplementedError
-
 import ujson as json
+from gateway.dto.output import OutputDTO
 
 if False:  # MYPY
     from typing import Any, Callable, Dict, List
@@ -147,10 +147,10 @@ class MasterController(object):
     def toggle_output(self, output_id):
         raise NotImplementedError()
 
-    def load_output(self, output_id, fields=None):
+    def load_output(self, output_id):  # type: (int) -> OutputDTO
         raise NotImplementedError()
 
-    def load_outputs(self, fields=None):
+    def load_outputs(self):  # type: () -> List[OutputDTO]
         raise NotImplementedError()
 
     def save_outputs(self, outputs, fields=None):

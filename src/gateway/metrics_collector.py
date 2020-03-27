@@ -728,7 +728,7 @@ class MetricsCollector(object):
                 logger.exception('Error while loading input configurations: {0}'.format(ex))
             # Outputs
             try:
-                result = self._gateway_api.get_output_configurations()
+                result = self._gateway_api.get_output_configurations()  # TODO: Handle OutputDTO
                 ids = []
                 for config in result:
                     if config['module_type'] not in ['o', 'O', 'd', 'D']:
