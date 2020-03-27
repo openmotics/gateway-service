@@ -40,7 +40,7 @@ from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
 from models import Feature
-from platform_utils import System
+from platform_utils import System, Hardware, Platform
 from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
 
@@ -2077,6 +2077,18 @@ class WebInterface(object):
         """
         return {'version': self._gateway_api.get_main_version(),
                 'gateway': gateway.__version__}
+
+    @openmotics_api(auth=True)
+    def get_system_info(self):
+        operating_system = System.get_operating_system()
+        os_id = operating_system.get('ID', '')
+        name = operating_system.get('NAME', '')
+        version = operating_system.get('VERSION_ID', 'unknown')
+        return {'model': str(Hardware.get_board_type()),
+                'operating_system': {'id': str(os_id),
+                                     'version': str(version),
+                                     'name': str(name)},
+                'platform': str(Platform.get_platform())}
 
     @openmotics_api(auth=True, plugin_exposed=False)
     def update(self, version, md5, update_data):
