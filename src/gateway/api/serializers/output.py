@@ -26,7 +26,7 @@ if False:  # MYPY
 
 class OutputSerializer(object):
     @staticmethod
-    def serialize_v0(output_dto, fields):  # type: (OutputDTO, Optional[List[str]]) -> Dict
+    def serialize(output_dto, fields):  # type: (OutputDTO, Optional[List[str]]) -> Dict
         data = {'id': output_dto.id,
                 'module_type': output_dto.module_type,
                 'name': output_dto.name,
@@ -47,27 +47,27 @@ class OutputSerializer(object):
         return {field: data[field] for field in fields}
 
     @staticmethod
-    def deserialize_v0(v0_data):  # type: (Dict) -> Tuple[OutputDTO, List[str]]
+    def deserialize(api_data):  # type: (Dict) -> Tuple[OutputDTO, List[str]]
         loaded_fields = ['id']
-        output_dto = OutputDTO(v0_data['id'])
+        output_dto = OutputDTO(api_data['id'])
         for data_field, dto_field in {'module_type': 'module_type',
                                       'name': 'name',
                                       'type': 'output_type'}.iteritems():
-            if data_field in v0_data:
+            if data_field in api_data:
                 loaded_fields.append(dto_field)
-                setattr(output_dto, dto_field, v0_data[data_field])
+                setattr(output_dto, dto_field, api_data[data_field])
         for data_field, (dto_field, default) in {'timer': ('timer', 2 ** 16 - 1),
                                                  'floor': ('floor', 255),
                                                  'room': ('room', 255)}.iteritems():
-            if data_field in v0_data:
+            if data_field in api_data:
                 loaded_fields.append(dto_field)
-                setattr(output_dto, dto_field, Toolbox.nonify(v0_data[data_field], default))
+                setattr(output_dto, dto_field, Toolbox.nonify(api_data[data_field], default))
         for i in xrange(4):
             base_field = 'can_led_{0}'.format(i + 1)
             id_field = '{0}_id'.format(base_field)
             function_field = '{0}_function'.format(base_field)
-            if id_field in v0_data and function_field in v0_data:
+            if id_field in api_data and function_field in api_data:
                 loaded_fields.append(base_field)
-                setattr(output_dto, base_field, FeedbackLedDTO(id=v0_data[id_field],
-                                                               function=v0_data[function_field]))
+                setattr(output_dto, base_field, FeedbackLedDTO(id=api_data[id_field],
+                                                               function=api_data[function_field]))
         return output_dto, loaded_fields
