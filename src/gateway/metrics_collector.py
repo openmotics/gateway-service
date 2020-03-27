@@ -706,7 +706,7 @@ class MetricsCollector(object):
                 return
             self._pause(start, metric_type)
 
-    def _load_environment_configurations(self, name, interval):
+    def _load_environment_configurations(self, name, interval):  # type: (str, int) -> None
         while not self._stopped:
             start = time.time()
             # Inputs
@@ -731,9 +731,9 @@ class MetricsCollector(object):
                 result = self._gateway_api.get_output_configurations()
                 ids = []
                 for config in result:
-                    if config['module_type'] not in ['o', 'O', 'd', 'D']:
+                    if config.module_type not in ['o', 'O', 'd', 'D']:
                         continue
-                    output_id = config['id']
+                    output_id = config.id
                     ids.append(output_id)
                     type_mapping = {0: 'outlet',
                                     1: 'valve',
@@ -745,13 +745,13 @@ class MetricsCollector(object):
                                     7: 'motor',
                                     8: 'ventilation',
                                     255: 'light'}
-                    self._environment['outputs'][output_id] = {'name': config['name'],
+                    self._environment['outputs'][output_id] = {'name': config.name,
                                                                'module_type': {'o': 'output',
                                                                                'O': 'output',
                                                                                'd': 'dimmer',
-                                                                               'D': 'dimmer'}[config['module_type']],
-                                                               'floor': config['floor'],
-                                                               'type': type_mapping.get(config['type'], 'generic')}
+                                                                               'D': 'dimmer'}[config.module_type],
+                                                               'floor': config.floor,
+                                                               'type': type_mapping.get(config.output_type, 'generic')}
                 for output_id in self._environment['outputs'].keys():
                     if output_id not in ids:
                         del self._environment['outputs'][output_id]

@@ -20,10 +20,15 @@ import time
 from datetime import datetime
 from threading import Thread, Timer
 
+from toolbox import Toolbox
+from gateway.dto.feedback_led import FeedbackLedDTO
+from gateway.dto.output import OutputDTO
+from gateway.hal.mappers_classic.output import OutputMapper
 from gateway.hal.master_controller import MasterController, MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master import eeprom_models, master_api
+from master.eeprom_controller import EepromModel
 from master.eeprom_models import CanLedConfiguration, DimmerConfiguration, \
     EepromAddress, GroupActionConfiguration, RoomConfiguration, \
     ScheduledActionConfiguration, ShutterConfiguration, \
@@ -70,7 +75,7 @@ class MasterClassicController(MasterController):
         self._input_config = {}
         self._output_interval = 600
         self._output_last_updated = 0
-        self._output_config = {}
+        self._output_config = {}  # type: Dict[int, OutputDTO]
 
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._module_log = []  # type: List[Tuple[str,str]]
@@ -413,21 +418,24 @@ class MasterClassicController(MasterController):
             {'action_type': master_api.BA_LIGHT_TOGGLE, 'action_number': output_id}
         )
 
-    def load_output(self, output_id, fields=None):
-        return self._eeprom_controller.read(eeprom_models.OutputConfiguration, output_id, fields).serialize()
+    def load_output(self, output_id):  # type: (int) -> OutputDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.OutputConfiguration, output_id)
+        return OutputMapper.orm_to_dto(classic_object)
 
-    def load_outputs(self, fields=None):
-        return [o.serialize() for o in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration, fields)]
+    def load_outputs(self):  # type: () -> List[OutputDTO]
+        return [OutputMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration)]
 
-    def save_outputs(self, outputs, fields=None):
-        self._eeprom_controller.write_batch([eeprom_models.OutputConfiguration.deserialize(output)
-                                             for output in outputs])
-        for output in outputs:
-            output_nr, timer = output['id'], output.get('timer')
-            if timer is not None:
+    def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
+        batch = []
+        for output, fields in outputs:
+            batch.append(OutputMapper.dto_to_orm(output, fields))
+        self._eeprom_controller.write_batch(batch)
+        for output, _ in outputs:
+            if output.timer is not None:
                 self._master_communicator.do_command(
                     master_api.write_timer(),
-                    {'id': output_nr, 'timer': timer}
+                    {'id': output.id, 'timer': output.timer}
                 )
         self._output_last_updated = 0
 
@@ -453,7 +461,7 @@ class MasterClassicController(MasterController):
             callback(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
 
     def _refresh_outputs(self):
-        self._output_config = self.load_outputs()
+        self._output_config = {output_dto.id: output_dto for output_dto in self.load_outputs()}
         number_of_outputs = self._master_communicator.do_command(master_api.number_of_io_modules())['out'] * 8
         outputs = []
         for i in xrange(number_of_outputs):
@@ -465,12 +473,12 @@ class MasterClassicController(MasterController):
         """ Executed by the Output Status tracker when an output changed state """
         event_status = {'on': status['on']}
         # 1. only add value to status when handling dimmers
-        if self._output_config[output_id]['module_type'] in ['d', 'D']:
+        if self._output_config[output_id].module_type in ['d', 'D']:
             event_status['value'] = status['value']
         # 2. format response data
         event_data = {'id': output_id,
                       'status': event_status,
-                      'location': {'room_id': self._output_config[output_id]['room']}}
+                      'location': {'room_id': Toolbox.denonify(self._output_config[output_id].room, 255)}}
         for callback in self._event_callbacks:
             callback(MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE, data=event_data))
 

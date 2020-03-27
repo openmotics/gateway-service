@@ -32,6 +32,7 @@ import time
 
 import constants
 from bus.om_bus_events import OMBusEvents
+from gateway.dto.output import OutputDTO
 from gateway.hal.master_controller import MasterController
 from gateway.observer import Observer
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -40,7 +41,7 @@ from power import power_api
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY:
-    from typing import Any, Dict, List
+    from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger('openmotics')
 
@@ -808,22 +809,22 @@ class GatewayApi(object):
 
     # Below are the auto generated master configuration functions
 
-    def get_output_configuration(self, output_id, fields=None):
+    def get_output_configuration(self, output_id):  # type: (int) -> OutputDTO
         """ Get a specific output_configuration defined by its id. """
         # TODO: work with output controller
-        return self.__master_controller.load_output(output_id, fields)
+        return self.__master_controller.load_output(output_id)
 
-    def get_output_configurations(self, fields=None):
+    def get_output_configurations(self):  # type: () -> List[OutputDTO]
         """ Get all output_configurations. """
         # TODO: work with output controller
-        return self.__master_controller.load_outputs(fields)
+        return self.__master_controller.load_outputs()
 
-    def set_output_configuration(self, config):
+    def set_output_configuration(self, config):  # type: (Tuple[OutputDTO, List[str]]) -> None
         """ Set one output_configuration. """
         # TODO: work with output controller
         self.__master_controller.save_outputs([config])
 
-    def set_output_configurations(self, config):
+    def set_output_configurations(self, config):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
         """ Set multiple output_configurations. """
         # TODO: work with output controller
         self.__master_controller.save_outputs(config)
@@ -1499,46 +1500,3 @@ class GatewayApi(object):
         return self.__power_communicator.do_command(address,
                                                     power_api.raw_command(mode, command, len(data)),
                                                     *data)
-
-    def cleanup_eeprom(self):
-        """
-        Cleans up the EEPROM:
-        * Removes 65536 second timeouts
-        * Clean memory of non-existing modules
-        """
-        input_ids = []
-        input_ids_can = []
-        for config in self.get_input_configurations():
-            input_ids.append(config['id'])
-            if config['can'] == 'C':
-                input_ids_can.append(config['id'])
-        for id in xrange(240):
-            if id not in input_ids:
-                self.set_input_configuration({'id': id,
-                                              'name': '',
-                                              'basic_actions': '',
-                                              'invert': 255,
-                                              'module_type': '',
-                                              'can': '',
-                                              'action': 255,
-                                              'room': 255})
-        for config in self.get_output_configurations():
-            change = False
-            if config['timer'] == 65535:
-                config['timer'] = 0
-                change = True
-            for i in [1, 2, 3, 4]:
-                if config['can_led_{0}_id'.format(i)] not in input_ids_can and config['can_led_{0}_id'.format(i)] != 255:
-                    config['can_led_{0}_id'.format(i)] = 255
-                    config['can_led_{0}_function'.format(i)] = 'UNKNOWN'
-            if change is True:
-                self.set_output_configuration(config)
-        for config in self.get_can_led_configurations():
-            change = False
-            for i in [1, 2, 3, 4]:
-                if config['can_led_{0}_id'.format(i)] not in input_ids_can and config['can_led_{0}_id'.format(i)] != 255:
-                    config['can_led_{0}_id'.format(i)] = 255
-                    config['can_led_{0}_function'.format(i)] = 'UNKNOWN'
-                    change = True
-            if change is True:
-                self.set_can_led_configuration(config)
