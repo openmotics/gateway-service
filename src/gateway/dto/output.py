@@ -24,7 +24,7 @@ from gateway.dto.feedback_led import FeedbackLedDTO
 class OutputDTO(BaseDTO):
     id = None  # type: int
     name = ''  # type: str
-    module_type = None  # type: None or int
+    module_type = None  # type: None or str
     timer = None  # type: None or int
     floor = None  # type: None or int
     output_type = None  # type: None or int
