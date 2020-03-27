@@ -16,9 +16,10 @@
 """
 Output (de)serializer
 """
+from toolbox import Toolbox
 from gateway.dto.output import OutputDTO
 
-if False:  # Mypy
+if False:  # MYPY
     from typing import Dict, Optional, List
 
 
@@ -28,8 +29,8 @@ class OutputSerializer(object):
         data = {'id': output_dto.id,
                 'module_type': output_dto.module_type,
                 'name': output_dto.name,
-                'timer': OutputDTO._denonify(output_dto.timer, 2 ** 16 - 1),
-                'floor': OutputDTO._denonify(output_dto.floor, 255),
+                'timer': Toolbox.denonify(output_dto.timer, 2 ** 16 - 1),
+                'floor': Toolbox.denonify(output_dto.floor, 255),
                 'type': output_dto.output_type,
                 'can_led_1_id': output_dto.can_led_1.id,
                 'can_led_1_function': output_dto.can_led_1.function,
@@ -39,7 +40,7 @@ class OutputSerializer(object):
                 'can_led_3_function': output_dto.can_led_3.function,
                 'can_led_4_id': output_dto.can_led_4.id,
                 'can_led_4_function': output_dto.can_led_4.function,
-                'room': OutputDTO._denonify(output_dto.room, 255)}
+                'room': Toolbox.denonify(output_dto.room, 255)}
         if fields is None:
             return data
         return {field: data[field] for field in fields}

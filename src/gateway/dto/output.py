@@ -16,57 +16,27 @@
 """
 Output DTO
 """
-
-from gateway.dto.base_dto import BaseDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
 
+if False:  # MYPY
+    from typing import Optional
 
-class OutputDTO(BaseDTO):
-    id = None  # type: int
-    name = ''  # type: str
-    module_type = None  # type: None or str
-    timer = None  # type: None or int
-    floor = None  # type: None or int
-    output_type = None  # type: None or int
-    can_led_1 = FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
-    can_led_2 = FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
-    can_led_3 = FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
-    can_led_4 = FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
-    room = None  # type: None or int
 
-    def __init__(self, id, **kwargs):
-        self.id = id
-        for key, value in kwargs.iteritems():
-            setattr(self, key, value)
-
-    @staticmethod
-    def read_from_core_orm(core_object):
-        timer = 0
-        if core_object.timer_type == 2:
-            timer = core_object.timer_value
-        elif core_object.timer_type == 1:
-            timer = core_object.timer_value / 10.0
-        return OutputDTO(id=core_object.id,
-                         name=core_object.name,
-                         module_type=core_object.module.device_type,  # TODO: Proper translation
-                         timer=timer,  # TODO: Proper calculation
-                         output_type=core_object.output_type)  # TODO: Proper translation
-
-    @staticmethod
-    def read_from_classic_orm(classic_object):
-        data = classic_object.serialize()
-        return OutputDTO(id=data['id'],
-                         module_type=data['module_type'],
-                         name=data['name'],
-                         timer=OutputDTO._nonify(data['timer'], 2 ** 16 - 1),
-                         floor=OutputDTO._nonify(data['floor'], 255),
-                         output_type=data['type'],
-                         room=OutputDTO._nonify(data['room'], 255),
-                         can_led_1=FeedbackLedDTO(id=OutputDTO._nonify(data['can_led_1_id'], 255),
-                                                  function=data['can_led_1_function']),
-                         can_led_2=FeedbackLedDTO(id=OutputDTO._nonify(data['can_led_2_id'], 255),
-                                                  function=data['can_led_2_function']),
-                         can_led_3=FeedbackLedDTO(id=OutputDTO._nonify(data['can_led_3_id'], 255),
-                                                  function=data['can_led_3_function']),
-                         can_led_4=FeedbackLedDTO(id=OutputDTO._nonify(data['can_led_4_id'], 255),
-                                                  function=data['can_led_4_function']))
+class OutputDTO(object):
+    def __init__(self, id, name='', module_type=None, timer=None, floor=None, output_type=None,
+                 can_led_1=None,  # type: Optional[FeedbackLedDTO]
+                 can_led_2=None,  # type: Optional[FeedbackLedDTO]
+                 can_led_3=None,  # type: Optional[FeedbackLedDTO]
+                 can_led_4=None,  # type: Optional[FeedbackLedDTO]
+                 room=None):
+        self.id = id  # type: int
+        self.name = name  # type: str
+        self.module_type = module_type  # type: str
+        self.timer = timer  # type: Optional[int]
+        self.floor = floor  # type: Optional[int]
+        self.output_type = output_type  # type: int
+        self.room = room  # type: Optional[int]
+        self.can_led_1 = can_led_1 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
+        self.can_led_2 = can_led_2 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
+        self.can_led_3 = can_led_3 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
+        self.can_led_4 = can_led_4 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)

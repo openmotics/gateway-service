@@ -16,10 +16,11 @@
 """
 Feedback LED DTO
 """
-from gateway.dto.base_dto import BaseDTO
+if False:  # MYPY
+    from typing import Optional
 
 
-class FeedbackLedDTO(BaseDTO):
+class FeedbackLedDTO(object):
 
     class Functions(object):
         UNKNOWN = 'UNKNOWN'
@@ -184,19 +185,6 @@ class FeedbackLedDTO(BaseDTO):
         SW_B16_NORMAL = 'Swinging B16'
         SW_B16_INVERTED = 'Swinging B16 Inverted'
 
-    id = None  # type: None or int
-    function = None  # type: Functions
-
-    def __init__(self, id, function):  # type: (None or int, Functions) -> None
-        self.id = id
-        self.function = function
-
-    @staticmethod
-    def read_from_core_orm(core_object):
-        raise NotImplementedError()
-
-    @staticmethod
-    def read_from_classic_orm(classic_object):
-        raise NotImplementedError()
-
-
+    def __init__(self, id, function):  # type: (Optional[int], FeedbackLedDTO.Functions) -> None
+        self.id = id  # type: Optional[int]
+        self.function = function  # type: FeedbackLedDTO.Functions

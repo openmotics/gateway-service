@@ -20,11 +20,14 @@ import time
 from datetime import datetime
 from threading import Thread, Timer
 
+from toolbox import Toolbox
+from gateway.dto.feedback_led import FeedbackLedDTO
 from gateway.dto.output import OutputDTO
 from gateway.hal.master_controller import MasterController, MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master import eeprom_models, master_api
+from master.eeprom_controller import EepromModel
 from master.eeprom_models import CanLedConfiguration, DimmerConfiguration, \
     EepromAddress, GroupActionConfiguration, RoomConfiguration, \
     ScheduledActionConfiguration, ShutterConfiguration, \
@@ -414,12 +417,31 @@ class MasterClassicController(MasterController):
             {'action_type': master_api.BA_LIGHT_TOGGLE, 'action_number': output_id}
         )
 
+    @staticmethod
+    def _output_to_output_dto(classic_object):  # type: (EepromModel) -> OutputDTO
+        data = classic_object.serialize()
+        return OutputDTO(id=data['id'],
+                         module_type=data['module_type'],
+                         name=data['name'],
+                         timer=Toolbox.nonify(data['timer'], 2 ** 16 - 1),
+                         floor=Toolbox.nonify(data['floor'], 255),
+                         output_type=data['type'],
+                         room=Toolbox.nonify(data['room'], 255),
+                         can_led_1=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_1_id'], 255),
+                                                  function=data['can_led_1_function']),
+                         can_led_2=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_2_id'], 255),
+                                                  function=data['can_led_2_function']),
+                         can_led_3=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_3_id'], 255),
+                                                  function=data['can_led_3_function']),
+                         can_led_4=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_4_id'], 255),
+                                                  function=data['can_led_4_function']))
+
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         classic_object = self._eeprom_controller.read(eeprom_models.OutputConfiguration, output_id)
-        return OutputDTO.read_from_classic_orm(classic_object)
+        return MasterClassicController._output_to_output_dto(classic_object)
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
-        return [OutputDTO.read_from_classic_orm(o)
+        return [MasterClassicController._output_to_output_dto(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration)]
 
     def save_outputs(self, outputs, fields=None):

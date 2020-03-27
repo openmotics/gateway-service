@@ -706,7 +706,7 @@ class MetricsCollector(object):
                 return
             self._pause(start, metric_type)
 
-    def _load_environment_configurations(self, name, interval):
+    def _load_environment_configurations(self, name, interval):  # type: (str, int) -> None
         while not self._stopped:
             start = time.time()
             # Inputs

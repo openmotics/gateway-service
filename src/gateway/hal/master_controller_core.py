@@ -278,14 +278,27 @@ class MasterCoreController(MasterController):
                                                                       'device_nr': output_id,
                                                                       'extra_parameter': 0})
 
-    def load_output(self, output_id):
+    @staticmethod
+    def _output_to_output_dto(core_object):  # type: (OutputConfiguration) -> OutputDTO
+        timer = 0
+        if core_object.timer_type == 2:
+            timer = core_object.timer_value
+        elif core_object.timer_type == 1:
+            timer = core_object.timer_value / 10.0
+        return OutputDTO(id=core_object.id,
+                         name=core_object.name,
+                         module_type=core_object.module.device_type,  # TODO: Proper translation
+                         timer=timer,  # TODO: Proper calculation
+                         output_type=core_object.output_type)  # TODO: Proper translation
+
+    def load_output(self, output_id):  # type: (int) -> OutputDTO
         output = OutputConfiguration(output_id)
         if output.is_shutter:
             # Outputs that are used by a shutter are returned as unconfigured (read-only) outputs
             return OutputDTO(id=output.id)
-        return OutputDTO.read_from_core_orm(output)
+        return MasterCoreController._output_to_output_dto(output)
 
-    def load_outputs(self):
+    def load_outputs(self):  # type: () -> List[OutputDTO]
         outputs = []
         for i in self._enumerate_io_modules('output'):
             outputs.append(self.load_output(i))
