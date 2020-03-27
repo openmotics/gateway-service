@@ -478,7 +478,7 @@ class MasterClassicController(MasterController):
         # 2. format response data
         event_data = {'id': output_id,
                       'status': event_status,
-                      'location': {'room_id': OutputDTO._denonify(self._output_config[output_id].room, 255)}}
+                      'location': {'room_id': Toolbox.denonify(self._output_config[output_id].room, 255)}}
         for callback in self._event_callbacks:
             callback(MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE, data=event_data))
 
