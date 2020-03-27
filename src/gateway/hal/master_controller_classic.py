@@ -71,7 +71,7 @@ class MasterClassicController(MasterController):
         self._input_config = {}
         self._output_interval = 600
         self._output_last_updated = 0
-        self._output_config = {}
+        self._output_config = {}  # type: Dict[int, OutputDTO]
 
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._module_log = []  # type: List[Tuple[str,str]]
@@ -414,11 +414,11 @@ class MasterClassicController(MasterController):
             {'action_type': master_api.BA_LIGHT_TOGGLE, 'action_number': output_id}
         )
 
-    def load_output(self, output_id):
+    def load_output(self, output_id):  # type: (int) -> OutputDTO
         classic_object = self._eeprom_controller.read(eeprom_models.OutputConfiguration, output_id)
         return OutputDTO.read_from_classic_orm(classic_object)
 
-    def load_outputs(self):
+    def load_outputs(self):  # type: () -> List[OutputDTO]
         return [OutputDTO.read_from_classic_orm(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration)]
 
@@ -456,7 +456,7 @@ class MasterClassicController(MasterController):
             callback(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
 
     def _refresh_outputs(self):
-        self._output_config = self.load_outputs()  # TODO: Handle OutputDTO
+        self._output_config = {output_dto.id: output_dto for output_dto in self.load_outputs()}
         number_of_outputs = self._master_communicator.do_command(master_api.number_of_io_modules())['out'] * 8
         outputs = []
         for i in xrange(number_of_outputs):
@@ -468,12 +468,12 @@ class MasterClassicController(MasterController):
         """ Executed by the Output Status tracker when an output changed state """
         event_status = {'on': status['on']}
         # 1. only add value to status when handling dimmers
-        if self._output_config[output_id]['module_type'] in ['d', 'D']:
+        if self._output_config[output_id].module_type in ['d', 'D']:
             event_status['value'] = status['value']
         # 2. format response data
         event_data = {'id': output_id,
                       'status': event_status,
-                      'location': {'room_id': self._output_config[output_id]['room']}}
+                      'location': {'room_id': OutputDTO._denonify(self._output_config[output_id].room, 255)}}
         for callback in self._event_callbacks:
             callback(MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE, data=event_data))
 
