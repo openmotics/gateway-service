@@ -2325,11 +2325,6 @@ class WebInterface(object):
                         definitions[_source][_metric_type] = definition
         return {'definitions': definitions}
 
-    @openmotics_api(auth=True, plugin_exposed=False)
-    def cleanup_eeprom(self):
-        self._gateway_api.cleanup_eeprom()
-        return {}
-
     @openmotics_api(check=types(confirm=bool), auth=True, plugin_exposed=False)
     def factory_reset(self, username, password, confirm=False):
         success, _ = self._user_controller.login(username, password)
