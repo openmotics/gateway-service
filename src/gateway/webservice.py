@@ -1049,7 +1049,8 @@ class WebInterface(object):
         :param config: The output_configuration to set: dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'floor' (Byte), 'name' (String[16]), 'room' (Byte), 'timer' (Word), 'type' (Byte)
         :type config: dict
         """
-        self._gateway_api.set_output_configuration(config)
+        data = OutputSerializer.deserialize_v0(config)
+        self._gateway_api.set_output_configuration(data)
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
@@ -1060,7 +1061,8 @@ class WebInterface(object):
         :param config: The list of output_configurations to set: list of output_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'floor' (Byte), 'name' (String[16]), 'room' (Byte), 'timer' (Word), 'type' (Byte)
         :type config: list
         """
-        self._gateway_api.set_output_configurations(config)
+        data = [OutputSerializer.deserialize_v0(entry) for entry in config]
+        self._gateway_api.set_output_configurations(data)
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))

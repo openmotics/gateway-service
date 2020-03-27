@@ -18,9 +18,10 @@ Output (de)serializer
 """
 from toolbox import Toolbox
 from gateway.dto.output import OutputDTO
+from gateway.dto.feedback_led import FeedbackLedDTO
 
 if False:  # MYPY
-    from typing import Dict, Optional, List
+    from typing import Dict, Optional, List, Tuple
 
 
 class OutputSerializer(object):
@@ -44,3 +45,29 @@ class OutputSerializer(object):
         if fields is None:
             return data
         return {field: data[field] for field in fields}
+
+    @staticmethod
+    def deserialize_v0(v0_data):  # type: (Dict) -> Tuple[OutputDTO, List[str]]
+        loaded_fields = ['id']
+        output_dto = OutputDTO(v0_data['id'])
+        for data_field, dto_field in {'module_type': 'module_type',
+                                      'name': 'name',
+                                      'type': 'output_type'}.iteritems():
+            if data_field in v0_data:
+                loaded_fields.append(dto_field)
+                setattr(output_dto, dto_field, v0_data[data_field])
+        for data_field, (dto_field, default) in {'timer': ('timer', 2 ** 16 - 1),
+                                                 'floor': ('floor', 255),
+                                                 'room': ('room', 255)}.iteritems():
+            if data_field in v0_data:
+                loaded_fields.append(dto_field)
+                setattr(output_dto, dto_field, Toolbox.nonify(v0_data[data_field], default))
+        for i in xrange(4):
+            base_field = 'can_led_{0}'.format(i + 1)
+            id_field = '{0}_id'.format(base_field)
+            function_field = '{0}_function'.format(base_field)
+            if id_field in v0_data and function_field in v0_data:
+                loaded_fields.append(base_field)
+                setattr(output_dto, base_field, FeedbackLedDTO(id=v0_data[id_field],
+                                                               function=v0_data[function_field]))
+        return output_dto, loaded_fields

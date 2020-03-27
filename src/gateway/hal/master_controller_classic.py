@@ -23,6 +23,7 @@ from threading import Thread, Timer
 from toolbox import Toolbox
 from gateway.dto.feedback_led import FeedbackLedDTO
 from gateway.dto.output import OutputDTO
+from gateway.hal.mappers_classic.output import OutputMapper
 from gateway.hal.master_controller import MasterController, MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -417,42 +418,24 @@ class MasterClassicController(MasterController):
             {'action_type': master_api.BA_LIGHT_TOGGLE, 'action_number': output_id}
         )
 
-    @staticmethod
-    def _output_to_output_dto(classic_object):  # type: (EepromModel) -> OutputDTO
-        data = classic_object.serialize()
-        return OutputDTO(id=data['id'],
-                         module_type=data['module_type'],
-                         name=data['name'],
-                         timer=Toolbox.nonify(data['timer'], 2 ** 16 - 1),
-                         floor=Toolbox.nonify(data['floor'], 255),
-                         output_type=data['type'],
-                         room=Toolbox.nonify(data['room'], 255),
-                         can_led_1=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_1_id'], 255),
-                                                  function=data['can_led_1_function']),
-                         can_led_2=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_2_id'], 255),
-                                                  function=data['can_led_2_function']),
-                         can_led_3=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_3_id'], 255),
-                                                  function=data['can_led_3_function']),
-                         can_led_4=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_4_id'], 255),
-                                                  function=data['can_led_4_function']))
-
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         classic_object = self._eeprom_controller.read(eeprom_models.OutputConfiguration, output_id)
-        return MasterClassicController._output_to_output_dto(classic_object)
+        return OutputMapper.orm_to_dto(classic_object)
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
-        return [MasterClassicController._output_to_output_dto(o)
+        return [OutputMapper.orm_to_dto(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration)]
 
-    def save_outputs(self, outputs, fields=None):
-        self._eeprom_controller.write_batch([eeprom_models.OutputConfiguration.deserialize(output)
-                                             for output in outputs])
-        for output in outputs:
-            output_nr, timer = output['id'], output.get('timer')
-            if timer is not None:
+    def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
+        batch = []
+        for output, fields in outputs:
+            batch.append(OutputMapper.dto_to_orm(output, fields))
+        self._eeprom_controller.write_batch(batch)
+        for output, _ in outputs:
+            if output.timer is not None:
                 self._master_communicator.do_command(
                     master_api.write_timer(),
-                    {'id': output_nr, 'timer': timer}
+                    {'id': output.id, 'timer': output.timer}
                 )
         self._output_last_updated = 0
 

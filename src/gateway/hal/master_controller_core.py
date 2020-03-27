@@ -20,6 +20,7 @@ import time
 from threading import Thread
 
 from gateway.dto.output import OutputDTO
+from gateway.hal.mappers_core.output import OutputMapper
 from gateway.hal.master_controller import MasterController, MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -33,7 +34,7 @@ from master_core.memory_models import GlobalConfiguration, \
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Any, Dict, List
+    from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger("openmotics")
 
@@ -278,25 +279,12 @@ class MasterCoreController(MasterController):
                                                                       'device_nr': output_id,
                                                                       'extra_parameter': 0})
 
-    @staticmethod
-    def _output_to_output_dto(core_object):  # type: (OutputConfiguration) -> OutputDTO
-        timer = 0
-        if core_object.timer_type == 2:
-            timer = core_object.timer_value
-        elif core_object.timer_type == 1:
-            timer = core_object.timer_value / 10.0
-        return OutputDTO(id=core_object.id,
-                         name=core_object.name,
-                         module_type=core_object.module.device_type,  # TODO: Proper translation
-                         timer=timer,  # TODO: Proper calculation
-                         output_type=core_object.output_type)  # TODO: Proper translation
-
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         output = OutputConfiguration(output_id)
         if output.is_shutter:
             # Outputs that are used by a shutter are returned as unconfigured (read-only) outputs
             return OutputDTO(id=output.id)
-        return MasterCoreController._output_to_output_dto(output)
+        return OutputMapper.orm_to_dto(output)
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
         outputs = []
@@ -304,11 +292,9 @@ class MasterCoreController(MasterController):
             outputs.append(self.load_output(i))
         return outputs
 
-    def save_outputs(self, outputs, fields=None):
-        for output_data in outputs:
-            new_data = {'id': output_data['id'],
-                        'name': output_data['name']}  # TODO: Rest of the mapping
-            output = OutputConfiguration.deserialize(new_data)
+    def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
+        for output, fields in outputs:
+            output = OutputMapper.dto_to_orm(output, fields)
             output.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
 
     def get_output_status(self, output_id):

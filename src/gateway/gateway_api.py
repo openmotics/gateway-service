@@ -41,7 +41,7 @@ from power import power_api
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY:
-    from typing import Any, Dict, List
+    from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger('openmotics')
 
@@ -819,12 +819,12 @@ class GatewayApi(object):
         # TODO: work with output controller
         return self.__master_controller.load_outputs()
 
-    def set_output_configuration(self, config):
+    def set_output_configuration(self, config):  # type: (Tuple[OutputDTO, List[str]]) -> None
         """ Set one output_configuration. """
         # TODO: work with output controller
         self.__master_controller.save_outputs([config])
 
-    def set_output_configurations(self, config):
+    def set_output_configurations(self, config):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
         """ Set multiple output_configurations. """
         # TODO: work with output controller
         self.__master_controller.save_outputs(config)

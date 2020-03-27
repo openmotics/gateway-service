@@ -20,7 +20,7 @@ import ujson as json
 from gateway.dto.output import OutputDTO
 
 if False:  # MYPY
-    from typing import Any, Callable, Dict, List
+    from typing import Any, Callable, Dict, List, Tuple
 
 
 class MasterEvent(object):
@@ -153,7 +153,7 @@ class MasterController(object):
     def load_outputs(self):  # type: () -> List[OutputDTO]
         raise NotImplementedError()
 
-    def save_outputs(self, outputs, fields=None):
+    def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
         raise NotImplementedError()
 
     def get_output_status(self, output_id):
