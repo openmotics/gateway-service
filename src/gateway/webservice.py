@@ -2080,9 +2080,15 @@ class WebInterface(object):
 
     @openmotics_api(auth=True)
     def get_system_info(self):
-        return {'model': Hardware.get_board_type(),
-                'operating_system': System.get_operating_system()['ID'],
-                'platform': Platform.get_platform()}
+        operating_system = System.get_operating_system()
+        os_id = operating_system.get('ID', '')
+        name = operating_system.get('NAME', '')
+        version = operating_system.get('VERSION_ID', 'unknown')
+        return {'model': str(Hardware.get_board_type()),
+                'operating_system': {'id': str(os_id),
+                                     'version': str(version),
+                                     'name': str(name)},
+                'platform': str(Platform.get_platform())}
 
     @openmotics_api(auth=True, plugin_exposed=False)
     def update(self, version, md5, update_data):
