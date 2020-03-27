@@ -34,6 +34,7 @@ from decorator import decorator
 import constants
 import gateway
 from bus.om_bus_events import OMBusEvents
+from gateway.api.serializers.output import OutputSerializer
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.shutters import ShutterController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
@@ -1024,8 +1025,8 @@ class WebInterface(object):
         :returns: 'config': output_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'floor' (Byte), 'module_type' (String[1]), 'name' (String[16]), 'room' (Byte), 'timer' (Word), 'type' (Byte)
         :rtype: dict
         """
-        # TODO: Serialize
-        return {'config': self._gateway_api.get_output_configuration(id)}
+        return {'config': OutputSerializer.serialize_v0(output_dto=self._gateway_api.get_output_configuration(id),
+                                                        fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
     def get_output_configurations(self, fields=None):
@@ -1037,8 +1038,8 @@ class WebInterface(object):
         :returns: 'config': list of output_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'floor' (Byte), 'module_type' (String[1]), 'name' (String[16]), 'room' (Byte), 'timer' (Word), 'type' (Byte)
         :rtype: dict
         """
-        # TODO: Serialize
-        return {'config': self._gateway_api.get_output_configurations()}
+        return {'config': [OutputSerializer.serialize_v0(output_dto=output, fields=fields)
+                           for output in self._gateway_api.get_output_configurations()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_output_configuration(self, config):
