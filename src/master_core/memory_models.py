@@ -46,14 +46,14 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
 
 class OutputModuleConfiguration(MemoryModelDefinition):
     class _ShutterComposition(CompositeMemoryModelDefinition):
-        set_01_direction = CompositeBitField(bit=0)
+        set_01_direction = CompositeBitField(bit=0)  # True means 0 is down, 1 is up. False means the opposite
         set_23_direction = CompositeBitField(bit=1)
         set_45_direction = CompositeBitField(bit=2)
         set_67_direction = CompositeBitField(bit=3)
-        set_01_outputs = CompositeBitField(bit=4)
-        set_23_outputs = CompositeBitField(bit=5)
-        set_45_outputs = CompositeBitField(bit=6)
-        set_67_outputs = CompositeBitField(bit=7)
+        are_01_outputs = CompositeBitField(bit=4)  # True means "output", False means "shutter"
+        are_23_outputs = CompositeBitField(bit=5)
+        are_45_outputs = CompositeBitField(bit=6)
+        are_67_outputs = CompositeBitField(bit=7)
 
     device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 0), length=1)  # 1-80, 0-3
     address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 0))  # 1-80, 0-3
@@ -66,7 +66,7 @@ class OutputConfiguration(MemoryModelDefinition):
         dali_output_id = CompositeNumberField(start_bit=0, width=8, max_value=63)
         dali_group_id = CompositeNumberField(start_bit=0, width=8, max_value=15, value_offset=64)
 
-    module = MemoryRelation(OutputModuleConfiguration, id_spec=lambda id: id / 8)
+    module = MemoryRelation(OutputModuleConfiguration, id_spec=lambda id: id / 8)  # type: OutputModuleConfiguration
     timer_value = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id / 8, 7 + id % 8))  # 1-80, 7-22
     timer_type = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id / 8, 23 + id % 8))  # 1-80, 23-30
     output_type = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id / 8, 31 + id % 8))  # 1-80, 31-38
@@ -75,6 +75,11 @@ class OutputConfiguration(MemoryModelDefinition):
     output_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id / 8, 55 + (id % 8) * 2))  # 1-80, 55-70
     dali_mapping = _DALIOutputComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id / 8, 71 + id % 8)))  # 1-80, 71-78
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id / 8, 128 + (id % 8) * 16), length=16)  # 1-80, 128-255
+
+    @property
+    def is_shutter(self):
+        group = self.id / 2
+        return not getattr(self.module.shutter_config, 'are_{0}_outputs'.format(['01', '23', '45', '67'][group]))
 
 
 class InputModuleConfiguration(MemoryModelDefinition):
@@ -99,7 +104,7 @@ class InputConfiguration(MemoryModelDefinition):
         enable_2s_press = CompositeBitField(bit=13)
         enable_double_press = CompositeBitField(bit=15)
 
-    module = MemoryRelation(InputModuleConfiguration, id_spec=lambda id: id / 8)
+    module = MemoryRelation(InputModuleConfiguration, id_spec=lambda id: id / 8)  # type: InputModuleConfiguration
     input_config = _InputConfigComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 7 + id)))  # 81-238, 7-14
     dali_mapping = _DALIInputComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 15 + id % 8)))  # 81-238, 15-22
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 128 + id * 16), length=16)  # 81-238, 128-255
@@ -122,7 +127,7 @@ class SensorConfiguration(MemoryModelDefinition):
         dali_output_id = CompositeNumberField(start_bit=0, width=8, max_value=63)
         dali_group_id = CompositeNumberField(start_bit=0, width=8, max_value=15, value_offset=64)
 
-    module = MemoryRelation(SensorModuleConfiguration, id_spec=lambda id: id / 8)
+    module = MemoryRelation(SensorModuleConfiguration, id_spec=lambda id: id / 8)  # type: SensorModuleConfiguration
     temperature_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id / 8, 8 + (id % 8) * 2))  # 239-254, 8-23
     humidity_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id / 8, 24 + (id % 8) * 2))  # 239-254, 24-39
     brightness_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id / 8, 40 + (id % 8) * 2))  # 239-254, 40-55

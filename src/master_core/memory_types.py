@@ -39,7 +39,7 @@ class MemoryModelDefinition(object):
 
     @Inject
     def __init__(self, id, memory_files=INJECTED):
-        self.id = id
+        self.id = id  # type: int
         self._memory_files = memory_files
         self._fields = []
         self._loaded_fields = set()
