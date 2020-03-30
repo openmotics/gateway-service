@@ -23,6 +23,9 @@ from threading import Lock
 from ioc import Injectable, Inject, INJECTED, Singleton
 from master_api import eeprom_list, write_eeprom, activate_eeprom
 
+if False:  # MYPY
+    from typing import Any, Dict
+
 logger = logging.getLogger("openmotics")
 
 
@@ -298,8 +301,8 @@ class EepromModel(object):
     class of EepromModel with an optional EepromId and EepromDataTypes as class fields.
     """
 
-    cache_fields = {}
-    cache_addresses = {}
+    cache_fields = {}  # type: Dict[str,Any]
+    cache_addresses = {}  # type: Dict[str,Any]
     cache_lock = Lock()
 
     def __init__(self, id=None):
@@ -1028,21 +1031,6 @@ class EextByte(EextDataType):
 
     def encode(self, value):
         return str(value)
-
-class EextBool(EextDataType):
-    """ A boolean field, stored in the eeprom extension database. """
-
-    def get_name(self):
-        return 'Bool'
-
-    def default_value(self):
-        return False
-
-    def decode(self, value):
-        return value == 'True'
-
-    def encode(self, value):
-        return str(bool(int(value)))
 
 
 class EextWord(EextDataType):
