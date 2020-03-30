@@ -27,23 +27,26 @@ if False:  # MYPY
 
 
 class OutputMapper(object):
+    WORD_MAX = 2 ** 16 - 1
+    BYTE_MAX = 255
+
     @staticmethod
     def orm_to_dto(orm_object):  # type: (EepromModel) -> OutputDTO
         data = orm_object.serialize()
         return OutputDTO(id=data['id'],
                          module_type=data['module_type'],
                          name=data['name'],
-                         timer=Toolbox.nonify(data['timer'], 2 ** 16 - 1),
-                         floor=Toolbox.nonify(data['floor'], 255),
-                         output_type=Toolbox.nonify(data['type'], 255),
-                         room=Toolbox.nonify(data['room'], 255),
-                         can_led_1=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_1_id'], 255),
+                         timer=Toolbox.nonify(data['timer'], OutputMapper.WORD_MAX),
+                         floor=Toolbox.nonify(data['floor'], OutputMapper.BYTE_MAX),
+                         output_type=Toolbox.nonify(data['type'], OutputMapper.BYTE_MAX),
+                         room=Toolbox.nonify(data['room'], OutputMapper.BYTE_MAX),
+                         can_led_1=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_1_id'], OutputMapper.BYTE_MAX),
                                                   function=data['can_led_1_function']),
-                         can_led_2=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_2_id'], 255),
+                         can_led_2=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_2_id'], OutputMapper.BYTE_MAX),
                                                   function=data['can_led_2_function']),
-                         can_led_3=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_3_id'], 255),
+                         can_led_3=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_3_id'], OutputMapper.BYTE_MAX),
                                                   function=data['can_led_3_function']),
-                         can_led_4=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_4_id'], 255),
+                         can_led_4=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_4_id'], OutputMapper.BYTE_MAX),
                                                   function=data['can_led_4_function']))
 
     @staticmethod
@@ -54,9 +57,9 @@ class OutputMapper(object):
                                       'output_type': 'type'}.iteritems():
             if dto_field in fields:
                 data[data_field] = getattr(output_dto, dto_field)
-        for dto_field, (data_field, default) in {'timer': ('timer', 2 ** 16 - 1),
-                                                 'floor': ('floor', 255),
-                                                 'room': ('room', 255)}.iteritems():
+        for dto_field, (data_field, default) in {'timer': ('timer', OutputMapper.WORD_MAX),
+                                                 'floor': ('floor', OutputMapper.BYTE_MAX),
+                                                 'room': ('room', OutputMapper.BYTE_MAX)}.iteritems():
             if dto_field in fields:
                 data[data_field] = Toolbox.denonify(getattr(output_dto, dto_field), default)
         for i in xrange(4):
