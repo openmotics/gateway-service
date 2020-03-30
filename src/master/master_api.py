@@ -661,7 +661,7 @@ class Svt(object):
             split = [int(x) for x in value.split(":")]
             if len(split) != 2:
                 raise ValueError("Time is not in HH:MM format: %s" % value)
-            self.__value = (split[0] * 6) + (split[1] / 10)
+            self.__value = (split[0] * 6) + int(split[1] / 10)
         elif svt_type in [Svt.TEMPERATURE, Svt.HUMIDITY, Svt.BRIGHTNESS]:
             if value is None:
                 self.__value = 255
