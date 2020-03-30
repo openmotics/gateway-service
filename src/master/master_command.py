@@ -22,7 +22,7 @@ Provides a function for each API call.
 from __future__ import absolute_import
 import math
 
-from . import master_api
+from .master_api import *
 from serial_utils import printable
 from six.moves import range
 
