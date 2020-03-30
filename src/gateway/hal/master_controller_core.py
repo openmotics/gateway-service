@@ -267,14 +267,21 @@ class MasterCoreController(MasterController):
     # Outputs
 
     def set_output(self, output_id, state, dimmer=None, timer=None):
-        # TODO: Use `dimmer` and `timer`
-        _ = dimmer, timer
+        output = OutputConfiguration(output_id)
+        if output.is_shutter:
+            # Shutter outputs cannot be controlled
+            return
+        _ = dimmer, timer  # TODO: Use `dimmer` and `timer`
         action = 1 if state else 0
         self._master_communicator.do_command(CoreAPI.basic_action(), {'type': 0, 'action': action,
                                                                       'device_nr': output_id,
                                                                       'extra_parameter': 0})
 
     def toggle_output(self, output_id):
+        output = OutputConfiguration(output_id)
+        if output.is_shutter:
+            # Shutter outputs cannot be controlled
+            return
         self._master_communicator.do_command(CoreAPI.basic_action(), {'type': 0, 'action': 16,
                                                                       'device_nr': output_id,
                                                                       'extra_parameter': 0})
@@ -295,6 +302,9 @@ class MasterCoreController(MasterController):
     def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
         for output, fields in outputs:
             output = OutputMapper.dto_to_orm(output, fields)
+            if output.is_shutter:
+                # Shutter outputs cannot be changed
+                continue
             output.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
 
     def get_output_status(self, output_id):
@@ -428,6 +438,16 @@ class MasterCoreController(MasterController):
 
     def add_virtual_input_module(self):
         raise NotImplementedError()
+
+    # Rooms
+
+    def load_room_configuration(self, room_id, fields=None):
+        # type: (int, Any) -> Dict[str,Any]
+        return {}
+
+    def load_room_configurations(self, fields=None):
+        # type: (Any) -> List[Dict[str,Any]]
+        return []
 
     # Generic
 

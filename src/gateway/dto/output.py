@@ -23,7 +23,7 @@ if False:  # MYPY
 
 
 class OutputDTO(object):
-    def __init__(self, id, name='', module_type=None, timer=None, floor=None, output_type=None,
+    def __init__(self, id, name='', module_type='O', timer=None, floor=None, output_type=None,
                  can_led_1=None,  # type: Optional[FeedbackLedDTO]
                  can_led_2=None,  # type: Optional[FeedbackLedDTO]
                  can_led_3=None,  # type: Optional[FeedbackLedDTO]

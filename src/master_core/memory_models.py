@@ -78,7 +78,7 @@ class OutputConfiguration(MemoryModelDefinition):
 
     @property
     def is_shutter(self):
-        group = self.id / 2
+        group = self.id % 8 / 2
         return not getattr(self.module.shutter_config, 'are_{0}_outputs'.format(['01', '23', '45', '67'][group]))
 
 

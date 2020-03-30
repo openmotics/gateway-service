@@ -35,7 +35,7 @@ class OutputMapper(object):
                          name=data['name'],
                          timer=Toolbox.nonify(data['timer'], 2 ** 16 - 1),
                          floor=Toolbox.nonify(data['floor'], 255),
-                         output_type=data['type'],
+                         output_type=Toolbox.nonify(data['type'], 255),
                          room=Toolbox.nonify(data['room'], 255),
                          can_led_1=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_1_id'], 255),
                                                   function=data['can_led_1_function']),

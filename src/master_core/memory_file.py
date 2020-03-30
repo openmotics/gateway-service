@@ -61,6 +61,7 @@ class MemoryFile(object):
         core_event = Event(data)
         if core_event.type == Event.Types.SYSTEM and core_event.data['type'] == Event.SystemEventTypes.EEPROM_ACTIVATE:
             self.invalidate_cache()
+            logger.info('Cache cleared: EEPROM_ACTIVATE')
 
     def read(self, addresses):
         """
