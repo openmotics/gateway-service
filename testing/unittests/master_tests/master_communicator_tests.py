@@ -16,6 +16,7 @@
 Tests for MasterCommunicator module.
 """
 
+from __future__ import absolute_import
 import unittest
 import xmlrunner
 import threading
@@ -26,6 +27,7 @@ from gateway.maintenance_communicator import InMaintenanceModeException
 from master import master_api
 from serial_tests import SerialMock, sin, sout
 from serial_utils import CommunicationTimedOutException
+from six.moves import range
 
 
 class MasterCommunicatorTest(unittest.TestCase):

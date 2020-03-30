@@ -18,10 +18,12 @@ Serial tools contains the RS485 wrapper, printable and CommunicationTimedOutExce
 @author: fryckbos
 """
 
+from __future__ import absolute_import
+from __future__ import print_function
 import struct
 import fcntl
 from threading import Thread
-from Queue import Queue
+from six.moves.queue import Queue
 
 
 class CommunicationTimedOutException(Exception):
@@ -74,4 +76,4 @@ class RS485(object):
                     for byte in self.__serial.read(size):
                         self.read_queue.put(byte)
         except Exception as ex:
-            print 'Error in reader: {0}'.format(ex)
+            print('Error in reader: {0}'.format(ex))

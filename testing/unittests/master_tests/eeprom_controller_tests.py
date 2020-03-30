@@ -16,6 +16,7 @@
 Tests for the eeprom_controller module.
 """
 
+from __future__ import absolute_import
 import unittest
 import xmlrunner
 import os
@@ -26,6 +27,7 @@ from master.eeprom_controller import EepromController, EepromFile, EepromModel, 
                                      EepromIBool, EextByte, EextString
 from master.eeprom_extension import EepromExtension
 import master.master_api as master_api
+from six.moves import range
 
 
 class Model1(EepromModel):

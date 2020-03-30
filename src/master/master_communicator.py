@@ -16,6 +16,7 @@
 Module to communicate with the master.
 """
 
+from __future__ import absolute_import
 import logging
 import time
 from threading import Thread, Lock, Event
@@ -23,7 +24,7 @@ from toolbox import Queue, Empty
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.maintenance_communicator import InMaintenanceModeException
 from master import master_api
-from master_command import Field, printable
+from .master_command import Field, printable
 from serial_utils import CommunicationTimedOutException
 
 logger = logging.getLogger("openmotics")
@@ -380,7 +381,7 @@ class MasterCommunicator(object):
                 that were not used. """
                 try:
                     bytes_consumed, result, done = read_state.current_consumer.consume(_data, read_state.partial_result)
-                except ValueError, value_error:
+                except ValueError as value_error:
                     logger.error('Could not consume/decode message from the master: {0}'.format(value_error))
                     return ''
 

@@ -19,10 +19,12 @@ Provides a function for each API call.
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import math
 
-import master_api
+from . import master_api
 from serial_utils import printable
+from six.moves import range
 
 
 class MasterCommandSpec(object):
@@ -129,7 +131,7 @@ class MasterCommandSpec(object):
             if index + num_bytes <= len(byte_str):
                 try:
                     decoded = field.decode(byte_str[index:index + num_bytes])
-                except NeedMoreBytesException, nmbe:
+                except NeedMoreBytesException as nmbe:
                     return decode_field(index, byte_str, field, nmbe.bytes_required)
                 else:
                     partial_result[field.name] = decoded

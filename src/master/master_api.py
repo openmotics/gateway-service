@@ -19,7 +19,8 @@ Requires Firmware 3.137.17 -- Caution on update: status api changed (used in upd
 @author: fryckbos
 """
 
-from master_command import MasterCommandSpec, Field, OutputFieldType, DimmerFieldType, \
+from __future__ import absolute_import
+from .master_command import MasterCommandSpec, Field, OutputFieldType, DimmerFieldType, \
     ErrorListFieldType
 
 BA_GROUP_ACTION = 2

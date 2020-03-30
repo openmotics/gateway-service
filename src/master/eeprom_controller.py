@@ -16,12 +16,15 @@
 Contains controller from reading and writing to the Master EEPROM.
 """
 
+from __future__ import absolute_import
 import inspect
 import types
 import logging
 from threading import Lock
 from ioc import Injectable, Inject, INJECTED, Singleton
-from master_api import eeprom_list, write_eeprom, activate_eeprom
+from .master_api import eeprom_list, write_eeprom, activate_eeprom
+import six
+from six.moves import range
 
 logger = logging.getLogger("openmotics")
 
@@ -95,7 +98,7 @@ class EepromController(object):
         :type fields: list of basestring
         :rtype: list of master.eeprom_controller.EepromModel
         """
-        return self.read_batch(eeprom_model, range(eeprom_model.get_max_id(self._eeprom_file) + 1), fields)
+        return self.read_batch(eeprom_model, list(range(eeprom_model.get_max_id(self._eeprom_file) + 1)), fields)
 
     def write(self, eeprom_model):
         """
@@ -308,11 +311,11 @@ class EepromModel(object):
         self._fields = {'eeprom': [], 'eext': []}
         self._loaded_fields = []
         address_cache = self.__class__.get_address_cache(self.id)
-        for field_name, field_type in self.__class__.get_field_dict(include_eeprom=True).iteritems():
+        for field_name, field_type in six.iteritems(self.__class__.get_field_dict(include_eeprom=True)):
             setattr(self, '_{0}'.format(field_name), EepromDataContainer(field_type, address_cache[field_name]))
             self._add_property(field_name)
             self._fields['eeprom'].append(field_name)
-        for field_name, field_type in self.__class__.get_field_dict(include_eext=True).iteritems():
+        for field_name, field_type in six.iteritems(self.__class__.get_field_dict(include_eext=True)):
             setattr(self, '_{0}'.format(field_name), EextDataContainer(field_type))
             self._add_property(field_name)
             self._fields['eext'].append(field_name)
@@ -394,7 +397,7 @@ class EepromModel(object):
 
     def _deserialize(self, data_dict):
         self._loaded_fields = []
-        for field_name, value in data_dict.iteritems():
+        for field_name, value in six.iteritems(data_dict):
             if field_name == 'id':
                 continue
             self._loaded_fields.append(field_name)
@@ -643,7 +646,7 @@ class EepromDataContainer(object):
 
     def deserialize(self, data, check_writability=True):
         if self.composed is True:
-            for i in xrange(len(data)):
+            for i in range(len(data)):
                 self._composed_data[self._composed_fields[i]].deserialize(data[i], check_writability=check_writability)
         else:
             if check_writability is True:
@@ -670,7 +673,7 @@ class EepromDataType(object):
         self._addr_func = None
         self._data = None
 
-        if isinstance(addr_gen, types.TupleType):
+        if isinstance(addr_gen, tuple):
             self._addr_tuple = addr_gen
         elif isinstance(addr_gen, types.FunctionType):
             args = inspect.getargspec(addr_gen).args
@@ -957,12 +960,12 @@ class EepromEnum(EepromDataType):
 
     def decode(self, data):
         index = ord(data[0])
-        if index in self._enum_values.keys():
+        if index in list(self._enum_values.keys()):
             return self._enum_values[index]
         return 'UNKNOWN'
 
     def encode(self, field):
-        for key, value in self._enum_values.iteritems():
+        for key, value in six.iteritems(self._enum_values):
             if field == value:
                 return str(chr(key))
         return str(chr(255))
