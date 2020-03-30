@@ -25,14 +25,12 @@ import os
 import shutil
 import sqlite3
 import subprocess
-import sys
 import tempfile
 import threading
-import time
 
 import constants
 from bus.om_bus_events import OMBusEvents
-from gateway.dto.output import OutputDTO
+from gateway.dto import OutputDTO, ShutterGroupDTO, ShutterDTO
 from gateway.hal.master_controller import MasterController
 from gateway.observer import Observer
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -41,7 +39,7 @@ from power import power_api
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY:
-    from typing import Any, Dict, List, Tuple
+    from typing import Any, Dict, List, Tuple, Optional
 
 logger = logging.getLogger('openmotics')
 
@@ -243,11 +241,9 @@ class GatewayApi(object):
 
     # Output functions
 
-    def get_outputs_status(self):
+    def get_outputs_status(self):  # type: () -> List[Dict[str, Any]]
         """
         Get a list containing the status of the Outputs.
-
-        :returns: A list is a dicts containing the following keys: id, status, ctimer and dimmer.
         """
         # TODO: work with output controller
         # TODO: implement output controller and let her handle routing to either master or e.g. plugin based outputs
@@ -258,11 +254,9 @@ class GatewayApi(object):
                  'dimmer': output['dimmer']}
                 for output in outputs]
 
-    def get_output_status(self, output_id):
+    def get_output_status(self, output_id):  # type: (int) -> Dict[str, Any]
         """
         Get a list containing the status of the Outputs.
-
-        :returns: A list is a dicts containing the following keys: id, status, ctimer and dimmer.
         """
         # TODO: work with output controller
         # TODO: implement output controller and let her handle routing to either master or e.g. plugin based outputs
@@ -275,144 +269,100 @@ class GatewayApi(object):
                     'ctimer': output['ctimer'],
                     'dimmer': output['dimmer']}
 
-    def set_output_status(self, output_id, is_on, dimmer=None, timer=None):
-        """ Set the status, dimmer and timer of an output.
-
+    def set_output_status(self, output_id, is_on, dimmer=None, timer=None):  # type: (int, bool, Optional[int], Optional[int]) -> None
+        """
+        Set the status, dimmer and timer of an output.
         :param output_id: The id of the output to set
-        :type output_id: int
         :param is_on: Whether the output should be on
-        :type is_on: bool
         :param dimmer: The dimmer value to set, None if unchanged
-        :type dimmer: int | None
         :param timer: The timer value to set, None if unchanged
-        :type timer: int | None
-        :returns: emtpy dict.
         """
         # TODO: work with output controller
         # TODO: implement output controller and let her handle routing to either master or e.g. plugin based outputs
         self.__master_controller.set_output(output_id=output_id, state=is_on, dimmer=dimmer, timer=timer)
-        return {}
 
-    def set_all_lights_off(self):
+    def set_all_lights_off(self):  # type: () -> None
         # TODO: work with output controller
         # TODO: also switch other lights (e.g. from plugins)
         return self.__master_controller.set_all_lights_off()
 
-    def set_all_lights_floor_off(self, floor):
+    def set_all_lights_floor_off(self, floor):  # type: (int) -> None
         # TODO: work with output controller
         # TODO: also switch other lights (e.g. from plugins)
         return self.__master_controller.set_all_lights_floor_off(floor)
 
-    def set_all_lights_floor_on(self, floor):
+    def set_all_lights_floor_on(self, floor):  # type: (int) -> None
         # TODO: work with output controller
         # TODO: also switch other lights (e.g. from plugins)
         return self.__master_controller.set_all_lights_floor_on(floor)
 
     # Shutter functions
 
-    def get_shutter_status(self):
-        """ Get a list containing the status of the Shutters.
-
-        :returns: A list is a dicts containing the following keys: id, status.
-        """
+    def get_shutter_status(self):  # type: () -> Dict[str, Any]
+        """ Get a list containing the status of the Shutters. """
         # TODO: work with shutter controller
         return self.__observer.get_shutter_status()
 
-    def do_shutter_down(self, shutter_id, position):
+    def do_shutter_down(self, shutter_id, position):  # type: (int, Optional[int]) -> None
         """
         Make a shutter go down. The shutter stops automatically when the down or specified position is reached
-
         :param shutter_id: The id of the shutter.
-        :type shutter_id: int
         :param position: The desired end position
-        :type position: int
-        :returns:'status': 'OK'.
-        :rtype: dict
         """
         self.__shutter_controller.shutter_down(shutter_id, position)
-        return {'status': 'OK'}
 
-    def do_shutter_up(self, shutter_id, position):
+    def do_shutter_up(self, shutter_id, position):  # type: (int, Optional[int]) -> None
         """
         Make a shutter go up. The shutter stops automatically when the up or specified position is reached
-
         :param shutter_id: The id of the shutter.
-        :type shutter_id: int
         :param position: The desired end position
-        :type position: int
-        :returns:'status': 'OK'.
-        :rtype: dict
         """
         self.__shutter_controller.shutter_up(shutter_id, position)
-        return {'status': 'OK'}
 
-    def do_shutter_stop(self, shutter_id):
+    def do_shutter_stop(self, shutter_id):  # type: (int) -> None
         """
         Make a shutter stop.
-
         :param shutter_id: The id of the shutter.
-        :type shutter_id: Byte
-        :returns:'status': 'OK'.
         """
         self.__shutter_controller.shutter_stop(shutter_id)
-        return {'status': 'OK'}
 
-    def do_shutter_goto(self, shutter_id, position):
+    def do_shutter_goto(self, shutter_id, position):  # type: (int, int) -> None
         """
         Make a shutter go to the desired position
-
         :param shutter_id: The id of the shutter.
-        :type shutter_id: int
         :param position: The desired end position
-        :type position: int
-        :returns:'status': 'OK'.
-        :rtype: dict
         """
         self.__shutter_controller.shutter_goto(shutter_id, position)
-        return {'status': 'OK'}
 
-    def shutter_report_position(self, shutter_id, position, direction=None):
+    def shutter_report_position(self, shutter_id, position, direction=None):  # type: (int, int, str) -> None
         """
         Report the actual position of a shutter
-
         :param shutter_id: The id of the shutter.
-        :type shutter_id: int
         :param position: The actual position
-        :type position: int
         :param direction: The direction
-        :type direction: str
-        :returns:'status': 'OK'.
-        :rtype: dict
         """
         self.__shutter_controller.report_shutter_position(shutter_id, position, direction)
-        return {'status': 'OK'}
 
-    def do_shutter_group_down(self, group_id):
-        """ Make a shutter group go down. The shutters stop automatically when the down position is
+    def do_shutter_group_down(self, group_id):  # type: (int) -> None
+        """
+        Make a shutter group go down. The shutters stop automatically when the down position is
         reached (after the predefined number of seconds).
-
         :param group_id: The id of the shutter group.
-        :type group_id: Byte
-        :returns:'status': 'OK'.
         """
         return self.__shutter_controller.shutter_group_down(group_id)
 
-    def do_shutter_group_up(self, group_id):
-        """ Make a shutter group go up. The shutters stop automatically when the up position is
+    def do_shutter_group_up(self, group_id):  # type: (int) -> None
+        """
+        Make a shutter group go up. The shutters stop automatically when the up position is
         reached (after the predefined number of seconds).
-
         :param group_id: The id of the shutter group.
-        :type group_id: Byte
-        :returns:'status': 'OK'.
         """
         return self.__shutter_controller.shutter_group_up(group_id)
 
-    def do_shutter_group_stop(self, group_id):
-        """ Make a shutter group stop.
-
+    def do_shutter_group_stop(self, group_id):  # type: (int) -> None
+        """
+        Make a shutter group stop.
         :param group_id: The id of the shutter group.
-        :type group_id: Byte
-        :returns:'status': 'OK'.
         """
         return self.__shutter_controller.shutter_group_stop(group_id)
 
@@ -807,7 +757,7 @@ class GatewayApi(object):
         """
         self.__pulse_controller.set_configurations(config)
 
-    # Below are the auto generated master configuration functions
+    # Outputs
 
     def get_output_configuration(self, output_id):  # type: (int) -> OutputDTO
         """ Get a specific output_configuration defined by its id. """
@@ -829,97 +779,45 @@ class GatewayApi(object):
         # TODO: work with output controller
         self.__master_controller.save_outputs(config)
 
-    def get_shutter_configuration(self, shutter_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        """
-        Get a specific shutter_configuration defined by its id.
+    # Shutters
 
-        :param shutter_id: The id of the shutter_configuration
-        :type shutter_id: Id
-        :param fields: The field of the shutter_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: shutter_configuration dict: contains 'id' (Id), 'group_1' (Byte), 'group_2' (Byte), 'name' (String[16]), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte), 'up_down_config' (Byte)
-        """
-        return self.__master_controller.load_shutter_configuration(shutter_id, fields=fields)
+    def get_shutter_configuration(self, shutter_id):  # type: (int) -> ShutterDTO
+        """ Gets a specific shutter configuration defined by its id. """
+        return self.__master_controller.load_shutter(shutter_id)
 
-    def get_shutter_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        """
-        Get all shutter_configurations.
+    def get_shutter_configurations(self):  # type: () -> List[ShutterDTO]
+        """ Get all shutter_configurations. """
+        return self.__master_controller.load_shutters()
 
-        :param fields: The field of the shutter_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of shutter_configuration dict: contains 'id' (Id), 'group_1' (Byte), 'group_2' (Byte), 'name' (String[16]), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte), 'up_down_config' (Byte)
-        """
-        return self.__master_controller.load_shutter_configurations(fields=fields)
-
-    def set_shutter_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set one shutter_configuration.
-
-        :param config: The shutter_configuration to set
-        :type config: shutter_configuration dict: contains 'id' (Id), 'group_1' (Byte), 'group_2' (Byte), 'name' (String[16]), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte), 'up_down_config' (Byte)
-        """
-        self.__master_controller.save_shutter_configuration(config)
+    def set_shutter_configuration(self, config):  # type: (Tuple[ShutterDTO, List[str]]) -> None
+        """ Set one shutter_configuration. """
+        self.__master_controller.save_shutters([config])
         self.__observer.invalidate_cache(Observer.Types.SHUTTERS)
         self.__shutter_controller.update_config(self.get_shutter_configurations())
 
-    def set_shutter_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        """
-        Set multiple shutter_configurations.
-
-        :param config: The list of shutter_configurations to set
-        :type config: list of shutter_configuration dict: contains 'id' (Id), 'group_1' (Byte), 'group_2' (Byte), 'name' (String[16]), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte), 'up_down_config' (Byte)
-        """
-        self.__master_controller.save_shutter_configurations(config)
+    def set_shutter_configurations(self, config):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
+        """ Set multiple shutter_configurations. """
+        self.__master_controller.save_shutters(config)
         self.__observer.invalidate_cache(Observer.Types.SHUTTERS)
         self.__shutter_controller.update_config(self.get_shutter_configurations())
 
-    def get_shutter_group_configuration(self, group_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        """
-        Get a specific shutter_group_configuration defined by its id.
+    def get_shutter_group_configuration(self, group_id):  # type: (int) -> ShutterGroupDTO
+        """ Get a specific shutter_group_configuration defined by its id. """
+        return self.__master_controller.load_shutter_group(group_id)
 
-        :param group_id: The id of the shutter_group_configuration
-        :type group_id: Id
-        :param fields: The field of the shutter_group_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: shutter_group_configuration dict: contains 'id' (Id), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte)
-        """
-        return self.__master_controller.load_shutter_group_configuration(group_id, fields=fields)
+    def get_shutter_group_configurations(self):  # type: () -> List[ShutterGroupDTO]
+        """ Get all shutter_group_configurations. """
+        return self.__master_controller.load_shutter_groups()
 
-    def get_shutter_group_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        """
-        Get all shutter_group_configurations.
+    def set_shutter_group_configuration(self, config):  # type: (Tuple[ShutterGroupDTO, List[str]]) -> None
+        """ Set one shutter_group_configuration. """
+        self.__master_controller.save_shutter_groups([config])
 
-        :param fields: The field of the shutter_group_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of shutter_group_configuration dict: contains 'id' (Id), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte)
-        """
-        return self.__master_controller.load_shutter_group_configurations(fields=fields)
+    def set_shutter_group_configurations(self, config):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
+        """ Set multiple shutter_group_configurations. """
+        self.__master_controller.save_shutter_groups(config)
 
-    def set_shutter_group_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set one shutter_group_configuration.
-
-        :param config: The shutter_group_configuration to set
-        :type config: shutter_group_configuration dict: contains 'id' (Id), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte)
-        """
-        self.__master_controller.save_shutter_group_configuration(config)
-
-    def set_shutter_group_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        """
-        Set multiple shutter_group_configurations.
-
-        :param config: The list of shutter_group_configurations to set
-        :type config: list of shutter_group_configuration dict: contains 'id' (Id), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte)
-        """
-        self.__master_controller.save_shutter_group_configurations(config)
+    # Inputs
 
     def get_input_configuration(self, input_id, fields=None):
         """ Get a specific input_configuration defined by its id. """

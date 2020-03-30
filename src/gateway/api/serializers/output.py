@@ -25,23 +25,26 @@ if False:  # MYPY
 
 
 class OutputSerializer(object):
+    WORD_MAX = 2 ** 16 - 1
+    BYTE_MAX = 255
+
     @staticmethod
     def serialize(output_dto, fields):  # type: (OutputDTO, Optional[List[str]]) -> Dict
         data = {'id': output_dto.id,
                 'module_type': output_dto.module_type,
                 'name': output_dto.name,
-                'timer': Toolbox.denonify(output_dto.timer, 2 ** 16 - 1),
-                'floor': Toolbox.denonify(output_dto.floor, 255),
-                'type': Toolbox.denonify(output_dto.output_type, 255),
-                'can_led_1_id': Toolbox.denonify(output_dto.can_led_1.id, 255),
+                'timer': Toolbox.denonify(output_dto.timer, OutputSerializer.WORD_MAX),
+                'floor': Toolbox.denonify(output_dto.floor, OutputSerializer.BYTE_MAX),
+                'type': Toolbox.denonify(output_dto.output_type, OutputSerializer.BYTE_MAX),
+                'can_led_1_id': Toolbox.denonify(output_dto.can_led_1.id, OutputSerializer.BYTE_MAX),
                 'can_led_1_function': output_dto.can_led_1.function,
-                'can_led_2_id': Toolbox.denonify(output_dto.can_led_2.id, 255),
+                'can_led_2_id': Toolbox.denonify(output_dto.can_led_2.id, OutputSerializer.BYTE_MAX),
                 'can_led_2_function': output_dto.can_led_2.function,
-                'can_led_3_id': Toolbox.denonify(output_dto.can_led_3.id, 255),
+                'can_led_3_id': Toolbox.denonify(output_dto.can_led_3.id, OutputSerializer.BYTE_MAX),
                 'can_led_3_function': output_dto.can_led_3.function,
-                'can_led_4_id': Toolbox.denonify(output_dto.can_led_4.id, 255),
+                'can_led_4_id': Toolbox.denonify(output_dto.can_led_4.id, OutputSerializer.BYTE_MAX),
                 'can_led_4_function': output_dto.can_led_4.function,
-                'room': Toolbox.denonify(output_dto.room, 255)}
+                'room': Toolbox.denonify(output_dto.room, OutputSerializer.BYTE_MAX)}
         if fields is None:
             return data
         return {field: data[field] for field in fields}
@@ -56,9 +59,9 @@ class OutputSerializer(object):
             if data_field in api_data:
                 loaded_fields.append(dto_field)
                 setattr(output_dto, dto_field, api_data[data_field])
-        for data_field, (dto_field, default) in {'timer': ('timer', 2 ** 16 - 1),
-                                                 'floor': ('floor', 255),
-                                                 'room': ('room', 255)}.iteritems():
+        for data_field, (dto_field, default) in {'timer': ('timer', OutputSerializer.WORD_MAX),
+                                                 'floor': ('floor', OutputSerializer.BYTE_MAX),
+                                                 'room': ('room', OutputSerializer.BYTE_MAX)}.iteritems():
             if data_field in api_data:
                 loaded_fields.append(dto_field)
                 setattr(output_dto, dto_field, Toolbox.nonify(api_data[data_field], default))

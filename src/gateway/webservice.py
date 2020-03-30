@@ -47,6 +47,9 @@ from serial_utils import CommunicationTimedOutException
 
 logger = logging.getLogger("openmotics")
 
+if False:  # MYPY
+    from typing import Dict, Optional, Any, List
+
 
 class FloatWrapper(float):
     """ Wrapper for float value that limits the number of digits when printed. """
@@ -580,20 +583,16 @@ class WebInterface(object):
         return {'status': self._gateway_api.get_outputs_status()}
 
     @openmotics_api(auth=True, check=types(id=int, is_on=bool, dimmer=int, timer=int))
-    def set_output(self, id, is_on, dimmer=None, timer=None):
+    def set_output(self, id, is_on, dimmer=None, timer=None):  # type: (int, bool, Optional[int], Optional[int]) -> Dict
         """
         Set the status, dimmer and timer of an output.
-
         :param id: The id of the output to set
-        :type id: int
         :param is_on: Whether the output should be on
-        :type is_on: bool
         :param dimmer: The dimmer value to set, None if unchanged
-        :type dimmer: int or None
         :param timer: The timer value to set, None if unchanged
-        :type timer: int
         """
-        return self._gateway_api.set_output_status(id, is_on, dimmer, timer)
+        self._gateway_api.set_output_status(id, is_on, dimmer, timer)
+        return {}
 
     @openmotics_api(auth=True)
     def set_all_lights_off(self):
@@ -634,123 +633,96 @@ class WebInterface(object):
         inputs = [(changed_input, None) for changed_input in self._gateway_api.get_last_inputs()]
         return {'inputs': inputs}
 
+    # Shutters
+
     @openmotics_api(auth=True)
-    def get_shutter_status(self):
+    def get_shutter_status(self):  # type: () -> Dict[str, Any]
         """
         Get the status of the shutters.
-
         :returns: 'status': list of dictionaries with the following keys: id, position.
-        :rtype: dict
         """
         return self._gateway_api.get_shutter_status()
 
     @openmotics_api(auth=True, check=types(id=int, position=int))
-    def do_shutter_down(self, id, position=None):
+    def do_shutter_down(self, id, position=None):  # type: (int, Optional[int]) -> Dict[str, str]
         """
         Make a shutter go down. The shutter stops automatically when the down or specified position is reached
-
         :param id: The id of the shutter.
-        :type id: int
         :param position: The desired end position
-        :type position: int
-        :returns:'status': 'OK'.
-        :rtype: dict
         """
-        return self._gateway_api.do_shutter_down(id, position)
+        self._gateway_api.do_shutter_down(id, position)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int, position=int))
-    def do_shutter_up(self, id, position=None):
+    def do_shutter_up(self, id, position=None):  # type: (int, Optional[int]) -> Dict[str, str]
         """
         Make a shutter go up. The shutter stops automatically when the up or specified position is reached
-
         :param id: The id of the shutter.
-        :type id: int
         :param position: The desired end position
-        :type position: int
-        :returns:'status': 'OK'.
-        :rtype: dict
         """
-        return self._gateway_api.do_shutter_up(id, position)
+        self._gateway_api.do_shutter_up(id, position)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int))
-    def do_shutter_stop(self, id):
+    def do_shutter_stop(self, id):  # type: (int) -> Dict[str, str]
         """
         Make a shutter stop.
-
         :param id: The id of the shutter.
-        :type id: int
-        :returns:'status': 'OK'.
-        :rtype: dict
         """
-        return self._gateway_api.do_shutter_stop(id)
+        self._gateway_api.do_shutter_stop(id)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int, position=int))
-    def do_shutter_goto(self, id, position):
+    def do_shutter_goto(self, id, position):  # type: (int, int) -> Dict[str, str]
         """
         Make a shutter go up or down to the specified position.
-
         :param id: The id of the shutter.
-        :type id: int
         :param position: The desired end position
-        :type position: int
-        :returns:'status': 'OK'.
-        :rtype: dict
         """
-        return self._gateway_api.do_shutter_goto(id, position)
+        self._gateway_api.do_shutter_goto(id, position)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int, position=int, direction=[ShutterController.Direction.UP, ShutterController.Direction.DOWN, ShutterController.Direction.STOP]))
-    def shutter_report_position(self, id, position, direction=None):
+    def shutter_report_position(self, id, position, direction=None):  # type: (int, int, Optional[str]) -> Dict[str, str]
         """
         Reports the actual position of a shutter
-
         :param id: The id of the shutter.
-        :type id: int
         :param position: The actual position
-        :type position: int
         :param direction: The direction
-        :type direction: str
-        :returns:'status': 'OK'.
-        :rtype: dict
         """
-        return self._gateway_api.shutter_report_position(id, position, direction)
+        self._gateway_api.shutter_report_position(id, position, direction)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int))
-    def do_shutter_group_down(self, id):
+    def do_shutter_group_down(self, id):  # type: (int) -> Dict[str, str]
         """
         Make a shutter group go down. The shutters stop automatically when the down position is
         reached (after the predefined number of seconds).
-
         :param id: The id of the shutter group.
-        :type id: int
-        :returns:'status': 'OK'.
-        :rtype: dict
         """
-        return self._gateway_api.do_shutter_group_down(id)
+        self._gateway_api.do_shutter_group_down(id)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int))
-    def do_shutter_group_up(self, id):
+    def do_shutter_group_up(self, id):  # type: (int) -> Dict[str, str]
         """
         Make a shutter group go up. The shutters stop automatically when the up position is
         reached (after the predefined number of seconds).
-
         :param id: The id of the shutter group.
-        :type id: int
-        :returns:'status': 'OK'.
-        :rtype: dict
         """
-        return self._gateway_api.do_shutter_group_up(id)
+        self._gateway_api.do_shutter_group_up(id)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int))
-    def do_shutter_group_stop(self, id):
+    def do_shutter_group_stop(self, id):  # type: (int) -> Dict[str, str]
         """
         Make a shutter group stop.
-
         :param id: The id of the shutter group.
-        :type id: int
-        :returns:'status': 'OK'.
-        :rtype: dict
         """
-        return self._gateway_api.do_shutter_group_stop(id)
+        self._gateway_api.do_shutter_group_stop(id)
+        return {'status': 'OK'}
+
+    # Thermostats
 
     @openmotics_api(auth=True)
     def get_thermostat_status(self):
@@ -1013,153 +985,110 @@ class WebInterface(object):
         """
         return self._gateway_api.master_clear_error_list
 
+    # Output configurations
+
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_output_configuration(self, id, fields=None):
+    def get_output_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
         Get a specific output_configuration defined by its id.
-
         :param id: The id of the output_configuration
-        :type id: int
-        :param fields: The fields of the output_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': output_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'floor' (Byte), 'module_type' (String[1]), 'name' (String[16]), 'room' (Byte), 'timer' (Word), 'type' (Byte)
-        :rtype: dict
+        :param fields: The fields of the output_configuration to get, None if all
         """
         return {'config': OutputSerializer.serialize(output_dto=self._gateway_api.get_output_configuration(id),
-                                                        fields=fields)}
+                                                     fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_output_configurations(self, fields=None):
+    def get_output_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
         Get all output_configurations.
-
-        :param fields: The field of the output_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of output_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'floor' (Byte), 'module_type' (String[1]), 'name' (String[16]), 'room' (Byte), 'timer' (Word), 'type' (Byte)
-        :rtype: dict
+        :param fields: The field of the output_configuration to get, None if all
         """
         return {'config': [OutputSerializer.serialize(output_dto=output, fields=fields)
                            for output in self._gateway_api.get_output_configurations()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_output_configuration(self, config):
-        """
-        Set one output_configuration.
-
-        :param config: The output_configuration to set: dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'floor' (Byte), 'name' (String[16]), 'room' (Byte), 'timer' (Word), 'type' (Byte)
-        :type config: dict
-        """
+    def set_output_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one output_configuration. """
         data = OutputSerializer.deserialize(config)
         self._gateway_api.set_output_configuration(data)
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_output_configurations(self, config):
-        """
-        Set multiple output_configurations.
-
-        :param config: The list of output_configurations to set: list of output_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'floor' (Byte), 'name' (String[16]), 'room' (Byte), 'timer' (Word), 'type' (Byte)
-        :type config: list
-        """
+    def set_output_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple output_configurations. """
         data = [OutputSerializer.deserialize(entry) for entry in config]
         self._gateway_api.set_output_configurations(data)
         return {}
 
+    # Shutter configurations
+
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_shutter_configuration(self, id, fields=None):
+    def get_shutter_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
         Get a specific shutter_configuration defined by its id.
-
         :param id: The id of the shutter_configuration
-        :type id: Id
-        :param fields: The fields of the shutter_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': shutter_configuration dict: contains 'id' (Id), 'group_1' (Byte), 'group_2' (Byte), 'name' (String[16]), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte), 'up_down_config' (Byte)
-        :rtype: dict
+        :param fields: The fields of the shutter_configuration to get, None if all
         """
+        # TODO: Use serializer
         return {'config': self._gateway_api.get_shutter_configuration(id, fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_shutter_configurations(self, fields=None):
+    def get_shutter_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
         Get all shutter_configurations.
-
-        :param fields: The fields of the shutter_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of shutter_configuration dict: contains 'id' (Id), 'group_1' (Byte), 'group_2' (Byte), 'name' (String[16]), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte), 'up_down_config' (Byte)
-        :rtype: dict
+        :param fields: The fields of the shutter_configuration to get, None if all
         """
+        # TODO: Use serializer
         return {'config': self._gateway_api.get_shutter_configurations(fields)}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_shutter_configuration(self, config):
-        """
-        Set one shutter_configuration.
-
-        :param config: The shutter_configuration to set: shutter_configuration dict: contains 'id' (Id), 'group_1' (Byte), 'group_2' (Byte), 'name' (String[16]), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte), 'up_down_config' (Byte)
-        :type config: dict
-        """
+    def set_shutter_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one shutter_configuration. """
+        # TODO: Use serializer
         self._gateway_api.set_shutter_configuration(config)
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_shutter_configurations(self, config):
-        """
-        Set multiple shutter_configurations.
-
-        :param config: The list of shutter_configurations to set: list of shutter_configuration dict: contains 'id' (Id), 'group_1' (Byte), 'group_2' (Byte), 'name' (String[16]), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte), 'up_down_config' (Byte)
-        :type config: list
-        """
+    def set_shutter_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple shutter_configurations. """
+        # TODO: Use serializer
         self._gateway_api.set_shutter_configurations(config)
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_shutter_group_configuration(self, id, fields=None):
+    def get_shutter_group_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
         Get a specific shutter_group_configuration defined by its id.
-
         :param id: The id of the shutter_group_configuration
-        :type id: int
-        :param fields: The field of the shutter_group_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': shutter_group_configuration dict: contains 'id' (Id), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte)
-        :rtype: dict
+        :param fields: The field of the shutter_group_configuration to get, None if all
         """
+        # TODO: Use serializer
         return {'config': self._gateway_api.get_shutter_group_configuration(id, fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_shutter_group_configurations(self, fields=None):
+    def get_shutter_group_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
         Get all shutter_group_configurations.
-
-        :param fields: The field of the shutter_group_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of shutter_group_configuration dict: contains 'id' (Id), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte)
-        :rtype: dict
+        :param fields: The field of the shutter_group_configuration to get, None if all
         """
+        # TODO: Use serializer
         return {'config': self._gateway_api.get_shutter_group_configurations(fields)}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_shutter_group_configuration(self, config):
-        """
-        Set one shutter_group_configuration.
-
-        :param config: The shutter_group_configuration to set: shutter_group_configuration dict: contains 'id' (Id), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte)
-        :type config: dict
-        """
+    def set_shutter_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one shutter_group_configuration. """
+        # TODO: Use serializer
         self._gateway_api.set_shutter_group_configuration(config)
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_shutter_group_configurations(self, config):
-        """
-        Set multiple shutter_group_configurations.
-
-        :param config: The list of shutter_group_configurations to set: list of shutter_group_configuration dict: contains 'id' (Id), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte)
-        :type config: list
-        """
+    def set_shutter_group_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple shutter_group_configurations. """
+        # TODO: Use serializer
         self._gateway_api.set_shutter_group_configurations(config)
         return {}
+
+    # Input configuration
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
     def get_input_configuration(self, id, fields=None):

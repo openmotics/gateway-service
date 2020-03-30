@@ -19,8 +19,8 @@ import logging
 import time
 from threading import Thread
 
-from gateway.dto.output import OutputDTO
-from gateway.hal.mappers_core.output import OutputMapper
+from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
+from gateway.hal.mappers_core import OutputMapper, ShutterMapper
 from gateway.hal.master_controller import MasterController, MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -29,8 +29,10 @@ from master_core.core_communicator import BackgroundConsumer
 from master_core.errors import Error
 from master_core.events import Event as MasterCoreEvent
 from master_core.memory_file import MemoryTypes
-from master_core.memory_models import GlobalConfiguration, \
-    InputConfiguration, OutputConfiguration, SensorConfiguration
+from master_core.memory_models import (
+    GlobalConfiguration, InputConfiguration, OutputConfiguration,
+    SensorConfiguration, ShutterConfiguration
+)
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
@@ -341,11 +343,47 @@ class MasterCoreController(MasterController):
                                                                       'device_nr': shutter_id,
                                                                       'extra_parameter': 0})
 
+    def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
+        shutter = ShutterConfiguration(shutter_id)
+        return ShutterMapper.orm_to_dto(shutter)
+
+    def load_shutters(self):  # type: () -> List[ShutterDTO]
+        shutters = []
+        for i in xrange(255):  # TODO: Dynamically load amount of supported shutters
+            shutters.append(self.load_shutter(i))
+        return shutters
+
+    def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
+        for shutter, fields in shutters:
+            shutter = ShutterMapper.dto_to_orm(shutter, fields)
+            shutter.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
+
+    def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
+        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+
+    def shutter_group_down(self, shutter_group_id):  # type: (int) -> None
+        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+
+    def shutter_group_stop(self, shutter_group_id):  # type: (int) -> None
+        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+
+    def load_shutter_group(self, shutter_group_id):  # type: (int) -> ShutterGroupDTO
+        return ShutterGroupDTO(id=shutter_group_id)
+
+    def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
+        shutter_groups = []
+        for i in xrange(16):
+            shutter_groups.append(ShutterGroupDTO(id=i))
+        return shutter_groups
+
+    def save_shutter_groups(self, shutter_groups):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
+        pass  # TODO: Implement when/if ShutterGroups get actual properties
+
     # Can Led functions
 
     def load_can_led_configurations(self, fields=None):
         # type: (Any) -> List[Dict[str,Any]]
-        return [] # TODO: implement
+        return []  # TODO: implement
 
     # Sensors
 
@@ -422,12 +460,6 @@ class MasterCoreController(MasterController):
         self._sensor_last_updated = time.time()
 
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
-        raise NotImplementedError()
-
-    def shutter_group_down(self, group_id):
-        raise NotImplementedError()
-
-    def shutter_group_up(self, group_id):
         raise NotImplementedError()
 
     def add_virtual_output_module(self):

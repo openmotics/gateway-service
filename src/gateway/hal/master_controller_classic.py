@@ -21,14 +21,12 @@ from datetime import datetime
 from threading import Thread, Timer
 
 from toolbox import Toolbox
-from gateway.dto.feedback_led import FeedbackLedDTO
-from gateway.dto.output import OutputDTO
-from gateway.hal.mappers_classic.output import OutputMapper
+from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
+from gateway.hal.mappers_classic import OutputMapper, ShutterMapper, ShutterGroupMapper
 from gateway.hal.master_controller import MasterController, MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master import eeprom_models, master_api
-from master.eeprom_controller import EepromModel
 from master.eeprom_models import CanLedConfiguration, DimmerConfiguration, \
     EepromAddress, GroupActionConfiguration, RoomConfiguration, \
     ScheduledActionConfiguration, ShutterConfiguration, \
@@ -488,107 +486,66 @@ class MasterClassicController(MasterController):
 
     # Shutters
 
-    def shutter_up(self, shutter_id):
+    def shutter_up(self, shutter_id):  # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_SHUTTER_UP, shutter_id)
 
-    def shutter_down(self, shutter_id):
+    def shutter_down(self, shutter_id):  # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_SHUTTER_DOWN, shutter_id)
 
-    def shutter_stop(self, shutter_id):
+    def shutter_stop(self, shutter_id):  # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_SHUTTER_STOP, shutter_id)
 
-    def shutter_group_up(self, group_id):
-        """ Make a shutter group go up. The shutters stop automatically when the up position is
-        reached (after the predefined number of seconds).
+    def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.ShutterConfiguration, shutter_id)
+        return ShutterMapper.orm_to_dto(classic_object)
 
-        :param group_id: The id of the shutter group.
-        :type group_id: Byte
-        :returns:'status': 'OK'.
-        """
-        if group_id < 0 or group_id > 30:
-            raise ValueError('id not in [0, 30]: %d' % group_id)
+    def load_shutters(self):  # type: () -> List[ShutterDTO]
+        return [ShutterMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.ShutterConfiguration)]
 
+    def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
+        batch = []
+        for shutter, fields in shutters:
+            batch.append(ShutterMapper.dto_to_orm(shutter, fields))
+        self._eeprom_controller.write_batch(batch)
+
+    def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
+        if not (0 <= shutter_group_id <= 30):
+            raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
         self._master_communicator.do_command(
             master_api.basic_action(),
-            {'action_type': master_api.BA_SHUTTER_GROUP_UP, 'action_number': id}
+            {'action_type': master_api.BA_SHUTTER_GROUP_UP, 'action_number': shutter_group_id}
         )
 
-        return {'status': 'OK'}
-
-    def shutter_group_down(self, group_id):
-        """ Make a shutter group go down. The shutters stop automatically when the down position is
-        reached (after the predefined number of seconds).
-
-        :param group_id: The id of the shutter group.
-        :type group_id: Byte
-        :returns:'status': 'OK'.
-        """
-        if group_id < 0 or group_id > 30:
-            raise ValueError('id not in [0, 30]: %d' % group_id)
-
+    def shutter_group_down(self, shutter_group_id):  # type: (int) -> None
+        if not (0 <= shutter_group_id <= 30):
+            raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
         self._master_communicator.do_command(
             master_api.basic_action(),
-            {'action_type': master_api.BA_SHUTTER_GROUP_DOWN, 'action_number': group_id}
+            {'action_type': master_api.BA_SHUTTER_GROUP_DOWN, 'action_number': shutter_group_id}
         )
 
-        return {'status': 'OK'}
-
-    def shutter_group_stop(self, group_id):
-        """ Make a shutter group stop.
-
-        :param group_id: The id of the shutter group.
-        :type group_id: Byte
-        :returns:'status': 'OK'.
-        """
-        if group_id < 0 or group_id > 30:
-            raise ValueError('id not in [0, 30]: %d' % group_id)
-
+    def shutter_group_stop(self, shutter_group_id):  # type: (int) -> None
+        if not (0 <= shutter_group_id <= 30):
+            raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
         self._master_communicator.do_command(
             master_api.basic_action(),
-            {'action_type': master_api.BA_SHUTTER_GROUP_STOP, 'action_number': group_id}
+            {'action_type': master_api.BA_SHUTTER_GROUP_STOP, 'action_number': shutter_group_id}
         )
 
-        return {'status': 'OK'}
+    def load_shutter_group(self, shutter_group_id):  # type: (int) -> ShutterGroupDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.ShutterGroupConfiguration, shutter_group_id)
+        return ShutterGroupMapper.orm_to_dto(classic_object)
 
-    def load_shutter_configuration(self, shutter_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        # TODO: work with shutter controller
-        return self._eeprom_controller.read(ShutterConfiguration, shutter_id, fields).serialize()
+    def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
+        return [ShutterGroupMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.ShutterGroupConfiguration)]
 
-    def load_shutter_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        # TODO: work with shutter controller
-        return [o.serialize() for o in self._eeprom_controller.read_all(ShutterConfiguration, fields)]
-
-    def save_shutter_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        # TODO: work with shutter controller
-        self._eeprom_controller.write(ShutterConfiguration.deserialize(config))
-
-    def save_shutter_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        # TODO: work with shutter controller
-        self._eeprom_controller.write_batch([ShutterConfiguration.deserialize(o) for o in config])
-
-    def load_shutter_group_configuration(self, group_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        # TODO: work with shutter controller
-        return self._eeprom_controller.read(ShutterGroupConfiguration, group_id, fields).serialize()
-
-    def load_shutter_group_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        # TODO: work with shutter controller
-        return [o.serialize() for o in self._eeprom_controller.read_all(ShutterGroupConfiguration, fields)]
-
-    def save_shutter_group_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        # TODO: work with shutter controller
-        self._eeprom_controller.write(ShutterGroupConfiguration.deserialize(config))
-
-    def save_shutter_group_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        # TODO: work with shutter controller
-        self._eeprom_controller.write_batch([ShutterGroupConfiguration.deserialize(o) for o in config])
+    def save_shutter_groups(self, shutter_groups):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
+        batch = []
+        for shutter_group, fields in shutter_groups:
+            batch.append(ShutterGroupMapper.dto_to_orm(shutter_group, fields))
+        self._eeprom_controller.write_batch(batch)
 
     # Virtual modules
 

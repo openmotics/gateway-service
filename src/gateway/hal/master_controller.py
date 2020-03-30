@@ -17,7 +17,7 @@ Module for communicating with the Master
 """
 from exceptions import NotImplementedError
 import ujson as json
-from gateway.dto.output import OutputDTO
+from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
 
 if False:  # MYPY
     from typing import Any, Callable, Dict, List, Tuple
@@ -173,42 +173,28 @@ class MasterController(object):
     def shutter_stop(self, shutter_id):
         raise NotImplementedError()
 
+    def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
+        raise NotImplementedError()
+
+    def load_shutters(self):  # type: () -> List[ShutterDTO]
+        raise NotImplementedError()
+
+    def save_shutters(self, config):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
+        raise NotImplementedError()
+
     def shutter_group_down(self, group_id):
         raise NotImplementedError()
 
     def shutter_group_up(self, group_id):
         raise NotImplementedError()
 
-    def load_shutter_configuration(self, shutter_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
+    def load_shutter_group(self, shutter_group_id):  # type: (int) -> ShutterGroupDTO
         raise NotImplementedError()
 
-    def load_shutter_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
+    def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
         raise NotImplementedError()
 
-    def save_shutter_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        raise NotImplementedError()
-
-    def save_shutter_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        raise NotImplementedError()
-
-    def load_shutter_group_configuration(self, group_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        raise NotImplementedError()
-
-    def load_shutter_group_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        raise NotImplementedError()
-
-    def save_shutter_group_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        raise NotImplementedError()
-
-    def save_shutter_group_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
+    def save_shutter_groups(self, config):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
         raise NotImplementedError()
 
     # Sensors
