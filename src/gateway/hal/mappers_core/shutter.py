@@ -21,7 +21,7 @@ from gateway.dto.shutter import ShutterDTO
 from master_core.memory_models import ShutterConfiguration
 
 if False:  # MYPY
-    from typing import List
+    from typing import List, Dict, Any
 
 
 class ShutterMapper(object):
@@ -50,7 +50,7 @@ class ShutterMapper(object):
 
     @staticmethod
     def dto_to_orm(shutter_dto, fields):  # type: (ShutterDTO, List[str]) -> ShutterConfiguration
-        new_data = {'id': shutter_dto.id}
+        new_data = {'id': shutter_dto.id}  # type: Dict[str, Any]
         if 'name' in fields:
             new_data['name'] = shutter_dto.name
         for field in ['timer_up', 'timer_down']:

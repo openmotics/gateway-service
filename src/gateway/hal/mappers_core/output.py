@@ -20,13 +20,13 @@ from gateway.dto.output import OutputDTO
 from master_core.memory_models import OutputConfiguration
 
 if False:  # MYPY
-    from typing import List
+    from typing import List, Dict, Any
 
 
 class OutputMapper(object):
     @staticmethod
     def orm_to_dto(orm_object):  # type: (OutputConfiguration) -> OutputDTO
-        timer = 0
+        timer = 0.0
         if orm_object.timer_type == 2:
             timer = orm_object.timer_value
         elif orm_object.timer_type == 1:
@@ -39,7 +39,7 @@ class OutputMapper(object):
 
     @staticmethod
     def dto_to_orm(output_dto, fields):  # type: (OutputDTO, List[str]) -> OutputConfiguration
-        new_data = {'id': output_dto.id}
+        new_data = {'id': output_dto.id}  # type: Dict[str, Any]
         if 'name' in fields:
             new_data['name'] = output_dto.name
         # TODO: Rest of the mapping

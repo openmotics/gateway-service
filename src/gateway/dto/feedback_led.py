@@ -185,6 +185,6 @@ class FeedbackLedDTO(object):
         SW_B16_NORMAL = 'Swinging B16'
         SW_B16_INVERTED = 'Swinging B16 Inverted'
 
-    def __init__(self, id, function):  # type: (Optional[int], FeedbackLedDTO.Functions) -> None
+    def __init__(self, id, function):  # type: (Optional[int], str) -> None
         self.id = id  # type: Optional[int]
-        self.function = function  # type: FeedbackLedDTO.Functions
+        self.function = function  # type: str
