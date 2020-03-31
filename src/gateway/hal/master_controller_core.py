@@ -148,10 +148,10 @@ class MasterCoreController(MasterController):
             data['module_type'] = input_module.module.device_type
         return data
 
-    def _enumerate_io_modules(self, module_type):
+    def _enumerate_io_modules(self, module_type, amount_per_module=8):
         cmd = CoreAPI.general_configuration_number_of_modules()
         module_count = self._master_communicator.do_command(cmd, {})[module_type]
-        return xrange(module_count * 8)
+        return xrange(module_count * amount_per_module)
 
     #######################
     # Internal management #
@@ -302,8 +302,8 @@ class MasterCoreController(MasterController):
         return outputs
 
     def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
-        for output, fields in outputs:
-            output = OutputMapper.dto_to_orm(output, fields)
+        for output_dto, fields in outputs:
+            output = OutputMapper.dto_to_orm(output_dto, fields)
             if output.is_shutter:
                 # Shutter outputs cannot be changed
                 continue
@@ -348,15 +348,30 @@ class MasterCoreController(MasterController):
         return ShutterMapper.orm_to_dto(shutter)
 
     def load_shutters(self):  # type: () -> List[ShutterDTO]
+        # At this moment, the system expects a given amount of Shutter modules to be physically
+        # installed. However, in the Core+, this is not the case as a Shutter isn't a physical module
+        # but instead a virtual layer over physical Output modules. For easy backwards compatible
+        # implementation, a Shutter will map 1-to-1 to the Outputs with the same ID. This means we only need
+        # to emulate such a Shutter module foreach Output module.
         shutters = []
-        for i in xrange(255):  # TODO: Dynamically load amount of supported shutters
+        for i in self._enumerate_io_modules('output', amount_per_module=4):
             shutters.append(self.load_shutter(i))
         return shutters
 
     def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
-        for shutter, fields in shutters:
-            shutter = ShutterMapper.dto_to_orm(shutter, fields)
-            shutter.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
+        # TODO: Batch saving - postpone eeprom activate if relevant for the Core
+        # TODO: Atomic saving
+        for shutter_dto, fields in shutters:
+            # Configure shutter
+            shutter = ShutterMapper.dto_to_orm(shutter_dto, fields)
+            shutter.save()
+            # Mark related Outputs as "occupied by shutter"
+            is_configured = shutter.outputs.output_0 != 255  # A shutter is considered "configured" if it's != max
+            output_set = ['01', '23', '45', '67'][shutter_dto.id % 4]
+            output_module = OutputConfiguration(shutter_dto.id * 2).module
+            setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_configured)
+            setattr(output_module.shutter_config, 'set_{0}_direction'.format(output_set), shutter_dto.up_down_config == 0)
+            output_module.save()
 
     def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
         raise NotImplementedError()  # TODO: Implement once supported by Core(+)
