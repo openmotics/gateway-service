@@ -19,12 +19,12 @@
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Dict, Any, List
+    from typing import Dict, Any, List, Optional
 
 
 class SerializerToolbox(object):
     @staticmethod
-    def filter_fields(data, fields):  # type: (Dict[str, Any], List[str]) -> Dict[str, Any]
+    def filter_fields(data, fields):  # type: (Dict[str, Any], Optional[List[str]]) -> Dict[str, Any]
         if fields is None:
             return data
         return {field: data[field] for field in fields}
