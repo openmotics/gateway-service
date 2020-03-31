@@ -2351,11 +2351,22 @@ class WebService(object):
         self._config_controller = configuration_controller
         self._https_server = None
         self._http_server = None
-        self._running = False
         if not verbose:
             logging.getLogger("cherrypy").propagate = False
 
-    def run(self):
+    @staticmethod
+    def _http_server_logger(msg='', level=20, traceback=False):
+        """
+        This workaround is to lower some CherryPy "TICK"-SSL errors' severity that are incorrectly
+        logged in our version of CherryPy. It is already resolved in a newer version, but we
+        still need to upgrade
+        """
+        # TODO upgrade cherrypy
+        _ = level, traceback
+        logger.debug(msg)
+
+    def start(self):
+        # type: () -> None
         """ Run the web service: start cherrypy. """
         try:
             logger.info('Starting webserver...')
@@ -2402,44 +2413,16 @@ class WebService(object):
             cherrypy.engine.start()
             self._https_server.httpserver.error_log = WebService._http_server_logger
             self._http_server.httpserver.error_log = WebService._http_server_logger
-            self._running = True
             logger.info('Starting webserver... Done')
-            cherrypy.engine.block()
-            logger.info('Webserver stopped')
-            self._running = False
         except Exception:
             logger.exception("Could not start webservice. Dying...")
             sys.exit(1)
 
-    @staticmethod
-    def _http_server_logger(msg='', level=20, traceback=False):
-        """
-        This workaround is to lower some CherryPy "TICK"-SSL errors' severity that are incorrectly
-        logged in our version of CherryPy. It is already resolved in a newer version, but we
-        still need to upgrade
-        """
-        # TODO upgrade cherrypy
-        _ = level, traceback
-        logger.debug(msg)
-
-    def start(self):
-        """ Start the web service in a new thread. """
-        thread = threading.Thread(target=self.run)
-        thread.setName("Web service thread")
-        thread.daemon = True
-        thread.start()
-        counter = 20
-        while self._running is False and counter > 0:
-            time.sleep(0.5)
-            counter -= 1
-
-    def stop(self, timeout=1):
+    def stop(self):
+        # type: () -> None
         """ Stop the web service. """
         logger.info('Stopping webserver...')
         cherrypy.engine.exit()  # Shutdown the cherrypy server: no new requests
-        start = time.time()
-        while self._running and time.time() - start < timeout:
-            time.sleep(0.1)
         logger.info('Stopping webserver... Done')
 
     def update_tree(self, mounts):
