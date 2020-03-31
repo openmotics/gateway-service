@@ -153,7 +153,7 @@ class System(object):
             raise NotImplementedError('only implemented for systemd services')
 
     @staticmethod
-    def _get_operating_system():
+    def get_operating_system():
         operating_system = {}
         with open('/etc/os-release', 'r') as osfh:
             lines = osfh.readlines()
@@ -167,7 +167,7 @@ class System(object):
     def get_ip_address():
         """ Get the local ip address. """
         interface = Hardware.get_local_interface()
-        operating_system = System._get_operating_system()
+        operating_system = System.get_operating_system()
         try:
             lines = subprocess.check_output('ifconfig {0}'.format(interface), shell=True)
             if operating_system['ID'] == System.OS.ANGSTROM:
@@ -181,11 +181,11 @@ class System(object):
 
     @staticmethod
     def get_vpn_service():
-        return 'openvpn.service' if System._get_operating_system()['ID'] == System.OS.ANGSTROM else 'openvpn-client@omcloud'
+        return 'openvpn.service' if System.get_operating_system()['ID'] == System.OS.ANGSTROM else 'openvpn-client@omcloud'
 
     @staticmethod
     def _use_pyopenssl():
-        return System._get_operating_system()['ID'] == System.OS.ANGSTROM
+        return System.get_operating_system()['ID'] == System.OS.ANGSTROM
 
     @staticmethod
     def get_ssl_socket(sock, private_key_filename, certificate_filename):
@@ -244,8 +244,8 @@ class System(object):
 
     @staticmethod
     def import_libs():
-        operating_system = System._get_operating_system()['ID']
-        sys.path.insert(0, '/opt/openmotics/dist-packages/')
+        operating_system = System.get_operating_system()['ID']
+        sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:

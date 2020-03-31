@@ -1,14 +1,18 @@
 import datetime
-import json
-import sys
-import logging
-import time
 import inspect
-from playhouse.signals import post_save, Model
+import json
+import logging
+import sys
+import time
 
 import constants
-from peewee import PrimaryKeyField, IntegerField, FloatField, BooleanField, TextField, ForeignKeyField, \
-                   CompositeKey, SqliteDatabase, DoesNotExist, CharField
+from peewee import BooleanField, CharField, CompositeKey, DoesNotExist, \
+    FloatField, ForeignKeyField, IntegerField, PrimaryKeyField, \
+    SqliteDatabase, TextField
+from playhouse.signals import Model, post_save
+
+if False:  # MYPY
+    from typing import Dict
 
 logger = logging.getLogger('openmotics')
 
@@ -19,7 +23,7 @@ class Database(object):
     _db = SqliteDatabase(filename, pragmas={'foreign_keys': 1})
 
     # used to store database metrics (e.g. number of saves)
-    _metrics = {}
+    _metrics = {}  # type: Dict[str,int]
 
     @classmethod
     def get_db(cls):
@@ -410,9 +414,9 @@ class DaySchedule(BaseModel):
 
         data = {0: temp_n,
                 get_seconds(start_d1): temp_d1,
-                get_seconds(stop_d1):  temp_n,
+                get_seconds(stop_d1): temp_n,
                 get_seconds(start_d2): temp_d2,
-                get_seconds(stop_d2):  temp_n}
+                get_seconds(stop_d2): temp_n}
         return data
 
     def update_schedule_from_v0(self, v0_schedule):

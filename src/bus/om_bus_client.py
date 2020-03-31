@@ -18,10 +18,11 @@ IPC Bus messaging client
 
 import logging
 import time
-import ujson as json
 from multiprocessing.connection import Client
-from threading import Thread, Lock
-from signal import signal, SIGTERM
+from signal import SIGTERM, signal
+from threading import Lock, Thread
+
+import ujson as json
 from bus.om_bus_events import OMBusEvents
 
 logger = logging.getLogger('openmotics')
@@ -83,7 +84,7 @@ class MessageClient(object):
                 self._connected = False
                 self._connect()
             except Exception as e:
-                logger.exception('Unexpected error occured in message receiver'.format(e))
+                logger.exception('Unexpected error occured in message receiver {}'.format(e))
                 self.client.close()
                 self._connected = False
                 time.sleep(5)

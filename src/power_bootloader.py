@@ -150,7 +150,7 @@ def bootload_power_module(module_address, hex_file, power_communicator):
     :param hex_file: The filename of the hex file to write.
     :param power_communicator: Communication with the power modules.
     """
-    logger.info('P{0} - Version: {0}'.format(module_address, get_module_firmware_version(module_address, power_api.POWER_MODULE, power_communicator)))
+    logger.info('P{0} - Version: {1}'.format(module_address, get_module_firmware_version(module_address, power_api.POWER_MODULE, power_communicator)))
     logger.info('P{0} - Start bootloading'.format(module_address))
     reader = HexReader(hex_file)
 

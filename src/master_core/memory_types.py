@@ -16,11 +16,15 @@
 Contains memory (field) types
 """
 import inspect
-import ujson as json
 import logging
 import types
 from threading import Lock
-from ioc import Inject, INJECTED
+
+import ujson as json
+from ioc import INJECTED, Inject
+
+if False:  # MYPY
+    from typing import Any, Dict
 
 logger = logging.getLogger("openmotics")
 
@@ -33,8 +37,8 @@ class MemoryModelDefinition(object):
     # TODO: Accept `None` and convert it to e.g. 255 and vice versa
     # TODO: Add (id) limits so we can't read memory we shouldn't read
 
-    _cache_fields = {}
-    _cache_addresses = {}
+    _cache_fields = {}  # type: Dict[str,Any]
+    _cache_addresses = {}  # type: Dict[str,Any]
     _cache_lock = Lock()
 
     @Inject
@@ -325,7 +329,7 @@ class MemoryWordField(MemoryField):
 
     @classmethod
     def encode(cls, value):
-        max_value = 2 ** 16 -1
+        max_value = 2 ** 16 - 1
         if not (0 <= value <= max_value):
             raise ValueError('Value {0} out of limits: 0 <= value <= {1}'.format(value, max_value))
         return [value / 256, value % 256]
@@ -521,7 +525,7 @@ class CompositeMemoryModelDefinition(object):
     Represents a composite model definition. This class (only) holds composite fields
     """
 
-    _cache_fields = {}
+    _cache_fields = {}  # type: Dict[str,Any]
 
     def __init__(self, field):
         self._field = field
