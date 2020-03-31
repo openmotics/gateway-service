@@ -238,6 +238,7 @@ class OpenmoticsService(object):
             metrics_controller.stop()
             thermostat_controller.stop()
             plugin_controller.stop()
+            communication_led_controller.stop()
             event_sender.stop()
             logger.info('Stopping OM core service... Done')
             signal_request['stop'] = True
