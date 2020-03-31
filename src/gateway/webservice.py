@@ -33,29 +33,29 @@ from decorator import decorator
 
 import constants
 import gateway
-from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
 from gateway.api.serializers import OutputSerializer, ShutterSerializer, ShutterGroupSerializer
-from gateway.config import ConfigurationController
-from gateway.gateway_api import GatewayApi
 from gateway.maintenance_communicator import InMaintenanceModeException
-from gateway.maintenance_controller import MaintenanceController
-from gateway.metrics_collector import MetricsCollector
-from gateway.metrics_controller import MetricsController
-from gateway.scheduling import SchedulingController
 from gateway.shutters import ShutterController
-from gateway.thermostat.thermostat_controller import ThermostatController
-from gateway.users import UserController
 from gateway.websockets import EventsSocket, MaintenanceSocket, MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
 from models import Feature
 from platform_utils import System, Hardware, Platform
-from plugins.base import PluginController
 from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
 
-if False:  # MYPY
+if False:
     from typing import Dict, Optional, Any, List
+    from bus.om_bus_client import MessageClient
+    from gateway.config import ConfigurationController
+    from gateway.gateway_api import GatewayApi
+    from gateway.maintenance_controller import MaintenanceController
+    from gateway.metrics_collector import MetricsCollector
+    from gateway.metrics_controller import MetricsController
+    from gateway.scheduling import SchedulingController
+    from gateway.thermostat.thermostat_controller import ThermostatController
+    from gateway.users import UserController
+    from plugins.base import PluginController
 
 logger = logging.getLogger("openmotics")
 
