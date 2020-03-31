@@ -24,7 +24,7 @@ if False:  # MYPY
     from typing import Dict, Optional, List, Tuple
 
 
-class ShutterSerializer(BaseSerializer):
+class ShutterSerializer(object):
     WORD_MAX = 2 ** 16 - 1
     BYTE_MAX = 255
 

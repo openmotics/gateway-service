@@ -24,7 +24,7 @@ if False:  # MYPY
     from typing import Dict, Optional, List, Tuple
 
 
-class ShutterGroupSerializer(BaseSerializer):
+class ShutterGroupSerializer(object):
     BYTE_MAX = 255
 
     @staticmethod
