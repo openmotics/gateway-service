@@ -17,8 +17,8 @@
 Output (de)serializer
 """
 from toolbox import Toolbox
-from gateway.dto.output import OutputDTO
-from gateway.dto.feedback_led import FeedbackLedDTO
+from gateway.api.serializers.base import SerializerToolbox
+from gateway.dto import OutputDTO, FeedbackLedDTO
 
 if False:  # MYPY
     from typing import Dict, Optional, List, Tuple
@@ -45,26 +45,22 @@ class OutputSerializer(object):
                 'can_led_4_id': Toolbox.denonify(output_dto.can_led_4.id, OutputSerializer.BYTE_MAX),
                 'can_led_4_function': output_dto.can_led_4.function,
                 'room': Toolbox.denonify(output_dto.room, OutputSerializer.BYTE_MAX)}
-        if fields is None:
-            return data
-        return {field: data[field] for field in fields}
+        return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
     def deserialize(api_data):  # type: (Dict) -> Tuple[OutputDTO, List[str]]
         loaded_fields = ['id']
         output_dto = OutputDTO(api_data['id'])
-        for data_field, dto_field in {'module_type': 'module_type',
-                                      'name': 'name',
-                                      'type': 'output_type'}.iteritems():
-            if data_field in api_data:
-                loaded_fields.append(dto_field)
-                setattr(output_dto, dto_field, api_data[data_field])
-        for data_field, (dto_field, default) in {'timer': ('timer', OutputSerializer.WORD_MAX),
-                                                 'floor': ('floor', OutputSerializer.BYTE_MAX),
-                                                 'room': ('room', OutputSerializer.BYTE_MAX)}.iteritems():
-            if data_field in api_data:
-                loaded_fields.append(dto_field)
-                setattr(output_dto, dto_field, Toolbox.nonify(api_data[data_field], default))
+        loaded_fields.append(SerializerToolbox.deserialize(
+            dto=output_dto,  # Referenced
+            api_data=api_data,
+            mapping={'module_type': ('module_type', None),
+                     'name': ('name', None),
+                     'type': ('output_type', None),
+                     'timer': ('timer', OutputSerializer.WORD_MAX),
+                     'floor': ('floor', OutputSerializer.BYTE_MAX),
+                     'room': ('room', OutputSerializer.BYTE_MAX)}
+        ))
         for i in xrange(4):
             base_field = 'can_led_{0}'.format(i + 1)
             id_field = '{0}_id'.format(base_field)

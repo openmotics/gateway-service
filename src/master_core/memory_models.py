@@ -22,6 +22,9 @@ from master_core.memory_types import (MemoryModelDefinition, GlobalMemoryModelDe
                                       MemoryByteArrayField, Memory3BytesField,
                                       CompositeMemoryModelDefinition, CompositeNumberField, CompositeBitField)
 
+if False:  # MYPY
+    from typing import Union
+
 
 class GlobalConfiguration(GlobalMemoryModelDefinition):
     number_of_output_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1))  # 0, 1
@@ -66,7 +69,7 @@ class OutputConfiguration(MemoryModelDefinition):
         dali_output_id = CompositeNumberField(start_bit=0, width=8, max_value=63)
         dali_group_id = CompositeNumberField(start_bit=0, width=8, max_value=15, value_offset=64)
 
-    module = MemoryRelation(OutputModuleConfiguration, id_spec=lambda id: id / 8)  # type: OutputModuleConfiguration
+    module = MemoryRelation(OutputModuleConfiguration, id_spec=lambda id: id / 8)  # type: Union[MemoryRelation, OutputModuleConfiguration]
     timer_value = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id / 8, 7 + id % 8))  # 1-80, 7-22
     timer_type = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id / 8, 23 + id % 8))  # 1-80, 23-30
     output_type = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id / 8, 31 + id % 8))  # 1-80, 31-38
@@ -104,7 +107,7 @@ class InputConfiguration(MemoryModelDefinition):
         enable_2s_press = CompositeBitField(bit=13)
         enable_double_press = CompositeBitField(bit=15)
 
-    module = MemoryRelation(InputModuleConfiguration, id_spec=lambda id: id / 8)  # type: InputModuleConfiguration
+    module = MemoryRelation(InputModuleConfiguration, id_spec=lambda id: id / 8)  # type: Union[MemoryRelation, InputModuleConfiguration]
     input_config = _InputConfigComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 7 + id)))  # 81-238, 7-14
     dali_mapping = _DALIInputComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 15 + id % 8)))  # 81-238, 15-22
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 128 + id * 16), length=16)  # 81-238, 128-255
@@ -127,7 +130,7 @@ class SensorConfiguration(MemoryModelDefinition):
         dali_output_id = CompositeNumberField(start_bit=0, width=8, max_value=63)
         dali_group_id = CompositeNumberField(start_bit=0, width=8, max_value=15, value_offset=64)
 
-    module = MemoryRelation(SensorModuleConfiguration, id_spec=lambda id: id / 8)  # type: SensorModuleConfiguration
+    module = MemoryRelation(SensorModuleConfiguration, id_spec=lambda id: id / 8)  # type: Union[MemoryRelation, SensorModuleConfiguration]
     temperature_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id / 8, 8 + (id % 8) * 2))  # 239-254, 8-23
     humidity_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id / 8, 24 + (id % 8) * 2))  # 239-254, 24-39
     brightness_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id / 8, 40 + (id % 8) * 2))  # 239-254, 40-55

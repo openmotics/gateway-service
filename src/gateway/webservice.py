@@ -33,22 +33,31 @@ from decorator import decorator
 
 import constants
 import gateway
+from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
-from gateway.api.serializers.output import OutputSerializer
+from gateway.api.serializers import OutputSerializer, ShutterSerializer, ShutterGroupSerializer
+from gateway.config import ConfigurationController
+from gateway.gateway_api import GatewayApi
 from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.maintenance_controller import MaintenanceController
+from gateway.metrics_collector import MetricsCollector
+from gateway.metrics_controller import MetricsController
+from gateway.scheduling import SchedulingController
 from gateway.shutters import ShutterController
-from gateway.websockets import EventsSocket, MaintenanceSocket, \
-    MetricsSocket, OMPlugin, OMSocketTool
+from gateway.thermostat.thermostat_controller import ThermostatController
+from gateway.users import UserController
+from gateway.websockets import EventsSocket, MaintenanceSocket, MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
 from models import Feature
 from platform_utils import System, Hardware, Platform
+from plugins.base import PluginController
 from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
 
-logger = logging.getLogger("openmotics")
-
 if False:  # MYPY
     from typing import Dict, Optional, Any, List
+
+logger = logging.getLogger("openmotics")
 
 
 class FloatWrapper(float):
@@ -251,27 +260,18 @@ class WebInterface(object):
                  thermostat_controller=INJECTED):
         """
         Constructor for the WebInterface.
-
-        :type user_controller: gateway.users.UserController
-        :type gateway_api: gateway.gateway_api.GatewayApi
-        :type maintenance_controller: gateway.hal.maintenance_controller.MaintenanceController
-        :type message_client: bus.om_bus_client.MessageClient
-        :type configuration_controller: gateway.config.ConfigController
-        :type scheduling_controller: gateway.scheduling.SchedulingController
-        :type thermostat_controller: gateway.thermostat.thermostat_controller.ThermostatController
         """
-        self._user_controller = user_controller
-        self._config_controller = configuration_controller
-        self._scheduling_controller = scheduling_controller
-        self._thermostat_controller = thermostat_controller
-        self._plugin_controller = None
+        self._user_controller = user_controller  # type: UserController
+        self._config_controller = configuration_controller  # type: ConfigurationController
+        self._scheduling_controller = scheduling_controller  # type: SchedulingController
+        self._thermostat_controller = thermostat_controller  # type: ThermostatController
 
-        self._gateway_api = gateway_api
-        self._maintenance_controller = maintenance_controller
-        self._message_client = message_client
-        self._plugin_controller = None
-        self._metrics_collector = None
-        self._metrics_controller = None
+        self._gateway_api = gateway_api  # type: GatewayApi
+        self._maintenance_controller = maintenance_controller  # type: MaintenanceController
+        self._message_client = message_client  # type: MessageClient
+        self._plugin_controller = None  # type: Optional[PluginController]
+        self._metrics_collector = None  # type: Optional[MetricsCollector]
+        self._metrics_controller = None  # type: Optional[MetricsController]
 
         self._ws_metrics_registered = False
         self._power_dirty = False
@@ -1029,8 +1029,8 @@ class WebInterface(object):
         :param id: The id of the shutter_configuration
         :param fields: The fields of the shutter_configuration to get, None if all
         """
-        # TODO: Use serializer
-        return {'config': self._gateway_api.get_shutter_configuration(id, fields)}
+        return {'config': ShutterSerializer.serialize(shutter_dto=self._gateway_api.get_shutter_configuration(id),
+                                                      fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
     def get_shutter_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
@@ -1038,21 +1038,21 @@ class WebInterface(object):
         Get all shutter_configurations.
         :param fields: The fields of the shutter_configuration to get, None if all
         """
-        # TODO: Use serializer
-        return {'config': self._gateway_api.get_shutter_configurations(fields)}
+        return {'config': [ShutterSerializer.serialize(shutter_dto=shutter, fields=fields)
+                           for shutter in self._gateway_api.get_shutter_configurations()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_shutter_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
         """ Set one shutter_configuration. """
-        # TODO: Use serializer
-        self._gateway_api.set_shutter_configuration(config)
+        data = ShutterSerializer.deserialize(config)
+        self._gateway_api.set_shutter_configuration(data)
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_shutter_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
         """ Set multiple shutter_configurations. """
-        # TODO: Use serializer
-        self._gateway_api.set_shutter_configurations(config)
+        data = [ShutterSerializer.deserialize(entry) for entry in config]
+        self._gateway_api.set_shutter_configurations(data)
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
@@ -1062,8 +1062,8 @@ class WebInterface(object):
         :param id: The id of the shutter_group_configuration
         :param fields: The field of the shutter_group_configuration to get, None if all
         """
-        # TODO: Use serializer
-        return {'config': self._gateway_api.get_shutter_group_configuration(id, fields)}
+        return {'config': ShutterGroupSerializer.serialize(shutter_group_dto=self._gateway_api.get_shutter_group_configuration(id),
+                                                           fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
     def get_shutter_group_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
@@ -1071,21 +1071,21 @@ class WebInterface(object):
         Get all shutter_group_configurations.
         :param fields: The field of the shutter_group_configuration to get, None if all
         """
-        # TODO: Use serializer
-        return {'config': self._gateway_api.get_shutter_group_configurations(fields)}
+        return {'config': [ShutterGroupSerializer.serialize(shutter_group_dto=shutter_group, fields=fields)
+                           for shutter_group in self._gateway_api.get_shutter_group_configurations()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_shutter_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
         """ Set one shutter_group_configuration. """
-        # TODO: Use serializer
-        self._gateway_api.set_shutter_group_configuration(config)
+        data = ShutterGroupSerializer.deserialize(config)
+        self._gateway_api.set_shutter_group_configuration(data)
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_shutter_group_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
         """ Set multiple shutter_group_configurations. """
-        # TODO: Use serializer
-        self._gateway_api.set_shutter_group_configurations(config)
+        data = [ShutterGroupSerializer.deserialize(entry) for entry in config]
+        self._gateway_api.set_shutter_group_configurations(data)
         return {}
 
     # Input configuration
