@@ -72,9 +72,15 @@ class PowerCommunicator(object):
         self.__verbose = verbose
 
     def start(self):
+        # type: () -> None
         """ Start the power communicator. """
         if self.__time_keeper is not None:
             self.__time_keeper.start()
+
+    def stop(self):
+        # type: () -> None
+        if self.__time_keeper is not None:
+            self.__time_keeper.stop()
 
     def get_communication_statistics(self):
         return self.__communication_stats
