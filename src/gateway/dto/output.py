@@ -40,3 +40,18 @@ class OutputDTO(object):
         self.can_led_2 = can_led_2 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
         self.can_led_3 = can_led_3 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
         self.can_led_4 = can_led_4 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
+
+    def __eq__(self, other):
+        if not isinstance(other, OutputDTO):
+            return False
+        return (self.id == other.id and
+                self.name == other.name and
+                self.module_type == other.module_type and
+                self.timer == other.timer and
+                self.floor == other.floor and
+                self.output_type == other.output_type and
+                self.room == other.room and
+                self.can_led_1 == other.can_led_1 and
+                self.can_led_2 == other.can_led_2 and
+                self.can_led_3 == other.can_led_3 and
+                self.can_led_4 == other.can_led_4)
