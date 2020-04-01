@@ -104,7 +104,7 @@ class MasterCoreController(MasterController):
             self._process_new_output_state(output_id=output_id,
                                            status=core_event.data['status'],
                                            timer=timer_value,
-                                           dimmer=core_event['dimmer_value'])
+                                           dimmer=core_event.data['dimmer_value'])
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             event = self._input_state.handle_event(core_event)
             for callback in self._event_callbacks:
