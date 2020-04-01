@@ -89,10 +89,10 @@ class ShutterController(object):
                 shutter_ids.append(shutter_id)
                 if shutter_dto != self._shutters.get(shutter_id):
                     self._shutters[shutter_id] = shutter_dto
-                    self._states[shutter_id] = [0, ShutterController.Shutter.State.STOPPED]
+                    self._states[shutter_id] = [0, ShutterEnums.State.STOPPED]
                     self._actual_positions[shutter_id] = None
                     self._desired_positions[shutter_id] = None
-                    self._directions[shutter_id] = ShutterController.Shutter.Direction.STOP
+                    self._directions[shutter_id] = ShutterEnums.Direction.STOP
 
             for shutter_id in self._shutters.keys():
                 if shutter_id not in shutter_ids:
@@ -141,10 +141,10 @@ class ShutterController(object):
         self._master_controller.shutter_group_stop(group_id)
 
     def shutter_up(self, shutter_id, desired_position=None):
-        return self._shutter_goto_direction(shutter_id, ShutterController.Shutter.Direction.UP, desired_position)
+        return self._shutter_goto_direction(shutter_id, ShutterEnums.Direction.UP, desired_position)
 
     def shutter_down(self, shutter_id, desired_position=None):
-        return self._shutter_goto_direction(shutter_id, ShutterController.Shutter.Direction.DOWN, desired_position)
+        return self._shutter_goto_direction(shutter_id, ShutterEnums.Direction.DOWN, desired_position)
 
     def shutter_goto(self, shutter_id, desired_position):
         # Fetch and validate data
@@ -157,7 +157,7 @@ class ShutterController(object):
             raise RuntimeError('Shutter {0} has unknown actual position'.format(shutter_id))
 
         direction = self._get_direction(actual_position, desired_position)
-        if direction == ShutterController.Shutter.Direction.STOP:
+        if direction == ShutterEnums.Direction.STOP:
             return self.shutter_stop(shutter_id)
 
         self._log('Shutter {0} setting desired position to {1}'.format(shutter_id, desired_position))
@@ -173,8 +173,8 @@ class ShutterController(object):
         self._log('Shutter {0} stopped. Removing desired position'.format(shutter_id))
 
         self._desired_positions[shutter_id] = None
-        self._directions[shutter_id] = ShutterController.Shutter.Direction.STOP
-        self._execute_shutter(shutter_id, ShutterController.Shutter.Direction.STOP)
+        self._directions[shutter_id] = ShutterEnums.Direction.STOP
+        self._execute_shutter(shutter_id, ShutterEnums.Direction.STOP)
 
     def _shutter_goto_direction(self, shutter_id, direction, desired_position=None):
         # Fetch and validate data
@@ -193,11 +193,11 @@ class ShutterController(object):
         self._execute_shutter(shutter_id, direction)
 
     def _execute_shutter(self, shutter_id, direction):
-        if direction == ShutterController.Shutter.Direction.UP:
+        if direction == ShutterEnums.Direction.UP:
             self._master_controller.shutter_up(shutter_id)
-        elif direction == ShutterController.Shutter.Direction.DOWN:
+        elif direction == ShutterEnums.Direction.DOWN:
             self._master_controller.shutter_down(shutter_id)
-        elif direction == ShutterController.Shutter.Direction.STOP:
+        elif direction == ShutterEnums.Direction.STOP:
             self._master_controller.shutter_stop(shutter_id)
 
     # Internal checks and validators
@@ -215,10 +215,10 @@ class ShutterController(object):
     def _is_position_reached(direction, desired_position, actual_position, stopped=True):
         if desired_position == actual_position:
             return True  # Obviously reached
-        if direction == ShutterController.Shutter.Direction.STOP:
+        if direction == ShutterEnums.Direction.STOP:
             return stopped  # Can't be decided, so return user value
         # An overshoot is considered as "position reached"
-        if direction == ShutterController.Shutter.Direction.UP:
+        if direction == ShutterEnums.Direction.UP:
             return actual_position < desired_position
         return actual_position > desired_position
 
@@ -226,17 +226,17 @@ class ShutterController(object):
     def _get_limit(direction, steps):
         if steps is None:
             return None
-        if direction == ShutterController.Shutter.Direction.UP:
+        if direction == ShutterEnums.Direction.UP:
             return 0
         return steps - 1
 
     @staticmethod
     def _get_direction(actual_position, desired_position):
         if actual_position == desired_position:
-            return ShutterController.Shutter.Direction.STOP
+            return ShutterEnums.Direction.STOP
         if actual_position < desired_position:
-            return ShutterController.Shutter.Direction.UP
-        return ShutterController.Shutter.Direction.DOWN
+            return ShutterEnums.Direction.UP
+        return ShutterEnums.Direction.DOWN
 
     @staticmethod
     def _get_steps(shutter):  # type: (ShutterDTO) -> Optional[int]
@@ -266,11 +266,11 @@ class ShutterController(object):
         self._log('Shutter {0} reports state {1}, which is direction {2}'.format(shutter_id, new_state, self._directions[shutter_id]))
 
         current_state_timestamp, current_state = self._states[shutter_id]
-        if new_state == current_state or (new_state == ShutterController.Shutter.State.STOPPED and current_state in [ShutterController.Shutter.State.DOWN, ShutterController.Shutter.State.UP]):
+        if new_state == current_state or (new_state == ShutterEnums.State.STOPPED and current_state in [ShutterEnums.State.DOWN, ShutterEnums.State.UP]):
             self._log('Shutter {0} new state {1} ignored since it equals {2}'.format(shutter_id, new_state, current_state))
             return  # State didn't change, nothing to do
 
-        if new_state != ShutterController.Shutter.State.STOPPED:
+        if new_state != ShutterEnums.State.STOPPED:
             # Shutter started moving
             self._states[shutter_id] = [time.time(), new_state]
             self._log('Shutter {0} started moving'.format(shutter_id))
@@ -284,8 +284,8 @@ class ShutterController(object):
                     self._log('Shutter {0} going {1} passed time threshold. New state {2}'.format(shutter_id, direction, ShutterController.DIRECTION_END_STATE_MAP[direction]))
                     new_state = ShutterController.DIRECTION_END_STATE_MAP[direction]
                 else:
-                    self._log('Shutter {0} going {1} did not pass time threshold ({2:.2f}s vs {3:.2f}s). New state {4}'.format(shutter_id, direction, elapsed_time, threshold, ShutterController.Shutter.State.STOPPED))
-                    new_state = ShutterController.Shutter.State.STOPPED
+                    self._log('Shutter {0} going {1} did not pass time threshold ({2:.2f}s vs {3:.2f}s). New state {4}'.format(shutter_id, direction, elapsed_time, threshold, ShutterEnums.State.STOPPED))
+                    new_state = ShutterEnums.State.STOPPED
             else:
                 # Supports position, so state will be calculated on position
                 limit_position = ShutterController._get_limit(direction, steps)
@@ -293,8 +293,8 @@ class ShutterController(object):
                     self._log('Shutter {0} going {1} reached limit. New state {2}'.format(shutter_id, direction, ShutterController.DIRECTION_END_STATE_MAP[direction]))
                     new_state = ShutterController.DIRECTION_END_STATE_MAP[direction]
                 else:
-                    self._log('Shutter {0} going {1} did not reach limit. New state {2}'.format(shutter_id, direction, ShutterController.Shutter.State.STOPPED))
-                    new_state = ShutterController.Shutter.State.STOPPED
+                    self._log('Shutter {0} going {1} did not reach limit. New state {2}'.format(shutter_id, direction, ShutterEnums.State.STOPPED))
+                    new_state = ShutterEnums.State.STOPPED
 
             self._states[shutter_id] = [time.time(), new_state]
 

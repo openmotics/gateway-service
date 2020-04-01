@@ -540,18 +540,17 @@ class MasterClassicController(MasterController):
         """
         Called with Master event information.
         """
-        with self._config_lock:
-            module_id = data['module_nr']
-            new_state = self._interprete_output_states(module_id, data['status'])
-            if new_state is None:
-                return  # Failsafe for master event handler
-            for i in xrange(4):
-                shutter_id = module_id * 4 + i
-                for callback in self._event_callbacks:
-                    event_data = {'id': shutter_id,
-                                  'status': new_state[i],
-                                  'location': {'room_id': self._shutter_config[shutter_id].room}}
-                    callback(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
+        module_id = data['module_nr']
+        new_state = self._interprete_output_states(module_id, data['status'])
+        if new_state is None:
+            return  # Failsafe for master event handler
+        for i in xrange(4):
+            shutter_id = module_id * 4 + i
+            for callback in self._event_callbacks:
+                event_data = {'id': shutter_id,
+                              'status': new_state[i],
+                              'location': {'room_id': self._shutter_config[shutter_id].room}}
+                callback(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
 
     def _interprete_output_states(self, module_id, output_states):
         states = []

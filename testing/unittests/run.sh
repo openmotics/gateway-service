@@ -31,6 +31,9 @@ python2 gateway_tests/users_tests.py
 echo "Running scheduling tests"
 python2 gateway_tests/scheduling_tests.py
 
+echo "Running shutter tests"
+python2 gateway_tests/shutter_tests.py
+
 echo "Running power controller tests"
 python2 power_tests/power_controller_tests.py
 

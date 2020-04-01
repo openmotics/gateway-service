@@ -35,6 +35,7 @@ import constants
 import gateway
 from bus.om_bus_events import OMBusEvents
 from gateway.api.serializers import OutputSerializer, ShutterSerializer, ShutterGroupSerializer
+from gateway.enums import ShutterEnums
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.shutters import ShutterController
 from gateway.websockets import EventsSocket, MaintenanceSocket, MetricsSocket, OMPlugin, OMSocketTool
@@ -682,7 +683,7 @@ class WebInterface(object):
         self._gateway_api.do_shutter_goto(id, position)
         return {'status': 'OK'}
 
-    @openmotics_api(auth=True, check=types(id=int, position=int, direction=[ShutterController.Direction.UP, ShutterController.Direction.DOWN, ShutterController.Direction.STOP]))
+    @openmotics_api(auth=True, check=types(id=int, position=int, direction=[ShutterEnums.Direction.UP, ShutterEnums.Direction.DOWN, ShutterEnums.Direction.STOP]))
     def shutter_report_position(self, id, position, direction=None):  # type: (int, int, Optional[str]) -> Dict[str, str]
         """
         Reports the actual position of a shutter
