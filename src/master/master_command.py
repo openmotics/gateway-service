@@ -22,7 +22,6 @@ Provides a function for each API call.
 from __future__ import absolute_import
 import math
 
-from .master_api import *
 from serial_utils import printable
 from six.moves import range
 
@@ -443,6 +442,7 @@ class SvtFieldType(object):
     @classmethod
     def decode(cls, byte_str):
         """ Decode a svt byte string into a instance of the Svt class. """
+        from . import master_api
         return master_api.Svt.from_byte(byte_str[0])
 
 
