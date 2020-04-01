@@ -186,7 +186,10 @@ class ShutterController(object):
         else:
             desired_position = ShutterController._get_limit(direction, steps)
 
-        self._log('Shutter {0} setting desired position to {1}'.format(shutter_id, desired_position))
+        self._log('Shutter {0} setting direction to {1} {2}'.format(
+            shutter_id, direction,
+            'without position' if desired_position is None else 'with position {0}'.format(desired_position)
+        ))
 
         self._desired_positions[shutter_id] = desired_position
         self._directions[shutter_id] = direction
@@ -278,7 +281,10 @@ class ShutterController(object):
             direction = ShutterController.STATE_DIRECTION_MAP[current_state]
             if steps is None:
                 # Time based state calculation
-                threshold = 0.90 * getattr(shutter, 'timer_{0}'.format(direction.lower()))  # Allow 10% difference
+                timer = getattr(shutter, 'timer_{0}'.format(direction.lower()))
+                if timer is None:
+                    timer = 255
+                threshold = 0.90 * timer  # Allow 10% difference
                 elapsed_time = time.time() - current_state_timestamp
                 if elapsed_time >= threshold:  # The shutter was going up/down for the whole `timer`. So it's now up/down
                     self._log('Shutter {0} going {1} passed time threshold. New state {2}'.format(shutter_id, direction, ShutterController.DIRECTION_END_STATE_MAP[direction]))

@@ -27,7 +27,7 @@ from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master_core.core_api import CoreAPI
-from master_core.core_communicator import BackgroundConsumer
+from master_core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master_core.ucan_communicator import UCANCommunicator
 from master_core.errors import Error
 from master_core.events import Event as MasterCoreEvent
@@ -51,6 +51,7 @@ class MasterCoreController(MasterController):
     @Inject
     def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, memory_files=INJECTED):
         super(MasterCoreController, self).__init__(master_communicator)
+        self._master_communicator = master_communicator  # type: CoreCommunicator
         self._ucan_communicator = ucan_communicator  # type: UCANCommunicator
         self._memory_files = memory_files  # type: Dict[str, MemoryFile]
         self._synchronization_thread = Thread(target=self._synchronize, name='CoreMasterSynchronization')
@@ -113,7 +114,7 @@ class MasterCoreController(MasterController):
                 callback(event)
             # Handle shutter events, if needed
             shutter_id = self._output_shutter_map.get(output_id)
-            if shutter_id is None:
+            if shutter_id is not None:
                 self._refresh_shutter_state(shutter_id)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             event = self._input_state.handle_event(core_event)
@@ -345,19 +346,19 @@ class MasterCoreController(MasterController):
     # Shutters
 
     def shutter_up(self, shutter_id):
-        self._master_communicator.do_command(CoreAPI.basic_action(), {'type': 10, 'action': 1,
-                                                                      'device_nr': shutter_id,
-                                                                      'extra_parameter': 0})
+        self._master_communicator.do_basic_action(action_type=10,
+                                                  action=1,
+                                                  device_nr=shutter_id)
 
     def shutter_down(self, shutter_id):
-        self._master_communicator.do_command(CoreAPI.basic_action(), {'type': 10, 'action': 2,
-                                                                      'device_nr': shutter_id,
-                                                                      'extra_parameter': 0})
+        self._master_communicator.do_basic_action(action_type=10,
+                                                  action=2,
+                                                  device_nr=shutter_id)
 
     def shutter_stop(self, shutter_id):
-        self._master_communicator.do_command(CoreAPI.basic_action(), {'type': 10, 'action': 0,
-                                                                      'device_nr': shutter_id,
-                                                                      'extra_parameter': 0})
+        self._master_communicator.do_basic_action(action_type=10,
+                                                  action=0,
+                                                  device_nr=shutter_id)
 
     def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
         shutter = ShutterConfiguration(shutter_id)
@@ -434,6 +435,7 @@ class MasterCoreController(MasterController):
                           'status': state,
                           'location': {'room_id': 255}}  # TODO: rooms
             callback(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
+        self._shutters_last_updated = time.time()
 
     def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
         raise NotImplementedError()  # TODO: Implement once supported by Core(+)

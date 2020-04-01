@@ -19,6 +19,8 @@ The observer module contains logic to observe various states of the system. It k
 import logging
 import ujson as json
 from ioc import Injectable, Inject, INJECTED, Singleton
+from toolbox import Toolbox
+from gateway.dto import ShutterDTO
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.shutters import ShutterController
@@ -136,10 +138,10 @@ class Observer(object):
     def get_shutter_status(self):
         return self._shutter_controller.get_states()
 
-    def _shutter_changed(self, shutter_id, shutter_data, shutter_state):
+    def _shutter_changed(self, shutter_id, shutter_data, shutter_state):  # type: (int, ShutterDTO, str) -> None
         """ Executed by the Shutter Status tracker when a shutter changed state """
         for callback in self._event_subscriptions:
             callback(Event(event_type=Event.Types.SHUTTER_CHANGE,
                            data={'id': shutter_id,
                                  'status': {'state': shutter_state},
-                                 'location': {'room_id': shutter_data['room']}}))
+                                 'location': {'room_id': Toolbox.nonify(shutter_data.room, 255)}}))

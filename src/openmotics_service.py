@@ -30,7 +30,6 @@ from signal import signal, SIGTERM
 from ConfigParser import ConfigParser
 from threading import Lock
 from serial_utils import RS485
-from gateway.observer import Observer
 from urlparse import urlparse
 from peewee_migrate import Router
 
@@ -189,7 +188,6 @@ class OpenmoticsService(object):
         plugin_controller.set_webservice(web_service)
         plugin_controller.set_metrics_controller(metrics_controller)
         plugin_controller.set_metrics_collector(metrics_collector)
-        observer.set_gateway_api(gateway_api)
         observer.subscribe_events(metrics_collector.process_observer_event)
         observer.subscribe_events(plugin_controller.process_observer_event)
         observer.subscribe_events(web_interface.send_event_websocket)
@@ -199,7 +197,7 @@ class OpenmoticsService(object):
     @staticmethod
     @Inject
     def start(master_controller=INJECTED, maintenance_controller=INJECTED,
-              observer=INJECTED, power_communicator=INJECTED, metrics_controller=INJECTED, passthrough_service=INJECTED,
+              power_communicator=INJECTED, metrics_controller=INJECTED, passthrough_service=INJECTED,
               scheduling_controller=INJECTED, metrics_collector=INJECTED, web_service=INJECTED, watchdog=INJECTED, plugin_controller=INJECTED,
               communication_led_controller=INJECTED, event_sender=INJECTED, thermostat_controller=INJECTED):
         """ Main function. """
@@ -207,7 +205,6 @@ class OpenmoticsService(object):
 
         master_controller.start()
         maintenance_controller.start()
-        observer.start()
         power_communicator.start()
         metrics_controller.start()
         if passthrough_service:

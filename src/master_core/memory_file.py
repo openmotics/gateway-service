@@ -25,8 +25,8 @@ logger = logging.getLogger("openmotics")
 
 
 class MemoryTypes(object):
-    FRAM = 'FRAM'
-    EEPROM = 'EEPROM'
+    FRAM = 'F'
+    EEPROM = 'E'
 
 
 class MemoryFile(object):
