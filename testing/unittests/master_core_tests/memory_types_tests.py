@@ -261,6 +261,11 @@ class MemoryTypesTest(unittest.TestCase):
         self.assertEqual(200, instance.composed.field_0)
         self.assertEqual(201, instance.composed.field_1)
 
+        memory_map[0][0] = 255
+        instance = Object(0)
+        self.assertEqual(510, instance.composed.field_0)
+        self.assertEqual(511, instance.composed.field_1)
+
 
 if __name__ == "__main__":
     unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

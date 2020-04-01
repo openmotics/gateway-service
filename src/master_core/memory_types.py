@@ -488,9 +488,9 @@ class CompositeNumberField(CompositeField):
         return self._decompose(value)
 
     def _decompose(self, value):
-        value = (((value & self._mask) >> self._start_bit) * self._value_factor) - self._value_offset
+        value = (value & self._mask) >> self._start_bit
         if self._max_value is None or 0 <= value <= self._max_value:
-            return value
+            return (value * self._value_factor) - self._value_offset
         return None
 
     def compose(self, current_composition, value, composition_width):
