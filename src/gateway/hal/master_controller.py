@@ -16,60 +16,18 @@
 Module for communicating with the Master
 """
 from exceptions import NotImplementedError
-import ujson as json
 from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
+from gateway.hal.master_event import MasterEvent
 
 if False:  # MYPY
     from typing import Any, Callable, Dict, List, Tuple
-
-
-class MasterEvent(object):
-    """
-    MasterEvent object
-
-    Data formats:
-    * OUTPUT CHANGE
-      {'id': int,                     # Output ID
-       'status': {'on': bool,         # On/off
-                  'value': int},      # Optional, dimmer value
-       'location': {'room_id': int}}  # Room ID
-    """
-
-    class Types(object):
-        INPUT_CHANGE = 'INPUT_CHANGE'
-        OUTPUT_CHANGE = 'OUTPUT_CHANGE'
-
-    def __init__(self, event_type, data):
-        self.type = event_type
-        self.data = data
-
-    def serialize(self):
-        return {'type': self.type,
-                'data': self.data}
-
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        return self.type == other.type \
-            and self.data == other.data
-
-    def __repr__(self):
-        # type: () -> str
-        return '<MasterEvent {} {}>'.format(self.type, self.data)
-
-    def __str__(self):
-        return json.dumps(self.serialize())
-
-    @staticmethod
-    def deserialize(data):
-        return MasterEvent(event_type=data['type'],
-                           data=data['data'])
 
 
 class MasterController(object):
 
     def __init__(self, master_communicator):
         self._master_communicator = master_communicator
-        self._event_callbacks = []  # type: List[Callable[[MasterEvent],None]]
+        self._event_callbacks = []  # type: List[Callable[[MasterEvent], None]]
 
     #######################
     # Internal management #
@@ -88,7 +46,7 @@ class MasterController(object):
     # Subscriptions #
     #################
 
-    def subscribe_event(self, callback):
+    def subscribe_event(self, callback):  # type: (Callable[[MasterEvent], None]) -> None
         self._event_callbacks.append(callback)
 
     ##############

@@ -23,7 +23,8 @@ from threading import Thread, Timer
 from toolbox import Toolbox
 from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
 from gateway.hal.mappers_classic import OutputMapper, ShutterMapper, ShutterGroupMapper
-from gateway.hal.master_controller import MasterController, MasterEvent
+from gateway.hal.master_controller import MasterController
+from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master import eeprom_models, master_api

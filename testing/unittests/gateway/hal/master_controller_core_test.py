@@ -5,7 +5,7 @@ from Queue import Queue
 import gateway.hal.master_controller_core
 import mock
 import xmlrunner
-from gateway.hal.master_controller import MasterEvent
+from gateway.hal.master_event import MasterEvent
 from ioc import Scope, SetTestMode, SetUpTestInjections
 from master import eeprom_models
 from master.eeprom_controller import EepromController

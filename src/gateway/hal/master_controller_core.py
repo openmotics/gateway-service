@@ -21,7 +21,8 @@ from threading import Thread
 
 from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
 from gateway.hal.mappers_core import OutputMapper, ShutterMapper
-from gateway.hal.master_controller import MasterController, MasterEvent
+from gateway.hal.master_controller import MasterController
+from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master_core.core_api import CoreAPI

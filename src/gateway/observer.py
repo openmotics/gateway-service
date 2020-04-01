@@ -16,16 +16,14 @@
 The observer module contains logic to observe various states of the system. It keeps track of what is changing
 """
 
-import time
 import logging
 import ujson as json
 from ioc import Injectable, Inject, INJECTED, Singleton
-from threading import Thread
-from platform_utils import Platform
-from gateway.hal.master_controller import MasterController, MasterEvent
-from gateway.maintenance_communicator import InMaintenanceModeException
-from master import master_api
+from gateway.hal.master_controller import MasterController
+from gateway.hal.master_event import MasterEvent
+from gateway.shutters import ShutterController
 from bus.om_bus_events import OMBusEvents
+from bus.om_bus_client import MessageClient
 
 if False:  # MYPY
     from typing import Any, Dict, List
