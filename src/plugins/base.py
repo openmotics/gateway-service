@@ -335,11 +335,11 @@ class PluginController(object):
                       if output['status'] == 1]
             for runner in self.__iter_running_runners():
                 runner.process_output_status(states)
-
-    def process_shutter_status(self, shutter_status_inst):
-        """ Should be called when the shutter status changes, notifies all plugins. """
-        for runner in self.__iter_running_runners():
-            runner.process_shutter_status(shutter_status_inst)
+        if event.type == Event.Types.SHUTTER_CHANGE:
+            # TODO: Implement versioning so a plugin can receive per-shutter events
+            states = self.__observer.get_shutter_status()
+            for runner in self.__iter_running_runners():
+                runner.process_shutter_status(states)
 
     def process_event(self, code):
         """ Should be called when an event is triggered, notifies all plugins. """
