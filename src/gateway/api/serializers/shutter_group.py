@@ -39,11 +39,11 @@ class ShutterGroupSerializer(object):
     def deserialize(api_data):  # type: (Dict) -> Tuple[ShutterGroupDTO, List[str]]
         loaded_fields = ['id']
         shutter_group_dto = ShutterGroupDTO(api_data['id'])
-        loaded_fields.append(SerializerToolbox.deserialize(
+        loaded_fields += SerializerToolbox.deserialize(
             dto=shutter_group_dto,  # Referenced
             api_data=api_data,
             mapping={'timer_up': ('timer_up', ShutterGroupSerializer.BYTE_MAX),
                      'timer_down': ('timer_down', ShutterGroupSerializer.BYTE_MAX),
                      'room': ('room', ShutterGroupSerializer.BYTE_MAX)}
-        ))
+        )
         return shutter_group_dto, loaded_fields

@@ -42,8 +42,9 @@ class MemoryModelDefinition(object):
     _cache_lock = Lock()
 
     @Inject
-    def __init__(self, id, memory_files=INJECTED):
+    def __init__(self, id, memory_files=INJECTED, verbose=False):
         self.id = id  # type: int
+        self._verbose = verbose
         self._memory_files = memory_files
         self._fields = []
         self._loaded_fields = set()
@@ -116,6 +117,12 @@ class MemoryModelDefinition(object):
     def save(self):
         for field_name in self._loaded_fields:
             field_container = getattr(self, '_{0}'.format(field_name))
+            if self._verbose:
+                logger.info('Saving {0}({1}).{2}'.format(
+                    self.__class__.__name__,
+                    '' if self.id is None else self.id,
+                    field_name
+                ))
             field_container.save()
 
     @classmethod
@@ -131,7 +138,7 @@ class MemoryModelDefinition(object):
                 relation = getattr(instance, '_{0}'.format(field_name))
                 instance._relations_cache[field_name] = relation.instance_type.deserialize(value)
             elif field_name in instance._compositions:
-                composition = getattr(instance, '_{0}'.format(field_name))
+                composition = getattr(instance, field_name)
                 composition._load(value)
             else:
                 raise ValueError('Unknown field: {0}', field_name)

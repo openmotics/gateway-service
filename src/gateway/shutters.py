@@ -283,7 +283,7 @@ class ShutterController(object):
                 # Time based state calculation
                 timer = getattr(shutter, 'timer_{0}'.format(direction.lower()))
                 if timer is None:
-                    timer = 255
+                    timer = 255  # TODO: Receive specs from (e.g.) MasterController
                 threshold = 0.90 * timer  # Allow 10% difference
                 elapsed_time = time.time() - current_state_timestamp
                 if elapsed_time >= threshold:  # The shutter was going up/down for the whole `timer`. So it's now up/down

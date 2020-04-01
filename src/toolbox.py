@@ -167,3 +167,14 @@ class Toolbox(object):
     @staticmethod
     def denonify(value, default_value):
         return default_value if value is None else value
+
+    @staticmethod
+    def are_dicts_equal(dict_one, dict_two):
+        if dict_one is None or dict_two is None:
+            return False
+        if dict_one.keys() != dict_two.keys():
+            return False
+        for key in dict_one.keys():
+            if dict_one.get(key) != dict_two.get(key):
+                return False
+        return True

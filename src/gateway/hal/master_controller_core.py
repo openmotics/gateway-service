@@ -19,6 +19,7 @@ import logging
 import time
 from threading import Thread
 
+from toolbox import Toolbox
 from gateway.enums import ShutterEnums
 from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
 from gateway.hal.mappers_core import OutputMapper, ShutterMapper
@@ -100,22 +101,10 @@ class MasterCoreController(MasterController):
             timer_value = core_event.data['timer_value']
             if timer_value is not None:
                 timer_value *= core_event.data['timer_factor']
-            self._output_states[output_id] = {'id': output_id,
-                                              'status': 1 if core_event.data['status'] else 0,
-                                              'ctimer': timer_value,
-                                              'dimmer': core_event.data['dimmer_value']}
-            # Generate generic event
-            event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE,
-                                data={'id': core_event.data['output'],
-                                      'status': {'on': core_event.data['status'],
-                                                 'value': core_event.data['dimmer_value']},
-                                      'location': {'room_id': 255}})  # TODO: Missing room
-            for callback in self._event_callbacks:
-                callback(event)
-            # Handle shutter events, if needed
-            shutter_id = self._output_shutter_map.get(output_id)
-            if shutter_id is not None:
-                self._refresh_shutter_state(shutter_id)
+            self._process_new_output_state(output_id=output_id,
+                                           status=core_event.data['status'],
+                                           timer=timer_value,
+                                           dimmer=core_event['dimmer_value'])
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             event = self._input_state.handle_event(core_event)
             for callback in self._event_callbacks:
@@ -125,6 +114,34 @@ class MasterCoreController(MasterController):
             if sensor_id not in self._sensor_states:
                 return
             self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
+
+    def _process_new_output_state(self, output_id, status, timer, dimmer):
+        new_output_state = {'id': output_id,
+                            'status': 1 if status else 0,
+                            'ctimer': timer,
+                            'dimmer': dimmer}
+        current_output_state = self._output_states.get(output_id)
+        if current_output_state is not None:
+            if Toolbox.are_dicts_equal(current_output_state, new_output_state):
+                return
+        logger.info('Detected output {0} state change: {1} > {2}'.format(
+            output_id,
+            'UNKNOWN' if current_output_state is None else ('ON' if current_output_state['status'] else 'OFF'),
+            'ON' if new_output_state['status'] else 'OFF'
+        ))
+        self._output_states[output_id] = new_output_state
+        # Generate generic event
+        event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE,
+                            data={'id': output_id,
+                                  'status': {'on': status,
+                                             'value': dimmer},
+                                  'location': {'room_id': 255}})  # TODO: Missing room
+        for callback in self._event_callbacks:
+            callback(event)
+        # Handle shutter events, if needed
+        shutter_id = self._output_shutter_map.get(output_id)
+        if shutter_id is not None:
+            self._refresh_shutter_state(shutter_id)
 
     def _synchronize(self):
         # type: () -> None
@@ -336,11 +353,7 @@ class MasterCoreController(MasterController):
     def _refresh_output_states(self):
         for i in self._enumerate_io_modules('output'):
             state = self._master_communicator.do_command(CoreAPI.output_detail(), {'device_nr': i})
-            # TODO: also trigger callback when status changed without an event.
-            self._output_states[i] = {'id': i,
-                                      'status': state['status'],  # 1 or 0
-                                      'ctimer': state['timer'],
-                                      'dimmer': state['dimmer']}
+            self._process_new_output_state(i, state['status'], state['timer'], state['dimmer'])
         self._output_last_updated = time.time()
 
     # Shutters
