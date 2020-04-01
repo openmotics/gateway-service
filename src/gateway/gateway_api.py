@@ -133,7 +133,6 @@ class GatewayApi(object):
         # type: () -> None
         """ Called when maintenance mode is stopped """
         self.__master_controller.invalidate_caches()
-        self.__observer.invalidate_cache()
         self.__message_client.send_event(OMBusEvents.DIRTY_EEPROM, None)
 
     def get_status(self):
@@ -172,7 +171,6 @@ class GatewayApi(object):
         status = self.__master_controller.module_discover_stop()
 
         self.__message_client.send_event(OMBusEvents.DIRTY_EEPROM, None)
-        self.__observer.invalidate_cache()
 
         return status
 
@@ -788,13 +786,11 @@ class GatewayApi(object):
     def set_shutter_configuration(self, config):  # type: (Tuple[ShutterDTO, List[str]]) -> None
         """ Set one shutter_configuration. """
         self.__master_controller.save_shutters([config])
-        self.__observer.invalidate_cache(Observer.Types.SHUTTERS)
         self.__shutter_controller.update_config(self.get_shutter_configurations())
 
     def set_shutter_configurations(self, config):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
         """ Set multiple shutter_configurations. """
         self.__master_controller.save_shutters(config)
-        self.__observer.invalidate_cache(Observer.Types.SHUTTERS)
         self.__shutter_controller.update_config(self.get_shutter_configurations())
 
     def get_shutter_group_configuration(self, group_id):  # type: (int) -> ShutterGroupDTO
