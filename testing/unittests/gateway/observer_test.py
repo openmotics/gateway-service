@@ -34,7 +34,6 @@ class ObserverTest(unittest.TestCase):
 
     def test_get_inputs(self):
         observer = get_observer()
-        observer.set_gateway_api(mock.Mock())
         input_status = {'id': 1, 'output': 2, 'status': True}
         with mock.patch.object(InputStatus, 'get_inputs',
                                return_value=[input_status]):
@@ -43,7 +42,6 @@ class ObserverTest(unittest.TestCase):
 
     def test_get_recent_inputs(self):
         observer = get_observer()
-        observer.set_gateway_api(mock.Mock())
         input_status = {'id': 1, 'output': 2, 'status': True}
         with mock.patch.object(InputStatus, 'get_recent',
                                return_value=[input_status]):
