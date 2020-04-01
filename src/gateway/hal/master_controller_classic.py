@@ -534,7 +534,7 @@ class MasterClassicController(MasterController):
         self._shutters_last_updated = time.time()
 
     def _on_master_shutter_change(self, data):
-        self._shutter_controller.update_from_master_state(data)
+        self._update_from_master_state(data)
 
     def _update_from_master_state(self, data):
         """

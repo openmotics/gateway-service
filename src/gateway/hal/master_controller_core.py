@@ -602,7 +602,7 @@ class MasterCoreController(MasterController):
         raise NotImplementedError()
 
     def last_success(self):
-        raise NotImplementedError()
+        return time.time()
 
     def clear_error_list(self):
         raise NotImplementedError()
@@ -624,6 +624,9 @@ class MasterCoreController(MasterController):
 
     def set_all_lights_floor_on(self, floor):
         raise NotImplementedError()
+
+    def get_configuration_dirty_flag(self):
+        return False
 
 
 class MasterInputState(object):
