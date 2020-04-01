@@ -22,16 +22,17 @@ from threading import Thread, Timer
 
 from toolbox import Toolbox
 from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
+from gateway.enums import ShutterEnums
 from gateway.hal.mappers_classic import OutputMapper, ShutterMapper, ShutterGroupMapper
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master import eeprom_models, master_api
-from master.eeprom_models import CanLedConfiguration, DimmerConfiguration, \
-    EepromAddress, GroupActionConfiguration, RoomConfiguration, \
-    ScheduledActionConfiguration, ShutterConfiguration, \
-    ShutterGroupConfiguration, StartupActionConfiguration
+from master.eeprom_models import (
+    CanLedConfiguration, DimmerConfiguration, EepromAddress, GroupActionConfiguration,
+    RoomConfiguration, ScheduledActionConfiguration, StartupActionConfiguration
+)
 from master.inputs import InputStatus
 from master.master_communicator import BackgroundConsumer
 from master.outputs import OutputStatus
@@ -75,6 +76,9 @@ class MasterClassicController(MasterController):
         self._output_interval = 600
         self._output_last_updated = 0
         self._output_config = {}  # type: Dict[int, OutputDTO]
+        self._shutters_interval = 600
+        self._shutters_last_updated = 0
+        self._shutter_config = {}  # type: Dict[int, ShutterDTO]
 
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._module_log = []  # type: List[Tuple[str,str]]
@@ -113,6 +117,9 @@ class MasterClassicController(MasterController):
                 if self._input_last_updated + self._input_interval < now:
                     self._refresh_inputs()
                     self._set_master_state(True)
+                if self._shutters_last_updated + self._shutters_interval < time.time():
+                    self._refresh_shutter_states()
+                    self._set_master_state(True)
                 time.sleep(1)
             except CommunicationTimedOutException:
                 logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
@@ -139,6 +146,10 @@ class MasterClassicController(MasterController):
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.input_list(self._master_version), 0,
                                self._on_master_input_change)
+        )
+        self._master_communicator.register_consumer(
+            BackgroundConsumer(master_api.shutter_status(self._master_version), 0,
+                               self._on_master_shutter_change)
         )
 
     def _check_master_time(self):
@@ -283,6 +294,7 @@ class MasterClassicController(MasterController):
         self._eeprom_controller.dirty = True
         self._input_last_updated = 0
         self._output_last_updated = 0
+        self._shutters_last_updated = 0
 
     def get_firmware_version(self):
         out_dict = self._master_communicator.do_command(master_api.status())
@@ -509,6 +521,60 @@ class MasterClassicController(MasterController):
         for shutter, fields in shutters:
             batch.append(ShutterMapper.dto_to_orm(shutter, fields))
         self._eeprom_controller.write_batch(batch)
+
+    def _refresh_shutter_states(self):
+        self._shutter_config = {shutter.id: shutter for shutter in self.load_shutters()}
+        number_of_shutter_modules = self._master_communicator.do_command(master_api.number_of_io_modules())['shutter']
+        for module_id in xrange(number_of_shutter_modules):
+            self._update_from_master_state(
+                {'module_nr': module_id,
+                 'status': self._master_communicator.do_command(master_api.shutter_status(self._master_version),
+                                                                {'module_nr': module_id})['status']}
+            )
+        self._shutters_last_updated = time.time()
+
+    def _on_master_shutter_change(self, data):
+        self._shutter_controller.update_from_master_state(data)
+
+    def _update_from_master_state(self, data):
+        """
+        Called with Master event information.
+        """
+        with self._config_lock:
+            module_id = data['module_nr']
+            new_state = self._interprete_output_states(module_id, data['status'])
+            if new_state is None:
+                return  # Failsafe for master event handler
+            for i in xrange(4):
+                shutter_id = module_id * 4 + i
+                for callback in self._event_callbacks:
+                    event_data = {'id': shutter_id,
+                                  'status': new_state[i],
+                                  'location': {'room_id': self._shutter_config[shutter_id].room}}
+                    callback(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
+
+    def _interprete_output_states(self, module_id, output_states):
+        states = []
+        for i in xrange(4):
+            shutter_id = module_id * 4 + i
+            if shutter_id not in self._shutter_config:
+                return  # Failsafe for master event handler
+
+            # first_up = 0 -> output 0 = up, output 1 = down
+            # first_up = 1 -> output 0 = down, output 1 = up
+            first_up = 0 if self._shutter_config[shutter_id].up_down_config == 0 else 1
+
+            up = (output_states >> (i * 2 + (1 - first_up))) & 0x1
+            down = (output_states >> (i * 2 + first_up)) & 0x1
+
+            if up == 1 and down == 0:
+                states.append(ShutterEnums.State.GOING_UP)
+            elif down == 1 and up == 0:
+                states.append(ShutterEnums.State.GOING_DOWN)
+            else:  # Both are off or - unlikely - both are on
+                states.append(ShutterEnums.State.STOPPED)
+
+        return states
 
     def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
         if not (0 <= shutter_group_id <= 30):

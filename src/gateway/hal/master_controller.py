@@ -146,6 +146,9 @@ class MasterController(object):
     def shutter_group_up(self, group_id):
         raise NotImplementedError()
 
+    def shutter_group_stop(self, group_id):
+        raise NotImplementedError()
+
     def load_shutter_group(self, shutter_group_id):  # type: (int) -> ShutterGroupDTO
         raise NotImplementedError()
 

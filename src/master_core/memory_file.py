@@ -25,8 +25,8 @@ logger = logging.getLogger("openmotics")
 
 
 class MemoryTypes(object):
-    FRAM = 'F'
-    EEPROM = 'E'
+    FRAM = 'FRAM'
+    EEPROM = 'EEPROM'
 
 
 class MemoryFile(object):
@@ -45,6 +45,7 @@ class MemoryFile(object):
         self._core_communicator = master_communicator
         self.type = memory_type
         self._cache = {}
+        self._eeprom_change_callback = None
         if memory_type == MemoryTypes.EEPROM:
             self._pages = 512
             self._page_length = 256
@@ -57,10 +58,15 @@ class MemoryFile(object):
                 BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
             )
 
+    def subscribe_eeprom_change(self, callback):
+        self._eeprom_change_callback = callback
+
     def _handle_event(self, data):
         core_event = Event(data)
         if core_event.type == Event.Types.SYSTEM and core_event.data['type'] == Event.SystemEventTypes.EEPROM_ACTIVATE:
             self.invalidate_cache()
+            if self._eeprom_change_callback is not None:
+                self._eeprom_change_callback()
             logger.info('Cache cleared: EEPROM_ACTIVATE')
 
     def read(self, addresses):

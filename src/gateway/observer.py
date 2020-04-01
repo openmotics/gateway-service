@@ -28,13 +28,6 @@ from bus.om_bus_client import MessageClient
 if False:  # MYPY
     from typing import Any, Dict, List
 
-if Platform.get_platform() == Platform.Type.CLASSIC:
-    from master.master_communicator import CommunicationTimedOutException
-else:
-    # TODO: Replace for the Core+
-    class CommunicationTimedOutException(Exception):  # type: ignore
-        pass
-
 logger = logging.getLogger("openmotics")
 
 
@@ -78,65 +71,18 @@ class Observer(object):
     The Observer gets various (change) events and will also monitor certain datasets to manually detect changes
     """
 
-    # TODO: Needs to be removed and replace by MasterEvents from the MasterController
-    class LegacyMasterEvents(object):
-        ON_SHUTTER_UPDATE = 'ON_SHUTTER_UPDATE'
-        ONLINE = 'ONLINE'
-
     class Types(object):
         THERMOSTATS = 'THERMOSTATS'
-        SHUTTERS = 'SHUTTERS'
 
     @Inject
-    def __init__(self, master_communicator=INJECTED, master_controller=INJECTED, message_client=INJECTED, shutter_controller=INJECTED):
-        """
-        :param master_communicator: Master communicator
-        :type master_communicator: master.master_communicator.MasterCommunicator
-        :param master_controller: Master controller
-        :type master_controller: gateway.master_controller.MasterController
-        :param message_client: MessageClient instance
-        :type message_client: bus.om_bus_client.MessageClient
-        :param shutter_controller: Shutter Controller
-        :type shutter_controller: gateway.shutters.ShutterController
-        """
-        self._master_communicator = master_communicator
+    def __init__(self, master_controller=INJECTED, message_client=INJECTED, shutter_controller=INJECTED):
         self._master_controller = master_controller  # type: MasterController
-        self._message_client = message_client
-        self._gateway_api = None
+        self._message_client = message_client  # type: MessageClient
+        self._shutter_controller = shutter_controller  # type: ShutterController
 
-        self._master_subscriptions = {Observer.LegacyMasterEvents.ON_SHUTTER_UPDATE: [],
-                                      Observer.LegacyMasterEvents.ONLINE: []}
         self._event_subscriptions = []
-
-        self._shutter_controller = shutter_controller
-        self._shutter_controller.set_shutter_changed_callback(self._shutter_changed)
-
         self._master_controller.subscribe_event(self._master_event)
-
-        self._shutters_interval = 600
-        self._shutters_last_updated = 0
-        self._master_online = False
-        self._background_consumers_registered = False
-        self._master_version = None
-
-        self._thread = Thread(target=self._monitor)
-        self._thread.daemon = True
-
-    def set_gateway_api(self, gateway_api):
-        """
-        Sets the Gateway API instance
-        :param gateway_api: Gateway API (business logic)
-        :type gateway_api: gateway.gateway_api.GatewayApi
-        """
-        self._gateway_api = gateway_api
-
-    def subscribe_master(self, event, callback):
-        """
-        Subscribes a callback to a certain event
-        :param event: The event on which to call the callback
-        :param callback: The callback to call
-        """
-        self._master_subscriptions[event].append(callback)
+        self._shutter_controller.subscribe_shutter_change(self._shutter_changed)
 
     def subscribe_events(self, callback):
         """
@@ -145,77 +91,7 @@ class Observer(object):
         """
         self._event_subscriptions.append(callback)
 
-    def start(self):
-        """ Starts the monitoring thread """
-        self._ensure_gateway_api()
-        if Platform.get_platform() == Platform.Type.CLASSIC:
-            self._thread.start()
-
-    def invalidate_cache(self, object_type=None):
-        """
-        Triggered when an external service knows certain settings might be changed in the background.
-        For example: maintenance mode or module discovery
-        """
-        if object_type is None or object_type == Observer.Types.SHUTTERS:
-            self._shutters_last_updated = 0
-        self._master_controller.invalidate_caches()
-
-    def _monitor(self):
-        # type: () -> None
-        """ Monitors certain system states to detect changes without events """
-        while True:
-            try:
-                self._check_master_version()
-                # Refresh if required
-                if self._shutters_last_updated + self._shutters_interval < time.time():
-                    self._refresh_shutters()
-                    self._set_master_state(True)
-                self._register_background_consumers()
-                time.sleep(1)
-            except CommunicationTimedOutException:
-                logger.error('Got communication timeout during monitoring, waiting 10 seconds.')
-                self._set_master_state(False)
-                time.sleep(10)
-            except InMaintenanceModeException:
-                # This is an expected situation
-                time.sleep(10)
-            except Exception as ex:
-                logger.exception('Unexpected error during monitoring: {0}'.format(ex))
-                time.sleep(10)
-
-    def _ensure_gateway_api(self):
-        if self._gateway_api is None:
-            raise RuntimeError('The observer has no access to the Gateway API yet')
-
-    def _check_master_version(self):
-        if self._master_version is None:
-            self._master_version = self._gateway_api.get_master_version()
-            self._set_master_state(True)
-
-    def _set_master_state(self, online):
-        if online != self._master_online:
-            self._master_online = online
-            # Notify subscribers
-            for callback in self._master_subscriptions[Observer.LegacyMasterEvents.ONLINE]:
-                callback(online)
-
     # Handle master "events"
-
-    def _register_background_consumers(self):
-        if self._master_version and not self._background_consumers_registered:
-            if Platform.get_platform() == Platform.Type.CLASSIC:
-                # This import/code will eventually be migrated away to MasterControllers
-                from master.master_communicator import BackgroundConsumer
-                self._master_communicator.register_consumer(BackgroundConsumer(master_api.shutter_status(self._master_version), 0, self._on_shutter_update))
-                self._background_consumers_registered = True
-
-    def _on_shutter_update(self, data):
-        """ Triggers when the master informs us of an Shutter state change """
-        # Update status tracker
-        self._shutter_controller.update_from_master_state(data)
-        # Notify subscribers
-        for callback in self._master_subscriptions[Observer.LegacyMasterEvents.ON_SHUTTER_UPDATE]:
-            callback(self._shutter_controller.get_states())
 
     def _master_event(self, master_event):
         """
@@ -267,17 +143,3 @@ class Observer(object):
                            data={'id': shutter_id,
                                  'status': {'state': shutter_state},
                                  'location': {'room_id': shutter_data['room']}}))
-
-    def _refresh_shutters(self):
-        """ Refreshes the Shutter status tracker """
-        number_of_shutter_modules = self._master_communicator.do_command(master_api.number_of_io_modules())['shutter']
-        self._shutter_controller.update_config(self._gateway_api.get_shutter_configurations())
-        for module_id in xrange(number_of_shutter_modules):
-            self._shutter_controller.update_from_master_state(
-                {'module_nr': module_id,
-                 'status': self._master_communicator.do_command(master_api.shutter_status(self._master_version),
-                                                                {'module_nr': module_id})['status']}
-            )
-        self._shutters_last_updated = time.time()
-
-

@@ -74,6 +74,7 @@ class OutputConfiguration(MemoryModelDefinition):
     dali_mapping: _DALIOutputComposition
     name: str
 
+    @property
     def is_shutter(self) -> bool: ...
 
 
@@ -159,6 +160,9 @@ class ShutterConfiguration(MemoryModelDefinition):
     timer_down: int
     name: str
     groups: _ShutterGroupMembershipComposition
+
+    @property
+    def output_set(self) -> str: ...
 
 
 class CanControlModuleConfiguration(MemoryModelDefinition):

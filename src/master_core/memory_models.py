@@ -165,6 +165,10 @@ class ShutterConfiguration(MemoryModelDefinition):
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (397 + id / 16, id % 16 * 16), length=16)  # 397-412, 0-255
     groups = _ShutterGroupMembershipComposition(field=MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (413 + id / 128, id % 128 * 2)))  # 413-414, 0-255
 
+    @property
+    def output_set(self):
+        return ['01', '23', '45', '67'][self.outputs.output_0 / 2 % 4]
+
 
 class CanControlModuleConfiguration(MemoryModelDefinition):
     device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (255, id * 16), length=1)  # 255, 0-255

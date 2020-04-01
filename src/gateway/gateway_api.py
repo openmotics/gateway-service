@@ -104,10 +104,6 @@ class GatewayApi(object):
         """ Set the plugin controller. """
         self.__master_controller.set_plugin_controller(plugin_controller)
 
-    def master_online_event(self, online):
-        if online:
-            self.__shutter_controller.update_config(self.get_shutter_configurations())
-
     def sync_master_time(self):
         # type: () -> None
         """ Set the time on the master. """
