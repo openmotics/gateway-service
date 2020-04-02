@@ -19,7 +19,6 @@ import logging
 import time
 from threading import Thread
 
-from toolbox import Toolbox
 from gateway.enums import ShutterEnums
 from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
 from gateway.hal.mappers_core import OutputMapper, ShutterMapper
@@ -86,6 +85,10 @@ class MasterCoreController(MasterController):
 
     def _handle_eeprom_change(self):
         self._output_shutter_map = {}
+        self._shutters_last_updated = 0
+        self._sensor_last_updated = 0
+        self._input_last_updated = 0
+        self._output_last_updated = 0
         event = MasterEvent(event_type=MasterEvent.Types.EEPROM_CHANGE,
                             data=None)
         for callback in self._event_callbacks:
@@ -94,7 +97,10 @@ class MasterCoreController(MasterController):
     def _handle_event(self, data):
         # type: (Dict[str,Any]) -> None
         core_event = MasterCoreEvent(data)
-        logger.info('Got master event: {0}'.format(core_event))
+        if core_event.type not in [MasterCoreEvent.Types.LED_BLINK,
+                                   MasterCoreEvent.Types.LED_ON]:
+            # Interesting for debug purposes, but not for everything
+            logger.info('Got master event: {0}'.format(core_event))
         if core_event.type == MasterCoreEvent.Types.OUTPUT:
             # Update internal state cache
             output_id = core_event.data['output']
@@ -116,20 +122,15 @@ class MasterCoreController(MasterController):
             self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
 
     def _process_new_output_state(self, output_id, status, timer, dimmer):
-        new_output_state = {'id': output_id,
-                            'status': 1 if status else 0,
-                            'ctimer': timer,
-                            'dimmer': dimmer}
-        current_output_state = self._output_states.get(output_id)
-        if current_output_state is not None:
-            if Toolbox.are_dicts_equal(current_output_state, new_output_state):
+        new_state = {'id': output_id,
+                     'status': 1 if status else 0,
+                     'ctimer': timer,
+                     'dimmer': dimmer}
+        current_state = self._output_states.get(output_id)
+        if current_state is not None:
+            if current_state['status'] == new_state['status'] and current_state['dimmer'] == new_state['dimmer']:
                 return
-        logger.info('Detected output {0} state change: {1} > {2}'.format(
-            output_id,
-            'UNKNOWN' if current_output_state is None else ('ON' if current_output_state['status'] else 'OFF'),
-            'ON' if new_output_state['status'] else 'OFF'
-        ))
-        self._output_states[output_id] = new_output_state
+        self._output_states[output_id] = new_state
         # Generate generic event
         event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE,
                             data={'id': output_id,
@@ -421,7 +422,15 @@ class MasterCoreController(MasterController):
 
     def _refresh_shutter_states(self):
         for shutter_id in self._enumerate_io_modules('output', amount_per_module=4):
+            shutter = ShutterConfiguration(shutter_id)
+            if shutter.outputs.output_0 != 255 * 2:
+                self._output_shutter_map[shutter.outputs.output_0] = shutter.id
+                self._output_shutter_map[shutter.outputs.output_1] = shutter.id
+            else:
+                self._output_shutter_map.pop(shutter.outputs.output_0, None)
+                self._output_shutter_map.pop(shutter.outputs.output_1, None)
             self._refresh_shutter_state(shutter_id)
+        self._shutters_last_updated = time.time()
 
     def _refresh_shutter_state(self, shutter_id):
         shutter = ShutterConfiguration(shutter_id)
@@ -431,7 +440,6 @@ class MasterCoreController(MasterController):
         output_1_on = self._output_states.get(shutter.outputs.output_1)['status'] == 1
         output_module = OutputConfiguration(shutter.outputs.output_0).module
         if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
-            # output_0 is down, output_1 is up
             up, down = output_1_on, output_0_on
         else:
             up, down = output_0_on, output_1_on
@@ -448,7 +456,6 @@ class MasterCoreController(MasterController):
                           'status': state,
                           'location': {'room_id': 255}}  # TODO: rooms
             callback(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
-        self._shutters_last_updated = time.time()
 
     def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
         raise NotImplementedError()  # TODO: Implement once supported by Core(+)

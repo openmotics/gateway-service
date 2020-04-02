@@ -22,6 +22,7 @@ from threading import Lock
 
 import ujson as json
 from ioc import INJECTED, Inject
+from master_core.memory_file import MemoryFile
 
 if False:  # MYPY
     from typing import Any, Dict
