@@ -380,9 +380,9 @@ class MasterCoreController(MasterController):
         # Load information that is set on the Output(Module)Configuration
         output_module = OutputConfiguration(shutter.outputs.output_0).module
         if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
-            shutter_dto.up_down_config = 0
-        else:
             shutter_dto.up_down_config = 1
+        else:
+            shutter_dto.up_down_config = 0
         return shutter_dto
 
     def load_shutters(self):  # type: () -> List[ShutterDTO]
@@ -417,7 +417,7 @@ class MasterCoreController(MasterController):
             # Mark related Outputs as "occupied by shutter"
             output_module = OutputConfiguration(shutter_dto.id * 2).module
             setattr(output_module.shutter_config, 'are_{0}_outputs'.format(shutter.output_set), not is_configured)
-            setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 0)
+            setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
             output_module.save()
 
     def _refresh_shutter_states(self):
@@ -440,9 +440,9 @@ class MasterCoreController(MasterController):
         output_1_on = self._output_states.get(shutter.outputs.output_1)['status'] == 1
         output_module = OutputConfiguration(shutter.outputs.output_0).module
         if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
-            up, down = output_1_on, output_0_on
-        else:
             up, down = output_0_on, output_1_on
+        else:
+            up, down = output_1_on, output_0_on
 
         if up == 1 and down == 0:
             state = ShutterEnums.State.GOING_UP
