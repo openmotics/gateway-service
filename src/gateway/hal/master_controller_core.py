@@ -619,7 +619,7 @@ class MasterCoreController(MasterController):
         raise NotImplementedError()
 
     def error_list(self):
-        raise NotImplementedError()
+        return []  # TODO: Implement
 
     def last_success(self):
         return time.time()
