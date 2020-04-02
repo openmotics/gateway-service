@@ -45,7 +45,7 @@ class MemoryModelDefinition(object):
     def __init__(self, id, memory_files=INJECTED, verbose=False):
         self.id = id  # type: int
         self._verbose = verbose
-        self._memory_files = memory_files
+        self._memory_files = memory_files  # type: Dict[str, MemoryFile]
         self._fields = []
         self._loaded_fields = set()
         self._relations = []
@@ -124,6 +124,8 @@ class MemoryModelDefinition(object):
                     field_name
                 ))
             field_container.save()
+        for memory_file in self._memory_files.itervalues():
+            memory_file.activate()
 
     @classmethod
     def deserialize(cls, data):

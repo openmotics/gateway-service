@@ -118,6 +118,10 @@ class MemoryFile(object):
                 {'type': self.type, 'page': page, 'start': start, 'data': data[start:start + length]}
             )
 
+    def activate(self):
+        if self.type == MemoryTypes.EEPROM:
+            self._core_communicator.do_basic_action(action_type=200, action=1)
+
     def invalidate_cache(self, page=None):
         pages = [page]
         if page is None:
