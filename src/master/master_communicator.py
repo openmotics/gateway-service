@@ -106,8 +106,8 @@ class MasterCommunicator(object):
             self.__serial.timeout = None
 
         if not self.__running:
+            self.__running = True
             self.__read_thread.start()
-        self.__running = True
 
     def stop(self):
         pass  # Not supported/used
