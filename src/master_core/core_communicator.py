@@ -80,13 +80,8 @@ class CoreCommunicator(object):
         self._stop = False
         self._read_thread.start()
 
-    def get_bytes_written(self):
-        """ Get the number of bytes written to the Core. """
-        return self._serial_bytes_written
-
-    def get_bytes_read(self):
-        """ Get the number of bytes read from the Core. """
-        return self._serial_bytes_read
+    def stop(self):
+        self._stop = True
 
     def get_communication_statistics(self):
         return self._communication_stats
@@ -155,6 +150,13 @@ class CoreCommunicator(object):
         """
         self._consumers.setdefault(consumer.get_header(), []).append(consumer)
 
+    def discard_cid(self, cid):
+        """
+        Discards a Command ID.
+        """
+        with self._cid_lock:
+            self._cids_in_use.discard(cid)
+
     def unregister_consumer(self, consumer):
         """
         Unregister a consumer
@@ -164,8 +166,7 @@ class CoreCommunicator(object):
         consumers = self._consumers.get(consumer.get_header(), [])
         if consumer in consumers:
             consumers.remove(consumer)
-        with self._cid_lock:
-            self._cids_in_use.discard(consumer.cid)
+        self.discard_cid(consumer.cid)
 
     def do_basic_action(self, action_type, action, device_nr, extra_parameter=0):
         """
@@ -208,8 +209,12 @@ class CoreCommunicator(object):
         consumer = Consumer(command, cid)
         command = consumer.command
 
-        self._consumers.setdefault(consumer.get_header(), []).append(consumer)
-        self._send_command(cid, command, fields)
+        try:
+            self._consumers.setdefault(consumer.get_header(), []).append(consumer)
+            self._send_command(cid, command, fields)
+        except Exception:
+            self.discard_cid(cid)
+            raise
 
         try:
             result = None
@@ -283,82 +288,88 @@ class CoreCommunicator(object):
         footer_length = 1 + 1 + len(CoreCommunicator.END_OF_REPLY)  # 'C' + checksum (1 byte) + \r\n
 
         while not self._stop:
+            try:
+                # Read what's now on the buffer
+                num_bytes = self._serial.inWaiting()
+                if num_bytes > 0:
+                    data += self._serial.read(num_bytes)
 
-            # Read what's now on the buffer
-            num_bytes = self._serial.inWaiting()
-            if num_bytes > 0:
-                data += self._serial.read(num_bytes)
+                # Update counters
+                self._serial_bytes_read += num_bytes
+                self._communication_stats['bytes_read'] += num_bytes
 
-            # Update counters
-            self._serial_bytes_read += num_bytes
-            self._communication_stats['bytes_read'] += num_bytes
+                # Wait for a speicific number of bytes, or the header length
+                if (wait_for_length is None and len(data) < header_length) or len(data) < wait_for_length:
+                    continue
 
-            # Wait for a speicific number of bytes, or the header length
-            if (wait_for_length is None and len(data) < header_length) or len(data) < wait_for_length:
-                continue
+                # Check if the data contains the START_OF_REPLY
+                if CoreCommunicator.START_OF_REPLY not in data:
+                    continue
 
-            # Check if the data contains the START_OF_REPLY
-            if CoreCommunicator.START_OF_REPLY not in data:
-                continue
+                if wait_for_length is None:
+                    # Flush everything before the START_OF_REPLY
+                    data = CoreCommunicator.START_OF_REPLY + data.split(CoreCommunicator.START_OF_REPLY, 1)[-1]
+                    if len(data) < header_length:
+                        continue  # Not enough data
 
-            if wait_for_length is None:
-                # Flush everything before the START_OF_REPLY
-                data = CoreCommunicator.START_OF_REPLY + data.split(CoreCommunicator.START_OF_REPLY, 1)[-1]
-                if len(data) < header_length:
-                    continue  # Not enough data
+                header_fields = CoreCommunicator._parse_header(data)
+                message_length = header_fields['length'] + header_length + footer_length
 
-            header_fields = CoreCommunicator._parse_header(data)
-            message_length = header_fields['length'] + header_length + footer_length
+                # If not all data is present, wait for more data
+                if len(data) < message_length:
+                    wait_for_length = message_length
+                    continue
 
-            # If not all data is present, wait for more data
-            if len(data) < message_length:
-                wait_for_length = message_length
-                continue
+                message = data[:message_length]
+                data = data[message_length:]
 
-            message = data[:message_length]
-            data = data[message_length:]
-
-            # A possible message is received, log where appropriate
-            if self._verbose:
-                logger.info('Reading from Core serial: {0}'.format(printable(message)))
-            threshold = time.time() - self._debug_buffer_duration
-            self._debug_buffer['read'][time.time()] = printable(message)
-            for t in self._debug_buffer['read'].keys():
-                if t < threshold:
-                    del self._debug_buffer['read'][t]
-
-            # Validate message boundaries
-            correct_boundaries = message.startswith(CoreCommunicator.START_OF_REPLY) and message.endswith(CoreCommunicator.END_OF_REPLY)
-            if not correct_boundaries:
-                logger.info('Unexpected boundaries: {0}'.format(printable(message)))
-                # Reset, so we'll wait for the next RTR
-                wait_for_length = None
-                data = message[3:] + data  # Strip the START_OF_REPLY, and restore full data
-                continue
-
-            # Validate message CRC
-            crc = ord(message[-3])
-            payload = message[8:-4]
-            checked_payload = message[3:-4]
-            expected_crc = CoreCommunicator._calculate_crc(checked_payload)
-            if crc != expected_crc:
-                logger.info('Unexpected CRC ({0} vs expected {1}): {2}'.format(crc, expected_crc, printable(checked_payload)))
-                # Reset, so we'll wait for the next RTR
-                wait_for_length = None
-                data = message[3:] + data  # Strip the START_OF_REPLY, and restore full data
-                continue
-
-            # A valid message is received, reliver it to the correct consumer
-            consumers = self._consumers.get(header_fields['header'], [])
-            for consumer in consumers[:]:
+                # A possible message is received, log where appropriate
                 if self._verbose:
-                    logger.info('Delivering payload to consumer {0}.{1}: {2}'.format(header_fields['command'], header_fields['cid'], printable(payload)))
-                consumer.consume(payload)
-                if isinstance(consumer, Consumer):
-                    self.unregister_consumer(consumer)
+                    logger.info('Reading from Core serial: {0}'.format(printable(message)))
+                threshold = time.time() - self._debug_buffer_duration
+                self._debug_buffer['read'][time.time()] = printable(message)
+                for t in self._debug_buffer['read'].keys():
+                    if t < threshold:
+                        del self._debug_buffer['read'][t]
 
-            # Message processed, cleaning up
-            wait_for_length = None
+                # Validate message boundaries
+                correct_boundaries = message.startswith(CoreCommunicator.START_OF_REPLY) and message.endswith(CoreCommunicator.END_OF_REPLY)
+                if not correct_boundaries:
+                    logger.info('Unexpected boundaries: {0}'.format(printable(message)))
+                    # Reset, so we'll wait for the next RTR
+                    wait_for_length = None
+                    data = message[3:] + data  # Strip the START_OF_REPLY, and restore full data
+                    continue
+
+                # Validate message CRC
+                crc = ord(message[-3])
+                payload = message[8:-4]
+                checked_payload = message[3:-4]
+                expected_crc = CoreCommunicator._calculate_crc(checked_payload)
+                if crc != expected_crc:
+                    logger.info('Unexpected CRC ({0} vs expected {1}): {2}'.format(crc, expected_crc, printable(checked_payload)))
+                    # Reset, so we'll wait for the next RTR
+                    wait_for_length = None
+                    data = message[3:] + data  # Strip the START_OF_REPLY, and restore full data
+                    continue
+
+                # A valid message is received, reliver it to the correct consumer
+                consumers = self._consumers.get(header_fields['header'], [])
+                for consumer in consumers[:]:
+                    if self._verbose:
+                        logger.info('Delivering payload to consumer {0}.{1}: {2}'.format(header_fields['command'], header_fields['cid'], printable(payload)))
+                    consumer.consume(payload)
+                    if isinstance(consumer, Consumer):
+                        self.unregister_consumer(consumer)
+
+                self.discard_cid(header_fields['cid'])
+
+                # Message processed, cleaning up
+                wait_for_length = None
+            except Exception:
+                logger.exception('Unexpected exception at Core read thread')
+                data = ''
+                wait_for_length = None
 
     @staticmethod
     def _parse_header(data):
@@ -422,9 +433,17 @@ class BackgroundConsumer(object):
         self._callback = callback
         self._queue = Queue()
 
-        self._callback_thread = Thread(target=self.deliver, name='CoreCommunicator BackgroundConsumer delivery thread')
+        self._callback_thread = Thread(target=self._consumer, name='CoreCommunicator BackgroundConsumer delivery thread')
         self._callback_thread.setDaemon(True)
         self._callback_thread.start()
+
+    def _consumer(self):
+        while True:
+            try:
+                self.deliver()
+            except Exception:
+                logger.exception('Unexpected exception delivering background consumer data')
+                time.sleep(1)
 
     def get_header(self):
         """ Get the prefix of the answer from the Core. """
@@ -437,9 +456,4 @@ class BackgroundConsumer(object):
 
     def deliver(self):
         """ Deliver data to the callback functions. """
-        while True:
-            try:
-                self._callback(self._queue.get())
-            except Exception:
-                logger.exception('Unexpected exception delivering background consumer data')
-                time.sleep(1)
+        self._callback(self._queue.get())

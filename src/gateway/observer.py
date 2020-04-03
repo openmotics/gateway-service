@@ -22,20 +22,20 @@ import ujson as json
 from ioc import Injectable, Inject, INJECTED, Singleton
 from threading import Thread
 from platform_utils import Platform
-from gateway.hal.master_controller import MasterEvent
+from gateway.hal.master_controller import MasterController, MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
-from master.thermostats import ThermostatStatus
-from master.inputs import InputStatus
 from master import master_api
 from bus.om_bus_events import OMBusEvents
+
+if False:  # MYPY
+    from typing import Any, Dict, List
 
 if Platform.get_platform() == Platform.Type.CLASSIC:
     from master.master_communicator import CommunicationTimedOutException
 else:
     # TODO: Replace for the Core+
-    class CommunicationTimedOutException(Exception):
+    class CommunicationTimedOutException(Exception):  # type: ignore
         pass
-
 
 logger = logging.getLogger("openmotics")
 
@@ -83,7 +83,6 @@ class Observer(object):
     # TODO: Needs to be removed and replace by MasterEvents from the MasterController
     class LegacyMasterEvents(object):
         ON_SHUTTER_UPDATE = 'ON_SHUTTER_UPDATE'
-        ON_INPUT_CHANGE = 'INPUT_CHANGE'
         ONLINE = 'ONLINE'
 
     class Types(object):
@@ -103,31 +102,19 @@ class Observer(object):
         :type shutter_controller: gateway.shutters.ShutterController
         """
         self._master_communicator = master_communicator
-        self._master_controller = master_controller
+        self._master_controller = master_controller  # type: MasterController
         self._message_client = message_client
         self._gateway_api = None
 
         self._master_subscriptions = {Observer.LegacyMasterEvents.ON_SHUTTER_UPDATE: [],
-                                      Observer.LegacyMasterEvents.ON_INPUT_CHANGE: [],
                                       Observer.LegacyMasterEvents.ONLINE: []}
         self._event_subscriptions = []
 
-        self._input_status = InputStatus(on_input_change=self._input_changed)
-        self._thermostat_status = ThermostatStatus(on_thermostat_change=self._thermostat_changed,
-                                                   on_thermostat_group_change=self._thermostat_group_changed)
         self._shutter_controller = shutter_controller
         self._shutter_controller.set_shutter_changed_callback(self._shutter_changed)
 
         self._master_controller.subscribe_event(self._master_event)
 
-        self._input_interval = 300
-        self._input_last_updated = 0
-        self._input_config = {}
-        self._thermostats_original_interval = 30
-        self._thermostats_interval = self._thermostats_original_interval
-        self._thermostats_last_updated = 0
-        self._thermostats_restore = 0
-        self._thermostats_config = {}
         self._shutters_interval = 600
         self._shutters_last_updated = 0
         self._master_online = False
@@ -171,36 +158,20 @@ class Observer(object):
         Triggered when an external service knows certain settings might be changed in the background.
         For example: maintenance mode or module discovery
         """
-        if object_type is None or object_type == Observer.Types.THERMOSTATS:
-            self._thermostats_last_updated = 0
         if object_type is None or object_type == Observer.Types.SHUTTERS:
             self._shutters_last_updated = 0
         self._master_controller.invalidate_caches()
 
-    def increase_interval(self, object_type, interval, window):
-        """ Increases a certain interval to a new setting for a given amount of time """
-        if object_type == Observer.Types.THERMOSTATS:
-            self._thermostats_interval = interval
-            self._thermostats_restore = time.time() + window
-
     def _monitor(self):
+        # type: () -> None
         """ Monitors certain system states to detect changes without events """
         while True:
             try:
                 self._check_master_version()
                 # Refresh if required
-                if self._thermostats_last_updated + self._thermostats_interval < time.time():
-                    self._refresh_thermostats()
-                    self._set_master_state(True)
                 if self._shutters_last_updated + self._shutters_interval < time.time():
                     self._refresh_shutters()
                     self._set_master_state(True)
-                if self._input_last_updated + self._input_interval < time.time():
-                    self._refresh_inputs()
-                    self._set_master_state(True)
-                # Restore interval if required
-                if self._thermostats_restore < time.time():
-                    self._thermostats_interval = self._thermostats_original_interval
                 self._register_background_consumers()
                 time.sleep(1)
             except CommunicationTimedOutException:
@@ -237,19 +208,8 @@ class Observer(object):
             if Platform.get_platform() == Platform.Type.CLASSIC:
                 # This import/code will eventually be migrated away to MasterControllers
                 from master.master_communicator import BackgroundConsumer
-                self._master_communicator.register_consumer(BackgroundConsumer(master_api.input_list(self._master_version), 0, self._on_input))
                 self._master_communicator.register_consumer(BackgroundConsumer(master_api.shutter_status(self._master_version), 0, self._on_shutter_update))
                 self._background_consumers_registered = True
-
-    # Handle master "events"
-
-    def _on_input(self, data):
-        """ Triggers when the master informs us of an Input state change """
-        # Update status tracker
-        self._input_status.set_input(data)
-        # Notify subscribers
-        for callback in self._master_subscriptions[Observer.LegacyMasterEvents.ON_INPUT_CHANGE]:
-            callback(data)
 
     def _on_shutter_update(self, data):
         """ Triggers when the master informs us of an Shutter state change """
@@ -264,6 +224,10 @@ class Observer(object):
         Triggers when the MasterController generates events
         :type master_event: gateway.hal.master_controller.MasterEvent
         """
+        if master_event.type == MasterEvent.Types.INPUT_CHANGE:
+            for callback in self._event_subscriptions:
+                callback(Event(event_type=Event.Types.INPUT_CHANGE,
+                               data=master_event.data))
         if master_event.type == MasterEvent.Types.OUTPUT_CHANGE:
             self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': master_event.data['id']})
             for callback in self._event_subscriptions:
@@ -274,53 +238,24 @@ class Observer(object):
 
     def get_outputs(self):
         """ Returns a list of Outputs with their status """
+        # TODO: also include other outputs (e.g. from plugins)
         return self._master_controller.get_output_statuses()
+
+    def get_output(self, output_id):
+        # TODO: also address other outputs (e.g. from plugins)
+        return self._master_controller.get_output_status(output_id)
 
     # Inputs
 
     def get_inputs(self):
+        # type: () -> List[Dict[str,Any]]
         """ Returns a list of Inputs with their status """
-        self._ensure_gateway_api()
-        return self._input_status.get_inputs()
+        return self._master_controller.get_inputs_with_status()
 
     def get_recent(self):
+        # type: () -> List[int]
         """ Returns a list of recently changed inputs """
-        self._ensure_gateway_api()
-        return self._input_status.get_recent()
-
-    def _input_changed(self, input_id, status):
-        """ Executed by the Input Status tracker when an input changed state """
-        for callback in self._event_subscriptions:
-            resp_data = {'id': input_id,
-                         'status': status,
-                         'location': {'room_id': self._input_config[input_id]['room']}}
-            callback(Event(event_type=Event.Types.INPUT_CHANGE, data=resp_data))
-
-    def _refresh_inputs(self):
-        """ Refreshes the Input Status tracker """
-        # 1. refresh input configuration
-        self._input_config = {input_configuration['id']: input_configuration for input_configuration in self._gateway_api.get_input_configurations()}
-        # 2. poll for latest input status
-        try:
-            number_of_input_modules = self._master_communicator.do_command(master_api.number_of_io_modules())['in']
-            inputs = []
-            for i in xrange(number_of_input_modules):
-                # we could be dealing with e.g. a temperature module, skip those
-                module_type = self._gateway_api.get_input_module_type(input_module_id=i)
-                if module_type not in ['i', 'I']:
-                    continue
-                result = self._master_communicator.do_command(master_api.read_input_module(self._master_version), {'input_module_nr': i})
-                module_status = result['input_status']
-                # module_status byte contains bits for each individual input, use mask and bitshift to get status
-                for n in xrange(8):
-                    input_nr = i * 8 + n
-                    input_status = module_status & (1 << n) != 0
-                    data = {'input': input_nr, 'status': input_status}
-                    inputs.append(data)
-            self._input_status.full_update(inputs)
-        except NotImplementedError as e:
-            logger.error('Cannot refresh inputs: {}'.format(e))
-        self._input_last_updated = time.time()
+        return self._master_controller.get_recent_inputs()
 
     # Shutters
 
@@ -347,88 +282,4 @@ class Observer(object):
             )
         self._shutters_last_updated = time.time()
 
-    # Thermostats
 
-    def get_thermostats(self):
-        """ Returns thermostat information """
-        self._ensure_gateway_api()
-        self._refresh_thermostats()  # Always return the latest information
-        return self._thermostat_status.get_thermostats()
-
-    def _thermostat_changed(self, thermostat_id, status):
-        """ Executed by the Thermostat Status tracker when an output changed state """
-        self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': thermostat_id})
-        location = {'room_id': self._thermostats_config[thermostat_id]['room']}
-        for callback in self._event_subscriptions:
-            callback(Event(event_type=Event.Types.THERMOSTAT_CHANGE,
-                           data={'id': thermostat_id,
-                                 'status': {'preset': status['preset'],
-                                            'current_setpoint': status['current_setpoint'],
-                                            'actual_temperature': status['actual_temperature'],
-                                            'output_0': status['output_0'],
-                                            'output_1': status['output_1']},
-                                 'location': location}))
-
-    def _thermostat_group_changed(self, status):
-        self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
-        for callback in self._event_subscriptions:
-            callback(Event(event_type=Event.Types.THERMOSTAT_GROUP_CHANGE,
-                           data={'id': 0,
-                                 'status': {'state': status['state'],
-                                            'mode': status['mode']},
-                                 'location': {}}))
-
-    def _refresh_thermostats(self):
-        """
-        Get basic information about all thermostats and pushes it in to the Thermostat Status tracker
-        """
-        def get_automatic_setpoint(_mode):
-            _automatic = bool(_mode & 1 << 3)
-            return _automatic, 0 if _automatic else (_mode & 0b00000111)
-
-        thermostat_info = self._master_communicator.do_command(master_api.thermostat_list())
-        thermostat_mode = self._master_communicator.do_command(master_api.thermostat_mode_list())
-        aircos = self._master_communicator.do_command(master_api.read_airco_status_bits())
-        outputs = self.get_outputs()
-
-        mode = thermostat_info['mode']
-        thermostats_on = bool(mode & 1 << 7)
-        cooling = bool(mode & 1 << 4)
-        automatic, setpoint = get_automatic_setpoint(thermostat_mode['mode0'])
-
-        fields = ['sensor', 'output0', 'output1', 'name', 'room']
-        if cooling:
-            self._thermostats_config = self._gateway_api.get_cooling_configurations(fields=fields)
-        else:
-            self._thermostats_config = self._gateway_api.get_thermostat_configurations(fields=fields)
-
-        thermostats = []
-        for thermostat_id in xrange(32):
-            config = self._thermostats_config[thermostat_id]
-            if (config['sensor'] <= 31 or config['sensor'] == 240) and config['output0'] <= 240:
-                t_mode = thermostat_mode['mode{0}'.format(thermostat_id)]
-                t_automatic, t_setpoint = get_automatic_setpoint(t_mode)
-                thermostat = {'id': thermostat_id,
-                              'act': thermostat_info['tmp{0}'.format(thermostat_id)].get_temperature(),
-                              'csetp': thermostat_info['setp{0}'.format(thermostat_id)].get_temperature(),
-                              'outside': thermostat_info['outside'].get_temperature(),
-                              'mode': t_mode,
-                              'automatic': t_automatic,
-                              'setpoint': t_setpoint,
-                              'name': config['name'],
-                              'sensor_nr': config['sensor'],
-                              'airco': aircos['ASB{0}'.format(thermostat_id)]}
-                for output in [0, 1]:
-                    output_nr = config['output{0}'.format(output)]
-                    if output_nr < len(outputs) and outputs[output_nr]['status']:
-                        thermostat['output{0}'.format(output)] = outputs[output_nr]['dimmer']
-                    else:
-                        thermostat['output{0}'.format(output)] = 0
-                thermostats.append(thermostat)
-
-        self._thermostat_status.full_update({'thermostats_on': thermostats_on,
-                                             'automatic': automatic,
-                                             'setpoint': setpoint,
-                                             'cooling': cooling,
-                                             'status': thermostats})
-        self._thermostats_last_updated = time.time()

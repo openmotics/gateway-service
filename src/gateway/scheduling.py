@@ -33,7 +33,7 @@ if Platform.get_platform() == Platform.Type.CLASSIC:
     from master.master_communicator import CommunicationTimedOutException
 else:
     # TODO: Replace for the Core+
-    class CommunicationTimedOutException(Exception):
+    class CommunicationTimedOutException(Exception):  # type: ignore
         pass
 
 
@@ -59,8 +59,6 @@ class Schedule(object):
 
     @property
     def is_due(self):
-        if self.status != 'ACTIVE':
-            return False
         if self.repeat is None:
             # Single-run schedules should start on their set starting time if not yet executed
             if self.last_executed is not None:
@@ -68,8 +66,10 @@ class Schedule(object):
             return self.start <= time.time()
         # Repeating
         timezone = pytz.timezone(Schedule.timezone)
-        now = datetime.now(timezone)
-        cron = croniter(self.repeat, now)
+        base_date = datetime.fromtimestamp(self.start, timezone)
+        if self.start < time.time():
+            base_date = datetime.now(timezone)
+        cron = croniter(self.repeat, base_date)
         next_execution = cron.get_next(ret_type=float)
         if self.next_execution is None:
             self.next_execution = next_execution
@@ -149,10 +149,7 @@ class SchedulingController(object):
         self._processor = None
         self._semaphore = None
 
-        try:
-            Schedule.timezone = gateway_api.get_timezone()
-        except Exception:
-            Schedule.timezone = 'UTC'
+        Schedule.timezone = gateway_api.get_timezone()
 
         self._load_schedule()
 

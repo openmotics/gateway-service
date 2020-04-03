@@ -16,12 +16,13 @@
 The main module for the OpenMotics
 """
 from platform_utils import System, Platform
-System.import_eggs()
+System.import_libs()
 
 import logging
 import time
 import constants
-from ioc import Injectable, Inject, INJECTED, DumpInjectionStack
+from models import Database, Feature
+from ioc import Injectable, Inject, INJECTED
 from bus.om_bus_service import MessageService
 from bus.om_bus_client import MessageClient
 from serial import Serial
@@ -31,6 +32,7 @@ from threading import Lock
 from serial_utils import RS485
 from gateway.observer import Observer
 from urlparse import urlparse
+from peewee_migrate import Router
 
 logger = logging.getLogger("openmotics")
 
@@ -71,11 +73,11 @@ class OpenmoticsService(object):
         from plugins import base
         from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
                              maintenance_controller, comm_led_controller, users, pulses, config as config_controller,
-                             metrics_caching)
+                             metrics_caching, watchdog)
         from cloud import events
         _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
              maintenance_controller, base, events, power_communicator, comm_led_controller, users,
-             power_controller, pulses, config_controller, metrics_caching)
+             power_controller, pulses, config_controller, metrics_caching, watchdog)
         if Platform.get_platform() == Platform.Type.CORE_PLUS:
             from gateway.hal import master_controller_core
             from master_core import maintenance, core_communicator, ucan_communicator
@@ -85,6 +87,15 @@ class OpenmoticsService(object):
             from gateway.hal import master_controller_classic
             from master import maintenance, master_communicator, eeprom_extension
             _ = master_controller_classic, maintenance, master_communicator, eeprom_extension
+
+        thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
+        thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled
+        if Platform.get_platform() == Platform.Type.CORE_PLUS or thermostats_gateway_enabled:
+            from gateway.thermostat.gateway import thermostat_controller_gateway
+            _ = thermostat_controller_gateway
+        else:
+            from gateway.thermostat.master import thermostat_controller_master
+            _ = thermostat_controller_master
 
         # IPC
         Injectable.value(message_client=MessageClient('openmotics_service'))
@@ -159,9 +170,13 @@ class OpenmoticsService(object):
     @Inject
     def fix_dependencies(metrics_controller=INJECTED, message_client=INJECTED, web_interface=INJECTED, scheduling_controller=INJECTED,
                          observer=INJECTED, gateway_api=INJECTED, metrics_collector=INJECTED, plugin_controller=INJECTED,
-                         web_service=INJECTED, event_sender=INJECTED, maintenance_controller=INJECTED):
+                         web_service=INJECTED, event_sender=INJECTED, maintenance_controller=INJECTED, thermostat_controller=INJECTED):
+
         # TODO: Fix circular dependencies
 
+        thermostat_controller.subscribe_events(web_interface.send_event_websocket)
+        thermostat_controller.subscribe_events(event_sender.enqueue_event)
+        thermostat_controller.subscribe_events(plugin_controller.process_observer_event)
         message_client.add_event_handler(metrics_controller.event_receiver)
         web_interface.set_plugin_controller(plugin_controller)
         web_interface.set_metrics_collector(metrics_collector)
@@ -181,8 +196,8 @@ class OpenmoticsService(object):
         observer.subscribe_events(event_sender.enqueue_event)
 
         # TODO: make sure all subscribers only subscribe to the observer, not master directly
-        observer.subscribe_master(Observer.LegacyMasterEvents.ON_INPUT_CHANGE, metrics_collector.on_input)
         observer.subscribe_master(Observer.LegacyMasterEvents.ON_SHUTTER_UPDATE, plugin_controller.process_shutter_status)
+        observer.subscribe_master(Observer.LegacyMasterEvents.ONLINE, gateway_api.master_online_event)
 
         maintenance_controller.subscribe_maintenance_stopped(gateway_api.maintenance_mode_stopped)
 
@@ -190,8 +205,8 @@ class OpenmoticsService(object):
     @Inject
     def start(master_controller=INJECTED, maintenance_controller=INJECTED,
               observer=INJECTED, power_communicator=INJECTED, metrics_controller=INJECTED, passthrough_service=INJECTED,
-              scheduling_controller=INJECTED, metrics_collector=INJECTED, web_service=INJECTED, gateway_api=INJECTED, plugin_controller=INJECTED,
-              communication_led_controller=INJECTED, event_sender=INJECTED):
+              scheduling_controller=INJECTED, metrics_collector=INJECTED, web_service=INJECTED, watchdog=INJECTED, plugin_controller=INJECTED,
+              communication_led_controller=INJECTED, event_sender=INJECTED, thermostat_controller=INJECTED):
         """ Main function. """
         logger.info('Starting OM core service...')
 
@@ -203,12 +218,13 @@ class OpenmoticsService(object):
         if passthrough_service:
             passthrough_service.start()
         scheduling_controller.start()
+        thermostat_controller.start()
         metrics_collector.start()
         web_service.start()
-        gateway_api.start()
         plugin_controller.start()
         communication_led_controller.start()
         event_sender.start()
+        watchdog.start()
 
         signal_request = {'stop': False}
 
@@ -216,11 +232,13 @@ class OpenmoticsService(object):
             """ This function is called on SIGTERM. """
             _ = signum, frame
             logger.info('Stopping OM core service...')
+            watchdog.stop()
             master_controller.stop()
             maintenance_controller.stop()
             web_service.stop()
             metrics_collector.stop()
             metrics_controller.stop()
+            thermostat_controller.stop()
             plugin_controller.stop()
             event_sender.stop()
             logger.info('Stopping OM core service... Done')
@@ -234,8 +252,14 @@ class OpenmoticsService(object):
 
 if __name__ == "__main__":
     setup_logger()
-    logger.info("Starting OpenMotics service")
 
+    logger.info("Applying migrations")
+    # Run all unapplied migrations
+    db = Database.get_db()
+    router = Router(db, migrate_dir='/opt/openmotics/python/migrations')
+    router.run()
+
+    logger.info("Starting OpenMotics service")
     # TODO: move message service to separate process
     message_service = MessageService()
     message_service.start()

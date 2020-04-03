@@ -7,7 +7,7 @@ from threading import Thread
 sys.path.insert(0, '/opt/openmotics/python')
 
 from platform_utils import System
-System.import_eggs()
+System.import_libs()
 
 from toolbox import PluginIPCStream
 from gateway.observer import Event
@@ -157,6 +157,8 @@ class PluginRuntime:
                     ret = self._handle_request(command['method'], command['args'], command['kwargs'])
                 elif action == 'remove_callback':
                     ret = self._handle_remove_callback()
+                elif action == 'ping':
+                    pass  # noop
                 else:
                     raise RuntimeError('Unknown action: {0}'.format(action))
 

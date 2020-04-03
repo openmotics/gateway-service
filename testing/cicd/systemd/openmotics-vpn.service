@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenMotics Gateway VPN
+After=openmotics.service network-online.target
+PartOf=openmotics.service
+Requires=openmotics.service
+
+[Service]
+User=root
+ExecStart=/usr/bin/python2 vpn_service.py
+WorkingDirectory=/opt/openmotics/python
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=openmotics.service

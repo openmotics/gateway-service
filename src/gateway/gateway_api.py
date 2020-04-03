@@ -17,38 +17,30 @@ The GatewayApi defines high level functions, these are used by the interface
 and call the master_api to complete the actions.
 """
 
-import os
-import time
-import threading
-import datetime
-import math
-import sqlite3
-import constants
-import logging
-import glob
-import shutil
-import subprocess
-import tempfile
 import ConfigParser
-import ujson as json
-from ioc import Injectable, Inject, INJECTED, Singleton
-from subprocess import check_output
-from threading import Timer, Thread
-from platform_utils import Platform
-from serial_utils import CommunicationTimedOutException
-from gateway.observer import Observer
-from gateway.maintenance_communicator import InMaintenanceModeException
-from master import master_api
-from power import power_api
-from master.eeprom_controller import EepromAddress
-from master.eeprom_models import ThermostatConfiguration, \
-    SensorConfiguration, PumpGroupConfiguration, GroupActionConfiguration, \
-    ScheduledActionConfiguration, StartupActionConfiguration, \
-    ShutterConfiguration, ShutterGroupConfiguration, DimmerConfiguration, \
-    GlobalThermostatConfiguration, CoolingConfiguration, CoolingPumpGroupConfiguration, \
-    GlobalRTD10Configuration, RTD10HeatingConfiguration, RTD10CoolingConfiguration, \
-    CanLedConfiguration, RoomConfiguration
+import glob
+import logging
+import math
+import os
+import shutil
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+
+import constants
 from bus.om_bus_events import OMBusEvents
+from gateway.hal.master_controller import MasterController
+from gateway.observer import Observer
+from ioc import INJECTED, Inject, Injectable, Singleton
+from platform_utils import Platform, System
+from power import power_api
+from serial_utils import CommunicationTimedOutException
+
+if False:  # MYPY:
+    from typing import Any, Dict, List
 
 logger = logging.getLogger('openmotics')
 
@@ -73,14 +65,14 @@ class GatewayApi(object):
 
     @Inject
     def __init__(self,
-                 master_communicator=INJECTED, master_controller=INJECTED, power_communicator=INJECTED,
-                 power_controller=INJECTED, eeprom_controller=INJECTED, pulse_controller=INJECTED,
+                 master_controller=INJECTED, power_communicator=INJECTED,
+                 power_controller=INJECTED, pulse_controller=INJECTED,
                  message_client=INJECTED, observer=INJECTED, configuration_controller=INJECTED, shutter_controller=INJECTED):
         """
         :param master_communicator: Master communicator
         :type master_communicator: master.master_communicator.MasterCommunicator
         :param master_controller: Master controller
-        :type master_controller: gateway.master_controller.MasterController
+        :type master_controller: gateway.hal.master_controller.MasterController
         :param power_communicator: Power communicator
         :type power_communicator: power.power_communicator.PowerCommunicator
         :param power_controller: Power controller
@@ -98,276 +90,29 @@ class GatewayApi(object):
         :param shutter_controller: Shutter Controller
         :type shutter_controller: gateway.shutters.ShutterController
         """
-        self.__master_communicator = master_communicator
-        self.__master_controller = master_controller
+        self.__master_controller = master_controller  # type: MasterController
         self.__config_controller = configuration_controller
-        self.__eeprom_controller = eeprom_controller
         self.__power_communicator = power_communicator
         self.__power_controller = power_controller
         self.__pulse_controller = pulse_controller
-        self.__plugin_controller = None
         self.__message_client = message_client
         self.__observer = observer
         self.__shutter_controller = shutter_controller
 
-        self.__discover_mode_timer = None
-
-        self.__module_log = []
-
         self.__previous_on_outputs = set()
 
-        if Platform.get_platform() == Platform.Type.CLASSIC:
-            from master.master_communicator import BackgroundConsumer
-            self.__master_communicator.register_consumer(
-                BackgroundConsumer(master_api.module_initialize(), 0, self.__update_modules)
-            )
-            self.__master_communicator.register_consumer(
-                BackgroundConsumer(master_api.event_triggered(), 0, self.__event_triggered, True)
-            )
-
-        self.__master_checker_thread = Thread(target=self.__master_checker)
-        self.__master_checker_thread.daemon = True
-
-    def start(self):
-        if Platform.get_platform() == Platform.Type.CLASSIC:
-            self.__master_checker_thread.start()
-
     def set_plugin_controller(self, plugin_controller):
-        """
-        Set the plugin controller.
-        :param plugin_controller: Plugin controller
-        :type plugin_controller: plugins.base.PluginController
-        """
-        self.__plugin_controller = plugin_controller
+        """ Set the plugin controller. """
+        self.__master_controller.set_plugin_controller(plugin_controller)
 
     def master_online_event(self, online):
         if online:
             self.__shutter_controller.update_config(self.get_shutter_configurations())
 
-    def __master_checker(self):
-        """
-        Validates certain master settings such as time and whether e.g. events are enabled. It will try to correct all
-        unexpected values
-        """
-        last_communication_check = 0
-        last_master_time_check = 0
-        last_master_settings_check = 0
-        while True:
-            try:
-                now = time.time()
-                if last_communication_check < now - 60:
-                    self.__check_master_communications()
-                    last_communication_check = now
-                if last_master_time_check < now - 300:
-                    self.__validate_master_time()
-                    last_master_time_check = now
-                if last_master_settings_check < now - 900:
-                    self.__check_master_settings()
-                    last_master_settings_check = now
-                time.sleep(5)
-            except CommunicationTimedOutException:
-                logger.error('Got communication timeout while checking the master.')
-                time.sleep(60)
-            except InMaintenanceModeException:
-                # This is an expected situation
-                time.sleep(10)
-            except Exception as ex:
-                logger.exception('Got unexpected exception while checking the master: {0}'.format(ex))
-                time.sleep(60)
-
-    def __check_master_communications(self):
-        communication_recovery = self.__config_controller.get_setting('communication_recovery', {})
-        calls_timedout = self.__master_communicator.get_communication_statistics()['calls_timedout']
-        calls_succeeded = self.__master_communicator.get_communication_statistics()['calls_succeeded']
-        all_calls = sorted(calls_timedout + calls_succeeded)
-
-        if len(calls_timedout) == 0:
-            # If there are no timeouts at all
-            if len(calls_succeeded) > 30:
-                self.__config_controller.remove_setting('communication_recovery')
-            return
-        if len(all_calls) <= 10:
-            # Not enough calls made to have a decent view on what's going on
-            return
-        if not any(t in calls_timedout for t in all_calls[-10:]):
-            # The last X calls are successfull
-            return
-        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
-        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
-        if ratio < 0.25:
-            # Less than 25% of the calls fail, let's assume everything is just "fine"
-            logger.warning('Noticed communication timeouts with the master, but there\'s only a failure ratio of {0:.2f}%.'.format(ratio * 100))
-            return
-
-        service_restart = None
-        master_reset = None
-        backoff = 300
-        # There's no successful communication.
-        if len(communication_recovery) == 0:
-            service_restart = 'communication_errors'
-        else:
-            last_service_restart = communication_recovery.get('service_restart')
-            if last_service_restart is None:
-                service_restart = 'communication_errors'
-            else:
-                backoff = last_service_restart['backoff']
-                if last_service_restart['time'] < time.time() - backoff:
-                    service_restart = 'communication_errors'
-                    backoff = min(1200, backoff * 2)
-                else:
-                    last_master_reset = communication_recovery.get('master_reset')
-                    if last_master_reset is None or last_master_reset['time'] < last_service_restart['time']:
-                        master_reset = 'communication_errors'
-
-        if service_restart is not None or master_reset is not None:
-            # Log debug information
-            try:
-                debug_buffer = self.__master_communicator.get_debug_buffer()
-                debug_data = {'type': 'communication_recovery',
-                              'data': {'buffer': debug_buffer,
-                                       'calls': {'timedout': calls_timedout,
-                                                 'succeeded': calls_succeeded},
-                                       'action': 'service_restart' if service_restart is not None else 'master_reset'}}
-                with open('/tmp/debug_{0}.json'.format(int(time.time())), 'w') as recovery_file:
-                    json.dump(debug_data, fp=recovery_file, indent=4, sort_keys=True)
-                check_output("ls -tp /tmp/ | grep 'debug_.*json' | tail -n +10 | while read file; do rm -r /tmp/$file; done", shell=True)
-            except Exception as ex:
-                logger.error('Could not store debug file: {0}'.format(ex))
-
-        if service_restart is not None:
-            logger.fatal('Major issues in communication with master. Restarting service...')
-            communication_recovery['service_restart'] = {'reason': service_restart,
-                                                         'time': time.time(),
-                                                         'backoff': backoff}
-            self.__config_controller.set_setting('communication_recovery', communication_recovery)
-            time.sleep(15)  # Wait a tad for the I/O to complete (both for DB changes as log flushing)
-            os._exit(1)
-        if master_reset is not None:
-            logger.fatal('Major issues in communication with master. Resetting master & service')
-            communication_recovery['master_reset'] = {'reason': master_reset,
-                                                      'time': time.time()}
-            self.__config_controller.set_setting('communication_recovery', communication_recovery)
-            self.reset_master()
-            time.sleep(5)  # Waiting for the master to come back online before restarting the service
-            os._exit(1)  # TODO: This can be removed once the master communicator can recover "alignment issues"
-
-    def __check_master_settings(self):
-        """
-        Checks master settings such as:
-        * Enable async messages
-        * Enable multi-tenancy
-        * Enable 32 thermostats
-        * Turn on all leds
-        """
-        eeprom_data = self.__master_communicator.do_command(master_api.eeprom_list(),
-                                                            {'bank': 0})['data']
-        write = False
-
-        if eeprom_data[11] != chr(255):
-            logger.info('Disabling async RO messages.')
-            self.__master_communicator.do_command(
-                master_api.write_eeprom(),
-                {'bank': 0, 'address': 11, 'data': chr(255)}
-            )
-            write = True
-
-        if eeprom_data[18] != chr(0):
-            logger.info('Enabling async OL messages.')
-            self.__master_communicator.do_command(
-                master_api.write_eeprom(),
-                {'bank': 0, 'address': 18, 'data': chr(0)}
-            )
-            write = True
-
-        if eeprom_data[20] != chr(0):
-            logger.info('Enabling async IL messages.')
-            self.__master_communicator.do_command(
-                master_api.write_eeprom(),
-                {'bank': 0, 'address': 20, 'data': chr(0)}
-            )
-            write = True
-
-        if eeprom_data[28] != chr(0):
-            logger.info('Enabling async SO messages.')
-            self.__master_communicator.do_command(
-                master_api.write_eeprom(),
-                {'bank': 0, 'address': 28, 'data': chr(0)}
-            )
-            write = True
-
-        thermostat_mode = ord(eeprom_data[14])
-        if thermostat_mode & 64 == 0:
-            logger.info('Enabling multi-tenant thermostats.')
-            self.__master_communicator.do_command(
-                master_api.write_eeprom(),
-                {'bank': 0, 'address': 14, 'data': chr(thermostat_mode | 64)}
-            )
-            write = True
-
-        if eeprom_data[59] != chr(32):
-            logger.info('Enabling 32 thermostats.')
-            self.__master_communicator.do_command(
-                master_api.write_eeprom(),
-                {'bank': 0, 'address': 59, 'data': chr(32)}
-            )
-            write = True
-
-        if eeprom_data[24] != chr(0):
-            logger.info('Disable auto-reset thermostat setpoint')
-            self.__master_communicator.do_command(
-                master_api.write_eeprom(),
-                {'bank': 0, 'address': 24, 'data': chr(0)}
-            )
-            write = True
-
-        if eeprom_data[13] != chr(0):
-            logger.info('Configure master startup mode to: API')
-            self.__master_communicator.do_command(
-                master_api.write_eeprom(),
-                {'bank': 0, 'address': 13, 'data': chr(0)}
-            )
-            write = True
-
-        if write:
-            self.__master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0})
-        self.set_master_status_leds(True)
-
-    def __validate_master_time(self):
-        """
-        Validates the master's time with the Gateway time
-        """
-        status = self.__master_communicator.do_command(master_api.status())
-        master_time = datetime.datetime(1, 1, 1, status['hours'], status['minutes'], status['seconds'])
-
-        now = datetime.datetime.now()
-        expected_weekday = now.weekday() + 1
-        expected_time = now.replace(year=1, month=1, day=1, microsecond=0)
-
-        sync = False
-        if abs((master_time - expected_time).total_seconds()) > 180:  # Allow 3 minutes difference
-            sync = True
-        if status['weekday'] != expected_weekday:
-            sync = True
-
-        if sync is True:
-            logger.info('Time - master: {0} ({1}) - gateway: {2} ({3})'.format(
-                master_time, status['weekday'], expected_time, expected_weekday)
-            )
-            if expected_time.hour == 0 and expected_time.minute < 15:
-                logger.info('Skip setting time between 00:00 and 00:15')
-            else:
-                self.sync_master_time()
-
     def sync_master_time(self):
+        # type: () -> None
         """ Set the time on the master. """
-        logger.info('Setting the time on the master.')
-        now = datetime.datetime.now()
-        self.__master_communicator.do_command(
-            master_api.set_time(),
-            {'sec': now.second, 'min': now.minute, 'hours': now.hour,
-             'weekday': now.isoweekday(), 'day': now.day, 'month': now.month,
-             'year': now.year % 100}
-        )
+        self.__master_controller.sync_time()
 
     def set_timezone(self, timezone):
         _ = self  # Not static for consistency
@@ -379,44 +124,29 @@ class GatewayApi(object):
         os.symlink(timezone_file_path, constants.get_timezone_file())
 
     def get_timezone(self):
-        path = os.path.realpath(constants.get_timezone_file())
-        if not path.startswith('/usr/share/zoneinfo/'):
-            # Reset timezone to default setting
-            self.set_timezone('UTC')
+        try:
+            path = os.path.realpath(constants.get_timezone_file())
+            if not path.startswith('/usr/share/zoneinfo/'):
+                # Reset timezone to default setting
+                self.set_timezone('UTC')
+                return 'UTC'
+            return path[20:]
+        except Exception:
             return 'UTC'
-        return path[20:]
-
-    def __event_triggered(self, ev_output):
-        """ Handle an event triggered by the master. """
-        code = ev_output['code']
-
-        if self.__plugin_controller is not None:
-            self.__plugin_controller.process_event(code)
 
     def maintenance_mode_stopped(self):
+        # type: () -> None
         """ Called when maintenance mode is stopped """
+        self.__master_controller.invalidate_caches()
         self.__observer.invalidate_cache()
-        self.__eeprom_controller.invalidate_cache()  # Eeprom can be changed in maintenance mode.
-        self.__eeprom_controller.dirty = True
         self.__message_client.send_event(OMBusEvents.DIRTY_EEPROM, None)
 
     def get_status(self):
-        """ Get the status of the Master.
-
-        :returns: dict with 'time' (HH:MM), 'date' (DD:MM:YYYY), 'mode', 'version' (a.b.c)
-                  and 'hw_version' (hardware version)
-        """
-        out_dict = self.__master_communicator.do_command(master_api.status())
-        return {'time': '%02d:%02d' % (out_dict['hours'], out_dict['minutes']),
-                'date': '%02d/%02d/%d' % (out_dict['day'], out_dict['month'], out_dict['year']),
-                'mode': out_dict['mode'],
-                'version': '%d.%d.%d' % (out_dict['f1'], out_dict['f2'], out_dict['f3']),
-                'hw_version': out_dict['h']}
+        # TODO: implement gateway status too (e.g. plugin status)
+        return self.__master_controller.get_status()
 
     def get_master_version(self):
-        """ Returns the master firmware version as tuple """
-        master_version = self.get_status()['version']
-        return tuple([int(x) for x in master_version.split('.')])
+        return self.__master_controller.get_firmware_version()
 
     def get_main_version(self):
         """ Gets reported main version """
@@ -426,229 +156,100 @@ class GatewayApi(object):
         return str(config.get('OpenMotics', 'version'))
 
     def reset_master(self):
-        """ Perform a cold reset on the master. Turns the power off, waits 5 seconds and
-        turns the power back on.
-
-        :returns: 'status': 'OK'.
-        """
-        _ = self  # Must be an instance method
-        gpio_direction = open('/sys/class/gpio/gpio44/direction', 'w')
-        gpio_direction.write('out')
-        gpio_direction.close()
-
-        def power(master_on):
-            """ Set the power on the master. """
-            gpio_file = open('/sys/class/gpio/gpio44/value', 'w')
-            gpio_file.write('1' if master_on else '0')
-            gpio_file.close()
-
-        power(False)
-        time.sleep(5)
-        power(True)
-
-        return {'status': 'OK'}
+        return self.__master_controller.cold_reset()
 
     # Master module functions
 
-    def __update_modules(self, api_data):
-        """ Create a log entry when the MI message is received. """
-        module_map = {'O': 'output', 'I': 'input', 'T': 'temperature', 'D': 'dimmer'}
-        message_map = {'N': 'New %s module found.',
-                       'E': 'Existing %s module found.',
-                       'D': 'The %s module tried to register but the registration failed, '
-                            'please presse the init button again.'}
-        log_level_map = {'N': 'INFO', 'E': 'WARN', 'D': 'ERROR'}
-
-        module_type = module_map.get(api_data['id'][0])
-        message = message_map.get(api_data['instr']) % module_type
-        log_level = log_level_map.get(api_data['instr'])
-
-        self.__module_log.append((log_level, message))
-
     def module_discover_start(self, timeout=900):
+        # type: (int) -> Dict[str,Any]
         """ Start the module discover mode on the master.
 
         :returns: dict with 'status' ('OK').
         """
-        ret = self.__master_communicator.do_command(master_api.module_discover_start())
-
-        if self.__discover_mode_timer is not None:
-            self.__discover_mode_timer.cancel()
-
-        self.__discover_mode_timer = Timer(timeout, self.module_discover_stop)
-        self.__discover_mode_timer.start()
-
-        self.__module_log = []
-
-        return {'status': ret['resp']}
+        return self.__master_controller.module_discover_start(timeout)
 
     def module_discover_stop(self):
+        # type: () -> Dict[str,Any]
         """ Stop the module discover mode on the master.
 
         :returns: dict with 'status' ('OK').
         """
-        if self.__discover_mode_timer is not None:
-            self.__discover_mode_timer.cancel()
-            self.__discover_mode_timer = None
+        status = self.__master_controller.module_discover_stop()
 
-        ret = self.__master_communicator.do_command(master_api.module_discover_stop())
-
-        self.__module_log = []
-        self.__eeprom_controller.invalidate_cache()
-        self.__eeprom_controller.dirty = True
         self.__message_client.send_event(OMBusEvents.DIRTY_EEPROM, None)
         self.__observer.invalidate_cache()
 
-        return {'status': ret['resp']}
+        return status
 
     def module_discover_status(self):
+        # type: () -> Dict[str,bool]
         """ Gets the status of the module discover mode on the master.
 
         :returns dict with 'running': True|False
         """
-        return {'running': self.__discover_mode_timer is not None}
+        return self.__master_controller.module_discover_status()
 
     def get_module_log(self):
+        # type: () -> Dict[str,Any]
         """ Get the log messages from the module discovery mode. This returns the current log
         messages and clear the log messages.
 
         :returns: dict with 'log' (list of tuples (log_level, message)).
         """
-        (module_log, self.__module_log) = (self.__module_log, [])
-        return {'log': module_log}
+        return self.__master_controller.get_module_log()
 
     def get_modules(self):
-        """ Get a list of all modules attached and registered with the master.
+        # TODO: do we want to include non-master managed "modules" ? e.g. plugin outputs
+        return self.__master_controller.get_modules()
 
-        :returns: Dict with:
-        * 'outputs' (list of module types: O,R,D),
-        * 'inputs' (list of input module types: I,T,L,C)
-        * 'shutters' (List of modules types: S).
-        """
-        mods = self.__master_communicator.do_command(master_api.number_of_io_modules())
+    def get_master_modules_information(self):
+        return self.__master_controller.get_modules_information()
 
-        inputs = []
-        outputs = []
-        shutters = []
-        can_inputs = []
+    def get_energy_modules_information(self):
+        information = {}
 
-        for i in range(mods['in']):
-            ret = self.__master_communicator.do_command(
-                master_api.read_eeprom(),
-                {'bank': 2 + i, 'addr': 252, 'num': 1}
-            )
-            is_can = ret['data'][0] == 'C'
-            ret = self.__master_communicator.do_command(
-                master_api.read_eeprom(),
-                {'bank': 2 + i, 'addr': 0, 'num': 1}
-            )
-            if is_can:
-                can_inputs.append(ret['data'][0])
-            else:
-                inputs.append(ret['data'][0])
-
-        for i in range(mods['out']):
-            ret = self.__master_communicator.do_command(
-                master_api.read_eeprom(),
-                {'bank': 33 + i, 'addr': 0, 'num': 1}
-            )
-            outputs.append(ret['data'][0])
-
-        for shutter in range(mods['shutter']):
-            shutters.append('S')
-
-        if len(can_inputs) > 0 and 'C' not in can_inputs:
-            can_inputs.append('C')  # First CAN enabled installations didn't had this in the eeprom yet
-
-        return {'outputs': outputs, 'inputs': inputs, 'shutters': shutters, 'can_inputs': can_inputs}
-
-    def get_modules_information(self):
-        """ Gets module information """
-
-        def get_master_version(eeprom_address, _is_can=False):
-            _module_address = self.__eeprom_controller.read_address(eeprom_address)
-            formatted_address = '{0:03}.{1:03}.{2:03}.{3:03}'.format(ord(_module_address.bytes[0]),
-                                                                     ord(_module_address.bytes[1]),
-                                                                     ord(_module_address.bytes[2]),
-                                                                     ord(_module_address.bytes[3]))
-            try:
-                if _is_can or _module_address.bytes[0].lower() == _module_address.bytes[0]:
-                    return formatted_address, None, None
-                _module_version = self.__master_communicator.do_command(master_api.get_module_version(),
-                                                                        {'addr': _module_address.bytes},
-                                                                        extended_crc=True,
-                                                                        timeout=1)
-                _firmware_version = '{0}.{1}.{2}'.format(_module_version['f1'], _module_version['f2'], _module_version['f3'])
-                return formatted_address, _module_version['hw_version'], _firmware_version
-            except CommunicationTimedOutException:
-                return formatted_address, None, None
-
-        information = {'master': {}, 'energy': {}}
-
-        # Master slave modules
-        no_modules = self.__master_communicator.do_command(master_api.number_of_io_modules())
-        for i in range(no_modules['in']):
-            is_can = self.__eeprom_controller.read_address(EepromAddress(2 + i, 252, 1)).bytes == 'C'
-            version_info = get_master_version(EepromAddress(2 + i, 0, 4), is_can)
-            module_address, hardware_version, firmware_version = version_info
-            module_type = self.__eeprom_controller.read_address(EepromAddress(2 + i, 0, 1)).bytes
-            information['master'][module_address] = {'type': module_type,
-                                                     'hardware': hardware_version,
-                                                     'firmware': firmware_version,
-                                                     'address': module_address,
-                                                     'is_can': is_can}
-        for i in range(no_modules['out']):
-            version_info = get_master_version(EepromAddress(33 + i, 0, 4))
-            module_address, hardware_version, firmware_version = version_info
-            module_type = self.__eeprom_controller.read_address(EepromAddress(33 + i, 0, 1)).bytes
-            information['master'][module_address] = {'type': module_type,
-                                                     'hardware': hardware_version,
-                                                     'firmware': firmware_version,
-                                                     'address': module_address}
-        for i in range(no_modules['shutter']):
-            version_info = get_master_version(EepromAddress(33 + i, 173, 4))
-            module_address, hardware_version, firmware_version = version_info
-            module_type = self.__eeprom_controller.read_address(EepromAddress(33 + i, 173, 1)).bytes
-            information['master'][module_address] = {'type': module_type,
-                                                     'hardware': hardware_version,
-                                                     'firmware': firmware_version,
-                                                     'address': module_address}
+        def get_energy_module_type(version):
+            if version == power_api.ENERGY_MODULE:
+                return 'E'
+            if version == power_api.POWER_MODULE:
+                return 'P'
+            if version == power_api.P1_CONCENTRATOR:
+                return 'C'
+            return 'U'
 
         # Energy/power modules
         if self.__power_communicator is not None and self.__power_controller is not None:
             modules = self.__power_controller.get_power_modules().values()
             for module in modules:
                 module_address = module['address']
-                raw_version = self.__power_communicator.do_command(module_address, power_api.get_version())[0]
+                module_version = module['version']
+                raw_version = self.__power_communicator.do_command(module_address, power_api.get_version(module_version))[0]
                 version_info = raw_version.split('\x00', 1)[0].split('_')
                 firmware_version = '{0}.{1}.{2}'.format(version_info[1], version_info[2], version_info[3])
-                information['energy'][module_address] = {'type': 'P' if module['version'] == 8 else 'E',
-                                                         'firmware': firmware_version,
-                                                         'address': module_address}
+                information[module_address] = {'type': get_energy_module_type(module['version']),
+                                               'firmware': firmware_version,
+                                               'address': module_address}
+        return information
 
+    def get_modules_information(self):
+        """ Gets module information """
+        information = {'master': self.get_master_modules_information(),
+                       'energy': self.get_energy_modules_information()}
         return information
 
     def flash_leds(self, led_type, led_id):
-        """ Flash the leds on the module for an output/input/sensor.
-
-        :type led_type: byte
-        :param led_type: The module type: output/dimmer (0), input (1), sensor/temperatur (2).
-        :type led_id: byte
-        :param led_id: The id of the output/input/sensor.
-        :returns: dict with 'status' ('OK').
-        """
-        ret = self.__master_communicator.do_command(master_api.indicate(),
-                                                    {'type': led_type, 'id': led_id})
-        return {'status': ret['resp']}
+        return self.__master_controller.flash_leds(led_type, led_id)
 
     # Output functions
 
-    def get_output_status(self):
+    def get_outputs_status(self):
         """
         Get a list containing the status of the Outputs.
 
         :returns: A list is a dicts containing the following keys: id, status, ctimer and dimmer.
         """
+        # TODO: work with output controller
+        # TODO: implement output controller and let her handle routing to either master or e.g. plugin based outputs
         outputs = self.__observer.get_outputs()
         return [{'id': output['id'],
                  'status': output['status'],
@@ -656,7 +257,24 @@ class GatewayApi(object):
                  'dimmer': output['dimmer']}
                 for output in outputs]
 
-    def set_output(self, output_id, is_on, dimmer=None, timer=None):
+    def get_output_status(self, output_id):
+        """
+        Get a list containing the status of the Outputs.
+
+        :returns: A list is a dicts containing the following keys: id, status, ctimer and dimmer.
+        """
+        # TODO: work with output controller
+        # TODO: implement output controller and let her handle routing to either master or e.g. plugin based outputs
+        output = self.__observer.get_output(output_id)
+        if output is None:
+            raise ValueError('Output with id {} does not exist'.format(output_id))
+        else:
+            return {'id': output['id'],
+                    'status': output['status'],
+                    'ctimer': output['ctimer'],
+                    'dimmer': output['dimmer']}
+
+    def set_output_status(self, output_id, is_on, dimmer=None, timer=None):
         """ Set the status, dimmer and timer of an output.
 
         :param output_id: The id of the output to set
@@ -669,44 +287,25 @@ class GatewayApi(object):
         :type timer: int | None
         :returns: emtpy dict.
         """
+        # TODO: work with output controller
+        # TODO: implement output controller and let her handle routing to either master or e.g. plugin based outputs
         self.__master_controller.set_output(output_id=output_id, state=is_on, dimmer=dimmer, timer=timer)
         return {}
 
     def set_all_lights_off(self):
-        """ Turn all lights off.
-
-        :returns: empty dict.
-        """
-        self.__master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_ALL_LIGHTS_OFF, 'action_number': 0}
-        )
-
-        return dict()
+        # TODO: work with output controller
+        # TODO: also switch other lights (e.g. from plugins)
+        return self.__master_controller.set_all_lights_off()
 
     def set_all_lights_floor_off(self, floor):
-        """ Turn all lights on a given floor off.
-
-        :returns: empty dict.
-        """
-        self.__master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_LIGHTS_OFF_FLOOR, 'action_number': floor}
-        )
-
-        return dict()
+        # TODO: work with output controller
+        # TODO: also switch other lights (e.g. from plugins)
+        return self.__master_controller.set_all_lights_floor_off(floor)
 
     def set_all_lights_floor_on(self, floor):
-        """ Turn all lights on a given floor on.
-
-        :returns: empty dict.
-        """
-        self.__master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_LIGHTS_ON_FLOOR, 'action_number': floor}
-        )
-
-        return dict()
+        # TODO: work with output controller
+        # TODO: also switch other lights (e.g. from plugins)
+        return self.__master_controller.set_all_lights_floor_on(floor)
 
     # Shutter functions
 
@@ -715,6 +314,7 @@ class GatewayApi(object):
 
         :returns: A list is a dicts containing the following keys: id, status.
         """
+        # TODO: work with shutter controller
         return self.__observer.get_shutter_status()
 
     def do_shutter_down(self, shutter_id, position):
@@ -794,15 +394,7 @@ class GatewayApi(object):
         :type group_id: Byte
         :returns:'status': 'OK'.
         """
-        if group_id < 0 or group_id > 30:
-            raise ValueError('id not in [0, 30]: %d' % group_id)
-
-        self.__master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_SHUTTER_GROUP_DOWN, 'action_number': group_id}
-        )
-
-        return {'status': 'OK'}
+        return self.__shutter_controller.shutter_group_down(group_id)
 
     def do_shutter_group_up(self, group_id):
         """ Make a shutter group go up. The shutters stop automatically when the up position is
@@ -812,15 +404,7 @@ class GatewayApi(object):
         :type group_id: Byte
         :returns:'status': 'OK'.
         """
-        if group_id < 0 or group_id > 30:
-            raise ValueError('id not in [0, 30]: %d' % group_id)
-
-        self.__master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_SHUTTER_GROUP_UP, 'action_number': id}
-        )
-
-        return {'status': 'OK'}
+        return self.__shutter_controller.shutter_group_up(group_id)
 
     def do_shutter_group_stop(self, group_id):
         """ Make a shutter group stop.
@@ -829,15 +413,7 @@ class GatewayApi(object):
         :type group_id: Byte
         :returns:'status': 'OK'.
         """
-        if group_id < 0 or group_id > 30:
-            raise ValueError('id not in [0, 30]: %d' % group_id)
-
-        self.__master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_SHUTTER_GROUP_STOP, 'action_number': group_id}
-        )
-
-        return {'status': 'OK'}
+        return self.__shutter_controller.shutter_group_stop(group_id)
 
     # Input functions
 
@@ -846,6 +422,7 @@ class GatewayApi(object):
         Get a list containing the status of the Inputs.
         :returns: A list is a dicts containing the following keys: id, status.
         """
+        # TODO: work with input controller
         inputs = self.__observer.get_inputs()
         return [{'id': input_port['id'], 'status': input_port['status']} for input_port in inputs]
 
@@ -853,307 +430,121 @@ class GatewayApi(object):
         """ Get the X last pressed inputs during the last Y seconds.
         :returns: a list of tuples (input, output).
         """
+        # TODO: work with input controller
         return self.__observer.get_recent()
 
-    # Thermostat functions
+    # Sensors
 
-    def get_thermostat_status(self):
-        """ Get the status of the thermostats. Note that the automatic and setpoint field returned
-        in the main dict are deprecated and reflect the state of the first thermostat.
-
-        :returns: dict with global status information about the thermostats: 'thermostats_on',
-        'automatic' (deprecated) and 'setpoint' (deprecated) and a list ('status') with status
-        information for all thermostats, each element in the list is a dict with the following keys:
-        'id', 'act', 'csetp', 'output0', 'output1', 'outside', 'mode', 'name', 'sensor_nr',
-        'automatic', 'setpoint'.
+    def get_sensor_configuration(self, sensor_id, fields=None):
         """
-        return self.__observer.get_thermostats()
+        Get a specific sensor_configuration defined by its id.
 
-    @staticmethod
-    def __check_thermostat(thermostat):
-        """ :raises ValueError if thermostat not in range [0, 32]. """
-        if thermostat not in range(0, 32):
-            raise ValueError('Thermostat not in [0,32]: %d' % thermostat)
-
-    def set_current_setpoint(self, thermostat, temperature):
-        """ Set the current setpoint of a thermostat.
-
-        :param thermostat: The id of the thermostat to set
-        :type thermostat: Integer [0, 32]
-        :param temperature: The temperature to set in degrees Celcius
-        :type temperature: float
-        :returns: dict with 'thermostat', 'config' and 'temp'
+        :param sensor_id: The id of the sensor_configuration
+        :type sensor_id: Id
+        :param fields: The field of the sensor_configuration to get. (None gets all fields)
+        :type fields: List of strings
+        :returns: sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
         """
-        GatewayApi.__check_thermostat(thermostat)
-        self.__master_communicator.do_command(master_api.write_setpoint(),
-                                              {'thermostat': thermostat,
-                                               'config': 0,
-                                               'temp': master_api.Svt.temp(temperature)})
+        # TODO: work with sensor controller
+        # TODO: add other sensors too (e.g. from database <-- plugins)
+        return self.__master_controller.load_sensor(sensor_id, fields=fields)
 
-        self.__observer.invalidate_cache(Observer.Types.THERMOSTATS)
-        self.__observer.increase_interval(Observer.Types.THERMOSTATS, interval=2, window=10)
-        return {'status': 'OK'}
-
-    def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
-        """ Set the mode of the thermostats.
-
-        :param thermostat_on: Whether the thermostats are on
-        :type thermostat_on: boolean
-        :param cooling_mode: Cooling mode (True) of Heating mode (False)
-        :type cooling_mode: boolean | None
-        :param cooling_on: Turns cooling ON when set to true.
-        :type cooling_on: boolean | None
-        :param automatic: Indicates whether the thermostat system should be set to automatic
-        :type automatic: boolean | None
-        :param setpoint: Requested setpoint (integer 0-5)
-        :type setpoint: int | None
-        :returns: dict with 'status'
+    def get_sensor_configurations(self, fields=None):
         """
-        _ = thermostat_on  # Still accept `thermostat_on` for backwards compatibility
+        Get all sensor_configurations.
 
-        # Figure out whether the system should be on or off
-        set_on = False
-        if cooling_mode is True and cooling_on is True:
-            set_on = True
-        if cooling_mode is False:
-            # Heating means threshold based
-            global_config = self.get_global_thermostat_configuration()
-            outside_sensor = global_config['outside_sensor']
-            current_temperatures = self.get_sensor_temperature_status()
-            if len(current_temperatures) > outside_sensor:
-                current_temperature = current_temperatures[outside_sensor]
-                set_on = global_config['threshold_temp'] > current_temperature
-            else:
-                set_on = True
-
-        # Calculate and set the global mode
-        mode = 0
-        mode |= (1 if set_on is True else 0) << 7
-        mode |= 1 << 6  # multi-tenant mode
-        mode |= (1 if cooling_mode else 0) << 4
-        if automatic is not None:
-            mode |= (1 if automatic else 0) << 3
-
-        check_basic_action(self.__master_communicator.do_basic_action(
-            master_api.BA_THERMOSTAT_MODE, mode
-        ))
-
-        # Caclulate and set the cooling/heating mode
-        cooling_heating_mode = 0
-        if cooling_mode is True:
-            cooling_heating_mode = 1 if cooling_on is False else 2
-
-        check_basic_action(self.__master_communicator.do_basic_action(
-            master_api.BA_THERMOSTAT_COOLING_HEATING, cooling_heating_mode
-        ))
-
-        # Then, set manual/auto
-        if automatic is not None:
-            action_number = 1 if automatic is True else 0
-            check_basic_action(self.__master_communicator.do_basic_action(
-                master_api.BA_THERMOSTAT_AUTOMATIC, action_number
-            ))
-
-        # If manual, set the setpoint if appropriate
-        if automatic is False and setpoint is not None and 3 <= setpoint <= 5:
-            check_basic_action(self.__master_communicator.do_basic_action(
-                getattr(master_api, 'BA_ALL_SETPOINT_{0}'.format(setpoint)), 0
-            ))
-
-        self.__observer.invalidate_cache(Observer.Types.THERMOSTATS)
-        self.__observer.increase_interval(Observer.Types.THERMOSTATS, interval=2, window=10)
-        return {'status': 'OK'}
-
-    def set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
-        """ Set the setpoint/mode for a certain thermostat.
-
-        :param thermostat_id: The id of the thermostat.
-        :type thermostat_id: Integer [0, 31]
-        :param automatic: Automatic mode (True) or Manual mode (False)
-        :type automatic: boolean
-        :param setpoint: The current setpoint
-        :type setpoint: Integer [0, 5]
-        :returns: dict with 'status'
+        :param fields: The field of the sensor_configuration to get. (None gets all fields)
+        :type fields: List of strings
+        :returns: list of sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
         """
-        if thermostat_id < 0 or thermostat_id > 31:
-            raise ValueError('Thermostat_id not in [0, 31]: %d' % thermostat_id)
+        # TODO: work with sensor controller
+        # TODO: add other sensors too (e.g. from database <-- plugins)
+        return self.__master_controller.load_sensors(fields=fields)
 
-        if setpoint < 0 or setpoint > 5:
-            raise ValueError('Setpoint not in [0, 5]: %d' % setpoint)
-
-        if automatic:
-            check_basic_action(self.__master_communicator.do_basic_action(
-                master_api.BA_THERMOSTAT_TENANT_AUTO, thermostat_id
-            ))
-        else:
-            check_basic_action(self.__master_communicator.do_basic_action(
-                master_api.BA_THERMOSTAT_TENANT_MANUAL, thermostat_id
-            ))
-
-            check_basic_action(self.__master_communicator.do_basic_action(
-                getattr(master_api, 'BA_ONE_SETPOINT_{0}'.format(setpoint)), thermostat_id
-            ))
-
-        self.__observer.invalidate_cache(Observer.Types.THERMOSTATS)
-        self.__observer.increase_interval(Observer.Types.THERMOSTATS, interval=2, window=10)
-        return {'status': 'OK'}
-
-    def get_airco_status(self):
-        """ Get the mode of the airco attached to a all thermostats.
-
-        :returns: dict with ASB0-ASB31.
+    def set_sensor_configuration(self, config):
         """
-        return self.__master_communicator.do_command(master_api.read_airco_status_bits())
+        Set one sensor_configuration.
 
-    def set_airco_status(self, thermostat_id, airco_on):
-        """ Set the mode of the airco attached to a given thermostat.
-
-        :param thermostat_id: The thermostat id.
-        :type thermostat_id: Integer [0, 31]
-        :param airco_on: Turns the airco on if True.
-        :type airco_on: boolean.
-
-        :returns: dict with 'status'.
+        :param config: The sensor_configuration to set
+        :type config: sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
         """
-        if thermostat_id < 0 or thermostat_id > 31:
-            raise ValueError('thermostat_id not in [0, 31]: %d' % thermostat_id)
+        # TODO: work with sensor controller
+        # TODO: add other sensors too (e.g. from database <-- plugins)
+        return self.__master_controller.save_sensor([config])
 
-        modifier = 0 if airco_on else 100
+    def set_sensor_configurations(self, config):
+        """
+        Set multiple sensor_configurations.
 
-        check_basic_action(self.__master_communicator.do_basic_action(
-            master_api.BA_THERMOSTAT_AIRCO_STATUS, modifier + thermostat_id
-        ))
+        :param config: The list of sensor_configurations to set
+        :type config: list of sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
+        """
+        # TODO: work with sensor controller
+        # TODO: add other sensors too (e.g. from database <-- plugins)
+        return self.__master_controller.save_sensors(config)
 
-        return {'status': 'OK'}
-
-    # Sensor status
-
-    def get_sensor_temperature_status(self):
+    def get_sensors_temperature_status(self):
         """ Get the current temperature of all sensors.
 
         :returns: list with 32 temperatures, 1 for each sensor. None/null if not connected
         """
-        output = []
+        # TODO: work with sensor controller
+        # TODO: add other sensors too (e.g. from database <-- plugins)
+        values = self.__master_controller.get_sensors_temperature()[:32]
+        if len(values) < 32:
+            values += [None] * (32 - len(values))
+        return values
 
-        sensor_list = self.__master_communicator.do_command(master_api.sensor_temperature_list())
-        for i in range(32):
-            output.append(sensor_list['tmp%d' % i].get_temperature())
+    def get_sensor_temperature_status(self, sensor_id):
+        """ Get the current temperature of all sensors. """
+        # TODO: work with sensor controller
+        # TODO: add other sensors too (e.g. from database <-- plugins)
+        return self.__master_controller.get_sensor_temperature(sensor_id)
 
-        return output
+    def get_sensors_humidity_status(self):
+        """ Get the current humidity of all sensors. """
+        # TODO: work with sensor controller
+        # TODO: add other sensors too (e.g. from database <-- plugins)
+        values = self.__master_controller.get_sensors_humidity()[:32]
+        if len(values) < 32:
+            values += [None] * (32 - len(values))
+        return values
 
-    def get_sensor_humidity_status(self):
-        """ Get the current humidity of all sensors.
-
-        :returns: list with 32 percentages, 1 for each sensor. None/null if not connected
-        """
-        output = []
-
-        sensor_list = self.__master_communicator.do_command(master_api.sensor_humidity_list())
-        for i in range(32):
-            output.append(sensor_list['hum%d' % i].get_humidity())
-
-        return output
-
-    def get_sensor_brightness_status(self):
-        """ Get the current brightness of all sensors.
-
-        :returns: list with 32 percentages, 1 for each sensor. None/null if not connected
-        """
-        output = []
-
-        sensor_list = self.__master_communicator.do_command(master_api.sensor_brightness_list())
-        for i in range(32):
-            output.append(sensor_list['bri%d' % i].get_brightness())
-
-        return output
+    def get_sensors_brightness_status(self):
+        """ Get the current brightness of all sensors. """
+        # TODO: work with sensor controller
+        # TODO: add other sensors too (e.g. from database <-- plugins)
+        values = self.__master_controller.get_sensors_brightness()[:32]
+        if len(values) < 32:
+            values += [None] * (32 - len(values))
+        return values
 
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
-        """ Set the temperature, humidity and brightness value of a virtual sensor.
-
-        :param sensor_id: The id of the sensor.
-        :type sensor_id: Integer [0, 31]
-        :param temperature: The temperature to set in degrees Celcius
-        :type temperature: float
-        :param humidity: The humidity to set in percentage
-        :type humidity: float
-        :param brightness: The brightness to set in percentage
-        :type brightness: float
-        :returns: dict with 'status'.
-        """
-        if 0 > sensor_id > 31:
-            raise ValueError('sensor_id not in [0, 31]: %d' % sensor_id)
-
-        self.__master_communicator.do_command(master_api.set_virtual_sensor(),
-                                              {'sensor': sensor_id,
-                                               'tmp': master_api.Svt.temp(temperature),
-                                               'hum': master_api.Svt.humidity(humidity),
-                                               'bri': master_api.Svt.brightness(brightness)})
-
-        return {'status': 'OK'}
+        # TODO: work with sensor controller
+        # TODO: add other sensors too (e.g. from database <-- plugins)
+        """ Set the temperature, humidity and brightness value of a virtual sensor. """
+        return self.__master_controller.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
 
     def add_virtual_output_module(self):
-        """ Adds a virtual output module.
-        :returns: dict with 'status'.
-        """
-        module = self.__master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'o'})
-        return {'status': module.get('resp')}
+        # TODO: work with output controller
+        return self.__master_controller.add_virtual_output_module()
 
     def add_virtual_dim_module(self):
-        """ Adds a virtual dim module.
-        :returns: dict with 'status'.
-        """
-        module = self.__master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'd'})
-        return {'status': module.get('resp')}
+        # TODO: work with output controller
+        return self.__master_controller.add_virtual_dim_module()
 
     def add_virtual_input_module(self):
-        """ Adds a virtual input module.
-        :returns: dict with 'status'.
-        """
-        module = self.__master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'i'})
-        return {'status': module.get('resp')}
+        # TODO: work with input controller
+        return self.__master_controller.add_virtual_input_module()
 
     # Basic and group actions
 
     def do_basic_action(self, action_type, action_number):
-        """ Execute a basic action.
-
-        :param action_type: The type of the action as defined by the master api.
-        :type action_type: Integer [0, 254]
-        :param action_number: The number provided to the basic action, its meaning depends on the \
-        action_type.
-        :type action_number: Integer [0, 254]
-        """
-        if action_type < 0 or action_type > 254:
-            raise ValueError('action_type not in [0, 254]: %d' % action_type)
-
-        if action_number < 0 or action_number > 254:
-            raise ValueError('action_number not in [0, 254]: %d' % action_number)
-
-        self.__master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': action_type,
-             'action_number': action_number}
-        )
-
-        return dict()
+        return self.__master_controller.do_basic_action(action_type, action_number)
 
     def do_group_action(self, group_action_id):
-        """ Execute a group action.
-
-        :param group_action_id: The id of the group action
-        :type group_action_id: Integer (0 - 159)
-        :returns: empty dict.
-        """
-        if group_action_id < 0 or group_action_id > 159:
-            raise ValueError('group_action_id not in [0, 160]: %d' % group_action_id)
-
-        self.__master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_GROUP_ACTION,
-             'action_number': group_action_id}
-        )
-
-        return dict()
+        # TODO: do we need more group actions than just with the master?
+        return self.__master_controller.do_group_action(group_action_id)
 
     # Backup and restore functions
 
@@ -1293,110 +684,25 @@ class GatewayApi(object):
             threading.Timer(1, lambda: os._exit(0)).start()
 
     def factory_reset(self):
-        """ Perform a factory reset deleting all sql lite databases and wiping the master eeprom
-
-        :returns: dict with 'output' key.
-        """
-        import glob
-        import shutil
+        # type: () -> Dict[str,Any]
         try:
-            # Wipe master EEPROM
-            data = chr(255) * (256 * 256)
-            self.master_restore(data)
+            subprocess.check_output(['python2', 'openmotics_cli.py', 'operator', 'factory-reset'])
+        except subprocess.CalledProcessError as exc:
+            return {'success': False, 'factory_reset': exc.output.strip()}
 
-            # Delete sql lite databases
-            filenames = [constants.get_config_database_file(),
-                         constants.get_scheduling_database_file(),
-                         constants.get_power_database_file(),
-                         constants.get_eeprom_extension_database_file(),
-                         constants.get_metrics_database_file(),
-                         constants.get_pulse_counter_database_file()]
+        def _restart():
+            # type: () -> None
+            logger.info('Restarting for factory reset...')
+            System.restart_service('openmotics.service')
 
-            for filename in filenames:
-                if os.path.exists(filename):
-                    os.remove(filename)
-
-            # Delete plugins
-            plugin_dir = constants.get_plugin_dir()
-            plugins = [name for name in os.listdir(plugin_dir) if os.path.isdir(os.path.join(plugin_dir, name))]
-            for plugin in plugins:
-                shutil.rmtree(plugin_dir + plugin)
-
-            config_files = constants.get_plugin_configfiles()
-            for config_file in glob.glob(config_files):
-                os.remove(config_file)
-
-            # reset the master
-            self.master_reset()
-
-            return {'output': 'Factory reset complete'}
-
-        finally:
-            # Restart the Cherrypy server after 1 second. Lets the current request terminate.
-            threading.Timer(1, lambda: os._exit(0)).start()
+        threading.Timer(2, _restart).start()
+        return {'factory_reset': 'pending'}
 
     def get_master_backup(self):
-        """
-        Get a backup of the eeprom of the master.
-
-        :returns: String of bytes (size = 64kb).
-        """
-        retry = None
-        output = ""
-        bank = 0
-        while bank < 256:
-            try:
-                output += self.__master_communicator.do_command(
-                    master_api.eeprom_list(),
-                    {'bank': bank}
-                )['data']
-                bank += 1
-            except CommunicationTimedOutException:
-                if retry == bank:
-                    raise
-                retry = bank
-                logger.warning('Got timeout reading bank {0}. Retrying...'.format(bank))
-                time.sleep(2)  # Doing heavy reads on eeprom can exhaust the master. Give it a bit room to breathe.
-        return output
+        return self.__master_controller.get_backup()
 
     def master_restore(self, data):
-        """
-        Restore a backup of the eeprom of the master.
-
-        :param data: The eeprom backup to restore.
-        :type data: string of bytes (size = 64 kb).
-        :returns: dict with 'output' key (contains an array with the addresses that were written).
-        """
-        ret = []
-        (num_banks, bank_size, write_size) = (256, 256, 10)
-
-        for bank in range(0, num_banks):
-            read = self.__master_communicator.do_command(master_api.eeprom_list(),
-                                                         {'bank': bank})['data']
-            for addr in range(0, bank_size, write_size):
-                orig = read[addr:addr + write_size]
-                new = data[bank * bank_size + addr: bank * bank_size + addr + len(orig)]
-                if new != orig:
-                    ret.append('B' + str(bank) + 'A' + str(addr))
-
-                    self.__master_communicator.do_command(
-                        master_api.write_eeprom(),
-                        {'bank': bank, 'address': addr, 'data': new}
-                    )
-
-        self.__master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0})
-        ret.append('Activated eeprom')
-        self.__eeprom_controller.invalidate_cache()
-
-        return {'output': ret}
-
-    def master_reset(self):
-        """ Reset the master.
-
-        :returns: emtpy dict.
-        """
-        self.__master_communicator.do_command(master_api.reset())
-        return dict()
+        return self.__master_controller.restore(data)
 
     # Error functions
 
@@ -1406,13 +712,15 @@ class GatewayApi(object):
 
         :returns: dict with 'errors' key, it contains list of tuples (module, nr_errors).
         """
-        error_list = self.__master_communicator.do_command(master_api.error_list())
-        return error_list['errors']
+        return self.__master_controller.error_list()
 
     def master_last_success(self):
         """ Get the number of seconds since the last successful communication with the master.
         """
-        return self.__master_communicator.get_seconds_since_last_success()
+        return self.__master_controller.last_success()
+
+    def master_clear_error_list(self):
+        return self.__master_controller.clear_error_list()
 
     def power_last_success(self):
         """ Get the number of seconds since the last successful communication with the power
@@ -1422,29 +730,10 @@ class GatewayApi(object):
             return 0
         return self.__power_communicator.get_seconds_since_last_success()
 
-    def master_clear_error_list(self):
-        """ Clear the number of errors.
-
-        :returns: empty dict.
-        """
-        self.__master_communicator.do_command(master_api.clear_error_list())
-        return dict()
-
     # Status led functions
 
     def set_master_status_leds(self, status):
-        """ Set the status of the leds on the master.
-
-        :param status: whether the leds should be on or off.
-        :type status: boolean.
-        :returns: empty dict.
-        """
-        on = 1 if status is True else 0
-        self.__master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_STATUS_LEDS, 'action_number': on}
-        )
-        return dict()
+        self.__master_controller.set_status_leds(status)
 
     # Pulse counter functions
 
@@ -1494,7 +783,10 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: list of pulse_counter_configuration dict: contains 'id' (Id), 'input' (Byte), 'name' (String[16]), 'room' (Byte)
         """
-        return self.__pulse_controller.get_configurations(fields)
+        if Platform.get_platform() == Platform.Type.CLASSIC:
+            return self.__pulse_controller.get_configurations(fields)
+        else:
+            return []  # TODO: implement
 
     def set_pulse_counter_configuration(self, config):
         """
@@ -1518,21 +810,26 @@ class GatewayApi(object):
 
     def get_output_configuration(self, output_id, fields=None):
         """ Get a specific output_configuration defined by its id. """
+        # TODO: work with output controller
         return self.__master_controller.load_output(output_id, fields)
 
     def get_output_configurations(self, fields=None):
         """ Get all output_configurations. """
+        # TODO: work with output controller
         return self.__master_controller.load_outputs(fields)
 
     def set_output_configuration(self, config):
         """ Set one output_configuration. """
+        # TODO: work with output controller
         self.__master_controller.save_outputs([config])
 
     def set_output_configurations(self, config):
         """ Set multiple output_configurations. """
+        # TODO: work with output controller
         self.__master_controller.save_outputs(config)
 
     def get_shutter_configuration(self, shutter_id, fields=None):
+        # type: (int, Any) -> Dict[str,Any]
         """
         Get a specific shutter_configuration defined by its id.
 
@@ -1542,9 +839,10 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: shutter_configuration dict: contains 'id' (Id), 'group_1' (Byte), 'group_2' (Byte), 'name' (String[16]), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte), 'up_down_config' (Byte)
         """
-        return self.__eeprom_controller.read(ShutterConfiguration, shutter_id, fields).serialize()
+        return self.__master_controller.load_shutter_configuration(shutter_id, fields=fields)
 
     def get_shutter_configurations(self, fields=None):
+        # type: (Any) -> List[Dict[str,Any]]
         """
         Get all shutter_configurations.
 
@@ -1552,31 +850,34 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: list of shutter_configuration dict: contains 'id' (Id), 'group_1' (Byte), 'group_2' (Byte), 'name' (String[16]), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte), 'up_down_config' (Byte)
         """
-        return [o.serialize() for o in self.__eeprom_controller.read_all(ShutterConfiguration, fields)]
+        return self.__master_controller.load_shutter_configurations(fields=fields)
 
     def set_shutter_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one shutter_configuration.
 
         :param config: The shutter_configuration to set
         :type config: shutter_configuration dict: contains 'id' (Id), 'group_1' (Byte), 'group_2' (Byte), 'name' (String[16]), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte), 'up_down_config' (Byte)
         """
-        self.__eeprom_controller.write(ShutterConfiguration.deserialize(config))
+        self.__master_controller.save_shutter_configuration(config)
         self.__observer.invalidate_cache(Observer.Types.SHUTTERS)
         self.__shutter_controller.update_config(self.get_shutter_configurations())
 
     def set_shutter_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple shutter_configurations.
 
         :param config: The list of shutter_configurations to set
         :type config: list of shutter_configuration dict: contains 'id' (Id), 'group_1' (Byte), 'group_2' (Byte), 'name' (String[16]), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte), 'up_down_config' (Byte)
         """
-        self.__eeprom_controller.write_batch([ShutterConfiguration.deserialize(o) for o in config])
+        self.__master_controller.save_shutter_configurations(config)
         self.__observer.invalidate_cache(Observer.Types.SHUTTERS)
         self.__shutter_controller.update_config(self.get_shutter_configurations())
 
     def get_shutter_group_configuration(self, group_id, fields=None):
+        # type: (int, Any) -> Dict[str,Any]
         """
         Get a specific shutter_group_configuration defined by its id.
 
@@ -1586,9 +887,10 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: shutter_group_configuration dict: contains 'id' (Id), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte)
         """
-        return self.__eeprom_controller.read(ShutterGroupConfiguration, group_id, fields).serialize()
+        return self.__master_controller.load_shutter_group_configuration(group_id, fields=fields)
 
     def get_shutter_group_configurations(self, fields=None):
+        # type: (Any) -> List[Dict[str,Any]]
         """
         Get all shutter_group_configurations.
 
@@ -1596,25 +898,27 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: list of shutter_group_configuration dict: contains 'id' (Id), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte)
         """
-        return [o.serialize() for o in self.__eeprom_controller.read_all(ShutterGroupConfiguration, fields)]
+        return self.__master_controller.load_shutter_group_configurations(fields=fields)
 
     def set_shutter_group_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one shutter_group_configuration.
 
         :param config: The shutter_group_configuration to set
         :type config: shutter_group_configuration dict: contains 'id' (Id), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte)
         """
-        self.__eeprom_controller.write(ShutterGroupConfiguration.deserialize(config))
+        self.__master_controller.save_shutter_group_configuration(config)
 
     def set_shutter_group_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple shutter_group_configurations.
 
         :param config: The list of shutter_group_configurations to set
         :type config: list of shutter_group_configuration dict: contains 'id' (Id), 'room' (Byte), 'timer_down' (Byte), 'timer_up' (Byte)
         """
-        self.__eeprom_controller.write_batch([ShutterGroupConfiguration.deserialize(o) for o in config])
+        self.__master_controller.save_shutter_group_configurations(config)
 
     def get_input_configuration(self, input_id, fields=None):
         """ Get a specific input_configuration defined by its id. """
@@ -1636,310 +940,8 @@ class GatewayApi(object):
         """ Set multiple input_configurations. """
         self.__master_controller.save_inputs(config)
 
-    def get_thermostat_configuration(self, thermostat_id, fields=None):
-        """
-        Get a specific thermostat_configuration defined by its id.
-
-        :param thermostat_id: The id of the thermostat_configuration
-        :type thermostat_id: Id
-        :param fields: The field of the thermostat_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: thermostat_configuration dict: contains 'id' (Id), 'auto_fri' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_mon' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sat' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sun' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_thu' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_tue' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_wed' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'name' (String[16]), 'output0' (Byte), 'output1' (Byte), 'permanent_manual' (Boolean), 'pid_d' (Byte), 'pid_i' (Byte), 'pid_int' (Byte), 'pid_p' (Byte), 'room' (Byte), 'sensor' (Byte), 'setp0' (Temp), 'setp1' (Temp), 'setp2' (Temp), 'setp3' (Temp), 'setp4' (Temp), 'setp5' (Temp)
-        """
-        return self.__eeprom_controller.read(ThermostatConfiguration, thermostat_id, fields).serialize()
-
-    def get_thermostat_configurations(self, fields=None):
-        """
-        Get all thermostat_configurations.
-
-        :param fields: The field of the thermostat_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of thermostat_configuration dict: contains 'id' (Id), 'auto_fri' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_mon' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sat' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sun' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_thu' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_tue' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_wed' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'name' (String[16]), 'output0' (Byte), 'output1' (Byte), 'permanent_manual' (Boolean), 'pid_d' (Byte), 'pid_i' (Byte), 'pid_int' (Byte), 'pid_p' (Byte), 'room' (Byte), 'sensor' (Byte), 'setp0' (Temp), 'setp1' (Temp), 'setp2' (Temp), 'setp3' (Temp), 'setp4' (Temp), 'setp5' (Temp)
-        """
-        return [o.serialize() for o in self.__eeprom_controller.read_all(ThermostatConfiguration, fields)]
-
-    def set_thermostat_configuration(self, config):
-        """
-        Set one thermostat_configuration.
-
-        :param config: The thermostat_configuration to set
-        :type config: thermostat_configuration dict: contains 'id' (Id), 'auto_fri' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_mon' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sat' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sun' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_thu' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_tue' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_wed' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'name' (String[16]), 'output0' (Byte), 'output1' (Byte), 'permanent_manual' (Boolean), 'pid_d' (Byte), 'pid_i' (Byte), 'pid_int' (Byte), 'pid_p' (Byte), 'room' (Byte), 'sensor' (Byte), 'setp0' (Temp), 'setp1' (Temp), 'setp2' (Temp), 'setp3' (Temp), 'setp4' (Temp), 'setp5' (Temp)
-        """
-        self.__eeprom_controller.write(ThermostatConfiguration.deserialize(config))
-        self.__observer.invalidate_cache(Observer.Types.THERMOSTATS)
-
-    def set_thermostat_configurations(self, config):
-        """
-        Set multiple thermostat_configurations.
-
-        :param config: The list of thermostat_configurations to set
-        :type config: list of thermostat_configuration dict: contains 'id' (Id), 'auto_fri' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_mon' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sat' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sun' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_thu' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_tue' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_wed' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'name' (String[16]), 'output0' (Byte), 'output1' (Byte), 'permanent_manual' (Boolean), 'pid_d' (Byte), 'pid_i' (Byte), 'pid_int' (Byte), 'pid_p' (Byte), 'room' (Byte), 'sensor' (Byte), 'setp0' (Temp), 'setp1' (Temp), 'setp2' (Temp), 'setp3' (Temp), 'setp4' (Temp), 'setp5' (Temp)
-        """
-        self.__eeprom_controller.write_batch([ThermostatConfiguration.deserialize(o) for o in config])
-        self.__observer.invalidate_cache(Observer.Types.THERMOSTATS)
-
-    def get_sensor_configuration(self, sensor_id, fields=None):
-        """
-        Get a specific sensor_configuration defined by its id.
-
-        :param sensor_id: The id of the sensor_configuration
-        :type sensor_id: Id
-        :param fields: The field of the sensor_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
-        """
-        return self.__eeprom_controller.read(SensorConfiguration, sensor_id, fields).serialize()
-
-    def get_sensor_configurations(self, fields=None):
-        """
-        Get all sensor_configurations.
-
-        :param fields: The field of the sensor_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
-        """
-        return [o.serialize() for o in self.__eeprom_controller.read_all(SensorConfiguration, fields)]
-
-    def set_sensor_configuration(self, config):
-        """
-        Set one sensor_configuration.
-
-        :param config: The sensor_configuration to set
-        :type config: sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
-        """
-        self.__eeprom_controller.write(SensorConfiguration.deserialize(config))
-
-    def set_sensor_configurations(self, config):
-        """
-        Set multiple sensor_configurations.
-
-        :param config: The list of sensor_configurations to set
-        :type config: list of sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
-        """
-        self.__eeprom_controller.write_batch([SensorConfiguration.deserialize(o) for o in config])
-
-    def get_pump_group_configuration(self, pump_group_id, fields=None):
-        """
-        Get a specific pump_group_configuration defined by its id.
-
-        :param pump_group_id: The id of the pump_group_configuration
-        :type pump_group_id: Id
-        :param fields: The field of the pump_group_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        return self.__eeprom_controller.read(PumpGroupConfiguration, pump_group_id, fields).serialize()
-
-    def get_pump_group_configurations(self, fields=None):
-        """
-        Get all pump_group_configurations.
-
-        :param fields: The field of the pump_group_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        return [o.serialize() for o in self.__eeprom_controller.read_all(PumpGroupConfiguration, fields)]
-
-    def set_pump_group_configuration(self, config):
-        """
-        Set one pump_group_configuration.
-
-        :param config: The pump_group_configuration to set
-        :type config: pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        self.__eeprom_controller.write(PumpGroupConfiguration.deserialize(config))
-
-    def set_pump_group_configurations(self, config):
-        """
-        Set multiple pump_group_configurations.
-
-        :param config: The list of pump_group_configurations to set
-        :type config: list of pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        self.__eeprom_controller.write_batch([PumpGroupConfiguration.deserialize(o) for o in config])
-
-    def get_cooling_configuration(self, cooling_id, fields=None):
-        """
-        Get a specific cooling_configuration defined by its id.
-
-        :param cooling_id: The id of the cooling_configuration
-        :type cooling_id: Id
-        :param fields: The field of the cooling_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: cooling_configuration dict: contains 'id' (Id), 'auto_fri' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_mon' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sat' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sun' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_thu' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_tue' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_wed' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'name' (String[16]), 'output0' (Byte), 'output1' (Byte), 'permanent_manual' (Boolean), 'pid_d' (Byte), 'pid_i' (Byte), 'pid_int' (Byte), 'pid_p' (Byte), 'room' (Byte), 'sensor' (Byte), 'setp0' (Temp), 'setp1' (Temp), 'setp2' (Temp), 'setp3' (Temp), 'setp4' (Temp), 'setp5' (Temp)
-        """
-        return self.__eeprom_controller.read(CoolingConfiguration, cooling_id, fields).serialize()
-
-    def get_cooling_configurations(self, fields=None):
-        """
-        Get all cooling_configurations.
-
-        :param fields: The field of the cooling_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of cooling_configuration dict: contains 'id' (Id), 'auto_fri' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_mon' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sat' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sun' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_thu' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_tue' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_wed' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'name' (String[16]), 'output0' (Byte), 'output1' (Byte), 'permanent_manual' (Boolean), 'pid_d' (Byte), 'pid_i' (Byte), 'pid_int' (Byte), 'pid_p' (Byte), 'room' (Byte), 'sensor' (Byte), 'setp0' (Temp), 'setp1' (Temp), 'setp2' (Temp), 'setp3' (Temp), 'setp4' (Temp), 'setp5' (Temp)
-        """
-        return [o.serialize() for o in self.__eeprom_controller.read_all(CoolingConfiguration, fields)]
-
-    def set_cooling_configuration(self, config):
-        """
-        Set one cooling_configuration.
-
-        :param config: The cooling_configuration to set
-        :type config: cooling_configuration dict: contains 'id' (Id), 'auto_fri' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_mon' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sat' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sun' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_thu' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_tue' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_wed' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'name' (String[16]), 'output0' (Byte), 'output1' (Byte), 'permanent_manual' (Boolean), 'pid_d' (Byte), 'pid_i' (Byte), 'pid_int' (Byte), 'pid_p' (Byte), 'room' (Byte), 'sensor' (Byte), 'setp0' (Temp), 'setp1' (Temp), 'setp2' (Temp), 'setp3' (Temp), 'setp4' (Temp), 'setp5' (Temp)
-        """
-        self.__eeprom_controller.write(CoolingConfiguration.deserialize(config))
-        self.__observer.invalidate_cache(Observer.Types.THERMOSTATS)
-
-    def set_cooling_configurations(self, config):
-        """
-        Set multiple cooling_configurations.
-
-        :param config: The list of cooling_configurations to set
-        :type config: list of cooling_configuration dict: contains 'id' (Id), 'auto_fri' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_mon' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sat' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sun' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_thu' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_tue' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_wed' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'name' (String[16]), 'output0' (Byte), 'output1' (Byte), 'permanent_manual' (Boolean), 'pid_d' (Byte), 'pid_i' (Byte), 'pid_int' (Byte), 'pid_p' (Byte), 'room' (Byte), 'sensor' (Byte), 'setp0' (Temp), 'setp1' (Temp), 'setp2' (Temp), 'setp3' (Temp), 'setp4' (Temp), 'setp5' (Temp)
-        """
-        self.__eeprom_controller.write_batch([CoolingConfiguration.deserialize(o) for o in config])
-        self.__observer.invalidate_cache(Observer.Types.THERMOSTATS)
-
-    def get_cooling_pump_group_configuration(self, pump_group_id, fields=None):
-        """
-        Get a specific cooling_pump_group_configuration defined by its id.
-
-        :param pump_group_id: The id of the cooling_pump_group_configuration
-        :type pump_group_id: Id
-        :param fields: The field of the cooling_pump_group_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: cooling_pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        return self.__eeprom_controller.read(CoolingPumpGroupConfiguration, pump_group_id, fields).serialize()
-
-    def get_cooling_pump_group_configurations(self, fields=None):
-        """
-        Get all cooling_pump_group_configurations.
-
-        :param fields: The field of the cooling_pump_group_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of cooling_pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        return [o.serialize() for o in self.__eeprom_controller.read_all(CoolingPumpGroupConfiguration, fields)]
-
-    def set_cooling_pump_group_configuration(self, config):
-        """
-        Set one cooling_pump_group_configuration.
-
-        :param config: The cooling_pump_group_configuration to set
-        :type config: cooling_pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        self.__eeprom_controller.write(CoolingPumpGroupConfiguration.deserialize(config))
-
-    def set_cooling_pump_group_configurations(self, config):
-        """
-        Set multiple cooling_pump_group_configurations.
-
-        :param config: The list of cooling_pump_group_configurations to set
-        :type config: list of cooling_pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        self.__eeprom_controller.write_batch([CoolingPumpGroupConfiguration.deserialize(o) for o in config])
-
-    def get_global_rtd10_configuration(self, fields=None):
-        """
-        Get the global_rtd10_configuration.
-
-        :param fields: The field of the global_rtd10_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: global_rtd10_configuration dict: contains 'output_value_cooling_16' (Byte), 'output_value_cooling_16_5' (Byte), 'output_value_cooling_17' (Byte), 'output_value_cooling_17_5' (Byte), 'output_value_cooling_18' (Byte), 'output_value_cooling_18_5' (Byte), 'output_value_cooling_19' (Byte), 'output_value_cooling_19_5' (Byte), 'output_value_cooling_20' (Byte), 'output_value_cooling_20_5' (Byte), 'output_value_cooling_21' (Byte), 'output_value_cooling_21_5' (Byte), 'output_value_cooling_22' (Byte), 'output_value_cooling_22_5' (Byte), 'output_value_cooling_23' (Byte), 'output_value_cooling_23_5' (Byte), 'output_value_cooling_24' (Byte), 'output_value_heating_16' (Byte), 'output_value_heating_16_5' (Byte), 'output_value_heating_17' (Byte), 'output_value_heating_17_5' (Byte), 'output_value_heating_18' (Byte), 'output_value_heating_18_5' (Byte), 'output_value_heating_19' (Byte), 'output_value_heating_19_5' (Byte), 'output_value_heating_20' (Byte), 'output_value_heating_20_5' (Byte), 'output_value_heating_21' (Byte), 'output_value_heating_21_5' (Byte), 'output_value_heating_22' (Byte), 'output_value_heating_22_5' (Byte), 'output_value_heating_23' (Byte), 'output_value_heating_23_5' (Byte), 'output_value_heating_24' (Byte)
-        """
-        return self.__eeprom_controller.read(GlobalRTD10Configuration, fields).serialize()
-
-    def set_global_rtd10_configuration(self, config):
-        """
-        Set the global_rtd10_configuration.
-
-        :param config: The global_rtd10_configuration to set
-        :type config: global_rtd10_configuration dict: contains 'output_value_cooling_16' (Byte), 'output_value_cooling_16_5' (Byte), 'output_value_cooling_17' (Byte), 'output_value_cooling_17_5' (Byte), 'output_value_cooling_18' (Byte), 'output_value_cooling_18_5' (Byte), 'output_value_cooling_19' (Byte), 'output_value_cooling_19_5' (Byte), 'output_value_cooling_20' (Byte), 'output_value_cooling_20_5' (Byte), 'output_value_cooling_21' (Byte), 'output_value_cooling_21_5' (Byte), 'output_value_cooling_22' (Byte), 'output_value_cooling_22_5' (Byte), 'output_value_cooling_23' (Byte), 'output_value_cooling_23_5' (Byte), 'output_value_cooling_24' (Byte), 'output_value_heating_16' (Byte), 'output_value_heating_16_5' (Byte), 'output_value_heating_17' (Byte), 'output_value_heating_17_5' (Byte), 'output_value_heating_18' (Byte), 'output_value_heating_18_5' (Byte), 'output_value_heating_19' (Byte), 'output_value_heating_19_5' (Byte), 'output_value_heating_20' (Byte), 'output_value_heating_20_5' (Byte), 'output_value_heating_21' (Byte), 'output_value_heating_21_5' (Byte), 'output_value_heating_22' (Byte), 'output_value_heating_22_5' (Byte), 'output_value_heating_23' (Byte), 'output_value_heating_23_5' (Byte), 'output_value_heating_24' (Byte)
-        """
-        self.__eeprom_controller.write(GlobalRTD10Configuration.deserialize(config))
-
-    def get_rtd10_heating_configuration(self, heating_id, fields=None):
-        """
-        Get a specific rtd10_heating_configuration defined by its id.
-
-        :param heating_id: The id of the rtd10_heating_configuration
-        :type heating_id: Id
-        :param fields: The field of the rtd10_heating_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: rtd10_heating_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        return self.__eeprom_controller.read(RTD10HeatingConfiguration, heating_id, fields).serialize()
-
-    def get_rtd10_heating_configurations(self, fields=None):
-        """
-        Get all rtd10_heating_configurations.
-
-        :param fields: The field of the rtd10_heating_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of rtd10_heating_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        return [o.serialize() for o in self.__eeprom_controller.read_all(RTD10HeatingConfiguration, fields)]
-
-    def set_rtd10_heating_configuration(self, config):
-        """
-        Set one rtd10_heating_configuration.
-
-        :param config: The rtd10_heating_configuration to set
-        :type config: rtd10_heating_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        self.__eeprom_controller.write(RTD10HeatingConfiguration.deserialize(config))
-
-    def set_rtd10_heating_configurations(self, config):
-        """
-        Set multiple rtd10_heating_configurations.
-
-        :param config: The list of rtd10_heating_configurations to set
-        :type config: list of rtd10_heating_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        self.__eeprom_controller.write_batch([RTD10HeatingConfiguration.deserialize(o) for o in config])
-
-    def get_rtd10_cooling_configuration(self, cooling_id, fields=None):
-        """
-        Get a specific rtd10_cooling_configuration defined by its id.
-
-        :param cooling_id: The id of the rtd10_cooling_configuration
-        :type cooling_id: Id
-        :param fields: The field of the rtd10_cooling_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: rtd10_cooling_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        return self.__eeprom_controller.read(RTD10CoolingConfiguration, cooling_id, fields).serialize()
-
-    def get_rtd10_cooling_configurations(self, fields=None):
-        """
-        Get all rtd10_cooling_configurations.
-
-        :param fields: The field of the rtd10_cooling_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of rtd10_cooling_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        return [o.serialize() for o in self.__eeprom_controller.read_all(RTD10CoolingConfiguration, fields)]
-
-    def set_rtd10_cooling_configuration(self, config):
-        """
-        Set one rtd10_cooling_configuration.
-
-        :param config: The rtd10_cooling_configuration to set
-        :type config: rtd10_cooling_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        self.__eeprom_controller.write(RTD10CoolingConfiguration.deserialize(config))
-
-    def set_rtd10_cooling_configurations(self, config):
-        """
-        Set multiple rtd10_cooling_configurations.
-
-        :param config: The list of rtd10_cooling_configurations to set
-        :type config: list of rtd10_cooling_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        self.__eeprom_controller.write_batch([RTD10CoolingConfiguration.deserialize(o) for o in config])
-
     def get_group_action_configuration(self, group_action_id, fields=None):
+        # type: (int, Any) -> Dict[str,Any]
         """
         Get a specific group_action_configuration defined by its id.
 
@@ -1949,9 +951,10 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: group_action_configuration dict: contains 'id' (Id), 'actions' (Actions[16]), 'name' (String[16])
         """
-        return self.__eeprom_controller.read(GroupActionConfiguration, group_action_id, fields).serialize()
+        return self.__master_controller.load_group_action_configuration(group_action_id, fields=fields)
 
     def get_group_action_configurations(self, fields=None):
+        # type: (Any) -> List[Dict[str,Any]]
         """
         Get all group_action_configurations.
 
@@ -1959,27 +962,30 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: list of group_action_configuration dict: contains 'id' (Id), 'actions' (Actions[16]), 'name' (String[16])
         """
-        return [o.serialize() for o in self.__eeprom_controller.read_all(GroupActionConfiguration, fields)]
+        return self.__master_controller.load_group_action_configurations(fields=fields)
 
     def set_group_action_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one group_action_configuration.
 
         :param config: The group_action_configuration to set
         :type config: group_action_configuration dict: contains 'id' (Id), 'actions' (Actions[16]), 'name' (String[16])
         """
-        self.__eeprom_controller.write(GroupActionConfiguration.deserialize(config))
+        self.__master_controller.save_group_action_configuration(config)
 
     def set_group_action_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple group_action_configurations.
 
         :param config: The list of group_action_configurations to set
         :type config: list of group_action_configuration dict: contains 'id' (Id), 'actions' (Actions[16]), 'name' (String[16])
         """
-        self.__eeprom_controller.write_batch([GroupActionConfiguration.deserialize(o) for o in config])
+        self.__master_controller.save_group_action_configurations(config)
 
     def get_scheduled_action_configuration(self, scheduled_action_id, fields=None):
+        # type: (int, Any) -> Dict[str,Any]
         """
         Get a specific scheduled_action_configuration defined by its id.
 
@@ -1989,9 +995,10 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: scheduled_action_configuration dict: contains 'id' (Id), 'action' (Actions[1]), 'day' (Byte), 'hour' (Byte), 'minute' (Byte)
         """
-        return self.__eeprom_controller.read(ScheduledActionConfiguration, scheduled_action_id, fields).serialize()
+        return self.__master_controller.load_scheduled_action_configuration(scheduled_action_id, fields=fields)
 
     def get_scheduled_action_configurations(self, fields=None):
+        # type: (Any) -> List[Dict[str,Any]]
         """
         Get all scheduled_action_configurations.
 
@@ -1999,27 +1006,30 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: list of scheduled_action_configuration dict: contains 'id' (Id), 'action' (Actions[1]), 'day' (Byte), 'hour' (Byte), 'minute' (Byte)
         """
-        return [o.serialize() for o in self.__eeprom_controller.read_all(ScheduledActionConfiguration, fields)]
+        return self.__master_controller.load_scheduled_action_configurations(fields=fields)
 
     def set_scheduled_action_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one scheduled_action_configuration.
 
         :param config: The scheduled_action_configuration to set
         :type config: scheduled_action_configuration dict: contains 'id' (Id), 'action' (Actions[1]), 'day' (Byte), 'hour' (Byte), 'minute' (Byte)
         """
-        self.__eeprom_controller.write(ScheduledActionConfiguration.deserialize(config))
+        self.__master_controller.save_scheduled_action_configuration(config)
 
     def set_scheduled_action_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple scheduled_action_configurations.
 
         :param config: The list of scheduled_action_configurations to set
         :type config: list of scheduled_action_configuration dict: contains 'id' (Id), 'action' (Actions[1]), 'day' (Byte), 'hour' (Byte), 'minute' (Byte)
         """
-        self.__eeprom_controller.write_batch([ScheduledActionConfiguration.deserialize(o) for o in config])
+        self.__master_controller.save_scheduled_action_configurations(config)
 
     def get_startup_action_configuration(self, fields=None):
+        # type: (Any) -> Dict[str,Any]
         """
         Get the startup_action_configuration.
 
@@ -2027,18 +1037,20 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: startup_action_configuration dict: contains 'actions' (Actions[100])
         """
-        return self.__eeprom_controller.read(StartupActionConfiguration, fields).serialize()
+        return self.__master_controller.load_startup_action_configuration(fields=fields)
 
     def set_startup_action_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set the startup_action_configuration.
 
         :param config: The startup_action_configuration to set
         :type config: startup_action_configuration dict: contains 'actions' (Actions[100])
         """
-        self.__eeprom_controller.write(StartupActionConfiguration.deserialize(config))
+        self.__master_controller.save_startup_action_configuration(config)
 
     def get_dimmer_configuration(self, fields=None):
+        # type: (Any) -> Dict[str,Any]
         """
         Get the dimmer_configuration.
 
@@ -2046,41 +1058,20 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: dimmer_configuration dict: contains 'dim_memory' (Byte), 'dim_step' (Byte), 'dim_wait_cycle' (Byte), 'min_dim_level' (Byte)
         """
-        return self.__eeprom_controller.read(DimmerConfiguration, fields).serialize()
+        return self.__master_controller.load_dimmer_configuration(fields=fields)
 
     def set_dimmer_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set the dimmer_configuration.
 
         :param config: The dimmer_configuration to set
         :type config: dimmer_configuration dict: contains 'dim_memory' (Byte), 'dim_step' (Byte), 'dim_wait_cycle' (Byte), 'min_dim_level' (Byte)
         """
-        self.__eeprom_controller.write(DimmerConfiguration.deserialize(config))
-
-    def get_global_thermostat_configuration(self, fields=None):
-        """
-        Get the global_thermostat_configuration.
-
-        :param fields: The field of the global_thermostat_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: global_thermostat_configuration dict: contains 'outside_sensor' (Byte), 'pump_delay' (Byte), 'switch_to_cooling_output_0' (Byte), 'switch_to_cooling_output_1' (Byte), 'switch_to_cooling_output_2' (Byte), 'switch_to_cooling_output_3' (Byte), 'switch_to_cooling_value_0' (Byte), 'switch_to_cooling_value_1' (Byte), 'switch_to_cooling_value_2' (Byte), 'switch_to_cooling_value_3' (Byte), 'switch_to_heating_output_0' (Byte), 'switch_to_heating_output_1' (Byte), 'switch_to_heating_output_2' (Byte), 'switch_to_heating_output_3' (Byte), 'switch_to_heating_value_0' (Byte), 'switch_to_heating_value_1' (Byte), 'switch_to_heating_value_2' (Byte), 'switch_to_heating_value_3' (Byte), 'threshold_temp' (Temp)
-        """
-        return self.__eeprom_controller.read(GlobalThermostatConfiguration, fields).serialize()
-
-    def set_global_thermostat_configuration(self, config):
-        """
-        Set the global_thermostat_configuration.
-
-        :param config: The global_thermostat_configuration to set
-        :type config: global_thermostat_configuration dict: contains 'outside_sensor' (Byte), 'pump_delay' (Byte), 'switch_to_cooling_output_0' (Byte), 'switch_to_cooling_output_1' (Byte), 'switch_to_cooling_output_2' (Byte), 'switch_to_cooling_output_3' (Byte), 'switch_to_cooling_value_0' (Byte), 'switch_to_cooling_value_1' (Byte), 'switch_to_cooling_value_2' (Byte), 'switch_to_cooling_value_3' (Byte), 'switch_to_heating_output_0' (Byte), 'switch_to_heating_output_1' (Byte), 'switch_to_heating_output_2' (Byte), 'switch_to_heating_output_3' (Byte), 'switch_to_heating_value_0' (Byte), 'switch_to_heating_value_1' (Byte), 'switch_to_heating_value_2' (Byte), 'switch_to_heating_value_3' (Byte), 'threshold_temp' (Temp)
-        """
-        if 'outside_sensor' in config:
-            if config['outside_sensor'] == 255:
-                config['threshold_temp'] = 50  # Works around a master issue where the thermostat would be turned off in case there is no outside sensor.
-        self.__eeprom_controller.write(GlobalThermostatConfiguration.deserialize(config))
-        self.__observer.invalidate_cache(Observer.Types.THERMOSTATS)
+        self.__master_controller.save_dimmer_configuration(config)
 
     def get_can_led_configuration(self, can_led_id, fields=None):
+        # type: (int, Any) -> Dict[str,Any]
         """
         Get a specific can_led_configuration defined by its id.
 
@@ -2090,9 +1081,10 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
         """
-        return self.__eeprom_controller.read(CanLedConfiguration, can_led_id, fields).serialize()
+        return self.__master_controller.load_can_led_configuration(can_led_id, fields=fields)
 
     def get_can_led_configurations(self, fields=None):
+        # type: (Any) -> List[Dict[str,Any]]
         """
         Get all can_led_configurations.
 
@@ -2100,27 +1092,30 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: list of can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
         """
-        return [o.serialize() for o in self.__eeprom_controller.read_all(CanLedConfiguration, fields)]
+        return self.__master_controller.load_can_led_configurations(fields=fields)
 
     def set_can_led_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one can_led_configuration.
 
         :param config: The can_led_configuration to set
         :type config: can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
         """
-        self.__eeprom_controller.write(CanLedConfiguration.deserialize(config))
+        self.__master_controller.save_can_led_configuration(config)
 
     def set_can_led_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple can_led_configurations.
 
         :param config: The list of can_led_configurations to set
         :type config: list of can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
         """
-        self.__eeprom_controller.write_batch([CanLedConfiguration.deserialize(o) for o in config])
+        self.__master_controller.save_can_led_configurations(config)
 
     def get_room_configuration(self, room_id, fields=None):
+        # type: (int, Any) -> Dict[str,Any]
         """
         Get a specific room_configuration defined by its id.
 
@@ -2130,9 +1125,10 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: room_configuration dict: contains 'id' (Id), 'floor' (Byte), 'name' (String)
         """
-        return self.__eeprom_controller.read(RoomConfiguration, room_id, fields).serialize()
+        return self.__master_controller.load_room_configuration(room_id, fields=fields)
 
     def get_room_configurations(self, fields=None):
+        # type: (Any) -> List[Dict[str,Any]]
         """
         Get all room_configurations.
 
@@ -2140,32 +1136,33 @@ class GatewayApi(object):
         :type fields: List of strings
         :returns: list of room_configuration dict: contains 'id' (Id), 'floor' (Byte), 'name' (String)
         """
-        return [o.serialize() for o in self.__eeprom_controller.read_all(RoomConfiguration, fields)]
+        return self.__master_controller.load_room_configurations(fields=fields)
 
     def set_room_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one room_configuration.
 
         :param config: The room_configuration to set
         :type config: room_configuration dict: contains 'id' (Id), 'floor' (Byte), 'name' (String)
         """
-        self.__eeprom_controller.write(RoomConfiguration.deserialize(config))
+        return self.__master_controller.save_room_configuration(config)
 
     def set_room_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple room_configurations.
 
         :param config: The list of room_configurations to set
         :type config: list of room_configuration dict: contains 'id' (Id), 'floor' (Byte), 'name' (String)
         """
-        self.__eeprom_controller.write_batch([RoomConfiguration.deserialize(o) for o in config])
+        return self.__master_controller.save_room_configurations(config)
 
     # End of auto generated functions
 
-    def get_reset_eeprom_dirty_flag(self):
-        dirty = self.__eeprom_controller.dirty
-        self.__eeprom_controller.dirty = False
-        return dirty
+    def get_configuration_dirty_flag(self):
+        # type: () -> bool
+        return self.__master_controller.get_configuration_dirty_flag()
 
     # Power functions
 
@@ -2187,7 +1184,11 @@ class GatewayApi(object):
 
         def translate_address(_module):
             """ Translate the address from an integer to the external address format (eg. E1). """
-            _module['address'] = 'E' + str(_module['address'])
+            if _module['version'] == power_api.P1_CONCENTRATOR:
+                module_type = 'C'
+            else:
+                module_type = 'E'
+            _module['address'] = '{0}{1}'.format(module_type, _module['address'])
             return _module
 
         return [translate_address(mod) for mod in modules]
@@ -2212,7 +1213,9 @@ class GatewayApi(object):
 
             version = self.__power_controller.get_version(mod['id'])
             addr = self.__power_controller.get_address(mod['id'])
-            if version == power_api.POWER_API_8_PORTS:
+            if version == power_api.P1_CONCENTRATOR:
+                continue  # TODO: Should raise an exception once the frontends know about the P1C
+            elif version == power_api.POWER_MODULE:
                 def _check_sid(key):
                     # 2 = 25A, 3 = 50A
                     if mod[key] in [2, 3]:
@@ -2222,7 +1225,7 @@ class GatewayApi(object):
                     addr, power_api.set_sensor_types(version),
                     *[_check_sid('sensor{0}'.format(i)) for i in xrange(power_api.NUM_PORTS[version])]
                 )
-            elif version == power_api.POWER_API_12_PORTS:
+            elif version == power_api.ENERGY_MODULE:
                 def _convert_ccf(key):
                     try:
                         if mod[key] == 2:  # 12.5 A
@@ -2268,27 +1271,49 @@ class GatewayApi(object):
                 version = modules[module_id]['version']
                 num_ports = power_api.NUM_PORTS[version]
 
-                if version == power_api.POWER_API_8_PORTS:
-                    raw_volt = self.__power_communicator.do_command(addr,
-                                                                    power_api.get_voltage(version))
-                    raw_freq = self.__power_communicator.do_command(addr,
-                                                                    power_api.get_frequency(version))
+                volt = [0.0] * num_ports  # TODO: Initialse to None is supported upstream
+                freq = [0.0] * num_ports
+                current = [0.0] * num_ports
+                power = [0.0] * num_ports
+                if version in [power_api.POWER_MODULE, power_api.ENERGY_MODULE]:
+                    if version == power_api.POWER_MODULE:
+                        raw_volt = self.__power_communicator.do_command(addr, power_api.get_voltage(version))
+                        raw_freq = self.__power_communicator.do_command(addr, power_api.get_frequency(version))
 
-                    volt = [raw_volt[0] for _ in range(num_ports)]
-                    freq = [raw_freq[0] for _ in range(num_ports)]
+                        volt = [raw_volt[0]] * num_ports
+                        freq = [raw_freq[0]] * num_ports
+                    else:
+                        volt = self.__power_communicator.do_command(addr, power_api.get_voltage(version))
+                        freq = self.__power_communicator.do_command(addr, power_api.get_frequency(version))
 
-                elif version == power_api.POWER_API_12_PORTS:
-                    volt = self.__power_communicator.do_command(addr,
-                                                                power_api.get_voltage(version))
-                    freq = self.__power_communicator.do_command(addr,
-                                                                power_api.get_frequency(version))
+                    current = self.__power_communicator.do_command(addr, power_api.get_current(version))
+                    power = self.__power_communicator.do_command(addr, power_api.get_power(version))
+                elif version == power_api.P1_CONCENTRATOR:
+                    status = self.__power_communicator.do_command(addr, power_api.get_status_p1(version))[0]
+                    raw_volt = self.__power_communicator.do_command(addr, power_api.get_voltage(version, phase=1))[0]  # TODO: Average?
+                    raw_current_ph1 = self.__power_communicator.do_command(addr, power_api.get_current(version, phase=1))[0]
+                    raw_current_ph2 = self.__power_communicator.do_command(addr, power_api.get_current(version, phase=2))[0]
+                    raw_current_ph3 = self.__power_communicator.do_command(addr, power_api.get_current(version, phase=3))[0]
+                    delivered_power = self.__power_communicator.do_command(addr, power_api.get_delivered_power(version))[0]
+                    received_power = self.__power_communicator.do_command(addr, power_api.get_received_power(version))[0]
+                    for port in xrange(num_ports):
+                        try:
+                            if status & 1 << port:
+                                volt[port] = float(raw_volt[port * 7:(port + 1) * 7][:5])
+                                power[port] = (float(delivered_power[port * 9:(port + 1) * 9][:6]) -
+                                               float(received_power[port * 9:(port + 1) * 9][:6])) * 1000
+                                current[port] = float(raw_current_ph1[port * 5:(port + 1) * 6][:3])
+                                try:
+                                    # Phase 2 and 3 might be available on 3-phase meters. If not, the data will be
+                                    # empty and generate a ValueError. In such case, ignore the exception and move on
+                                    current[port] += (float(raw_current_ph2[port * 5:(port + 1) * 6][:3]) +
+                                                      float(raw_current_ph3[port * 5:(port + 1) * 6][:3]))
+                                except ValueError:
+                                    pass
+                        except ValueError:
+                            pass
                 else:
                     raise ValueError('Unknown power api version')
-
-                current = self.__power_communicator.do_command(addr,
-                                                               power_api.get_current(version))
-                power = self.__power_communicator.do_command(addr,
-                                                             power_api.get_power(version))
 
                 out = []
                 for i in range(num_ports):
@@ -2317,14 +1342,29 @@ class GatewayApi(object):
             try:
                 addr = modules[module_id]['address']
                 version = modules[module_id]['version']
+                num_ports = power_api.NUM_PORTS[version]
 
-                day = self.__power_communicator.do_command(addr,
-                                                           power_api.get_day_energy(version))
-                night = self.__power_communicator.do_command(addr,
-                                                             power_api.get_night_energy(version))
+                day = [0] * num_ports  # TODO: Initialse to None is supported upstream
+                night = [0] * num_ports
+                if version in [power_api.ENERGY_MODULE, power_api.POWER_MODULE]:
+                    day = self.__power_communicator.do_command(addr, power_api.get_day_energy(version))
+                    night = self.__power_communicator.do_command(addr, power_api.get_night_energy(version))
+                elif version == power_api.P1_CONCENTRATOR:
+                    status = self.__power_communicator.do_command(addr, power_api.get_status_p1(version))[0]
+                    raw_day = self.__power_communicator.do_command(addr, power_api.get_day_energy(version))[0]
+                    raw_night = self.__power_communicator.do_command(addr, power_api.get_night_energy(version))[0]
+                    for port in xrange(num_ports):
+                        try:
+                            if status & 1 << port:
+                                day[port] = int(float(raw_day[port * 14:(port + 1) * 14][:10]) * 1000)
+                                night[port] = int(float(raw_night[port * 14:(port + 1) * 14][:10]) * 1000)
+                        except ValueError:
+                            pass
+                else:
+                    raise ValueError('Unknown power api version')
 
                 out = []
-                for i in range(power_api.NUM_PORTS[version]):
+                for i in range(num_ports):
                     out.append([convert_nan(day[i]), convert_nan(night[i])])
 
                 output[str(module_id)] = out
@@ -2375,7 +1415,7 @@ class GatewayApi(object):
 
         addr = self.__power_controller.get_address(module_id)
         version = self.__power_controller.get_version(module_id)
-        if version != power_api.POWER_API_12_PORTS:
+        if version != power_api.ENERGY_MODULE:
             raise ValueError('Unknown power api version')
         self.__power_communicator.do_command(addr, power_api.set_voltage(), voltage)
         return dict()
@@ -2390,7 +1430,7 @@ class GatewayApi(object):
 
         addr = self.__power_controller.get_address(module_id)
         version = self.__power_controller.get_version(module_id)
-        if version != power_api.POWER_API_12_PORTS:
+        if version != power_api.ENERGY_MODULE:
             raise ValueError('Unknown power api version')
         if input_id is None:
             input_ids = range(12)
@@ -2425,7 +1465,7 @@ class GatewayApi(object):
 
         addr = self.__power_controller.get_address(module_id)
         version = self.__power_controller.get_version(module_id)
-        if version != power_api.POWER_API_12_PORTS:
+        if version != power_api.ENERGY_MODULE:
             raise ValueError('Unknown power api version')
         if input_id is None:
             input_ids = range(12)

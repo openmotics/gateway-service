@@ -14,8 +14,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 Module to communicate with the power modules.
-
-@author: fryckbos
 """
 
 import logging
@@ -25,7 +23,7 @@ from ioc import Injectable, Inject, INJECTED, Singleton
 from threading import Thread, RLock
 from serial_utils import printable, CommunicationTimedOutException
 from power import power_api
-from power.power_command import crc7
+from power.power_command import crc7, crc8
 from power.time_keeper import TimeKeeper
 
 logger = logging.getLogger("openmotics")
@@ -44,12 +42,10 @@ class PowerCommunicator(object):
         :param power_serial: Serial port to communicate with
         :type power_serial: Instance of :class`RS485`
         :param verbose: Print all serial communication to stdout.
-        :type verbose: boolean.
+        :type verbose: bool
         """
         self.__serial = power_serial
         self.__serial_lock = RLock()
-        self.__serial_bytes_written = 0
-        self.__serial_bytes_read = 0
         self.__cid = 1
 
         self.__address_mode = False
@@ -65,6 +61,14 @@ class PowerCommunicator(object):
         else:
             self.__time_keeper = None
 
+        self.__communication_stats = {'calls_succeeded': [],
+                                      'calls_timedout': [],
+                                      'bytes_written': 0,
+                                      'bytes_read': 0}
+        self.__debug_buffer = {'read': {},
+                               'write': {}}
+        self.__debug_buffer_duration = 300
+
         self.__verbose = verbose
 
     def start(self):
@@ -72,13 +76,11 @@ class PowerCommunicator(object):
         if self.__time_keeper is not None:
             self.__time_keeper.start()
 
-    def get_bytes_written(self):
-        """ Get the number of bytes written to the power modules. """
-        return self.__serial_bytes_written
+    def get_communication_statistics(self):
+        return self.__communication_stats
 
-    def get_bytes_read(self):
-        """ Get the number of bytes read from the power modules. """
-        return self.__serial_bytes_read
+    def get_debug_buffer(self):
+        return self.__debug_buffer
 
     def get_seconds_since_last_success(self):
         """ Get the number of seconds since the last successful communication. """
@@ -106,7 +108,12 @@ class PowerCommunicator(object):
         if self.__verbose:
             PowerCommunicator.__log('writing to', data)
         self.__serial.write(data)
-        self.__serial_bytes_written += len(data)
+        self.__communication_stats['bytes_written'] += len(data)
+        threshold = time.time() - self.__debug_buffer_duration
+        self.__debug_buffer['write'][time.time()] = printable(data)
+        for t in self.__debug_buffer['write'].keys():
+            if t < threshold:
+                del self.__debug_buffer['write'][t]
 
     def do_command(self, address, cmd, *data):
         """ Send a command over the serial port and block until an answer is received.
@@ -127,32 +134,42 @@ class PowerCommunicator(object):
 
         def do_once(_address, _cmd, *_data):
             """ Send the command once. """
-            cid = self.__get_cid()
-            send_data = _cmd.create_input(_address, cid, *_data)
-            self.__write_to_serial(send_data)
+            try:
+                cid = self.__get_cid()
+                send_data = _cmd.create_input(_address, cid, *_data)
+                self.__write_to_serial(send_data)
 
-            if _address == power_api.BROADCAST_ADDRESS:
-                return None  # No reply on broadcast messages !
-            else:
-                tries = 0
-                while True:
-                    # In this loop we might receive data that didn't match the expected header. This might happen
-                    # if we for some reason had a timeout on the previous call, and we now read the response
-                    # to that call. In this case, we just re-try (up to 3 times), as the correct data might be
-                    # next in line.
-                    header, response_data = self.__read_from_serial()
-                    if not _cmd.check_header(header, _address, cid):
-                        if _cmd.is_nack(header, _address, cid) and response_data == "\x02":
-                            raise UnkownCommandException('Unknown command')
-                        tries += 1
-                        logger.warning("Header did not match command ({0})".format(tries))
-                        if tries == 3:
-                            raise Exception("Header did not match command ({0})".format(tries))
-                    else:
-                        break
+                if _address == power_api.BROADCAST_ADDRESS:
+                    self.__communication_stats['calls_succeeded'].append(time.time())
+                    self.__communication_stats['calls_succeeded'] = self.__communication_stats['calls_succeeded'][-50:]
+                    return None  # No reply on broadcast messages !
+                else:
+                    tries = 0
+                    while True:
+                        # In this loop we might receive data that didn't match the expected header. This might happen
+                        # if we for some reason had a timeout on the previous call, and we now read the response
+                        # to that call. In this case, we just re-try (up to 3 times), as the correct data might be
+                        # next in line.
+                        header, response_data = self.__read_from_serial()
+                        if not _cmd.check_header(header, _address, cid):
+                            if _cmd.is_nack(header, _address, cid) and response_data == "\x02":
+                                raise UnkownCommandException('Unknown command')
+                            tries += 1
+                            logger.warning("Header did not match command ({0})".format(tries))
+                            if tries == 3:
+                                raise Exception("Header did not match command ({0})".format(tries))
+                        else:
+                            break
 
-                self.__last_success = time.time()
-                return _cmd.read_output(response_data)
+                    self.__last_success = time.time()
+                    return_data = _cmd.read_output(response_data)
+                    self.__communication_stats['calls_succeeded'].append(time.time())
+                    self.__communication_stats['calls_succeeded'] = self.__communication_stats['calls_succeeded'][-50:]
+                    return return_data
+            except CommunicationTimedOutException:
+                self.__communication_stats['calls_timedout'].append(time.time())
+                self.__communication_stats['calls_timedout'] = self.__communication_stats['calls_timedout'][-50:]
+                raise
 
         with self.__serial_lock:
             try:
@@ -193,17 +210,25 @@ class PowerCommunicator(object):
         if self.__power_controller is None:
             self.__address_mode = False
             self.__address_thread = None
+            return
 
         expire = time.time() + self.__address_mode_timeout
-        address_mode = power_api.set_addressmode()
-        want_an_address_8 = power_api.want_an_address(power_api.POWER_API_8_PORTS)
-        want_an_address_12 = power_api.want_an_address(power_api.POWER_API_12_PORTS)
-        set_address = power_api.set_address()
+        address_mode = power_api.set_addressmode(power_api.ENERGY_MODULE)
+        address_mode_p1c = power_api.set_addressmode(power_api.P1_CONCENTRATOR)
+        want_an_address_8 = power_api.want_an_address(power_api.POWER_MODULE)
+        want_an_address_12 = power_api.want_an_address(power_api.ENERGY_MODULE)
+        want_an_address_p1c = power_api.want_an_address(power_api.P1_CONCENTRATOR)
+        set_address = power_api.set_address(power_api.ENERGY_MODULE)
+        set_address_p1c = power_api.set_address(power_api.P1_CONCENTRATOR)
 
         # AGT start
         data = address_mode.create_input(power_api.BROADCAST_ADDRESS,
                                          self.__get_cid(),
                                          power_api.ADDRESS_MODE)
+        self.__write_to_serial(data)
+        data = address_mode_p1c.create_input(power_api.BROADCAST_ADDRESS,
+                                             self.__get_cid(),
+                                             power_api.ADDRESS_MODE)
         self.__write_to_serial(data)
 
         # Wait for WAA and answer.
@@ -211,11 +236,19 @@ class PowerCommunicator(object):
             try:
                 header, data = self.__read_from_serial()
 
-                waa_8 = want_an_address_8.check_header_partial(header)
-                waa_12 = want_an_address_12.check_header_partial(header)
+                if set_address.check_header_partial(header) or set_address_p1c.check_header_partial(header):
+                    continue
 
-                if not waa_8 and not waa_12:
-                    logger.warning("Received non WAA/WAD message in address mode")
+                version = None
+                if want_an_address_8.check_header_partial(header):
+                    version = power_api.POWER_MODULE
+                elif want_an_address_12.check_header_partial(header):
+                    version = power_api.ENERGY_MODULE
+                elif want_an_address_p1c.check_header_partial(header):
+                    version = power_api.P1_CONCENTRATOR
+
+                if version is None:
+                    logger.warning("Received unexpected message in address mode")
                 else:
                     (old_address, cid) = (ord(header[:2][1]), header[2:3])
                     # Ask power_controller for new address, and register it.
@@ -224,28 +257,32 @@ class PowerCommunicator(object):
                     if self.__power_controller.module_exists(old_address):
                         self.__power_controller.readdress_power_module(old_address, new_address)
                     else:
-                        version = power_api.POWER_API_8_PORTS if waa_8 else power_api.POWER_API_12_PORTS
-
                         self.__power_controller.register_power_module(new_address, version)
 
-                    # Send new address to power module
-                    address_data = set_address.create_input(old_address, ord(cid), new_address)
+                    # Send new address to module
+                    if version == power_api.P1_CONCENTRATOR:
+                        address_data = set_address_p1c.create_input(old_address, ord(cid), new_address)
+                    else:
+                        # Both power- and energy module share the same API
+                        address_data = set_address.create_input(old_address, ord(cid), new_address)
                     self.__write_to_serial(address_data)
 
             except CommunicationTimedOutException:
                 pass  # Didn't receive a command, no problem.
             except Exception as exception:
-                traceback.print_exc()
-                logger.warning("Got exception in address mode: %s", exception)
+                logger.exception("Got exception in address mode: %s", exception)
 
         # AGT stop
         data = address_mode.create_input(power_api.BROADCAST_ADDRESS,
                                          self.__get_cid(),
                                          power_api.NORMAL_MODE)
         self.__write_to_serial(data)
+        data = address_mode_p1c.create_input(power_api.BROADCAST_ADDRESS,
+                                             self.__get_cid(),
+                                             power_api.NORMAL_MODE)
+        self.__write_to_serial(data)
 
         self.__address_mode = False
-        self.__address_thread = None
 
     def stop_address_mode(self):
         """ Stop address mode. """
@@ -254,6 +291,7 @@ class PowerCommunicator(object):
 
         self.__address_mode_stop = True
         self.__address_thread.join()
+        self.__address_thread = None
 
     def in_address_mode(self):
         """ Returns whether the PowerCommunicator is in address mode. """
@@ -275,7 +313,8 @@ class PowerCommunicator(object):
             while phase < 8:
                 byte = self.__serial.read_queue.get(True, 0.25)
                 command += byte
-                self.__serial_bytes_read += 1
+                self.__communication_stats['bytes_read'] += 1
+
                 if phase == 0:  # Skip non 'R' bytes
                     if byte == 'R':
                         phase = 1
@@ -320,13 +359,20 @@ class PowerCommunicator(object):
                         phase = 8
                     else:
                         raise Exception("Unexpected character")
-            if crc7(header + data) != crc:
-                raise Exception("CRC doesn't match")
+            crc_match = (crc7(header + data) == crc) if header[0] == 'E' else (crc8(data) == crc)
+            if not crc_match:
+                raise Exception('CRC{0} doesn\'t match'.format('7' if header[0] == 'E' else '8'))
         except Empty:
             raise CommunicationTimedOutException('Communication timed out')
         finally:
             if self.__verbose:
                 PowerCommunicator.__log('reading from', command)
+
+        threshold = time.time() - self.__debug_buffer_duration
+        self.__debug_buffer['read'][time.time()] = printable(command)
+        for t in self.__debug_buffer['read'].keys():
+            if t < threshold:
+                del self.__debug_buffer['read'][t]
 
         return header, data
 

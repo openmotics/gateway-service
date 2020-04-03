@@ -21,7 +21,7 @@ import traceback
 from gateway.observer import Event
 from datetime import datetime
 from ioc import Injectable, Inject, INJECTED, Singleton
-from plugins.runner import PluginRunner
+from plugins.runner import PluginRunner, RunnerWatchdog
 
 logger = logging.getLogger("openmotics")
 
@@ -50,6 +50,7 @@ class PluginController(object):
         self.__stopped = True
         self.__logs = {}
         self.__runners = {}
+        self.__runner_watchdogs = {}
 
         self.__metrics_controller = None
         self.__metrics_collector = None
@@ -86,6 +87,7 @@ class PluginController(object):
         package_names = [o[1] for o in objects if o[2]]
 
         self.__runners = {}
+        self.__runner_watchdogs = {}
         # First initialize all plugin runners, then start them.
         for package_name in package_names:
             self.__init_plugin_runner(package_name)
@@ -104,6 +106,7 @@ class PluginController(object):
             plugin_path = os.path.join(self.__plugins_path, plugin_name)
             runner = PluginRunner(plugin_name, self.__runtime_path, plugin_path, _logger)
             self.__runners[runner.name] = runner
+            self.__runner_watchdogs[runner.name] = RunnerWatchdog(runner)
             return runner
         except Exception as exception:
             self.log(plugin_name, '[Runner] Could not initialize plugin', exception)
@@ -113,6 +116,9 @@ class PluginController(object):
         try:
             logger.info('Plugin {0}: {1}'.format(runner_name, 'Starting...'))
             runner.start()
+            watchdog = self.__runner_watchdogs.get(runner_name)
+            if watchdog is not None:
+                watchdog.start()
             if update_dependencies:
                 self.__update_dependencies()
             logger.info('Plugin {0}: {1}'.format(runner_name, 'Starting... Done'))
@@ -139,6 +145,9 @@ class PluginController(object):
             return
         try:
             logger.info('Plugin {0}: {1}'.format(runner.name, 'Stopping...'))
+            watchdog = self.__runner_watchdogs.get(runner_name)
+            if watchdog is not None:
+                watchdog.stop()
             runner.stop()
             if update_dependencies:
                 self.__update_dependencies()
@@ -159,6 +168,7 @@ class PluginController(object):
         self.__stop_plugin_runner(runner_name, False)
         self.__logs.pop(runner_name, None)
         self.__runners.pop(runner_name, None)
+        self.__runner_watchdogs.pop(runner_name, None)
 
     def __update_dependencies(self):
         """ When a runner is added/removed, this call updates all code that needs to know about plugins """
@@ -228,6 +238,8 @@ class PluginController(object):
 
             def parse_version(version_string):
                 """ Parse the version from a string "x.y.z" to a tuple(x, y, z). """
+                if version_string is None:
+                    return 0, 0, 0  # A stopped plugin doesn't announce it's version, so make sure we can update stopped plugins
                 return tuple([int(x) for x in version_string.split('.')])
 
             # Check if a newer version of the package is already installed
@@ -378,7 +390,7 @@ class PluginController(object):
 
     def __get_cherrypy_mounts(self):
         mounts = []
-        cors_enabled = self.__config_controller.get_setting('cors_enabled', False)
+        cors_enabled = self.__config_controller.get('cors_enabled', False)
         for runner in self.__iter_running_runners():
             mounts.append({'root': runner.get_webservice(self.__webinterface),
                            'script_name': '/plugins/{0}'.format(runner.name),

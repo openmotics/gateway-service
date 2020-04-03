@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenMotics Gateway
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python2 openmotics_init.py
+WorkingDirectory=/opt/openmotics/python
+RemainAfterExit=true
+SyslogIdentifier=openmotics-init
+StandardOutput=syslog
+StandardError=syslog
+
+[Install]
+WantedBy=multi-user.target

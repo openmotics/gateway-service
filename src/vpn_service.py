@@ -19,7 +19,7 @@ thermostats to the cloud, to keep the status information in the cloud in sync.
 """
 
 from platform_utils import System
-System.import_eggs()
+System.import_libs()
 
 import logging
 import os
@@ -30,7 +30,6 @@ import subprocess
 import traceback
 import constants
 import ujson as json
-
 from threading import Thread, Lock
 from collections import deque
 from ConfigParser import ConfigParser
@@ -143,7 +142,7 @@ class Cloud(object):
                 configuration_changed = cmp(self.__configuration, data['configuration']) != 0
                 if configuration_changed:
                     for setting, value in data['configuration'].iteritems():
-                        self.__config.set_setting(setting, value)
+                        self.__config.set(setting, value)
                     logger.info('configuration changed: {0}'.format(data['configuration']))
 
                 # update __configuration when storing config is successful
@@ -242,6 +241,13 @@ class Gateway(object):
             return [(inp["id"], inp["status"]) for inp in data['status']]
         return
 
+    def get_shutters_status(self):
+        """ Get the shutters status. """
+        data = self.do_call("get_shutter_status?token=None")
+        if data is not None and data['success']:
+            return [(int(shutter_id), details["state"].upper()) for shutter_id, details in data['detail'].iteritems()]
+        return
+
     def get_thermostats(self):
         """ Fetch the setpoints for the enabled thermostats from the webservice. """
         data = self.do_call("get_thermostat_status?token=None")
@@ -329,7 +335,8 @@ class VPNService(object):
         self._sleep_time = 0
         self._previous_sleep_time = 0
         self._vpn_open = False
-        self._debug_data = {}
+        self._debug_data = {'energy': {},
+                            'master': {}}
         self._eeprom_events = deque()
         self._gateway = Gateway()
         self._vpn_controller = VpnController()
@@ -341,6 +348,7 @@ class VPNService(object):
         self._collectors = {'thermostats': DataCollector(self._gateway.get_thermostats, 60),
                             'inputs': DataCollector(self._gateway.get_inputs_status),
                             'outputs': DataCollector(self._gateway.get_enabled_outputs),
+                            'shutters': DataCollector(self._gateway.get_shutters_status),
                             'pulses': DataCollector(self._gateway.get_pulse_counter_diff, 60),
                             'power': DataCollector(self._gateway.get_real_time_power),
                             'errors': DataCollector(self._gateway.get_errors, 600),
@@ -403,24 +411,28 @@ class VPNService(object):
         # > Assume broken TCP stack. No connectivity
         return False
 
-    def _get_debug_dumps(self):
-        if not self._config_controller.get_setting('cloud_support', False):
+    def _get_debug_dumps(self, dump_type):
+        if not self._config_controller.get('cloud_support', False):
             return {}
+        debug_data = self._debug_data[dump_type]
         found_timestamps = []
-        for filename in glob.glob('/tmp/debug_*.json'):
-            timestamp = int(filename.replace('/tmp/debug_', '').replace('.json', ''))
-            if timestamp not in self._debug_data:
+        for filename in glob.glob('/tmp/debug_{0}_*.json'.format(dump_type)):
+            timestamp = int(filename.replace('/tmp/debug_{0}_'.format(dump_type), '').replace('.json', ''))
+            if timestamp not in debug_data:
                 with open(filename, 'r') as debug_file:
-                    self._debug_data[timestamp] = json.load(debug_file)
+                    try:
+                        debug_data[timestamp] = json.load(debug_file)
+                    except ValueError as ex:
+                        logger.warning('Error parsing crash dump: {0}'.format(ex))
             found_timestamps.append(timestamp)
-        for timestamp in self._debug_data:
+        for timestamp in debug_data.keys():
             if timestamp not in found_timestamps:
-                del self._debug_data[timestamp]
-        return self._debug_data
+                del debug_data[timestamp]
+        return debug_data
 
-    def _clean_debug_dumps(self):
-        for timestamp in self._debug_data:
-            filename = '/tmp/debug_{0}.json'.format(timestamp)
+    def _clean_debug_dumps(self, dump_type):
+        for timestamp in self._debug_data[dump_type]:
+            filename = '/tmp/debug_{0}_{1}.json'.format(dump_type, timestamp)
             try:
                 os.remove(filename)
             except Exception as ex:
@@ -479,7 +491,7 @@ class VPNService(object):
                 start_time = time.time()
 
                 # Check whether connection to the Cloud is enabled/disabled
-                cloud_enabled = self._config_controller.get_setting('cloud_enabled')
+                cloud_enabled = self._config_controller.get('cloud_enabled')
                 if cloud_enabled is False:
                     self._sleep_time = None
                     self._set_vpn(False)
@@ -502,13 +514,18 @@ class VPNService(object):
                     data = collector.collect()
                     if data is not None:
                         call_data[collector_name] = data
-                call_data['debug'] = {'dumps': self._get_debug_dumps()}
+
+                dumps = {}
+                dumps.update(self._get_debug_dumps('energy'))
+                dumps.update(self._get_debug_dumps('master'))
+                call_data['debug'] = {'dumps': dumps}
 
                 # Send data to the cloud and see if the VPN should be opened
                 feedback = self._cloud.call_home(call_data)
 
                 if feedback['success']:
-                    self._clean_debug_dumps()
+                    self._clean_debug_dumps('energy')
+                    self._clean_debug_dumps('master')
 
                 if self._iterations > 20 and self._cloud.get_last_connect() < time.time() - REBOOT_TIMEOUT:
                     # We can't connect for over `REBOOT_TIMEOUT` seconds and we tried for at least 20 times.

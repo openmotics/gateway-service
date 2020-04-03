@@ -18,6 +18,8 @@ Contains a memory representation
 import logging
 from ioc import Inject, INJECTED
 from master_core.core_api import CoreAPI
+from master_core.core_communicator import BackgroundConsumer
+from master_core.events import Event
 
 logger = logging.getLogger("openmotics")
 
@@ -32,7 +34,8 @@ class MemoryFile(object):
     @Inject
     def __init__(self, memory_type, master_communicator=INJECTED):
         """
-        Initializes the MemoryFile instance, reprensenting one of the supported memory types
+        Initializes the MemoryFile instance, reprensenting one of the supported memory types.
+        It provides caching for EEPROM, and direct write/read through for FRAM
 
         :type master_communicator: master_core.core_communicator.CoreCommunicator
         """
@@ -41,13 +44,23 @@ class MemoryFile(object):
 
         self._core_communicator = master_communicator
         self.type = memory_type
+        self._cache = {}
         if memory_type == MemoryTypes.EEPROM:
             self._pages = 512
             self._page_length = 256
         elif memory_type == MemoryTypes.FRAM:
             self._pages = 128
             self._page_length = 256
-        self._cache = {}
+
+        if memory_type == MemoryTypes.EEPROM:
+            self._core_communicator.register_consumer(
+                BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
+            )
+
+    def _handle_event(self, data):
+        core_event = Event(data)
+        if core_event.type == Event.Types.SYSTEM and core_event.data['type'] == Event.SystemEventTypes.EEPROM_ACTIVATE:
+            self.invalidate_cache()
 
     def read(self, addresses):
         """
@@ -70,18 +83,26 @@ class MemoryFile(object):
             self.write_page(address.page, page_data)
 
     def read_page(self, page):
-        if page not in self._cache:
+        def _read_page():
             page_data = []
             for i in xrange(self._page_length / 32):
                 page_data += self._core_communicator.do_command(
                     CoreAPI.memory_read(),
                     {'type': self.type, 'page': page, 'start': i * 32, 'length': 32}
                 )['data']
-            self._cache[page] = page_data
+            return page_data
+
+        if self.type == MemoryTypes.FRAM:
+            return _read_page()
+
+        if page not in self._cache:
+            self._cache[page] = _read_page()
         return self._cache[page]
 
     def write_page(self, page, data):
-        self._cache[page] = data
+        if self.type == MemoryTypes.EEPROM:
+            self._cache[page] = data
+
         length = 32
         for i in xrange(self._page_length / length):
             start = i * length

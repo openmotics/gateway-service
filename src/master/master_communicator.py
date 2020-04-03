@@ -55,8 +55,6 @@ class MasterCommunicator(object):
         self.__serial = controller_serial
         self.__serial_write_lock = Lock()
         self.__command_lock = Lock()
-        self.__serial_bytes_written = 0
-        self.__serial_bytes_read = 0
 
         self.__cid = 1
 
@@ -73,7 +71,7 @@ class MasterCommunicator(object):
 
         self.__last_success = 0
 
-        self.__stop = False
+        self.__running = False
 
         self.__read_thread = Thread(target=self.__read, name="MasterCommunicator read thread")
         self.__read_thread.daemon = True
@@ -107,22 +105,15 @@ class MasterCommunicator(object):
             flush_serial_input()
             self.__serial.timeout = None
 
-        self.__stop = False
-        self.__read_thread.start()
+        if not self.__running:
+            self.__running = True
+            self.__read_thread.start()
 
     def stop(self):
         pass  # Not supported/used
 
     def enable_passthrough(self):
         self.__passthrough_enabled = True
-
-    def get_bytes_written(self):
-        """ Get the number of bytes written to the Master. """
-        return self.__serial_bytes_written
-
-    def get_bytes_read(self):
-        """ Get the number of bytes read from the Master. """
-        return self.__serial_bytes_read
 
     def get_communication_statistics(self):
         return self.__communication_stats
@@ -159,7 +150,6 @@ class MasterCommunicator(object):
                     del self.__debug_buffer['write'][t]
 
             self.__serial.write(data)
-            self.__serial_bytes_written += len(data)
             self.__communication_stats['bytes_written'] += len(data)
 
     def register_consumer(self, consumer):
@@ -408,13 +398,12 @@ class MasterCommunicator(object):
         read_state = ReadState()
         data = ""
 
-        while not self.__stop:
+        while self.__running:
             data += self.__serial.read(1)
             num_bytes = self.__serial.inWaiting()
             if num_bytes > 0:
                 data += self.__serial.read(num_bytes)
             if data is not None and len(data) > 0:
-                self.__serial_bytes_read += (1 + num_bytes)
                 self.__communication_stats['bytes_read'] += (1 + num_bytes)
 
                 threshold = time.time() - self.__debug_buffer_duration
@@ -537,4 +526,7 @@ class BackgroundConsumer(object):
 
     def deliver(self, output):
         """ Deliver output to the thread waiting on get(). """
-        self.callback(output)
+        try:
+            self.callback(output)
+        except Exception:
+            logger.exception('Unexpected exception delivering BackgroundConsumer payload')

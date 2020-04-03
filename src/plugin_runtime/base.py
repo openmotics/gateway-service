@@ -5,7 +5,7 @@ try:
     import ujson as json
 except ImportError:
     # This is the case when the plugin runtime is unittested
-    import json
+    import json  # type: ignore
 
 from decorators import *  # Import for backwards compatibility
 
@@ -168,7 +168,7 @@ class PluginConfigChecker(object):
             raise PluginException(PluginConfigChecker.KEY_INVALID_TYPE.format('repeat', item, 'a bool'))
 
         if ('repeat' not in item or item['repeat'] is False) and 'min' in item:
-            raise PluginException('The configuration item \'%s\' does contains a \'min\' key but is not repeatable.'.format(item))
+            raise PluginException('The configuration item \'{}\' does contains a \'min\' key but is not repeatable.'.format(item))
 
         if 'min' in item and not isinstance(item['min'], int):
             raise PluginException(PluginConfigChecker.KEY_INVALID_TYPE.format('min', item, 'an int'))
@@ -234,7 +234,7 @@ class PluginConfigChecker(object):
 
             if item['type'] == 'enum':
                 if config[name] not in item['choices']:
-                    raise PluginException('Config \'{0}\': \'{1}\' is not in the choices: {2}'.format(name, config[name], ', '.format(item['choices'])))
+                    raise PluginException('Config \'{0}\': \'{1}\' is not in the choices: {2}'.format(name, config[name], ', '.join(item['choices'])))
             elif item['type'] == 'section':
                 for config_section in config[name]:
                     try:

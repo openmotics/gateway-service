@@ -16,15 +16,20 @@
 This module collects OpenMotics metrics and makes them available to the MetricsController
 """
 
-import time
 import logging
-import psutil
-from threading import Thread, Event
+import time
 from collections import deque
-from ioc import Injectable, Inject, INJECTED, Singleton
-from serial_utils import CommunicationTimedOutException
-from gateway.observer import Event as ObserverEvent
+from threading import Event, Thread
+
+import psutil
+
 from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.observer import Event as ObserverEvent
+from ioc import INJECTED, Inject, Injectable, Singleton
+from models import Database
+from platform_utils import Hardware
+from power import power_api
+from serial_utils import CommunicationTimedOutException
 
 logger = logging.getLogger("openmotics")
 
@@ -37,12 +42,14 @@ class MetricsCollector(object):
     """
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, pulse_controller=INJECTED):
+    def __init__(self, gateway_api=INJECTED, pulse_controller=INJECTED, thermostat_controller=INJECTED):
         """
         :param gateway_api: Gateway API
         :type gateway_api: gateway.gateway_api.GatewayApi
         :param pulse_controller: Pulse Controller
         :type pulse_controller: gateway.pulses.PulseCounterController
+        :param thermostat_controller: Thermostat Controller
+        :type thermostat_controller: gateway.thermostat.thermostat_controller.ThermostatController
         """
         self._start = time.time()
         self._last_service_uptime = 0
@@ -70,6 +77,7 @@ class MetricsCollector(object):
                                         'end': 0} for metric_type in self._min_intervals}
 
         self._gateway_api = gateway_api
+        self._thermostat_controller = thermostat_controller
         self._pulse_controller = pulse_controller
         self._metrics_queue = deque()
 
@@ -199,6 +207,7 @@ class MetricsCollector(object):
             time.sleep(sleep)
 
     def process_observer_event(self, event):
+        # type: (ObserverEvent) -> None
         if event.type == ObserverEvent.Types.OUTPUT_CHANGE:
             output_id = event.data['id']
             output = self._environment['outputs'].get(output_id)
@@ -206,7 +215,9 @@ class MetricsCollector(object):
                 output.update({'status': 1 if event.data['status']['on'] else 0,
                                'dimmer': int(event.data['status'].get('value', 0))})
                 self._process_outputs([output_id], 'output')
-        # TODO: Replace `on_input` by this event handler
+        if event.type == ObserverEvent.Types.INPUT_CHANGE:
+            event_id = event.data['id']
+            self._process_input(event_id, event.data.get('status'))
 
     def _process_outputs(self, output_ids, metric_type):
         try:
@@ -234,9 +245,6 @@ class MetricsCollector(object):
                                           timestamp=now)
         except Exception as ex:
             logger.exception('Error processing outputs {0}: {1}'.format(output_ids, ex))
-
-    def on_input(self, data):
-        self._process_input(data['input'], data.get('status'))
 
     def _process_input(self, input_id, status):
         try:
@@ -316,6 +324,12 @@ class MetricsCollector(object):
                     logger.error('Error loading disk metrics: {0}'.format(ex))
 
                 try:
+                    for key, val in Hardware.read_mmc_ext_csd():
+                        values['disk_{}'.format(key)] = val
+                except Exception as ex:
+                    logger.error('Error loading disk eMMC metrics: {0}'.format(ex))
+
+                try:
                     network = dict(psutil.net_io_counters()._asdict())
                     for reading in ['bytes_sent', 'bytes_recv', 'packets_sent', 'packets_recv']:
                         try:
@@ -326,6 +340,17 @@ class MetricsCollector(object):
                             logger.error('Error loading network metric: {0}'.format(ex))
                 except Exception as ex:
                     logger.error('Error loading network metrics: {0}'.format(ex))
+
+                # get database metrics
+                try:
+                    for model, counter in Database.get_metrics().iteritems():
+                        try:
+                            key = 'db_{0}'.format(model)
+                            values[key] = int(counter)
+                        except Exception as ex:
+                            logger.error('Error loading database metric: {0}'.format(ex))
+                except Exception as ex:
+                    logger.error('Error loading database metrics: {0}'.format(ex))
 
                 self._enqueue_metrics(metric_type=metric_type,
                                       values=values,
@@ -383,7 +408,7 @@ class MetricsCollector(object):
         while not self._stopped:
             start = time.time()
             try:
-                result = self._gateway_api.get_output_status()
+                result = self._gateway_api.get_outputs_status()
                 for output in result:
                     output_id = output['id']
                     if output_id not in self._environment['outputs']:
@@ -406,9 +431,9 @@ class MetricsCollector(object):
             start = time.time()
             try:
                 now = time.time()
-                temperatures = self._gateway_api.get_sensor_temperature_status()
-                humidities = self._gateway_api.get_sensor_humidity_status()
-                brightnesses = self._gateway_api.get_sensor_brightness_status()
+                temperatures = self._gateway_api.get_sensors_temperature_status()
+                humidities = self._gateway_api.get_sensors_humidity_status()
+                brightnesses = self._gateway_api.get_sensors_brightness_status()
                 for sensor_id, sensor in self._environment['sensors'].iteritems():
                     name = sensor['name']
                     if name == '' or name == 'NOT_IN_USE':
@@ -443,7 +468,7 @@ class MetricsCollector(object):
             start = time.time()
             try:
                 now = time.time()
-                thermostats = self._gateway_api.get_thermostat_status()
+                thermostats = self._thermostat_controller.v0_get_thermostat_status()
                 self._enqueue_metrics(metric_type=metric_type,
                                       values={'on': thermostats['thermostats_on'],
                                               'cooling': thermostats['cooling']},
@@ -558,9 +583,8 @@ class MetricsCollector(object):
                 for power_module in result:
                     device_id = '{0}.{{0}}'.format(power_module['address'])
                     mapping[str(power_module['id'])] = device_id
-                    if power_module['version'] in [8, 12]:
-                        for i in xrange(power_module['version']):
-                            power_data[device_id.format(i)] = {'name': power_module['input{0}'.format(i)]}
+                    for i in xrange(power_api.NUM_PORTS[power_module['version']]):
+                        power_data[device_id.format(i)] = {'name': power_module['input{0}'.format(i)]}
             except CommunicationTimedOutException:
                 logger.error('Error getting power modules: CommunicationTimedOutException')
             except InMaintenanceModeException:
@@ -630,7 +654,7 @@ class MetricsCollector(object):
                 result = self._gateway_api.get_power_modules()
                 for power_module in result:
                     device_id = '{0}.{{0}}'.format(power_module['address'])
-                    if power_module['version'] != 12:
+                    if power_module['version'] != power_api.ENERGY_MODULE:
                         continue
                     result = self._gateway_api.get_energy_time(power_module['id'])
                     abort = False
@@ -718,6 +742,8 @@ class MetricsCollector(object):
                                     4: 'pump',
                                     5: 'hvac',
                                     6: 'generic',
+                                    7: 'motor',
+                                    8: 'ventilation',
                                     255: 'light'}
                     self._environment['outputs'][output_id] = {'name': config['name'],
                                                                'module_type': {'o': 'output',
@@ -783,6 +809,10 @@ class MetricsCollector(object):
         >                                    "unit": "kWh"}]}
         """
         pulse_persistence = self._pulse_controller.get_persistence()
+        db_definitions = [{'name': database_model,
+                           'description': database_model,
+                           'type': 'counter',
+                           'unit': ''} for database_model in Database.get_models()]
         return [
             # system
             {'type': 'system',
@@ -875,6 +905,18 @@ class MetricsCollector(object):
                           'description': 'Disk write bytes',
                           'type': 'gauge',
                           'unit': 'bytes'},
+                         {'name': 'disk_life_time_est_typ_b',
+                          'description': 'Disk eMMC Life Time Estimation B',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'disk_life_time_est_typ_a',
+                          'description': 'Disk eMMC Life Time Estimation A',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'disk_eol_info',
+                          'description': 'eMMC Pre EOL information',
+                          'type': 'gauge',
+                          'unit': ''},
                          {'name': 'net_bytes_sent',
                           'description': 'Network bytes sent',
                           'type': 'gauge',
@@ -922,7 +964,7 @@ class MetricsCollector(object):
                          {'name': 'cloud_time_ago_try',
                           'description': 'Time passed since the last try sending metrics to the Cloud',
                           'type': 'gauge',
-                          'unit': 'seconds'}]},
+                          'unit': 'seconds'}] + db_definitions},
             # inputs / events
             {'type': 'event',
              'tags': ['type', 'id', 'name'],
