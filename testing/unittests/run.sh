@@ -8,7 +8,7 @@ echo "Running master command tests"
 python2 master_tests/master_command_tests.py
 
 echo "Running master communicator tests"
-python2 master_tests/master_communicator_tests.py
+pytest master_tests/master_communicator_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports/MasterCommunicatorTest.xml
 
 echo "Running outputs tests"
 python2 master_tests/outputs_tests.py
