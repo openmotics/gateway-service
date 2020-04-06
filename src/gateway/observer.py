@@ -18,12 +18,9 @@ The observer module contains logic to observe various states of the system. It k
 
 import logging
 from ioc import Injectable, Inject, INJECTED, Singleton
-from toolbox import Toolbox
 from gateway.events import GatewayEvent
-from gateway.dto import ShutterDTO
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
-from gateway.shutters import ShutterController
 from bus.om_bus_events import OMBusEvents
 from bus.om_bus_client import MessageClient
 
@@ -44,14 +41,12 @@ class Observer(object):
         THERMOSTATS = 'THERMOSTATS'
 
     @Inject
-    def __init__(self, master_controller=INJECTED, message_client=INJECTED, shutter_controller=INJECTED):
+    def __init__(self, master_controller=INJECTED, message_client=INJECTED):
         self._master_controller = master_controller  # type: MasterController
         self._message_client = message_client  # type: MessageClient
-        self._shutter_controller = shutter_controller  # type: ShutterController
 
         self._event_subscriptions = []
         self._master_controller.subscribe_event(self._master_event)
-        self._shutter_controller.subscribe_shutter_change(self._shutter_changed)
 
     def subscribe_events(self, callback):
         """
@@ -99,13 +94,3 @@ class Observer(object):
         # type: () -> List[int]
         """ Returns a list of recently changed inputs """
         return self._master_controller.get_recent_inputs()
-
-    # Shutters
-
-    def _shutter_changed(self, shutter_id, shutter_data, shutter_state):  # type: (int, ShutterDTO, str) -> None
-        """ Executed by the Shutter Status tracker when a shutter changed state """
-        for callback in self._event_subscriptions:
-            callback(GatewayEvent(event_type=GatewayEvent.Types.SHUTTER_CHANGE,
-                                  data={'id': shutter_id,
-                                        'status': {'state': shutter_state},
-                                        'location': {'room_id': Toolbox.nonify(shutter_data.room, 255)}}))

@@ -169,7 +169,8 @@ class OpenmoticsService(object):
     @Inject
     def fix_dependencies(metrics_controller=INJECTED, message_client=INJECTED, web_interface=INJECTED, scheduling_controller=INJECTED,
                          observer=INJECTED, gateway_api=INJECTED, metrics_collector=INJECTED, plugin_controller=INJECTED,
-                         web_service=INJECTED, event_sender=INJECTED, maintenance_controller=INJECTED, thermostat_controller=INJECTED):
+                         web_service=INJECTED, event_sender=INJECTED, maintenance_controller=INJECTED, thermostat_controller=INJECTED,
+                         shutter_controller=INJECTED):
 
         # TODO: Fix circular dependencies
 
@@ -188,11 +189,16 @@ class OpenmoticsService(object):
         plugin_controller.set_webservice(web_service)
         plugin_controller.set_metrics_controller(metrics_controller)
         plugin_controller.set_metrics_collector(metrics_collector)
+        maintenance_controller.subscribe_maintenance_stopped(gateway_api.maintenance_mode_stopped)
+        # TODO: Replace by event bus
         observer.subscribe_events(metrics_collector.process_observer_event)
         observer.subscribe_events(plugin_controller.process_observer_event)
         observer.subscribe_events(web_interface.send_event_websocket)
         observer.subscribe_events(event_sender.enqueue_event)
-        maintenance_controller.subscribe_maintenance_stopped(gateway_api.maintenance_mode_stopped)
+        shutter_controller.subscribe_events(metrics_collector.process_observer_event)
+        shutter_controller.subscribe_events(plugin_controller.process_observer_event)
+        shutter_controller.subscribe_events(web_interface.send_event_websocket)
+        shutter_controller.subscribe_events(event_sender.enqueue_event)
 
     @staticmethod
     @Inject

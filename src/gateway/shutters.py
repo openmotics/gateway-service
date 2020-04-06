@@ -19,9 +19,11 @@ import logging
 import time
 from threading import Lock
 from ioc import Injectable, Inject, INJECTED, Singleton
+from toolbox import Toolbox
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.enums import ShutterEnums
+from gateway.events import GatewayEvent
 from gateway.dto import ShutterDTO, ShutterGroupDTO
 
 if False:  # MYPY
@@ -64,7 +66,8 @@ class ShutterController(object):
         self._desired_positions = {}
         self._directions = {}
         self._states = {}
-        self._on_shutter_changed = None
+
+        self._event_subscriptions = []
 
         self._verbose = verbose
         self._config_lock = Lock()
@@ -101,6 +104,9 @@ class ShutterController(object):
                     del self._actual_positions[shutter_id]
                     del self._desired_positions[shutter_id]
                     del self._directions[shutter_id]
+
+    def subscribe_events(self, callback):
+        self._event_subscriptions.append(callback)
 
     # Allow shutter positions to be reported
 
@@ -281,9 +287,6 @@ class ShutterController(object):
 
     # Reporting
 
-    def subscribe_shutter_change(self, callback):
-        self._on_shutter_changed = callback
-
     def _report_shutter_state(self, shutter_id, new_state):
         shutter = self._get_shutter(shutter_id)
         steps = ShutterController._get_steps(shutter)
@@ -329,7 +332,7 @@ class ShutterController(object):
 
             self._states[shutter_id] = [time.time(), new_state]
 
-        self._report_change(shutter_id, shutter, self._states[shutter_id])
+        self._send_event(shutter_id, shutter, self._states[shutter_id])
 
     def get_states(self):
         all_states = []
@@ -341,8 +344,9 @@ class ShutterController(object):
                                         'desired_position': self._desired_positions[shutter_id]}
                            for shutter_id in self._shutters}}
 
-    def _report_change(self, shutter_id, shutter_data, shutter_state):
-        # TODO: This should actually send the event instead of the Observer. Currently, the observer is
-        #       subscribed on this callback and wraps the data
-        if self._on_shutter_changed is not None:
-            self._on_shutter_changed(shutter_id, shutter_data, shutter_state[1].upper())
+    def _send_event(self, shutter_id, shutter_data, shutter_state):
+        for callback in self._event_subscriptions:
+            callback(GatewayEvent(event_type=GatewayEvent.Types.SHUTTER_CHANGE,
+                                  data={'id': shutter_id,
+                                        'status': {'state': shutter_state[1].upper()},
+                                        'location': {'room_id': Toolbox.nonify(shutter_data.room, 255)}}))
