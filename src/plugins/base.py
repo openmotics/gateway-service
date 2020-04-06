@@ -18,9 +18,10 @@ import logging
 import os
 import pkgutil
 import traceback
-from gateway.observer import Event
 from datetime import datetime
 from ioc import Injectable, Inject, INJECTED, Singleton
+from gateway.events import GatewayEvent
+from gateway.shutters import ShutterController
 from plugins.runner import PluginRunner, RunnerWatchdog
 
 logger = logging.getLogger("openmotics")
@@ -34,6 +35,7 @@ class PluginController(object):
     @Inject
     def __init__(self,
                  web_interface=INJECTED, configuration_controller=INJECTED, observer=INJECTED,
+                 shutter_controller=INJECTED,
                  runtime_path='/opt/openmotics/python/plugin_runtime',
                  plugins_path='/opt/openmotics/python/plugins',
                  plugin_config_path='/opt/openmotics/etc'):
@@ -42,6 +44,7 @@ class PluginController(object):
         """
         self.__webinterface = web_interface
         self.__config_controller = configuration_controller
+        self.__shuttercontroller = shutter_controller  # type: ShutterController
         self.__runtime_path = runtime_path
         self.__plugins_path = plugins_path
         self.__plugin_config_path = plugin_config_path
@@ -324,22 +327,22 @@ class PluginController(object):
                 yield runner
 
     def process_observer_event(self, event):
-        if event.type == Event.Types.INPUT_CHANGE:
+        if event.type == GatewayEvent.Types.INPUT_CHANGE:
             # Should be called when the input status changes, notifies all plugins.
             for runner in self.__iter_running_runners():
                 runner.process_input_status(event)
-        if event.type == Event.Types.OUTPUT_CHANGE:
+        if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             # TODO: Implement versioning so a plugin can also receive "normal" events on version 2
             # Should be called when the output status changes, notifies all plugins.
             states = [(output['id'], output['dimmer']) for output in self.__observer.get_outputs()
                       if output['status'] == 1]
             for runner in self.__iter_running_runners():
                 runner.process_output_status(states)
-
-    def process_shutter_status(self, shutter_status_inst):
-        """ Should be called when the shutter status changes, notifies all plugins. """
-        for runner in self.__iter_running_runners():
-            runner.process_shutter_status(shutter_status_inst)
+        if event.type == GatewayEvent.Types.SHUTTER_CHANGE:
+            # TODO: Implement versioning so a plugin can receive per-shutter events
+            states = self.__shuttercontroller.get_states()
+            for runner in self.__iter_running_runners():
+                runner.process_shutter_status(states)
 
     def process_event(self, code):
         """ Should be called when an event is triggered, notifies all plugins. """

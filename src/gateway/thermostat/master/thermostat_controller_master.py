@@ -3,7 +3,8 @@ import time
 from threading import Thread
 from ioc import Injectable, Inject, Singleton, INJECTED
 from bus.om_bus_events import OMBusEvents
-from gateway.observer import Observer, Event
+from gateway.observer import Observer
+from gateway.events import GatewayEvent
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.thermostat.master.thermostat_status_master import ThermostatStatusMaster
 from master import master_api
@@ -66,23 +67,23 @@ class ThermostatControllerMaster(ThermostatController):
         self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': thermostat_id})
         location = {'room_id': self._thermostats_config[thermostat_id]['room']}
         for callback in self._event_subscriptions:
-            callback(Event(event_type=Event.Types.THERMOSTAT_CHANGE,
-                           data={'id': thermostat_id,
-                                 'status': {'preset': status['preset'],
-                                            'current_setpoint': status['current_setpoint'],
-                                            'actual_temperature': status['actual_temperature'],
-                                            'output_0': status['output_0'],
-                                            'output_1': status['output_1']},
-                                 'location': location}))
+            callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_CHANGE,
+                                  data={'id': thermostat_id,
+                                        'status': {'preset': status['preset'],
+                                                   'current_setpoint': status['current_setpoint'],
+                                                   'actual_temperature': status['actual_temperature'],
+                                                   'output_0': status['output_0'],
+                                                   'output_1': status['output_1']},
+                                        'location': location}))
 
     def _thermostat_group_changed(self, status):
         self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
         for callback in self._event_subscriptions:
-            callback(Event(event_type=Event.Types.THERMOSTAT_GROUP_CHANGE,
-                           data={'id': 0,
-                                 'status': {'state': status['state'],
-                                            'mode': status['mode']},
-                                 'location': {}}))
+            callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
+                                  data={'id': 0,
+                                        'status': {'state': status['state'],
+                                                   'mode': status['mode']},
+                                        'location': {}}))
 
     @staticmethod
     def check_basic_action(ret_dict):

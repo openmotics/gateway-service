@@ -19,6 +19,7 @@ The pulses module contains the PulseCounterController.
 import sqlite3
 import logging
 import master.master_api as master_api
+from platform_utils import Platform
 from ioc import Injectable, Inject, INJECTED, Singleton
 from master.eeprom_models import PulseCounterConfiguration
 
@@ -102,8 +103,12 @@ class PulseCounterController(object):
         return pulse_counter_status
 
     def _get_master_pulse_counter_status(self):
-        out_dict = self._master_communicator.do_command(master_api.pulse_list())
-        return [out_dict['pv{0}'.format(i)] for i in xrange(0, MASTER_PULSE_COUNTERS)]
+        if Platform.get_platform() == Platform.Type.CLASSIC:
+            out_dict = self._master_communicator.do_command(master_api.pulse_list())
+            return [out_dict['pv{0}'.format(i)] for i in xrange(0, MASTER_PULSE_COUNTERS)]
+        else:
+            # TODO: Fix when migrating to MasterController
+            return [0 for i in xrange(0, MASTER_PULSE_COUNTERS)]
 
     @staticmethod
     def _row_to_config(row):

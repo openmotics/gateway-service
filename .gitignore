@@ -5,3 +5,5 @@
 .vscode/
 testing/gw-unit-reports
 venv/
+.mypy_cache/
+.dmypy.json

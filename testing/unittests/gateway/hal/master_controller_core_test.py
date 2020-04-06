@@ -5,11 +5,12 @@ from Queue import Queue
 import gateway.hal.master_controller_core
 import mock
 import xmlrunner
-from gateway.hal.master_controller import MasterEvent
+from gateway.hal.master_event import MasterEvent
 from ioc import Scope, SetTestMode, SetUpTestInjections
 from master import eeprom_models
 from master.eeprom_controller import EepromController
 from master_core.core_api import CoreAPI
+from master_core.memory_file import MemoryTypes
 from master_core.core_communicator import BackgroundConsumer
 from master_core.memory_models import InputConfiguration
 from master_core.ucan_communicator import UCANCommunicator
@@ -21,7 +22,7 @@ class MasterCoreControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        SetUpTestInjections(memory_files={})
+        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: mock.Mock()})
 
     def test_input_module_type(self):
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
@@ -133,7 +134,7 @@ class MasterCoreControllerCompatibilityTest(unittest.TestCase):
         SetTestMode()
 
     def test_load_input(self):
-        SetUpTestInjections(memory_files={})
+        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: mock.Mock()})
         core = get_core_controller_dummy()
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                return_value=get_input_dummy(1)):

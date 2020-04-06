@@ -19,13 +19,15 @@ Tests for the passthrough module.
 """
 
 from __future__ import absolute_import
-import unittest
-import xmlrunner
 import time
+import unittest
+
+import xmlrunner
+
 from ioc import SetTestMode, SetUpTestInjections
 from master.master_communicator import MasterCommunicator
 from master.passthrough import PassthroughService
-from serial_tests import SerialMock, sout, sin
+from serial_tests import DummyPty, SerialMock, sin, sout
 
 
 class PassthroughServiceTest(unittest.TestCase):
@@ -37,13 +39,12 @@ class PassthroughServiceTest(unittest.TestCase):
 
     def test_passthrough(self):
         """ Test the passthrough. """
-        master_mock = SerialMock([
-                        sout("data for the passthrough"), sin("response"),
-                        sout("more data"), sin("more response")])
+        master_pty = DummyPty(['response',
+                               'more response'])
         passthrough_mock = SerialMock([
                         sin("data for the passthrough"), sout("response"),
                         sin("more data"), sout("more response")])
-        SetUpTestInjections(controller_serial=master_mock,
+        SetUpTestInjections(controller_serial=master_pty,
                             passthrough_serial=passthrough_mock)
 
         master_communicator = MasterCommunicator(init_master=False)
@@ -55,13 +56,14 @@ class PassthroughServiceTest(unittest.TestCase):
         passthrough = PassthroughService()
         passthrough.start()
 
-        time.sleep(1)
+        master_pty.fd.write('data for the passthrough')
+        master_pty.master_wait()
+        master_pty.fd.write('more data')
+        master_pty.master_wait()
+        time.sleep(0.2)
 
         self.assertEquals(33, master_communicator.get_communication_statistics()['bytes_read'])
         self.assertEquals(21, master_communicator.get_communication_statistics()['bytes_written'])
-
-        self.assertEquals(33, master_mock.bytes_read)
-        self.assertEquals(21, master_mock.bytes_written)
 
         self.assertEquals(21, passthrough_mock.bytes_read)
         self.assertEquals(33, passthrough_mock.bytes_written)

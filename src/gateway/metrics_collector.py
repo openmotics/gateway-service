@@ -24,7 +24,7 @@ from threading import Event, Thread
 import psutil
 
 from gateway.maintenance_communicator import InMaintenanceModeException
-from gateway.observer import Event as ObserverEvent
+from gateway.events import GatewayEvent
 from ioc import INJECTED, Inject, Injectable, Singleton
 from models import Database
 from platform_utils import Hardware
@@ -207,15 +207,15 @@ class MetricsCollector(object):
             time.sleep(sleep)
 
     def process_observer_event(self, event):
-        # type: (ObserverEvent) -> None
-        if event.type == ObserverEvent.Types.OUTPUT_CHANGE:
+        # type: (GatewayEvent) -> None
+        if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             output_id = event.data['id']
             output = self._environment['outputs'].get(output_id)
             if output is not None:
                 output.update({'status': 1 if event.data['status']['on'] else 0,
                                'dimmer': int(event.data['status'].get('value', 0))})
                 self._process_outputs([output_id], 'output')
-        if event.type == ObserverEvent.Types.INPUT_CHANGE:
+        if event.type == GatewayEvent.Types.INPUT_CHANGE:
             event_id = event.data['id']
             self._process_input(event_id, event.data.get('status'))
 
@@ -706,7 +706,7 @@ class MetricsCollector(object):
                 return
             self._pause(start, metric_type)
 
-    def _load_environment_configurations(self, name, interval):
+    def _load_environment_configurations(self, name, interval):  # type: (str, int) -> None
         while not self._stopped:
             start = time.time()
             # Inputs
@@ -731,9 +731,9 @@ class MetricsCollector(object):
                 result = self._gateway_api.get_output_configurations()
                 ids = []
                 for config in result:
-                    if config['module_type'] not in ['o', 'O', 'd', 'D']:
+                    if config.module_type not in ['o', 'O', 'd', 'D']:
                         continue
-                    output_id = config['id']
+                    output_id = config.id
                     ids.append(output_id)
                     type_mapping = {0: 'outlet',
                                     1: 'valve',
@@ -745,13 +745,13 @@ class MetricsCollector(object):
                                     7: 'motor',
                                     8: 'ventilation',
                                     255: 'light'}
-                    self._environment['outputs'][output_id] = {'name': config['name'],
+                    self._environment['outputs'][output_id] = {'name': config.name,
                                                                'module_type': {'o': 'output',
                                                                                'O': 'output',
                                                                                'd': 'dimmer',
-                                                                               'D': 'dimmer'}[config['module_type']],
-                                                               'floor': config['floor'],
-                                                               'type': type_mapping.get(config['type'], 'generic')}
+                                                                               'D': 'dimmer'}[config.module_type],
+                                                               'floor': config.floor,
+                                                               'type': type_mapping.get(config.output_type, 'generic')}
                 for output_id in self._environment['outputs'].keys():
                     if output_id not in ids:
                         del self._environment['outputs'][output_id]

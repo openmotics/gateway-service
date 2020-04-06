@@ -102,8 +102,8 @@ class MasterClassicControllerTest(unittest.TestCase):
             controller._input_config = {1: {}}  # TODO: cleanup
             controller.subscribe_event(subscriber.callback)
             new_consumer.assert_called()
-            consumer_list[-1].deliver({'input': 1})
-            from gateway.hal.master_controller_classic import MasterEvent
+            consumer_list[-2].deliver({'input': 1})
+            from gateway.hal.master_event import MasterEvent
             expected_event = MasterEvent.deserialize({'type': 'INPUT_CHANGE',
                                                       'data': {'id': 1,
                                                                'status': True,

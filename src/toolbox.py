@@ -157,3 +157,13 @@ class PluginIPCStream(object):
         if encode_type == '1':
             return msgpack.loads(data)
         return None
+
+
+class Toolbox(object):
+    @staticmethod
+    def nonify(value, default_value):
+        return None if value == default_value else value
+
+    @staticmethod
+    def denonify(value, default_value):
+        return default_value if value is None else value

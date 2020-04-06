@@ -18,7 +18,7 @@ Tests for events.
 import unittest
 import xmlrunner
 from cloud.cloud_api_client import CloudAPIClient
-from gateway.observer import Event
+from gateway.events import GatewayEvent
 from cloud.events import EventSender
 
 
@@ -35,9 +35,9 @@ class EventsTest(unittest.TestCase):
         event_sender = EventSender(cloud)  # Don't start, trigger manually
         self.assertEqual(len(event_sender._queue), 0)
         self.assertFalse(event_sender._batch_send_events())
-        event_sender.enqueue_event(Event(Event.Types.OUTPUT_CHANGE, None))
-        event_sender.enqueue_event(Event(Event.Types.THERMOSTAT_CHANGE, None))
-        event_sender.enqueue_event(Event(Event.Types.INPUT_TRIGGER, None))
+        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, None))
+        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, None))
+        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_TRIGGER, None))
         self.assertEqual(len(event_sender._queue), 2)
         self.assertTrue(event_sender._batch_send_events())
         self.assertEqual(len(event_sender._queue), 0)
