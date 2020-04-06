@@ -574,11 +574,11 @@ class MasterCoreController(MasterController):
 
     def load_room_configuration(self, room_id, fields=None):
         # type: (int, Any) -> Dict[str,Any]
-        return {}
+        return {}  # TODO: Implement
 
     def load_room_configurations(self, fields=None):
         # type: (Any) -> List[Dict[str,Any]]
-        return []
+        return []  # TODO: Implement
 
     # Generic
 
@@ -622,7 +622,7 @@ class MasterCoreController(MasterController):
         return []  # TODO: Implement
 
     def last_success(self):
-        return time.time()
+        return time.time()  # TODO: Implement
 
     def clear_error_list(self):
         raise NotImplementedError()
@@ -646,7 +646,7 @@ class MasterCoreController(MasterController):
         raise NotImplementedError()
 
     def get_configuration_dirty_flag(self):
-        return False
+        return False  # TODO: Implement
 
 
 class MasterInputState(object):
