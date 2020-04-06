@@ -314,7 +314,7 @@ class ShutterControllerTest(unittest.TestCase):
                 else:
                     self.assertEqual(controller._directions[shutter_id], entry[3])
 
-    def test_master_events_and_state(self):
+    def test_events_and_state(self):
         fakesleep.reset(0)
         calls = {}
 
@@ -329,9 +329,9 @@ class ShutterControllerTest(unittest.TestCase):
         controller = ShutterController()
         controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)
 
-        def shutter_callback(_shutter_id, _shutter_data, _state):
-            calls.setdefault(_shutter_id, []).append([_shutter_data, _state])
-        controller.subscribe_shutter_change(shutter_callback)
+        def shutter_callback(event):
+            calls.setdefault(event.data['id'], []).append(event.data['status']['state'])
+        controller.subscribe_events(shutter_callback)
 
         def validate(_shutter_id, _entry):
             self.assertEquals(controller._actual_positions.get(_shutter_id), _entry[0])
@@ -339,7 +339,7 @@ class ShutterControllerTest(unittest.TestCase):
             self.assertEquals(controller._directions.get(_shutter_id), _entry[2])
             self.assertEquals(controller._states.get(_shutter_id), _entry[3])
             if len(_entry) == 4 or _entry[4]:
-                self.assertEqual(calls[_shutter_id].pop()[1], _entry[3][1].upper())
+                self.assertEqual(calls[_shutter_id].pop(), _entry[3][1].upper())
 
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00000000})
         for shutter_id in xrange(3):

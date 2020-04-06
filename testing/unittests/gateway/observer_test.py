@@ -57,8 +57,7 @@ def get_observer():
     from gateway.hal.master_controller_classic import MasterClassicController
     master = MasterClassicController()
     return Observer(master_controller=master,
-                    message_client=mock.Mock(),
-                    shutter_controller=mock.Mock())
+                    message_client=mock.Mock())
 
 
 if __name__ == "__main__":
