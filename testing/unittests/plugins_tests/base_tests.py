@@ -25,8 +25,9 @@ import tempfile
 import time
 import unittest
 import xmlrunner
+from mock import Mock
 from subprocess import call
-
+from ioc import SetUpTestInjections, SetTestMode
 from gateway.events import GatewayEvent
 from plugin_runtime.base import PluginConfigChecker, PluginException
 
@@ -40,6 +41,7 @@ class PluginControllerTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        SetTestMode()
         cls.PLUGINS_PATH = tempfile.mkdtemp()
         cls.PLUGIN_CONFIG_PATH = tempfile.mkdtemp()
 
@@ -76,11 +78,12 @@ class PluginControllerTest(unittest.TestCase):
 
     @staticmethod
     def _get_controller(observer=None):
+        SetUpTestInjections(shutter_controller=Mock(),
+                            web_interface=None,
+                            configuration_controller=None,
+                            observer=observer)
         from plugins.base import PluginController
-        controller = PluginController(web_interface=None,
-                                      configuration_controller=None,
-                                      observer=observer,
-                                      runtime_path=PluginControllerTest.RUNTIME_PATH,
+        controller = PluginController(runtime_path=PluginControllerTest.RUNTIME_PATH,
                                       plugins_path=PluginControllerTest.PLUGINS_PATH,
                                       plugin_config_path=PluginControllerTest.PLUGIN_CONFIG_PATH)
         metric_controller = type('MetricController', (), {'get_filter': lambda *args, **kwargs: ['test'],
