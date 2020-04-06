@@ -201,8 +201,8 @@ class EventsSocket(OMSocket):
                                             self.metadata['client_id'],
                                             {'subscribed_types': subscribed_types})
             elif event.type == GatewayEvent.Types.PING:
-                self.send(msgpack.dumps(Event(event_type=GatewayEvent.Types.PONG,
-                                              data=None).serialize()), binary=True)
+                self.send(msgpack.dumps(GatewayEvent(event_type=GatewayEvent.Types.PONG,
+                                                     data=None).serialize()), binary=True)
         except Exception as ex:
             logger.exception('Error receiving message: %s', ex)
             # Ignore malformed data processing; in that case there's nothing that will happen
