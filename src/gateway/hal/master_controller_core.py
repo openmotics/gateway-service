@@ -436,8 +436,8 @@ class MasterCoreController(MasterController):
         shutter = ShutterConfiguration(shutter_id)
         if shutter.outputs.output_0 == 255 * 2:
             return
-        output_0_on = self._output_states.get(shutter.outputs.output_0)['status'] == 1
-        output_1_on = self._output_states.get(shutter.outputs.output_1)['status'] == 1
+        output_0_on = self._output_states.get(shutter.outputs.output_0, {}).get('status') == 1
+        output_1_on = self._output_states.get(shutter.outputs.output_1, {}).get('status') == 1
         output_module = OutputConfiguration(shutter.outputs.output_0).module
         if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
             up, down = output_0_on, output_1_on
