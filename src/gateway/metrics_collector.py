@@ -24,7 +24,7 @@ from threading import Event, Thread
 import psutil
 
 from gateway.maintenance_communicator import InMaintenanceModeException
-from gateway.observer import Event as ObserverEvent
+from gateway.events import GatewayEvent
 from ioc import INJECTED, Inject, Injectable, Singleton
 from models import Database
 from platform_utils import Hardware
@@ -207,15 +207,15 @@ class MetricsCollector(object):
             time.sleep(sleep)
 
     def process_observer_event(self, event):
-        # type: (ObserverEvent) -> None
-        if event.type == ObserverEvent.Types.OUTPUT_CHANGE:
+        # type: (GatewayEvent) -> None
+        if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             output_id = event.data['id']
             output = self._environment['outputs'].get(output_id)
             if output is not None:
                 output.update({'status': 1 if event.data['status']['on'] else 0,
                                'dimmer': int(event.data['status'].get('value', 0))})
                 self._process_outputs([output_id], 'output')
-        if event.type == ObserverEvent.Types.INPUT_CHANGE:
+        if event.type == GatewayEvent.Types.INPUT_CHANGE:
             event_id = event.data['id']
             self._process_input(event_id, event.data.get('status'))
 

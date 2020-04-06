@@ -20,7 +20,7 @@ import pkgutil
 import traceback
 from datetime import datetime
 from ioc import Injectable, Inject, INJECTED, Singleton
-from gateway.observer import Event
+from gateway.events import GatewayEvent
 from gateway.shutters import ShutterController
 from plugins.runner import PluginRunner, RunnerWatchdog
 
@@ -327,18 +327,18 @@ class PluginController(object):
                 yield runner
 
     def process_observer_event(self, event):
-        if event.type == Event.Types.INPUT_CHANGE:
+        if event.type == GatewayEvent.Types.INPUT_CHANGE:
             # Should be called when the input status changes, notifies all plugins.
             for runner in self.__iter_running_runners():
                 runner.process_input_status(event)
-        if event.type == Event.Types.OUTPUT_CHANGE:
+        if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             # TODO: Implement versioning so a plugin can also receive "normal" events on version 2
             # Should be called when the output status changes, notifies all plugins.
             states = [(output['id'], output['dimmer']) for output in self.__observer.get_outputs()
                       if output['status'] == 1]
             for runner in self.__iter_running_runners():
                 runner.process_output_status(states)
-        if event.type == Event.Types.SHUTTER_CHANGE:
+        if event.type == GatewayEvent.Types.SHUTTER_CHANGE:
             # TODO: Implement versioning so a plugin can receive per-shutter events
             states = self.__shuttercontroller.get_states()
             for runner in self.__iter_running_runners():

@@ -17,9 +17,9 @@ The observer module contains logic to observe various states of the system. It k
 """
 
 import logging
-import ujson as json
 from ioc import Injectable, Inject, INJECTED, Singleton
 from toolbox import Toolbox
+from gateway.events import GatewayEvent
 from gateway.dto import ShutterDTO
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
@@ -31,39 +31,6 @@ if False:  # MYPY
     from typing import Any, Dict, List
 
 logger = logging.getLogger("openmotics")
-
-
-class Event(object):
-    """
-    Event object
-    """
-
-    class Types(object):
-        INPUT_CHANGE = 'INPUT_CHANGE'
-        OUTPUT_CHANGE = 'OUTPUT_CHANGE'
-        SHUTTER_CHANGE = 'SHUTTER_CHANGE'
-        THERMOSTAT_CHANGE = 'THERMOSTAT_CHANGE'
-        THERMOSTAT_GROUP_CHANGE = 'THERMOSTAT_GROUP_CHANGE'
-        ACTION = 'ACTION'
-        PING = 'PING'
-        PONG = 'PONG'
-
-    def __init__(self, event_type, data):
-        self.type = event_type
-        self.data = data
-
-    def serialize(self):
-        return {'type': self.type,
-                'data': self.data,
-                '_version': 1.0}  # Add version so that event processing code can handle multiple formats
-
-    def __str__(self):
-        return json.dumps(self.serialize())
-
-    @staticmethod
-    def deserialize(data):
-        return Event(event_type=data['type'],
-                     data=data['data'])
 
 
 @Injectable.named('observer')
@@ -102,13 +69,13 @@ class Observer(object):
         """
         if master_event.type == MasterEvent.Types.INPUT_CHANGE:
             for callback in self._event_subscriptions:
-                callback(Event(event_type=Event.Types.INPUT_CHANGE,
-                               data=master_event.data))
+                callback(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE,
+                                      data=master_event.data))
         if master_event.type == MasterEvent.Types.OUTPUT_CHANGE:
             self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': master_event.data['id']})
             for callback in self._event_subscriptions:
-                callback(Event(event_type=Event.Types.OUTPUT_CHANGE,
-                               data=master_event.data))
+                callback(GatewayEvent(event_type=GatewayEvent.Types.OUTPUT_CHANGE,
+                                      data=master_event.data))
 
     # Outputs
 
@@ -138,7 +105,7 @@ class Observer(object):
     def _shutter_changed(self, shutter_id, shutter_data, shutter_state):  # type: (int, ShutterDTO, str) -> None
         """ Executed by the Shutter Status tracker when a shutter changed state """
         for callback in self._event_subscriptions:
-            callback(Event(event_type=Event.Types.SHUTTER_CHANGE,
-                           data={'id': shutter_id,
-                                 'status': {'state': shutter_state},
-                                 'location': {'room_id': Toolbox.nonify(shutter_data.room, 255)}}))
+            callback(GatewayEvent(event_type=GatewayEvent.Types.SHUTTER_CHANGE,
+                                  data={'id': shutter_id,
+                                        'status': {'state': shutter_state},
+                                        'location': {'room_id': Toolbox.nonify(shutter_data.room, 255)}}))

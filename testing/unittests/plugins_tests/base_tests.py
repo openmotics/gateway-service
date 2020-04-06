@@ -27,7 +27,7 @@ import unittest
 import xmlrunner
 from subprocess import call
 
-from gateway.observer import Event
+from gateway.events import GatewayEvent
 from plugin_runtime.base import PluginConfigChecker, PluginException
 
 
@@ -232,16 +232,16 @@ class P1(OMPluginBase):
             rising_input_event = {'id': 1,
                                   'status': True,
                                   'location': {'room_id': 1}}
-            controller.process_observer_event(Event(event_type=Event.Types.INPUT_CHANGE, data=rising_input_event))
+            controller.process_observer_event(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE, data=rising_input_event))
             falling_input_event = {'id': 2,
                                    'status': False,
                                    'location': {'room_id': 5}}
-            controller.process_observer_event(Event(event_type=Event.Types.INPUT_CHANGE, data=falling_input_event))
+            controller.process_observer_event(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE, data=falling_input_event))
             output_event = {'id': 1,
                             'status': {'on': True,
                                        'value': 5},
                             'location': {'room_id': 5}}
-            controller.process_observer_event(Event(event_type=Event.Types.OUTPUT_CHANGE, data=output_event))
+            controller.process_observer_event(GatewayEvent(event_type=GatewayEvent.Types.OUTPUT_CHANGE, data=output_event))
             controller.process_event(1)
 
             keys = ['input_data', 'input_data_version_2', 'output_data', 'event_data']

@@ -10,7 +10,7 @@ from platform_utils import System
 System.import_libs()
 
 from toolbox import PluginIPCStream
-from gateway.observer import Event
+from gateway.events import GatewayEvent
 from plugin_runtime import base
 from plugin_runtime.utils import get_plugin_class, check_plugin, get_special_methods
 from plugin_runtime.interfaces import has_interface
@@ -198,7 +198,7 @@ class PluginRuntime:
         self._stopped = True
 
     def _handle_input_status(self, event_json):
-        event = Event.deserialize(event_json)
+        event = GatewayEvent.deserialize(event_json)
         # get relevant event details
         input_id = event.data['id']
         status = event.data['status']

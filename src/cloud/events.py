@@ -21,7 +21,7 @@ from collections import deque
 from threading import Thread
 from ioc import Injectable, Singleton, INJECTED, Inject
 from cloud.cloud_api_client import APIException
-from gateway.observer import Event
+from gateway.events import GatewayEvent
 
 logger = logging.getLogger('openmotics')
 
@@ -58,12 +58,12 @@ class EventSender(object):
             self._queue.appendleft(event)
 
     def _is_enabled(self, event):
-        if event.type in [Event.Types.OUTPUT_CHANGE,
-                          Event.Types.SHUTTER_CHANGE,
-                          Event.Types.THERMOSTAT_CHANGE,
-                          Event.Types.THERMOSTAT_GROUP_CHANGE]:
+        if event.type in [GatewayEvent.Types.OUTPUT_CHANGE,
+                          GatewayEvent.Types.SHUTTER_CHANGE,
+                          GatewayEvent.Types.THERMOSTAT_CHANGE,
+                          GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE]:
             return True
-        elif event.type == Event.Types.INPUT_CHANGE:
+        elif event.type == GatewayEvent.Types.INPUT_CHANGE:
             input_id = event.data['id']
             # TODO: Below entry needs to be cached. But caching needs invalidation, so lets fix this
             #       when we have decent cache invalidation events to subscribe on
