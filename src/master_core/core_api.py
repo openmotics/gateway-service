@@ -70,7 +70,8 @@ class CoreAPI(object):
         return CoreCommandSpec(instruction='GC',
                                request_fields=[LiteralBytesField(0)],
                                response_fields=[ByteField('type'), ByteField('output'), ByteField('input'),
-                                                ByteField('sensor'), ByteField('ucan'), ByteField('ucan_input'), ByteField('ucan_sensor')])
+                                                ByteField('sensor'), ByteField('ucan'), ByteField('ucan_input'), ByteField('ucan_sensor'),
+                                                ByteField('power_rs485'), ByteField('power_can')])
 
     @staticmethod
     def general_configuration_max_specs():

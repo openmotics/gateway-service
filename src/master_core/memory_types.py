@@ -22,6 +22,7 @@ from threading import Lock
 
 import ujson as json
 from ioc import INJECTED, Inject
+from master_core.memory_file import MemoryFile
 
 if False:  # MYPY
     from typing import Any, Dict
@@ -42,9 +43,10 @@ class MemoryModelDefinition(object):
     _cache_lock = Lock()
 
     @Inject
-    def __init__(self, id, memory_files=INJECTED):
-        self.id = id
-        self._memory_files = memory_files
+    def __init__(self, id, memory_files=INJECTED, verbose=False):
+        self.id = id  # type: int
+        self._verbose = verbose
+        self._memory_files = memory_files  # type: Dict[str, MemoryFile]
         self._fields = []
         self._loaded_fields = set()
         self._relations = []
@@ -116,7 +118,15 @@ class MemoryModelDefinition(object):
     def save(self):
         for field_name in self._loaded_fields:
             field_container = getattr(self, '_{0}'.format(field_name))
+            if self._verbose:
+                logger.info('Saving {0}({1}).{2}'.format(
+                    self.__class__.__name__,
+                    '' if self.id is None else self.id,
+                    field_name
+                ))
             field_container.save()
+        for memory_file in self._memory_files.itervalues():
+            memory_file.activate()
 
     @classmethod
     def deserialize(cls, data):
@@ -131,7 +141,7 @@ class MemoryModelDefinition(object):
                 relation = getattr(instance, '_{0}'.format(field_name))
                 instance._relations_cache[field_name] = relation.instance_type.deserialize(value)
             elif field_name in instance._compositions:
-                composition = getattr(instance, '_{0}'.format(field_name))
+                composition = getattr(instance, field_name)
                 composition._load(value)
             else:
                 raise ValueError('Unknown field: {0}', field_name)
@@ -473,7 +483,7 @@ class CompositeField(object):
 
 
 class CompositeNumberField(CompositeField):
-    def __init__(self, start_bit, width, value_offset=0, max_value=None):
+    def __init__(self, start_bit, width, value_offset=0, value_factor=1, max_value=None):
         super(CompositeNumberField, self).__init__()
         self._mask = 2 ** width - 1 << start_bit
         self._start_bit = start_bit
@@ -482,14 +492,15 @@ class CompositeNumberField(CompositeField):
         else:
             self._max_value = max_value
         self._value_offset = value_offset
+        self._value_factor = value_factor
 
     def decompose(self, value):
         return self._decompose(value)
 
     def _decompose(self, value):
-        value = ((value & self._mask) >> self._start_bit) - self._value_offset
+        value = (value & self._mask) >> self._start_bit
         if self._max_value is None or 0 <= value <= self._max_value:
-            return value
+            return (value * self._value_factor) - self._value_offset
         return None
 
     def compose(self, current_composition, value, composition_width):
@@ -501,7 +512,7 @@ class CompositeNumberField(CompositeField):
             return current_composition
         if self._max_value is not None and not (0 <= value <= self._max_value):
             raise ValueError('Value out of limits: 0 <= value <= {0}'.format(self._max_value))
-        value = ((value + self._value_offset) << self._start_bit) & self._mask
+        value = (((value + self._value_offset) / self._value_factor) << self._start_bit) & self._mask
         current_composition = current_composition & ~self._mask & (2 ** composition_width - 1)
         return current_composition | value
 

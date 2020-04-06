@@ -19,20 +19,27 @@ import logging
 import time
 from threading import Thread
 
-from gateway.hal.master_controller import MasterController, MasterEvent
+from gateway.enums import ShutterEnums
+from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
+from gateway.hal.mappers_core import OutputMapper, ShutterMapper
+from gateway.hal.master_controller import MasterController
+from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master_core.core_api import CoreAPI
-from master_core.core_communicator import BackgroundConsumer
+from master_core.core_communicator import BackgroundConsumer, CoreCommunicator
+from master_core.ucan_communicator import UCANCommunicator
 from master_core.errors import Error
 from master_core.events import Event as MasterCoreEvent
-from master_core.memory_file import MemoryTypes
-from master_core.memory_models import GlobalConfiguration, \
-    InputConfiguration, OutputConfiguration, SensorConfiguration
+from master_core.memory_file import MemoryTypes, MemoryFile
+from master_core.memory_models import (
+    GlobalConfiguration, InputConfiguration, OutputConfiguration,
+    SensorConfiguration, ShutterConfiguration
+)
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Any, Dict, List
+    from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger("openmotics")
 
@@ -43,14 +50,10 @@ class MasterCoreController(MasterController):
 
     @Inject
     def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, memory_files=INJECTED):
-        """
-        :type master_communicator: master_core.core_communicator.CoreCommunicator
-        :type ucan_communicator: master_core.ucan_communicator.UCANCommunicator
-        :type memory_files: dict[master_core.memory_file.MemoryTypes, master_core.memory_file.MemoryFile]
-        """
         super(MasterCoreController, self).__init__(master_communicator)
-        self._ucan_communicator = ucan_communicator
-        self._memory_files = memory_files
+        self._master_communicator = master_communicator  # type: CoreCommunicator
+        self._ucan_communicator = ucan_communicator  # type: UCANCommunicator
+        self._memory_files = memory_files  # type: Dict[str, MemoryFile]
         self._synchronization_thread = Thread(target=self._synchronize, name='CoreMasterSynchronization')
         self._master_online = False
         self._input_state = MasterInputState()
@@ -60,6 +63,11 @@ class MasterCoreController(MasterController):
         self._sensor_interval = 300
         self._sensor_last_updated = 0
         self._sensor_states = {}
+        self._shutters_interval = 600
+        self._shutters_last_updated = 0
+        self._output_shutter_map = {}  # type: Dict[int, int]
+
+        self._memory_files[MemoryTypes.EEPROM].subscribe_eeprom_change(self._handle_eeprom_change)
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
@@ -75,28 +83,34 @@ class MasterCoreController(MasterController):
     # Private stuff #
     #################
 
+    def _handle_eeprom_change(self):
+        self._output_shutter_map = {}
+        self._shutters_last_updated = 0
+        self._sensor_last_updated = 0
+        self._input_last_updated = 0
+        self._output_last_updated = 0
+        event = MasterEvent(event_type=MasterEvent.Types.EEPROM_CHANGE,
+                            data=None)
+        for callback in self._event_callbacks:
+            callback(event)
+
     def _handle_event(self, data):
         # type: (Dict[str,Any]) -> None
         core_event = MasterCoreEvent(data)
-        logger.info('Got master event: {0}'.format(core_event))
+        if core_event.type not in [MasterCoreEvent.Types.LED_BLINK,
+                                   MasterCoreEvent.Types.LED_ON]:
+            # Interesting for debug purposes, but not for everything
+            logger.info('Got master event: {0}'.format(core_event))
         if core_event.type == MasterCoreEvent.Types.OUTPUT:
             # Update internal state cache
             output_id = core_event.data['output']
             timer_value = core_event.data['timer_value']
             if timer_value is not None:
                 timer_value *= core_event.data['timer_factor']
-            self._output_states[output_id] = {'id': output_id,
-                                              'status': 1 if core_event.data['status'] else 0,
-                                              'ctimer': timer_value,
-                                              'dimmer': core_event.data['dimmer_value']}
-            # Generate generic event
-            event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE,
-                                data={'id': core_event.data['output'],
-                                      'status': {'on': core_event.data['status'],
-                                                 'value': core_event.data['dimmer_value']},
-                                      'location': {'room_id': 255}})  # TODO: Missing room
-            for callback in self._event_callbacks:
-                callback(event)
+            self._process_new_output_state(output_id=output_id,
+                                           status=core_event.data['status'],
+                                           timer=timer_value,
+                                           dimmer=core_event.data['dimmer_value'])
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             event = self._input_state.handle_event(core_event)
             for callback in self._event_callbacks:
@@ -106,6 +120,29 @@ class MasterCoreController(MasterController):
             if sensor_id not in self._sensor_states:
                 return
             self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
+
+    def _process_new_output_state(self, output_id, status, timer, dimmer):
+        new_state = {'id': output_id,
+                     'status': 1 if status else 0,
+                     'ctimer': timer,
+                     'dimmer': dimmer}
+        current_state = self._output_states.get(output_id)
+        if current_state is not None:
+            if current_state['status'] == new_state['status'] and current_state['dimmer'] == new_state['dimmer']:
+                return
+        self._output_states[output_id] = new_state
+        # Generate generic event
+        event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE,
+                            data={'id': output_id,
+                                  'status': {'on': status,
+                                             'value': dimmer},
+                                  'location': {'room_id': 255}})  # TODO: Missing room
+        for callback in self._event_callbacks:
+            callback(event)
+        # Handle shutter events, if needed
+        shutter_id = self._output_shutter_map.get(output_id)
+        if shutter_id is not None:
+            self._refresh_shutter_state(shutter_id)
 
     def _synchronize(self):
         # type: () -> None
@@ -119,6 +156,9 @@ class MasterCoreController(MasterController):
                     self._set_master_state(True)
                 if self._sensor_last_updated + self._sensor_interval < time.time():
                     self._refresh_sensor_states()
+                    self._set_master_state(True)
+                if self._shutters_last_updated + self._shutters_interval < time.time():
+                    self._refresh_shutter_states()
                     self._set_master_state(True)
                 time.sleep(1)
             except CommunicationTimedOutException:
@@ -144,10 +184,10 @@ class MasterCoreController(MasterController):
             data['module_type'] = input_module.module.device_type
         return data
 
-    def _enumerate_io_modules(self, module_type):
+    def _enumerate_io_modules(self, module_type, amount_per_module=8):
         cmd = CoreAPI.general_configuration_number_of_modules()
         module_count = self._master_communicator.do_command(cmd, {})[module_type]
-        return xrange(module_count * 8)
+        return xrange(module_count * amount_per_module)
 
     #######################
     # Internal management #
@@ -265,55 +305,44 @@ class MasterCoreController(MasterController):
     # Outputs
 
     def set_output(self, output_id, state, dimmer=None, timer=None):
-        # TODO: Use `dimmer` and `timer`
-        _ = dimmer, timer
+        output = OutputConfiguration(output_id)
+        if output.is_shutter:
+            # Shutter outputs cannot be controlled
+            return
+        _ = dimmer, timer  # TODO: Use `dimmer` and `timer`
         action = 1 if state else 0
         self._master_communicator.do_command(CoreAPI.basic_action(), {'type': 0, 'action': action,
                                                                       'device_nr': output_id,
                                                                       'extra_parameter': 0})
 
     def toggle_output(self, output_id):
+        output = OutputConfiguration(output_id)
+        if output.is_shutter:
+            # Shutter outputs cannot be controlled
+            return
         self._master_communicator.do_command(CoreAPI.basic_action(), {'type': 0, 'action': 16,
                                                                       'device_nr': output_id,
                                                                       'extra_parameter': 0})
 
-    def load_output(self, output_id, fields=None):
+    def load_output(self, output_id):  # type: (int) -> OutputDTO
         output = OutputConfiguration(output_id)
-        timer = 0
-        if output.timer_type == 2:
-            timer = output.timer_value
-        elif output.timer_type == 1:
-            timer = output.timer_value / 10.0
-        data = {'id': output.id,
-                'module_type': output.module.device_type,  # TODO: Proper translation
-                'name': output.name,
-                'timer': timer,  # TODO: Proper calculation
-                'floor': 255,
-                'type': output.output_type,  # TODO: Proper translation
-                'can_led_1_id': 255,
-                'can_led_1_function': 'UNKNOWN',
-                'can_led_2_id': 255,
-                'can_led_2_function': 'UNKNOWN',
-                'can_led_3_id': 255,
-                'can_led_3_function': 'UNKNOWN',
-                'can_led_4_id': 255,
-                'can_led_4_function': 'UNKNOWN',
-                'room': 255}
-        if fields is None:
-            return data
-        return {field: data[field] for field in fields}
+        if output.is_shutter:
+            # Outputs that are used by a shutter are returned as unconfigured (read-only) outputs
+            return OutputDTO(id=output.id)
+        return OutputMapper.orm_to_dto(output)
 
-    def load_outputs(self, fields=None):
+    def load_outputs(self):  # type: () -> List[OutputDTO]
         outputs = []
         for i in self._enumerate_io_modules('output'):
-            outputs.append(self.load_output(i, fields))
+            outputs.append(self.load_output(i))
         return outputs
 
-    def save_outputs(self, outputs, fields=None):
-        for output_data in outputs:
-            new_data = {'id': output_data['id'],
-                        'name': output_data['name']}  # TODO: Rest of the mapping
-            output = OutputConfiguration.deserialize(new_data)
+    def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
+        for output_dto, fields in outputs:
+            output = OutputMapper.dto_to_orm(output_dto, fields)
+            if output.is_shutter:
+                # Shutter outputs cannot be changed
+                continue
             output.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
 
     def get_output_status(self, output_id):
@@ -323,38 +352,137 @@ class MasterCoreController(MasterController):
         return self._output_states.values()
 
     def _refresh_output_states(self):
-        amount_output_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['output']
-        for i in xrange(amount_output_modules * 8):
+        for i in self._enumerate_io_modules('output'):
             state = self._master_communicator.do_command(CoreAPI.output_detail(), {'device_nr': i})
-            # TODO: also trigger callback when status changed without an event.
-            self._output_states[i] = {'id': i,
-                                      'status': state['status'],  # 1 or 0
-                                      'ctimer': state['timer'],
-                                      'dimmer': state['dimmer']}
+            self._process_new_output_state(i, state['status'], state['timer'], state['dimmer'])
         self._output_last_updated = time.time()
 
     # Shutters
 
     def shutter_up(self, shutter_id):
-        self._master_communicator.do_command(CoreAPI.basic_action(), {'type': 10, 'action': 1,
-                                                                      'device_nr': shutter_id,
-                                                                      'extra_parameter': 0})
+        self._master_communicator.do_basic_action(action_type=10,
+                                                  action=1,
+                                                  device_nr=shutter_id)
 
     def shutter_down(self, shutter_id):
-        self._master_communicator.do_command(CoreAPI.basic_action(), {'type': 10, 'action': 2,
-                                                                      'device_nr': shutter_id,
-                                                                      'extra_parameter': 0})
+        self._master_communicator.do_basic_action(action_type=10,
+                                                  action=2,
+                                                  device_nr=shutter_id)
 
     def shutter_stop(self, shutter_id):
-        self._master_communicator.do_command(CoreAPI.basic_action(), {'type': 10, 'action': 0,
-                                                                      'device_nr': shutter_id,
-                                                                      'extra_parameter': 0})
+        self._master_communicator.do_basic_action(action_type=10,
+                                                  action=0,
+                                                  device_nr=shutter_id)
+
+    def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
+        shutter = ShutterConfiguration(shutter_id)
+        shutter_dto = ShutterMapper.orm_to_dto(shutter)
+        # Load information that is set on the Output(Module)Configuration
+        output_module = OutputConfiguration(shutter.outputs.output_0).module
+        if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
+            shutter_dto.up_down_config = 1
+        else:
+            shutter_dto.up_down_config = 0
+        return shutter_dto
+
+    def load_shutters(self):  # type: () -> List[ShutterDTO]
+        # At this moment, the system expects a given amount of Shutter modules to be physically
+        # installed. However, in the Core+, this is not the case as a Shutter isn't a physical module
+        # but instead a virtual layer over physical Output modules. For easy backwards compatible
+        # implementation, a Shutter will map 1-to-1 to the Outputs with the same ID. This means we only need
+        # to emulate such a Shutter module foreach Output module.
+        shutters = []
+        for shutter_id in self._enumerate_io_modules('output', amount_per_module=4):
+            shutters.append(self.load_shutter(shutter_id))
+        return shutters
+
+    def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
+        # TODO: Batch saving - postpone eeprom activate if relevant for the Core
+        # TODO: Atomic saving
+        for shutter_dto, fields in shutters:
+            # Configure shutter
+            shutter = ShutterMapper.dto_to_orm(shutter_dto, fields)
+            if shutter.timer_down is not None and shutter.timer_up is not None:
+                # Shutter is "configured"
+                shutter.outputs.output_0 = shutter.id * 2
+                self._output_shutter_map[shutter.outputs.output_0] = shutter.id
+                self._output_shutter_map[shutter.outputs.output_1] = shutter.id
+                is_configured = True
+            else:
+                self._output_shutter_map.pop(shutter.outputs.output_0, None)
+                self._output_shutter_map.pop(shutter.outputs.output_1, None)
+                shutter.outputs.output_0 = 255 * 2
+                is_configured = False
+            shutter.save()
+            # Mark related Outputs as "occupied by shutter"
+            output_module = OutputConfiguration(shutter_dto.id * 2).module
+            setattr(output_module.shutter_config, 'are_{0}_outputs'.format(shutter.output_set), not is_configured)
+            setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
+            output_module.save()
+
+    def _refresh_shutter_states(self):
+        for shutter_id in self._enumerate_io_modules('output', amount_per_module=4):
+            shutter = ShutterConfiguration(shutter_id)
+            if shutter.outputs.output_0 != 255 * 2:
+                self._output_shutter_map[shutter.outputs.output_0] = shutter.id
+                self._output_shutter_map[shutter.outputs.output_1] = shutter.id
+            else:
+                self._output_shutter_map.pop(shutter.outputs.output_0, None)
+                self._output_shutter_map.pop(shutter.outputs.output_1, None)
+            self._refresh_shutter_state(shutter_id)
+        self._shutters_last_updated = time.time()
+
+    def _refresh_shutter_state(self, shutter_id):
+        shutter = ShutterConfiguration(shutter_id)
+        if shutter.outputs.output_0 == 255 * 2:
+            return
+        output_0_on = self._output_states.get(shutter.outputs.output_0, {}).get('status') == 1
+        output_1_on = self._output_states.get(shutter.outputs.output_1, {}).get('status') == 1
+        output_module = OutputConfiguration(shutter.outputs.output_0).module
+        if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
+            up, down = output_0_on, output_1_on
+        else:
+            up, down = output_1_on, output_0_on
+
+        if up == 1 and down == 0:
+            state = ShutterEnums.State.GOING_UP
+        elif down == 1 and up == 0:
+            state = ShutterEnums.State.GOING_DOWN
+        else:  # Both are off or - unlikely - both are on
+            state = ShutterEnums.State.STOPPED
+
+        for callback in self._event_callbacks:
+            event_data = {'id': shutter_id,
+                          'status': state,
+                          'location': {'room_id': 255}}  # TODO: rooms
+            callback(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
+
+    def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
+        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+
+    def shutter_group_down(self, shutter_group_id):  # type: (int) -> None
+        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+
+    def shutter_group_stop(self, shutter_group_id):  # type: (int) -> None
+        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+
+    def load_shutter_group(self, shutter_group_id):  # type: (int) -> ShutterGroupDTO
+        return ShutterGroupDTO(id=shutter_group_id)
+
+    def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
+        shutter_groups = []
+        for i in xrange(16):
+            shutter_groups.append(ShutterGroupDTO(id=i))
+        return shutter_groups
+
+    def save_shutter_groups(self, shutter_groups):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
+        pass  # TODO: Implement when/if ShutterGroups get actual properties
 
     # Can Led functions
 
     def load_can_led_configurations(self, fields=None):
         # type: (Any) -> List[Dict[str,Any]]
-        return [] # TODO: implement
+        return []  # TODO: implement
 
     # Sensors
 
@@ -433,12 +561,6 @@ class MasterCoreController(MasterController):
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         raise NotImplementedError()
 
-    def shutter_group_down(self, group_id):
-        raise NotImplementedError()
-
-    def shutter_group_up(self, group_id):
-        raise NotImplementedError()
-
     def add_virtual_output_module(self):
         raise NotImplementedError()
 
@@ -447,6 +569,16 @@ class MasterCoreController(MasterController):
 
     def add_virtual_input_module(self):
         raise NotImplementedError()
+
+    # Rooms
+
+    def load_room_configuration(self, room_id, fields=None):
+        # type: (int, Any) -> Dict[str,Any]
+        return {}  # TODO: Implement
+
+    def load_room_configurations(self, fields=None):
+        # type: (Any) -> List[Dict[str,Any]]
+        return []  # TODO: Implement
 
     # Generic
 
@@ -487,10 +619,10 @@ class MasterCoreController(MasterController):
         raise NotImplementedError()
 
     def error_list(self):
-        raise NotImplementedError()
+        return []  # TODO: Implement
 
     def last_success(self):
-        raise NotImplementedError()
+        return time.time()  # TODO: Implement
 
     def clear_error_list(self):
         raise NotImplementedError()
@@ -512,6 +644,9 @@ class MasterCoreController(MasterController):
 
     def set_all_lights_floor_on(self, floor):
         raise NotImplementedError()
+
+    def get_configuration_dirty_flag(self):
+        return False  # TODO: Implement
 
 
 class MasterInputState(object):

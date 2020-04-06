@@ -23,6 +23,7 @@ from croniter import croniter
 import xmlrunner
 import time
 import fakesleep
+from mock import Mock
 from datetime import datetime, timedelta
 from threading import Lock, Semaphore
 from ioc import SetTestMode, SetUpTestInjections
@@ -77,7 +78,8 @@ class SchedulingControllerTest(unittest.TestCase):
                             maintenance_controller=None,
                             message_client=None,
                             configuration_controller=None,
-                            thermostat_controller=None)
+                            thermostat_controller=None,
+                            shutter_controller=Mock())
         controller = SchedulingController()
         SetUpTestInjections(scheduling_controller=controller)
         controller.set_webinterface(WebInterface())
@@ -227,7 +229,7 @@ class SchedulingControllerTest(unittest.TestCase):
         next_execution1 = cron.get_next(ret_type=float)
         self.assertEqual(schedule1.is_due, False)
         self.assertEqual(schedule1.next_execution, next_execution1)
-        
+
         start2 = start - timedelta(days=10).total_seconds()
         end2 = start + timedelta(days=10).total_seconds()
         controller.add_schedule('group_action', start2, 'GROUP_ACTION', 1, '0 0 * * *', None, end2)

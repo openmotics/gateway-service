@@ -1,0 +1,52 @@
+# Copyright (C) 2018 OpenMotics BV
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+The events module contains various event classes
+"""
+
+import ujson as json
+
+
+class GatewayEvent(object):
+    """
+    GatewayEvent object
+    """
+
+    class Types(object):
+        INPUT_CHANGE = 'INPUT_CHANGE'
+        OUTPUT_CHANGE = 'OUTPUT_CHANGE'
+        SHUTTER_CHANGE = 'SHUTTER_CHANGE'
+        THERMOSTAT_CHANGE = 'THERMOSTAT_CHANGE'
+        THERMOSTAT_GROUP_CHANGE = 'THERMOSTAT_GROUP_CHANGE'
+        ACTION = 'ACTION'
+        PING = 'PING'
+        PONG = 'PONG'
+
+    def __init__(self, event_type, data):
+        self.type = event_type
+        self.data = data
+
+    def serialize(self):
+        return {'type': self.type,
+                'data': self.data,
+                '_version': 1.0}  # Add version so that event processing code can handle multiple formats
+
+    def __str__(self):
+        return json.dumps(self.serialize())
+
+    @staticmethod
+    def deserialize(data):
+        return GatewayEvent(event_type=data['type'],
+                            data=data['data'])

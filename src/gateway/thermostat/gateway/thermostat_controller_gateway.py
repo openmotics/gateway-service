@@ -8,7 +8,7 @@ from peewee import DoesNotExist
 from playhouse.signals import post_save
 from ioc import Injectable, Inject, Singleton, INJECTED
 from bus.om_bus_events import OMBusEvents
-from gateway.observer import Event
+from gateway.events import GatewayEvent
 from models import Output, DaySchedule, Preset, Thermostat, ThermostatGroup, OutputToThermostatGroup, ValveToThermostat, Valve, Pump, Feature
 from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
 from gateway.thermostat.thermostat_controller import ThermostatController
@@ -687,14 +687,14 @@ class ThermostatControllerGateway(ThermostatController):
         self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': thermostat_number})
         location = {'room_id': room}
         for callback in self._event_subscriptions:
-            callback(Event(event_type=Event.Types.THERMOSTAT_CHANGE,
-                           data={'id': thermostat_number,
-                                 'status': {'preset': active_preset,
-                                            'current_setpoint': current_setpoint,
-                                            'actual_temperature': actual_temperature,
-                                            'output_0': percentages[0],
-                                            'output_1': percentages[1]},
-                                 'location': location}))
+            callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_CHANGE,
+                                  data={'id': thermostat_number,
+                                        'status': {'preset': active_preset,
+                                                   'current_setpoint': current_setpoint,
+                                                   'actual_temperature': actual_temperature,
+                                                   'output_0': percentages[0],
+                                                   'output_1': percentages[1]},
+                                        'location': location}))
 
     def v0_event_thermostat_group_changed(self, thermostat_group):
         """
@@ -703,11 +703,11 @@ class ThermostatControllerGateway(ThermostatController):
         logger.debug('v0_event_thermostat_group_changed: {}'.format(thermostat_group))
         self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
         for callback in self._event_subscriptions:
-            callback(Event(event_type=Event.Types.THERMOSTAT_GROUP_CHANGE,
-                           data={'id': 0,
-                                 'status': {'state': 'ON' if thermostat_group.on else 'OFF',
-                                            'mode': 'COOLING' if thermostat_group.mode == 'cooling' else 'HEATING'},
-                                 'location': {}}))
+            callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
+                                  data={'id': 0,
+                                        'status': {'state': 'ON' if thermostat_group.on else 'OFF',
+                                                   'mode': 'COOLING' if thermostat_group.mode == 'cooling' else 'HEATING'},
+                                        'location': {}}))
 
 
 @post_save(sender=ThermostatGroup)
