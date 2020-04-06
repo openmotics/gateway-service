@@ -118,7 +118,7 @@ class MessageClient(object):
             self._stop = True
         signal(SIGTERM, stop)
 
-        receiver = Thread(target=self._message_receiver)
+        receiver = Thread(target=self._message_receiver, name='MessageClient receiver')
         receiver.daemon = True
         receiver.start()
 

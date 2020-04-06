@@ -103,7 +103,7 @@ class MessageService(object):
             try:
                 conn = self.listener.accept()
                 logger.info('connection accepted from {0}'.format(self.listener.last_accepted))
-                receiver = Thread(target=self._receiver, args=(conn,))
+                receiver = Thread(target=self._receiver, args=(conn,), name='MessageService receiver')
                 receiver.daemon = True
                 receiver.start()
             except IOError as io_error:
@@ -123,6 +123,6 @@ class MessageService(object):
             logger.info('Stopping OM messaging service... Done')
         signal(SIGTERM, stop)
 
-        server = Thread(target=self._server)
+        server = Thread(target=self._server, name='MessageService server')
         server.daemon = True
         server.start()
