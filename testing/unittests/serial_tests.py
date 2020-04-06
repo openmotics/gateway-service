@@ -18,12 +18,70 @@ Contains the SerialMock.
 @author: fryckbos
 """
 
-import time
+import os
+import pty
 import threading
+import time
 import unittest
+
 import xmlrunner
+from serial import Serial
 
 from serial_utils import printable
+
+if False:  # MYPY
+    from typing import List, Optional
+
+
+class DummyPty(object):
+    def __init__(self, sequence):
+        # type: (List[str]) -> None
+        self._replies = []  # type: List[str]
+        self._sequence = sequence
+        self._read = threading.Event()
+        master, slave = pty.openpty()
+        self.fd = os.fdopen(master, 'wb', 0)
+        self._serial = Serial(os.ttyname(slave))
+        self._serial.timeout = None
+
+    def master_reply(self, data):
+        # type: (str) -> None
+        self._replies.append(data)
+
+    def master_wait(self, timeout=2):
+        # type: (Optional[float]) -> None
+        self._read.clear()
+        self._read.wait(timeout)
+
+    def read(self, size=None):
+        # type: (Optional[int]) -> str
+        data = self._serial.read(size)
+        if data:
+            self._read.set()
+        return data
+
+    def write(self, data):
+        # type: (str) -> int
+        if data != self._sequence[0]:
+            assert printable(self._sequence[0]) == printable(data)
+        self._sequence.pop(0)
+        if self._replies:
+            self.fd.write(self._replies[0])
+            self._replies.pop(0)
+        return len(data)
+
+    def fileno(self):
+        # type: () -> int
+        return self._serial.fileno()
+
+    @property
+    def in_waiting(self):
+        # type: () -> int
+        return self._serial.in_waiting
+
+    def inWaiting(self):  # pylint: disable=C0103
+        # type: () -> int
+        return self._serial.inWaiting()
 
 
 def sin(data):

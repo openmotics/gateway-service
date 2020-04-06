@@ -26,7 +26,7 @@ from master.master_communicator import MasterCommunicator
 from gateway.pulses import PulseCounterController
 import master.master_api as master_api
 from master_tests.eeprom_controller_tests import get_eeprom_controller_dummy
-from serial_tests import SerialMock, sout, sin
+from serial_tests import DummyPty
 
 
 class PulseCounterControllerTest(unittest.TestCase):
@@ -102,13 +102,13 @@ class PulseCounterControllerTest(unittest.TestCase):
                       'pv15': 15, 'pv16': 16, 'pv17': 17, 'pv18': 18, 'pv19': 19, 'pv20': 20, 'pv21': 21,
                       'pv22': 22, 'pv23': 23, 'crc': [67, 1, 20]}
 
-        serial_mock = SerialMock([sin(action.create_input(1, in_fields)),
-                                  sout(action.create_output(1, out_fields))])
-        SetUpTestInjections(controller_serial=serial_mock)
+        pty = DummyPty([action.create_input(1, in_fields)])
+        SetUpTestInjections(controller_serial=pty)
 
         master_communicator = MasterCommunicator(init_master=False)
         master_communicator.start()
 
+        pty.master_reply(action.create_output(1, out_fields))
         controller = self._get_controller(master_communicator)
         controller.set_pulse_counter_amount(26)
         controller.set_pulse_counter_status(24, 123)
