@@ -18,9 +18,10 @@ import logging
 import os
 import pkgutil
 import traceback
-from gateway.observer import Event
 from datetime import datetime
 from ioc import Injectable, Inject, INJECTED, Singleton
+from gateway.observer import Event
+from gateway.shutters import ShutterController
 from plugins.runner import PluginRunner, RunnerWatchdog
 
 logger = logging.getLogger("openmotics")
@@ -34,6 +35,7 @@ class PluginController(object):
     @Inject
     def __init__(self,
                  web_interface=INJECTED, configuration_controller=INJECTED, observer=INJECTED,
+                 shutter_controller=INJECTED,
                  runtime_path='/opt/openmotics/python/plugin_runtime',
                  plugins_path='/opt/openmotics/python/plugins',
                  plugin_config_path='/opt/openmotics/etc'):
@@ -42,6 +44,7 @@ class PluginController(object):
         """
         self.__webinterface = web_interface
         self.__config_controller = configuration_controller
+        self.__shuttercontroller = shutter_controller  # type: ShutterController
         self.__runtime_path = runtime_path
         self.__plugins_path = plugins_path
         self.__plugin_config_path = plugin_config_path
@@ -337,7 +340,7 @@ class PluginController(object):
                 runner.process_output_status(states)
         if event.type == Event.Types.SHUTTER_CHANGE:
             # TODO: Implement versioning so a plugin can receive per-shutter events
-            states = self.__observer.get_shutter_status()
+            states = self.__shuttercontroller.get_states()
             for runner in self.__iter_running_runners():
                 runner.process_shutter_status(states)
 

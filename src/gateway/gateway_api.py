@@ -30,9 +30,8 @@ import threading
 
 import constants
 from bus.om_bus_events import OMBusEvents
-from gateway.dto import OutputDTO, ShutterGroupDTO, ShutterDTO
+from gateway.dto import OutputDTO
 from gateway.hal.master_controller import MasterController
-from gateway.observer import Observer
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Platform, System
 from power import power_api
@@ -66,18 +65,14 @@ class GatewayApi(object):
     def __init__(self,
                  master_controller=INJECTED, power_communicator=INJECTED,
                  power_controller=INJECTED, pulse_controller=INJECTED,
-                 message_client=INJECTED, observer=INJECTED, configuration_controller=INJECTED, shutter_controller=INJECTED):
+                 message_client=INJECTED, observer=INJECTED, configuration_controller=INJECTED):
         """
-        :param master_communicator: Master communicator
-        :type master_communicator: master.master_communicator.MasterCommunicator
         :param master_controller: Master controller
         :type master_controller: gateway.hal.master_controller.MasterController
         :param power_communicator: Power communicator
         :type power_communicator: power.power_communicator.PowerCommunicator
         :param power_controller: Power controller
         :type power_controller: power.power_controller.PowerController
-        :param eeprom_controller: EEPROM controller
-        :type eeprom_controller: master.eeprom_controller.EepromController
         :param pulse_controller: Pulse controller
         :type pulse_controller: gateway.pulses.PulseCounterController
         :param message_client: Om Message Client
@@ -86,8 +81,6 @@ class GatewayApi(object):
         :type observer: gateway.observer.Observer
         :param configuration_controller: Configuration controller
         :type configuration_controller: gateway.config.ConfigurationController
-        :param shutter_controller: Shutter Controller
-        :type shutter_controller: gateway.shutters.ShutterController
         """
         self.__master_controller = master_controller  # type: MasterController
         self.__config_controller = configuration_controller
@@ -96,7 +89,6 @@ class GatewayApi(object):
         self.__pulse_controller = pulse_controller
         self.__message_client = message_client
         self.__observer = observer
-        self.__shutter_controller = shutter_controller
 
         self.__previous_on_outputs = set()
 
@@ -289,76 +281,6 @@ class GatewayApi(object):
         # TODO: work with output controller
         # TODO: also switch other lights (e.g. from plugins)
         return self.__master_controller.set_all_lights_floor_on(floor)
-
-    # Shutter functions
-
-    def get_shutter_status(self):  # type: () -> Dict[str, Any]
-        """ Get a list containing the status of the Shutters. """
-        # TODO: work with shutter controller
-        return self.__observer.get_shutter_status()
-
-    def do_shutter_down(self, shutter_id, position):  # type: (int, Optional[int]) -> None
-        """
-        Make a shutter go down. The shutter stops automatically when the down or specified position is reached
-        :param shutter_id: The id of the shutter.
-        :param position: The desired end position
-        """
-        self.__shutter_controller.shutter_down(shutter_id, position)
-
-    def do_shutter_up(self, shutter_id, position):  # type: (int, Optional[int]) -> None
-        """
-        Make a shutter go up. The shutter stops automatically when the up or specified position is reached
-        :param shutter_id: The id of the shutter.
-        :param position: The desired end position
-        """
-        self.__shutter_controller.shutter_up(shutter_id, position)
-
-    def do_shutter_stop(self, shutter_id):  # type: (int) -> None
-        """
-        Make a shutter stop.
-        :param shutter_id: The id of the shutter.
-        """
-        self.__shutter_controller.shutter_stop(shutter_id)
-
-    def do_shutter_goto(self, shutter_id, position):  # type: (int, int) -> None
-        """
-        Make a shutter go to the desired position
-        :param shutter_id: The id of the shutter.
-        :param position: The desired end position
-        """
-        self.__shutter_controller.shutter_goto(shutter_id, position)
-
-    def shutter_report_position(self, shutter_id, position, direction=None):  # type: (int, int, str) -> None
-        """
-        Report the actual position of a shutter
-        :param shutter_id: The id of the shutter.
-        :param position: The actual position
-        :param direction: The direction
-        """
-        self.__shutter_controller.report_shutter_position(shutter_id, position, direction)
-
-    def do_shutter_group_down(self, group_id):  # type: (int) -> None
-        """
-        Make a shutter group go down. The shutters stop automatically when the down position is
-        reached (after the predefined number of seconds).
-        :param group_id: The id of the shutter group.
-        """
-        return self.__shutter_controller.shutter_group_down(group_id)
-
-    def do_shutter_group_up(self, group_id):  # type: (int) -> None
-        """
-        Make a shutter group go up. The shutters stop automatically when the up position is
-        reached (after the predefined number of seconds).
-        :param group_id: The id of the shutter group.
-        """
-        return self.__shutter_controller.shutter_group_up(group_id)
-
-    def do_shutter_group_stop(self, group_id):  # type: (int) -> None
-        """
-        Make a shutter group stop.
-        :param group_id: The id of the shutter group.
-        """
-        return self.__shutter_controller.shutter_group_stop(group_id)
 
     # Input functions
 
@@ -772,42 +694,6 @@ class GatewayApi(object):
         """ Set multiple output_configurations. """
         # TODO: work with output controller
         self.__master_controller.save_outputs(config)
-
-    # Shutters
-
-    def get_shutter_configuration(self, shutter_id):  # type: (int) -> ShutterDTO
-        """ Gets a specific shutter configuration defined by its id. """
-        return self.__master_controller.load_shutter(shutter_id)
-
-    def get_shutter_configurations(self):  # type: () -> List[ShutterDTO]
-        """ Get all shutter_configurations. """
-        return self.__master_controller.load_shutters()
-
-    def set_shutter_configuration(self, config):  # type: (Tuple[ShutterDTO, List[str]]) -> None
-        """ Set one shutter_configuration. """
-        self.__master_controller.save_shutters([config])
-        self.__shutter_controller.update_config(self.get_shutter_configurations())
-
-    def set_shutter_configurations(self, config):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
-        """ Set multiple shutter_configurations. """
-        self.__master_controller.save_shutters(config)
-        self.__shutter_controller.update_config(self.get_shutter_configurations())
-
-    def get_shutter_group_configuration(self, group_id):  # type: (int) -> ShutterGroupDTO
-        """ Get a specific shutter_group_configuration defined by its id. """
-        return self.__master_controller.load_shutter_group(group_id)
-
-    def get_shutter_group_configurations(self):  # type: () -> List[ShutterGroupDTO]
-        """ Get all shutter_group_configurations. """
-        return self.__master_controller.load_shutter_groups()
-
-    def set_shutter_group_configuration(self, config):  # type: (Tuple[ShutterGroupDTO, List[str]]) -> None
-        """ Set one shutter_group_configuration. """
-        self.__master_controller.save_shutter_groups([config])
-
-    def set_shutter_group_configurations(self, config):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
-        """ Set multiple shutter_group_configurations. """
-        self.__master_controller.save_shutter_groups(config)
 
     # Inputs
 

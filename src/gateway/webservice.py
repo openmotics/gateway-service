@@ -37,7 +37,6 @@ from bus.om_bus_events import OMBusEvents
 from gateway.api.serializers import OutputSerializer, ShutterSerializer, ShutterGroupSerializer
 from gateway.enums import ShutterEnums
 from gateway.maintenance_communicator import InMaintenanceModeException
-from gateway.shutters import ShutterController
 from gateway.websockets import EventsSocket, MaintenanceSocket, MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
 from models import Feature
@@ -54,6 +53,7 @@ if False:
     from gateway.metrics_collector import MetricsCollector
     from gateway.metrics_controller import MetricsController
     from gateway.scheduling import SchedulingController
+    from gateway.shutters import ShutterController
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.users import UserController
     from plugins.base import PluginController
@@ -258,7 +258,7 @@ class WebInterface(object):
     @Inject
     def __init__(self, user_controller=INJECTED, gateway_api=INJECTED, maintenance_controller=INJECTED,
                  message_client=INJECTED, configuration_controller=INJECTED, scheduling_controller=INJECTED,
-                 thermostat_controller=INJECTED):
+                 thermostat_controller=INJECTED, shutter_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -266,6 +266,7 @@ class WebInterface(object):
         self._config_controller = configuration_controller  # type: ConfigurationController
         self._scheduling_controller = scheduling_controller  # type: SchedulingController
         self._thermostat_controller = thermostat_controller  # type: ThermostatController
+        self._shutter_controller = shutter_controller  # type: ShutterController
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
@@ -642,7 +643,7 @@ class WebInterface(object):
         Get the status of the shutters.
         :returns: 'status': list of dictionaries with the following keys: id, position.
         """
-        return self._gateway_api.get_shutter_status()
+        return self._shutter_controller.get_states()
 
     @openmotics_api(auth=True, check=types(id=int, position=int))
     def do_shutter_down(self, id, position=None):  # type: (int, Optional[int]) -> Dict[str, str]
@@ -651,7 +652,7 @@ class WebInterface(object):
         :param id: The id of the shutter.
         :param position: The desired end position
         """
-        self._gateway_api.do_shutter_down(id, position)
+        self._shutter_controller.shutter_down(id, position)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int, position=int))
@@ -661,7 +662,7 @@ class WebInterface(object):
         :param id: The id of the shutter.
         :param position: The desired end position
         """
-        self._gateway_api.do_shutter_up(id, position)
+        self._shutter_controller.shutter_up(id, position)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int))
@@ -670,7 +671,7 @@ class WebInterface(object):
         Make a shutter stop.
         :param id: The id of the shutter.
         """
-        self._gateway_api.do_shutter_stop(id)
+        self._shutter_controller.shutter_stop(id)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int, position=int))
@@ -680,7 +681,7 @@ class WebInterface(object):
         :param id: The id of the shutter.
         :param position: The desired end position
         """
-        self._gateway_api.do_shutter_goto(id, position)
+        self._shutter_controller.shutter_goto(id, position)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int, position=int, direction=[ShutterEnums.Direction.UP, ShutterEnums.Direction.DOWN, ShutterEnums.Direction.STOP]))
@@ -691,7 +692,7 @@ class WebInterface(object):
         :param position: The actual position
         :param direction: The direction
         """
-        self._gateway_api.shutter_report_position(id, position, direction)
+        self._shutter_controller.report_shutter_position(id, position, direction)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int))
@@ -701,7 +702,7 @@ class WebInterface(object):
         reached (after the predefined number of seconds).
         :param id: The id of the shutter group.
         """
-        self._gateway_api.do_shutter_group_down(id)
+        self._shutter_controller.shutter_group_down(id)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int))
@@ -711,7 +712,7 @@ class WebInterface(object):
         reached (after the predefined number of seconds).
         :param id: The id of the shutter group.
         """
-        self._gateway_api.do_shutter_group_up(id)
+        self._shutter_controller.shutter_group_up(id)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int))
@@ -720,7 +721,7 @@ class WebInterface(object):
         Make a shutter group stop.
         :param id: The id of the shutter group.
         """
-        self._gateway_api.do_shutter_group_stop(id)
+        self._shutter_controller.shutter_group_stop(id)
         return {'status': 'OK'}
 
     # Thermostats
@@ -1030,7 +1031,7 @@ class WebInterface(object):
         :param id: The id of the shutter_configuration
         :param fields: The fields of the shutter_configuration to get, None if all
         """
-        return {'config': ShutterSerializer.serialize(shutter_dto=self._gateway_api.get_shutter_configuration(id),
+        return {'config': ShutterSerializer.serialize(shutter_dto=self._shutter_controller.load_shutter(id),
                                                       fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
@@ -1040,20 +1041,20 @@ class WebInterface(object):
         :param fields: The fields of the shutter_configuration to get, None if all
         """
         return {'config': [ShutterSerializer.serialize(shutter_dto=shutter, fields=fields)
-                           for shutter in self._gateway_api.get_shutter_configurations()]}
+                           for shutter in self._shutter_controller.load_shutters()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_shutter_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
         """ Set one shutter_configuration. """
         data = ShutterSerializer.deserialize(config)
-        self._gateway_api.set_shutter_configuration(data)
+        self._shutter_controller.save_shutters([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_shutter_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
         """ Set multiple shutter_configurations. """
         data = [ShutterSerializer.deserialize(entry) for entry in config]
-        self._gateway_api.set_shutter_configurations(data)
+        self._shutter_controller.save_shutters(data)
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
@@ -1063,7 +1064,7 @@ class WebInterface(object):
         :param id: The id of the shutter_group_configuration
         :param fields: The field of the shutter_group_configuration to get, None if all
         """
-        return {'config': ShutterGroupSerializer.serialize(shutter_group_dto=self._gateway_api.get_shutter_group_configuration(id),
+        return {'config': ShutterGroupSerializer.serialize(shutter_group_dto=self._shutter_controller.load_shutter_group(id),
                                                            fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
@@ -1073,20 +1074,20 @@ class WebInterface(object):
         :param fields: The field of the shutter_group_configuration to get, None if all
         """
         return {'config': [ShutterGroupSerializer.serialize(shutter_group_dto=shutter_group, fields=fields)
-                           for shutter_group in self._gateway_api.get_shutter_group_configurations()]}
+                           for shutter_group in self._shutter_controller.load_shutter_groups()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_shutter_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
         """ Set one shutter_group_configuration. """
         data = ShutterGroupSerializer.deserialize(config)
-        self._gateway_api.set_shutter_group_configuration(data)
+        self._shutter_controller.save_shutter_groups([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_shutter_group_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
         """ Set multiple shutter_group_configurations. """
         data = [ShutterGroupSerializer.deserialize(entry) for entry in config]
-        self._gateway_api.set_shutter_group_configurations(data)
+        self._shutter_controller.save_shutter_groups(data)
         return {}
 
     # Input configuration

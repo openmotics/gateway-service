@@ -135,9 +135,6 @@ class Observer(object):
 
     # Shutters
 
-    def get_shutter_status(self):
-        return self._shutter_controller.get_states()
-
     def _shutter_changed(self, shutter_id, shutter_data, shutter_state):  # type: (int, ShutterDTO, str) -> None
         """ Executed by the Shutter Status tracker when a shutter changed state """
         for callback in self._event_subscriptions:

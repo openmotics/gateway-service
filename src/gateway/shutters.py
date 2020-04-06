@@ -22,10 +22,10 @@ from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.enums import ShutterEnums
-from gateway.dto import ShutterDTO
+from gateway.dto import ShutterDTO, ShutterGroupDTO
 
 if False:  # MYPY
-    from typing import List, Dict, Optional
+    from typing import List, Dict, Optional, Tuple
 
 logger = logging.getLogger('openmotics')
 
@@ -129,6 +129,27 @@ class ShutterController(object):
             self._log('Shutter {0} reported position is desired position: Stopping'.format(shutter_id))
             self.shutter_stop(shutter_id)
 
+    # Configure shutters
+
+    def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
+        return self._master_controller.load_shutter(shutter_id)
+
+    def load_shutters(self):  # type: () -> List[ShutterDTO]
+        return self._master_controller.load_shutters()
+
+    def save_shutters(self, config):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
+        self._master_controller.save_shutters(config)
+        self.update_config(self.load_shutters())
+
+    def load_shutter_group(self, group_id):  # type: (int) -> ShutterGroupDTO
+        return self._master_controller.load_shutter_group(group_id)
+
+    def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
+        return self._master_controller.load_shutter_groups()
+
+    def save_shutter_groups(self, config):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
+        self._master_controller.save_shutter_groups(config)
+
     # Control shutters
 
     def shutter_group_down(self, group_id):
@@ -175,6 +196,8 @@ class ShutterController(object):
         self._desired_positions[shutter_id] = None
         self._directions[shutter_id] = ShutterEnums.Direction.STOP
         self._execute_shutter(shutter_id, ShutterEnums.Direction.STOP)
+
+    # Control operations
 
     def _shutter_goto_direction(self, shutter_id, direction, desired_position=None):
         # Fetch and validate data
