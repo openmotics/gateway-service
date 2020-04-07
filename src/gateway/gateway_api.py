@@ -43,11 +43,11 @@ if False:  # MYPY:
 logger = logging.getLogger('openmotics')
 
 
-def convert_nan(number):
-    """ Convert nan to 0. """
+def convert_nan(number, default):  # type: (float, Optional[float]) -> Optional[float]
+    """ Convert nan to a default value """
     if math.isnan(number):
         logger.warning('Got an unexpected NaN')
-    return 0.0 if math.isnan(number) else number
+    return default if math.isnan(number) else number
 
 
 def check_basic_action(ret_dict):
@@ -1094,8 +1094,8 @@ class GatewayApi(object):
 
                 out = []
                 for i in range(num_ports):
-                    out.append([convert_nan(volt[i]), convert_nan(freq[i]),
-                                convert_nan(current[i]), convert_nan(power[i])])
+                    out.append([convert_nan(volt[i], default=0.0), convert_nan(freq[i], default=0.0),
+                                convert_nan(current[i], default=0.0), convert_nan(power[i], default=0.0)])
 
                 output[str(module_id)] = out
             except CommunicationTimedOutException:
@@ -1121,11 +1121,13 @@ class GatewayApi(object):
                 version = modules[module_id]['version']
                 num_ports = power_api.NUM_PORTS[version]
 
-                day = [0] * num_ports  # TODO: Initialse to None is supported upstream
-                night = [0] * num_ports
+                day = [None] * num_ports  # type: List[Optional[int]]
+                night = [None] * num_ports  # type: List[Optional[int]]
                 if version in [power_api.ENERGY_MODULE, power_api.POWER_MODULE]:
-                    day = self.__power_communicator.do_command(addr, power_api.get_day_energy(version))
-                    night = self.__power_communicator.do_command(addr, power_api.get_night_energy(version))
+                    day = [convert_nan(entry, default=None)
+                           for entry in self.__power_communicator.do_command(addr, power_api.get_day_energy(version))]
+                    night = [convert_nan(entry, default=None)
+                             for entry in self.__power_communicator.do_command(addr, power_api.get_night_energy(version))]
                 elif version == power_api.P1_CONCENTRATOR:
                     status = self.__power_communicator.do_command(addr, power_api.get_status_p1(version))[0]
                     raw_day = self.__power_communicator.do_command(addr, power_api.get_day_energy(version))[0]
@@ -1142,7 +1144,7 @@ class GatewayApi(object):
 
                 out = []
                 for i in range(num_ports):
-                    out.append([convert_nan(day[i]), convert_nan(night[i])])
+                    out.append([day[i], night[i]])
 
                 output[str(module_id)] = out
             except CommunicationTimedOutException:

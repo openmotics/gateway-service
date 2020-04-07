@@ -573,6 +573,10 @@ class MetricsCollector(object):
             self._pause(start, metric_type)
 
     def _run_power_openmotics(self, metric_type):
+        def _add_if_not_none(dictionary, field, value):
+            if value is not None:
+                dictionary[field] = float(value)
+
         while not self._stopped:
             start = time.time()
             now = time.time()
@@ -596,12 +600,13 @@ class MetricsCollector(object):
                 for module_id, device_id in mapping.iteritems():
                     if module_id in result:
                         for index, entry in enumerate(result[module_id]):
+                            voltage, frequency, current, power = entry
                             if device_id.format(index) in power_data:
                                 usage = power_data[device_id.format(index)]
-                                usage.update({'voltage': entry[0],
-                                              'frequency': entry[1],
-                                              'current': entry[2],
-                                              'power': entry[3]})
+                                _add_if_not_none(usage, 'voltage', voltage)
+                                _add_if_not_none(usage, 'frequency', frequency)
+                                _add_if_not_none(usage, 'current', current)
+                                _add_if_not_none(usage, 'power', power)
             except CommunicationTimedOutException:
                 logger.error('Error getting realtime power: CommunicationTimedOutException')
             except InMaintenanceModeException:
@@ -613,11 +618,15 @@ class MetricsCollector(object):
                 for module_id, device_id in mapping.iteritems():
                     if module_id in result:
                         for index, entry in enumerate(result[module_id]):
+                            day, night = entry
+                            total = None
+                            if day is not None and night is not None:
+                                total = day + night
                             if device_id.format(index) in power_data:
                                 usage = power_data[device_id.format(index)]
-                                usage.update({'counter': entry[0] + entry[1],
-                                              'counter_day': entry[0],
-                                              'counter_night': entry[1]})
+                                _add_if_not_none(usage, 'counter', total)
+                                _add_if_not_none(usage, 'counter_day', day)
+                                _add_if_not_none(usage, 'counter_night', night)
             except CommunicationTimedOutException:
                 logger.error('Error getting total energy: CommunicationTimedOutException')
             except InMaintenanceModeException:
@@ -627,18 +636,13 @@ class MetricsCollector(object):
             for device_id in power_data:
                 device = power_data[device_id]
                 try:
-                    if device['name'] != '' and 'voltage' in device and 'counter' in device:
+                    if device['name'] != '' and len(device) > 1:
+                        name = device.pop('name')
                         self._enqueue_metrics(metric_type=metric_type,
-                                              values={'voltage': device['voltage'],
-                                                      'current': device['current'],
-                                                      'frequency': device['frequency'],
-                                                      'power': device['power'],
-                                                      'counter': float(device['counter']),
-                                                      'counter_day': float(device['counter_day']),
-                                                      'counter_night': float(device['counter_night'])},
+                                              values=device,
                                               tags={'type': 'openmotics',
                                                     'id': device_id,
-                                                    'name': device['name']},
+                                                    'name': name},
                                               timestamp=now)
                 except Exception as ex:
                     logger.exception('Error processing OpenMotics power device {0}: {1}'.format(device_id, ex))
