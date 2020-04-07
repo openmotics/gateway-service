@@ -32,7 +32,7 @@ class ThermostatControllerMaster(ThermostatController):
 
         self._monitor_thread = DaemonThread(name='ThermostatControllerMaster monitor',
                                             target=self._monitor,
-                                            interval=1)
+                                            interval=30, delay=10)
 
         self._thermostat_status = ThermostatStatusMaster(on_thermostat_change=self._thermostat_changed,
                                                          on_thermostat_group_change=self._thermostat_group_changed)

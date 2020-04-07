@@ -44,7 +44,7 @@ class Watchdog(object):
 
         self._watchdog_thread = DaemonThread(name='Watchdog watcher',
                                              target=self._watch,
-                                             interval=60)
+                                             interval=60, delay=10)
 
     def start(self):
         # type: () -> None
