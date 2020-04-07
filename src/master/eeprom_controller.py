@@ -27,7 +27,9 @@ import six
 from six.moves import range
 
 if False:  # MYPY
-    from typing import Any, Dict
+    from typing import Any, Dict, List, Iterable, Type, TypeVar
+    from master.eeprom_extension import EepromExtension
+    M = TypeVar('M', bound='EepromModel')
 
 logger = logging.getLogger("openmotics")
 
@@ -51,29 +53,22 @@ class EepromController(object):
         self.dirty = True
 
     def invalidate_cache(self):
+        # type: () -> None
         """ Invalidate the cache, this should happen when maintenance mode was used. """
         self._eeprom_file.invalidate_cache()
 
-    def read(self, eeprom_model, id=None, fields=None):
+    def read(self, eeprom_model, id, fields=None):
+        # type: (Type[M], int, List[str]) -> M
         """
         Create an instance of an EepromModel by reading it from the EepromFile. The id has to
         be specified if the model has an EepromId field.
-
-        :type eeprom_model: class
-        :type id: int
-        :type fields: list of basestring
-        :rtype: master.eeprom_controller.EepromModel
         """
         return self.read_batch(eeprom_model, [id], fields)[0]
 
     def read_batch(self, eeprom_model, ids, fields=None):
+        # type: (Type[M], Iterable[int], List[str]) -> List[M]
         """
         Create a list of instances of an EepromModel by reading it from the EepromFile.
-
-        :type eeprom_model: class
-        :type ids: list of int
-        :type fields: list of basestring
-        :rtype: list of master.eeprom_controller.EepromModel
         """
         return_data = []
         for id in ids:
@@ -83,27 +78,22 @@ class EepromController(object):
         return return_data
 
     def read_address(self, address):
+        # type: (EepromAddress) -> EepromData
         """
         Reads a given address (+length) from the eeprom
-        :param address: Address to read
-        :type address: master.eeprom_controller.EepromAddress
-        :returns: Eeprom data
-        :rtype: master.eeprom_controller.EepromData
         """
         return self._eeprom_file.read([address])[address]
 
     def read_all(self, eeprom_model, fields=None):
+        # type: (Type[M], List[str]) -> List[M]
         """
         Create a list of instance of an EepromModel by reading all ids of that model from the
         EepromFile. Only applicable for EepromModels with an EepromId.
-
-        :type eeprom_model: class
-        :type fields: list of basestring
-        :rtype: list of master.eeprom_controller.EepromModel
         """
-        return self.read_batch(eeprom_model, list(range(eeprom_model.get_max_id(self._eeprom_file) + 1)), fields)
+        return self.read_batch(eeprom_model, range(eeprom_model.get_max_id(self._eeprom_file) + 1), fields)
 
     def write(self, eeprom_model):
+        # type: (M) -> None
         """
         Write a given EepromModel to the EepromFile.
 
@@ -112,6 +102,7 @@ class EepromController(object):
         return self.write_batch([eeprom_model])
 
     def write_batch(self, eeprom_models):
+        # type: (List[M]) -> None
         """
         Write a list of EepromModel instances to the EepromFile.
 
@@ -324,11 +315,7 @@ class EepromModel(object):
             self._fields['eext'].append(field_name)
 
     def load_from_system(self, eeprom_file, eeprom_extension, fields=None):
-        """
-        :type eeprom_file: master.eeprom_controller.EepromFile
-        :type eeprom_extension: master.eeprom_extension.EepromExtension
-        :type fields: list of basestring
-        """
+        # type: (EepromFile, EepromExtension, List[str]) -> None
         expected_fields = [] if fields is None else fields[:]
         self._loaded_fields = []
         addresses = []
@@ -364,7 +351,7 @@ class EepromModel(object):
                 field.load_bytes(data)
             self._loaded_fields.append(field_name)
         if len(expected_fields) > 0:
-            raise RuntimeError('Unknown fields: {0}'.format(', '.join(fields)))
+            raise RuntimeError('Unknown fields: {0}'.format(', '.join(expected_fields)))
 
     def get_eeprom_data(self):
         data = []
@@ -963,7 +950,7 @@ class EepromEnum(EepromDataType):
 
     def decode(self, data):
         index = ord(data[0])
-        if index in list(self._enum_values.keys()):
+        if index in self._enum_values.keys():
             return self._enum_values[index]
         return 'UNKNOWN'
 
