@@ -27,7 +27,7 @@ import six
 from six.moves import range
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Iterable, Type, TypeVar
+    from typing import Any, Dict, List, Optional, Iterable, Type, TypeVar
     from master.eeprom_extension import EepromExtension
     M = TypeVar('M', bound='EepromModel')
 
@@ -57,8 +57,8 @@ class EepromController(object):
         """ Invalidate the cache, this should happen when maintenance mode was used. """
         self._eeprom_file.invalidate_cache()
 
-    def read(self, eeprom_model, id, fields=None):
-        # type: (Type[M], int, List[str]) -> M
+    def read(self, eeprom_model, id=None, fields=None):
+        # type: (Type[M], Optional[int], List[str]) -> M
         """
         Create an instance of an EepromModel by reading it from the EepromFile. The id has to
         be specified if the model has an EepromId field.
@@ -66,7 +66,7 @@ class EepromController(object):
         return self.read_batch(eeprom_model, [id], fields)[0]
 
     def read_batch(self, eeprom_model, ids, fields=None):
-        # type: (Type[M], Iterable[int], List[str]) -> List[M]
+        # type: (Type[M], Iterable[Optional[int]], List[str]) -> List[M]
         """
         Create a list of instances of an EepromModel by reading it from the EepromFile.
         """
