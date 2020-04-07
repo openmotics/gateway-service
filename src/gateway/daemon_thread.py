@@ -16,6 +16,7 @@ from __future__ import absolute_import, print_function
 
 import logging
 import threading
+import time
 
 logger = logging.getLogger("openmotics")
 
@@ -41,7 +42,7 @@ class DaemonThread(object):
 
     def start(self):
         # type: () -> None
-        logger.debug('Starting daemon {}'.format(self._name))
+        logger.info('Starting daemon {}'.format(self._name))
         self._thread.start()
 
     def stop(self):
@@ -66,13 +67,13 @@ class DaemonThread(object):
         # type: () -> None
         backoff = 0
         while not self._stop.is_set():
+            start = time.time()
             if not self._parent.is_alive():
                 logger.info('Aborting daemon {}'.format(self._name))
                 return
             try:
-                logger.debug('Running {}'.format(self._name))
                 self._target()
-                self.sleep(self._interval)
+                self.sleep(max(0, self._interval - (time.time() - start)))
                 backoff = 0
             except DaemonThreadWait as ex:
                 logger.debug('{}, waiting {} seconds'.format(ex, self._delay))

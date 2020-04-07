@@ -102,11 +102,11 @@ class MetricsController(object):
     def start(self):
         self._collector_plugins = DaemonThread(name='MetricsController plugin collector',
                                                target=self._collect_plugins,
-                                               interval=0.1)
+                                               interval=1)
         self._collector_plugins.start()
         self._collector_openmotics = DaemonThread(name='MetricsController plugin distributor',
                                                   target=self._collect_openmotics,
-                                                  interval=0.1)
+                                                  interval=1)
         self._collector_openmotics.start()
         self._distributor_plugins = DaemonThread(name='MetricsController plugin distributor',
                                                  target=self._distribute_plugins,
@@ -495,14 +495,12 @@ class MetricsController(object):
             if metric_ok is False:
                 continue
             self._put(metric)
-        self._collector_plugins.sleep(max(0.1, 1 - (time.time() - start)))
 
     def _collect_openmotics(self):
         # type: () -> None
         start = time.time()
         for metric in self._metrics_collector.collect_metrics():
             self._put(metric)
-        self._collector_openmotics.sleep(max(0.1, 1 - (time.time() - start)))
 
     def _distribute_plugins(self):
         try:
