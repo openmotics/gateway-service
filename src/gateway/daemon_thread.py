@@ -73,7 +73,7 @@ class DaemonThread(object):
                 return
             try:
                 self._target()
-                self.sleep(max(0, self._interval - (time.time() - start)))
+                self.sleep(max(0.1, self._interval - (time.time() - start)))
                 backoff = 0
             except DaemonThreadWait as ex:
                 logger.debug('{}, waiting {} seconds'.format(ex, self._delay))

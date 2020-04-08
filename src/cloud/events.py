@@ -49,7 +49,7 @@ class EventSender(object):
         self._events_queue = deque()
         self._events_thread = DaemonThread(name='EventSender loop',
                                            target=self._send_events_loop,
-                                           interval=0.05, delay=0.2)
+                                           interval=0.1, delay=0.2)
 
     def start(self):
         # type: () -> None
