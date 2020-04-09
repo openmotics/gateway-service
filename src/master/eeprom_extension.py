@@ -17,6 +17,7 @@ Contains the EEPROM extensions. This is used to store data that does not fit int
 data is stored in a sqlite database on the gateways filesystem.
 """
 
+from __future__ import absolute_import
 import sqlite3
 import os.path
 from threading import Lock

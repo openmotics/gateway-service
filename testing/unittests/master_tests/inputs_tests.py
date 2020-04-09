@@ -16,12 +16,14 @@
 Tests for InputStatus.
 """
 
+from __future__ import absolute_import
 import time
 import unittest
 
 import mock
 import xmlrunner
 from master.inputs import InputStatus
+from six.moves import range
 
 
 class InputStatusTest(unittest.TestCase):
@@ -58,7 +60,7 @@ class InputStatusTest(unittest.TestCase):
             self.assertEqual([1], inps.get_recent())
 
         with mock.patch.object(time, 'time', return_value=30):
-            for i in xrange(2, 10):
+            for i in range(2, 10):
                 inps.set_input({'input': i, 'status': 1})
             self.assertEqual(5, len(inps.get_recent()))
 

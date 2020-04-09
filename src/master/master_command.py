@@ -19,10 +19,11 @@ Provides a function for each API call.
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import math
 
-import master_api
 from serial_utils import printable
+from six.moves import range
 
 
 class MasterCommandSpec(object):
@@ -86,7 +87,7 @@ class MasterCommandSpec(object):
         for byte in encoded_string:
             crc += ord(byte)
 
-        return 'C' + chr(crc / 256) + chr(crc % 256)
+        return 'C' + chr(crc // 256) + chr(crc % 256)
 
     def create_output(self, cid, fields):
         """ Create an output command from the master using this spec and the provided fields.
@@ -129,7 +130,7 @@ class MasterCommandSpec(object):
             if index + num_bytes <= len(byte_str):
                 try:
                     decoded = field.decode(byte_str[index:index + num_bytes])
-                except NeedMoreBytesException, nmbe:
+                except NeedMoreBytesException as nmbe:
                     return decode_field(index, byte_str, field, nmbe.bytes_required)
                 else:
                     partial_result[field.name] = decoded
@@ -332,7 +333,7 @@ class FieldType(object):
             if field_value < 0 or field_value > 65535:
                 raise ValueError('Int does not fit in 2 bytes: %d' % field_value)
             else:
-                return str(chr(field_value / 256)) + str(chr(field_value % 256))
+                return str(chr(field_value // 256)) + str(chr(field_value % 256))
         elif self.python_type == str:
             if len(field_value) != self.length:
                 raise ValueError('String is not of the correct length: expected %d, got %d' % (self.length, len(field_value)))
@@ -441,6 +442,7 @@ class SvtFieldType(object):
     @classmethod
     def decode(cls, byte_str):
         """ Decode a svt byte string into a instance of the Svt class. """
+        from . import master_api
         return master_api.Svt.from_byte(byte_str[0])
 
 
@@ -550,7 +552,7 @@ class ErrorListFieldType(object):
         for field in field_value:
             bytes += "%s%s%s%s" % (field[0][0],
                                    chr(int(field[0][1:])),
-                                   chr(field[1] / 256),
+                                   chr(field[1] // 256),
                                    chr(field[1] % 256))
         return bytes
 

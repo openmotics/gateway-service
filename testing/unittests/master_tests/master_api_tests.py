@@ -18,9 +18,11 @@ Tests for master_api module.
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import unittest
 import xmlrunner
 from master.master_api import Svt
+from six.moves import range
 
 class SvtTest(unittest.TestCase):
     """ Tests for :class`Svt`. """

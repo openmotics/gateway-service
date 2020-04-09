@@ -16,6 +16,7 @@
 Tests for MasterCommunicator module.
 """
 
+from __future__ import absolute_import
 import threading
 import time
 import unittest
@@ -29,6 +30,7 @@ from master.master_communicator import BackgroundConsumer, \
     CrcCheckFailedException, MasterCommunicator
 from serial_tests import DummyPty
 from serial_utils import CommunicationTimedOutException
+from six.moves import range
 
 
 class MasterCommunicatorTest(unittest.TestCase):
