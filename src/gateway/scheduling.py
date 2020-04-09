@@ -214,7 +214,7 @@ class SchedulingController(object):
 
     def start(self):
         self._stop = False
-        self._processor = Thread(target=self._process)
+        self._processor = Thread(target=self._process, name='SchedulingController processor')
         self._processor.daemon = True
         self._processor.start()
 
@@ -225,7 +225,8 @@ class SchedulingController(object):
         while self._stop is False:
             for schedule in self._schedules.values():
                 if schedule.status == 'ACTIVE' and schedule.is_due:
-                    thread = Thread(target=self._execute_schedule, args=(schedule,))
+                    thread = Thread(target=self._execute_schedule, args=(schedule,),
+                                    name='SchedulingController executor')
                     thread.daemon = True
                     thread.start()
             now = int(time.time())

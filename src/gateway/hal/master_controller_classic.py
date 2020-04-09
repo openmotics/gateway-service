@@ -18,25 +18,26 @@ Module for communicating with the Master
 import logging
 import time
 from datetime import datetime
-from threading import Thread, Timer
+from threading import Timer
 
-from toolbox import Toolbox
+from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
 from gateway.enums import ShutterEnums
-from gateway.hal.mappers_classic import OutputMapper, ShutterMapper, ShutterGroupMapper
+from gateway.hal.mappers_classic import OutputMapper, ShutterGroupMapper, \
+    ShutterMapper
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master import eeprom_models, master_api
-from master.eeprom_models import (
-    CanLedConfiguration, DimmerConfiguration, EepromAddress, GroupActionConfiguration,
-    RoomConfiguration, ScheduledActionConfiguration, StartupActionConfiguration
-)
+from master.eeprom_models import CanLedConfiguration, DimmerConfiguration, \
+    EepromAddress, GroupActionConfiguration, RoomConfiguration, \
+    ScheduledActionConfiguration, StartupActionConfiguration
 from master.inputs import InputStatus
 from master.master_communicator import BackgroundConsumer
 from master.outputs import OutputStatus
 from serial_utils import CommunicationTimedOutException
+from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Tuple
@@ -66,8 +67,9 @@ class MasterClassicController(MasterController):
         self._output_status = OutputStatus(on_output_change=self._output_changed)
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
-        self._synchronization_thread = Thread(target=self._synchronize, name='ClassicMasterSynchronization')
-        self._synchronization_thread.daemon = True
+        self._synchronization_thread = DaemonThread(name='MasterClassicController synchronization',
+                                                    target=self._synchronize,
+                                                    interval=30, delay=10)
         self._master_version = None
         self._master_online = False
         self._input_interval = 300
@@ -99,38 +101,33 @@ class MasterClassicController(MasterController):
 
     def _synchronize(self):
         # type: () -> None
-        while True:
-            try:
-                now = time.time()
-                self._get_master_version()
-                # Validate communicator checks
-                if self._time_last_updated < now - 300:
-                    self._check_master_time()
-                    self._time_last_updated = now
-                if self._settings_last_updated < now - 900:
-                    self._check_master_settings()
-                    self._settings_last_updated = now
-                # Refresh if required
-                if self._output_last_updated + self._output_interval < now:
-                    self._refresh_outputs()
-                    self._set_master_state(True)
-                if self._input_last_updated + self._input_interval < now:
-                    self._refresh_inputs()
-                    self._set_master_state(True)
-                if self._shutters_last_updated + self._shutters_interval < time.time():
-                    self._refresh_shutter_states()
-                    self._set_master_state(True)
-                time.sleep(1)
-            except CommunicationTimedOutException:
-                logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
-                self._set_master_state(False)
-                time.sleep(10)
-            except InMaintenanceModeException:
-                # This is an expected situation
-                time.sleep(10)
-            except Exception as ex:
-                logger.exception('Unexpected error during synchronization: {0}'.format(ex))
-                time.sleep(10)
+        try:
+            now = time.time()
+            self._get_master_version()
+            # Validate communicator checks
+            if self._time_last_updated < now - 300:
+                self._check_master_time()
+                self._time_last_updated = now
+            if self._settings_last_updated < now - 900:
+                self._check_master_settings()
+                self._settings_last_updated = now
+            # Refresh if required
+            if self._output_last_updated + self._output_interval < now:
+                self._refresh_outputs()
+                self._set_master_state(True)
+            if self._input_last_updated + self._input_interval < now:
+                self._refresh_inputs()
+                self._set_master_state(True)
+            if self._shutters_last_updated + self._shutters_interval < time.time():
+                self._refresh_shutter_states()
+                self._set_master_state(True)
+        except CommunicationTimedOutException:
+            logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
+            self._set_master_state(False)
+            raise DaemonThreadWait
+        except InMaintenanceModeException:
+            # This is an expected situation
+            raise DaemonThreadWait
 
     def _get_master_version(self):
         if self._master_version is None:
@@ -273,8 +270,14 @@ class MasterClassicController(MasterController):
     #######################
 
     def start(self):
+        # type: () -> None
         super(MasterClassicController, self).start()
         self._synchronization_thread.start()
+
+    def stop(self):
+        # type: () -> None
+        self._synchronization_thread.stop()
+        super(MasterClassicController, self).stop()
 
     def set_plugin_controller(self, plugin_controller):
         """

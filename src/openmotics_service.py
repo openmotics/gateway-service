@@ -122,6 +122,7 @@ class OpenmoticsService(object):
         power_serial_port = config.get('OpenMotics', 'power_serial')
         Injectable.value(power_db=constants.get_power_database_file())
         if power_serial_port:
+            # TODO: make non blocking?
             Injectable.value(power_serial=RS485(Serial(power_serial_port, 115200, timeout=None)))
         else:
             Injectable.value(power_serial=None)
@@ -231,13 +232,15 @@ class OpenmoticsService(object):
             _ = signum, frame
             logger.info('Stopping OM core service...')
             watchdog.stop()
+            web_service.stop()
+            power_communicator.stop()
             master_controller.stop()
             maintenance_controller.stop()
-            web_service.stop()
             metrics_collector.stop()
             metrics_controller.stop()
             thermostat_controller.stop()
             plugin_controller.stop()
+            communication_led_controller.stop()
             event_sender.stop()
             logger.info('Stopping OM core service... Done')
             signal_request['stop'] = True

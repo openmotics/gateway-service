@@ -1,16 +1,20 @@
 import logging
 import time
-from threading import Thread
-from ioc import Injectable, Inject, Singleton, INJECTED
+
 from bus.om_bus_events import OMBusEvents
-from gateway.observer import Observer
+from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.events import GatewayEvent
+from gateway.observer import Observer
+from gateway.thermostat.master.thermostat_status_master import \
+    ThermostatStatusMaster
 from gateway.thermostat.thermostat_controller import ThermostatController
-from gateway.thermostat.master.thermostat_status_master import ThermostatStatusMaster
+from ioc import INJECTED, Inject, Injectable, Singleton
 from master import master_api
-from master.eeprom_models import ThermostatConfiguration, GlobalThermostatConfiguration, CoolingConfiguration, \
-    CoolingPumpGroupConfiguration, GlobalRTD10Configuration, RTD10HeatingConfiguration, RTD10CoolingConfiguration, \
-    PumpGroupConfiguration
+from master.eeprom_models import CoolingConfiguration, \
+    CoolingPumpGroupConfiguration, GlobalRTD10Configuration, \
+    GlobalThermostatConfiguration, PumpGroupConfiguration, \
+    RTD10CoolingConfiguration, RTD10HeatingConfiguration, \
+    ThermostatConfiguration
 from master.master_communicator import CommunicationTimedOutException
 
 logger = logging.getLogger("openmotics")
@@ -26,8 +30,9 @@ class ThermostatControllerMaster(ThermostatController):
         self._eeprom_controller = eeprom_controller
         self._master_communicator = master_communicator
 
-        self._monitor_thread = Thread(target=self._monitor)
-        self._monitor_thread.daemon = True
+        self._monitor_thread = DaemonThread(name='ThermostatControllerMaster monitor',
+                                            target=self._monitor,
+                                            interval=30, delay=10)
 
         self._thermostat_status = ThermostatStatusMaster(on_thermostat_change=self._thermostat_changed,
                                                          on_thermostat_group_change=self._thermostat_group_changed)
@@ -43,7 +48,7 @@ class ThermostatControllerMaster(ThermostatController):
 
     def stop(self):
         # type: () -> None
-        pass
+        self._monitor_thread.stop()
 
     ################################
     # v1 APIs
@@ -542,22 +547,18 @@ class ThermostatControllerMaster(ThermostatController):
         return {'status': 'OK'}
 
     def _monitor(self):
+        # type: () -> None
         """ Monitors certain system states to detect changes without events """
-        while True:
-            try:
-                # Refresh if required
-                if self._thermostats_last_updated + self._thermostats_interval < time.time():
-                    self._refresh_thermostats()
-                # Restore interval if required
-                if self._thermostats_restore < time.time():
-                    self._thermostats_interval = self._thermostats_original_interval
-                time.sleep(1)
-            except CommunicationTimedOutException:
-                logger.error('Got communication timeout during thermostat monitoring, waiting 10 seconds.')
-                time.sleep(10)
-            except Exception as ex:
-                logger.exception('Unexpected error during monitoring: {0}'.format(ex))
-                time.sleep(10)
+        try:
+            # Refresh if required
+            if self._thermostats_last_updated + self._thermostats_interval < time.time():
+                self._refresh_thermostats()
+            # Restore interval if required
+            if self._thermostats_restore < time.time():
+                self._thermostats_interval = self._thermostats_original_interval
+        except CommunicationTimedOutException:
+            logger.error('Got communication timeout during thermostat monitoring, waiting 10 seconds.')
+            raise DaemonThreadWait
 
     def _refresh_thermostats(self):
         """

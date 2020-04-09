@@ -54,7 +54,8 @@ class RS485(object):
             fcntl.ioctl(fileno, 0x542F, serial_rs485)
 
         serial.timeout = None
-        self.__thread = Thread(target=self._reader)
+        self.__thread = Thread(target=self._reader,
+                               name='RS485 reader')
         self.__thread.daemon = True
         self.__thread.start()
         self.read_queue = Queue()
@@ -74,4 +75,4 @@ class RS485(object):
                     for byte in self.__serial.read(size):
                         self.read_queue.put(byte)
         except Exception as ex:
-            print 'Error in reader: {0}'.format(ex)
+            print('Error in reader: {0}'.format(ex))

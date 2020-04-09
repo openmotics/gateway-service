@@ -16,13 +16,15 @@
 Contains a watchdog that monitors internal service threads
 """
 
+import logging
 import os
 import time
-import logging
-import ujson as json
-from threading import Thread
 from subprocess import check_output
-from ioc import Injectable, Inject, INJECTED, Singleton
+
+import ujson as json
+
+from gateway.daemon_thread import DaemonThread
+from ioc import INJECTED, Inject, Injectable, Singleton
 
 logger = logging.getLogger("openmotics")
 
@@ -40,46 +42,36 @@ class Watchdog(object):
         self._power_communicator = power_communicator
         self._config_controller = configuration_controller
 
-        self._watchdog_thread = None
-        self._stopped = False
+        self._watchdog_thread = DaemonThread(name='Watchdog watcher',
+                                             target=self._watch,
+                                             interval=60, delay=10)
 
     def start(self):
+        # type: () -> None
         self._stopped = False
-        self._watchdog_thread = Thread(target=self._watch)
-        self._watchdog_thread.daemon = True
         self._watchdog_thread.start()
 
     def stop(self):
-        self._stopped = True
+        # type: () -> None
+        self._watchdog_thread.stop()
 
     def _watch(self):
+        # type: () -> None
         # Cleanup legacy
         self._config_controller.remove('communication_recovery')
 
-        # Start actual watching
-        while not self._stopped:
-            try:
-                reset_requirement = self._controller_check('master', self._master_controller)
-                if reset_requirement is not None:
-                    if reset_requirement == 'device':
-                        self._master_controller.cold_reset()
-                    time.sleep(15)
-                    os._exit(1)
-                reset_requirement = self._controller_check('energy', self._power_communicator)
-                if reset_requirement is not None:
-                    if reset_requirement == 'device':
-                        self._master_controller.power_cycle_bus()
-                    time.sleep(15)
-                    os._exit(1)
-                sleep = 60
-            except Exception:
-                logger.exception('Unexpected exception when watching')
-                sleep = 60
-
-            for _ in xrange(sleep):
-                if self._stopped:
-                    return
-                time.sleep(1)
+        reset_requirement = self._controller_check('master', self._master_controller)
+        if reset_requirement is not None:
+            if reset_requirement == 'device':
+                self._master_controller.cold_reset()
+            time.sleep(15)
+            os._exit(1)
+        reset_requirement = self._controller_check('energy', self._power_communicator)
+        if reset_requirement is not None:
+            if reset_requirement == 'device':
+                self._master_controller.power_cycle_bus()
+            time.sleep(15)
+            os._exit(1)
 
     def _controller_check(self, name, controller):
         recovery_data_key = 'communication_recovery_{0}'.format(name)
