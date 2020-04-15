@@ -743,6 +743,8 @@ class EepromString(EepromDataType):
         return ''.join([i if ord(i) < 128 else ' ' for i in dirty])
 
     def encode(self, field):
+        if field is None:
+            field = ''
         return append_tail(field, self._length)
 
     def get_length(self):
@@ -762,6 +764,8 @@ class EepromByte(EepromDataType):
         return ord(data[0])
 
     def encode(self, field):
+        if field is None:
+            field = 255
         return str(chr(field))
 
     def get_length(self):
@@ -781,6 +785,8 @@ class EepromWord(EepromDataType):
         return ord(data[1]) * 256 + ord(data[0])
 
     def encode(self, field):
+        if field is None:
+            field = 65535
         return ''.join([chr(int(field) % 256), chr(int(field) / 256)])
 
     def get_length(self):
@@ -832,11 +838,10 @@ class EepromSignedTemp(EepromDataType):
             return multiplier * float(value & 15) / 2.0
 
     def encode(self, field):
-        if field < -7.5 or field > 7.5:
-            raise ValueError('SignedTemp should be in [-7.5, 7.5], was {0}'.format(field))
-
-        if field == 0.0:
+        if field is None or field == 0.0:
             return str(chr(255))
+        elif field < -7.5 or field > 7.5:
+            raise ValueError('SignedTemp should be in [-7.5, 7.5], was {0}'.format(field))
         else:
             offset = 0 if field > 0 else 128
             value = int(abs(field) * 2)
@@ -862,6 +867,8 @@ class EepromTime(EepromDataType):
         return "{0:02d}:{1:02d}".format(hours, minutes)
 
     def encode(self, field):
+        if field is None:
+            return str(chr(255))
         split = [int(x) for x in field.split(':')]
         if len(split) != 2:
             raise ValueError('Time is not in HH:MM format: {0}'.format(field))
@@ -887,7 +894,9 @@ class EepromCSV(EepromDataType):
         return ','.join([str(ord(b)) for b in remove_tail(data, '\xff')])
 
     def encode(self, field):
-        actions = '' if len(field) == 0 else ''.join([chr(int(x)) for x in field.split(",")])
+        actions = ''
+        if field is not None and len(field) > 0:
+            actions = ''.join([chr(int(x)) for x in field.split(",")])
         return append_tail(actions, self._length, '\xff')
 
     def get_length(self):
@@ -911,7 +920,9 @@ class EepromActions(EepromDataType):
         return ','.join([str(ord(b)) for b in remove_tail(data, '\xff\xff')])
 
     def encode(self, field):
-        actions = '' if len(field) == 0 else ''.join([chr(int(x)) for x in field.split(',')])
+        actions = ''
+        if field is not None and len(field) > 0:
+            actions = ''.join([chr(int(x)) for x in field.split(',')])
         return append_tail(actions, 2 * self._length, '\xff\xff')
 
     def get_length(self):
@@ -1020,6 +1031,8 @@ class EextByte(EextDataType):
         return int(value)
 
     def encode(self, value):
+        if value is None:
+            value = self.default_value()
         return str(value)
 
 
@@ -1036,6 +1049,8 @@ class EextWord(EextDataType):
         return int(value)
 
     def encode(self, value):
+        if value is None:
+            value = self.default_value()
         return str(value)
 
 
@@ -1052,6 +1067,8 @@ class EextString(EextDataType):
         return value
 
     def encode(self, value):
+        if value is None:
+            value = self.default_value()
         return value
 
 
@@ -1068,4 +1085,6 @@ class EextBool(EextDataType):
         return bool(value)
 
     def encode(self, value):
+        if value is None:
+            value = self.default_value()
         return str(value)
