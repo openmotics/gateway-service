@@ -16,6 +16,7 @@
 The pulses module contains the PulseCounterController.
 """
 
+from __future__ import absolute_import
 import sqlite3
 import logging
 import master.master_api as master_api

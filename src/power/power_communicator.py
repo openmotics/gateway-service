@@ -16,6 +16,7 @@
 Module to communicate with the power modules.
 """
 
+from __future__ import absolute_import
 import logging
 import time
 from Queue import Empty

@@ -16,6 +16,7 @@
 Tests for the fields module
 """
 
+from __future__ import absolute_import
 import unittest
 import xmlrunner
 import logging

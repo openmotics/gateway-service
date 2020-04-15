@@ -15,6 +15,7 @@
 """
 This module contains logic to handle shutters with their state/position
 """
+from __future__ import absolute_import
 import logging
 import time
 from threading import Lock

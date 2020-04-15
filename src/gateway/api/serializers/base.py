@@ -16,6 +16,7 @@
 """
 (De)serializer helpers
 """
+from __future__ import absolute_import
 from toolbox import Toolbox
 
 if False:  # MYPY

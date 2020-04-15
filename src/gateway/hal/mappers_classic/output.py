@@ -16,6 +16,7 @@
 """
 Output Mapper
 """
+from __future__ import absolute_import
 from toolbox import Toolbox
 from gateway.dto.output import OutputDTO
 from gateway.dto.feedback_led import FeedbackLedDTO

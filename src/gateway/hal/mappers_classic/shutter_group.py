@@ -16,6 +16,7 @@
 """
 ShutterGroup Mapper
 """
+from __future__ import absolute_import
 from toolbox import Toolbox
 from gateway.dto.shutter_group import ShutterGroupDTO
 from master.eeprom_controller import EepromModel

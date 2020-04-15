@@ -16,6 +16,7 @@
 Module to work update an uCAN
 """
 
+from __future__ import absolute_import
 import logging
 import os
 import struct

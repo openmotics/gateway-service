@@ -16,6 +16,7 @@
 IPC Bus messaging service
 """
 
+from __future__ import absolute_import
 import logging
 import time
 import ujson as json

@@ -15,6 +15,7 @@
 """
 Tool to bootload the power modules from the command line.
 """
+from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 

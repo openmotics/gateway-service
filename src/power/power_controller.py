@@ -17,6 +17,7 @@ The power controller module contains the PowerController class, which keeps trac
 power modules and their address.
 """
 
+from __future__ import absolute_import
 import sqlite3
 from threading import Lock
 from ioc import Injectable, Inject, INJECTED, Singleton

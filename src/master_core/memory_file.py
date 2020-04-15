@@ -15,6 +15,7 @@
 """
 Contains a memory representation
 """
+from __future__ import absolute_import
 import logging
 from ioc import Inject, INJECTED
 from master_core.core_api import CoreAPI

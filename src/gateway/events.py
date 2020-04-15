@@ -16,6 +16,7 @@
 The events module contains various event classes
 """
 
+from __future__ import absolute_import
 import ujson as json
 
 

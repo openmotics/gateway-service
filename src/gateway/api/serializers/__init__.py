@@ -16,3 +16,4 @@
 from output import OutputSerializer
 from shutter import ShutterSerializer
 from shutter_group import ShutterGroupSerializer
+from __future__ import absolute_import

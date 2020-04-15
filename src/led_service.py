@@ -18,6 +18,7 @@ This service allows other services to set the leds over the om bus and check whe
 gateway is in authorized mode.
 """
 
+from __future__ import absolute_import
 from platform_utils import System, Platform
 System.import_libs()
 

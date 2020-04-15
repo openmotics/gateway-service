@@ -15,6 +15,7 @@
 
 """ Module contains all websocket related logic """
 
+from __future__ import absolute_import
 import msgpack
 import cherrypy
 import logging

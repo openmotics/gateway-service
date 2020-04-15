@@ -16,6 +16,7 @@
 Tests for plugins.base.
 """
 
+from __future__ import absolute_import
 import hashlib
 import inspect
 import os

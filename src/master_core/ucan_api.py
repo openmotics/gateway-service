@@ -16,6 +16,7 @@
 Contains the definition of the Core API
 """
 
+from __future__ import absolute_import
 from master_core.ucan_command import UCANCommandSpec, UCANPalletCommandSpec, SID, PalletType, Instruction
 from master_core.fields import AddressField, ByteField, WordField, VersionField, StringField, UInt32Field, ByteArrayField
 

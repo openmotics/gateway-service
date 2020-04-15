@@ -16,6 +16,7 @@
 A few helper classes
 """
 
+from __future__ import absolute_import
 import time
 import msgpack
 from select import select

@@ -16,6 +16,7 @@
 The metrics module collects and re-distributes metric data
 """
 
+from __future__ import absolute_import
 import logging
 import re
 import time

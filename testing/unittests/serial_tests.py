@@ -18,6 +18,7 @@ Contains the SerialMock.
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import os
 import pty
 import threading

@@ -15,6 +15,7 @@
 """
 Module for handling maintenance mode
 """
+from __future__ import absolute_import
 import logging
 import socket
 import random

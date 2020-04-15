@@ -16,6 +16,7 @@
 Contains the definition of the power modules Api.
 """
 
+from __future__ import absolute_import
 from power.power_command import PowerCommand
 
 BROADCAST_ADDRESS = 255

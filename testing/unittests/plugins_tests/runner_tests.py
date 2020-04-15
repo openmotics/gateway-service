@@ -16,6 +16,7 @@
 Tests for plugin runner
 """
 
+from __future__ import absolute_import
 import os
 import plugin_runtime
 import shutil

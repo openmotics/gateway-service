@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """ The update modules provides the update functionality. """
 
+from __future__ import absolute_import
 import sys
 import hashlib
 import traceback

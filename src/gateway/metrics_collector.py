@@ -16,6 +16,7 @@
 This module collects OpenMotics metrics and makes them available to the MetricsController
 """
 
+from __future__ import absolute_import
 import logging
 import time
 from collections import deque

@@ -16,6 +16,7 @@
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import unittest
 import xmlrunner
 from datetime import datetime

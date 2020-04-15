@@ -17,6 +17,7 @@ The self test scripts runs the 'echo + 1' routine on the RS485 and 2 RS232
 ports.
 """
 
+from __future__ import absolute_import
 import threading
 import sys
 

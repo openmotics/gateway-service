@@ -17,6 +17,7 @@ The thermostats module contains classes to track the current state of the thermo
 the master.
 """
 
+from __future__ import absolute_import
 from threading import Lock
 
 

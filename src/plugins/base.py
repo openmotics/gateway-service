@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """ The OpenMotics plugin controller. """
 
+from __future__ import absolute_import
 import logging
 import os
 import pkgutil

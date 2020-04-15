@@ -15,6 +15,7 @@
 """
 Memory models
 """
+from __future__ import absolute_import
 from master_core.memory_file import MemoryTypes
 from master_core.memory_types import (MemoryModelDefinition, GlobalMemoryModelDefinition,
                                       MemoryRelation,

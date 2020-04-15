@@ -15,6 +15,7 @@
 """"
 The hardware_utils module contains various classes helping with Hardware and System abstraction
 """
+from __future__ import absolute_import
 import os
 import sys
 import subprocess

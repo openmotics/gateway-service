@@ -15,6 +15,7 @@
 """
 Module for communicating with the Master
 """
+from __future__ import absolute_import
 import logging
 import time
 from datetime import datetime

@@ -18,6 +18,7 @@ For more information, see:
 * https://wiki.openmotics.com/index.php/API_Reference_Guide
 * https://wiki.openmotics.com/index.php/Bootloader_Error_Codes
 """
+from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 

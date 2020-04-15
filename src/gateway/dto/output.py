@@ -16,6 +16,7 @@
 """
 Output DTO
 """
+from __future__ import absolute_import
 from gateway.dto.feedback_led import FeedbackLedDTO
 
 if False:  # MYPY

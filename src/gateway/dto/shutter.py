@@ -16,6 +16,7 @@
 """
 Shutter DTO
 """
+from __future__ import absolute_import
 if False:  # MYPY
     from typing import Optional
 

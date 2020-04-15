@@ -15,6 +15,7 @@
 """
 Tests for metrics.
 """
+from __future__ import absolute_import
 import os
 import unittest
 import requests

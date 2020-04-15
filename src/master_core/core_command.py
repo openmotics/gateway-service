@@ -15,6 +15,7 @@
 """
 CoreCommandSpec defines payload handling; (de)serialization
 """
+from __future__ import absolute_import
 import logging
 from serial_utils import printable
 from master_core.fields import PaddingField

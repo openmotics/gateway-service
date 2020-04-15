@@ -16,6 +16,7 @@
 Tests for plugins.interfaces.
 """
 
+from __future__ import absolute_import
 import unittest
 import xmlrunner
 from plugin_runtime.base import OMPluginBase, PluginException, om_expose

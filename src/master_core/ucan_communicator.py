@@ -16,6 +16,7 @@
 Module to communicate with the uCANs.
 """
 
+from __future__ import absolute_import
 import logging
 import time
 from Queue import Queue, Empty

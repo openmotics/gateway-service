@@ -18,6 +18,7 @@ if required. On each check the vpn_service sends some status information about t
 thermostats to the cloud, to keep the status information in the cloud in sync.
 """
 
+from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 

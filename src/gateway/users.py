@@ -17,6 +17,7 @@ The users module contains the UserController class, which provides methods for c
 and authenticating users.
 """
 
+from __future__ import absolute_import
 import sqlite3
 import hashlib
 import uuid

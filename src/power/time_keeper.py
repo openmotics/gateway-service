@@ -16,6 +16,7 @@
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import logging
 from datetime import datetime
 from threading import Thread

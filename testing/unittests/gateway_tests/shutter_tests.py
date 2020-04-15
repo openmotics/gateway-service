@@ -15,6 +15,7 @@
 """
 Tests for the shutters module.
 """
+from __future__ import absolute_import
 import copy
 import fakesleep
 import time

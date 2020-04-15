@@ -16,6 +16,7 @@
 Configuration controller
 """
 
+from __future__ import absolute_import
 import time
 import sqlite3
 import logging

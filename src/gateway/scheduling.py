@@ -16,6 +16,7 @@
 The scheduling module contains the SchedulingController, this controller is used for scheduling various actions
 """
 
+from __future__ import absolute_import
 import sqlite3
 import logging
 import time

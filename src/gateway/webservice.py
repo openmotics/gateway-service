@@ -15,6 +15,7 @@
 """ Includes the WebService class """
 
 
+from __future__ import absolute_import
 import base64
 import logging
 import os

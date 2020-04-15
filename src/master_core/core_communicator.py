@@ -17,6 +17,7 @@ Module to communicate with the Core.
 
 """
 
+from __future__ import absolute_import
 import logging
 import time
 from threading import Thread, Lock

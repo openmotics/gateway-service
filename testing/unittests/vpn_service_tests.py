@@ -18,6 +18,7 @@ Tests for the vpn service.
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import time
 import threading
 import unittest

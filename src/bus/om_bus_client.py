@@ -16,6 +16,7 @@
 IPC Bus messaging client
 """
 
+from __future__ import absolute_import
 import logging
 import time
 from multiprocessing.connection import Client

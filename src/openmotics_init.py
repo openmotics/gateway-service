@@ -15,6 +15,7 @@
 """
 The main module for the OpenMotics
 """
+from __future__ import absolute_import
 from platform_utils import Platform, System
 
 System.import_libs()

@@ -18,6 +18,7 @@ Module to handle Errors from the Core
 More information: https://wiki.openmotics.com/index.php/Error_List_AIO
 """
 
+from __future__ import absolute_import
 import logging
 
 logger = logging.getLogger('openmotics')

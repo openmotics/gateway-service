@@ -15,3 +15,4 @@
 
 from output import OutputMapper
 from shutter import ShutterMapper
+from __future__ import absolute_import

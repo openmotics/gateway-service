@@ -15,6 +15,7 @@
 """
 Module for communicating with the Master
 """
+from __future__ import absolute_import
 from exceptions import NotImplementedError
 from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
 from gateway.hal.master_event import MasterEvent

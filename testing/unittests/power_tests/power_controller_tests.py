@@ -18,6 +18,7 @@ Tests for the power controller module.
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import unittest
 import xmlrunner
 import os

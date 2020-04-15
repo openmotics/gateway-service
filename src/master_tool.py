@@ -17,6 +17,7 @@ Tool to control the master from the command line.
 
 @author: fryckbos
 """
+from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 

@@ -16,6 +16,7 @@
 """
 Shutter Mapper
 """
+from __future__ import absolute_import
 from toolbox import Toolbox
 from gateway.dto.shutter import ShutterDTO
 from master_core.memory_models import ShutterConfiguration

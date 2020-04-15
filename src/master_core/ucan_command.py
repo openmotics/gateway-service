@@ -15,6 +15,7 @@
 """
 UCANCommandSpec defines payload handling; (de)serialization
 """
+from __future__ import absolute_import
 import logging
 import math
 from master_core.fields import PaddingField, UInt32Field, StringField

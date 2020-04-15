@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """ Contains the definition of the plugin interfaces. """
 
+from __future__ import absolute_import
 import inspect
 
 from base import PluginException
