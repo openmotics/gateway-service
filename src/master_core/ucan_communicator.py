@@ -27,6 +27,7 @@ from master_core.exceptions import BootloadingException
 from master_core.ucan_command import SID
 from master_core.ucan_api import UCANAPI
 from serial_utils import CommunicationTimedOutException, printable
+from six.moves import range
 
 logger = logging.getLogger('openmotics')
 

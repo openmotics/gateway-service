@@ -30,6 +30,7 @@ from ioc import SetTestMode, SetUpTestInjections
 from gateway.config import ConfigurationController
 from gateway.metrics_controller import MetricsController
 from gateway.metrics_caching import MetricsCacheController
+from six.moves import range
 
 
 class MetricsTest(unittest.TestCase):
@@ -482,7 +483,7 @@ class MetricsTest(unittest.TestCase):
         tags = {'name': 'name', 'id': 0}
 
         expected_metrics = []
-        for i in xrange(10):
+        for i in range(10):
             timestamp = 300 + 60 * 60 * 12 * i  # Metric every 12 hours
             controller.buffer_counter('OpenMotics', 'foobar', tags, {'counter': i}, timestamp)
             if not (i % 2):

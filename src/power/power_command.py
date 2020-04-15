@@ -19,6 +19,7 @@ class is used to create the power_api.
 
 from __future__ import absolute_import
 import struct
+from six.moves import range
 
 CRC_TABLE = [0, 49, 98, 83, 196, 245, 166, 151, 185, 136, 219, 234, 125, 76, 31, 46, 67, 114, 33,
              16, 135, 182, 229, 212, 250, 203, 152, 169, 62, 15, 92, 109, 134, 183, 228, 213, 66,

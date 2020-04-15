@@ -23,6 +23,7 @@ import master.master_api as master_api
 from platform_utils import Platform
 from ioc import Injectable, Inject, INJECTED, Singleton
 from master.eeprom_models import PulseCounterConfiguration
+from six.moves import range
 
 logger = logging.getLogger('openmotics')
 MASTER_PULSE_COUNTERS = 24
@@ -69,7 +70,7 @@ class PulseCounterController(object):
             raise ValueError('Amount should be {0} or more'.format(MASTER_PULSE_COUNTERS))
 
         # Create new pulse counters if required
-        for i in xrange(24, amount):
+        for i in range(24, amount):
             self._execute('INSERT INTO pulse_counters (id, name, room, persistent) ' 
                           'SELECT ?, "", 255, 0 ' 
                           'WHERE NOT EXISTS (SELECT 1 FROM pulse_counters WHERE id = ?);', (i, i))
@@ -106,10 +107,10 @@ class PulseCounterController(object):
     def _get_master_pulse_counter_status(self):
         if Platform.get_platform() == Platform.Type.CLASSIC:
             out_dict = self._master_communicator.do_command(master_api.pulse_list())
-            return [out_dict['pv{0}'.format(i)] for i in xrange(0, MASTER_PULSE_COUNTERS)]
+            return [out_dict['pv{0}'.format(i)] for i in range(0, MASTER_PULSE_COUNTERS)]
         else:
             # TODO: Fix when migrating to MasterController
-            return [0 for i in xrange(0, MASTER_PULSE_COUNTERS)]
+            return [0 for i in range(0, MASTER_PULSE_COUNTERS)]
 
     @staticmethod
     def _row_to_config(row):
@@ -159,7 +160,7 @@ class PulseCounterController(object):
             self.set_configuration(item)
 
     def get_persistence(self):
-        configs = [False for _ in xrange(0, MASTER_PULSE_COUNTERS)]
+        configs = [False for _ in range(0, MASTER_PULSE_COUNTERS)]
         for row in self._execute('SELECT persistent FROM pulse_counters ORDER BY id ASC;'):
             configs.append(row[0] >= 1)
         return configs

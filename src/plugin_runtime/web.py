@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 import re
 import requests
+from six.moves import range
 
 try:
     import ujson as json
@@ -73,7 +74,7 @@ class WebInterfaceDispatcher(object):
                 if len(args) + len(kwargs) > len(params) or len(kwargs) == 0:
                     del args[0]
             # 2. Convert to kwargs, so it's possible to do parameter parsing
-            for i in xrange(len(args)):
+            for i in range(len(args)):
                 kwargs[params[i]] = args[i]
             # 3. Make sure empty (`None` value) params are included
             for arg in kwargs:

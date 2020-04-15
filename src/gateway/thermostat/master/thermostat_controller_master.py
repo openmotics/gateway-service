@@ -17,6 +17,7 @@ from master.eeprom_models import CoolingConfiguration, \
     RTD10CoolingConfiguration, RTD10HeatingConfiguration, \
     ThermostatConfiguration
 from master.master_communicator import CommunicationTimedOutException
+from six.moves import range
 
 logger = logging.getLogger("openmotics")
 
@@ -587,7 +588,7 @@ class ThermostatControllerMaster(ThermostatController):
             self._thermostats_config = self.v0_get_thermostat_configurations(fields=fields)
 
         thermostats = []
-        for thermostat_id in xrange(32):
+        for thermostat_id in range(32):
             config = self._thermostats_config[thermostat_id]
             if (config['sensor'] <= 31 or config['sensor'] == 240) and config['output0'] <= 240:
                 t_mode = thermostat_mode['mode{0}'.format(thermostat_id)]

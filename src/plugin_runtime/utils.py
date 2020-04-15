@@ -4,6 +4,7 @@ import re
 
 from plugin_runtime.base import PluginException, OMPluginBase
 from plugin_runtime.interfaces import check_interfaces
+from six.moves import range
 
 
 def get_plugin_class(package_name):

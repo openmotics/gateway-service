@@ -28,6 +28,7 @@ from gateway.pulses import PulseCounterController
 import master.master_api as master_api
 from master_tests.eeprom_controller_tests import get_eeprom_controller_dummy
 from serial_tests import DummyPty
+from six.moves import range
 
 
 class PulseCounterControllerTest(unittest.TestCase):
@@ -54,7 +55,7 @@ class PulseCounterControllerTest(unittest.TestCase):
     def _get_controller(master_communicator):
         """ Get a PulseCounterController using FILE. """
         banks = []
-        for i in xrange(255):
+        for i in range(255):
             banks.append("\xff" * 256)
 
         eeprom_controller = get_eeprom_controller_dummy(banks)

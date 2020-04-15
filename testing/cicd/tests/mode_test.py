@@ -20,6 +20,7 @@ import time
 
 import psutil
 import pytest
+from six.moves import range
 
 logger = logging.getLogger('openmotics')
 
@@ -52,7 +53,7 @@ def authorized_mode(request, toolbox):
 @pytest.fixture
 def maintenance_mode(request, toolbox):
     yield
-    for _ in xrange(10):
+    for _ in range(10):
         data = toolbox.dut.get('/get_status', success=False)
         if data['success']:
             break
@@ -78,7 +79,7 @@ def test_module_discover_noop(toolbox, discover_mode):
     toolbox.discover_input_module()
     toolbox.discover_output_module()
 
-    for _ in xrange(10):
+    for _ in range(10):
         data = toolbox.dut.get('/get_modules')
         if data.get('inputs') and data.get('outputs'):
             break

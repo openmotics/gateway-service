@@ -25,6 +25,7 @@ from intelhex import IntelHex
 from master_core.ucan_api import UCANAPI
 from master_core.ucan_command import UCANPalletCommandSpec, SID
 from master_core.fields import UInt32Field
+from six.moves import range
 
 logger = logging.getLogger('openmotics')
 
@@ -91,12 +92,12 @@ class UCANUpdater(object):
             crc = 0
             total_payload = []
             logged_percentage = -1
-            reset_vector = [intel_hex[i] for i in xrange(4)]
+            reset_vector = [intel_hex[i] for i in range(4)]
             for index, start_address in enumerate(address_blocks):
                 end_address = min(UCANUpdater.ADDRESS_END, start_address + UCANUpdater.MAX_FLASH_BYTES)
 
                 payload = []
-                for i in xrange(start_address, end_address):
+                for i in range(start_address, end_address):
                     payload.append(intel_hex[i])
 
                 crc = UCANPalletCommandSpec.calculate_crc(payload, crc)

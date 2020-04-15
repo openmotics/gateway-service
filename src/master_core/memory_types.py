@@ -24,6 +24,8 @@ from threading import Lock
 import ujson as json
 from ioc import INJECTED, Inject
 from master_core.memory_file import MemoryFile
+import six
+from six.moves import range
 
 if False:  # MYPY
     from typing import Any, Dict
@@ -406,7 +408,7 @@ class MemoryAddressField(MemoryField):
         super(MemoryAddressField, self).__init__(memory_type, address_spec, length)
 
     def encode(self, value):
-        example = '.'.join(['ID{0}'.format(i) for i in xrange(self._length - 1, -1, -1)])
+        example = '.'.join(['ID{0}'.format(i) for i in range(self._length - 1, -1, -1)])
         error_message = 'Value should be a string in the format of {0}, where 0 <= IDx <= 255'.format(example)
         parts = str(value).split('.')
         if len(parts) != self._length:

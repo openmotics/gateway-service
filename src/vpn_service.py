@@ -20,6 +20,8 @@ thermostats to the cloud, to keep the status information in the cloud in sync.
 
 from __future__ import absolute_import
 from platform_utils import System
+import six
+from six.moves import range
 System.import_libs()
 
 import logging
@@ -209,10 +211,10 @@ class Gateway(object):
             counters = data['counters']
 
             if self.__last_pulse_counters is None:
-                ret = [0 for _ in xrange(0, 24)]
+                ret = [0 for _ in range(0, 24)]
             else:
                 ret = [Gateway.__counter_diff(counters[i], self.__last_pulse_counters[i])
-                       for i in xrange(0, 24)]
+                       for i in range(0, 24)]
 
             self.__last_pulse_counters = counters
             return ret
@@ -365,7 +367,7 @@ class VPNService(object):
         # If NTP date changes the time during a execution of a sub process this hangs forever.
         def popen_timeout(command, timeout):
             p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            for _ in xrange(timeout):
+            for _ in range(timeout):
                 time.sleep(1)
                 if p.poll() is not None:
                     stdout_data, stderr_data = p.communicate()

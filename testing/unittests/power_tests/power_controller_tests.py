@@ -25,6 +25,7 @@ import os
 from ioc import SetTestMode, SetUpTestInjections
 from power.power_controller import PowerController
 from power.power_api import POWER_MODULE
+from six.moves import range
 
 
 class PowerControllerTest(unittest.TestCase):

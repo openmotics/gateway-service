@@ -4,6 +4,8 @@ from threading import Lock
 from ioc import INJECTED, Inject
 from models import Valve
 from gateway.thermostat.gateway.valve_driver import ValveDriver
+import six
+from six.moves import range
 
 logger = logging.getLogger('openmotics')
 
@@ -43,10 +45,10 @@ class PumpValveController(object):
         percentage_per_valve = 100.0 / n_valves
         n_valves_fully_open = int(total_percentage / percentage_per_valve)
         last_valve_open_percentage = 100.0 * (total_percentage - n_valves_fully_open * percentage_per_valve) / percentage_per_valve
-        for n in xrange(n_valves_fully_open):
+        for n in range(n_valves_fully_open):
             valve_driver = valve_drivers[n]
             valve_driver.set(100)
-        for n in xrange(n_valves_fully_open, n_valves):
+        for n in range(n_valves_fully_open, n_valves):
             valve_driver = valve_drivers[n]
             percentage = last_valve_open_percentage if n == n_valves_fully_open else 0
             valve_driver.set(percentage)

@@ -23,6 +23,7 @@ from threading import Thread
 
 from gateway.daemon_thread import DaemonThread
 import power.power_api as power_api
+from six.moves import range
 
 logger = logging.getLogger("openmotics")
 

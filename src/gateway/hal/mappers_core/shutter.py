@@ -20,6 +20,7 @@ from __future__ import absolute_import
 from toolbox import Toolbox
 from gateway.dto.shutter import ShutterDTO
 from master_core.memory_models import ShutterConfiguration
+from six.moves import range
 
 if False:  # MYPY
     from typing import List, Dict, Any
@@ -38,7 +39,7 @@ class ShutterMapper(object):
                 # TODO: High-level code currently assumes this is a byte
                 kwargs[field] = min(ShutterMapper.BYTE_MAX, kwargs[field])
         member_groups = []
-        for group_id in xrange(16):
+        for group_id in range(16):
             if getattr(orm_object.groups, 'group_{0}'.format(group_id)):
                 member_groups.append(group_id)
         if len(member_groups) >= 1:
@@ -58,7 +59,7 @@ class ShutterMapper(object):
             # TODO: Currently denonify as byte, since high-level code most likely assumes this is a byte
             new_data[field] = Toolbox.denonify(getattr(shutter_dto, field), ShutterMapper.BYTE_MAX)
         groups = {}
-        for group_id in xrange(16):
+        for group_id in range(16):
             group_name = 'group_{0}'.format(group_id)
             groups[group_name] = False
             if group_id in [shutter_dto.group_1, shutter_dto.group_2]:

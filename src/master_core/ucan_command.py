@@ -20,6 +20,7 @@ import logging
 import math
 from master_core.fields import PaddingField, UInt32Field, StringField
 from serial_utils import printable
+from six.moves import range
 
 
 logger = logging.getLogger('openmotics')
@@ -275,7 +276,7 @@ class UCANPalletCommandSpec(UCANCommandSpec):
         for data_item in data:
             remainder ^= data_item << (width - 8)
             remainder &= 0xFFFFFFFF
-            for _ in xrange(7, -1, -1):
+            for _ in range(7, -1, -1):
                 if remainder & topbit:
                     remainder = (remainder << 1) ^ polynomial
                     remainder &= 0xFFFFFFFF

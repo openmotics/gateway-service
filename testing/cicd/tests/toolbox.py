@@ -21,6 +21,7 @@ from datetime import datetime
 import requests
 import ujson as json
 from requests.exceptions import ConnectionError, RequestException
+from six.moves import range
 
 logger = logging.getLogger('openmotics')
 
@@ -265,7 +266,7 @@ class Toolbox(object):
     def start_module_discovery(self):
         # type: () -> None
         self.dut.get('/module_discover_start')
-        for _ in xrange(10):
+        for _ in range(10):
             data = self.dut.get('/module_discover_status')
             if data['running']:
                 return

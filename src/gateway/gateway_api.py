@@ -37,6 +37,8 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Platform, System
 from power import power_api
 from serial_utils import CommunicationTimedOutException
+import six
+from six.moves import range
 
 if False:  # MYPY:
     from typing import Any, Dict, List, Tuple, Optional
@@ -1001,7 +1003,7 @@ class GatewayApi(object):
                     return 2
                 self.__power_communicator.do_command(
                     addr, power_api.set_sensor_types(version),
-                    *[_check_sid('sensor{0}'.format(i)) for i in xrange(power_api.NUM_PORTS[version])]
+                    *[_check_sid('sensor{0}'.format(i)) for i in range(power_api.NUM_PORTS[version])]
                 )
             elif version == power_api.ENERGY_MODULE:
                 def _convert_ccf(key):
@@ -1016,7 +1018,7 @@ class GatewayApi(object):
                         return 0.5
                 self.__power_communicator.do_command(
                     addr, power_api.set_current_clamp_factor(version),
-                    *[_convert_ccf('sensor{0}'.format(i)) for i in xrange(power_api.NUM_PORTS[version])]
+                    *[_convert_ccf('sensor{0}'.format(i)) for i in range(power_api.NUM_PORTS[version])]
                 )
 
                 def _convert_sci(key):
@@ -1025,7 +1027,7 @@ class GatewayApi(object):
                     return 1 if mod[key] in [True, 1] else 0
                 self.__power_communicator.do_command(
                     addr, power_api.set_current_inverse(version),
-                    *[_convert_sci('inverted{0}'.format(i)) for i in xrange(power_api.NUM_PORTS[version])]
+                    *[_convert_sci('inverted{0}'.format(i)) for i in range(power_api.NUM_PORTS[version])]
                 )
             else:
                 raise ValueError('Unknown power api version')
@@ -1074,7 +1076,7 @@ class GatewayApi(object):
                     raw_current_ph3 = self.__power_communicator.do_command(addr, power_api.get_current(version, phase=3))[0]
                     delivered_power = self.__power_communicator.do_command(addr, power_api.get_delivered_power(version))[0]
                     received_power = self.__power_communicator.do_command(addr, power_api.get_received_power(version))[0]
-                    for port in xrange(num_ports):
+                    for port in range(num_ports):
                         try:
                             if status & 1 << port:
                                 volt[port] = float(raw_volt[port * 7:(port + 1) * 7][:5])
@@ -1133,7 +1135,7 @@ class GatewayApi(object):
                     status = self.__power_communicator.do_command(addr, power_api.get_status_p1(version))[0]
                     raw_day = self.__power_communicator.do_command(addr, power_api.get_day_energy(version))[0]
                     raw_night = self.__power_communicator.do_command(addr, power_api.get_night_energy(version))[0]
-                    for port in xrange(num_ports):
+                    for port in range(num_ports):
                         try:
                             if status & 1 << port:
                                 day[port] = int(float(raw_day[port * 14:(port + 1) * 14][:10]) * 1000)

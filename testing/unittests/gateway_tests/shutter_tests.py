@@ -27,6 +27,8 @@ from gateway.enums import ShutterEnums
 from gateway.shutters import ShutterController
 from gateway.dto import ShutterDTO
 from gateway.hal.master_controller_classic import MasterClassicController
+import six
+from six.moves import range
 
 
 class ShutterControllerTest(unittest.TestCase):
@@ -67,7 +69,7 @@ class ShutterControllerTest(unittest.TestCase):
         # Basic configuration
         controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)
         self.assertEqual(len(controller._shutters), 4)
-        for shutter_id in xrange(3):
+        for shutter_id in range(3):
             self.assertIn(shutter_id, controller._shutters)
             self.assertEqual(controller._shutters[shutter_id], ShutterControllerTest.SHUTTER_CONFIG[shutter_id])
             self.assertIn(shutter_id, controller._actual_positions)
@@ -140,7 +142,7 @@ class ShutterControllerTest(unittest.TestCase):
             self.assertEqual(calls.get(shutter_id)[-1], 'up')
 
         calls = {}
-        for shutter_id in xrange(3):
+        for shutter_id in range(3):
             controller.shutter_stop(shutter_id)
             self.assertIsNone(controller._desired_positions[shutter_id])
             self.assertEqual(controller._directions[shutter_id], ShutterEnums.Direction.STOP)
@@ -343,14 +345,14 @@ class ShutterControllerTest(unittest.TestCase):
                 self.assertEqual(calls[_shutter_id].pop(), _entry[3][1].upper())
 
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00000000})
-        for shutter_id in xrange(3):
+        for shutter_id in range(3):
             #                     +- actual position
             #                     |     +- desired position
             #                     |     |     +- direction                      +- state                              +- optional skip call check
             #                     v     v     v                                 v                                     v
             validate(shutter_id, [None, None, ShutterEnums.Direction.STOP, [0, ShutterEnums.State.STOPPED], False])
 
-        for shutter_id in xrange(3):
+        for shutter_id in range(3):
             controller.shutter_down(shutter_id, None)
 
         time.sleep(20)

@@ -22,6 +22,8 @@ from gateway.dto.output import OutputDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
 from master.eeprom_controller import EepromModel
 from master.eeprom_models import OutputConfiguration
+import six
+from six.moves import range
 
 if False:  # MYPY
     from typing import List
@@ -63,7 +65,7 @@ class OutputMapper(object):
                                                  'room': ('room', OutputMapper.BYTE_MAX)}.iteritems():
             if dto_field in fields:
                 data[data_field] = Toolbox.denonify(getattr(output_dto, dto_field), default)
-        for i in xrange(4):
+        for i in range(4):
             base_field = 'can_led_{0}'.format(i + 1)
             if base_field in fields:
                 id_field = '{0}_id'.format(base_field)

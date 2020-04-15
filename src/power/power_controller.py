@@ -22,6 +22,8 @@ import sqlite3
 from threading import Lock
 from ioc import Injectable, Inject, INJECTED, Singleton
 from power_api import POWER_MODULE, ENERGY_MODULE, P1_CONCENTRATOR, NUM_PORTS, LARGEST_MODULE_TYPE
+import six
+from six.moves import range
 
 
 @Injectable.named('power_controller')
@@ -40,7 +42,7 @@ class PowerController(object):
         self._power_schema = {'name': 'TEXT default \'\'',
                               'address': 'INTEGER',
                               'version': 'INTEGER'}
-        for i in xrange(NUM_PORTS[LARGEST_MODULE_TYPE]):
+        for i in range(NUM_PORTS[LARGEST_MODULE_TYPE]):
             self._power_schema.update({'input{0}'.format(i): 'TEXT default \'\'',
                                        'sensor{0}'.format(i): 'INT default 0',
                                        'times{0}'.format(i): 'TEXT',
@@ -58,7 +60,7 @@ class PowerController(object):
     @staticmethod
     def _power_setting_fields(amount):
         fields = []
-        for i in xrange(amount):
+        for i in range(amount):
             fields += ['input{0}'.format(i),
                        'sensor{0}'.format(i),
                        'times{0}'.format(i),

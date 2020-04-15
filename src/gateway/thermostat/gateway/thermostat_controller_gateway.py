@@ -15,6 +15,8 @@ from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.thermostat.gateway.thermostat_pid import ThermostatPid
 from apscheduler.schedulers.background import BackgroundScheduler
+import six
+from six.moves import range
 
 logger = logging.getLogger('openmotics')
 
@@ -185,9 +187,9 @@ class ThermostatControllerGateway(ThermostatController):
             if not f.enabled:
                 # 1. try to read all config from master and save it in the db
                 try:
-                    for thermostat_id in xrange(32):
                         for mode, config_mapper in {'heating': ThermostatConfiguration,
                                                     'cooling': CoolingConfiguration}.iteritems():
+                    for thermostat_id in range(32):
                             config = self._eeprom_controller.read(config_mapper, thermostat_id).serialize()
                             if is_valid(config):
                                 ThermostatControllerGateway.create_or_update_thermostat_from_v0_api(thermostat_id,
@@ -199,7 +201,7 @@ class ThermostatControllerGateway(ThermostatController):
 
                 # 2. disable all thermostats on the master
                 try:
-                    for thermostat_id in xrange(32):
+                    for thermostat_id in range(32):
                         # TODO: use new master API to disable thermostat
                         # self._master_communicator.xyz
                         pass
@@ -416,21 +418,21 @@ class ThermostatControllerGateway(ThermostatController):
 
         cooling_outputs = global_thermostat_group.v0_switch_to_cooling_outputs
         n = len(cooling_outputs)
-        for i in xrange(n):
+        for i in range(n):
             cooling_output = cooling_outputs[n]
             config['switch_to_cooling_output_{}'.format(i)] = cooling_output[0]
             config['switch_to_cooling_value_{}'.format(i)] = cooling_output[1]
-        for i in xrange(n, 4-n):
+        for i in range(n, 4-n):
             config['switch_to_cooling_output_{}'.format(i)] = 255
             config['switch_to_cooling_value_{}'.format(i)] = 255
 
         heating_outputs = global_thermostat_group.v0_switch_to_heating_outputs
         n = len(heating_outputs)
-        for i in xrange(n):
+        for i in range(n):
             heating_output = heating_outputs[n]
             config['switch_to_heating_output_{}'.format(i)] = heating_output[0]
             config['switch_to_heating_value_{}'.format(i)] = heating_output[1]
-        for i in xrange(n, 4-n):
+        for i in range(n, 4-n):
             config['switch_to_heating_output_{}'.format(i)] = 255
             config['switch_to_heating_value_{}'.format(i)] = 255
 
@@ -445,7 +447,7 @@ class ThermostatControllerGateway(ThermostatController):
 
         # link configuration outputs to global thermostat config
         for mode in ['cooling', 'heating']:
-            for i in xrange(4):
+            for i in range(4):
                 full_key = 'switch_to_{}_output_{}'.format(mode, i)
                 output_number = config.get(full_key)
                 output = Output.get_or_create(number=output_number)

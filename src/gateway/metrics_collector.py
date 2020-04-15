@@ -31,6 +31,8 @@ from models import Database
 from platform_utils import Hardware
 from power import power_api
 from serial_utils import CommunicationTimedOutException
+import six
+from six.moves import range
 
 logger = logging.getLogger("openmotics")
 
@@ -588,7 +590,7 @@ class MetricsCollector(object):
                 for power_module in result:
                     device_id = '{0}.{{0}}'.format(power_module['address'])
                     mapping[str(power_module['id'])] = device_id
-                    for i in xrange(power_api.NUM_PORTS[power_module['version']]):
+                    for i in range(power_api.NUM_PORTS[power_module['version']]):
                         power_data[device_id.format(i)] = {'name': power_module['input{0}'.format(i)]}
             except CommunicationTimedOutException:
                 logger.error('Error getting power modules: CommunicationTimedOutException')
@@ -663,7 +665,7 @@ class MetricsCollector(object):
                         continue
                     result = self._gateway_api.get_energy_time(power_module['id'])
                     abort = False
-                    for i in xrange(12):
+                    for i in range(12):
                         if abort is True:
                             break
                         name = power_module['input{0}'.format(i)]
@@ -671,7 +673,7 @@ class MetricsCollector(object):
                             continue
                         timestamp = now
                         length = min(len(result[str(i)]['current']), len(result[str(i)]['voltage']))
-                        for j in xrange(length):
+                        for j in range(length):
                             self._enqueue_metrics(metric_type=metric_type,
                                                   values={'current': result[str(i)]['current'][j],
                                                           'voltage': result[str(i)]['voltage'][j]},
@@ -682,7 +684,7 @@ class MetricsCollector(object):
                             timestamp += 0.250  # Stretch actual data by 1000 for visualtisation purposes
                     result = self._gateway_api.get_energy_frequency(power_module['id'])
                     abort = False
-                    for i in xrange(12):
+                    for i in range(12):
                         if abort is True:
                             break
                         name = power_module['input{0}'.format(i)]
@@ -690,7 +692,7 @@ class MetricsCollector(object):
                             continue
                         timestamp = now
                         length = min(len(result[str(i)]['current'][0]), len(result[str(i)]['voltage'][0]))
-                        for j in xrange(length):
+                        for j in range(length):
                             self._enqueue_metrics(metric_type=metric_type,
                                                   values={'current_harmonics': result[str(i)]['current'][0][j],
                                                           'current_phase': result[str(i)]['current'][1][j],
@@ -1061,7 +1063,7 @@ class MetricsCollector(object):
                           'type': 'counter',
                           'policies': [{'policy': 'persist',
                                         'key': 'id',
-                                        'matches': ['P{0}'.format(i) for i in xrange(0, len(pulse_persistence))
+                                        'matches': ['P{0}'.format(i) for i in range(0, len(pulse_persistence))
                                                     if not pulse_persistence[i]]},
                                        'buffer'],
                           'unit': ''}]},

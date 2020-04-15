@@ -15,6 +15,7 @@ from master_core.memory_file import MemoryTypes
 from master_core.core_communicator import BackgroundConsumer
 from master_core.memory_models import InputConfiguration
 from master_core.ucan_communicator import UCANCommunicator
+from six.moves import range
 
 
 class MasterCoreControllerTest(unittest.TestCase):
@@ -199,7 +200,7 @@ class MasterInputState(unittest.TestCase):
             self.assertEqual([1], state.get_recent())
 
         with mock.patch.object(time, 'time', return_value=30):
-            for i in xrange(2, 10):
+            for i in range(2, 10):
                 core_event = MasterCoreEvent({'type': 1, 'action': 1, 'device_nr': i, 'data': {}})
                 state.handle_event(core_event)
             devices = state.get_recent()

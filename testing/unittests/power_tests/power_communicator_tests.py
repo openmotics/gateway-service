@@ -28,6 +28,7 @@ from power.power_communicator import PowerCommunicator, InAddressModeException
 
 from serial_tests import SerialMock, sin, sout
 from serial_utils import CommunicationTimedOutException, RS485
+from six.moves import range
 
 
 class PowerCommunicatorTest(unittest.TestCase):

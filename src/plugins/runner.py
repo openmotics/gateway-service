@@ -9,6 +9,7 @@ import ujson as json
 from threading import Thread, Lock
 from Queue import Queue, Empty, Full
 from toolbox import PluginIPCStream
+from six.moves import range
 
 logger = logging.getLogger("openmotics")
 
@@ -348,7 +349,7 @@ class RunnerWatchdog:
             except Exception as e:
                 self._plugin_runner.logger('[Watchdog] Exception in watchdog: {0}'.format(e))
 
-            for _ in xrange(self._check_interval):
+            for _ in range(self._check_interval):
                 # Small sleep cycles, to be able to finish the thread quickly
                 time.sleep(1)
                 if self._stopped:

@@ -28,6 +28,7 @@ import os
 from vpn_service import BufferingDataCollector
 
 import constants
+from six.moves import range
 constants.get_buffer_file = lambda filename: "/tmp/%s.buffer" % filename
 
 
