@@ -15,6 +15,7 @@
 """ The update modules provides the update functionality. """
 
 from __future__ import absolute_import
+from __future__ import print_function
 import sys
 import hashlib
 import traceback
@@ -85,7 +86,7 @@ def update(version, md5_server):
 def main():
     """ The main function. """
     if len(sys.argv) != 3:
-        print 'Usage: python ' + __file__ + ' version md5sum'
+        print('Usage: python ' + __file__ + ' version md5sum')
         sys.exit(1)
     else:
         (version, md5_sum) = (sys.argv[1], sys.argv[2])

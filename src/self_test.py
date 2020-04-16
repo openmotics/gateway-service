@@ -18,6 +18,7 @@ ports.
 """
 
 from __future__ import absolute_import
+from __future__ import print_function
 import threading
 import sys
 
@@ -33,7 +34,7 @@ def echo_plus_one(name, serial):
         try:
             data = serial.read(1)
             if bool(data) and data[0] != '\x00':
-                print "Read '%s' from %s" % (data, name)
+                print("Read '%s' from %s" % (data, name))
                 serial.write(chr((ord(data[0]) + 1) % 256))
         except Exception:
             traceback.print_exc()
@@ -47,7 +48,7 @@ def start_echo_plus_one(name, serial):
 
 
 if __name__ == "__main__":
-    print "Starting tty echo's..."
+    print("Starting tty echo's...")
     for tty in ["/dev/ttyO1", "/dev/ttyO2", "/dev/ttyO5"]:
         sys.stdout.write("Starting tty echo on %s... " % tty)
         start_echo_plus_one(tty, Serial(tty, 115200))

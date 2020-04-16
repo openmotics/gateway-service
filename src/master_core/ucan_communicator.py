@@ -17,6 +17,7 @@ Module to communicate with the uCANs.
 """
 
 from __future__ import absolute_import
+from __future__ import print_function
 import logging
 import time
 from Queue import Queue, Empty
@@ -143,7 +144,7 @@ class UCANCommunicator(object):
             return consumer.get(timeout)
 
     def _release_pallet_mode(self, cc_address):
-        print('Releasing pallet mode for {0}'.format(cc_address))
+        print(('Releasing pallet mode for {0}'.format(cc_address)))
         self._cc_pallet_mode[cc_address] = False
 
     def _process_transport_message(self, package):

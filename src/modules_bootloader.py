@@ -19,6 +19,7 @@ For more information, see:
 * https://wiki.openmotics.com/index.php/Bootloader_Error_Codes
 """
 from __future__ import absolute_import
+from __future__ import print_function
 from platform_utils import System
 from six.moves import range
 System.import_libs()
@@ -369,17 +370,17 @@ def main():
             try:
                 log_file = open(args.log, 'a')
             except IOError as ex:
-                print 'Could not open the requested log file: {0}'.format(ex)
+                print('Could not open the requested log file: {0}'.format(ex))
                 return False
             logger = lambda msg: log_file.write('{0}\n'.format(msg))
         else:
             logger = lambda msg: sys.stdout.write('{0}\n'.format(msg))
         try:
             if os.path.getsize(args.file) <= 0:
-                print 'Could not read hex or file is empty: {0}'.format(args.file)
+                print('Could not read hex or file is empty: {0}'.format(args.file))
                 return False
         except OSError as ex:
-            print 'Could not open hex: {0}'.format(ex)
+            print('Could not open hex: {0}'.format(ex))
             return False
 
         # The type argument is lowercase for backwards compatibility reasons. However, all subsequent calls need the correct type

@@ -17,6 +17,7 @@ Example:
   Hello()  # This will print 'Hello Anonymous'
 """
 from __future__ import absolute_import
+from __future__ import print_function
 import collections
 import functools
 import inspect
@@ -503,7 +504,7 @@ def Warmup():
 
 def DumpInjectionStack():
     for scope in _MyScopes():
-        print scope
+        print(scope)
 
 
 def SetTestMode(enabled=True):
