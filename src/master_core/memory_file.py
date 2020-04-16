@@ -86,7 +86,7 @@ class MemoryFile(object):
         """
         :type data_map: dict[master_core.memory_types.MemoryAddress, list[int]]
         """
-        for address, data in data_map.iteritems():
+        for address, data in six.iteritems(data_map):
             page_data = self.read_page(address.page)
             for index, data_byte in enumerate(data):
                 page_data[address.offset + index] = data_byte

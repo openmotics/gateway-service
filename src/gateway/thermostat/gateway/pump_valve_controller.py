@@ -78,7 +78,7 @@ class PumpValveController(object):
     def prepare_pumps_for_transition(self):
         active_pump_drivers = set()
         potential_inactive_pump_drivers = set()
-        for valve_number, valve_driver in self._valve_drivers.iteritems():
+        for valve_number, valve_driver in six.iteritems(self._valve_drivers):
             if valve_driver.is_open():
                 for pump_driver in valve_driver.pump_drivers:
                     active_pump_drivers.add(pump_driver)
@@ -91,13 +91,13 @@ class PumpValveController(object):
             pump_driver.turn_off()
 
     def steer_valves(self):
-        for valve_number, valve_driver in self._valve_drivers.iteritems():
+        for valve_number, valve_driver in six.iteritems(self._valve_drivers):
             valve_driver.steer_output()
 
     def steer_pumps(self):
         active_pump_drivers = set()
         potential_inactive_pump_drivers = set()
-        for valve_number, valve_driver in self._valve_drivers.iteritems():
+        for valve_number, valve_driver in six.iteritems(self._valve_drivers):
             if valve_driver.is_open():
                 for pump_driver in valve_driver.pump_drivers:
                     active_pump_drivers.add(pump_driver)

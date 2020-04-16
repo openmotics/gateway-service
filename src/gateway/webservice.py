@@ -44,6 +44,7 @@ from models import Feature
 from platform_utils import System, Hardware, Platform
 from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
+import six
 
 if False:
     from typing import Dict, Optional, Any, List
@@ -225,7 +226,7 @@ def _openmotics_api(f, *args, **kwargs):
     timings['serialization'] = 'Serialization', time.time() - serialization_start
     cherrypy.response.headers['Content-Type'] = 'application/json'
     cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
-                                                           for key, value in timings.iteritems()])
+                                                           for key, value in six.iteritems(timings)])
     if hasattr(f, 'deprecated') and f.deprecated is not None:
         cherrypy.response.headers['Warning'] = 'Warning: 299 - "Deprecated, replaced by: {0}"'.format(f.deprecated)
     cherrypy.response.status = status
@@ -2264,10 +2265,10 @@ class WebInterface(object):
         sources = self._metrics_controller.get_filter('source', source)
         metric_types = self._metrics_controller.get_filter('metric_type', metric_type)
         definitions = {}
-        for _source, _metric_types in self._metrics_controller.definitions.iteritems():
+        for _source, _metric_types in six.iteritems(self._metrics_controller.definitions):
             if _source in sources:
                 definitions[_source] = {}
-                for _metric_type, definition in _metric_types.iteritems():
+                for _metric_type, definition in six.iteritems(_metric_types):
                     if _metric_type in metric_types:
                         definitions[_source][_metric_type] = definition
         return {'definitions': definitions}

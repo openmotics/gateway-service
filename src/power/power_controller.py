@@ -74,16 +74,16 @@ class PowerController(object):
         the update is only performed for legacy users that still have the old schema.
         """
         with self.__lock:
-            for table, schema in {'power_modules': self._power_schema}.iteritems():
+            for table, schema in six.iteritems({'power_modules': self._power_schema}):
                 fields = []
                 for row in self.__cursor.execute('PRAGMA table_info(\'{0}\');'.format(table)):
                     fields.append(row[1])
                 if len(fields) == 0:
                     self.__cursor.execute('CREATE TABLE {0} (id INTEGER PRIMARY KEY, {1});'.format(
-                        table, ', '.join(['{0} {1}'.format(key, value) for key, value in schema.iteritems()])
+                        table, ', '.join(['{0} {1}'.format(key, value) for key, value in six.iteritems(schema)])
                     ))
                 else:
-                    for field, default in schema.iteritems():
+                    for field, default in six.iteritems(schema):
                         if field not in fields:
                             self.__cursor.execute('ALTER TABLE {0} ADD COLUMN {1} {2};'.format(table, field, default))
 

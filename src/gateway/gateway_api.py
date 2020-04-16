@@ -450,12 +450,12 @@ class GatewayApi(object):
             with open('{0}/master.eep'.format(tmp_sqlite_dir), 'w') as eeprom_file:
                 eeprom_file.write(self.get_master_backup())
 
-            for filename, source in {'config.db': constants.get_config_database_file(),
+            for filename, source in six.iteritems({'config.db': constants.get_config_database_file(),
                                      'scheduled.db': constants.get_scheduling_database_file(),
                                      'power.db': constants.get_power_database_file(),
                                      'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
                                      'metrics.db': constants.get_metrics_database_file(),
-                                     'pulse.db': constants.get_pulse_counter_database_file()}.iteritems():
+                                     'pulse.db': constants.get_pulse_counter_database_file()}):
                 target = '{0}/{1}'.format(tmp_sqlite_dir, filename)
                 backup_sqlite_db(source, target)
 
@@ -517,13 +517,13 @@ class GatewayApi(object):
                 eeprom_content = eeprom_file.read()
                 self.master_restore(eeprom_content)
 
-            for filename, target in {'config.db': constants.get_config_database_file(),
+            for filename, target in six.iteritems({'config.db': constants.get_config_database_file(),
                                      'users.db': constants.get_config_database_file(),
                                      'scheduled.db': constants.get_scheduling_database_file(),
                                      'power.db': constants.get_power_database_file(),
                                      'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
                                      'metrics.db': constants.get_metrics_database_file(),
-                                     'pulse.db': constants.get_pulse_counter_database_file()}.iteritems():
+                                     'pulse.db': constants.get_pulse_counter_database_file()}):
                 source = '{0}/{1}'.format(src_dir, filename)
                 if os.path.exists(source):
                     shutil.copyfile(source, target)

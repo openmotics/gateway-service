@@ -55,14 +55,14 @@ class OutputMapper(object):
     @staticmethod
     def dto_to_orm(output_dto, fields):  # type: (OutputDTO, List[str]) -> EepromModel
         data = {'id': output_dto.id}
-        for dto_field, data_field in {'module_type': 'module_type',
+        for dto_field, data_field in six.iteritems({'module_type': 'module_type',
                                       'name': 'name',
-                                      'output_type': 'type'}.iteritems():
+                                      'output_type': 'type'}):
             if dto_field in fields:
                 data[data_field] = getattr(output_dto, dto_field)
-        for dto_field, (data_field, default) in {'timer': ('timer', OutputMapper.WORD_MAX),
+        for dto_field, (data_field, default) in six.iteritems({'timer': ('timer', OutputMapper.WORD_MAX),
                                                  'floor': ('floor', OutputMapper.BYTE_MAX),
-                                                 'room': ('room', OutputMapper.BYTE_MAX)}.iteritems():
+                                                 'room': ('room', OutputMapper.BYTE_MAX)}):
             if dto_field in fields:
                 data[data_field] = Toolbox.denonify(getattr(output_dto, dto_field), default)
         for i in range(4):

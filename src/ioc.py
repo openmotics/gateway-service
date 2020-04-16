@@ -22,6 +22,7 @@ import functools
 import inspect
 import logging
 import threading
+import six
 
 if False:  # MYPY
     from typing import Any
@@ -529,7 +530,7 @@ def SetUpTestInjections(**kwargs):
     """
     global _TEST_SCOPE
     _TEST_SCOPE = _TEST_SCOPE or _Scope(None)
-    for name, value in kwargs.iteritems():
+    for name, value in six.iteritems(kwargs):
         _TEST_SCOPE.Injectable(_CreateCallable(name, value))
 
 

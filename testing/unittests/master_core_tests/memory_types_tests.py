@@ -25,6 +25,7 @@ from ioc import SetTestMode, SetUpTestInjections
 from master_core.basic_action import BasicAction
 from master_core.memory_file import MemoryTypes, MemoryFile
 from master_core.memory_types import *
+import six
 
 logger = logging.getLogger('openmotics')
 
@@ -153,7 +154,7 @@ class MemoryTypesTest(unittest.TestCase):
             return data_
 
         def _write(data_map):
-            for address, data_ in data_map.iteritems():
+            for address, data_ in six.iteritems(data_map):
                 for index, data_byte in enumerate(data_):
                     memory_map[address.page][address.offset + index] = data_byte
 
@@ -231,7 +232,7 @@ class MemoryTypesTest(unittest.TestCase):
             return data_
 
         def _write(data_map):
-            for address, data_ in data_map.iteritems():
+            for address, data_ in six.iteritems(data_map):
                 for index, data_byte in enumerate(data_):
                     memory_map[address.page][address.offset + index] = data_byte
 

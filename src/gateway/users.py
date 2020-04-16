@@ -24,6 +24,7 @@ import uuid
 import time
 from random import randint
 from ioc import Injectable, Inject, Singleton, INJECTED
+import six
 
 
 @Injectable.named('user_controller')
@@ -82,12 +83,12 @@ class UserController(object):
         """
         with self._lock:
             self._execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, {0});".format(
-                ", ".join(['{0} {1}'.format(key, value) for key, value in self._schema.iteritems()])
+                ", ".join(['{0} {1}'.format(key, value) for key, value in six.iteritems(self._schema)])
             ), lock=False)
             fields = []
             for row in self._execute("PRAGMA table_info('users');", lock=False):
                 fields.append(row[1])
-            for field, field_type in self._schema.iteritems():
+            for field, field_type in six.iteritems(self._schema):
                 if field not in fields:
                     self._execute("ALTER TABLE users ADD COLUMN {0} {1};".format(field, field_type), lock=False)
 

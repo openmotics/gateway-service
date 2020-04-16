@@ -81,7 +81,7 @@ class ThermostatControllerGateway(ThermostatController):
 
     def _pid_tick(self):
         while self._running:
-            for thermostat_number, thermostat_pid in self.thermostat_pids.iteritems():
+            for thermostat_number, thermostat_pid in six.iteritems(self.thermostat_pids):
                 try:
                     thermostat_pid.tick()
                 except Exception:
@@ -126,12 +126,12 @@ class ThermostatControllerGateway(ThermostatController):
 
     def _sync_scheduler(self):
         self._scheduler.remove_all_jobs()
-        for thermostat_number, thermostat_pid in self.thermostat_pids.iteritems():
+        for thermostat_number, thermostat_pid in six.iteritems(self.thermostat_pids):
             start_date = datetime.datetime.utcfromtimestamp(thermostat_pid.thermostat.start)
             day_schedules = thermostat_pid.thermostat.day_schedules
             schedule_length = len(day_schedules)
             for schedule in day_schedules:
-                for seconds_of_day, new_setpoint in schedule.schedule_data.iteritems():
+                for seconds_of_day, new_setpoint in six.iteritems(schedule.schedule_data):
                     m, s = divmod(int(seconds_of_day), 60)
                     h, m = divmod(m, 60)
                     if schedule.mode == 'heating':
@@ -174,7 +174,7 @@ class ThermostatControllerGateway(ThermostatController):
             sensor = config_.get('sensor', 255)
             if not (sensor < 32 or sensor == 240):
                 return False
-            for key, value in config_.iteritems():
+            for key, value in six.iteritems(config_):
                 if key.startswith('auto_') and ('42:30' in value or 255 in value):
                     return False
             return True
@@ -187,9 +187,9 @@ class ThermostatControllerGateway(ThermostatController):
             if not f.enabled:
                 # 1. try to read all config from master and save it in the db
                 try:
-                        for mode, config_mapper in {'heating': ThermostatConfiguration,
-                                                    'cooling': CoolingConfiguration}.iteritems():
                     for thermostat_id in range(32):
+                        for mode, config_mapper in six.iteritems({'heating': ThermostatConfiguration,
+                                                    'cooling': CoolingConfiguration}):
                             config = self._eeprom_controller.read(config_mapper, thermostat_id).serialize()
                             if is_valid(config):
                                 ThermostatControllerGateway.create_or_update_thermostat_from_v0_api(thermostat_id,
@@ -348,7 +348,7 @@ class ThermostatControllerGateway(ThermostatController):
         global_thermosat.mode = mode
         global_thermosat.save()
 
-        for thermostat_number, thermostat_pid in self.thermostat_pids.iteritems():
+        for thermostat_number, thermostat_pid in six.iteritems(self.thermostat_pids):
             thermostat = Thermostat.get(number=thermostat_number)
             if thermostat is not None:
                 if automatic is False and setpoint is not None and 3 <= setpoint <= 5:

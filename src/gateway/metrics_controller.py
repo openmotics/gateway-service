@@ -28,6 +28,7 @@ import ujson as json
 from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread
 from ioc import INJECTED, Inject, Injectable, Singleton
+import six
 
 logger = logging.getLogger("openmotics")
 
@@ -180,11 +181,11 @@ class MetricsController(object):
                         'type': basestring,
                         'unit': basestring}
         expected_plugins = []
-        for plugin, plugin_definitions in definitions.iteritems():
+        for plugin, plugin_definitions in six.iteritems(definitions):
             log = self._plugin_controller.get_logger(plugin)
             for definition in plugin_definitions:
                 definition_ok = True
-                for key, key_type in required_keys.iteritems():
+                for key, key_type in six.iteritems(required_keys):
                     if key not in definition:
                         log('Definitions should contain keys: {0}'.format(', '.join(required_keys.keys())))
                         definition_ok = False
@@ -201,7 +202,7 @@ class MetricsController(object):
                                 log('Metric definitions should be dictionaries')
                                 definition_ok = False
                                 break
-                            for mkey, mkey_type in metrics_keys.iteritems():
+                            for mkey, mkey_type in six.iteritems(metrics_keys):
                                 if mkey not in metric_definition:
                                     log('Metric definitions should contain keys: {0}'.format(', '.join(metrics_keys.keys())))
                                     definition_ok = False
@@ -401,7 +402,7 @@ class MetricsController(object):
         time_ago_try = int(now - self._cloud_last_try)
         if time_ago_send > time_ago_try and include_this_metric is True and len(counters_to_buffer) > 0:
             cache_data = {}
-            for counter, match_setting in counters_to_buffer.iteritems():
+            for counter, match_setting in six.iteritems(counters_to_buffer):
                 if match_setting is not True:
                     if metric['tags'][match_setting['key']] not in match_setting['matches']:
                         continue
@@ -425,7 +426,7 @@ class MetricsController(object):
     def _transform_counters(self, metric):
         source = metric['source']
         mtype = metric['type']
-        for counter, match_setting in self._persist_counters.get(source, {}).get(mtype, {}).iteritems():
+        for counter, match_setting in six.iteritems(self._persist_counters.get(source, {}).get(mtype, {})):
             if counter not in metric['values']:
                 continue
             if match_setting is not True:
@@ -465,7 +466,7 @@ class MetricsController(object):
                              'values': dict,
                              'tags': dict}
             metric_ok = True
-            for key, key_type in required_keys.iteritems():
+            for key, key_type in six.iteritems(required_keys):
                 if key not in metric:
                     log('Metric should contain keys {0}'.format(', '.join(required_keys.keys())))
                     metric_ok = False
@@ -513,7 +514,7 @@ class MetricsController(object):
                 pass
             if metrics:
                 rates = self._plugin_controller.distribute_metrics(metrics)
-                for key, rate in rates.iteritems():
+                for key, rate in six.iteritems(rates):
                     if key not in self.outbound_rates:
                         self.outbound_rates[key] = 0
                     self.outbound_rates[key] += rate
@@ -539,5 +540,5 @@ class MetricsController(object):
 
     def event_receiver(self, event, payload):
         if event == OMBusEvents.METRICS_INTERVAL_CHANGE:
-            for metric_type, interval in payload.iteritems():
+            for metric_type, interval in six.iteritems(payload):
                 self.set_cloud_interval(metric_type, interval)

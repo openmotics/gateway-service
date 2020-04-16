@@ -11,6 +11,7 @@ from peewee import BooleanField, CharField, CompositeKey, DoesNotExist, \
     FloatField, ForeignKeyField, IntegerField, PrimaryKeyField, \
     SqliteDatabase, TextField
 from playhouse.signals import Model, post_save
+import six
 
 if False:  # MYPY
     from typing import Dict
@@ -391,7 +392,7 @@ class DaySchedule(BaseModel):
             }
         """
         # convert relative timestamps to int and temperature values to float
-        for key, value in data.iteritems():
+        for key, value in six.iteritems(data):
             relative_timestamp = int(key)
             if relative_timestamp < 86400:
                 data[relative_timestamp] = float(value)
@@ -437,7 +438,7 @@ class DaySchedule(BaseModel):
             logger.error('Serializing an empty temperature day schedule.')
         elif n_entries < 4:
             logger.warning('Not enough data to serialize day schedule in old format. Returning best effort data.')
-            first_value = schedule.itervalues().next()
+            first_value = six.itervalues(schedule)
             return_data['temp_n'] = first_value
             return_data['temp_d1'] = first_value
             return_data['temp_d2'] = first_value

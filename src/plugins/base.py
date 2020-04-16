@@ -24,6 +24,7 @@ from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.events import GatewayEvent
 from gateway.shutters import ShutterController
 from plugins.runner import PluginRunner, RunnerWatchdog
+import six
 
 logger = logging.getLogger("openmotics")
 
@@ -444,4 +445,4 @@ class PluginController(object):
 
     def get_logs(self):
         """ Get the logs for all plugins. Returns a dict where the keys are the plugin names and the value is a string. """
-        return dict((plugin, '\n'.join(entries)) for plugin, entries in self.__logs.iteritems())
+        return dict((plugin, '\n'.join(entries)) for plugin, entries in six.iteritems(self.__logs))

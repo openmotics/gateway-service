@@ -22,6 +22,7 @@ import subprocess
 import logging
 import constants
 from ConfigParser import ConfigParser
+import six
 
 logger = logging.getLogger('openmotics')
 
@@ -68,7 +69,7 @@ class Hardware(object):
         for reg, i in registers.items():
             pos = i * 2
             ecsd_info[reg] = int(ecsd[pos:pos + 2], 16)
-        return ecsd_info.iteritems()
+        return six.iteritems(ecsd_info)
 
     @staticmethod
     def get_board_type():

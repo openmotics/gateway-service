@@ -4,6 +4,7 @@ import sys
 import traceback
 import time
 from threading import Thread
+import six
 
 sys.path.insert(0, '/opt/openmotics/python')
 
@@ -75,7 +76,7 @@ class PluginRuntime:
                             'shutter_status': self._shutter_status_receivers,
                             'receive_events': self._event_receivers}
 
-        for method_attribute, target in receiver_mapping.iteritems():
+        for method_attribute, target in six.iteritems(receiver_mapping):
             for method in get_special_methods(self._plugin, method_attribute):
                 target.append(method)
 

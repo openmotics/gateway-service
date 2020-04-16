@@ -179,7 +179,7 @@ class MetricsCollector(object):
 
     def _sleep_manager(self):
         while True:
-            for sleep_data in self._sleepers.itervalues():
+            for sleep_data in six.itervalues(self._sleepers):
                 if not sleep_data['event'].is_set() and sleep_data['end'] < time.time():
                     sleep_data['event'].set()
             time.sleep(0.1)
@@ -346,7 +346,7 @@ class MetricsCollector(object):
 
                 # get database metrics
                 try:
-                    for model, counter in Database.get_metrics().iteritems():
+                    for model, counter in six.iteritems(Database.get_metrics()):
                         try:
                             key = 'db_{0}'.format(model)
                             values[key] = int(counter)
@@ -437,7 +437,7 @@ class MetricsCollector(object):
                 temperatures = self._gateway_api.get_sensors_temperature_status()
                 humidities = self._gateway_api.get_sensors_humidity_status()
                 brightnesses = self._gateway_api.get_sensors_brightness_status()
-                for sensor_id, sensor in self._environment['sensors'].iteritems():
+                for sensor_id, sensor in six.iteritems(self._environment['sensors']):
                     name = sensor['name']
                     if name == '' or name == 'NOT_IN_USE':
                         continue
@@ -548,7 +548,7 @@ class MetricsCollector(object):
             now = time.time()
             counters_data = {}
             try:
-                for counter_id, counter in self._environment['pulse_counters'].iteritems():
+                for counter_id, counter in six.iteritems(self._environment['pulse_counters']):
                     counters_data[counter_id] = {'name': counter['name'],
                                                  'input': counter['input']}
                 result = self._gateway_api.get_pulse_counter_status()
@@ -600,7 +600,7 @@ class MetricsCollector(object):
                 logger.exception('Error getting power modules: {0}'.format(ex))
             try:
                 result = self._gateway_api.get_realtime_power()
-                for module_id, device_id in mapping.iteritems():
+                for module_id, device_id in six.iteritems(mapping):
                     if module_id in result:
                         for index, entry in enumerate(result[module_id]):
                             voltage, frequency, current, power = entry
@@ -618,7 +618,7 @@ class MetricsCollector(object):
                 logger.exception('Error getting realtime power: {0}'.format(ex))
             try:
                 result = self._gateway_api.get_total_energy()
-                for module_id, device_id in mapping.iteritems():
+                for module_id, device_id in six.iteritems(mapping):
                     if module_id in result:
                         for index, entry in enumerate(result[module_id]):
                             day, night = entry

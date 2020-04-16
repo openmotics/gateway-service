@@ -144,7 +144,7 @@ class Cloud(object):
             if 'configuration' in data:
                 configuration_changed = cmp(self.__configuration, data['configuration']) != 0
                 if configuration_changed:
-                    for setting, value in data['configuration'].iteritems():
+                    for setting, value in six.iteritems(data['configuration']):
                         self.__config.set(setting, value)
                     logger.info('configuration changed: {0}'.format(data['configuration']))
 
@@ -248,7 +248,7 @@ class Gateway(object):
         """ Get the shutters status. """
         data = self.do_call("get_shutter_status?token=None")
         if data is not None and data['success']:
-            return [(int(shutter_id), details["state"].upper()) for shutter_id, details in data['detail'].iteritems()]
+            return [(int(shutter_id), details["state"].upper()) for shutter_id, details in six.iteritems(data['detail'])]
         return
 
     def get_thermostats(self):
