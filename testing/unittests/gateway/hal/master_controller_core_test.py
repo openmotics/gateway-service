@@ -56,16 +56,16 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.assertRaises(TypeError, controller.load_input, 1)
 
     def test_load_inputs(self):
-        input_modules = map(get_input_dummy, xrange(1, 17))
+        input_modules = list(map(get_input_dummy, range(1, 17)))
         controller = get_core_controller_dummy({'output': 0, 'input': 2})
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                side_effect=input_modules):
             inputs = controller.load_inputs()
-            self.assertEqual([x['id'] for x in inputs], range(1, 17))
+            self.assertEqual([x['id'] for x in inputs], list(range(1, 17)))
 
     def test_load_inputs_skips_invalid_type(self):
-        input_modules = map(get_input_dummy, xrange(1, 9))
-        input_modules += map(lambda i: get_input_dummy(i, module_type='O'), xrange(9, 17))
+        input_modules = list(map(get_input_dummy, range(1, 9)))
+        input_modules += [get_input_dummy(i, module_type='O') for i in range(9, 17)]
         controller = get_core_controller_dummy({'output': 0, 'input': 2})
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                side_effect=input_modules):

@@ -194,6 +194,6 @@ def test_factory_reset(toolbox, create_user):
     toolbox.dut.get('/module_discover_stop')
     time.sleep(2)
     data = toolbox.dut.get('/get_modules_information')
-    modules = data['modules']['master'].values()
+    modules = list(data['modules']['master'].values())
     assert set(['I', 'O']) == set(x['type'] for x in modules)
     assert None not in [x['firmware'] for x in modules]

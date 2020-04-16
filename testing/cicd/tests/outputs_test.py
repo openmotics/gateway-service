@@ -31,7 +31,7 @@ DEFAULT_LIGHT_CONFIG = {'type': 255, 'timer': 2**16 - 1}
 def next_output(draw):
     used_values = []
     def f(toolbox):
-        value = draw(one_of(map(just, toolbox.dut_outputs)).filter(lambda x: x not in used_values))
+        value = draw(one_of(list(map(just, toolbox.dut_outputs))).filter(lambda x: x not in used_values))
         used_values.append(value)
         hypothesis.note('module o#{}'.format(value))
         return value

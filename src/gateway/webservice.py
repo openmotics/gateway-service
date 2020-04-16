@@ -205,7 +205,7 @@ def _openmotics_api(f, *args, **kwargs):
     status = 200  # OK
     try:
         return_data = f(*args, **kwargs)
-        data = limit_floats(dict({'success': True}.items() + return_data.items()))
+        data = limit_floats(dict(list({'success': True}.items()) + list(return_data.items())))
     except cherrypy.HTTPError as ex:
         status = ex.status
         data = {'success': False, 'msg': ex._message}

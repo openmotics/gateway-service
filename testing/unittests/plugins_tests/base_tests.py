@@ -711,7 +711,7 @@ class PluginConfigCheckerTest(unittest.TestCase):
         from gateway.webservice import WebInterface
         found_calls = web._load_webinterface()
 
-        ramaining_methods = found_calls.keys()
+        ramaining_methods = list(found_calls.keys())
         for method_info in inspect.getmembers(WebInterface, predicate=lambda m: inspect.ismethod(m)):
             method = method_info[1]
             method_name = method.__name__

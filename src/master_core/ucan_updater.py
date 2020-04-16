@@ -87,7 +87,7 @@ class UCANUpdater(object):
 
             logger.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
             logger.info('Flashing...')
-            address_blocks = range(UCANUpdater.ADDRESS_START, UCANUpdater.ADDRESS_END, UCANUpdater.MAX_FLASH_BYTES)
+            address_blocks = list(range(UCANUpdater.ADDRESS_START, UCANUpdater.ADDRESS_END, UCANUpdater.MAX_FLASH_BYTES))
             total_amount = float(len(address_blocks))
             crc = 0
             total_payload = []

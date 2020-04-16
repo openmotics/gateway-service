@@ -358,7 +358,7 @@ class Preset(BaseModel):
         name = str(self.name)
         v0_setpoint = mapping.get(name)
         if v0_setpoint is None:
-            raise ValueError('Preset name {} not compatible with v0_setpoint. Should be one of {}.'.format(name, mapping.keys()))
+            raise ValueError('Preset name {} not compatible with v0_setpoint. Should be one of {}.'.format(name, list(mapping.keys())))
         return v0_setpoint
 
     @classmethod

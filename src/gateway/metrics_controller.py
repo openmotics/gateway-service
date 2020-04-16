@@ -187,7 +187,7 @@ class MetricsController(object):
                 definition_ok = True
                 for key, key_type in six.iteritems(required_keys):
                     if key not in definition:
-                        log('Definitions should contain keys: {0}'.format(', '.join(required_keys.keys())))
+                        log('Definitions should contain keys: {0}'.format(', '.join(list(required_keys.keys()))))
                         definition_ok = False
                         break
                     if not isinstance(definition[key], key_type):
@@ -204,7 +204,7 @@ class MetricsController(object):
                                 break
                             for mkey, mkey_type in six.iteritems(metrics_keys):
                                 if mkey not in metric_definition:
-                                    log('Metric definitions should contain keys: {0}'.format(', '.join(metrics_keys.keys())))
+                                    log('Metric definitions should contain keys: {0}'.format(', '.join(list(metrics_keys.keys()))))
                                     definition_ok = False
                                     break
                                 if not isinstance(metric_definition[mkey], mkey_type):
@@ -468,7 +468,7 @@ class MetricsController(object):
             metric_ok = True
             for key, key_type in six.iteritems(required_keys):
                 if key not in metric:
-                    log('Metric should contain keys {0}'.format(', '.join(required_keys.keys())))
+                    log('Metric should contain keys {0}'.format(', '.join(list(required_keys.keys()))))
                     metric_ok = False
                     break
                 if not isinstance(metric[key], key_type):

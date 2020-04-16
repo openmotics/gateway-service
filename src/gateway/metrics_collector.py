@@ -424,7 +424,7 @@ class MetricsCollector(object):
                 logger.info('Error getting output status: InMaintenanceModeException')
             except Exception as ex:
                 logger.exception('Error getting output status: {0}'.format(ex))
-            self._process_outputs(self._environment['outputs'].keys(), metric_type)
+            self._process_outputs(list(self._environment['outputs'].keys()), metric_type)
             if self._stopped:
                 return
             self._pause(start, metric_type)

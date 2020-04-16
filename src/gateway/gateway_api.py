@@ -207,7 +207,7 @@ class GatewayApi(object):
 
         # Energy/power modules
         if self.__power_communicator is not None and self.__power_controller is not None:
-            modules = self.__power_controller.get_power_modules().values()
+            modules = list(self.__power_controller.get_power_modules().values())
             for module in modules:
                 module_address = module['address']
                 module_version = module['version']
@@ -960,7 +960,7 @@ class GatewayApi(object):
         if self.__power_controller is None:
             return []
 
-        modules = self.__power_controller.get_power_modules().values()
+        modules = list(self.__power_controller.get_power_modules().values())
 
         def translate_address(_module):
             """ Translate the address from an integer to the external address format (eg. E1). """
@@ -1215,7 +1215,7 @@ class GatewayApi(object):
         if version != power_api.ENERGY_MODULE:
             raise ValueError('Unknown power api version')
         if input_id is None:
-            input_ids = range(12)
+            input_ids = list(range(12))
         else:
             input_id = int(input_id)
             if input_id < 0 or input_id > 11:
@@ -1250,7 +1250,7 @@ class GatewayApi(object):
         if version != power_api.ENERGY_MODULE:
             raise ValueError('Unknown power api version')
         if input_id is None:
-            input_ids = range(12)
+            input_ids = list(range(12))
         else:
             input_id = int(input_id)
             if input_id < 0 or input_id > 11:

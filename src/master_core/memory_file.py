@@ -128,6 +128,6 @@ class MemoryFile(object):
     def invalidate_cache(self, page=None):
         pages = [page]
         if page is None:
-            pages = range(self._pages)
+            pages = list(range(self._pages))
         for page in pages:
             self._cache.pop(page, None)

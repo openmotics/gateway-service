@@ -162,7 +162,7 @@ class SchedulingController(object):
 
     @property
     def schedules(self):
-        return self._schedules.values()
+        return list(self._schedules.values())
 
     def _execute(self, *args, **kwargs):
         with self._lock:

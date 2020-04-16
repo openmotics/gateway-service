@@ -528,7 +528,7 @@ class ThermostatControllerMaster(ThermostatController):
     @staticmethod
     def __check_thermostat(thermostat):
         """ :raises ValueError if thermostat not in range [0, 32]. """
-        if thermostat not in range(0, 32):
+        if thermostat not in list(range(0, 32)):
             raise ValueError('Thermostat not in [0,32]: %d' % thermostat)
 
     def v0_set_current_setpoint(self, thermostat, temperature):

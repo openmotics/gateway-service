@@ -351,7 +351,7 @@ class MasterCoreController(MasterController):
         return self._output_states.get(output_id)
 
     def get_output_statuses(self):
-        return self._output_states.values()
+        return list(self._output_states.values())
 
     def _refresh_output_states(self):
         for i in self._enumerate_io_modules('output'):
@@ -664,7 +664,7 @@ class MasterInputState(object):
 
     def get_recent(self):
         # type: () -> List[int]
-        sorted_inputs = sorted(self._values.values(), key=lambda x: x.changed_at)
+        sorted_inputs = sorted(list(self._values.values()), key=lambda x: x.changed_at)
         recent_events = [x.input_id for x in sorted_inputs
                          if x.changed_at > time.time() - 10]
         return recent_events[-5:]

@@ -31,7 +31,7 @@ DEFAULT_INPUT_CONFIG = {'invert': 255}
 def next_input(draw):
     used_values = []
     def f(toolbox):
-        value = draw(one_of(map(just, toolbox.dut_inputs)).filter(lambda x: x not in used_values))
+        value = draw(one_of(list(map(just, toolbox.dut_inputs))).filter(lambda x: x not in used_values))
         used_values.append(value)
         hypothesis.note('module i#{}'.format(value))
         return value
@@ -42,7 +42,7 @@ def next_input(draw):
 def next_output(draw):
     used_values = []
     def f(toolbox):
-        value = draw(one_of(map(just, toolbox.dut_outputs)).filter(lambda x: x not in used_values))
+        value = draw(one_of(list(map(just, toolbox.dut_outputs))).filter(lambda x: x not in used_values))
         used_values.append(value)
         hypothesis.note('module o#{}'.format(value))
         return value

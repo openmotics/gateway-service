@@ -117,7 +117,7 @@ class PulseCounterControllerTest(unittest.TestCase):
         controller.set_pulse_counter_status(25, 456)
 
         status = controller.get_pulse_counter_status()
-        self.assertEquals(range(0, 24) + [123, 456], status)
+        self.assertEquals(list(range(0, 24)) + [123, 456], status)
 
         # Set pulse counter for unexisting pulse counter
         try:

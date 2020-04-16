@@ -192,14 +192,14 @@ class Toolbox(object):
         # type: () -> List[int]
         if self._dut_inputs is None:
             input_modules = self.list_modules('I')
-            self._dut_inputs = range(0, len(input_modules) * 8 - 1)
+            self._dut_inputs = list(range(0, len(input_modules) * 8 - 1))
         return self._dut_inputs
 
     @property
     def dut_outputs(self):
         if self._dut_outputs is None:
             output_modules = self.list_modules('O')
-            self._dut_outputs = range(0, len(output_modules) * 8 - 1)
+            self._dut_outputs = list(range(0, len(output_modules) * 8 - 1))
         return self._dut_outputs
 
     def initialize(self):

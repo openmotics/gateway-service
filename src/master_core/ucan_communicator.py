@@ -231,9 +231,9 @@ class PalletConsumer(Consumer):
             self._amount_of_segments = segments_remaining + 1
         segment_data = payload[1:]
         self._payload_set[segments_remaining] = segment_data
-        if self._amount_of_segments is not None and sorted(self._payload_set.keys()) == range(self._amount_of_segments):
+        if self._amount_of_segments is not None and sorted(self._payload_set.keys()) == list(range(self._amount_of_segments)):
             pallet = []
-            for segment in sorted(self._payload_set.keys(), reverse=True):
+            for segment in sorted(list(self._payload_set.keys()), reverse=True):
                 pallet += self._payload_set[segment]
             self._queue.put(self.command.consume_response_payload(pallet))
             return True
