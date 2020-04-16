@@ -9,7 +9,7 @@ except ImportError:
     # This is the case when the plugin runtime is unittested
     import json  # type: ignore
 
-from decorators import *  # Import for backwards compatibility
+from .decorators import *  # Import for backwards compatibility
 
 logger = logging.getLogger("openmotics")
 

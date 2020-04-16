@@ -13,8 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from feedback_led import FeedbackLedDTO
-from output import OutputDTO
-from shutter import ShutterDTO
-from shutter_group import ShutterGroupDTO
 from __future__ import absolute_import
+from .feedback_led import FeedbackLedDTO
+from .output import OutputDTO
+from .shutter import ShutterDTO
+from .shutter_group import ShutterGroupDTO

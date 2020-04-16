@@ -13,6 +13,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from output import OutputMapper
-from shutter import ShutterMapper
 from __future__ import absolute_import
+from .output import OutputMapper
+from .shutter import ShutterMapper

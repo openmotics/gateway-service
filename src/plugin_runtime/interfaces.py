@@ -17,7 +17,7 @@
 from __future__ import absolute_import
 import inspect
 
-from base import PluginException
+from .base import PluginException
 
 
 class PluginInterface(object):

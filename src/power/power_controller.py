@@ -21,7 +21,7 @@ from __future__ import absolute_import
 import sqlite3
 from threading import Lock
 from ioc import Injectable, Inject, INJECTED, Singleton
-from power_api import POWER_MODULE, ENERGY_MODULE, P1_CONCENTRATOR, NUM_PORTS, LARGEST_MODULE_TYPE
+from .power_api import POWER_MODULE, ENERGY_MODULE, P1_CONCENTRATOR, NUM_PORTS, LARGEST_MODULE_TYPE
 import six
 from six.moves import range
 
