@@ -21,7 +21,7 @@ import sys
 import subprocess
 import logging
 import constants
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 import six
 
 logger = logging.getLogger('openmotics')

@@ -28,7 +28,7 @@ import argparse
 import logging
 import time
 from ioc import Injectable
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from serial import Serial
 from serial_utils import RS485, CommunicationTimedOutException
 from power.power_communicator import PowerCommunicator

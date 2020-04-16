@@ -35,7 +35,7 @@ import constants
 import ujson as json
 from threading import Thread, Lock
 from collections import deque
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from ioc import Injectable, INJECTED, Inject
 from gateway.config import ConfigurationController
 from bus.om_bus_client import MessageClient

@@ -17,8 +17,8 @@ The GatewayApi defines high level functions, these are used by the interface
 and call the master_api to complete the actions.
 """
 
-import ConfigParser
 from __future__ import absolute_import
+import six.moves.configparser
 import glob
 import logging
 import math
@@ -140,7 +140,7 @@ class GatewayApi(object):
     def get_main_version(self):
         """ Gets reported main version """
         _ = self
-        config = ConfigParser.ConfigParser()
+        config = six.moves.configparser.ConfigParser()
         config.read(constants.get_config_file())
         return str(config.get('OpenMotics', 'version'))
 

@@ -28,7 +28,7 @@ import constants
 import logging
 
 from threading import Thread
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from signal import signal, SIGTERM
 from bus.om_bus_events import OMBusEvents
 from bus.om_bus_client import MessageClient

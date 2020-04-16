@@ -23,7 +23,7 @@ System.import_libs()
 import sys
 import logging
 import constants
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from serial import Serial
 from ioc import Injectable
 from master_core.core_updater import CoreUpdater

@@ -32,7 +32,7 @@ import intelhex
 import constants
 import master.master_api as master_api
 from ioc import Injectable, Inject, INJECTED
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from serial import Serial
 from master.master_communicator import MasterCommunicator, CommunicationTimedOutException
 from master.eeprom_controller import EepromFile, EepromAddress

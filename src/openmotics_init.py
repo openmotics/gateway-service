@@ -22,7 +22,7 @@ System.import_libs()
 
 import logging
 import os
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from threading import Lock
 
 import constants

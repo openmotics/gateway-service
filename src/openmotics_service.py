@@ -28,7 +28,7 @@ from bus.om_bus_service import MessageService
 from bus.om_bus_client import MessageClient
 from serial import Serial
 from signal import signal, SIGTERM
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from threading import Lock
 from serial_utils import RS485
 from urlparse import urlparse

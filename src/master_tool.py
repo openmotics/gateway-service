@@ -25,7 +25,7 @@ System.import_libs()
 import argparse
 import sys
 import time
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from ioc import Injectable
 from serial import Serial
 import constants

@@ -20,7 +20,7 @@ import hashlib
 import traceback
 import subprocess
 
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 
 from constants import get_config_file, get_update_script, get_update_output_file, get_update_file
 
