@@ -113,7 +113,7 @@ def params_parser(params, param_types):
         value = params[key]
         if value is None:
             continue
-        if isinstance(value, basestring) and value.lower() in ['null', 'none', '']:
+        if isinstance(value, six.string_types) and value.lower() in ['null', 'none', '']:
             params[key] = None
         else:
             if isinstance(param_types[key], list):

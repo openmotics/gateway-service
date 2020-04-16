@@ -266,7 +266,7 @@ class MemoryField(object):
 
         self._data = None
 
-        if isinstance(address_spec, types.TupleType):
+        if isinstance(address_spec, tuple):
             self._address_tuple = address_spec
         elif isinstance(address_spec, types.FunctionType):
             args = inspect.getargspec(address_spec).args

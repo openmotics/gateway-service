@@ -7,7 +7,7 @@ import time
 import traceback
 import ujson as json
 from threading import Thread, Lock
-from Queue import Queue, Empty, Full
+from six.moves.queue import Queue, Empty, Full
 from toolbox import PluginIPCStream
 from six.moves import range
 

@@ -29,6 +29,7 @@ from ioc import Injectable, Inject, INJECTED, Singleton
 from platform_utils import Platform
 from gateway.webservice import params_parser
 import ujson as json
+import six
 
 if Platform.get_platform() == Platform.Type.CLASSIC:
     from master.master_communicator import CommunicationTimedOutException
@@ -264,7 +265,7 @@ class SchedulingController(object):
                 self._semaphore.release()
 
     def _validate(self, name, start, schedule_type, arguments, repeat, duration, end):
-        if name is None or not isinstance(name, basestring) or name.strip() == '':
+        if name is None or not isinstance(name, six.string_types) or name.strip() == '':
             raise RuntimeError('A schedule must have a name')
         # Check whether the requested type is valid
         accepted_types = ['GROUP_ACTION', 'BASIC_ACTION', 'LOCAL_API']

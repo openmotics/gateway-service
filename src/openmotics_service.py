@@ -31,7 +31,7 @@ from signal import signal, SIGTERM
 from six.moves.configparser import ConfigParser
 from threading import Lock
 from serial_utils import RS485
-from urlparse import urlparse
+from six.moves.urllib.parse import urlparse
 from peewee_migrate import Router
 
 logger = logging.getLogger("openmotics")

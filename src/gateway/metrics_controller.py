@@ -173,13 +173,13 @@ class MetricsController(object):
         #                  "type": "counter",
         #                  "unit": "kWh"}]
         # }
-        required_keys = {'type': basestring,
+        required_keys = {'type': six.string_types,
                          'metrics': list,
                          'tags': list}
-        metrics_keys = {'name': basestring,
-                        'description': basestring,
-                        'type': basestring,
-                        'unit': basestring}
+        metrics_keys = {'name': six.string_types,
+                        'description': six.string_types,
+                        'type': six.string_types,
+                        'unit': six.string_types}
         expected_plugins = []
         for plugin, plugin_definitions in six.iteritems(definitions):
             log = self._plugin_controller.get_logger(plugin)
@@ -461,7 +461,7 @@ class MetricsController(object):
             # Validation, part 1
             source = metric['source']
             log = self._plugin_controller.get_logger(source)
-            required_keys = {'type': basestring,
+            required_keys = {'type': six.string_types,
                              'timestamp': (float, int),
                              'values': dict,
                              'tags': dict}

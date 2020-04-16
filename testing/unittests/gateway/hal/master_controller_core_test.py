@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 import time
 import unittest
-from Queue import Queue
+from six.moves.queue import Queue
 
 import gateway.hal.master_controller_core
 import mock
@@ -15,6 +15,7 @@ from master_core.memory_file import MemoryTypes
 from master_core.core_communicator import BackgroundConsumer
 from master_core.memory_models import InputConfiguration
 from master_core.ucan_communicator import UCANCommunicator
+from six.moves import map
 from six.moves import range
 
 

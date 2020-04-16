@@ -140,7 +140,7 @@ class PluginConfigChecker(object):
                                        ('i18n', False)]:
                     if mandatory is True and key not in item:
                         raise PluginException(PluginConfigChecker.MISSES_KEY.format(item, key))
-                    if key in item and not isinstance(item[key], basestring):
+                    if key in item and not isinstance(item[key], six.string_types):
                         raise PluginException(PluginConfigChecker.KEY_INVALID_TYPE.format(key, item, 'a string'))
 
                 if item['type'] == 'enum':
@@ -161,7 +161,7 @@ class PluginConfigChecker(object):
             raise PluginException(PluginConfigChecker.KEY_INVALID_TYPE.format('choices', item, 'a list'))
 
         for choice in item['choices']:
-            if not isinstance(choice, basestring):
+            if not isinstance(choice, six.string_types):
                 raise PluginException(PluginConfigChecker.CHOICES_INVALID_TYPE.format(item, 'a string'))
 
     def _check_section(self, item):
@@ -226,11 +226,11 @@ class PluginConfigChecker(object):
             if name not in config:
                 raise PluginException('The config does not contain key \'{0}\'.'.format(name))
 
-            for key, type_info in {'str': (basestring, 'a string'),
+            for key, type_info in six.iteritems({'str': (six.string_types, 'a string'),
                                    'int': (int, 'an int'),
                                    'bool': (bool, 'a bool'),
-                                   'password': (basestring, 'a string'),
-                                   'section': (list, 'a list')}.iteritems():
+                                   'password': (six.string_types, 'a string'),
+                                   'section': (list, 'a list')}):
                 if item['type'] == key and not isinstance(config[name], type_info[0]):
                     raise PluginException(PluginConfigChecker.CONFIG_INVALID_TYPE.format(name, config[name], type_info[1]))
 

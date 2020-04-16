@@ -21,7 +21,7 @@ from __future__ import absolute_import
 import logging
 import time
 from threading import Thread, Lock
-from Queue import Queue, Empty
+from six.moves.queue import Queue, Empty
 from ioc import Injectable, Inject, INJECTED, Singleton
 from master_core.core_api import CoreAPI
 from master_core.fields import WordField

@@ -20,7 +20,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 import logging
 import time
-from Queue import Queue, Empty
+from six.moves.queue import Queue, Empty
 from ioc import Injectable, Inject, INJECTED, Singleton
 from master_core.core_api import CoreAPI
 from master_core.core_communicator import BackgroundConsumer

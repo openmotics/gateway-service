@@ -20,6 +20,7 @@ import hypothesis
 import pytest
 import ujson as json
 from hypothesis.strategies import booleans, composite, integers, just, one_of
+from six.moves import map
 
 logger = logging.getLogger('openmotics')
 

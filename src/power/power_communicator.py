@@ -19,7 +19,7 @@ Module to communicate with the power modules.
 from __future__ import absolute_import
 import logging
 import time
-from Queue import Empty
+from six.moves.queue import Empty
 from ioc import Injectable, Inject, INJECTED, Singleton
 from threading import Thread, RLock
 from serial_utils import printable, CommunicationTimedOutException
