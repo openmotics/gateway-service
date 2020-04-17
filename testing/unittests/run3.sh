@@ -46,7 +46,7 @@ pytest power_tests/time_keeper_tests.py --log-level=DEBUG --durations=2 --junit-
 #pytest plugins_tests/base_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/PluginsBaseTest.xml
 
 echo "Running plugin interfaces tests"
-#python3 plugins_tests/interfaces_tests.py
+pytest plugins_tests/interfaces_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/PluginsInterfacesTest.xml
 
 echo "Running pulse counter controller tests"
 #python3 gateway_tests/pulses_tests.py
