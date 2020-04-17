@@ -104,7 +104,7 @@ class PluginController(object):
     def __init_plugin_runner(self, plugin_name):
         """ Initializes a single plugin runner """
         try:
-            if plugin_name in list(self.__runners.keys()):
+            if plugin_name in self.__runners.keys():
                 self.log(plugin_name, '[Runner] Could not init plugin', 'Multiple plugins with the same name found')
                 return
             _logger = self.get_logger(plugin_name)
