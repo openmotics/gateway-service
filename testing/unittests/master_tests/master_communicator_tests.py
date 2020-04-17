@@ -52,7 +52,7 @@ class MasterCommunicatorTest(unittest.TestCase):
 
         pty.master_reply(action.create_output(1, {'resp': 'OK'}))
         output = comm.do_command(action, fields)
-        self.assertEquals('OK', output['resp'])
+        self.assertEqual('OK', output['resp'])
 
     def test_timeout(self):
         action = master_api.basic_action()
@@ -82,7 +82,7 @@ class MasterCommunicatorTest(unittest.TestCase):
 
         pty.master_reply(action.create_output(2, {'resp': 'OK'}))
         output = comm.do_command(action, fields)
-        self.assertEquals('OK', output['resp'])
+        self.assertEqual('OK', output['resp'])
 
     def test_split_data(self):
         action = master_api.basic_action()
@@ -114,7 +114,7 @@ class MasterCommunicatorTest(unittest.TestCase):
 
             ready.wait(2)
             output = comm.do_command(action, fields)
-            self.assertEquals('OK', output['resp'])
+            self.assertEqual('OK', output['resp'])
             thread.join(2)
             assert not thread.is_alive()
 
@@ -128,7 +128,7 @@ class MasterCommunicatorTest(unittest.TestCase):
 
         pty.master_reply('got it!')
         comm.send_passthrough_data('data from passthrough')
-        self.assertEquals('got it!', comm.get_passthrough_data())
+        self.assertEqual('got it!', comm.get_passthrough_data())
 
     def test_passthrough_with_commands(self):
         action = master_api.basic_action()
@@ -144,16 +144,16 @@ class MasterCommunicatorTest(unittest.TestCase):
         comm.start()
 
         pty.master_reply('hello' + action.create_output(1, {'resp': 'OK'}))
-        self.assertEquals('OK', comm.do_command(action, fields)['resp'])
-        self.assertEquals('hello', comm.get_passthrough_data())
+        self.assertEqual('OK', comm.do_command(action, fields)['resp'])
+        self.assertEqual('hello', comm.get_passthrough_data())
 
         pty.master_reply(action.create_output(2, {'resp': 'OK'}) + 'world')
-        self.assertEquals('OK', comm.do_command(action, fields)['resp'])
-        self.assertEquals('world', comm.get_passthrough_data())
+        self.assertEqual('OK', comm.do_command(action, fields)['resp'])
+        self.assertEqual('world', comm.get_passthrough_data())
 
         pty.master_reply('hello' + action.create_output(3, {'resp': 'OK'}) + ' world')
-        self.assertEquals('OK', comm.do_command(action, fields)['resp'])
-        self.assertEquals('hello world', comm.get_passthrough_data())
+        self.assertEqual('OK', comm.do_command(action, fields)['resp'])
+        self.assertEqual('hello world', comm.get_passthrough_data())
 
     def test_maintenance_mode(self):
         action = master_api.basic_action()
@@ -169,11 +169,11 @@ class MasterCommunicatorTest(unittest.TestCase):
         comm.start_maintenance_mode()
         pty.fd.write('OK')
         self.assertRaises(InMaintenanceModeException, comm.do_command, action, fields)
-        self.assertEquals('OK', comm.get_maintenance_data())
+        self.assertEqual('OK', comm.get_maintenance_data())
 
         comm.send_maintenance_data("error list\r\n")
         pty.fd.write('the list\n')
-        self.assertEquals('the list\n', comm.get_maintenance_data())
+        self.assertEqual('the list\n', comm.get_maintenance_data())
 
         comm.stop_maintenance_mode()
 
@@ -193,9 +193,9 @@ class MasterCommunicatorTest(unittest.TestCase):
 
         def get_passthrough():
             """ Background thread that reads the passthrough data. """
-            self.assertEquals('Before maintenance', comm.get_passthrough_data())
+            self.assertEqual('Before maintenance', comm.get_passthrough_data())
             ready.set()
-            self.assertEquals('After maintenance', comm.get_passthrough_data())
+            self.assertEqual('After maintenance', comm.get_passthrough_data())
 
         thread = threading.Thread(target=get_passthrough)
         thread.start()
@@ -207,12 +207,12 @@ class MasterCommunicatorTest(unittest.TestCase):
         pty.fd.write('OK')
         time.sleep(0.2)
         self.assertRaises(InMaintenanceModeException, comm.do_command, action, fields)
-        self.assertEquals('OK', comm.get_maintenance_data())
+        self.assertEqual('OK', comm.get_maintenance_data())
 
         comm.send_maintenance_data("error list\r\n")
         pty.fd.write('the list\n')
         time.sleep(0.2)
-        self.assertEquals('the list\n', comm.get_maintenance_data())
+        self.assertEqual('the list\n', comm.get_maintenance_data())
 
         comm.stop_maintenance_mode()
         pty.fd.write('After maintenance')
@@ -232,10 +232,10 @@ class MasterCommunicatorTest(unittest.TestCase):
         def callback(output):
             """ Callback that check if the correct result was returned for OL. """
             if got_output['phase'] == 1:
-                self.assertEquals([(3, int(12 * 10.0 / 6.0))], output['outputs'])
+                self.assertEqual([(3, int(12 * 10.0 / 6.0))], output['outputs'])
                 got_output['phase'] = 2
             elif got_output['phase'] == 2:
-                self.assertEquals([(3, int(12 * 10.0 / 6.0)), (5, int(6 * 10.0 / 6.0))],
+                self.assertEqual([(3, int(12 * 10.0 / 6.0)), (5, int(6 * 10.0 / 6.0))],
                                   output['outputs'])
                 got_output['phase'] = 3
 
@@ -249,10 +249,10 @@ class MasterCommunicatorTest(unittest.TestCase):
 
         pty.master_reply(action.create_output(1, {'resp': 'OK'}))
         output = comm.do_command(action, fields)
-        self.assertEquals('OK', output['resp'])
+        self.assertEqual('OK', output['resp'])
 
-        self.assertEquals(3, got_output['phase'])
-        self.assertEquals('junk here', comm.get_passthrough_data())
+        self.assertEqual(3, got_output['phase'])
+        self.assertEqual('junk here', comm.get_passthrough_data())
 
     def test_background_consumer_passthrough(self):
         action = master_api.basic_action()
@@ -265,7 +265,7 @@ class MasterCommunicatorTest(unittest.TestCase):
 
         def callback(output):
             """ Callback that check if the correct result was returned for OL. """
-            self.assertEquals([(3, int(12 * 10.0 / 6.0))], output['outputs'])
+            self.assertEqual([(3, int(12 * 10.0 / 6.0))], output['outputs'])
             got_output['passed'] = True
 
         comm = MasterCommunicator(init_master=False)
@@ -278,10 +278,10 @@ class MasterCommunicatorTest(unittest.TestCase):
 
         pty.master_reply(action.create_output(1, {'resp': 'OK'}))
         output = comm.do_command(action, fields)
-        self.assertEquals('OK', output['resp'])
+        self.assertEqual('OK', output['resp'])
 
-        self.assertEquals(True, got_output['passed'])
-        self.assertEquals('OL\x00\x01\x03\x0c\r\n', comm.get_passthrough_data())
+        self.assertEqual(True, got_output['passed'])
+        self.assertEqual('OL\x00\x01\x03\x0c\r\n', comm.get_passthrough_data())
 
     def test_bytes_counter(self):
         action = master_api.basic_action()
@@ -297,10 +297,10 @@ class MasterCommunicatorTest(unittest.TestCase):
         pty.fd.write('hello')
         pty.master_reply(action.create_output(1, {'resp': 'OK'}))
         comm.do_command(action, fields)
-        self.assertEquals('hello', comm.get_passthrough_data())
+        self.assertEqual('hello', comm.get_passthrough_data())
 
-        self.assertEquals(21, comm.get_communication_statistics()['bytes_written'])
-        self.assertEquals(5 + 18, comm.get_communication_statistics()['bytes_read'])
+        self.assertEqual(21, comm.get_communication_statistics()['bytes_written'])
+        self.assertEqual(5 + 18, comm.get_communication_statistics()['bytes_read'])
 
     def test_crc_checking(self):
         action = master_api.sensor_humidity_list()
@@ -324,8 +324,8 @@ class MasterCommunicatorTest(unittest.TestCase):
 
         pty.master_reply(action.create_output(1, fields1))
         output = comm.do_command(action)
-        self.assertEquals('\x00', output['hum0'].get_byte())
-        self.assertEquals('\x01', output['hum1'].get_byte())
+        self.assertEqual('\x00', output['hum0'].get_byte())
+        self.assertEqual('\x01', output['hum1'].get_byte())
 
         pty.master_reply(action.create_output(2, fields2))
         self.assertRaises(CrcCheckFailedException, comm.do_command, action)

@@ -66,14 +66,14 @@ class BufferingDataCollectorTest(unittest.TestCase):
         """ Test direct data collection. """
         bdc = BufferingDataCollector(gen(), 1)
         reset_time()
-        self.assertEquals(
+        self.assertEqual(
             {'timestamp' : time.time(),
             'values' : [[123456789.0, [[1, 2], [2, 3], [3, 4], [4, 5]]]]},
             bdc.collect(''))
         bdc.data_sent_callback(True)
         advance_time()
 
-        self.assertEquals(
+        self.assertEqual(
             {'timestamp' : time.time(),
             'values' : [[123456790.0, [[2, 3], [3, 4], [4, 5], [5, 6]]]]},
             bdc.collect(''))
@@ -83,14 +83,14 @@ class BufferingDataCollectorTest(unittest.TestCase):
         """ Test data collection with buffering. """
         bdc = BufferingDataCollector(gen(), 1)
         reset_time()
-        self.assertEquals(
+        self.assertEqual(
             {'timestamp' : time.time(),
             'values' : [[123456789.0, [[1, 2], [2, 3], [3, 4], [4, 5]]]]},
             bdc.collect(''))
         bdc.data_sent_callback(False)
         advance_time()
 
-        self.assertEquals(
+        self.assertEqual(
             {'timestamp' : time.time(),
             'values' : [
             [123456789.0, [[1, 2], [2, 3], [3, 4], [4, 5]]],
@@ -99,7 +99,7 @@ class BufferingDataCollectorTest(unittest.TestCase):
         bdc.data_sent_callback(True)
         advance_time()
 
-        self.assertEquals(
+        self.assertEqual(
             {'timestamp' : time.time(),
             'values' : [[123456791.0, [[3, 4], [4, 5], [5, 6], [6, 7]]]]},
             bdc.collect(''))
@@ -111,13 +111,13 @@ class BufferingDataCollectorTest(unittest.TestCase):
 
         bdc = BufferingDataCollector(get_data, 1)
         reset_time()
-        self.assertEquals(
+        self.assertEqual(
             {'timestamp' : time.time(),
             'values' : [[123456789.0, [[1, 2], [2, 3], [3, 4], [4, 5]]]]},
             bdc.collect(''))
         bdc.data_sent_callback(False)
         advance_time()
-        self.assertEquals(
+        self.assertEqual(
             {'timestamp' : time.time(),
             'values' : [
             [123456789.0, [[1, 2], [2, 3], [3, 4], [4, 5]]],
@@ -125,7 +125,7 @@ class BufferingDataCollectorTest(unittest.TestCase):
             bdc.collect(''))
         bdc.data_sent_callback(False)
         advance_time()
-        self.assertEquals(
+        self.assertEqual(
             {'timestamp' : time.time(),
             'values' : [
             [123456789.0, [[1, 2], [2, 3], [3, 4], [4, 5]]],
@@ -136,7 +136,7 @@ class BufferingDataCollectorTest(unittest.TestCase):
         advance_time()
 
         bdc2 = BufferingDataCollector(get_data, 1)
-        self.assertEquals(
+        self.assertEqual(
             {'timestamp' : time.time(),
             'values' : [
             [123456789.0, [[1, 2], [2, 3], [3, 4], [4, 5]]],
@@ -148,7 +148,7 @@ class BufferingDataCollectorTest(unittest.TestCase):
         advance_time()
 
         bdc3 = BufferingDataCollector(get_data, 1)
-        self.assertEquals(
+        self.assertEqual(
             {'timestamp' : time.time(),
             'values' : [[123456793.0, [[5, 6], [6, 7] ,[7, 8], [8, 9]]]]},
             bdc3.collect(''))
@@ -171,7 +171,7 @@ class BufferingDataCollectorTest(unittest.TestCase):
         
         f = open(path, 'r')
         line = f.readline()
-        self.assertEquals('[123764780.0, [[307992, 307993], [307993, 307994], [307994, 307995], [307995, 307996]]]\n', line)
+        self.assertEqual('[123764780.0, [[307992, 307993], [307993, 307994], [307994, 307995], [307995, 307996]]]\n', line)
         f.close()
 
 

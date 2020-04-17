@@ -122,8 +122,8 @@ class P1(OMPluginBase):
             controller = PluginControllerTest._get_controller()
             controller.start()
             plugin_list = controller.get_plugins()
-            self.assertEquals(1, len(plugin_list))
-            self.assertEquals('P1', plugin_list[0].name)
+            self.assertEqual(1, len(plugin_list))
+            self.assertEqual('P1', plugin_list[0].name)
         finally:
             if controller is not None:
                 controller.stop()
@@ -154,9 +154,9 @@ class P2(OMPluginBase):
             controller = PluginControllerTest._get_controller()
             controller.start()
             plugin_list = controller.get_plugins()
-            self.assertEquals(2, len(plugin_list))
+            self.assertEqual(2, len(plugin_list))
             names = sorted([plugin_list[0].name, plugin_list[1].name])
-            self.assertEquals(['P1', 'P2'], names)
+            self.assertEqual(['P1', 'P2'], names)
         finally:
             if controller is not None:
                 controller.stop()
@@ -401,7 +401,7 @@ class P2(OMPluginBase):
         try:
             check_plugin(P1)
         except PluginException as exception:
-            self.assertEquals('Attribute \'name\' is missing from the plugin class', str(exception))
+            self.assertEqual('Attribute \'name\' is missing from the plugin class', str(exception))
 
         class P2(OMPluginBase):
             """ Plugin with malformed name. """
@@ -410,7 +410,7 @@ class P2(OMPluginBase):
         try:
             check_plugin(P2)
         except PluginException as exception:
-            self.assertEquals('Plugin name \'malformed name\' is malformed: can only contain letters, numbers and underscores.', str(exception))
+            self.assertEqual('Plugin name \'malformed name\' is malformed: can only contain letters, numbers and underscores.', str(exception))
 
         class P3(OMPluginBase):
             """ Plugin without version. """
@@ -419,7 +419,7 @@ class P2(OMPluginBase):
         try:
             check_plugin(P3)
         except PluginException as exception:
-            self.assertEquals('Attribute \'version\' is missing from the plugin class', str(exception))
+            self.assertEqual('Attribute \'version\' is missing from the plugin class', str(exception))
 
         class P4(OMPluginBase):
             """ Plugin without interfaces. """
@@ -429,7 +429,7 @@ class P2(OMPluginBase):
         try:
             check_plugin(P4)
         except PluginException as exception:
-            self.assertEquals('Attribute \'interfaces\' is missing from the plugin class', str(exception))
+            self.assertEqual('Attribute \'interfaces\' is missing from the plugin class', str(exception))
 
         class P5(OMPluginBase):
             """ Valid plugin. """
@@ -448,7 +448,7 @@ class P2(OMPluginBase):
         try:
             check_plugin(P6)
         except PluginException as exception:
-            self.assertEquals('Plugin \'test\' has no method named \'html_index\'', str(exception))
+            self.assertEqual('Plugin \'test\' has no method named \'html_index\'', str(exception))
 
 
 FULL_DESCR = [
@@ -725,8 +725,8 @@ class PluginConfigCheckerTest(unittest.TestCase):
                 continue
             self.assertIsNotNone(call_info, 'Expected call was not exposed to plugins: {0}'.format(method_name))
             arg_spec = inspect.getargspec(method)
-            self.assertEquals(arg_spec.args[0], 'self')
-            self.assertEquals(arg_spec.args[1:], call_info)
+            self.assertEqual(arg_spec.args[0], 'self')
+            self.assertEqual(arg_spec.args[1:], call_info)
             ramaining_methods.remove(method_name)
         self.assertEqual(ramaining_methods, [])
 

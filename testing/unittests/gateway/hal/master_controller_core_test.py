@@ -32,21 +32,21 @@ class MasterCoreControllerTest(unittest.TestCase):
                                return_value=get_input_dummy(1)):
             controller = get_core_controller_dummy()
             data = controller.get_input_module_type(1)
-            self.assertEquals('I', data)
+            self.assertEqual('I', data)
 
     def test_load_input(self):
         controller = get_core_controller_dummy()
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                return_value=get_input_dummy(1)):
             data = controller.load_input(1)
-            self.assertEquals(data['id'], 1)
+            self.assertEqual(data['id'], 1)
 
     def test_load_input_with_fields(self):
         controller = get_core_controller_dummy()
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                return_value=get_input_dummy(1)):
             data = controller.load_input(1, fields=['module_type'])
-            self.assertEquals(data['id'], 1)
+            self.assertEqual(data['id'], 1)
             self.assertIn('module_type', data)
             self.assertNotIn('name', data)
 

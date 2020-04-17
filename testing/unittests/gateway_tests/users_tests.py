@@ -59,9 +59,9 @@ class UserControllerTest(unittest.TestCase):
         user_controller = self._get_controller()
         success, data = user_controller.login('fred', 'test')
         self.assertFalse(success)
-        self.assertEquals(data, 'invalid_credentials')
-        self.assertEquals(False, user_controller.check_token('some token 123'))
-        self.assertEquals(None, user_controller.get_role('fred'))
+        self.assertEqual(data, 'invalid_credentials')
+        self.assertEqual(False, user_controller.check_token('some token 123'))
+        self.assertEqual(None, user_controller.get_role('fred'))
 
         success, data = user_controller.login('om', 'pass')
         self.assertTrue(success)
@@ -88,7 +88,7 @@ class UserControllerTest(unittest.TestCase):
         user_controller = self._get_controller()
         user_controller.create_user('fred', 'test', 'admin', True)
 
-        self.assertEquals(False, user_controller.login('fred', '123', accept_terms=True)[0])
+        self.assertEqual(False, user_controller.login('fred', '123', accept_terms=True)[0])
         self.assertFalse(user_controller.check_token('blah'))
 
         token = user_controller.login('fred', 'test', accept_terms=True)[1]
@@ -97,7 +97,7 @@ class UserControllerTest(unittest.TestCase):
         self.assertTrue(user_controller.check_token(token))
         self.assertFalse(user_controller.check_token('blah'))
 
-        self.assertEquals('admin', user_controller.get_role('fred'))
+        self.assertEqual('admin', user_controller.get_role('fred'))
 
     def test_token_timeout(self):
         """ Test the timeout on the tokens. """
@@ -133,15 +133,15 @@ class UserControllerTest(unittest.TestCase):
     def test_get_usernames(self):
         """ Test getting all usernames. """
         user_controller = self._get_controller()
-        self.assertEquals(['om'], user_controller.get_usernames())
+        self.assertEqual(['om'], user_controller.get_usernames())
 
         user_controller.create_user('test', 'test', 'admin', True)
-        self.assertEquals(['om', 'test'], user_controller.get_usernames())
+        self.assertEqual(['om', 'test'], user_controller.get_usernames())
 
     def test_remove_user(self):
         """ Test removing a user. """
         user_controller = self._get_controller()
-        self.assertEquals(['om'], user_controller.get_usernames())
+        self.assertEqual(['om'], user_controller.get_usernames())
 
         user_controller.create_user('test', 'test', 'admin', True)
 
@@ -151,13 +151,13 @@ class UserControllerTest(unittest.TestCase):
         user_controller.remove_user('test')
 
         self.assertFalse(user_controller.check_token(token))
-        self.assertEquals(['om'], user_controller.get_usernames())
+        self.assertEqual(['om'], user_controller.get_usernames())
 
         try:
             user_controller.remove_user('om')
             self.fail('Should have raised exception !')
         except Exception as exception:
-            self.assertEquals('Cannot delete last admin account', str(exception))
+            self.assertEqual('Cannot delete last admin account', str(exception))
 
     def test_case_insensitive(self):
         """ Test the case insensitivity of the username. """
@@ -171,9 +171,9 @@ class UserControllerTest(unittest.TestCase):
         token = user_controller.login('TesT', 'test', accept_terms=True)[1]
         self.assertTrue(user_controller.check_token(token))
 
-        self.assertEquals('invalid_credentials', user_controller.login('test', 'Test')[1])
+        self.assertEqual('invalid_credentials', user_controller.login('test', 'Test')[1])
 
-        self.assertEquals(['om', 'test'], user_controller.get_usernames())
+        self.assertEqual(['om', 'test'], user_controller.get_usernames())
 
 
 if __name__ == '__main__':

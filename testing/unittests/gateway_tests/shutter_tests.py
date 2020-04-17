@@ -101,8 +101,8 @@ class ShutterControllerTest(unittest.TestCase):
         controller.update_config(config)
         self.assertIsNone(controller._actual_positions.get(1, 'incorrect'))
         self.assertIsNone(controller._desired_positions.get(1, 'incorrect'))
-        self.assertEquals(controller._directions.get(1), ShutterEnums.Direction.STOP)
-        self.assertEquals(controller._states.get(1), [0, ShutterEnums.State.STOPPED])
+        self.assertEqual(controller._directions.get(1), ShutterEnums.Direction.STOP)
+        self.assertEqual(controller._states.get(1), [0, ShutterEnums.State.STOPPED])
 
     def test_basic_actions_non_positional(self):
         calls = {}
@@ -337,10 +337,10 @@ class ShutterControllerTest(unittest.TestCase):
         controller.subscribe_events(shutter_callback)
 
         def validate(_shutter_id, _entry):
-            self.assertEquals(controller._actual_positions.get(_shutter_id), _entry[0])
-            self.assertEquals(controller._desired_positions.get(_shutter_id), _entry[1])
-            self.assertEquals(controller._directions.get(_shutter_id), _entry[2])
-            self.assertEquals(controller._states.get(_shutter_id), _entry[3])
+            self.assertEqual(controller._actual_positions.get(_shutter_id), _entry[0])
+            self.assertEqual(controller._desired_positions.get(_shutter_id), _entry[1])
+            self.assertEqual(controller._directions.get(_shutter_id), _entry[2])
+            self.assertEqual(controller._states.get(_shutter_id), _entry[3])
             if len(_entry) == 4 or _entry[4]:
                 self.assertEqual(calls[_shutter_id].pop(), _entry[3][1].upper())
 

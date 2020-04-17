@@ -49,7 +49,7 @@ class CheckInterfacesTest(unittest.TestCase):
 
         with self.assertRaises(PluginException) as ctx:
             check_interfaces(P1)
-        self.assertEquals('The interfaces attribute on plugin \'P1\' is not a list.', ctx.exception.message)
+        self.assertEqual('The interfaces attribute on plugin \'P1\' is not a list.', ctx.exception.message)
 
         class P2(OMPluginBase):
             """ Plugin with invalid interface. """
@@ -59,7 +59,7 @@ class CheckInterfacesTest(unittest.TestCase):
 
         with self.assertRaises(PluginException) as ctx:
             check_interfaces(P2)
-        self.assertEquals('Interface \'interface1\' on plugin \'P2\' is not a tuple of (name, version).', ctx.exception.message)
+        self.assertEqual('Interface \'interface1\' on plugin \'P2\' is not a tuple of (name, version).', ctx.exception.message)
 
         class P3(OMPluginBase):
             """ Plugin with invalid interface. """
@@ -69,7 +69,7 @@ class CheckInterfacesTest(unittest.TestCase):
 
         with self.assertRaises(PluginException) as ctx:
             check_interfaces(P3)
-        self.assertEquals('Interface \'(\'interface1\',)\' on plugin \'P3\' is not a tuple of (name, version).', ctx.exception.message)
+        self.assertEqual('Interface \'(\'interface1\',)\' on plugin \'P3\' is not a tuple of (name, version).', ctx.exception.message)
 
     def test_interface_not_found(self):
         """ Test a plugin with an interface that is not known. """
@@ -81,7 +81,7 @@ class CheckInterfacesTest(unittest.TestCase):
 
         with self.assertRaises(PluginException) as ctx:
             check_interfaces(P1)
-        self.assertEquals('Interface \'myinterface\' with version \'2.0\' was not found.', ctx.exception.message)
+        self.assertEqual('Interface \'myinterface\' with version \'2.0\' was not found.', ctx.exception.message)
 
     def test_missing_method_interface(self):
         """ Test a plugin with a missing method. """
@@ -93,7 +93,7 @@ class CheckInterfacesTest(unittest.TestCase):
 
         with self.assertRaises(PluginException) as ctx:
             check_interfaces(P1)
-        self.assertEquals('Plugin \'P1\' has no method named \'html_index\'', ctx.exception.message)
+        self.assertEqual('Plugin \'P1\' has no method named \'html_index\'', ctx.exception.message)
 
     def test_not_a_method(self):
         """ Test where a name of an interface method is used for something else. """
@@ -106,7 +106,7 @@ class CheckInterfacesTest(unittest.TestCase):
 
         with self.assertRaises(PluginException) as ctx:
             check_interfaces(P1)
-        self.assertEquals('Plugin \'P1\' has no method named \'html_index\'', ctx.exception.message)
+        self.assertEqual('Plugin \'P1\' has no method named \'html_index\'', ctx.exception.message)
 
     def test_not_exposed_interface(self):
         """ Test a non-exposed method on a plugin. """
@@ -122,7 +122,7 @@ class CheckInterfacesTest(unittest.TestCase):
 
         with self.assertRaises(PluginException) as ctx:
             check_interfaces(P1)
-        self.assertEquals('Plugin \'P1\' does not expose method \'html_index\'', ctx.exception.message)
+        self.assertEqual('Plugin \'P1\' does not expose method \'html_index\'', ctx.exception.message)
 
     def test_wrong_authentication_interface(self):
         """ Test a plugin with wrong authentication on a method. """
@@ -138,7 +138,7 @@ class CheckInterfacesTest(unittest.TestCase):
 
         with self.assertRaises(PluginException) as ctx:
             check_interfaces(P1)
-        self.assertEquals('Plugin \'P1\': authentication for method \'html_index\' does not match the interface authentication (required).', ctx.exception.message)
+        self.assertEqual('Plugin \'P1\': authentication for method \'html_index\' does not match the interface authentication (required).', ctx.exception.message)
 
     def test_wrong_arguments(self):
         """ Test a plugin with wrong arguments to a method. """
@@ -165,7 +165,7 @@ class CheckInterfacesTest(unittest.TestCase):
 
         with self.assertRaises(PluginException) as ctx:
             check_interfaces(P1)
-        self.assertEquals('Plugin \'P1\': the arguments for method \'set_config\': [\'test\'] do not match the interface arguments: [\'config\'].', ctx.exception.message)
+        self.assertEqual('Plugin \'P1\': the arguments for method \'set_config\': [\'test\'] do not match the interface arguments: [\'config\'].', ctx.exception.message)
 
     def test_missing_self(self):
         """ Test a plugin that is missing 'self' for a method. """
@@ -182,7 +182,7 @@ class CheckInterfacesTest(unittest.TestCase):
 
         with self.assertRaises(PluginException) as ctx:
             check_interfaces(P1)
-        self.assertEquals('Method \'html_index\' on plugin \'P1\' lacks \'self\' as first argument.', ctx.exception.message)
+        self.assertEqual('Method \'html_index\' on plugin \'P1\' lacks \'self\' as first argument.', ctx.exception.message)
 
     def test_ok(self):
         """ Test an interface check that succeeds. """

@@ -70,30 +70,30 @@ class PulseCounterControllerTest(unittest.TestCase):
 
         # Only master pulse counters
         controller.set_pulse_counter_amount(24)
-        self.assertEquals(24, controller.get_pulse_counter_amount())
+        self.assertEqual(24, controller.get_pulse_counter_amount())
 
         # Add virtual pulse counters
         controller.set_pulse_counter_amount(28)
-        self.assertEquals(28, controller.get_pulse_counter_amount())
+        self.assertEqual(28, controller.get_pulse_counter_amount())
 
         # Add virtual pulse counter
         controller.set_pulse_counter_amount(29)
-        self.assertEquals(29, controller.get_pulse_counter_amount())
+        self.assertEqual(29, controller.get_pulse_counter_amount())
 
         # Remove virtual pulse counter
         controller.set_pulse_counter_amount(28)
-        self.assertEquals(28, controller.get_pulse_counter_amount())
+        self.assertEqual(28, controller.get_pulse_counter_amount())
 
         # Set virtual pulse counters to 0
         controller.set_pulse_counter_amount(24)
-        self.assertEquals(24, controller.get_pulse_counter_amount())
+        self.assertEqual(24, controller.get_pulse_counter_amount())
 
         # Set the number of pulse counters to low
         try:
             controller.set_pulse_counter_amount(23)
             self.fail('Exception should have been thrown')
         except ValueError as e:
-            self.assertEquals('Amount should be 24 or more', str(e))
+            self.assertEqual('Amount should be 24 or more', str(e))
 
     def test_pulse_counter_status(self):
         action = master_api.pulse_list()
@@ -117,21 +117,21 @@ class PulseCounterControllerTest(unittest.TestCase):
         controller.set_pulse_counter_status(25, 456)
 
         status = controller.get_pulse_counter_status()
-        self.assertEquals(list(range(0, 24)) + [123, 456], status)
+        self.assertEqual(list(range(0, 24)) + [123, 456], status)
 
         # Set pulse counter for unexisting pulse counter
         try:
             controller.set_pulse_counter_status(26, 789)
             self.fail('Exception should have been thrown')
         except ValueError as e:
-            self.assertEquals('Could not find pulse counter 26', str(e))
+            self.assertEqual('Could not find pulse counter 26', str(e))
 
         # Set pulse counter for physical pulse counter
         try:
             controller.set_pulse_counter_status(23, 789)
             self.fail('Exception should have been thrown')
         except ValueError as e:
-            self.assertEquals('Cannot set pulse counter status for 23 (should be > 23)', str(e))
+            self.assertEqual('Cannot set pulse counter status for 23 (should be > 23)', str(e))
 
     def test_config(self):
         controller = self._get_controller(None)
@@ -144,7 +144,7 @@ class PulseCounterControllerTest(unittest.TestCase):
         ])
         configs = controller.get_configurations()
 
-        self.assertEquals([{'input': 255, 'room': 255, 'id': 0, 'name': '', 'persistent': False},
+        self.assertEqual([{'input': 255, 'room': 255, 'id': 0, 'name': '', 'persistent': False},
                            {'input': 10, 'room': 1, 'id': 1, 'name': 'Water', 'persistent': False},
                            {'input': 255, 'room': 255, 'id': 2, 'name': '', 'persistent': False},
                            {'input': 255, 'room': 255, 'id': 3, 'name': '', 'persistent': False},
@@ -176,27 +176,27 @@ class PulseCounterControllerTest(unittest.TestCase):
             controller.set_configuration({'id': 25, 'name': 'Electricity', 'input': 22, 'room': 3})
             self.fail('Exception should have been thrown')
         except ValueError as e:
-            self.assertEquals('Virtual pulse counter 25 can only have input -1', str(e))
+            self.assertEqual('Virtual pulse counter 25 can only have input -1', str(e))
 
         # Get configuration for existing master pulse counter
-        self.assertEquals({'input': 10, 'room': 1, 'id': 1, 'name': 'Water', 'persistent': False}, controller.get_configuration(1))
+        self.assertEqual({'input': 10, 'room': 1, 'id': 1, 'name': 'Water', 'persistent': False}, controller.get_configuration(1))
 
         # Get configuration for existing virtual pulse counter
-        self.assertEquals({'input': -1, 'room': 3, 'id': 25, 'name': 'Electricity', 'persistent': True}, controller.get_configuration(25))
+        self.assertEqual({'input': -1, 'room': 3, 'id': 25, 'name': 'Electricity', 'persistent': True}, controller.get_configuration(25))
 
         # Get configuration for unexisting pulse counter
         try:
             controller.set_configuration({'id': 26, 'name': 'Electricity', 'input': -1, 'room': 3})
             self.fail('Exception should have been thrown')
         except ValueError as e:
-            self.assertEquals('Could not find pulse counter 26', str(e))
+            self.assertEqual('Could not find pulse counter 26', str(e))
 
         # Set configuration for unexisting pulse counter
         try:
             controller.get_configuration(26)
             self.fail('Exception should have been thrown')
         except ValueError as e:
-            self.assertEquals('Could not find pulse counter 26', str(e))
+            self.assertEqual('Could not find pulse counter 26', str(e))
 
 
 if __name__ == '__main__':

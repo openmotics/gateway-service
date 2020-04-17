@@ -258,9 +258,9 @@ class MetricsTest(unittest.TestCase):
             self.assertListEqual(controller._cloud_queue, queue)
             self.assertDictEqual(controller.cloud_stats, stats)
             self.assertListEqual(controller._cloud_buffer, buffer)
-            self.assertEquals(controller._cloud_last_send, last_send)
-            self.assertEquals(controller._cloud_last_try, last_try)
-            self.assertEquals(controller._cloud_retry_interval, retry_interval)
+            self.assertEqual(controller._cloud_last_send, last_send)
+            self.assertEqual(controller._cloud_last_try, last_try)
+            self.assertEqual(controller._cloud_retry_interval, retry_interval)
 
         # Validate initial state
 

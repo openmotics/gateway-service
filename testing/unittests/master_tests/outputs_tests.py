@@ -41,20 +41,20 @@ class OutputStatusTest(unittest.TestCase):
         status.full_update(outputs)
 
         status.partial_update([])  # Everything is off
-        self.assertEquals(0, status.get_outputs()[0]['status'])
-        self.assertEquals(10, status.get_outputs()[0]['dimmer'])
-        self.assertEquals(0, status.get_outputs()[1]['status'])
-        self.assertEquals(20, status.get_outputs()[1]['dimmer'])
-        self.assertEquals(0, status.get_outputs()[2]['status'])
-        self.assertEquals(0, status.get_outputs()[2]['dimmer'])
+        self.assertEqual(0, status.get_outputs()[0]['status'])
+        self.assertEqual(10, status.get_outputs()[0]['dimmer'])
+        self.assertEqual(0, status.get_outputs()[1]['status'])
+        self.assertEqual(20, status.get_outputs()[1]['dimmer'])
+        self.assertEqual(0, status.get_outputs()[2]['status'])
+        self.assertEqual(0, status.get_outputs()[2]['dimmer'])
 
         status.partial_update([(3, 0), (2, 1)])
-        self.assertEquals(0, status.get_outputs()[0]['status'])
-        self.assertEquals(10, status.get_outputs()[0]['dimmer'])
-        self.assertEquals(1, status.get_outputs()[1]['status'])
-        self.assertEquals(1, status.get_outputs()[1]['dimmer'])
-        self.assertEquals(1, status.get_outputs()[2]['status'])
-        self.assertEquals(0, status.get_outputs()[2]['dimmer'])
+        self.assertEqual(0, status.get_outputs()[0]['status'])
+        self.assertEqual(10, status.get_outputs()[0]['dimmer'])
+        self.assertEqual(1, status.get_outputs()[1]['status'])
+        self.assertEqual(1, status.get_outputs()[1]['dimmer'])
+        self.assertEqual(1, status.get_outputs()[2]['status'])
+        self.assertEqual(0, status.get_outputs()[2]['dimmer'])
 
         update = [{'id': 1, 'name': 'light1', 'floor_level': 1, 'light': 1,
                    'type': 'D', 'controller_out': 1, 'timer': 200, 'ctimer': 200,
@@ -67,12 +67,12 @@ class OutputStatusTest(unittest.TestCase):
                    'max_power': 1, 'status': 1, 'dimmer': 0}]
 
         status.full_update(update)
-        self.assertEquals(0, status.get_outputs()[0]['status'])
-        self.assertEquals(50, status.get_outputs()[0]['dimmer'])
-        self.assertEquals(0, status.get_outputs()[1]['status'])
-        self.assertEquals(80, status.get_outputs()[1]['dimmer'])
-        self.assertEquals(1, status.get_outputs()[2]['status'])
-        self.assertEquals(0, status.get_outputs()[2]['dimmer'])
+        self.assertEqual(0, status.get_outputs()[0]['status'])
+        self.assertEqual(50, status.get_outputs()[0]['dimmer'])
+        self.assertEqual(0, status.get_outputs()[1]['status'])
+        self.assertEqual(80, status.get_outputs()[1]['dimmer'])
+        self.assertEqual(1, status.get_outputs()[2]['status'])
+        self.assertEqual(0, status.get_outputs()[2]['dimmer'])
 
 
 if __name__ == "__main__":
