@@ -395,7 +395,7 @@ class EepromControllerTest(unittest.TestCase):
 
         batch = []
         for i in range(ids):
-            batch.append(Model9.deserialize({'id': i, 'name': 'Room {0}'.format(i), 'floor': i / 2}))
+            batch.append(Model9.deserialize({'id': i, 'name': 'Room {0}'.format(i), 'floor': i // 2}))
 
         controller.write_batch(batch)
 
@@ -405,7 +405,7 @@ class EepromControllerTest(unittest.TestCase):
         for i in range(ids):
             self.assertEquals(i, models[i].id)
             self.assertEquals('Room {0}'.format(i), models[i].name)
-            self.assertEquals(i / 2, models[i].floor)
+            self.assertEquals(i // 2, models[i].floor)
 
 
 class MasterCommunicator(object):

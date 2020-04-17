@@ -724,7 +724,7 @@ def append_tail(byte_str, length, delimiter='\xff'):
     of the string.
     """
     if len(byte_str) < length:
-        return str(byte_str) + delimiter * ((length - len(byte_str)) / len(delimiter))
+        return str(byte_str) + delimiter * int((length - len(byte_str)) / len(delimiter))
     return str(byte_str)
 
 
@@ -787,7 +787,7 @@ class EepromWord(EepromDataType):
     def encode(self, field):
         if field is None:
             field = 65535
-        return ''.join([chr(int(field) % 256), chr(int(field) / 256)])
+        return ''.join([chr(int(field) % 256), chr(int(field) // 256)])
 
     def get_length(self):
         return 2

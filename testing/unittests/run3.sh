@@ -20,7 +20,7 @@ echo "Running passthrough tests"
 #pytest master_tests/passthrough_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterPassthroughTest.xml
 
 echo "Running eeprom controller tests"
-#pytest master_tests/eeprom_controller_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterEEPROMControllerTest.xml
+pytest master_tests/eeprom_controller_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterEEPROMControllerTest.xml
 echo "Running eeprom extension tests"
 pytest master_tests/eeprom_extension_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterEEPROMExtensionTest.xml
 
