@@ -16,9 +16,11 @@
 Input status keeps track of the last X pressed inputs, pressed in the last X seconds.
 """
 
+from __future__ import absolute_import
 import time
 import logging
 from threading import Lock
+import six
 
 if False:  # MYPY
     from typing import Any, Dict, List
@@ -41,7 +43,7 @@ class InputStatus(object):
         self._on_input_change = on_input_change
 
     def _sorted_inputs(self):
-        return sorted(self._inputs_status.itervalues(),
+        return sorted(six.itervalues(self._inputs_status),
                       key=lambda x: x.get('last_status_change'))
 
     def get_recent(self):
@@ -87,7 +89,7 @@ class InputStatus(object):
         # type: () -> List[Dict[str,Any]]
         """ Get the inputs status. """
         inputs = []
-        for input_nr, current_state in self._inputs_status.iteritems():
+        for input_nr, current_state in six.iteritems(self._inputs_status):
             inputs.append(current_state)
         return inputs
 
@@ -97,7 +99,7 @@ class InputStatus(object):
 
     def full_update(self, inputs):
         """ Update the status of the inputs using a list of Inputs. """
-        obsolete_ids = self._inputs_status.keys()
+        obsolete_ids = list(self._inputs_status.keys())
         for input in inputs:
             input_id = input['input']
             if input_id in obsolete_ids:

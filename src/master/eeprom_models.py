@@ -16,10 +16,12 @@
 Contains the EepromModels
 """
 
-from eeprom_controller import EepromModel, EepromAddress, EepromId, EepromString, \
+from __future__ import absolute_import
+from .eeprom_controller import EepromModel, EepromAddress, EepromId, EepromString, \
                               EepromWord, EepromByte, EepromActions, EepromTemp, EepromTime, \
                               EepromCSV, CompositeDataType, EepromSignedTemp, EepromIBool, \
                               EepromEnum, EextByte, EextString, EextWord, EextBool
+from six.moves import range
 
 
 def page_per_module(module_size, start_page, start_offset, field_size):

@@ -30,7 +30,8 @@ class Event(object):
         THERMOSTAT = 'THERMOSTAT'
         SYSTEM = 'SYSTEM'
         POWER = 'POWER'
-        LED = 'LED'
+        LED_ON = 'LED_ON'
+        LED_BLINK = 'LED_BLINK'
         UNKNOWN = 'UNKNOWN'
 
     class SensorType(object):
@@ -73,7 +74,9 @@ class Event(object):
 
     class LedStates(object):
         OFF = 'OFF'
-        BLINKING = 'BLINKING'
+        BLINKING_25 = 'BLINKING_25'
+        BLINKING_50 = 'BLINKING_50'
+        BLINKING_75 = 'BLINKING_75'
         ON = 'ON'
 
     def __init__(self, data):
@@ -88,7 +91,8 @@ class Event(object):
                     1: Event.Types.INPUT,
                     2: Event.Types.SENSOR,
                     20: Event.Types.THERMOSTAT,
-                    252: Event.Types.LED,
+                    251: Event.Types.LED_BLINK,
+                    252: Event.Types.LED_ON,
                     253: Event.Types.POWER,
                     254: Event.Types.SYSTEM}
         return type_map.get(self._type, Event.Types.UNKNOWN)
@@ -136,15 +140,27 @@ class Event(object):
                     'thermostat': self._device_nr,
                     'mode': self._data[0],
                     'setpoint': self._data[1]}
-        if self.type == Event.Types.LED:
-            word_on = Event._word_decode(self._data[0:2])
-            word_blinking = Event._word_decode(self._data[2:4])
+        if self.type == Event.Types.LED_BLINK:
+            word_25 = self._device_nr
+            word_50 = Event._word_decode(self._data[0:2])
+            word_75 = Event._word_decode(self._data[2:4])
             leds = {}
             for i in xrange(16):
-                state = Event.LedStates.OFF
-                if word_on & (1 << i):
-                    state = Event.LedStates.BLINKING if word_blinking & (1 << i) else Event.LedStates.ON
-                leds[i] = state
+                if word_25 & (1 << i):
+                    leds[i] = Event.LedStates.BLINKING_25
+                elif word_50 & (1 << i):
+                    leds[i] = Event.LedStates.BLINKING_50
+                elif word_75 & (1 << i):
+                    leds[i] = Event.LedStates.BLINKING_75
+                else:
+                    leds[i] = Event.LedStates.OFF
+            return {'chip': self._device_nr,
+                    'leds': leds}
+        if self.type == Event.Types.LED_ON:
+            word_on = Event._word_decode(self._data[0:2])
+            leds = {}
+            for i in xrange(16):
+                leds[i] = Event.LedStates.ON if word_on & (1 << i) else Event.LedStates.OFF
             return {'chip': self._device_nr,
                     'leds': leds}
         if self.type == Event.Types.POWER:
@@ -165,4 +181,4 @@ class Event(object):
         return WordField.decode(str(chr(data[0])) + str(chr(data[1])))
 
     def __str__(self):
-        return '{0} ({1})'.format(self.type, self.data)
+        return '{0} ({1})'.format(self.type, self.data if self.type != Event.Types.UNKNOWN else self._type)

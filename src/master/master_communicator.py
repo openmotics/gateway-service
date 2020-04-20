@@ -16,15 +16,18 @@
 Module to communicate with the master.
 """
 
+from __future__ import absolute_import
 import logging
+import select
 import time
-from threading import Thread, Lock, Event
-from toolbox import Queue, Empty
-from ioc import Injectable, Inject, INJECTED, Singleton
+from threading import Event, Lock, Thread
+
 from gateway.maintenance_communicator import InMaintenanceModeException
+from ioc import INJECTED, Inject, Injectable, Singleton
 from master import master_api
-from master_command import Field, printable
+from .master_command import Field, printable
 from serial_utils import CommunicationTimedOutException
+from toolbox import Empty, Queue
 
 logger = logging.getLogger("openmotics")
 
@@ -103,7 +106,7 @@ class MasterCommunicator(object):
             flush_serial_input()
             self.__serial.write(" "*10)
             flush_serial_input()
-            self.__serial.timeout = None
+            self.__serial.timeout = None  # TODO: make non blocking
 
         if not self.__running:
             self.__running = True
@@ -142,6 +145,8 @@ class MasterCommunicator(object):
         with self.__serial_write_lock:
             if self.__verbose:
                 logger.info('Writing to Master serial:   {0}'.format(printable(data)))
+            else:
+                logger.debug('Writing to Master serial:   {0}'.format(printable(data)))
 
             threshold = time.time() - self.__debug_buffer_duration
             self.__debug_buffer['write'][time.time()] = printable(data)
@@ -149,7 +154,7 @@ class MasterCommunicator(object):
                 if t < threshold:
                     del self.__debug_buffer['write'][t]
 
-            self.__serial.write(data)
+            self.__serial.write(data)  # TODO: make non blocking
             self.__communication_stats['bytes_written'] += len(data)
 
     def register_consumer(self, consumer):
@@ -380,7 +385,7 @@ class MasterCommunicator(object):
                 that were not used. """
                 try:
                     bytes_consumed, result, done = read_state.current_consumer.consume(_data, read_state.partial_result)
-                except ValueError, value_error:
+                except ValueError as value_error:
                     logger.error('Could not consume/decode message from the master: {0}'.format(value_error))
                     return ''
 
@@ -399,12 +404,16 @@ class MasterCommunicator(object):
         data = ""
 
         while self.__running:
-            data += self.__serial.read(1)
+            # TODO: use a non blocking serial instead?
+            readers, _, _ = select.select([self.__serial], [], [], 2)
+            if not readers:
+                logger.debug('MasterCommunicator read waiting...')
+                continue
+
             num_bytes = self.__serial.inWaiting()
-            if num_bytes > 0:
-                data += self.__serial.read(num_bytes)
+            data += self.__serial.read(num_bytes)
             if data is not None and len(data) > 0:
-                self.__communication_stats['bytes_read'] += (1 + num_bytes)
+                self.__communication_stats['bytes_read'] += num_bytes
 
                 threshold = time.time() - self.__debug_buffer_duration
                 self.__debug_buffer['read'][time.time()] = printable(data)
@@ -414,6 +423,8 @@ class MasterCommunicator(object):
 
                 if self.__verbose:
                     logger.info('Reading from Master serial: {0}'.format(printable(data)))
+                else:
+                    logger.debug('Reading from Master serial: {0}'.format(printable(data)))
 
                 if read_state.should_resume():
                     data = read_state.consume(data)

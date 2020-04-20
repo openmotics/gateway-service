@@ -17,7 +17,9 @@ The outputs module contains classes to track the current state of the outputs on
 the master.
 """
 
+from __future__ import absolute_import
 from threading import Lock
+import six
 
 
 class OutputStatus(object):
@@ -42,14 +44,14 @@ class OutputStatus(object):
             on_dict[on_output[0]] = on_output[1]
 
         with self._merge_lock:
-            for output_id, output in self._outputs.iteritems():
+            for output_id, output in six.iteritems(self._outputs):
                 self._update_maybe_report_change(output, {'status': output_id in on_dict,
                                                           'dimmer': on_dict.get(output_id)})
 
     def full_update(self, outputs):
         """ Update the status of the outputs using a list of Outputs. """
         with self._merge_lock:
-            obsolete_ids = self._outputs.keys()
+            obsolete_ids = list(self._outputs.keys())
             for output in outputs:
                 output_id = output['id']
                 if output_id in obsolete_ids:
@@ -64,7 +66,7 @@ class OutputStatus(object):
 
     def get_outputs(self):
         """ Return the list of Outputs. """
-        return self._outputs.values()
+        return list(self._outputs.values())
 
     def get_output(self, output_id):
         """ Return the list of Outputs. """

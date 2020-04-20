@@ -168,7 +168,7 @@ class CoreCommunicator(object):
             consumers.remove(consumer)
         self.discard_cid(consumer.cid)
 
-    def do_basic_action(self, action_type, action, device_nr, extra_parameter=0):
+    def do_basic_action(self, action_type, action, device_nr=0, extra_parameter=0):
         """
         Sends a basic action to the Core with the given action type and action number
         :param action_type: The action type to execute

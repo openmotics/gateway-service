@@ -16,6 +16,7 @@
 The maintenance module contains the MaintenanceCommunicator class.
 """
 
+from __future__ import absolute_import
 import time
 import logging
 from threading import Timer, Thread

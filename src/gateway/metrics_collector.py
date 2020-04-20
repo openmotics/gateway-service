@@ -24,7 +24,7 @@ from threading import Event, Thread
 import psutil
 
 from gateway.maintenance_communicator import InMaintenanceModeException
-from gateway.observer import Event as ObserverEvent
+from gateway.events import GatewayEvent
 from ioc import INJECTED, Inject, Injectable, Singleton
 from models import Database
 from platform_utils import Hardware
@@ -207,15 +207,15 @@ class MetricsCollector(object):
             time.sleep(sleep)
 
     def process_observer_event(self, event):
-        # type: (ObserverEvent) -> None
-        if event.type == ObserverEvent.Types.OUTPUT_CHANGE:
+        # type: (GatewayEvent) -> None
+        if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             output_id = event.data['id']
             output = self._environment['outputs'].get(output_id)
             if output is not None:
                 output.update({'status': 1 if event.data['status']['on'] else 0,
                                'dimmer': int(event.data['status'].get('value', 0))})
                 self._process_outputs([output_id], 'output')
-        if event.type == ObserverEvent.Types.INPUT_CHANGE:
+        if event.type == GatewayEvent.Types.INPUT_CHANGE:
             event_id = event.data['id']
             self._process_input(event_id, event.data.get('status'))
 
@@ -573,6 +573,10 @@ class MetricsCollector(object):
             self._pause(start, metric_type)
 
     def _run_power_openmotics(self, metric_type):
+        def _add_if_not_none(dictionary, field, value):
+            if value is not None:
+                dictionary[field] = float(value)
+
         while not self._stopped:
             start = time.time()
             now = time.time()
@@ -596,12 +600,13 @@ class MetricsCollector(object):
                 for module_id, device_id in mapping.iteritems():
                     if module_id in result:
                         for index, entry in enumerate(result[module_id]):
+                            voltage, frequency, current, power = entry
                             if device_id.format(index) in power_data:
                                 usage = power_data[device_id.format(index)]
-                                usage.update({'voltage': entry[0],
-                                              'frequency': entry[1],
-                                              'current': entry[2],
-                                              'power': entry[3]})
+                                _add_if_not_none(usage, 'voltage', voltage)
+                                _add_if_not_none(usage, 'frequency', frequency)
+                                _add_if_not_none(usage, 'current', current)
+                                _add_if_not_none(usage, 'power', power)
             except CommunicationTimedOutException:
                 logger.error('Error getting realtime power: CommunicationTimedOutException')
             except InMaintenanceModeException:
@@ -613,11 +618,15 @@ class MetricsCollector(object):
                 for module_id, device_id in mapping.iteritems():
                     if module_id in result:
                         for index, entry in enumerate(result[module_id]):
+                            day, night = entry
+                            total = None
+                            if day is not None and night is not None:
+                                total = day + night
                             if device_id.format(index) in power_data:
                                 usage = power_data[device_id.format(index)]
-                                usage.update({'counter': entry[0] + entry[1],
-                                              'counter_day': entry[0],
-                                              'counter_night': entry[1]})
+                                _add_if_not_none(usage, 'counter', total)
+                                _add_if_not_none(usage, 'counter_day', day)
+                                _add_if_not_none(usage, 'counter_night', night)
             except CommunicationTimedOutException:
                 logger.error('Error getting total energy: CommunicationTimedOutException')
             except InMaintenanceModeException:
@@ -627,18 +636,13 @@ class MetricsCollector(object):
             for device_id in power_data:
                 device = power_data[device_id]
                 try:
-                    if device['name'] != '' and 'voltage' in device and 'counter' in device:
+                    if device['name'] != '' and len(device) > 1:
+                        name = device.pop('name')
                         self._enqueue_metrics(metric_type=metric_type,
-                                              values={'voltage': device['voltage'],
-                                                      'current': device['current'],
-                                                      'frequency': device['frequency'],
-                                                      'power': device['power'],
-                                                      'counter': float(device['counter']),
-                                                      'counter_day': float(device['counter_day']),
-                                                      'counter_night': float(device['counter_night'])},
+                                              values=device,
                                               tags={'type': 'openmotics',
                                                     'id': device_id,
-                                                    'name': device['name']},
+                                                    'name': name},
                                               timestamp=now)
                 except Exception as ex:
                     logger.exception('Error processing OpenMotics power device {0}: {1}'.format(device_id, ex))
@@ -706,7 +710,7 @@ class MetricsCollector(object):
                 return
             self._pause(start, metric_type)
 
-    def _load_environment_configurations(self, name, interval):
+    def _load_environment_configurations(self, name, interval):  # type: (str, int) -> None
         while not self._stopped:
             start = time.time()
             # Inputs
@@ -731,9 +735,9 @@ class MetricsCollector(object):
                 result = self._gateway_api.get_output_configurations()
                 ids = []
                 for config in result:
-                    if config['module_type'] not in ['o', 'O', 'd', 'D']:
+                    if config.module_type not in ['o', 'O', 'd', 'D']:
                         continue
-                    output_id = config['id']
+                    output_id = config.id
                     ids.append(output_id)
                     type_mapping = {0: 'outlet',
                                     1: 'valve',
@@ -745,13 +749,13 @@ class MetricsCollector(object):
                                     7: 'motor',
                                     8: 'ventilation',
                                     255: 'light'}
-                    self._environment['outputs'][output_id] = {'name': config['name'],
+                    self._environment['outputs'][output_id] = {'name': config.name,
                                                                'module_type': {'o': 'output',
                                                                                'O': 'output',
                                                                                'd': 'dimmer',
-                                                                               'D': 'dimmer'}[config['module_type']],
-                                                               'floor': config['floor'],
-                                                               'type': type_mapping.get(config['type'], 'generic')}
+                                                                               'D': 'dimmer'}[config.module_type],
+                                                               'floor': config.floor,
+                                                               'type': type_mapping.get(config.output_type, 'generic')}
                 for output_id in self._environment['outputs'].keys():
                     if output_id not in ids:
                         del self._environment['outputs'][output_id]
@@ -1082,17 +1086,17 @@ class MetricsCollector(object):
                          {'name': 'counter',
                           'description': 'Total energy consumed',
                           'type': 'counter',
-                          'policies': ['persist', 'buffer'],
+                          'policies': ['buffer'],
                           'unit': 'Wh'},
                          {'name': 'counter_day',
                           'description': 'Total energy consumed during daytime',
                           'type': 'counter',
-                          'policies': ['persist', 'buffer'],
+                          'policies': ['buffer'],
                           'unit': 'Wh'},
                          {'name': 'counter_night',
                           'description': 'Total energy consumed during nighttime',
                           'type': 'counter',
-                          'policies': ['persist', 'buffer'],
+                          'policies': ['buffer'],
                           'unit': 'Wh'}]},
             # energy_analytics
             {'type': 'energy_analytics',

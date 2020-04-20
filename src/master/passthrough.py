@@ -19,6 +19,7 @@ to communicate with the master.
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import logging
 import threading
 from ioc import Injectable, Inject, INJECTED, Singleton

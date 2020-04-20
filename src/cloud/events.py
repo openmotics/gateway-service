@@ -18,12 +18,17 @@ Sends events to the cloud
 import logging
 import time
 from collections import deque
-from threading import Thread
-from ioc import Injectable, Singleton, INJECTED, Inject
+
 from cloud.cloud_api_client import APIException
-from gateway.observer import Event
+from gateway.daemon_thread import DaemonThread, DaemonThreadWait
+from gateway.events import GatewayEvent
+from ioc import INJECTED, Inject, Injectable, Singleton
 
 logger = logging.getLogger('openmotics')
+
+
+class EventSenderFailed(Exception):
+    pass
 
 
 @Injectable.named('event_sender')
@@ -42,15 +47,17 @@ class EventSender(object):
         self._gateway_api = gateway_api
 
         self._events_queue = deque()
-        self._events_thread = Thread(target=self._send_events_loop, name='Event Sender')
-        self._events_thread.setDaemon(True)
+        self._events_thread = DaemonThread(name='EventSender loop',
+                                           target=self._send_events_loop,
+                                           interval=0.1, delay=0.2)
 
     def start(self):
-        self._stopped = False
+        # type: () -> None
         self._events_thread.start()
 
     def stop(self):
-        self._stopped = True
+        # type: () -> None
+        self._events_thread.stop()
 
     def enqueue_event(self, event):
         if self._is_enabled(event):
@@ -58,12 +65,12 @@ class EventSender(object):
             self._queue.appendleft(event)
 
     def _is_enabled(self, event):
-        if event.type in [Event.Types.OUTPUT_CHANGE,
-                          Event.Types.SHUTTER_CHANGE,
-                          Event.Types.THERMOSTAT_CHANGE,
-                          Event.Types.THERMOSTAT_GROUP_CHANGE]:
+        if event.type in [GatewayEvent.Types.OUTPUT_CHANGE,
+                          GatewayEvent.Types.SHUTTER_CHANGE,
+                          GatewayEvent.Types.THERMOSTAT_CHANGE,
+                          GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE]:
             return True
-        elif event.type == Event.Types.INPUT_CHANGE:
+        elif event.type == GatewayEvent.Types.INPUT_CHANGE:
             input_id = event.data['id']
             # TODO: Below entry needs to be cached. But caching needs invalidation, so lets fix this
             #       when we have decent cache invalidation events to subscribe on
@@ -73,17 +80,12 @@ class EventSender(object):
             return False
 
     def _send_events_loop(self):
-        while not self._stopped:
-            try:
-                if not self._batch_send_events():
-                    time.sleep(0.20)
-                time.sleep(0.05)
-            except APIException as ex:
-                logger.error('Error sending events to the cloud: {}'.format(str(ex)))
-                time.sleep(1)
-            except Exception:
-                logger.exception('Unexpected error when sending events')
-                time.sleep(1)
+        # type: () -> None
+        try:
+            if not self._batch_send_events():
+                raise DaemonThreadWait
+        except APIException as ex:
+            raise EventSenderFailed('Error sending events to the cloud: {}'.format(str(ex)))
 
     def _batch_send_events(self):
         events = []

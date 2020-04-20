@@ -8,7 +8,7 @@ echo "Running master command tests"
 python2 master_tests/master_command_tests.py
 
 echo "Running master communicator tests"
-python2 master_tests/master_communicator_tests.py
+pytest master_tests/master_communicator_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports/MasterCommunicatorTest.xml
 
 echo "Running outputs tests"
 python2 master_tests/outputs_tests.py
@@ -30,6 +30,9 @@ python2 gateway_tests/users_tests.py
 
 echo "Running scheduling tests"
 python2 gateway_tests/scheduling_tests.py
+
+echo "Running shutter tests"
+python2 gateway_tests/shutter_tests.py
 
 echo "Running power controller tests"
 python2 power_tests/power_controller_tests.py
