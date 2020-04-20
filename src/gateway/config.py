@@ -62,16 +62,16 @@ class ConfigurationController(object):
         """
         self.__execute('CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY, setting TEXT UNIQUE, data TEXT);')
         for key, default_value in six.iteritems({'cloud_enabled': True,
-                                   'cloud_endpoint': 'cloud.openmotics.com',
-                                   'cloud_endpoint_metrics': 'portal/metrics/',
-                                   'cloud_metrics_types': [],
-                                   'cloud_metrics_sources': [],
-                                   'cloud_metrics_enabled|energy': True,
-                                   'cloud_metrics_enabled|counter': True,
-                                   'cloud_metrics_batch_size': 50,
-                                   'cloud_metrics_min_interval': 300,
-                                   'cloud_support': False,
-                                   'cors_enabled': False}):
+                                                 'cloud_endpoint': 'cloud.openmotics.com',
+                                                 'cloud_endpoint_metrics': 'portal/metrics/',
+                                                 'cloud_metrics_types': [],
+                                                 'cloud_metrics_sources': [],
+                                                 'cloud_metrics_enabled|energy': True,
+                                                 'cloud_metrics_enabled|counter': True,
+                                                 'cloud_metrics_batch_size': 50,
+                                                 'cloud_metrics_min_interval': 300,
+                                                 'cloud_support': False,
+                                                 'cors_enabled': False}):
             if self.get(key) is None:
                 self.get(key, default_value)
 

@@ -297,7 +297,7 @@ def main():
         logger.info('Scanning addresses 0-255...')
         for address in range(256):
             for module_type, version in six.iteritems({'E/P': power_api.ENERGY_MODULE,
-                                         'C': power_api.P1_CONCENTRATOR}):
+                                                       'C': power_api.P1_CONCENTRATOR}):
                 try:
                     logger.info('{0}{1} - Version: {2}'.format(
                         module_type, address, get_module_firmware_version(address, version, power_communicator)

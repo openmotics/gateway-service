@@ -227,10 +227,10 @@ class PluginConfigChecker(object):
                 raise PluginException('The config does not contain key \'{0}\'.'.format(name))
 
             for key, type_info in six.iteritems({'str': (six.string_types, 'a string'),
-                                   'int': (int, 'an int'),
-                                   'bool': (bool, 'a bool'),
-                                   'password': (six.string_types, 'a string'),
-                                   'section': (list, 'a list')}):
+                                                 'int': (int, 'an int'),
+                                                 'bool': (bool, 'a bool'),
+                                                 'password': (six.string_types, 'a string'),
+                                                 'section': (list, 'a list')}):
                 if item['type'] == key and not isinstance(config[name], type_info[0]):
                     raise PluginException(PluginConfigChecker.CONFIG_INVALID_TYPE.format(name, config[name], type_info[1]))
 

@@ -189,7 +189,7 @@ class ThermostatControllerGateway(ThermostatController):
                 try:
                     for thermostat_id in range(32):
                         for mode, config_mapper in six.iteritems({'heating': ThermostatConfiguration,
-                                                    'cooling': CoolingConfiguration}):
+                                                                  'cooling': CoolingConfiguration}):
                             config = self._eeprom_controller.read(config_mapper, thermostat_id).serialize()
                             if is_valid(config):
                                 ThermostatControllerGateway.create_or_update_thermostat_from_v0_api(thermostat_id,
