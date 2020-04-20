@@ -17,3 +17,5 @@ from feedback_led import FeedbackLedDTO
 from output import OutputDTO
 from shutter import ShutterDTO
 from shutter_group import ShutterGroupDTO
+from thermostat_heating import HeatingThermostatDTO
+from thermostat_schedule import ThermostatScheduleDTO

@@ -4,17 +4,20 @@ import time
 from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.events import GatewayEvent
+from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.observer import Observer
-from gateway.thermostat.master.thermostat_status_master import \
+from gateway.thermostat.master.thermostat_status_master import (
     ThermostatStatusMaster
+)
 from gateway.thermostat.thermostat_controller import ThermostatController
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master import master_api
-from master.eeprom_models import CoolingConfiguration, \
-    CoolingPumpGroupConfiguration, GlobalRTD10Configuration, \
-    GlobalThermostatConfiguration, PumpGroupConfiguration, \
-    RTD10CoolingConfiguration, RTD10HeatingConfiguration, \
-    ThermostatConfiguration
+from master.eeprom_models import (
+    GlobalThermostatConfiguration,
+    ThermostatConfiguration, PumpGroupConfiguration,
+    CoolingConfiguration, CoolingPumpGroupConfiguration,
+    GlobalRTD10Configuration, RTD10CoolingConfiguration, RTD10HeatingConfiguration
+)
 from master.master_communicator import CommunicationTimedOutException
 
 logger = logging.getLogger("openmotics")
@@ -25,10 +28,12 @@ logger = logging.getLogger("openmotics")
 class ThermostatControllerMaster(ThermostatController):
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, message_client=INJECTED, observer=INJECTED, master_communicator=INJECTED, eeprom_controller=INJECTED):
+    def __init__(self, gateway_api=INJECTED, message_client=INJECTED, observer=INJECTED,
+                 master_communicator=INJECTED, eeprom_controller=INJECTED, master_controller=INJECTED):
         super(ThermostatControllerMaster, self).__init__(gateway_api, message_client, observer)
         self._eeprom_controller = eeprom_controller
         self._master_communicator = master_communicator
+        self._master_controller = master_controller  # type: MasterClassicController
 
         self._monitor_thread = DaemonThread(name='ThermostatControllerMaster monitor',
                                             target=self._monitor,
@@ -49,23 +54,6 @@ class ThermostatControllerMaster(ThermostatController):
     def stop(self):
         # type: () -> None
         self._monitor_thread.stop()
-
-    ################################
-    # v1 APIs
-    ################################
-    @staticmethod
-    def get_current_preset(thermostat_number):
-        raise NotImplementedError()
-
-    def set_current_preset(self, thermostat_number, preset_name):
-        raise NotImplementedError()
-
-    def set_current_setpoint(self, thermostat_number, heating_temperature, cooling_temperature):
-        raise NotImplementedError()
-
-    ################################
-    # v0 compatible APIs
-    ################################
 
     def _thermostat_changed(self, thermostat_id, status):
         """ Executed by the Thermostat Status tracker when an output changed state """
@@ -110,46 +98,31 @@ class ThermostatControllerMaster(ThermostatController):
         if object_type is None or object_type == Observer.Types.THERMOSTATS:
             self._thermostats_last_updated = 0
 
-    def v0_get_thermostat_configuration(self, thermostat_id, fields=None):
-        """
-        Get a specific thermostat_configuration defined by its id.
+    ################################
+    # New API
+    ################################
 
-        :param thermostat_id: The id of the thermostat_configuration
-        :type thermostat_id: Id
-        :param fields: The field of the thermostat_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: thermostat_configuration dict: contains 'id' (Id), 'auto_fri' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_mon' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sat' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sun' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_thu' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_tue' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_wed' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'name' (String[16]), 'output0' (Byte), 'output1' (Byte), 'permanent_manual' (Boolean), 'pid_d' (Byte), 'pid_i' (Byte), 'pid_int' (Byte), 'pid_p' (Byte), 'room' (Byte), 'sensor' (Byte), 'setp0' (Temp), 'setp1' (Temp), 'setp2' (Temp), 'setp3' (Temp), 'setp4' (Temp), 'setp5' (Temp)
-        """
-        return self._eeprom_controller.read(ThermostatConfiguration, thermostat_id, fields).serialize()
+    def get_current_preset(self, thermostat_number):
+        raise NotImplementedError()
 
-    def v0_get_thermostat_configurations(self, fields=None):
-        """
-        Get all thermostat_configurations.
+    def set_current_preset(self, thermostat_number, preset_name):
+        raise NotImplementedError()
 
-        :param fields: The field of the thermostat_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of thermostat_configuration dict: contains 'id' (Id), 'auto_fri' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_mon' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sat' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sun' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_thu' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_tue' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_wed' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'name' (String[16]), 'output0' (Byte), 'output1' (Byte), 'permanent_manual' (Boolean), 'pid_d' (Byte), 'pid_i' (Byte), 'pid_int' (Byte), 'pid_p' (Byte), 'room' (Byte), 'sensor' (Byte), 'setp0' (Temp), 'setp1' (Temp), 'setp2' (Temp), 'setp3' (Temp), 'setp4' (Temp), 'setp5' (Temp)
-        """
-        return [o.serialize() for o in self._eeprom_controller.read_all(ThermostatConfiguration, fields)]
+    def set_current_setpoint(self, thermostat_number, heating_temperature, cooling_temperature):
+        raise NotImplementedError()
 
-    def v0_set_thermostat_configuration(self, config):
-        """
-        Set one thermostat_configuration.
+    ################################
+    # Legacy API
+    ################################
 
-        :param config: The thermostat_configuration to set
-        :type config: thermostat_configuration dict: contains 'id' (Id), 'auto_fri' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_mon' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sat' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sun' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_thu' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_tue' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_wed' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'name' (String[16]), 'output0' (Byte), 'output1' (Byte), 'permanent_manual' (Boolean), 'pid_d' (Byte), 'pid_i' (Byte), 'pid_int' (Byte), 'pid_p' (Byte), 'room' (Byte), 'sensor' (Byte), 'setp0' (Temp), 'setp1' (Temp), 'setp2' (Temp), 'setp3' (Temp), 'setp4' (Temp), 'setp5' (Temp)
-        """
-        self._eeprom_controller.write(ThermostatConfiguration.deserialize(config))
-        self.invalidate_cache(Observer.Types.THERMOSTATS)
+    def load_heating_thermostat(self, thermostat_id):
+        return self._master_controller.load_heating_thermostat(thermostat_id)
 
-    def v0_set_thermostat_configurations(self, config):
-        """
-        Set multiple thermostat_configurations.
+    def load_heating_thermostats(self):
+        return self._master_controller.load_heating_thermostats()
 
-        :param config: The list of thermostat_configurations to set
-        :type config: list of thermostat_configuration dict: contains 'id' (Id), 'auto_fri' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_mon' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sat' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sun' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_thu' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_tue' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_wed' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'name' (String[16]), 'output0' (Byte), 'output1' (Byte), 'permanent_manual' (Boolean), 'pid_d' (Byte), 'pid_i' (Byte), 'pid_int' (Byte), 'pid_p' (Byte), 'room' (Byte), 'sensor' (Byte), 'setp0' (Temp), 'setp1' (Temp), 'setp2' (Temp), 'setp3' (Temp), 'setp4' (Temp), 'setp5' (Temp)
-        """
-        self._eeprom_controller.write_batch([ThermostatConfiguration.deserialize(o) for o in config])
+    def save_heating_thermostats(self, thermostats):
+        self._master_controller.save_heating_thermostats(thermostats)
         self.invalidate_cache(Observer.Types.THERMOSTATS)
 
     def v0_set_cooling_configuration(self, config):

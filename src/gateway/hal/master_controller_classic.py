@@ -21,10 +21,17 @@ from datetime import datetime
 from threading import Timer
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
+from gateway.dto import (
+    OutputDTO,
+    ShutterDTO, ShutterGroupDTO,
+    HeatingThermostatDTO
+)
 from gateway.enums import ShutterEnums
-from gateway.hal.mappers_classic import OutputMapper, ShutterGroupMapper, \
-    ShutterMapper
+from gateway.hal.mappers_classic import (
+    OutputMapper,
+    ShutterGroupMapper, ShutterMapper,
+    HeatingThermostatMapper
+)
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
@@ -614,6 +621,22 @@ class MasterClassicController(MasterController):
         batch = []
         for shutter_group, fields in shutter_groups:
             batch.append(ShutterGroupMapper.dto_to_orm(shutter_group, fields))
+        self._eeprom_controller.write_batch(batch)
+
+    # Thermostats
+
+    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> HeatingThermostatDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.ThermostatConfiguration, thermostat_id)
+        return HeatingThermostatMapper.orm_to_dto(classic_object)
+
+    def load_heating_thermostats(self):  # type: () -> List[HeatingThermostatDTO]
+        return [HeatingThermostatMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.ThermostatConfiguration)]
+
+    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[HeatingThermostatDTO, List[str]]]) -> None
+        batch = []
+        for thermostat, fields in thermostats:
+            batch.append(HeatingThermostatMapper.dto_to_orm(thermostat, fields))
         self._eeprom_controller.write_batch(batch)
 
     # Virtual modules

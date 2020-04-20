@@ -13,7 +13,4 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from output import OutputMapper
-from shutter import ShutterMapper
-from shutter_group import ShutterGroupMapper
 from thermostat_heating import HeatingThermostatMapper

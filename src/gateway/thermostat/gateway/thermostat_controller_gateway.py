@@ -9,11 +9,16 @@ from playhouse.signals import post_save
 from ioc import Injectable, Inject, Singleton, INJECTED
 from bus.om_bus_events import OMBusEvents
 from gateway.events import GatewayEvent
+from gateway.dto import HeatingThermostatDTO
 from models import Output, DaySchedule, Preset, Thermostat, ThermostatGroup, OutputToThermostatGroup, ValveToThermostat, Valve, Pump, Feature
 from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.thermostat.gateway.thermostat_pid import ThermostatPid
+from gateway.thermostat.gateway.mappers import HeatingThermostatMapper
 from apscheduler.schedulers.background import BackgroundScheduler
+
+if False:  # MYPY
+    from typing import List, Tuple
 
 logger = logging.getLogger('openmotics')
 
@@ -360,23 +365,21 @@ class ThermostatControllerGateway(ThermostatController):
         self.set_current_setpoint(thermostat_number, heating_temperature=temperature, cooling_temperature=temperature)
         return {'status': 'OK'}
 
-    def v0_get_thermostat_configurations(self, fields=None):
+    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> HeatingThermostatDTO
         # TODO: implement the new v1 config format
-        thermostats = Thermostat.select()
-        return [thermostat.to_v0_format(mode='heating', fields=fields) for thermostat in thermostats]
+        thermostat = Thermostat.get(number=thermostat_id)
+        return HeatingThermostatMapper.orm_to_dto(thermostat)
 
-    def v0_get_thermostat_configuration(self, thermostat_number, fields=None):
+    def load_heating_thermostats(self):  # type: () -> List[HeatingThermostatDTO]
         # TODO: implement the new v1 config format
-        thermostat = Thermostat.get(number=thermostat_number)
-        return thermostat.to_v0_format(mode='heating', fields=fields)
+        return [HeatingThermostatMapper.orm_to_dto(thermostat)
+                for thermostat in Thermostat.select()]
 
-    def v0_set_thermostat_configurations(self, config):
+    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[HeatingThermostatDTO, List[str]]]) -> None
         # TODO: implement the new v1 config format
-        for thermostat_config in config:
-            self.v0_set_thermostat_configuration(thermostat_config)
-
-    def v0_set_thermostat_configuration(self, config):
-        self.v0_set_configuration(config, 'heating')
+        for thermostat_dto, fields in thermostats:
+            thermostat = HeatingThermostatMapper.dto_to_orm(thermostat_dto, fields)
+            self.refresh_set_configuration(thermostat)
 
     def v0_get_cooling_configurations(self, fields=None):
         thermostats = Thermostat.select()
@@ -393,6 +396,7 @@ class ThermostatControllerGateway(ThermostatController):
             self.v0_set_cooling_configuration(thermostat_config)
 
     def v0_set_cooling_configuration(self, config):
+        # TODO: Refactor to mappers
         self.v0_set_configuration(config, 'cooling')
 
     def v0_set_per_thermostat_mode(self, thermostat_number, automatic, setpoint):
@@ -664,15 +668,17 @@ class ThermostatControllerGateway(ThermostatController):
         # TODO: implement the new v1 config format
         thermostat_number = int(config['id'])
         thermostat = ThermostatControllerGateway.create_or_update_thermostat_from_v0_api(thermostat_number, config, mode)
-        thermostat_pid = self.thermostat_pids.get(thermostat_number)
+        self.refresh_set_configuration(thermostat)
+
+    def refresh_set_configuration(self, thermostat):  # type: (Thermostat) -> None
+        thermostat_pid = self.thermostat_pids.get(thermostat.number)
         if thermostat_pid is not None:
             thermostat_pid.update_thermostat(thermostat)
         else:
             thermostat_pid = ThermostatPid(thermostat, self._pump_valve_controller)
-            self.thermostat_pids[thermostat_number] = thermostat_pid
+            self.thermostat_pids[thermostat.number] = thermostat_pid
         self._sync_scheduler()
         thermostat_pid.tick()
-        return {'status': 'OK'}
 
     def v0_event_thermostat_changed(self, thermostat_number, active_preset, current_setpoint, actual_temperature, percentages, room):
         """

@@ -16,7 +16,11 @@
 Module for communicating with the Master
 """
 from exceptions import NotImplementedError
-from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
+from gateway.dto import (
+    OutputDTO,
+    ShutterDTO, ShutterGroupDTO,
+    HeatingThermostatDTO
+)
 from gateway.hal.master_event import MasterEvent
 
 if False:  # MYPY
@@ -156,6 +160,17 @@ class MasterController(object):
         raise NotImplementedError()
 
     def save_shutter_groups(self, config):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
+        raise NotImplementedError()
+
+    # Thermostats
+
+    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> HeatingThermostatDTO
+        raise NotImplementedError()
+
+    def load_heating_thermostats(self):  # type: () -> List[HeatingThermostatDTO]
+        raise NotImplementedError()
+
+    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[HeatingThermostatDTO, List[str]]]) -> None
         raise NotImplementedError()
 
     # Sensors
