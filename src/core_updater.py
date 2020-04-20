@@ -47,7 +47,7 @@ def setup_logger():
 if __name__ == '__main__':
     if len(sys.argv) != 2:
         print('Usage:')
-        print(('{0} firmware_filename'.format(sys.argv[0])))
+        print('{0} firmware_filename'.format(sys.argv[0]))
         sys.exit(1)
     firmware_filename = sys.argv[1]
 
