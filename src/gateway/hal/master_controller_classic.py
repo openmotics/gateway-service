@@ -1157,6 +1157,7 @@ class MasterClassicController(MasterController):
              'hum': master_api.Svt.humidity(humidity),
              'bri': master_api.Svt.brightness(brightness)}
         )
+        return dict()
 
     def load_sensor(self, sensor_id, fields=None):
         return self._eeprom_controller.read(eeprom_models.SensorConfiguration, sensor_id, fields).serialize()
