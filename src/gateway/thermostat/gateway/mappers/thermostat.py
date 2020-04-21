@@ -74,7 +74,7 @@ class ThermostatMapper(object):
                                (4, 'auto_fri'),
                                (5, 'auto_sat'),
                                (6, 'auto_sun')]:
-            index = (7 - start_day_of_week + day_index) % 7
+            index = int((7 - start_day_of_week + day_index) % 7)
             setattr(dto, key, ThermostatMapper._schedule_orm_to_dto(day_schedules[index]))
 
         # TODO: Map missing [pid_int, setp0, setp1, setp2]
