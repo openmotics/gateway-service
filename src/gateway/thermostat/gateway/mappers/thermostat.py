@@ -33,7 +33,7 @@ class ThermostatMapper(object):
 
     @staticmethod
     def orm_to_dto(orm_object, mode):  # type: (Thermostat, str) -> ThermostatDTO
-        dto = ThermostatDTO(id=orm_object.id,
+        dto = ThermostatDTO(id=orm_object.number,
                             name=orm_object.name,
                             sensor=orm_object.sensor,
                             pid_p=getattr(orm_object, 'pid_{0}_p'.format(mode)),
