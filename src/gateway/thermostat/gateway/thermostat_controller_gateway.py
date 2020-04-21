@@ -173,67 +173,6 @@ class ThermostatControllerGateway(ThermostatController):
                                                 args=args,
                                                 name='T{}: {} ({}) {}'.format(thermostat_number, new_setpoint, schedule.mode, seconds_of_day))
 
-    def migrate_master_config_to_gateway(self):
-        # TODO: Migrate this code since it uses legacy master models and helpers such as eeprom controller and
-        #  master communicator. This cannot be imported/used in Core+ context
-        from master.eeprom_models import ThermostatConfiguration, CoolingConfiguration
-        # validate if valid config
-        # 1. output0 <= 240
-        # 2. sensor < 32 or 240
-        # 3. timing check e.g. '42:30' is not valid time (255)
-        # 4. valid PID params
-
-        def is_valid(config_):
-            if config_.get('output0', 255) <= 240:
-                return False
-            if config_.get('pid_p', 255) == 255:
-                return False
-            sensor = config_.get('sensor', 255)
-            if not (sensor < 32 or sensor == 240):
-                return False
-            for key, value in config_.iteritems():
-                if key.startswith('auto_') and ('42:30' in value or 255 in value):
-                    return False
-            return True
-
-        self._master_communicator.start()
-
-        try:
-            # 0. check if migration already done
-            f = Feature.get(name='thermostats_gateway')
-            if not f.enabled:
-                # 1. try to read all config from master and save it in the db
-                try:
-                    for thermostat_id in xrange(32):
-                        for mode, config_mapper in {'heating': ThermostatConfiguration,
-                                                    'cooling': CoolingConfiguration}.iteritems():
-                            config = self._eeprom_controller.read(config_mapper, thermostat_id).serialize()
-                            if is_valid(config):
-                                ThermostatControllerGateway.create_or_update_thermostat_from_v0_api(thermostat_id,
-                                                                                                    config,
-                                                                                                    mode)
-                except Exception:
-                    logger.exception('Error occurred while migrating thermostats configuration from master eeprom.')
-                    return False
-
-                # 2. disable all thermostats on the master
-                try:
-                    for thermostat_id in xrange(32):
-                        # TODO: use new master API to disable thermostat
-                        # self._master_communicator.xyz
-                        pass
-                except Exception:
-                    logger.exception('Error occurred while stopping master thermostats.')
-                    return False
-
-                # 3. write flag in database to enable gateway thermostats
-                f.enabled = True
-                f.save()
-            return True
-        except Exception:
-            logger.exception('Error migrating master thermostats')
-            return False
-
     ################################
     # v1 APIs
     ################################
