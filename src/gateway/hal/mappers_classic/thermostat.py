@@ -22,7 +22,7 @@ from master.eeprom_controller import EepromModel
 from master.eeprom_models import ThermostatConfiguration
 
 if False:  # MYPY
-    from typing import List
+    from typing import List, Dict, Any
 
 
 class ThermostatMapper(object):
@@ -52,7 +52,7 @@ class ThermostatMapper(object):
 
     @staticmethod
     def dto_to_orm(thermostat_dto, fields):  # type: (ThermostatDTO, List[str]) -> EepromModel
-        data = {'id': thermostat_dto.id}
+        data = {'id': thermostat_dto.id}  # type: Dict[str, Any]
         for field in ['name', 'permanent_manual'] + ['setp{0}'.format(i) for i in range(6)]:
             if field in fields:
                 data[field] = getattr(thermostat_dto, field)
