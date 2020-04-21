@@ -16,4 +16,4 @@
 from output import OutputMapper
 from shutter import ShutterMapper
 from shutter_group import ShutterGroupMapper
-from thermostat_heating import HeatingThermostatMapper
+from thermostat import ThermostatMapper

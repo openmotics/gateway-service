@@ -22,7 +22,7 @@ if False:
     from typing import Optional
 
 
-class HeatingThermostatDTO(object):
+class ThermostatDTO(object):
     def __init__(self, id,
                  name='', permanent_manual=False,
                  setp0=None, setp1=None, setp2=None, setp3=None, setp4=None, setp5=None,
@@ -56,7 +56,7 @@ class HeatingThermostatDTO(object):
         self.auto_sun = auto_sun  # type: Optional[ThermostatScheduleDTO]
 
     def __eq__(self, other):
-        if not isinstance(other, HeatingThermostatDTO):
+        if not isinstance(other, ThermostatDTO):
             return False
         return (self.id == other.id and
                 self.name == other.name and

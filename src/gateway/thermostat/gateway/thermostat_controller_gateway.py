@@ -9,12 +9,12 @@ from playhouse.signals import post_save
 from ioc import Injectable, Inject, Singleton, INJECTED
 from bus.om_bus_events import OMBusEvents
 from gateway.events import GatewayEvent
-from gateway.dto import HeatingThermostatDTO
+from gateway.dto import ThermostatDTO
 from models import Output, DaySchedule, Preset, Thermostat, ThermostatGroup, OutputToThermostatGroup, ValveToThermostat, Valve, Pump, Feature
 from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.thermostat.gateway.thermostat_pid import ThermostatPid
-from gateway.thermostat.gateway.mappers import HeatingThermostatMapper
+from gateway.thermostat.gateway.mappers import ThermostatMapper
 from apscheduler.schedulers.background import BackgroundScheduler
 
 if False:  # MYPY
@@ -365,39 +365,37 @@ class ThermostatControllerGateway(ThermostatController):
         self.set_current_setpoint(thermostat_number, heating_temperature=temperature, cooling_temperature=temperature)
         return {'status': 'OK'}
 
-    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> HeatingThermostatDTO
+    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         # TODO: implement the new v1 config format
         thermostat = Thermostat.get(number=thermostat_id)
-        return HeatingThermostatMapper.orm_to_dto(thermostat)
+        return ThermostatMapper.orm_to_dto(thermostat, 'heating')
 
-    def load_heating_thermostats(self):  # type: () -> List[HeatingThermostatDTO]
+    def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
         # TODO: implement the new v1 config format
-        return [HeatingThermostatMapper.orm_to_dto(thermostat)
+        return [ThermostatMapper.orm_to_dto(thermostat, 'heating')
                 for thermostat in Thermostat.select()]
 
-    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[HeatingThermostatDTO, List[str]]]) -> None
+    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
         # TODO: implement the new v1 config format
         for thermostat_dto, fields in thermostats:
-            thermostat = HeatingThermostatMapper.dto_to_orm(thermostat_dto, fields)
+            thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, 'heating')
             self.refresh_set_configuration(thermostat)
 
-    def v0_get_cooling_configurations(self, fields=None):
-        thermostats = Thermostat.select()
-        return [thermostat.to_v0_format(mode='cooling', fields=fields) for thermostat in thermostats]
-
-    def v0_get_cooling_configuration(self, cooling_id, fields=None):
+    def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         # TODO: implement the new v1 config format
-        thermostat = Thermostat.get(number=cooling_id)
-        return thermostat.to_v0_format(mode='cooling', fields=fields)
+        thermostat = Thermostat.get(number=thermostat_id)
+        return ThermostatMapper.orm_to_dto(thermostat, 'cooling')
 
-    def v0_set_cooling_configurations(self, config):
+    def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
         # TODO: implement the new v1 config format
-        for thermostat_config in config:
-            self.v0_set_cooling_configuration(thermostat_config)
+        return [ThermostatMapper.orm_to_dto(thermostat, 'cooling')
+                for thermostat in Thermostat.select()]
 
-    def v0_set_cooling_configuration(self, config):
-        # TODO: Refactor to mappers
-        self.v0_set_configuration(config, 'cooling')
+    def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+        # TODO: implement the new v1 config format
+        for thermostat_dto, fields in thermostats:
+            thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, 'cooling')
+            self.refresh_set_configuration(thermostat)
 
     def v0_set_per_thermostat_mode(self, thermostat_number, automatic, setpoint):
         thermostat_pid = self.thermostat_pids.get(thermostat_number)

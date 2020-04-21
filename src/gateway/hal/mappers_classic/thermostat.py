@@ -17,7 +17,7 @@
 HeatingThermostat Mapper
 """
 from toolbox import Toolbox
-from gateway.dto import HeatingThermostatDTO, ThermostatScheduleDTO
+from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
 from master.eeprom_controller import EepromModel
 from master.eeprom_models import ThermostatConfiguration
 
@@ -25,11 +25,11 @@ if False:  # MYPY
     from typing import List
 
 
-class HeatingThermostatMapper(object):
+class ThermostatMapper(object):
     BYTE_MAX = 255
 
     @staticmethod
-    def orm_to_dto(orm_object):  # type: (EepromModel) -> HeatingThermostatDTO
+    def orm_to_dto(orm_object):  # type: (EepromModel) -> ThermostatDTO
         data = orm_object.serialize()
         kwargs = {'name': data['name'],
                   'permanent_manual': data['permanent_manual']}
@@ -37,7 +37,7 @@ class HeatingThermostatMapper(object):
             field = 'setp{0}'.format(i)
             kwargs[field] = data[field]
         for field in ['sensor', 'output0', 'output1', 'pid_p', 'pid_i', 'pid_d', 'pid_int', 'room']:
-            kwargs[field] = Toolbox.nonify(data[field], HeatingThermostatMapper.BYTE_MAX)
+            kwargs[field] = Toolbox.nonify(data[field], ThermostatMapper.BYTE_MAX)
         for day in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']:
             field = 'auto_{0}'.format(day)
             kwargs[field] = ThermostatScheduleDTO(temp_night=data[field][0],
@@ -47,18 +47,18 @@ class HeatingThermostatMapper(object):
                                                   start_day_2=data[field][4],
                                                   end_day_2=data[field][5],
                                                   temp_day_2=data[field][6])
-        return HeatingThermostatDTO(id=data['id'],
-                                    **kwargs)
+        return ThermostatDTO(id=data['id'],
+                             **kwargs)
 
     @staticmethod
-    def dto_to_orm(thermostat_dto, fields):  # type: (HeatingThermostatDTO, List[str]) -> EepromModel
+    def dto_to_orm(thermostat_dto, fields):  # type: (ThermostatDTO, List[str]) -> EepromModel
         data = {'id': thermostat_dto.id}
         for field in ['name', 'permanent_manual'] + ['setp{0}'.format(i) for i in range(6)]:
             if field in fields:
                 data[field] = getattr(thermostat_dto, field)
         for field in ['sensor', 'output0', 'output1', 'pid_p', 'pid_i', 'pid_d', 'pid_int', 'room']:
             if field in fields:
-                data[field] = Toolbox.denonify(getattr(thermostat_dto, field), HeatingThermostatMapper.BYTE_MAX)
+                data[field] = Toolbox.denonify(getattr(thermostat_dto, field), ThermostatMapper.BYTE_MAX)
         for day in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']:
             field = 'auto_{0}'.format(day)
             if field not in fields:

@@ -14,13 +14,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-HeatingThermostat Mapper
+Thermostat Mapper
 """
 import logging
 import time
 import datetime
 from peewee import DoesNotExist
-from gateway.dto import HeatingThermostatDTO, ThermostatScheduleDTO
+from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
 from models import Thermostat, DaySchedule, ValveToThermostat, Output, Valve, Preset
 
 if False:  # MYPY
@@ -29,21 +29,21 @@ if False:  # MYPY
 logger = logging.getLogger("openmotics")
 
 
-class HeatingThermostatMapper(object):
+class ThermostatMapper(object):
 
     @staticmethod
-    def orm_to_dto(orm_object):  # type: (Thermostat) -> HeatingThermostatDTO
-        dto = HeatingThermostatDTO(id=orm_object.id,
-                                   name=orm_object.name,
-                                   sensor=orm_object.sensor,
-                                   pid_p=orm_object.pid_heating_p,
-                                   pid_i=orm_object.pid_heating_i,
-                                   pid_d=orm_object.pid_heating_d,
-                                   permanent_manual=orm_object.automatic,
-                                   room=orm_object.room)
+    def orm_to_dto(orm_object, mode):  # type: (Thermostat, str) -> ThermostatDTO
+        dto = ThermostatDTO(id=orm_object.id,
+                            name=orm_object.name,
+                            sensor=orm_object.sensor,
+                            pid_p=getattr(orm_object, 'pid_{0}_p'.format(mode)),
+                            pid_i=getattr(orm_object, 'pid_{0}_i'.format(mode)),
+                            pid_d=getattr(orm_object, 'pid_{0}_d'.format(mode)),
+                            permanent_manual=orm_object.automatic,
+                            room=orm_object.room)
 
         # Outputs
-        db_outputs = [valve.output.number for valve in orm_object.heating_valves]
+        db_outputs = [valve.output.number for valve in getattr(orm_object, '{0}_valves'.format(mode))]
         number_of_outputs = len(db_outputs)
         if number_of_outputs > 0:
             dto.output0 = db_outputs[0]
@@ -54,7 +54,7 @@ class HeatingThermostatMapper(object):
 
         # Presets
         for preset in orm_object.presets:
-            setpoint = preset.heating_setpoint
+            setpoint = getattr(preset, '{0}_setpoint'.format(mode))
             if preset.name == 'AWAY':
                 dto.setp3 = setpoint
             elif preset.name == 'VACATION':
@@ -63,7 +63,9 @@ class HeatingThermostatMapper(object):
                 dto.setp5 = setpoint
 
         # Schedules
-        day_schedules = sorted(orm_object.day_schedules, key=lambda s: s.index, reverse=False)
+        day_schedules = sorted(getattr(orm_object, '{0}_schedules'.format(mode)),
+                               key=lambda s: s.index,
+                               reverse=False)
         start_day_of_week = (orm_object.start / 86400 - 4) % 7  # 0: Monday, 1: Tuesday, ...
         for day_index, key in [(0, 'auto_mon'),
                                (1, 'auto_tue'),
@@ -73,7 +75,7 @@ class HeatingThermostatMapper(object):
                                (5, 'auto_sat'),
                                (6, 'auto_sun')]:
             index = (7 - start_day_of_week + day_index) % 7
-            setattr(dto, key, HeatingThermostatMapper._schedule_orm_to_dto(day_schedules[index]))
+            setattr(dto, key, ThermostatMapper._schedule_orm_to_dto(day_schedules[index]))
 
         # TODO: Map missing [pid_int, setp0, setp1, setp2]
         return dto
@@ -110,7 +112,7 @@ class HeatingThermostatMapper(object):
         return ThermostatScheduleDTO(**kwargs)
 
     @staticmethod
-    def dto_to_orm(thermostat_dto, fields):  # type: (HeatingThermostatDTO, List[str]) -> Thermostat
+    def dto_to_orm(thermostat_dto, fields, mode):  # type: (ThermostatDTO, List[str], str) -> Thermostat
         # TODO: A mapper should not alter the database, but instead give an in-memory
         #       structure back to the caller to process
 
@@ -127,9 +129,9 @@ class HeatingThermostatMapper(object):
         for orm_field, (dto_field, mapping) in {'name': ('name', None),
                                                 'sensor': ('sensor', int),
                                                 'room': ('room', int),
-                                                'pid_heating_p': ('pid_p', float),
-                                                'pid_heating_i': ('pid_i', float),
-                                                'pid_heating_d': ('pid_d', float)}.iteritems():
+                                                'pid_{0}_p'.format(mode): ('pid_p', float),
+                                                'pid_{0}_i'.format(mode): ('pid_i', float),
+                                                'pid_{0}_d'.format(mode): ('pid_d', float)}.iteritems():
             if dto_field not in fields:
                 continue
             value = getattr(thermostat_dto, dto_field)
@@ -147,7 +149,7 @@ class HeatingThermostatMapper(object):
             deleted = ValveToThermostat \
                 .delete() \
                 .where(ValveToThermostat.thermostat == thermostat) \
-                .where(ValveToThermostat.mode == 'heating') \
+                .where(ValveToThermostat.mode == mode) \
                 .execute()
             logger.info('Unlinked {0} valve_numbers from thermostat {1}'.format(deleted, thermostat.name))
 
@@ -170,9 +172,9 @@ class HeatingThermostatMapper(object):
 
                 # 3. Link the valve to the thermostat, set properties
                 try:
-                    valve_to_thermostat = ValveToThermostat.get(valve=valve, thermostat=thermostat, mode='heating')
+                    valve_to_thermostat = ValveToThermostat.get(valve=valve, thermostat=thermostat, mode=mode)
                 except DoesNotExist:
-                    valve_to_thermostat = ValveToThermostat(valve=valve, thermostat=thermostat, mode='heating')
+                    valve_to_thermostat = ValveToThermostat(valve=valve, thermostat=thermostat, mode=mode)
 
                 # TODO: decide if this is a cooling thermostat or heating thermostat
                 valve_to_thermostat.priority = 0 if field == 'output0' else 1
@@ -192,10 +194,10 @@ class HeatingThermostatMapper(object):
             if dto_data is None:
                 continue
             try:
-                day_schedule = DaySchedule.get(thermostat=thermostat, index=day_index, mode='heating')
+                day_schedule = DaySchedule.get(thermostat=thermostat, index=day_index, mode=mode)
             except DoesNotExist:
-                day_schedule = DaySchedule(thermostat=thermostat, index=day_index, mode='heating')
-            day_schedule.schedule_data = HeatingThermostatMapper._schedule_dto_to_orm(dto_data)
+                day_schedule = DaySchedule(thermostat=thermostat, index=day_index, mode=mode)
+            day_schedule.schedule_data = ThermostatMapper._schedule_dto_to_orm(dto_data)
             day_schedule.save()
 
         # Presets
@@ -211,7 +213,7 @@ class HeatingThermostatMapper(object):
                 preset = Preset.get(name=preset_name, thermostat=thermostat)
             except DoesNotExist:
                 preset = Preset(name=preset_name, thermostat=thermostat)
-            preset.heating_setpoint = float(dto_data)
+            setattr(preset, '{0}_setpoint'.format(mode), float(dto_data))
             preset.active = False
             preset.save()
 

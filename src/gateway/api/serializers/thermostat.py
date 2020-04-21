@@ -18,37 +18,37 @@ Heating thermostat (de)serializer
 """
 from toolbox import Toolbox
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto import HeatingThermostatDTO, ThermostatScheduleDTO
+from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
 
 if False:  # MYPY
     from typing import Dict, Optional, List, Tuple
 
 
-class HeatingThermostatSerializer(object):
+class ThermostatSerializer(object):
     BYTE_MAX = 255
 
     @staticmethod
-    def serialize(heating_thermostat_dto, fields):  # type: (HeatingThermostatDTO, Optional[List[str]]) -> Dict
-        data = {'id': heating_thermostat_dto.id,
-                'name': heating_thermostat_dto.name,
-                'room': Toolbox.denonify(heating_thermostat_dto.room, HeatingThermostatSerializer.BYTE_MAX),
-                'setp0': heating_thermostat_dto.setp0,
-                'setp1': heating_thermostat_dto.setp1,
-                'setp2': heating_thermostat_dto.setp2,
-                'setp3': heating_thermostat_dto.setp3,
-                'setp4': heating_thermostat_dto.setp4,
-                'setp5': heating_thermostat_dto.setp5,
-                'sensor': Toolbox.denonify(heating_thermostat_dto.sensor, HeatingThermostatSerializer.BYTE_MAX),
-                'output0': Toolbox.denonify(heating_thermostat_dto.output0, HeatingThermostatSerializer.BYTE_MAX),
-                'output1': Toolbox.denonify(heating_thermostat_dto.output1, HeatingThermostatSerializer.BYTE_MAX),
-                'pid_p': Toolbox.denonify(heating_thermostat_dto.pid_p, HeatingThermostatSerializer.BYTE_MAX),
-                'pid_i': Toolbox.denonify(heating_thermostat_dto.pid_i, HeatingThermostatSerializer.BYTE_MAX),
-                'pid_d': Toolbox.denonify(heating_thermostat_dto.pid_d, HeatingThermostatSerializer.BYTE_MAX),
-                'pid_int': Toolbox.denonify(heating_thermostat_dto.pid_int, HeatingThermostatSerializer.BYTE_MAX),
-                'permanent_manual': heating_thermostat_dto.permanent_manual}
+    def serialize(thermostat_dto, fields):  # type: (ThermostatDTO, Optional[List[str]]) -> Dict
+        data = {'id': thermostat_dto.id,
+                'name': thermostat_dto.name,
+                'room': Toolbox.denonify(thermostat_dto.room, ThermostatSerializer.BYTE_MAX),
+                'setp0': thermostat_dto.setp0,
+                'setp1': thermostat_dto.setp1,
+                'setp2': thermostat_dto.setp2,
+                'setp3': thermostat_dto.setp3,
+                'setp4': thermostat_dto.setp4,
+                'setp5': thermostat_dto.setp5,
+                'sensor': Toolbox.denonify(thermostat_dto.sensor, ThermostatSerializer.BYTE_MAX),
+                'output0': Toolbox.denonify(thermostat_dto.output0, ThermostatSerializer.BYTE_MAX),
+                'output1': Toolbox.denonify(thermostat_dto.output1, ThermostatSerializer.BYTE_MAX),
+                'pid_p': Toolbox.denonify(thermostat_dto.pid_p, ThermostatSerializer.BYTE_MAX),
+                'pid_i': Toolbox.denonify(thermostat_dto.pid_i, ThermostatSerializer.BYTE_MAX),
+                'pid_d': Toolbox.denonify(thermostat_dto.pid_d, ThermostatSerializer.BYTE_MAX),
+                'pid_int': Toolbox.denonify(thermostat_dto.pid_int, ThermostatSerializer.BYTE_MAX),
+                'permanent_manual': thermostat_dto.permanent_manual}
         for day in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']:
             field = 'auto_{0}'.format(day)
-            dto_data = getattr(heating_thermostat_dto, field)  # type: ThermostatScheduleDTO
+            dto_data = getattr(thermostat_dto, field)  # type: ThermostatScheduleDTO
             if dto_data is None:
                 continue
             data[field] = [dto_data.temp_night,
@@ -61,9 +61,9 @@ class HeatingThermostatSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[HeatingThermostatDTO, List[str]]
+    def deserialize(api_data):  # type: (Dict) -> Tuple[ThermostatDTO, List[str]]
         loaded_fields = ['id']
-        heating_thermostat_dto = HeatingThermostatDTO(api_data['id'])
+        heating_thermostat_dto = ThermostatDTO(api_data['id'])
         loaded_fields += SerializerToolbox.deserialize(
             dto=heating_thermostat_dto,  # Referenced
             api_data=api_data,
@@ -75,14 +75,14 @@ class HeatingThermostatSerializer(object):
                      'setp3': ('setp3', None),
                      'setp4': ('setp4', None),
                      'setp5': ('setp5', None),
-                     'room': ('room', HeatingThermostatSerializer.BYTE_MAX),
-                     'sensor': ('sensor', HeatingThermostatSerializer.BYTE_MAX),
-                     'output0': ('output0', HeatingThermostatSerializer.BYTE_MAX),
-                     'output1': ('output1', HeatingThermostatSerializer.BYTE_MAX),
-                     'pid_p': ('pid_p', HeatingThermostatSerializer.BYTE_MAX),
-                     'pid_i': ('pid_i', HeatingThermostatSerializer.BYTE_MAX),
-                     'pid_d': ('pid_d', HeatingThermostatSerializer.BYTE_MAX),
-                     'pid_int': ('pid_int', HeatingThermostatSerializer.BYTE_MAX)}
+                     'room': ('room', ThermostatSerializer.BYTE_MAX),
+                     'sensor': ('sensor', ThermostatSerializer.BYTE_MAX),
+                     'output0': ('output0', ThermostatSerializer.BYTE_MAX),
+                     'output1': ('output1', ThermostatSerializer.BYTE_MAX),
+                     'pid_p': ('pid_p', ThermostatSerializer.BYTE_MAX),
+                     'pid_i': ('pid_i', ThermostatSerializer.BYTE_MAX),
+                     'pid_d': ('pid_d', ThermostatSerializer.BYTE_MAX),
+                     'pid_int': ('pid_int', ThermostatSerializer.BYTE_MAX)}
         )
         for day in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']:
             field = 'auto_{0}'.format(day)

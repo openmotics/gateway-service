@@ -23,7 +23,7 @@ from gateway.enums import ShutterEnums
 from gateway.dto import (
     OutputDTO,
     ShutterDTO, ShutterGroupDTO,
-    HeatingThermostatDTO
+    ThermostatDTO
 )
 from gateway.hal.mappers_core import OutputMapper, ShutterMapper
 from gateway.hal.master_controller import MasterController
@@ -484,13 +484,13 @@ class MasterCoreController(MasterController):
 
     # Thermostats
 
-    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> HeatingThermostatDTO
+    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         raise NotImplementedError()
 
-    def load_heating_thermostats(self):  # type: () -> List[HeatingThermostatDTO]
+    def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
         raise NotImplementedError()
 
-    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[HeatingThermostatDTO, List[str]]]) -> None
+    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
         raise NotImplementedError()
 
     # Can Led functions
