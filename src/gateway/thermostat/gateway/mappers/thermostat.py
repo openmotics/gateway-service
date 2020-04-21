@@ -89,10 +89,10 @@ class ThermostatMapper(object):
         schedule = schedule_orm.schedule_data
         amount_of_entries = len(schedule)
         if amount_of_entries == 0:
-            logger.error('Serializing an empty temperature day schedule.')
+            logger.warning('Mapping an empty temperature day schedule.')
             return None
         if amount_of_entries < 4:
-            logger.warning('Not enough data to serialize day schedule in old format. Returning best effort data.')
+            logger.warning('Not enough data to map day schedule. Returning best effort data.')
             first_value = schedule.itervalues().next()
             return ThermostatScheduleDTO(temp_night=first_value,
                                          temp_day_1=first_value,
