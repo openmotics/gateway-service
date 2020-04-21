@@ -63,7 +63,7 @@ class ThermostatMapper(object):
                 dto.setp5 = setpoint
 
         # Schedules
-        day_schedules = sorted(getattr(orm_object, '{0}_schedules'.format(mode)),
+        day_schedules = sorted(getattr(orm_object, '{0}_schedules'.format(mode))(),
                                key=lambda s: s.index,
                                reverse=False)
         start_day_of_week = (orm_object.start / 86400 - 4) % 7  # 0: Monday, 1: Tuesday, ...
