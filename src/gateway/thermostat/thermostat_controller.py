@@ -14,7 +14,7 @@ class ThermostatController(object):
         self._message_client = message_client
         self._observer = observer
 
-        self._event_subscriptions = []
+        self._event_subscriptions = []  # type: List[Callable[[GatewayEvent], None]]
 
     def start(self):  # type: () -> None
         raise NotImplementedError()
