@@ -85,14 +85,14 @@ class ThermostatPid(object):
             self._cooling_valve_numbers = [valve.number for valve in thermostat.cooling_valves]
 
             if thermostat.mode == 'heating':
-                pid_p = thermostat.pid_heating_p if thermostat.pid_heating_p else self.DEFAULT_KP
-                pid_i = thermostat.pid_heating_i if thermostat.pid_heating_i else self.DEFAULT_KI
-                pid_d = thermostat.pid_heating_d if thermostat.pid_heating_d else self.DEFAULT_KD
+                pid_p = thermostat.pid_heating_p if thermostat.pid_heating_p is not None else self.DEFAULT_KP
+                pid_i = thermostat.pid_heating_i if thermostat.pid_heating_i is not None else self.DEFAULT_KI
+                pid_d = thermostat.pid_heating_d if thermostat.pid_heating_d is not None else self.DEFAULT_KD
                 setpoint = self._active_preset.heating_setpoint if self._active_preset is not None else 14.0
             else:
-                pid_p = thermostat.pid_cooling_p if thermostat.pid_cooling_p else self.DEFAULT_KP
-                pid_i = thermostat.pid_cooling_i if thermostat.pid_cooling_i else self.DEFAULT_KI
-                pid_d = thermostat.pid_cooling_d if thermostat.pid_cooling_d else self.DEFAULT_KD
+                pid_p = thermostat.pid_cooling_p if thermostat.pid_cooling_p is not None else self.DEFAULT_KP
+                pid_i = thermostat.pid_cooling_i if thermostat.pid_cooling_i is not None else self.DEFAULT_KI
+                pid_d = thermostat.pid_cooling_d if thermostat.pid_cooling_d is not None else self.DEFAULT_KD
                 setpoint = self._active_preset.cooling_setpoint if self._active_preset is not None else 30.0
 
             if self._pid is None:
