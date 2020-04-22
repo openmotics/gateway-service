@@ -25,13 +25,14 @@ from models import (
     Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump,
     Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule
 )
+from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
 from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatControllerGateway
 
 MODELS = [Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump,
           Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule]
 
 
-class GatewayThermostatORMCrudTests(unittest.TestCase):
+class GatewayThermostatMappingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
@@ -54,14 +55,18 @@ class GatewayThermostatORMCrudTests(unittest.TestCase):
         self.test_db.drop_tables(MODELS)
         self.test_db.close()
 
-    def test_load(self):
+    @staticmethod
+    def _create_controller():
         gateway_api = Mock()
         gateway_api.get_timezone = lambda: 'Europe/Brussels'
 
         SetUpTestInjections(gateway_api=gateway_api,
                             message_client=Mock(),
                             observer=Mock())
-        controller = ThermostatControllerGateway()
+        return ThermostatControllerGateway()
+
+    def test_load(self):
+        controller = GatewayThermostatMappingTests._create_controller()
 
         thermostat = Thermostat(number=10,
                                 sensor=0,

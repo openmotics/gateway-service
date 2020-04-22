@@ -8,4 +8,4 @@ echo "Running master command tests"
 pytest master_tests/master_command_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterCommandTest.xml
 
 echo "Running thermostat tests"
-pytest thermostat_tests/gateway_orm_crud_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/GatewayThermostatORMCrudTest.xml
+pytest thermostat_tests/gateway_mapping_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/GatewayThermostatMappingTest.xml

@@ -99,6 +99,14 @@ class ThermostatMapper(object):
                                          temp_day_2=first_value,
                                          **kwargs)
 
+        # Parsing day/night, assuming following (classic) schedule:
+        #      ______     ______
+        #      |    |     |    |
+        # _____|    |_____|    |_____
+        # ^    ^    ^     ^    ^
+        # So to parse a classic format out of it, at least 4 of the markers are required, as
+        # in classic mode, only one night temperature is assumed anyway, so the 3rd and 5th values
+        # are ignored
         index = 0
         for timestamp in sorted(schedule.keys()):
             temperature = schedule[timestamp]

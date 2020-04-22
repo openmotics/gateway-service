@@ -77,4 +77,4 @@ echo "Running metrics tests"
 python2 gateway_tests/metrics_tests.py
 
 echo "Running thermostat tests"
-python2 thermostat_tests/gateway_orm_crud_tests.py
+python2 thermostat_tests/gateway_mapping_tests.py
