@@ -56,14 +56,17 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         self.test_db.close()
 
     @staticmethod
-    def _create_controller():
+    def _create_controller(get_sensor_temperature_status=None):
         gateway_api = Mock()
         gateway_api.get_timezone = lambda: 'Europe/Brussels'
+        gateway_api.get_sensor_temperature_status = get_sensor_temperature_status
 
         SetUpTestInjections(gateway_api=gateway_api,
                             message_client=Mock(),
                             observer=Mock())
-        return ThermostatControllerGateway()
+        thermostat_controller = ThermostatControllerGateway()
+        SetUpTestInjections(thermostat_controller=thermostat_controller)
+        return thermostat_controller
 
     def test_load(self):
         controller = GatewayThermostatMappingTests._create_controller()
@@ -157,6 +160,75 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                                end_day_1='42:30',
                                                start_day_2='42:30',
                                                end_day_2='42:30'), dto.auto_thu)
+
+    def test_save(self):
+        temperatures = {}
+
+        def _get_temperature(sensor_id):
+            return temperatures[sensor_id]
+
+        controller = GatewayThermostatMappingTests._create_controller(get_sensor_temperature_status=_get_temperature)
+
+        thermostat_group = ThermostatGroup(number=0,
+                                           name='global')
+        thermostat_group.save()
+        thermostat = Thermostat(number=10,
+                                sensor=1,
+                                room=2,
+                                start=0,  # 0 is on a thursday
+                                name='thermostat',
+                                thermostat_group=thermostat_group)
+        thermostat.save()
+
+        for i in range(7):
+            day_schedule = DaySchedule(index=i,
+                                       content='{}',
+                                       mode='heating')
+            day_schedule.thermostat = thermostat
+            day_schedule.save()
+
+        heating_thermostats = controller.load_heating_thermostats()
+        self.assertEqual(1, len(heating_thermostats))
+        dto = heating_thermostats[0]  # type: ThermostatDTO
+
+        dto.room = 5  # This field won't be saved
+        dto.sensor = 15
+        dto.output0 = 5
+        dto.name = 'changed'
+        dto.auto_thu = ThermostatScheduleDTO(temp_night=10,
+                                             temp_day_1=15,
+                                             temp_day_2=30,
+                                             start_day_1='08:00',
+                                             end_day_1='10:00',
+                                             start_day_2='16:00',
+                                             end_day_2='18:00')
+
+        temperatures[15] = 5.0
+        controller.save_heating_thermostats([(dto, ['sensor', 'output0', 'name', 'auto_thu'])])
+
+        heating_thermostats = controller.load_heating_thermostats()
+        self.assertEqual(1, len(heating_thermostats))
+        dto = heating_thermostats[0]  # type: ThermostatDTO
+
+        self.assertEqual(ThermostatDTO(id=10,
+                                       name='changed',
+                                       setp3=14.0,
+                                       setp4=14.0,
+                                       setp5=14.0,
+                                       sensor=15,
+                                       pid_p=120.0,
+                                       pid_i=0.0,
+                                       pid_d=0.0,
+                                       room=2,  # Unchanged
+                                       output0=5,
+                                       permanent_manual=True,
+                                       auto_thu=ThermostatScheduleDTO(temp_night=10.0,
+                                                                      temp_day_1=15.0,
+                                                                      temp_day_2=30.0,
+                                                                      start_day_1='42:30',
+                                                                      end_day_1='42:30',
+                                                                      start_day_2='42:30',
+                                                                      end_day_2='42:30')), dto)
 
 
 if __name__ == "__main__":

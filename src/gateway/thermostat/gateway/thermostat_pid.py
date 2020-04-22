@@ -122,7 +122,7 @@ class ThermostatPid(object):
                      self.get_active_valves_percentage(), self.thermostat.room)
 
     def tick(self):
-        logger.info('_pid_tick - thermostat {} is {} enabled in {} mode'.format(self.thermostat.number, '' if self.enabled else 'not', self._mode))
+        logger.info('_pid_tick - thermostat {} is {}abled in {} mode'.format(self.thermostat.number, 'en' if self.enabled else 'dis', self._mode))
         if not self.enabled:
             self.switch_off()
         else:

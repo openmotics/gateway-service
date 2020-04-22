@@ -14,25 +14,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-ShutterGroup DTO
+Base DTO
 """
-from gateway.dto.base import BaseDTO
-
-if False:  # MYPY
-    from typing import Optional
 
 
-class ShutterGroupDTO(BaseDTO):
-    def __init__(self, id, timer_up=None, timer_down=None, room=None):
-        self.id = id  # type: int
-        self.timer_up = timer_up  # type: Optional[int]
-        self.timer_down = timer_down  # type: Optional[int]
-        self.room = room  # type: Optional[int]
+class BaseDTO(object):
+    def __set__(self):
+        return str(self.__dict__)
 
-    def __eq__(self, other):
-        if not isinstance(other, ShutterGroupDTO):
-            return False
-        return (self.id == other.id and
-                self.timer_up == other.timer_up and
-                self.timer_down == other.timer_down and
-                self.room == other.room)
+    def __repr__(self):
+        return str(self.__dict__)

@@ -16,9 +16,10 @@
 """
 ThermostatSchedule DTO
 """
+from gateway.dto.base import BaseDTO
 
 
-class ThermostatScheduleDTO(object):
+class ThermostatScheduleDTO(BaseDTO):
     def __init__(self,
                  temp_night, temp_day_1, temp_day_2,
                  start_day_1, end_day_1,

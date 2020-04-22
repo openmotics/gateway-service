@@ -17,12 +17,14 @@
 HeatingThermostat DTO
 """
 
+from gateway.dto.base import BaseDTO
 from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
+
 if False:
     from typing import Optional
 
 
-class ThermostatDTO(object):
+class ThermostatDTO(BaseDTO):
     def __init__(self, id,
                  name='', permanent_manual=False,
                  setp0=None, setp1=None, setp2=None, setp3=None, setp4=None, setp5=None,
