@@ -85,7 +85,7 @@ class ValveDriver(object):
                 except Exception:
                     dimmable_output = False
                 if not dimmable_output:
-                    # TODO: implement PWM logic
+                    # TODO: Implement PWM logic
                     logger.info('Valve (output: {}) using ON/OFF approximation - desired: {}%'.format(output_nr, self._desired_percentage))
                 self._current_percentage = self._desired_percentage
                 self._time_state_changed = time.time()

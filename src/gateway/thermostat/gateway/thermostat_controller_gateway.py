@@ -117,7 +117,7 @@ class ThermostatControllerGateway(ThermostatController):
                 self.thermostat_pids[thermostat.number] = thermostat_pid
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
-            # TODO: delete stale/removed thermostats
+            # TODO: Delete stale/removed thermostats
 
     def log_scheduler_jobs(self):
         logger.info('Scheduled jobs:')
@@ -261,7 +261,7 @@ class ThermostatControllerGateway(ThermostatController):
         global_thermostat = ThermostatGroup.get(number=0)
         if global_thermostat is not None:
             return_data = {'thermostats_on': global_thermostat.on,
-                           'automatic': True,  # TODO: if any thermnostat is automatic
+                           'automatic': True,  # TODO: If any thermnostat is automatic
                            'setpoint': 0,      # can be ignored
                            'cooling': str(global_thermostat.mode).lower() == 'cooling'}
             status = []
@@ -280,12 +280,12 @@ class ThermostatControllerGateway(ThermostatController):
                         'act': self._gateway_api.get_sensor_temperature_status(thermostat.sensor),
                         'csetp': csetp,
                         'outside': self._gateway_api.get_sensor_temperature_status(global_thermostat.sensor),
-                        'mode': 0,  # TODO: !!!check if still used!!
+                        'mode': 0,  # TODO: Check if still used
                         'automatic': active_preset.name == 'SCHEDULE',
                         'setpoint': v0_setpoint,  # ---> 'AWAY': 3, 'VACATION': 4, ...
                         'name': thermostat.mode,
                         'sensor_nr': thermostat.sensor,
-                        'airco': 0,  # TODO: !!!check if still used!!
+                        'airco': 0,  # TODO: Check if still used
                         'output0': get_output_level(output_numbers[0]),
                         'output1': get_output_level(output_numbers[1])
                         }
@@ -319,33 +319,33 @@ class ThermostatControllerGateway(ThermostatController):
         return {'status': 'OK'}
 
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
-        # TODO: implement the new v1 config format
+        # TODO: Implement the new v1 config format
         thermostat = Thermostat.get(number=thermostat_id)
         return ThermostatMapper.orm_to_dto(thermostat, 'heating')
 
     def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
-        # TODO: implement the new v1 config format
+        # TODO: Implement the new v1 config format
         return [ThermostatMapper.orm_to_dto(thermostat, 'heating')
                 for thermostat in Thermostat.select()]
 
     def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
-        # TODO: implement the new v1 config format
+        # TODO: Implement the new v1 config format
         for thermostat_dto, fields in thermostats:
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, 'heating')
             self.refresh_set_configuration(thermostat)
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
-        # TODO: implement the new v1 config format
+        # TODO: Implement the new v1 config format
         thermostat = Thermostat.get(number=thermostat_id)
         return ThermostatMapper.orm_to_dto(thermostat, 'cooling')
 
     def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
-        # TODO: implement the new v1 config format
+        # TODO: Implement the new v1 config format
         return [ThermostatMapper.orm_to_dto(thermostat, 'cooling')
                 for thermostat in Thermostat.select()]
 
     def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
-        # TODO: implement the new v1 config format
+        # TODO: Implement the new v1 config format
         for thermostat_dto, fields in thermostats:
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, 'cooling')
             self.refresh_set_configuration(thermostat)
@@ -362,7 +362,7 @@ class ThermostatControllerGateway(ThermostatController):
         return {'status': 'OK'}
 
     def v0_get_global_thermostat_configuration(self, fields=None):
-        # TODO: implement this with sqlite as backing
+        # TODO: Implement this with sqlite as backing
         global_thermostat_group = ThermostatGroup.v0_get_global()
         config = {'outside_sensor': global_thermostat_group.sensor,
                   'pump_delay': 255,

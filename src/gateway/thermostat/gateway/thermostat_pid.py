@@ -116,7 +116,7 @@ class ThermostatPid(object):
         self._report_state_callbacks.append(callback)
 
     def report_state_change(self):
-        # TODO: only invoke callback if change occurred
+        # TODO: Only invoke callback if change occurred
         for callback in self._report_state_callbacks:
             callback(self.number, self._active_preset.name, self.setpoint, self.current_temperature,
                      self.get_active_valves_percentage(), self.thermostat.room)
@@ -183,7 +183,7 @@ class ThermostatPid(object):
 
         # configure valves and set desired opening
         if power > 0:
-            # TODO: check union to avoid opening same valve_numbers in heating and cooling
+            # TODO: Check union to avoid opening same valve_numbers in heating and cooling
             self._pump_valve_controller.set_valves(0, self.cooling_valve_numbers, mode=self.thermostat.valve_config)
             self._pump_valve_controller.set_valves(power, self.heating_valve_numbers, mode=self.thermostat.valve_config)
         else:

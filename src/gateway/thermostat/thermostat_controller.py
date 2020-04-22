@@ -47,7 +47,7 @@ class ThermostatController(object):
     ################################
     # v1 APIs
     ################################
-    # TODO: implement all v1 APIs
+    # TODO: Implement all v1 APIs
 
     def set_current_setpoint(self, thermostat_number, heating_temperature, cooling_temperature):
         raise NotImplementedError()

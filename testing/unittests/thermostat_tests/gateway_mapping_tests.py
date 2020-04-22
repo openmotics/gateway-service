@@ -144,10 +144,10 @@ class GatewayThermostatMappingTests(unittest.TestCase):
 
         day_schedule = thermostat.heating_schedules()[0]  # type: DaySchedule
         day_schedule.schedule_data = {0: 5.0,
-                                      150: 5.5,   # 150 and 1000 are selected because 150 < 1000,
-                                      1000: 6.0,  # but str(150) > str(1000)
-                                      8000: 6.5,
-                                      8500: 7.0}
+                                      120: 5.5,   # 120 and 1200 are selected because 120 < 1200,
+                                      1200: 6.0,  # but str(120) > str(1200)
+                                      3600: 6.5,
+                                      7500: 7.0}
         day_schedule.save()
         heating_thermostats = controller.load_heating_thermostats()
         self.assertEqual(1, len(heating_thermostats))
@@ -156,10 +156,10 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         self.assertEqual(ThermostatScheduleDTO(temp_night=5.0,
                                                temp_day_1=5.5,
                                                temp_day_2=6.5,
-                                               start_day_1='42:30',
-                                               end_day_1='42:30',
-                                               start_day_2='42:30',
-                                               end_day_2='42:30'), dto.auto_thu)
+                                               start_day_1='00:02',
+                                               end_day_1='00:20',
+                                               start_day_2='01:00',
+                                               end_day_2='02:05'), dto.auto_thu)
 
     def test_save(self):
         temperatures = {}
@@ -199,9 +199,9 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                              temp_day_1=15,
                                              temp_day_2=30,
                                              start_day_1='08:00',
-                                             end_day_1='10:00',
+                                             end_day_1='10:30',
                                              start_day_2='16:00',
-                                             end_day_2='18:00')
+                                             end_day_2='18:45')
 
         temperatures[15] = 5.0
         controller.save_heating_thermostats([(dto, ['sensor', 'output0', 'name', 'auto_thu'])])
@@ -225,10 +225,10 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        auto_thu=ThermostatScheduleDTO(temp_night=10.0,
                                                                       temp_day_1=15.0,
                                                                       temp_day_2=30.0,
-                                                                      start_day_1='42:30',
-                                                                      end_day_1='42:30',
-                                                                      start_day_2='42:30',
-                                                                      end_day_2='42:30')), dto)
+                                                                      start_day_1='08:00',
+                                                                      end_day_1='10:30',
+                                                                      start_day_2='16:00',
+                                                                      end_day_2='18:45')), dto)
 
 
 if __name__ == "__main__":

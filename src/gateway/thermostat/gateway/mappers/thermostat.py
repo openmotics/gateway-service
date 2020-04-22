@@ -82,40 +82,45 @@ class ThermostatMapper(object):
 
     @staticmethod
     def _schedule_orm_to_dto(schedule_orm):  # type: (DaySchedule) -> Optional[ThermostatScheduleDTO]
-        kwargs = {'start_day_1': '42:30',
-                  'end_day_1': '42:30',
-                  'start_day_2': '42:30',
-                  'end_day_2': '42:30'}  # TODO: Map missing times
         schedule = schedule_orm.schedule_data
         amount_of_entries = len(schedule)
         if amount_of_entries == 0:
             logger.warning('Mapping an empty temperature day schedule.')
             return None
-        if amount_of_entries < 4:
+        if amount_of_entries < 5:
             logger.warning('Not enough data to map day schedule. Returning best effort data.')
             first_value = schedule.itervalues().next()
             return ThermostatScheduleDTO(temp_night=first_value,
+                                         start_day_1='42:30',
+                                         end_day_1='42:30',
                                          temp_day_1=first_value,
-                                         temp_day_2=first_value,
-                                         **kwargs)
+                                         start_day_2='42:30',
+                                         end_day_2='42:30',
+                                         temp_day_2=first_value)
 
         # Parsing day/night, assuming following (classic) schedule:
         #      ______     ______
         #      |    |     |    |
         # _____|    |_____|    |_____
         # ^    ^    ^     ^    ^
-        # So to parse a classic format out of it, at least 4 of the markers are required, as
-        # in classic mode, only one night temperature is assumed anyway, so the 3rd and 5th values
-        # are ignored
+        # So to parse a classic format out of it, at least 5 of the markers are required
         index = 0
+        kwargs = {}
         for timestamp in sorted(schedule.keys(), key=lambda t: int(t)):
             temperature = schedule[timestamp]
+            timestamp = int(timestamp)
             if index == 0:
                 kwargs['temp_night'] = temperature
             elif index == 1:
                 kwargs['temp_day_1'] = temperature
+                kwargs['start_day_1'] = '{0:02d}:{1:02d}'.format(timestamp // 3600, (timestamp % 3600) // 60)
+            elif index == 2:
+                kwargs['end_day_1'] = '{0:02d}:{1:02d}'.format(timestamp // 3600, (timestamp % 3600) // 60)
             elif index == 3:
                 kwargs['temp_day_2'] = temperature
+                kwargs['start_day_2'] = '{0:02d}:{1:02d}'.format(timestamp // 3600, (timestamp % 3600) // 60)
+            elif index == 4:
+                kwargs['end_day_2'] = '{0:02d}:{1:02d}'.format(timestamp // 3600, (timestamp % 3600) // 60)
             index += 1
         return ThermostatScheduleDTO(**kwargs)
 
@@ -184,7 +189,7 @@ class ThermostatMapper(object):
                 except DoesNotExist:
                     valve_to_thermostat = ValveToThermostat(valve=valve, thermostat=thermostat, mode=mode)
 
-                # TODO: decide if this is a cooling thermostat or heating thermostat
+                # TODO: Decide if this is a cooling thermostat or heating thermostat
                 valve_to_thermostat.priority = 0 if field == 'output0' else 1
                 valve_to_thermostat.save()
 
