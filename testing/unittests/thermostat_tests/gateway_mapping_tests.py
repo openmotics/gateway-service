@@ -106,6 +106,58 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         self.assertEqual('thermostat', heating_thermostat_dto.name)
         self.assertEqual(thermostat.number, heating_thermostat_dto.id)
 
+    def test_orm_to_dto_mapping(self):
+        controller = GatewayThermostatMappingTests._create_controller()
+
+        thermostat = Thermostat(number=10,
+                                sensor=1,
+                                room=2,
+                                start=0,  # 0 is on a thursday
+                                name='thermostat')
+        thermostat.save()
+
+        for i in range(7):
+            day_schedule = DaySchedule(index=i,
+                                       content='{}',
+                                       mode='heating')
+            day_schedule.thermostat = thermostat
+            day_schedule.save()
+
+        heating_thermostats = controller.load_heating_thermostats()
+        self.assertEqual(1, len(heating_thermostats))
+        dto = heating_thermostats[0]  # type: ThermostatDTO
+
+        self.assertEqual(ThermostatDTO(id=10,
+                                       name='thermostat',
+                                       setp3=14.0,
+                                       setp4=14.0,
+                                       setp5=14.0,
+                                       sensor=1,
+                                       pid_p=120.0,
+                                       pid_i=0.0,
+                                       pid_d=0.0,
+                                       room=2,
+                                       permanent_manual=True), dto)
+
+        day_schedule = thermostat.heating_schedules()[0]  # type: DaySchedule
+        day_schedule.schedule_data = {0: 5.0,
+                                      150: 5.5,   # 150 and 1000 are selected because 150 < 1000,
+                                      1000: 6.0,  # but str(150) > str(1000)
+                                      8000: 6.5,
+                                      8500: 7.0}
+        day_schedule.save()
+        heating_thermostats = controller.load_heating_thermostats()
+        self.assertEqual(1, len(heating_thermostats))
+        dto = heating_thermostats[0]  # type: ThermostatDTO
+
+        self.assertEqual(ThermostatScheduleDTO(temp_night=5.0,
+                                               temp_day_1=5.5,
+                                               temp_day_2=6.5,
+                                               start_day_1='42:30',
+                                               end_day_1='42:30',
+                                               start_day_2='42:30',
+                                               end_day_2='42:30'), dto.auto_thu)
+
 
 if __name__ == "__main__":
     unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

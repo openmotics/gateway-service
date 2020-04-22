@@ -108,7 +108,7 @@ class ThermostatMapper(object):
         # in classic mode, only one night temperature is assumed anyway, so the 3rd and 5th values
         # are ignored
         index = 0
-        for timestamp in sorted(schedule.keys()):
+        for timestamp in sorted(schedule.keys(), key=lambda t: int(t)):
             temperature = schedule[timestamp]
             if index == 0:
                 kwargs['temp_night'] = temperature
