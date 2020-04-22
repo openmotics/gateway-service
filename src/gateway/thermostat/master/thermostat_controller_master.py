@@ -549,7 +549,7 @@ class ThermostatControllerMaster(ThermostatController):
                                         for thermostat in self.load_heating_thermostats()}
 
         thermostats = []
-        for thermostat_id in xrange(32):
+        for thermostat_id in range(32):
             config = self._thermostats_config[thermostat_id]
             if (config.sensor <= 31 or config.sensor == 240) and config.output0 <= 240:
                 t_mode = thermostat_mode['mode{0}'.format(thermostat_id)]

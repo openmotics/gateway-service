@@ -62,7 +62,7 @@ class Migrator(object):
 
                 # 2. disable all thermostats on the master
                 try:
-                    for thermostat_id in xrange(32):
+                    for thermostat_id in range(32):
                         # TODO: use new master API to disable thermostat
                         # self._master_communicator.xyz
                         pass

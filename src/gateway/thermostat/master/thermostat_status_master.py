@@ -60,7 +60,7 @@ class ThermostatStatusMaster(object):
             if not self._thermostats:
                 self._report_group_change(thermostats_on=thermostats['thermostats_on'],
                                           cooling=thermostats['cooling'])
-                for i in xrange(0, 32):
+                for i in range(0, 32):
                     self._report_change(i, new_status.get(i))
             else:
                 change = False
@@ -73,7 +73,7 @@ class ThermostatStatusMaster(object):
                     self._report_group_change(thermostats_on=thermostats['thermostats_on'],
                                               cooling=thermostats['cooling'])
                 old_status = {t['id']: t for t in self._thermostats['status']}
-                for thermostat_id in xrange(0, 32):
+                for thermostat_id in range(0, 32):
                     change = False
                     if (thermostat_id in old_status) != (thermostat_id in new_status):
                         change = True

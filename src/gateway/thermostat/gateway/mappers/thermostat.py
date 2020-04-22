@@ -139,7 +139,7 @@ class ThermostatMapper(object):
                                                 'room': ('room', int),
                                                 'pid_{0}_p'.format(mode): ('pid_p', float),
                                                 'pid_{0}_i'.format(mode): ('pid_i', float),
-                                                'pid_{0}_d'.format(mode): ('pid_d', float)}.iteritems():
+                                                'pid_{0}_d'.format(mode): ('pid_d', float)}.items():
             if dto_field not in fields:
                 continue
             value = getattr(thermostat_dto, dto_field)

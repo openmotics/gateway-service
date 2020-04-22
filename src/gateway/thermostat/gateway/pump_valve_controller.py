@@ -57,10 +57,10 @@ class PumpValveController(object):
         percentage_per_valve = 100.0 / n_valves
         n_valves_fully_open = int(total_percentage / percentage_per_valve)
         last_valve_open_percentage = 100.0 * (total_percentage - n_valves_fully_open * percentage_per_valve) / percentage_per_valve
-        for n in xrange(n_valves_fully_open):
+        for n in range(n_valves_fully_open):
             valve_driver = valve_drivers[n]
             valve_driver.set(100)
-        for n in xrange(n_valves_fully_open, n_valves):
+        for n in range(n_valves_fully_open, n_valves):
             valve_driver = valve_drivers[n]
             percentage = last_valve_open_percentage if n == n_valves_fully_open else 0
             valve_driver.set(percentage)
@@ -90,7 +90,7 @@ class PumpValveController(object):
     def prepare_pumps_for_transition(self):
         active_pump_drivers = set()
         potential_inactive_pump_drivers = set()
-        for valve_number, valve_driver in self._valve_drivers.iteritems():
+        for valve_number, valve_driver in self._valve_drivers.items():
             if valve_driver.is_open():
                 for pump_driver in valve_driver.pump_drivers:
                     active_pump_drivers.add(pump_driver)
@@ -103,13 +103,13 @@ class PumpValveController(object):
             pump_driver.turn_off()
 
     def steer_valves(self):
-        for valve_number, valve_driver in self._valve_drivers.iteritems():
+        for valve_number, valve_driver in self._valve_drivers.items():
             valve_driver.steer_output()
 
     def steer_pumps(self):
         active_pump_drivers = set()
         potential_inactive_pump_drivers = set()
-        for valve_number, valve_driver in self._valve_drivers.iteritems():
+        for valve_number, valve_driver in self._valve_drivers.items():
             if valve_driver.is_open():
                 for pump_driver in valve_driver.pump_drivers:
                     active_pump_drivers.add(pump_driver)

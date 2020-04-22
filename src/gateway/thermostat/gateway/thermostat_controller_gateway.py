@@ -97,7 +97,7 @@ class ThermostatControllerGateway(ThermostatController):
 
     def _pid_tick(self):
         while self._running:
-            for thermostat_number, thermostat_pid in self.thermostat_pids.iteritems():
+            for thermostat_number, thermostat_pid in self.thermostat_pids.items():
                 try:
                     thermostat_pid.tick()
                 except Exception:
@@ -142,12 +142,12 @@ class ThermostatControllerGateway(ThermostatController):
 
     def _sync_scheduler(self):
         self._scheduler.remove_all_jobs()
-        for thermostat_number, thermostat_pid in self.thermostat_pids.iteritems():
+        for thermostat_number, thermostat_pid in self.thermostat_pids.items():
             start_date = datetime.datetime.utcfromtimestamp(thermostat_pid.thermostat.start)
             day_schedules = thermostat_pid.thermostat.day_schedules
             schedule_length = len(day_schedules)
             for schedule in day_schedules:
-                for seconds_of_day, new_setpoint in schedule.schedule_data.iteritems():
+                for seconds_of_day, new_setpoint in schedule.schedule_data.items():
                     m, s = divmod(int(seconds_of_day), 60)
                     h, m = divmod(m, 60)
                     if schedule.mode == 'heating':
@@ -303,7 +303,7 @@ class ThermostatControllerGateway(ThermostatController):
         global_thermosat.mode = mode
         global_thermosat.save()
 
-        for thermostat_number, thermostat_pid in self.thermostat_pids.iteritems():
+        for thermostat_number, thermostat_pid in self.thermostat_pids.items():
             thermostat = Thermostat.get(number=thermostat_number)
             if thermostat is not None:
                 if automatic is False and setpoint is not None and 3 <= setpoint <= 5:
@@ -370,21 +370,21 @@ class ThermostatControllerGateway(ThermostatController):
 
         cooling_outputs = global_thermostat_group.v0_switch_to_cooling_outputs
         n = len(cooling_outputs)
-        for i in xrange(n):
+        for i in range(n):
             cooling_output = cooling_outputs[n]
             config['switch_to_cooling_output_{}'.format(i)] = cooling_output[0]
             config['switch_to_cooling_value_{}'.format(i)] = cooling_output[1]
-        for i in xrange(n, 4-n):
+        for i in range(n, 4-n):
             config['switch_to_cooling_output_{}'.format(i)] = 255
             config['switch_to_cooling_value_{}'.format(i)] = 255
 
         heating_outputs = global_thermostat_group.v0_switch_to_heating_outputs
         n = len(heating_outputs)
-        for i in xrange(n):
+        for i in range(n):
             heating_output = heating_outputs[n]
             config['switch_to_heating_output_{}'.format(i)] = heating_output[0]
             config['switch_to_heating_value_{}'.format(i)] = heating_output[1]
-        for i in xrange(n, 4-n):
+        for i in range(n, 4-n):
             config['switch_to_heating_output_{}'.format(i)] = 255
             config['switch_to_heating_value_{}'.format(i)] = 255
 
@@ -399,7 +399,7 @@ class ThermostatControllerGateway(ThermostatController):
 
         # link configuration outputs to global thermostat config
         for mode in ['cooling', 'heating']:
-            for i in xrange(4):
+            for i in range(4):
                 full_key = 'switch_to_{}_output_{}'.format(mode, i)
                 output_number = config.get(full_key)
                 output = Output.get_or_create(number=output_number)
