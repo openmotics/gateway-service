@@ -15,6 +15,7 @@
 """
 Tests for events.
 """
+from __future__ import absolute_import
 import unittest
 import xmlrunner
 from cloud.cloud_api_client import CloudAPIClient

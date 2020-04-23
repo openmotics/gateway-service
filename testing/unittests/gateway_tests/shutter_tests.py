@@ -15,6 +15,7 @@
 """
 Tests for the shutters module.
 """
+from __future__ import absolute_import
 import copy
 import fakesleep
 import time
@@ -66,7 +67,7 @@ class ShutterControllerTest(unittest.TestCase):
         # Basic configuration
         controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)
         self.assertEqual(len(controller._shutters), 4)
-        for shutter_id in xrange(3):
+        for shutter_id in range(3):
             self.assertIn(shutter_id, controller._shutters)
             self.assertEqual(controller._shutters[shutter_id], ShutterControllerTest.SHUTTER_CONFIG[shutter_id])
             self.assertIn(shutter_id, controller._actual_positions)
@@ -98,8 +99,8 @@ class ShutterControllerTest(unittest.TestCase):
         controller.update_config(config)
         self.assertIsNone(controller._actual_positions.get(1, 'incorrect'))
         self.assertIsNone(controller._desired_positions.get(1, 'incorrect'))
-        self.assertEquals(controller._directions.get(1), ShutterEnums.Direction.STOP)
-        self.assertEquals(controller._states.get(1), [0, ShutterEnums.State.STOPPED])
+        self.assertEqual(controller._directions.get(1), ShutterEnums.Direction.STOP)
+        self.assertEqual(controller._states.get(1), [0, ShutterEnums.State.STOPPED])
 
     def test_basic_actions_non_positional(self):
         calls = {}
@@ -121,7 +122,7 @@ class ShutterControllerTest(unittest.TestCase):
         calls = {}             # v  v
         for shutter_id, data in {0: None,
                                  1: None,
-                                 2: 99}.iteritems():
+                                 2: 99}.items():
             controller.shutter_down(shutter_id)
             self.assertEqual(controller._desired_positions[shutter_id], data)
             self.assertEqual(controller._directions[shutter_id], ShutterEnums.Direction.DOWN)
@@ -132,14 +133,14 @@ class ShutterControllerTest(unittest.TestCase):
         calls = {}             # v  v
         for shutter_id, data in {0: None,
                                  1: None,
-                                 2: 0}.iteritems():
+                                 2: 0}.items():
             controller.shutter_up(shutter_id)
             self.assertEqual(controller._desired_positions[shutter_id], data)
             self.assertEqual(controller._directions[shutter_id], ShutterEnums.Direction.UP)
             self.assertEqual(calls.get(shutter_id)[-1], 'up')
 
         calls = {}
-        for shutter_id in xrange(3):
+        for shutter_id in range(3):
             controller.shutter_stop(shutter_id)
             self.assertIsNone(controller._desired_positions[shutter_id])
             self.assertEqual(controller._directions[shutter_id], ShutterEnums.Direction.STOP)
@@ -222,7 +223,7 @@ class ShutterControllerTest(unittest.TestCase):
         #                             |   |   |                            +- expected BA to be executed
         calls = {}                  # v   v   v                            v
         for shutter_id, data in {2: [[10, 50, ShutterEnums.Direction.UP,   'up'],  # down = 0, up = 100
-                                     [10, 5,  ShutterEnums.Direction.DOWN, 'down']]}.iteritems():
+                                     [10, 5,  ShutterEnums.Direction.DOWN, 'down']]}.items():
             # Out of range calls need to fail
             message = 'Shutter {0} has a position limit of 0 <= position <= {1}'.format(shutter_id, ShutterControllerTest.SHUTTER_CONFIG[shutter_id].steps - 1)
             with self.assertRaises(RuntimeError) as ex:
@@ -301,7 +302,7 @@ class ShutterControllerTest(unittest.TestCase):
                                      [50, 50, ShutterEnums.Direction.UP,   None],
                                      [50, 50, ShutterEnums.Direction.UP,   ShutterEnums.Direction.STOP],
                                      [50, 50, ShutterEnums.Direction.UP,   ShutterEnums.Direction.UP],
-                                     [50, 50, ShutterEnums.Direction.UP,   ShutterEnums.Direction.DOWN]]}.iteritems():
+                                     [50, 50, ShutterEnums.Direction.UP,   ShutterEnums.Direction.DOWN]]}.items():
             for entry in data:
                 controller._desired_positions[shutter_id] = entry[0]
                 controller._directions[shutter_id] = entry[2]
@@ -334,22 +335,22 @@ class ShutterControllerTest(unittest.TestCase):
         controller.subscribe_events(shutter_callback)
 
         def validate(_shutter_id, _entry):
-            self.assertEquals(controller._actual_positions.get(_shutter_id), _entry[0])
-            self.assertEquals(controller._desired_positions.get(_shutter_id), _entry[1])
-            self.assertEquals(controller._directions.get(_shutter_id), _entry[2])
-            self.assertEquals(controller._states.get(_shutter_id), _entry[3])
+            self.assertEqual(controller._actual_positions.get(_shutter_id), _entry[0])
+            self.assertEqual(controller._desired_positions.get(_shutter_id), _entry[1])
+            self.assertEqual(controller._directions.get(_shutter_id), _entry[2])
+            self.assertEqual(controller._states.get(_shutter_id), _entry[3])
             if len(_entry) == 4 or _entry[4]:
                 self.assertEqual(calls[_shutter_id].pop(), _entry[3][1].upper())
 
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00000000})
-        for shutter_id in xrange(3):
+        for shutter_id in range(3):
             #                     +- actual position
             #                     |     +- desired position
-            #                     |     |     +- direction                      +- state                              +- optional skip call check
-            #                     v     v     v                                 v                                     v
-            validate(shutter_id, [None, None, ShutterEnums.Direction.STOP, [0, ShutterEnums.State.STOPPED], False])
+            #                     |     |     +- direction                      +- state                     +- optional skip call check
+            #                     v     v     v                                 v                            v
+            validate(shutter_id, [None, None, ShutterEnums.Direction.STOP,  [0, ShutterEnums.State.STOPPED], False])
 
-        for shutter_id in xrange(3):
+        for shutter_id in range(3):
             controller.shutter_down(shutter_id, None)
 
         time.sleep(20)
@@ -361,7 +362,7 @@ class ShutterControllerTest(unittest.TestCase):
         #                             v     v     v                                 v
         for shutter_id, entry in {0: [None, None, ShutterEnums.Direction.DOWN, [20, ShutterEnums.State.GOING_DOWN]],
                                   1: [None, None, ShutterEnums.Direction.UP,   [20, ShutterEnums.State.GOING_UP]],
-                                  2: [None, 99,   ShutterEnums.Direction.DOWN, [20, ShutterEnums.State.GOING_DOWN]]}.iteritems():
+                                  2: [None, 99,   ShutterEnums.Direction.DOWN, [20, ShutterEnums.State.GOING_DOWN]]}.items():
             validate(shutter_id, entry)
 
         time.sleep(50)  # Standard shutters will be down now
@@ -370,11 +371,11 @@ class ShutterControllerTest(unittest.TestCase):
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00010100})  # First shutter motor stop
         #                             +- actual position
         #                             |     +- desired position
-        #                             |     |     +- direction                      +- state                                  +- optional skip call check
-        #                             v     v     v                                 v                                         v
+        #                             |     |     +- direction                      +- state                        +- optional skip call check
+        #                             v     v     v                                 v                               v
         for shutter_id, entry in {0: [None, None, ShutterEnums.Direction.STOP, [70, ShutterEnums.State.STOPPED]],
                                   1: [None, None, ShutterEnums.Direction.UP,   [20, ShutterEnums.State.GOING_UP],   False],
-                                  2: [20,   99,   ShutterEnums.Direction.DOWN, [20, ShutterEnums.State.GOING_DOWN], False]}.iteritems():
+                                  2: [20,   99,   ShutterEnums.Direction.DOWN, [20, ShutterEnums.State.GOING_DOWN], False]}.items():
             validate(shutter_id, entry)
 
         time.sleep(50)  # Standard shutters will be down now
@@ -383,11 +384,11 @@ class ShutterControllerTest(unittest.TestCase):
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00010000})  # Second shutter motor stop
         #                             +- actual position
         #                             |     +- desired position
-        #                             |     |     +- direction                      +- state                                  +- optional skip call check
-        #                             v     v     v                                 v                                         v
-        for shutter_id, entry in {0: [None, None, ShutterEnums.Direction.STOP, [70, ShutterEnums.State.STOPPED],    False],
+        #                             |     |     +- direction                       +- state                        +- optional skip call check
+        #                             v     v     v                                  v                               v
+        for shutter_id, entry in {0: [None, None, ShutterEnums.Direction.STOP,  [70, ShutterEnums.State.STOPPED],    False],
                                   1: [None, None, ShutterEnums.Direction.STOP, [120, ShutterEnums.State.UP]],
-                                  2: [50,   99,   ShutterEnums.Direction.DOWN, [20, ShutterEnums.State.GOING_DOWN], False]}.iteritems():
+                                  2: [50,   99,   ShutterEnums.Direction.DOWN,  [20, ShutterEnums.State.GOING_DOWN], False]}.items():
             validate(shutter_id, entry)
 
         time.sleep(10)
@@ -396,33 +397,33 @@ class ShutterControllerTest(unittest.TestCase):
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00000000})  # Third motor stopped
         #                             +- actual position
         #                             |     +- desired position
-        #                             |     |     +- direction                      +- state                               +- optional skip call check
-        #                             v     v     v                                 v                                      v
-        for shutter_id, entry in {0: [None, None, ShutterEnums.Direction.STOP, [70, ShutterEnums.State.STOPPED], False],
-                                  1: [None, None, ShutterEnums.Direction.STOP, [120, ShutterEnums.State.UP],     False],
-                                  2: [50,   99,   ShutterEnums.Direction.STOP, [130, ShutterEnums.State.STOPPED]]}.iteritems():
+        #                             |     |     +- direction                      +- state                      +- optional skip call check
+        #                             v     v     v                                 v                             v
+        for shutter_id, entry in {0: [None, None, ShutterEnums.Direction.STOP,  [70, ShutterEnums.State.STOPPED], False],
+                                  1: [None, None, ShutterEnums.Direction.STOP, [120, ShutterEnums.State.UP],      False],
+                                  2: [50,   99,   ShutterEnums.Direction.STOP, [130, ShutterEnums.State.STOPPED]]}.items():
             validate(shutter_id, entry)
 
         controller._actual_positions[2] = 60  # Simulate position reporting
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00010000})  # Third motor started again
         #                             +- actual position
         #                             |     +- desired position
-        #                             |     |     +- direction                      +- state                               +- optional skip call check
-        #                             v     v     v                                 v                                      v
-        for shutter_id, entry in {0: [None, None, ShutterEnums.Direction.STOP, [70, ShutterEnums.State.STOPPED], False],
-                                  1: [None, None, ShutterEnums.Direction.STOP, [120, ShutterEnums.State.UP],     False],
-                                  2: [60,   99,   ShutterEnums.Direction.DOWN, [130, ShutterEnums.State.GOING_DOWN]]}.iteritems():
+        #                             |     |     +- direction                      +- state                      +- optional skip call check
+        #                             v     v     v                                 v                             v
+        for shutter_id, entry in {0: [None, None, ShutterEnums.Direction.STOP,  [70, ShutterEnums.State.STOPPED], False],
+                                  1: [None, None, ShutterEnums.Direction.STOP, [120, ShutterEnums.State.UP],      False],
+                                  2: [60,  99,    ShutterEnums.Direction.DOWN, [130, ShutterEnums.State.GOING_DOWN]]}.items():
             validate(shutter_id, entry)
 
         controller._actual_positions[2] = 99  # Simulate position reporting
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00000000})  # Third motor stopped again
         #                             +- actual position
         #                             |     +- desired position
-        #                             |     |     +- direction                      +- state                               +- optional skip call check
-        #                             v     v     v                                 v                                      v
-        for shutter_id, entry in {0: [None, None, ShutterEnums.Direction.STOP, [70, ShutterEnums.State.STOPPED], False],
-                                  1: [None, None, ShutterEnums.Direction.STOP, [120, ShutterEnums.State.UP],     False],
-                                  2: [99,   99,   ShutterEnums.Direction.STOP, [130, ShutterEnums.State.DOWN]]}.iteritems():
+        #                             |     |     +- direction                       +- state                     +- optional skip call check
+        #                             v     v     v                                  v                            v
+        for shutter_id, entry in {0: [None, None, ShutterEnums.Direction.STOP,  [70, ShutterEnums.State.STOPPED], False],
+                                  1: [None, None, ShutterEnums.Direction.STOP, [120, ShutterEnums.State.UP],      False],
+                                  2: [99,   99,   ShutterEnums.Direction.STOP, [130, ShutterEnums.State.DOWN]]}.items():
             validate(shutter_id, entry)
 
         states = controller.get_states()

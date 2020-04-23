@@ -15,12 +15,13 @@
 """"
 The hardware_utils module contains various classes helping with Hardware and System abstraction
 """
+from __future__ import absolute_import
 import os
 import sys
 import subprocess
 import logging
 import constants
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 
 logger = logging.getLogger('openmotics')
 
@@ -67,7 +68,7 @@ class Hardware(object):
         for reg, i in registers.items():
             pos = i * 2
             ecsd_info[reg] = int(ecsd[pos:pos + 2], 16)
-        return ecsd_info.iteritems()
+        return ecsd_info
 
     @staticmethod
     def get_board_type():

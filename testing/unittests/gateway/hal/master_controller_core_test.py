@@ -1,6 +1,7 @@
+from __future__ import absolute_import
 import time
 import unittest
-from Queue import Queue
+from six.moves.queue import Queue
 
 import gateway.hal.master_controller_core
 import mock
@@ -14,6 +15,7 @@ from master_core.memory_file import MemoryTypes
 from master_core.core_communicator import BackgroundConsumer
 from master_core.memory_models import InputConfiguration
 from master_core.ucan_communicator import UCANCommunicator
+from six.moves import map
 
 
 class MasterCoreControllerTest(unittest.TestCase):
@@ -29,21 +31,21 @@ class MasterCoreControllerTest(unittest.TestCase):
                                return_value=get_input_dummy(1)):
             controller = get_core_controller_dummy()
             data = controller.get_input_module_type(1)
-            self.assertEquals('I', data)
+            self.assertEqual('I', data)
 
     def test_load_input(self):
         controller = get_core_controller_dummy()
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                return_value=get_input_dummy(1)):
             data = controller.load_input(1)
-            self.assertEquals(data['id'], 1)
+            self.assertEqual(data['id'], 1)
 
     def test_load_input_with_fields(self):
         controller = get_core_controller_dummy()
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                return_value=get_input_dummy(1)):
             data = controller.load_input(1, fields=['module_type'])
-            self.assertEquals(data['id'], 1)
+            self.assertEqual(data['id'], 1)
             self.assertIn('module_type', data)
             self.assertNotIn('name', data)
 
@@ -54,16 +56,16 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.assertRaises(TypeError, controller.load_input, 1)
 
     def test_load_inputs(self):
-        input_modules = map(get_input_dummy, xrange(1, 17))
+        input_modules = list(map(get_input_dummy, range(1, 17)))
         controller = get_core_controller_dummy({'output': 0, 'input': 2})
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                side_effect=input_modules):
             inputs = controller.load_inputs()
-            self.assertEqual([x['id'] for x in inputs], range(1, 17))
+            self.assertEqual([x['id'] for x in inputs], list(range(1, 17)))
 
     def test_load_inputs_skips_invalid_type(self):
-        input_modules = map(get_input_dummy, xrange(1, 9))
-        input_modules += map(lambda i: get_input_dummy(i, module_type='O'), xrange(9, 17))
+        input_modules = list(map(get_input_dummy, range(1, 9)))
+        input_modules += [get_input_dummy(i, module_type='O') for i in range(9, 17)]
         controller = get_core_controller_dummy({'output': 0, 'input': 2})
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                side_effect=input_modules):
@@ -198,7 +200,7 @@ class MasterInputState(unittest.TestCase):
             self.assertEqual([1], state.get_recent())
 
         with mock.patch.object(time, 'time', return_value=30):
-            for i in xrange(2, 10):
+            for i in range(2, 10):
                 core_event = MasterCoreEvent({'type': 1, 'action': 1, 'device_nr': i, 'data': {}})
                 state.handle_event(core_event)
             devices = state.get_recent()

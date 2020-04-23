@@ -15,6 +15,7 @@
 """
 Module for communicating with the Master
 """
+from __future__ import absolute_import
 import logging
 import time
 from threading import Thread
@@ -191,7 +192,7 @@ class MasterCoreController(MasterController):
     def _enumerate_io_modules(self, module_type, amount_per_module=8):
         cmd = CoreAPI.general_configuration_number_of_modules()
         module_count = self._master_communicator.do_command(cmd, {})[module_type]
-        return xrange(module_count * amount_per_module)
+        return range(module_count * amount_per_module)
 
     #######################
     # Internal management #
@@ -353,7 +354,7 @@ class MasterCoreController(MasterController):
         return self._output_states.get(output_id)
 
     def get_output_statuses(self):
-        return self._output_states.values()
+        return list(self._output_states.values())
 
     def _refresh_output_states(self):
         for i in self._enumerate_io_modules('output'):
@@ -475,7 +476,7 @@ class MasterCoreController(MasterController):
 
     def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
         shutter_groups = []
-        for i in xrange(16):
+        for i in range(16):
             shutter_groups.append(ShutterGroupDTO(id=i))
         return shutter_groups
 
@@ -516,7 +517,7 @@ class MasterCoreController(MasterController):
     def get_sensors_temperature(self):
         amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
         temperatures = []
-        for sensor_id in xrange(amount_sensor_modules * 8):
+        for sensor_id in range(amount_sensor_modules * 8):
             temperatures.append(self.get_sensor_temperature(sensor_id))
         return temperatures
 
@@ -526,7 +527,7 @@ class MasterCoreController(MasterController):
     def get_sensors_humidity(self):
         amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
         humidities = []
-        for sensor_id in xrange(amount_sensor_modules * 8):
+        for sensor_id in range(amount_sensor_modules * 8):
             humidities.append(self.get_sensor_humidity(sensor_id))
         return humidities
 
@@ -540,7 +541,7 @@ class MasterCoreController(MasterController):
     def get_sensors_brightness(self):
         amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
         brightnesses = []
-        for sensor_id in xrange(amount_sensor_modules * 8):
+        for sensor_id in range(amount_sensor_modules * 8):
             brightnesses.append(self.get_sensor_brightness(sensor_id))
         return brightnesses
 
@@ -558,7 +559,7 @@ class MasterCoreController(MasterController):
     def load_sensors(self, fields=None):
         amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
         sensors = []
-        for i in xrange(amount_sensor_modules * 8):
+        for i in range(amount_sensor_modules * 8):
             sensors.append(self.load_sensor(i, fields))
         return sensors
 
@@ -571,11 +572,11 @@ class MasterCoreController(MasterController):
 
     def _refresh_sensor_states(self):
         amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
-        for module_nr in xrange(amount_sensor_modules):
+        for module_nr in range(amount_sensor_modules):
             temperature_values = self._master_communicator.do_command(CoreAPI.sensor_temperature_values(), {'module_nr': module_nr})['values']
             brightness_values = self._master_communicator.do_command(CoreAPI.sensor_brightness_values(), {'module_nr': module_nr})['values']
             humidity_values = self._master_communicator.do_command(CoreAPI.sensor_humidity_values(), {'module_nr': module_nr})['values']
-            for i in xrange(8):
+            for i in range(8):
                 sensor_id = module_nr * 8 + i
                 self._sensor_states[sensor_id] = {'TEMPERATURE': temperature_values[i],
                                                   'BRIGHTNESS': brightness_values[i],
@@ -686,7 +687,7 @@ class MasterInputState(object):
 
     def get_recent(self):
         # type: () -> List[int]
-        sorted_inputs = sorted(self._values.values(), key=lambda x: x.changed_at)
+        sorted_inputs = sorted(list(self._values.values()), key=lambda x: x.changed_at)
         recent_events = [x.input_id for x in sorted_inputs
                          if x.changed_at > time.time() - 10]
         return recent_events[-5:]
@@ -707,7 +708,7 @@ class MasterInputState(object):
         # type: (List[int]) -> List[MasterEvent]
         events = []
         for i, byte in enumerate(info):
-            for j in xrange(0, 8):
+            for j in range(0, 8):
                 current_status = byte >> j & 0x1
                 input_id = (i * 8) + j
                 if input_id not in self._values:

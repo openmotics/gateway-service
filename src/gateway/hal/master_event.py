@@ -15,6 +15,7 @@
 """
 Module for master events
 """
+from __future__ import absolute_import
 import ujson as json
 
 if False:  # MYPY

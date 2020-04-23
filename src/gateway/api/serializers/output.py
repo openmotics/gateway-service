@@ -16,6 +16,7 @@
 """
 Output (de)serializer
 """
+from __future__ import absolute_import
 from toolbox import Toolbox
 from gateway.api.serializers.base import SerializerToolbox
 from gateway.dto import OutputDTO, FeedbackLedDTO
@@ -61,7 +62,7 @@ class OutputSerializer(object):
                      'floor': ('floor', OutputSerializer.BYTE_MAX),
                      'room': ('room', OutputSerializer.BYTE_MAX)}
         )
-        for i in xrange(4):
+        for i in range(4):
             base_field = 'can_led_{0}'.format(i + 1)
             id_field = '{0}_id'.format(base_field)
             function_field = '{0}_function'.format(base_field)

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import datetime
 import inspect
 import json
@@ -315,7 +316,7 @@ class Preset(BaseModel):
         name = str(self.name)
         v0_setpoint = mapping.get(name)
         if v0_setpoint is None:
-            raise ValueError('Preset name {} not compatible with v0_setpoint. Should be one of {}.'.format(name, mapping.keys()))
+            raise ValueError('Preset name {} not compatible with v0_setpoint. Should be one of {}.'.format(name, list(mapping.keys())))
         return v0_setpoint
 
     @classmethod
@@ -349,7 +350,7 @@ class DaySchedule(BaseModel):
             }
         """
         # convert relative timestamps to int and temperature values to float
-        for key, value in data.iteritems():
+        for key, value in data.items():
             relative_timestamp = int(key)
             if relative_timestamp < 86400:
                 data[relative_timestamp] = float(value)

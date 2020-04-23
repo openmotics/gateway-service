@@ -16,9 +16,9 @@
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import logging
 from datetime import datetime
-from threading import Thread
 
 from gateway.daemon_thread import DaemonThread
 import power.power_api as power_api

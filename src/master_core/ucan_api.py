@@ -16,6 +16,7 @@
 Contains the definition of the Core API
 """
 
+from __future__ import absolute_import
 from master_core.ucan_command import UCANCommandSpec, UCANPalletCommandSpec, SID, PalletType, Instruction
 from master_core.fields import AddressField, ByteField, WordField, VersionField, StringField, UInt32Field, ByteArrayField
 
@@ -38,7 +39,7 @@ class UCANAPI(object):
         return UCANCommandSpec(sid=SID.NORMAL_COMMAND,
                                instruction=Instruction(instruction=[0, 199]),
                                identifier=AddressField('ucan_address', 3),
-                               response_instructions=[Instruction(instruction=[i, 199], checksum_byte=7) for i in xrange(1, 14)],
+                               response_instructions=[Instruction(instruction=[i, 199], checksum_byte=7) for i in range(1, 14)],
                                response_fields=[ByteField('input_link_0'), ByteField('input_link_1'), ByteField('input_link_2'),
                                                 ByteField('input_link_3'), ByteField('input_link_4'), ByteField('input_link_5'),
                                                 ByteField('sensor_link_0'), ByteField('sensor_link_1'), ByteField('sensor_type'),

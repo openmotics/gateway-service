@@ -16,6 +16,7 @@
 """
 Output Mapper
 """
+from __future__ import absolute_import
 from toolbox import Toolbox
 from gateway.dto.output import OutputDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
@@ -54,15 +55,15 @@ class OutputMapper(object):
         data = {'id': output_dto.id}
         for dto_field, data_field in {'module_type': 'module_type',
                                       'name': 'name',
-                                      'output_type': 'type'}.iteritems():
+                                      'output_type': 'type'}.items():
             if dto_field in fields:
                 data[data_field] = getattr(output_dto, dto_field)
         for dto_field, (data_field, default) in {'timer': ('timer', OutputMapper.WORD_MAX),
                                                  'floor': ('floor', OutputMapper.BYTE_MAX),
-                                                 'room': ('room', OutputMapper.BYTE_MAX)}.iteritems():
+                                                 'room': ('room', OutputMapper.BYTE_MAX)}.items():
             if dto_field in fields:
                 data[data_field] = Toolbox.denonify(getattr(output_dto, dto_field), default)
-        for i in xrange(4):
+        for i in range(4):
             base_field = 'can_led_{0}'.format(i + 1)
             if base_field in fields:
                 id_field = '{0}_id'.format(base_field)

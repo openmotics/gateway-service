@@ -18,6 +18,7 @@ Gives the watchdog a push every 10 seconds.
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import time
 
 

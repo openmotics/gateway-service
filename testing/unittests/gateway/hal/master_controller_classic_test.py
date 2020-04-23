@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
+from __future__ import absolute_import
 import unittest
 
 import gateway.hal.master_controller_classic
@@ -41,7 +42,7 @@ class MasterClassicControllerTest(unittest.TestCase):
             InputConfiguration.deserialize(input_data)
         ])
         data = controller.get_input_module_type(1)
-        self.assertEquals(data, 'I')
+        self.assertEqual(data, 'I')
 
     def test_load_input(self):
         input_data = {'id': 1, 'module_type': 'I'}
@@ -49,7 +50,7 @@ class MasterClassicControllerTest(unittest.TestCase):
             InputConfiguration.deserialize(input_data)
         ])
         data = controller.load_input(1)
-        self.assertEquals(data['id'], 1)
+        self.assertEqual(data['id'], 1)
 
     def test_load_input_with_invalid_type(self):
         input_data = {'id': 1, 'module_type': 'O'}
@@ -66,7 +67,7 @@ class MasterClassicControllerTest(unittest.TestCase):
             InputConfiguration.deserialize(input_data2)
         ])
         inputs = controller.load_inputs()
-        self.assertEquals([x['id'] for x in inputs], [1, 2])
+        self.assertEqual([x['id'] for x in inputs], [1, 2])
 
     def test_load_inputs_skips_invalid_type(self):
         input_data1 = {'id': 1, 'module_type': 'I'}
@@ -76,7 +77,7 @@ class MasterClassicControllerTest(unittest.TestCase):
             InputConfiguration.deserialize(input_data2)
         ])
         inputs = controller.load_inputs()
-        self.assertEquals([x['id'] for x in inputs], [1])
+        self.assertEqual([x['id'] for x in inputs], [1])
 
     def test_input_event_consumer(self):
         with mock.patch.object(gateway.hal.master_controller_classic, 'BackgroundConsumer',

@@ -17,13 +17,14 @@ Tool to control the master from the command line.
 
 @author: fryckbos
 """
+from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 
 import argparse
 import sys
 import time
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from ioc import Injectable
 from serial import Serial
 import constants
@@ -56,10 +57,10 @@ def main():
     port = config.get('OpenMotics', 'controller_serial')
 
     if args.port:
-        print port
+        print(port)
 
     elif args.hardreset:
-        print 'Performing hard reset...'
+        print('Performing hard reset...')
 
         gpio_dir = open('/sys/class/gpio/gpio44/direction', 'w')
         gpio_dir.write('out')
@@ -74,7 +75,7 @@ def main():
         power(False)
         time.sleep(5)
         power(True)
-        print 'Done performing hard reset'
+        print('Done performing hard reset')
 
     elif args.sync or args.version or args.reset or args.wipe:
         master_serial = Serial(port, 115200)
@@ -85,34 +86,34 @@ def main():
         master_communicator.start()
 
         if args.sync:
-            print 'Sync...'
+            print('Sync...')
             try:
                 master_communicator.do_command(master_api.status())
-                print 'Done sync'
+                print('Done sync')
                 sys.exit(0)
             except CommunicationTimedOutException:
-                print 'Failed sync'
+                print('Failed sync')
                 sys.exit(1)
 
         elif args.version:
             status = master_communicator.do_command(master_api.status())
-            print '{0}.{1}.{2} H{3}'.format(status['f1'], status['f2'], status['f3'], status['h'])
+            print('{0}.{1}.{2} H{3}'.format(status['f1'], status['f2'], status['f3'], status['h']))
 
         elif args.reset:
-            print 'Resetting...'
+            print('Resetting...')
             try:
                 master_communicator.do_command(master_api.reset())
-                print 'Done resetting'
+                print('Done resetting')
                 sys.exit(0)
             except CommunicationTimedOutException:
-                print 'Failed resetting'
+                print('Failed resetting')
                 sys.exit(1)
 
         elif args.wipe:
             (num_banks, bank_size, write_size) = (256, 256, 10)
-            print 'Wiping the master...'
+            print('Wiping the master...')
             for bank in range(0, num_banks):
-                print '-  Wiping bank {0}'.format(bank)
+                print('-  Wiping bank {0}'.format(bank))
                 for addr in range(0, bank_size, write_size):
                     master_communicator.do_command(
                         master_api.write_eeprom(),
@@ -120,7 +121,7 @@ def main():
                     )
 
             master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0})
-            print 'Done wiping the master'
+            print('Done wiping the master')
 
     else:
         parser.print_help()

@@ -23,8 +23,6 @@ import logging
 from threading import Lock
 from ioc import Injectable, Inject, INJECTED, Singleton
 from .master_api import eeprom_list, write_eeprom, activate_eeprom
-import six
-from six.moves import range
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Iterable, Type, TypeVar
@@ -305,11 +303,11 @@ class EepromModel(object):
         self._fields = {'eeprom': [], 'eext': []}
         self._loaded_fields = []
         address_cache = self.__class__.get_address_cache(self.id)
-        for field_name, field_type in six.iteritems(self.__class__.get_field_dict(include_eeprom=True)):
+        for field_name, field_type in self.__class__.get_field_dict(include_eeprom=True).items():
             setattr(self, '_{0}'.format(field_name), EepromDataContainer(field_type, address_cache[field_name]))
             self._add_property(field_name)
             self._fields['eeprom'].append(field_name)
-        for field_name, field_type in six.iteritems(self.__class__.get_field_dict(include_eext=True)):
+        for field_name, field_type in self.__class__.get_field_dict(include_eext=True).items():
             setattr(self, '_{0}'.format(field_name), EextDataContainer(field_type))
             self._add_property(field_name)
             self._fields['eext'].append(field_name)
@@ -387,7 +385,7 @@ class EepromModel(object):
 
     def _deserialize(self, data_dict):
         self._loaded_fields = []
-        for field_name, value in six.iteritems(data_dict):
+        for field_name, value in data_dict.items():
             if field_name == 'id':
                 continue
             self._loaded_fields.append(field_name)
@@ -724,7 +722,7 @@ def append_tail(byte_str, length, delimiter='\xff'):
     of the string.
     """
     if len(byte_str) < length:
-        return str(byte_str) + delimiter * ((length - len(byte_str)) / len(delimiter))
+        return str(byte_str) + delimiter * ((length - len(byte_str)) // len(delimiter))
     return str(byte_str)
 
 
@@ -787,7 +785,7 @@ class EepromWord(EepromDataType):
     def encode(self, field):
         if field is None:
             field = 65535
-        return ''.join([chr(int(field) % 256), chr(int(field) / 256)])
+        return ''.join([chr(int(field) % 256), chr(int(field) // 256)])
 
     def get_length(self):
         return 2
@@ -966,7 +964,7 @@ class EepromEnum(EepromDataType):
         return 'UNKNOWN'
 
     def encode(self, field):
-        for key, value in six.iteritems(self._enum_values):
+        for key, value in self._enum_values.items():
             if field == value:
                 return str(chr(key))
         return str(chr(255))

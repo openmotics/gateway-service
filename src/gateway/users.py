@@ -17,6 +17,7 @@ The users module contains the UserController class, which provides methods for c
 and authenticating users.
 """
 
+from __future__ import absolute_import
 import sqlite3
 import hashlib
 import uuid
@@ -81,12 +82,12 @@ class UserController(object):
         """
         with self._lock:
             self._execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, {0});".format(
-                ", ".join(['{0} {1}'.format(key, value) for key, value in self._schema.iteritems()])
+                ", ".join(['{0} {1}'.format(key, value) for key, value in self._schema.items()])
             ), lock=False)
             fields = []
             for row in self._execute("PRAGMA table_info('users');", lock=False):
                 fields.append(row[1])
-            for field, field_type in self._schema.iteritems():
+            for field, field_type in self._schema.items():
                 if field not in fields:
                     self._execute("ALTER TABLE users ADD COLUMN {0} {1};".format(field, field_type), lock=False)
 

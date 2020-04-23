@@ -16,6 +16,7 @@
 Tests for uCAN communicator module.
 """
 
+from __future__ import absolute_import
 import unittest
 import xmlrunner
 import logging
@@ -82,7 +83,7 @@ class UCANCommunicatorTest(unittest.TestCase):
             # Build fake reply from Core
             consumer = ucan_communicator._consumers[cc_address][0]
             fixed_payload = [0, 0, 0, 0, 0, 0, pallet_type]
-            variable_payload = range(7, 7 + length)  # [7] or [7, 8, 9]
+            variable_payload = list(range(7, 7 + length))  # [7] or [7, 8, 9]
             crc_payload = UInt32Field.encode_bytes(UCANPalletCommandSpec.calculate_crc(fixed_payload + variable_payload))
             ucan_communicator._process_transport_message({'cc_address': cc_address,
                                                           'nr_can_bytes': 8,

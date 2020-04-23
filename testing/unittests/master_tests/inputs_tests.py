@@ -23,7 +23,6 @@ import unittest
 import mock
 import xmlrunner
 from master.inputs import InputStatus
-from six.moves import range
 
 
 class InputStatusTest(unittest.TestCase):
@@ -86,7 +85,7 @@ class InputStatusTest(unittest.TestCase):
         inps.set_input({'input': 6, 'status': 0})
         inps.set_input({'input': 6, 'status': 0})
         inps.set_input({'input': 6, 'status': 1})
-        self.assertEquals(len(changed), 4)
+        self.assertEqual(len(changed), 4)
 
     def test_set_input_without_status(self):
         changed = []
@@ -97,26 +96,26 @@ class InputStatusTest(unittest.TestCase):
         inps = InputStatus(on_input_change=on_input_change)
         inps.set_input({'input': 6, 'status': 1})
         current_status = inps.get_input(6)
-        self.assertEquals(current_status['status'], True)
+        self.assertEqual(current_status['status'], True)
         inps.set_input({'input': 6})
         current_status = inps.get_input(6)
-        self.assertEquals(current_status['status'], None)
-        self.assertEquals(len(changed), 2)
+        self.assertEqual(current_status['status'], None)
+        self.assertEqual(len(changed), 2)
 
     def test_timeout(self):
         """ Test timeout of InputStatus data. """
         inps = InputStatus(5, 1)
         inps.set_input({'input': 1, 'status': 1})
-        self.assertEquals([1], inps.get_recent())
+        self.assertEqual([1], inps.get_recent())
 
         time.sleep(0.8)
 
         inps.set_input({'input': 2, 'status': 1})
-        self.assertEquals([1, 2], inps.get_recent())
+        self.assertEqual([1, 2], inps.get_recent())
 
         time.sleep(0.3)
 
-        self.assertEquals([2], inps.get_recent())
+        self.assertEqual([2], inps.get_recent())
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import absolute_import
 import logging
 import os
 import time
@@ -190,14 +191,14 @@ class Toolbox(object):
         # type: () -> List[int]
         if self._dut_inputs is None:
             input_modules = self.list_modules('I')
-            self._dut_inputs = range(0, len(input_modules) * 8 - 1)
+            self._dut_inputs = list(range(0, len(input_modules) * 8 - 1))
         return self._dut_inputs
 
     @property
     def dut_outputs(self):
         if self._dut_outputs is None:
             output_modules = self.list_modules('O')
-            self._dut_outputs = range(0, len(output_modules) * 8 - 1)
+            self._dut_outputs = list(range(0, len(output_modules) * 8 - 1))
         return self._dut_outputs
 
     def initialize(self):
@@ -264,7 +265,7 @@ class Toolbox(object):
     def start_module_discovery(self):
         # type: () -> None
         self.dut.get('/module_discover_start')
-        for _ in xrange(10):
+        for _ in range(10):
             data = self.dut.get('/module_discover_status')
             if data['running']:
                 return

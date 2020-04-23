@@ -15,6 +15,7 @@
 """
 Cloud API Client
 """
+from __future__ import absolute_import
 import logging
 import requests
 import ujson as json

@@ -18,6 +18,7 @@ Tests for the pulses module.
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import unittest
 import xmlrunner
 import os
@@ -53,7 +54,7 @@ class PulseCounterControllerTest(unittest.TestCase):
     def _get_controller(master_communicator):
         """ Get a PulseCounterController using FILE. """
         banks = []
-        for i in xrange(255):
+        for i in range(255):
             banks.append("\xff" * 256)
 
         eeprom_controller = get_eeprom_controller_dummy(banks)
@@ -68,30 +69,30 @@ class PulseCounterControllerTest(unittest.TestCase):
 
         # Only master pulse counters
         controller.set_pulse_counter_amount(24)
-        self.assertEquals(24, controller.get_pulse_counter_amount())
+        self.assertEqual(24, controller.get_pulse_counter_amount())
 
         # Add virtual pulse counters
         controller.set_pulse_counter_amount(28)
-        self.assertEquals(28, controller.get_pulse_counter_amount())
+        self.assertEqual(28, controller.get_pulse_counter_amount())
 
         # Add virtual pulse counter
         controller.set_pulse_counter_amount(29)
-        self.assertEquals(29, controller.get_pulse_counter_amount())
+        self.assertEqual(29, controller.get_pulse_counter_amount())
 
         # Remove virtual pulse counter
         controller.set_pulse_counter_amount(28)
-        self.assertEquals(28, controller.get_pulse_counter_amount())
+        self.assertEqual(28, controller.get_pulse_counter_amount())
 
         # Set virtual pulse counters to 0
         controller.set_pulse_counter_amount(24)
-        self.assertEquals(24, controller.get_pulse_counter_amount())
+        self.assertEqual(24, controller.get_pulse_counter_amount())
 
         # Set the number of pulse counters to low
         try:
             controller.set_pulse_counter_amount(23)
             self.fail('Exception should have been thrown')
         except ValueError as e:
-            self.assertEquals('Amount should be 24 or more', str(e))
+            self.assertEqual('Amount should be 24 or more', str(e))
 
     def test_pulse_counter_status(self):
         action = master_api.pulse_list()
@@ -115,21 +116,21 @@ class PulseCounterControllerTest(unittest.TestCase):
         controller.set_pulse_counter_status(25, 456)
 
         status = controller.get_pulse_counter_status()
-        self.assertEquals(range(0, 24) + [123, 456], status)
+        self.assertEqual(list(range(0, 24)) + [123, 456], status)
 
         # Set pulse counter for unexisting pulse counter
         try:
             controller.set_pulse_counter_status(26, 789)
             self.fail('Exception should have been thrown')
         except ValueError as e:
-            self.assertEquals('Could not find pulse counter 26', str(e))
+            self.assertEqual('Could not find pulse counter 26', str(e))
 
         # Set pulse counter for physical pulse counter
         try:
             controller.set_pulse_counter_status(23, 789)
             self.fail('Exception should have been thrown')
         except ValueError as e:
-            self.assertEquals('Cannot set pulse counter status for 23 (should be > 23)', str(e))
+            self.assertEqual('Cannot set pulse counter status for 23 (should be > 23)', str(e))
 
     def test_config(self):
         controller = self._get_controller(None)
@@ -142,59 +143,59 @@ class PulseCounterControllerTest(unittest.TestCase):
         ])
         configs = controller.get_configurations()
 
-        self.assertEquals([{'input': 255, 'room': 255, 'id': 0, 'name': '', 'persistent': False},
-                           {'input': 10, 'room': 1, 'id': 1, 'name': 'Water', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 2, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 3, 'name': '', 'persistent': False},
-                           {'input': 11, 'room': 2, 'id': 4, 'name': 'Gas', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 5, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 6, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 7, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 8, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 9, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 10, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 11, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 12, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 13, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 14, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 15, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 16, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 17, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 18, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 19, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 20, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 21, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 22, 'name': '', 'persistent': False},
-                           {'input': 255, 'room': 255, 'id': 23, 'name': '', 'persistent': False},
-                           {'input': -1, 'room': 255, 'id': 24, 'name': '', 'persistent': False},
-                           {'input': -1, 'room': 3, 'id': 25, 'name': 'Electricity', 'persistent': True}], configs)
+        self.assertEqual([{'input': 255, 'room': 255, 'id': 0, 'name': '', 'persistent': False},
+                          {'input': 10, 'room': 1, 'id': 1, 'name': 'Water', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 2, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 3, 'name': '', 'persistent': False},
+                          {'input': 11, 'room': 2, 'id': 4, 'name': 'Gas', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 5, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 6, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 7, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 8, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 9, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 10, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 11, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 12, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 13, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 14, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 15, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 16, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 17, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 18, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 19, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 20, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 21, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 22, 'name': '', 'persistent': False},
+                          {'input': 255, 'room': 255, 'id': 23, 'name': '', 'persistent': False},
+                          {'input': -1, 'room': 255, 'id': 24, 'name': '', 'persistent': False},
+                          {'input': -1, 'room': 3, 'id': 25, 'name': 'Electricity', 'persistent': True}], configs)
 
         # Try to set input on virtual pulse counter
         try:
             controller.set_configuration({'id': 25, 'name': 'Electricity', 'input': 22, 'room': 3})
             self.fail('Exception should have been thrown')
         except ValueError as e:
-            self.assertEquals('Virtual pulse counter 25 can only have input -1', str(e))
+            self.assertEqual('Virtual pulse counter 25 can only have input -1', str(e))
 
         # Get configuration for existing master pulse counter
-        self.assertEquals({'input': 10, 'room': 1, 'id': 1, 'name': 'Water', 'persistent': False}, controller.get_configuration(1))
+        self.assertEqual({'input': 10, 'room': 1, 'id': 1, 'name': 'Water', 'persistent': False}, controller.get_configuration(1))
 
         # Get configuration for existing virtual pulse counter
-        self.assertEquals({'input': -1, 'room': 3, 'id': 25, 'name': 'Electricity', 'persistent': True}, controller.get_configuration(25))
+        self.assertEqual({'input': -1, 'room': 3, 'id': 25, 'name': 'Electricity', 'persistent': True}, controller.get_configuration(25))
 
         # Get configuration for unexisting pulse counter
         try:
             controller.set_configuration({'id': 26, 'name': 'Electricity', 'input': -1, 'room': 3})
             self.fail('Exception should have been thrown')
         except ValueError as e:
-            self.assertEquals('Could not find pulse counter 26', str(e))
+            self.assertEqual('Could not find pulse counter 26', str(e))
 
         # Set configuration for unexisting pulse counter
         try:
             controller.get_configuration(26)
             self.fail('Exception should have been thrown')
         except ValueError as e:
-            self.assertEquals('Could not find pulse counter 26', str(e))
+            self.assertEqual('Could not find pulse counter 26', str(e))
 
 
 if __name__ == '__main__':

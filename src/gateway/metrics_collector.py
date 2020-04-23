@@ -16,6 +16,7 @@
 This module collects OpenMotics metrics and makes them available to the MetricsController
 """
 
+from __future__ import absolute_import
 import logging
 import time
 from collections import deque
@@ -30,6 +31,7 @@ from models import Database
 from platform_utils import Hardware
 from power import power_api
 from serial_utils import CommunicationTimedOutException
+import six
 
 logger = logging.getLogger("openmotics")
 
@@ -176,7 +178,7 @@ class MetricsCollector(object):
 
     def _sleep_manager(self):
         while True:
-            for sleep_data in self._sleepers.itervalues():
+            for sleep_data in self._sleepers.values():
                 if not sleep_data['event'].is_set() and sleep_data['end'] < time.time():
                     sleep_data['event'].set()
             time.sleep(0.1)
@@ -324,7 +326,7 @@ class MetricsCollector(object):
                     logger.error('Error loading disk metrics: {0}'.format(ex))
 
                 try:
-                    for key, val in Hardware.read_mmc_ext_csd():
+                    for key, val in Hardware.read_mmc_ext_csd().items():
                         values['disk_{}'.format(key)] = val
                 except Exception as ex:
                     logger.error('Error loading disk eMMC metrics: {0}'.format(ex))
@@ -343,7 +345,7 @@ class MetricsCollector(object):
 
                 # get database metrics
                 try:
-                    for model, counter in Database.get_metrics().iteritems():
+                    for model, counter in six.iteritems(Database.get_metrics()):
                         try:
                             key = 'db_{0}'.format(model)
                             values[key] = int(counter)
@@ -421,7 +423,7 @@ class MetricsCollector(object):
                 logger.info('Error getting output status: InMaintenanceModeException')
             except Exception as ex:
                 logger.exception('Error getting output status: {0}'.format(ex))
-            self._process_outputs(self._environment['outputs'].keys(), metric_type)
+            self._process_outputs(list(self._environment['outputs'].keys()), metric_type)
             if self._stopped:
                 return
             self._pause(start, metric_type)
@@ -434,7 +436,7 @@ class MetricsCollector(object):
                 temperatures = self._gateway_api.get_sensors_temperature_status()
                 humidities = self._gateway_api.get_sensors_humidity_status()
                 brightnesses = self._gateway_api.get_sensors_brightness_status()
-                for sensor_id, sensor in self._environment['sensors'].iteritems():
+                for sensor_id, sensor in self._environment['sensors'].items():
                     name = sensor['name']
                     if name == '' or name == 'NOT_IN_USE':
                         continue
@@ -545,7 +547,7 @@ class MetricsCollector(object):
             now = time.time()
             counters_data = {}
             try:
-                for counter_id, counter in self._environment['pulse_counters'].iteritems():
+                for counter_id, counter in self._environment['pulse_counters'].items():
                     counters_data[counter_id] = {'name': counter['name'],
                                                  'input': counter['input']}
                 result = self._gateway_api.get_pulse_counter_status()
@@ -587,7 +589,7 @@ class MetricsCollector(object):
                 for power_module in result:
                     device_id = '{0}.{{0}}'.format(power_module['address'])
                     mapping[str(power_module['id'])] = device_id
-                    for i in xrange(power_api.NUM_PORTS[power_module['version']]):
+                    for i in range(power_api.NUM_PORTS[power_module['version']]):
                         power_data[device_id.format(i)] = {'name': power_module['input{0}'.format(i)]}
             except CommunicationTimedOutException:
                 logger.error('Error getting power modules: CommunicationTimedOutException')
@@ -597,7 +599,7 @@ class MetricsCollector(object):
                 logger.exception('Error getting power modules: {0}'.format(ex))
             try:
                 result = self._gateway_api.get_realtime_power()
-                for module_id, device_id in mapping.iteritems():
+                for module_id, device_id in mapping.items():
                     if module_id in result:
                         for index, entry in enumerate(result[module_id]):
                             voltage, frequency, current, power = entry
@@ -615,7 +617,7 @@ class MetricsCollector(object):
                 logger.exception('Error getting realtime power: {0}'.format(ex))
             try:
                 result = self._gateway_api.get_total_energy()
-                for module_id, device_id in mapping.iteritems():
+                for module_id, device_id in mapping.items():
                     if module_id in result:
                         for index, entry in enumerate(result[module_id]):
                             day, night = entry
@@ -662,7 +664,7 @@ class MetricsCollector(object):
                         continue
                     result = self._gateway_api.get_energy_time(power_module['id'])
                     abort = False
-                    for i in xrange(12):
+                    for i in range(12):
                         if abort is True:
                             break
                         name = power_module['input{0}'.format(i)]
@@ -670,7 +672,7 @@ class MetricsCollector(object):
                             continue
                         timestamp = now
                         length = min(len(result[str(i)]['current']), len(result[str(i)]['voltage']))
-                        for j in xrange(length):
+                        for j in range(length):
                             self._enqueue_metrics(metric_type=metric_type,
                                                   values={'current': result[str(i)]['current'][j],
                                                           'voltage': result[str(i)]['voltage'][j]},
@@ -681,7 +683,7 @@ class MetricsCollector(object):
                             timestamp += 0.250  # Stretch actual data by 1000 for visualtisation purposes
                     result = self._gateway_api.get_energy_frequency(power_module['id'])
                     abort = False
-                    for i in xrange(12):
+                    for i in range(12):
                         if abort is True:
                             break
                         name = power_module['input{0}'.format(i)]
@@ -689,7 +691,7 @@ class MetricsCollector(object):
                             continue
                         timestamp = now
                         length = min(len(result[str(i)]['current'][0]), len(result[str(i)]['voltage'][0]))
-                        for j in xrange(length):
+                        for j in range(length):
                             self._enqueue_metrics(metric_type=metric_type,
                                                   values={'current_harmonics': result[str(i)]['current'][0][j],
                                                           'current_phase': result[str(i)]['current'][1][j],
@@ -1060,7 +1062,7 @@ class MetricsCollector(object):
                           'type': 'counter',
                           'policies': [{'policy': 'persist',
                                         'key': 'id',
-                                        'matches': ['P{0}'.format(i) for i in xrange(0, len(pulse_persistence))
+                                        'matches': ['P{0}'.format(i) for i in range(0, len(pulse_persistence))
                                                     if not pulse_persistence[i]]},
                                        'buffer'],
                           'unit': ''}]},

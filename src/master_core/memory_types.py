@@ -15,6 +15,7 @@
 """
 Contains memory (field) types
 """
+from __future__ import absolute_import
 import inspect
 import logging
 import types
@@ -53,17 +54,17 @@ class MemoryModelDefinition(object):
         self._relations_cache = {}
         self._compositions = []
         address_cache = self.__class__._get_address_cache(self.id)
-        for field_name, field_type in self.__class__._get_field_dict().iteritems():
+        for field_name, field_type in self.__class__._get_field_dict().items():
             setattr(self, '_{0}'.format(field_name), MemoryFieldContainer(field_type,
                                                                           address_cache[field_name],
                                                                           self._memory_files))
             self._add_property(field_name)
             self._fields.append(field_name)
-        for field_name, relation in self.__class__._get_relational_fields().iteritems():
+        for field_name, relation in self.__class__._get_relational_fields().items():
             setattr(self, '_{0}'.format(field_name), relation)
             self._add_relation(field_name)
             self._relations.append(field_name)
-        for field_name, composition in self.__class__._get_composite_fields().iteritems():
+        for field_name, composition in self.__class__._get_composite_fields().items():
             setattr(self, '_{0}'.format(field_name), CompositionContainer(composition,
                                                                           composition._field._length * 8,
                                                                           MemoryFieldContainer(composition._field,
@@ -125,14 +126,14 @@ class MemoryModelDefinition(object):
                     field_name
                 ))
             field_container.save()
-        for memory_file in self._memory_files.itervalues():
+        for memory_file in self._memory_files.items():
             memory_file.activate()
 
     @classmethod
     def deserialize(cls, data):
         instance_id = data['id']
         instance = cls(instance_id)
-        for field_name, value in data.iteritems():
+        for field_name, value in data.items():
             if field_name == 'id':
                 pass
             elif field_name in instance._fields:
@@ -263,7 +264,7 @@ class MemoryField(object):
 
         self._data = None
 
-        if isinstance(address_spec, types.TupleType):
+        if isinstance(address_spec, tuple):
             self._address_tuple = address_spec
         elif isinstance(address_spec, types.FunctionType):
             args = inspect.getargspec(address_spec).args
@@ -405,7 +406,7 @@ class MemoryAddressField(MemoryField):
         super(MemoryAddressField, self).__init__(memory_type, address_spec, length)
 
     def encode(self, value):
-        example = '.'.join(['ID{0}'.format(i) for i in xrange(self._length - 1, -1, -1)])
+        example = '.'.join(['ID{0}'.format(i) for i in range(self._length - 1, -1, -1)])
         error_message = 'Value should be a string in the format of {0}, where 0 <= IDx <= 255'.format(example)
         parts = str(value).split('.')
         if len(parts) != self._length:
@@ -581,7 +582,7 @@ class CompositionContainer(object):
         self._field_container.encode(field.compose(current_composition, value, self._composition_width))
 
     def _load(self, data):
-        for field_name, value in data.iteritems():
+        for field_name, value in data.items():
             if field_name == 'id':
                 pass
             elif field_name in self._fields:

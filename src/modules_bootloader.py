@@ -18,6 +18,7 @@ For more information, see:
 * https://wiki.openmotics.com/index.php/API_Reference_Guide
 * https://wiki.openmotics.com/index.php/Bootloader_Error_Codes
 """
+from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 
@@ -30,7 +31,7 @@ import intelhex
 import constants
 import master.master_api as master_api
 from ioc import Injectable, Inject, INJECTED
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from serial import Serial
 from master.master_communicator import MasterCommunicator, CommunicationTimedOutException
 from master.eeprom_controller import EepromFile, EepromAddress
@@ -367,17 +368,17 @@ def main():
             try:
                 log_file = open(args.log, 'a')
             except IOError as ex:
-                print 'Could not open the requested log file: {0}'.format(ex)
+                print('Could not open the requested log file: {0}'.format(ex))
                 return False
             logger = lambda msg: log_file.write('{0}\n'.format(msg))
         else:
             logger = lambda msg: sys.stdout.write('{0}\n'.format(msg))
         try:
             if os.path.getsize(args.file) <= 0:
-                print 'Could not read hex or file is empty: {0}'.format(args.file)
+                print('Could not read hex or file is empty: {0}'.format(args.file))
                 return False
         except OSError as ex:
-            print 'Could not open hex: {0}'.format(ex)
+            print('Could not open hex: {0}'.format(ex))
             return False
 
         # The type argument is lowercase for backwards compatibility reasons. However, all subsequent calls need the correct type

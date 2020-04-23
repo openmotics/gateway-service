@@ -18,6 +18,7 @@ This service allows other services to set the leds over the om bus and check whe
 gateway is in authorized mode.
 """
 
+from __future__ import absolute_import
 from platform_utils import System, Platform
 System.import_libs()
 
@@ -27,7 +28,7 @@ import constants
 import logging
 
 from threading import Thread
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from signal import signal, SIGTERM
 from bus.om_bus_events import OMBusEvents
 from bus.om_bus_client import MessageClient
@@ -94,7 +95,7 @@ class LedController(object):
 
         self._gpio_led_config = Hardware.get_gpio_led_config()
         self._i2c_led_config = Hardware.get_i2c_led_config()
-        for led in self._gpio_led_config.keys() + self._i2c_led_config.keys():
+        for led in list(self._gpio_led_config.keys()) + list(self._i2c_led_config.keys()):
             self._enabled_leds[led] = False
             self._write_leds()
 

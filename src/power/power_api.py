@@ -16,6 +16,7 @@
 Contains the definition of the power modules Api.
 """
 
+from __future__ import absolute_import
 from power.power_command import PowerCommand
 
 BROADCAST_ADDRESS = 255
@@ -35,7 +36,7 @@ NUM_PORTS = {POWER_MODULE: 8,
              P1_CONCENTRATOR: 8}
 
 LARGEST_MODULE_TYPE = [module_type for module_type in NUM_PORTS.keys()
-                       if NUM_PORTS[module_type] == max(*NUM_PORTS.values())][0]
+                       if NUM_PORTS[module_type] == max(*list(NUM_PORTS.values()))][0]
 
 
 def get_general_status(version):

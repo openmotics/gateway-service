@@ -16,6 +16,7 @@
 The scheduling module contains the SchedulingController, this controller is used for scheduling various actions
 """
 
+from __future__ import absolute_import
 import sqlite3
 import logging
 import time
@@ -28,6 +29,7 @@ from ioc import Injectable, Inject, INJECTED, Singleton
 from platform_utils import Platform
 from gateway.webservice import params_parser
 import ujson as json
+import six
 
 if Platform.get_platform() == Platform.Type.CLASSIC:
     from master.master_communicator import CommunicationTimedOutException
@@ -161,7 +163,7 @@ class SchedulingController(object):
 
     @property
     def schedules(self):
-        return self._schedules.values()
+        return list(self._schedules.values())
 
     def _execute(self, *args, **kwargs):
         with self._lock:
@@ -263,7 +265,7 @@ class SchedulingController(object):
                 self._semaphore.release()
 
     def _validate(self, name, start, schedule_type, arguments, repeat, duration, end):
-        if name is None or not isinstance(name, basestring) or name.strip() == '':
+        if name is None or not isinstance(name, six.string_types) or name.strip() == '':
             raise RuntimeError('A schedule must have a name')
         # Check whether the requested type is valid
         accepted_types = ['GROUP_ACTION', 'BASIC_ACTION', 'LOCAL_API']

@@ -12,6 +12,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import absolute_import
 import logging
 import socket
 import ssl
@@ -51,7 +52,7 @@ def authorized_mode(request, toolbox):
 @pytest.fixture
 def maintenance_mode(request, toolbox):
     yield
-    for _ in xrange(10):
+    for _ in range(10):
         data = toolbox.dut.get('/get_status', success=False)
         if data['success']:
             break
@@ -77,7 +78,7 @@ def test_module_discover_noop(toolbox, discover_mode):
     toolbox.discover_input_module()
     toolbox.discover_output_module()
 
-    for _ in xrange(10):
+    for _ in range(10):
         data = toolbox.dut.get('/get_modules')
         if data.get('inputs') and data.get('outputs'):
             break
@@ -192,6 +193,6 @@ def test_factory_reset(toolbox, create_user):
     toolbox.dut.get('/module_discover_stop')
     time.sleep(2)
     data = toolbox.dut.get('/get_modules_information')
-    modules = data['modules']['master'].values()
+    modules = list(data['modules']['master'].values())
     assert set(['I', 'O']) == set(x['type'] for x in modules)
     assert None not in [x['firmware'] for x in modules]

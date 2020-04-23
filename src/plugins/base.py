@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """ The OpenMotics plugin controller. """
 
+from __future__ import absolute_import
 import logging
 import os
 import pkgutil
@@ -23,6 +24,7 @@ from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.events import GatewayEvent
 from gateway.shutters import ShutterController
 from plugins.runner import PluginRunner, RunnerWatchdog
+import six
 
 logger = logging.getLogger("openmotics")
 
@@ -188,7 +190,7 @@ class PluginController(object):
 
         :rtype: list of plugins.runner.PluginRunner
         """
-        return self.__runners.values()
+        return list(self.__runners.values())
 
     def __get_plugin(self, name):
         """
@@ -443,4 +445,4 @@ class PluginController(object):
 
     def get_logs(self):
         """ Get the logs for all plugins. Returns a dict where the keys are the plugin names and the value is a string. """
-        return dict((plugin, '\n'.join(entries)) for plugin, entries in self.__logs.iteritems())
+        return dict((plugin, '\n'.join(entries)) for plugin, entries in six.iteritems(self.__logs))

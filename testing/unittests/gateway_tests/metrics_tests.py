@@ -15,6 +15,7 @@
 """
 Tests for metrics.
 """
+from __future__ import absolute_import
 import os
 import unittest
 import requests
@@ -256,9 +257,9 @@ class MetricsTest(unittest.TestCase):
             self.assertListEqual(controller._cloud_queue, queue)
             self.assertDictEqual(controller.cloud_stats, stats)
             self.assertListEqual(controller._cloud_buffer, buffer)
-            self.assertEquals(controller._cloud_last_send, last_send)
-            self.assertEquals(controller._cloud_last_try, last_try)
-            self.assertEquals(controller._cloud_retry_interval, retry_interval)
+            self.assertEqual(controller._cloud_last_send, last_send)
+            self.assertEqual(controller._cloud_last_try, last_try)
+            self.assertEqual(controller._cloud_retry_interval, retry_interval)
 
         # Validate initial state
 
@@ -481,7 +482,7 @@ class MetricsTest(unittest.TestCase):
         tags = {'name': 'name', 'id': 0}
 
         expected_metrics = []
-        for i in xrange(10):
+        for i in range(10):
             timestamp = 300 + 60 * 60 * 12 * i  # Metric every 12 hours
             controller.buffer_counter('OpenMotics', 'foobar', tags, {'counter': i}, timestamp)
             if not (i % 2):

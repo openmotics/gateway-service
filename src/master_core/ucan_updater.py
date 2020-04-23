@@ -16,10 +16,10 @@
 Module to work update an uCAN
 """
 
+from __future__ import absolute_import
 import logging
 import os
 import struct
-import time
 from intelhex import IntelHex
 from master_core.ucan_api import UCANAPI
 from master_core.ucan_command import UCANPalletCommandSpec, SID
@@ -85,17 +85,17 @@ class UCANUpdater(object):
 
             logger.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
             logger.info('Flashing...')
-            address_blocks = range(UCANUpdater.ADDRESS_START, UCANUpdater.ADDRESS_END, UCANUpdater.MAX_FLASH_BYTES)
+            address_blocks = list(range(UCANUpdater.ADDRESS_START, UCANUpdater.ADDRESS_END, UCANUpdater.MAX_FLASH_BYTES))
             total_amount = float(len(address_blocks))
             crc = 0
             total_payload = []
             logged_percentage = -1
-            reset_vector = [intel_hex[i] for i in xrange(4)]
+            reset_vector = [intel_hex[i] for i in range(4)]
             for index, start_address in enumerate(address_blocks):
                 end_address = min(UCANUpdater.ADDRESS_END, start_address + UCANUpdater.MAX_FLASH_BYTES)
 
                 payload = []
-                for i in xrange(start_address, end_address):
+                for i in range(start_address, end_address):
                     payload.append(intel_hex[i])
 
                 crc = UCANPalletCommandSpec.calculate_crc(payload, crc)

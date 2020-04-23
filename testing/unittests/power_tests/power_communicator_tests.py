@@ -16,6 +16,7 @@
 Tests for PowerCommunicator module.
 """
 
+from __future__ import absolute_import
 import unittest
 import xmlrunner
 import os
@@ -71,10 +72,10 @@ class PowerCommunicatorTest(unittest.TestCase):
 
         output = comm.do_command(1, action)
 
-        self.assertEquals((49.5, ), output)
+        self.assertEqual((49.5, ), output)
 
-        self.assertEquals(14, comm.get_communication_statistics()['bytes_written'])
-        self.assertEquals(18, comm.get_communication_statistics()['bytes_read'])
+        self.assertEqual(14, comm.get_communication_statistics()['bytes_written'])
+        self.assertEqual(18, comm.get_communication_statistics()['bytes_read'])
 
     def test_do_command_timeout_once(self):
         """ Test for timeout in PowerCommunicator.do_command. """
@@ -88,7 +89,7 @@ class PowerCommunicatorTest(unittest.TestCase):
         comm.start()
 
         output = comm.do_command(1, action)
-        self.assertEquals((49.5, ), output)
+        self.assertEqual((49.5, ), output)
 
     def test_do_command_timeout_twice(self):
         """ Test for timeout in PowerCommunicator.do_command. """
@@ -118,7 +119,7 @@ class PowerCommunicatorTest(unittest.TestCase):
 
         output = comm.do_command(1, action)
 
-        self.assertEquals((49.5, ), output)
+        self.assertEqual((49.5, ), output)
 
     def test_wrong_response(self):
         """ Test PowerCommunicator.do_command when the power module returns a wrong response. """
@@ -196,7 +197,7 @@ class PowerCommunicatorTest(unittest.TestCase):
 
         comm.stop_address_mode()
 
-        self.assertEquals((49.5, ), comm.do_command(1, action))
+        self.assertEqual((49.5, ), comm.do_command(1, action))
 
     def test_address_mode_timeout(self):
         """ Test address mode timeout. """
@@ -221,7 +222,7 @@ class PowerCommunicatorTest(unittest.TestCase):
         comm.start_address_mode()
         time.sleep(1.1)
 
-        self.assertEquals((49.5, ), comm.do_command(1, action))
+        self.assertEqual((49.5, ), comm.do_command(1, action))
 
     def test_timekeeper(self):
         """ Test the TimeKeeper. """
@@ -246,7 +247,7 @@ class PowerCommunicatorTest(unittest.TestCase):
 
         time.sleep(1.5)
 
-        self.assertEquals((243, ), comm.do_command(1, action))
+        self.assertEqual((243, ), comm.do_command(1, action))
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@
 IPC Bus messaging service
 """
 
+from __future__ import absolute_import
 import logging
 import time
 import ujson as json
@@ -36,12 +37,12 @@ class MessageService(object):
         self._stop = False
 
     def _multicast(self, source, msg):
-        for connection, client_name in self.connections.iteritems():
+        for connection, client_name in self.connections.items():
             if client_name != source and connection is not None:
                 self._send(connection, msg)
 
     def _unicast(self, destination, msg):
-        for connection, client_name in self.connections.iteritems():
+        for connection, client_name in self.connections.items():
             if client_name == destination and connection is not None:
                 self._send(connection, msg)
                 break

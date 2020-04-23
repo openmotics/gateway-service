@@ -15,6 +15,7 @@
 """
 Module for communicating with the Master
 """
+from __future__ import absolute_import
 import logging
 import time
 from datetime import datetime
@@ -356,7 +357,7 @@ class MasterClassicController(MasterController):
         try:
             number_of_input_modules = self._master_communicator.do_command(master_api.number_of_io_modules())['in']
             inputs = []
-            for i in xrange(number_of_input_modules):
+            for i in range(number_of_input_modules):
                 # we could be dealing with e.g. a temperature module, skip those
                 module_type = self.get_input_module_type(i)
                 if module_type not in ['i', 'I']:
@@ -364,7 +365,7 @@ class MasterClassicController(MasterController):
                 result = self._master_communicator.do_command(master_api.read_input_module(self._master_version), {'input_module_nr': i})
                 module_status = result['input_status']
                 # module_status byte contains bits for each individual input, use mask and bitshift to get status
-                for n in xrange(8):
+                for n in range(8):
                     input_nr = i * 8 + n
                     input_status = module_status & (1 << n) != 0
                     data = {'input': input_nr, 'status': input_status}
@@ -485,7 +486,7 @@ class MasterClassicController(MasterController):
         self._output_config = {output_dto.id: output_dto for output_dto in self.load_outputs()}
         number_of_outputs = self._master_communicator.do_command(master_api.number_of_io_modules())['out'] * 8
         outputs = []
-        for i in xrange(number_of_outputs):
+        for i in range(number_of_outputs):
             outputs.append(self._master_communicator.do_command(master_api.read_output(), {'id': i}))
         self._output_status.full_update(outputs)
         self._output_last_updated = time.time()
@@ -535,7 +536,7 @@ class MasterClassicController(MasterController):
     def _refresh_shutter_states(self):
         self._shutter_config = {shutter.id: shutter for shutter in self.load_shutters()}
         number_of_shutter_modules = self._master_communicator.do_command(master_api.number_of_io_modules())['shutter']
-        for module_id in xrange(number_of_shutter_modules):
+        for module_id in range(number_of_shutter_modules):
             self._update_from_master_state(
                 {'module_nr': module_id,
                  'status': self._master_communicator.do_command(master_api.shutter_status(self._master_version),
@@ -554,7 +555,7 @@ class MasterClassicController(MasterController):
         new_state = self._interprete_output_states(module_id, data['status'])
         if new_state is None:
             return  # Failsafe for master event handler
-        for i in xrange(4):
+        for i in range(4):
             shutter_id = module_id * 4 + i
             for callback in self._event_callbacks:
                 event_data = {'id': shutter_id,
@@ -564,7 +565,7 @@ class MasterClassicController(MasterController):
 
     def _interprete_output_states(self, module_id, output_states):
         states = []
-        for i in xrange(4):
+        for i in range(4):
             shutter_id = module_id * 4 + i
             if shutter_id not in self._shutter_config:
                 return  # Failsafe for master event handler
@@ -1189,7 +1190,7 @@ class MasterClassicController(MasterController):
     def get_sensors_temperature(self):
         temperatures = []
         sensor_list = self._master_communicator.do_command(master_api.sensor_temperature_list())
-        for i in xrange(32):
+        for i in range(32):
             temperatures.append(sensor_list['tmp{0}'.format(i)].get_temperature())
         return temperatures
 
@@ -1201,7 +1202,7 @@ class MasterClassicController(MasterController):
     def get_sensors_humidity(self):
         humidities = []
         sensor_list = self._master_communicator.do_command(master_api.sensor_humidity_list())
-        for i in xrange(32):
+        for i in range(32):
             humidities.append(sensor_list['hum{0}'.format(i)].get_humidity())
         return humidities
 
@@ -1213,7 +1214,7 @@ class MasterClassicController(MasterController):
     def get_sensors_brightness(self):
         brightnesses = []
         sensor_list = self._master_communicator.do_command(master_api.sensor_brightness_list())
-        for i in xrange(32):
+        for i in range(32):
             brightnesses.append(sensor_list['bri{0}'.format(i)].get_brightness())
         return brightnesses
 

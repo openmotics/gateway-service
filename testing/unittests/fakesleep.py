@@ -27,6 +27,7 @@
 provides a fake sleep() for use in tests
 """
 
+from __future__ import absolute_import
 import time as time_mod
 
 originals = {name: getattr(time_mod, name) for name in

@@ -18,9 +18,11 @@ if required. On each check the vpn_service sends some status information about t
 thermostats to the cloud, to keep the status information in the cloud in sync.
 """
 
+from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 
+import six
 import logging
 import os
 import glob
@@ -32,9 +34,8 @@ import constants
 import ujson as json
 from threading import Thread, Lock
 from collections import deque
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from ioc import Injectable, INJECTED, Inject
-from gateway.config import ConfigurationController
 from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
 
@@ -141,7 +142,7 @@ class Cloud(object):
             if 'configuration' in data:
                 configuration_changed = cmp(self.__configuration, data['configuration']) != 0
                 if configuration_changed:
-                    for setting, value in data['configuration'].iteritems():
+                    for setting, value in data['configuration'].items():
                         self.__config.set(setting, value)
                     logger.info('configuration changed: {0}'.format(data['configuration']))
 
@@ -208,10 +209,10 @@ class Gateway(object):
             counters = data['counters']
 
             if self.__last_pulse_counters is None:
-                ret = [0 for _ in xrange(0, 24)]
+                ret = [0 for _ in range(0, 24)]
             else:
                 ret = [Gateway.__counter_diff(counters[i], self.__last_pulse_counters[i])
-                       for i in xrange(0, 24)]
+                       for i in range(0, 24)]
 
             self.__last_pulse_counters = counters
             return ret
@@ -245,7 +246,7 @@ class Gateway(object):
         """ Get the shutters status. """
         data = self.do_call("get_shutter_status?token=None")
         if data is not None and data['success']:
-            return [(int(shutter_id), details["state"].upper()) for shutter_id, details in data['detail'].iteritems()]
+            return [(int(shutter_id), details["state"].upper()) for shutter_id, details in six.iteritems(data['detail'])]
         return
 
     def get_thermostats(self):
@@ -364,7 +365,7 @@ class VPNService(object):
         # If NTP date changes the time during a execution of a sub process this hangs forever.
         def popen_timeout(command, timeout):
             p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            for _ in xrange(timeout):
+            for _ in range(timeout):
                 time.sleep(1)
                 if p.poll() is not None:
                     stdout_data, stderr_data = p.communicate()

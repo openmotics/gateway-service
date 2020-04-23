@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import os
 import sys
 import traceback
@@ -74,7 +75,7 @@ class PluginRuntime:
                             'shutter_status': self._shutter_status_receivers,
                             'receive_events': self._event_receivers}
 
-        for method_attribute, target in receiver_mapping.iteritems():
+        for method_attribute, target in receiver_mapping.items():
             for method in get_special_methods(self._plugin, method_attribute):
                 target.append(method)
 

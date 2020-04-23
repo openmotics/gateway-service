@@ -17,7 +17,7 @@ The GatewayApi defines high level functions, these are used by the interface
 and call the master_api to complete the actions.
 """
 
-import ConfigParser
+from __future__ import absolute_import
 import glob
 import logging
 import math
@@ -27,6 +27,7 @@ import sqlite3
 import subprocess
 import tempfile
 import threading
+from six.moves.configparser import ConfigParser
 
 import constants
 from bus.om_bus_events import OMBusEvents
@@ -137,7 +138,7 @@ class GatewayApi(object):
     def get_main_version(self):
         """ Gets reported main version """
         _ = self
-        config = ConfigParser.ConfigParser()
+        config = ConfigParser()
         config.read(constants.get_config_file())
         return str(config.get('OpenMotics', 'version'))
 
@@ -452,7 +453,7 @@ class GatewayApi(object):
                                      'power.db': constants.get_power_database_file(),
                                      'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
                                      'metrics.db': constants.get_metrics_database_file(),
-                                     'pulse.db': constants.get_pulse_counter_database_file()}.iteritems():
+                                     'pulse.db': constants.get_pulse_counter_database_file()}.items():
                 target = '{0}/{1}'.format(tmp_sqlite_dir, filename)
                 backup_sqlite_db(source, target)
 
@@ -520,7 +521,7 @@ class GatewayApi(object):
                                      'power.db': constants.get_power_database_file(),
                                      'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
                                      'metrics.db': constants.get_metrics_database_file(),
-                                     'pulse.db': constants.get_pulse_counter_database_file()}.iteritems():
+                                     'pulse.db': constants.get_pulse_counter_database_file()}.items():
                 source = '{0}/{1}'.format(src_dir, filename)
                 if os.path.exists(source):
                     shutil.copyfile(source, target)
@@ -1000,7 +1001,7 @@ class GatewayApi(object):
                     return 2
                 self.__power_communicator.do_command(
                     addr, power_api.set_sensor_types(version),
-                    *[_check_sid('sensor{0}'.format(i)) for i in xrange(power_api.NUM_PORTS[version])]
+                    *[_check_sid('sensor{0}'.format(i)) for i in range(power_api.NUM_PORTS[version])]
                 )
             elif version == power_api.ENERGY_MODULE:
                 def _convert_ccf(key):
@@ -1015,7 +1016,7 @@ class GatewayApi(object):
                         return 0.5
                 self.__power_communicator.do_command(
                     addr, power_api.set_current_clamp_factor(version),
-                    *[_convert_ccf('sensor{0}'.format(i)) for i in xrange(power_api.NUM_PORTS[version])]
+                    *[_convert_ccf('sensor{0}'.format(i)) for i in range(power_api.NUM_PORTS[version])]
                 )
 
                 def _convert_sci(key):
@@ -1024,7 +1025,7 @@ class GatewayApi(object):
                     return 1 if mod[key] in [True, 1] else 0
                 self.__power_communicator.do_command(
                     addr, power_api.set_current_inverse(version),
-                    *[_convert_sci('inverted{0}'.format(i)) for i in xrange(power_api.NUM_PORTS[version])]
+                    *[_convert_sci('inverted{0}'.format(i)) for i in range(power_api.NUM_PORTS[version])]
                 )
             else:
                 raise ValueError('Unknown power api version')
@@ -1073,7 +1074,7 @@ class GatewayApi(object):
                     raw_current_ph3 = self.__power_communicator.do_command(addr, power_api.get_current(version, phase=3))[0]
                     delivered_power = self.__power_communicator.do_command(addr, power_api.get_delivered_power(version))[0]
                     received_power = self.__power_communicator.do_command(addr, power_api.get_received_power(version))[0]
-                    for port in xrange(num_ports):
+                    for port in range(num_ports):
                         try:
                             if status & 1 << port:
                                 volt[port] = float(raw_volt[port * 7:(port + 1) * 7][:5])
@@ -1132,7 +1133,7 @@ class GatewayApi(object):
                     status = self.__power_communicator.do_command(addr, power_api.get_status_p1(version))[0]
                     raw_day = self.__power_communicator.do_command(addr, power_api.get_day_energy(version))[0]
                     raw_night = self.__power_communicator.do_command(addr, power_api.get_night_energy(version))[0]
-                    for port in xrange(num_ports):
+                    for port in range(num_ports):
                         try:
                             if status & 1 << port:
                                 day[port] = int(float(raw_day[port * 14:(port + 1) * 14][:10]) * 1000)

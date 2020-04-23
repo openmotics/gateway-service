@@ -15,6 +15,7 @@
 """ Includes the WebService class """
 
 
+from __future__ import absolute_import
 import base64
 import logging
 import os
@@ -47,6 +48,7 @@ from models import Feature
 from platform_utils import System, Hardware, Platform
 from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
+import six
 
 if False:
     from typing import Dict, Optional, Any, List
@@ -115,7 +117,7 @@ def params_parser(params, param_types):
         value = params[key]
         if value is None:
             continue
-        if isinstance(value, basestring) and value.lower() in ['null', 'none', '']:
+        if isinstance(value, six.string_types) and value.lower() in ['null', 'none', '']:
             params[key] = None
         else:
             if isinstance(param_types[key], list):
@@ -207,7 +209,7 @@ def _openmotics_api(f, *args, **kwargs):
     status = 200  # OK
     try:
         return_data = f(*args, **kwargs)
-        data = limit_floats(dict({'success': True}.items() + return_data.items()))
+        data = limit_floats(dict(list({'success': True}.items()) + list(return_data.items())))
     except cherrypy.HTTPError as ex:
         status = ex.status
         data = {'success': False, 'msg': ex._message}
@@ -228,7 +230,7 @@ def _openmotics_api(f, *args, **kwargs):
     timings['serialization'] = 'Serialization', time.time() - serialization_start
     cherrypy.response.headers['Content-Type'] = 'application/json'
     cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
-                                                           for key, value in timings.iteritems()])
+                                                           for key, value in timings.items()])
     if hasattr(f, 'deprecated') and f.deprecated is not None:
         cherrypy.response.headers['Warning'] = 'Warning: 299 - "Deprecated, replaced by: {0}"'.format(f.deprecated)
     cherrypy.response.status = status
@@ -2247,10 +2249,10 @@ class WebInterface(object):
         sources = self._metrics_controller.get_filter('source', source)
         metric_types = self._metrics_controller.get_filter('metric_type', metric_type)
         definitions = {}
-        for _source, _metric_types in self._metrics_controller.definitions.iteritems():
+        for _source, _metric_types in six.iteritems(self._metrics_controller.definitions):
             if _source in sources:
                 definitions[_source] = {}
-                for _metric_type, definition in _metric_types.iteritems():
+                for _metric_type, definition in six.iteritems(_metric_types):
                     if _metric_type in metric_types:
                         definitions[_source][_metric_type] = definition
         return {'definitions': definitions}

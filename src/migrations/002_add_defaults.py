@@ -21,6 +21,7 @@ Some examples (model - class or model name)::
 
 """
 
+from __future__ import absolute_import
 import peewee as pw
 import logging
 

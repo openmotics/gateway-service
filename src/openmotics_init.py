@@ -15,13 +15,14 @@
 """
 The main module for the OpenMotics
 """
+from __future__ import absolute_import
 from platform_utils import Platform, System
 
 System.import_libs()
 
 import logging
 import os
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from threading import Lock
 
 import constants

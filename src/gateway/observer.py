@@ -16,6 +16,7 @@
 The observer module contains logic to observe various states of the system. It keeps track of what is changing
 """
 
+from __future__ import absolute_import
 import logging
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.events import GatewayEvent

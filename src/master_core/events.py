@@ -16,6 +16,7 @@
 Module to handle Events from the Core
 """
 
+from __future__ import absolute_import
 import logging
 from master_core.fields import WordField
 
@@ -145,7 +146,7 @@ class Event(object):
             word_50 = Event._word_decode(self._data[0:2])
             word_75 = Event._word_decode(self._data[2:4])
             leds = {}
-            for i in xrange(16):
+            for i in range(16):
                 if word_25 & (1 << i):
                     leds[i] = Event.LedStates.BLINKING_25
                 elif word_50 & (1 << i):
@@ -159,7 +160,7 @@ class Event(object):
         if self.type == Event.Types.LED_ON:
             word_on = Event._word_decode(self._data[0:2])
             leds = {}
-            for i in xrange(16):
+            for i in range(16):
                 leds[i] = Event.LedStates.ON if word_on & (1 << i) else Event.LedStates.OFF
             return {'chip': self._device_nr,
                     'leds': leds}

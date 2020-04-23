@@ -15,6 +15,7 @@
 """
 The main module for the OpenMotics
 """
+from __future__ import absolute_import
 from platform_utils import System, Platform
 System.import_libs()
 
@@ -27,10 +28,10 @@ from bus.om_bus_service import MessageService
 from bus.om_bus_client import MessageClient
 from serial import Serial
 from signal import signal, SIGTERM
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from threading import Lock
 from serial_utils import RS485
-from urlparse import urlparse
+from six.moves.urllib.parse import urlparse
 from peewee_migrate import Router
 
 logger = logging.getLogger("openmotics")

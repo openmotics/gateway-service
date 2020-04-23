@@ -17,6 +17,7 @@
 Plugin to queue and expose all master events on the api.
 """
 
+from __future__ import absolute_import
 import collections
 import copy
 import json

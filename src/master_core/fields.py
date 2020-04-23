@@ -15,6 +15,7 @@
 """
 Communication fields
 """
+from __future__ import absolute_import
 import struct
 
 
@@ -196,7 +197,7 @@ class ByteArrayField(Field):
 
     def decode_bytes(self, data):
         result = []
-        for i in xrange(len(data)):
+        for i in range(len(data)):
             result.append(self._field.decode_bytes([data[i]]))
         return result
 
@@ -229,7 +230,7 @@ class WordArrayField(Field):
 
     def decode_bytes(self, data):
         result = []
-        for i in xrange(0, len(data), 2):
+        for i in range(0, len(data), 2):
             result.append(self._word_field.decode_bytes(data[i:i + 2]))
         return result
 
@@ -257,7 +258,7 @@ class AddressField(Field):
         super(AddressField, self).__init__(name, length)
 
     def encode_bytes(self, value):
-        example = '.'.join(['ID{0}'.format(i) for i in xrange(self.length - 1, -1, -1)])
+        example = '.'.join(['ID{0}'.format(i) for i in range(self.length - 1, -1, -1)])
         error_message = 'Value `{0}` should be a string in the format of {1}, where 0 <= IDx <= 255'.format(value, example)
         parts = str(value).split('.')
         if len(parts) != self.length:

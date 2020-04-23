@@ -16,6 +16,7 @@
 """
 ShutterGroup (de)serializer
 """
+from __future__ import absolute_import
 from toolbox import Toolbox
 from gateway.api.serializers.base import SerializerToolbox
 from gateway.dto import ShutterGroupDTO

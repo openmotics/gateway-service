@@ -16,6 +16,7 @@
 The metrics module collects and re-distributes metric data
 """
 
+from __future__ import absolute_import
 import logging
 import re
 import time
@@ -27,6 +28,7 @@ import ujson as json
 from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread
 from ioc import INJECTED, Inject, Injectable, Singleton
+import six
 
 logger = logging.getLogger("openmotics")
 
@@ -171,21 +173,21 @@ class MetricsController(object):
         #                  "type": "counter",
         #                  "unit": "kWh"}]
         # }
-        required_keys = {'type': basestring,
+        required_keys = {'type': six.string_types,
                          'metrics': list,
                          'tags': list}
-        metrics_keys = {'name': basestring,
-                        'description': basestring,
-                        'type': basestring,
-                        'unit': basestring}
+        metrics_keys = {'name': six.string_types,
+                        'description': six.string_types,
+                        'type': six.string_types,
+                        'unit': six.string_types}
         expected_plugins = []
-        for plugin, plugin_definitions in definitions.iteritems():
+        for plugin, plugin_definitions in six.iteritems(definitions):
             log = self._plugin_controller.get_logger(plugin)
             for definition in plugin_definitions:
                 definition_ok = True
-                for key, key_type in required_keys.iteritems():
+                for key, key_type in required_keys.items():
                     if key not in definition:
-                        log('Definitions should contain keys: {0}'.format(', '.join(required_keys.keys())))
+                        log('Definitions should contain keys: {0}'.format(', '.join(list(required_keys.keys()))))
                         definition_ok = False
                         break
                     if not isinstance(definition[key], key_type):
@@ -200,9 +202,9 @@ class MetricsController(object):
                                 log('Metric definitions should be dictionaries')
                                 definition_ok = False
                                 break
-                            for mkey, mkey_type in metrics_keys.iteritems():
+                            for mkey, mkey_type in metrics_keys.items():
                                 if mkey not in metric_definition:
-                                    log('Metric definitions should contain keys: {0}'.format(', '.join(metrics_keys.keys())))
+                                    log('Metric definitions should contain keys: {0}'.format(', '.join(list(metrics_keys.keys()))))
                                     definition_ok = False
                                     break
                                 if not isinstance(metric_definition[mkey], mkey_type):
@@ -400,7 +402,7 @@ class MetricsController(object):
         time_ago_try = int(now - self._cloud_last_try)
         if time_ago_send > time_ago_try and include_this_metric is True and len(counters_to_buffer) > 0:
             cache_data = {}
-            for counter, match_setting in counters_to_buffer.iteritems():
+            for counter, match_setting in six.iteritems(counters_to_buffer):
                 if match_setting is not True:
                     if metric['tags'][match_setting['key']] not in match_setting['matches']:
                         continue
@@ -424,7 +426,7 @@ class MetricsController(object):
     def _transform_counters(self, metric):
         source = metric['source']
         mtype = metric['type']
-        for counter, match_setting in self._persist_counters.get(source, {}).get(mtype, {}).iteritems():
+        for counter, match_setting in six.iteritems(self._persist_counters.get(source, {}).get(mtype, {})):
             if counter not in metric['values']:
                 continue
             if match_setting is not True:
@@ -459,14 +461,14 @@ class MetricsController(object):
             # Validation, part 1
             source = metric['source']
             log = self._plugin_controller.get_logger(source)
-            required_keys = {'type': basestring,
+            required_keys = {'type': six.string_types,
                              'timestamp': (float, int),
                              'values': dict,
                              'tags': dict}
             metric_ok = True
-            for key, key_type in required_keys.iteritems():
+            for key, key_type in required_keys.items():
                 if key not in metric:
-                    log('Metric should contain keys {0}'.format(', '.join(required_keys.keys())))
+                    log('Metric should contain keys {0}'.format(', '.join(list(required_keys.keys()))))
                     metric_ok = False
                     break
                 if not isinstance(metric[key], key_type):
@@ -512,7 +514,7 @@ class MetricsController(object):
                 pass
             if metrics:
                 rates = self._plugin_controller.distribute_metrics(metrics)
-                for key, rate in rates.iteritems():
+                for key, rate in six.iteritems(rates):
                     if key not in self.outbound_rates:
                         self.outbound_rates[key] = 0
                     self.outbound_rates[key] += rate
@@ -538,5 +540,5 @@ class MetricsController(object):
 
     def event_receiver(self, event, payload):
         if event == OMBusEvents.METRICS_INTERVAL_CHANGE:
-            for metric_type, interval in payload.iteritems():
+            for metric_type, interval in six.iteritems(payload):
                 self.set_cloud_interval(metric_type, interval)

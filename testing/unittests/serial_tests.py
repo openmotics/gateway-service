@@ -18,6 +18,7 @@ Contains the SerialMock.
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import os
 import pty
 import threading
@@ -165,12 +166,12 @@ class SerialMockTest(unittest.TestCase):
         """ Tests for SerialMock. """
         serial_mock = SerialMock([sin("abc"), sout("def"), sin("g"), sout("h")])
         serial_mock.write("abc")
-        self.assertEquals("d", serial_mock.read(1))
-        self.assertEquals(2, serial_mock.inWaiting())
-        self.assertEquals("ef", serial_mock.read(2))
+        self.assertEqual("d", serial_mock.read(1))
+        self.assertEqual(2, serial_mock.inWaiting())
+        self.assertEqual("ef", serial_mock.read(2))
         serial_mock.write("g")
-        self.assertEquals("h", serial_mock.read(1))
-        self.assertEquals(0, serial_mock.inWaiting())
+        self.assertEqual("h", serial_mock.read(1))
+        self.assertEqual(0, serial_mock.inWaiting())
 
     def test_threaded_serial_mock(self):
         """ Tests for SerialMock in thread, check if reads and writes are in sequence. """
@@ -179,22 +180,22 @@ class SerialMockTest(unittest.TestCase):
 
         def __reader(serial, phase):
             """ Code for reading from a differen thread, checks the output and phase. """
-            self.assertEquals("d", serial.read(1))
-            self.assertEquals(1, phase['phase'])
+            self.assertEqual("d", serial.read(1))
+            self.assertEqual(1, phase['phase'])
             phase['phase'] = 2
-            self.assertEquals(2, serial.inWaiting())
-            self.assertEquals("ef", serial.read(2))
+            self.assertEqual(2, serial.inWaiting())
+            self.assertEqual("ef", serial.read(2))
 
-            self.assertEquals("h", serial.read(1))
-            self.assertEquals(3, phase['phase'])
-            self.assertEquals(0, serial.inWaiting())
+            self.assertEqual("h", serial.read(1))
+            self.assertEqual(3, phase['phase'])
+            self.assertEqual(0, serial.inWaiting())
 
         threading.Thread(target=__reader, args=(serial_mock, phase)).start()
 
         serial_mock.write("abc")
         phase['phase'] = 1
         serial_mock.write("g")
-        self.assertEquals(2, phase['phase'])
+        self.assertEqual(2, phase['phase'])
         phase['phase'] = 3
 
     def test_keep_read_waiting(self):
@@ -212,7 +213,7 @@ class SerialMockTest(unittest.TestCase):
         threading.Thread(target=__timeout, args=(serial_mock, phase)).start()
 
         serial_mock.read(1)
-        self.assertEquals(1, phase['phase'])
+        self.assertEqual(1, phase['phase'])
 
 
 if __name__ == "__main__":
