@@ -501,7 +501,7 @@ def Warmup():
 
 def DumpInjectionStack():
     for scope in _MyScopes():
-        print scope
+        print(scope)
 
 
 def SetTestMode(enabled=True):
@@ -528,7 +528,7 @@ def SetUpTestInjections(**kwargs):
     """
     global _TEST_SCOPE
     _TEST_SCOPE = _TEST_SCOPE or _Scope(None)
-    for name, value in kwargs.iteritems():
+    for name, value in kwargs.items():
         _TEST_SCOPE.Injectable(_CreateCallable(name, value))
 
 

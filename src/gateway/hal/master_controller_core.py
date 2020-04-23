@@ -20,7 +20,11 @@ import time
 from threading import Thread
 
 from gateway.enums import ShutterEnums
-from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
+from gateway.dto import (
+    OutputDTO,
+    ShutterDTO, ShutterGroupDTO,
+    ThermostatDTO
+)
 from gateway.hal.mappers_core import OutputMapper, ShutterMapper
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
@@ -477,6 +481,26 @@ class MasterCoreController(MasterController):
 
     def save_shutter_groups(self, shutter_groups):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
         pass  # TODO: Implement when/if ShutterGroups get actual properties
+
+    # Thermostats
+
+    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+        raise NotImplementedError()
+
+    def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
+        raise NotImplementedError()
+
+    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+        raise NotImplementedError()
+
+    def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+        raise NotImplementedError()
+
+    def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
+        raise NotImplementedError()
+
+    def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+        raise NotImplementedError()
 
     # Can Led functions
 

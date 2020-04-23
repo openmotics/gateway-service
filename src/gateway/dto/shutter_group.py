@@ -16,11 +16,13 @@
 """
 ShutterGroup DTO
 """
+from gateway.dto.base import BaseDTO
+
 if False:  # MYPY
     from typing import Optional
 
 
-class ShutterGroupDTO(object):
+class ShutterGroupDTO(BaseDTO):
     def __init__(self, id, timer_up=None, timer_down=None, room=None):
         self.id = id  # type: int
         self.timer_up = timer_up  # type: Optional[int]

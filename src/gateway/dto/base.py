@@ -13,5 +13,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from gateway.hal.mappers_core.output import OutputMapper
-from gateway.hal.mappers_core.shutter import ShutterMapper
+"""
+Base DTO
+"""
+
+
+class BaseDTO(object):
+    def __str__(self):
+        return str(self.__dict__)
+
+    def __repr__(self):
+        return str(self.__dict__)

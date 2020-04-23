@@ -21,10 +21,17 @@ from datetime import datetime
 from threading import Timer
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import OutputDTO, ShutterDTO, ShutterGroupDTO
+from gateway.dto import (
+    OutputDTO,
+    ShutterDTO, ShutterGroupDTO,
+    ThermostatDTO
+)
 from gateway.enums import ShutterEnums
-from gateway.hal.mappers_classic import OutputMapper, ShutterGroupMapper, \
-    ShutterMapper
+from gateway.hal.mappers_classic import (
+    OutputMapper,
+    ShutterGroupMapper, ShutterMapper,
+    ThermostatMapper
+)
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
@@ -614,6 +621,36 @@ class MasterClassicController(MasterController):
         batch = []
         for shutter_group, fields in shutter_groups:
             batch.append(ShutterGroupMapper.dto_to_orm(shutter_group, fields))
+        self._eeprom_controller.write_batch(batch)
+
+    # Thermostats
+
+    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.ThermostatConfiguration, thermostat_id)
+        return ThermostatMapper.orm_to_dto(classic_object)
+
+    def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
+        return [ThermostatMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.ThermostatConfiguration)]
+
+    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+        batch = []
+        for thermostat, fields in thermostats:
+            batch.append(ThermostatMapper.dto_to_orm(thermostat, fields))
+        self._eeprom_controller.write_batch(batch)
+
+    def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.CoolingConfiguration, thermostat_id)
+        return ThermostatMapper.orm_to_dto(classic_object)
+
+    def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
+        return [ThermostatMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.CoolingConfiguration)]
+
+    def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+        batch = []
+        for thermostat, fields in thermostats:
+            batch.append(ThermostatMapper.dto_to_orm(thermostat, fields))
         self._eeprom_controller.write_batch(batch)
 
     # Virtual modules

@@ -75,3 +75,6 @@ python2 master_core_tests/core_communicator_tests.py
 
 echo "Running metrics tests"
 python2 gateway_tests/metrics_tests.py
+
+echo "Running thermostat tests"
+python2 thermostat_tests/gateway_mapping_tests.py

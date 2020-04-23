@@ -16,13 +16,14 @@
 """
 Output DTO
 """
+from gateway.dto.base import BaseDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
 
 if False:  # MYPY
     from typing import Optional
 
 
-class OutputDTO(object):
+class OutputDTO(BaseDTO):
     def __init__(self, id, name='', module_type='O', timer=None, floor=None, output_type=None,
                  can_led_1=None,  # type: Optional[FeedbackLedDTO]
                  can_led_2=None,  # type: Optional[FeedbackLedDTO]
