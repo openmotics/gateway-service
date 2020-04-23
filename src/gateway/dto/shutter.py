@@ -16,12 +16,13 @@
 """
 Shutter DTO
 """
-from __future__ import absolute_import
+from gateway.dto.base import BaseDTO
+
 if False:  # MYPY
     from typing import Optional
 
 
-class ShutterDTO(object):
+class ShutterDTO(BaseDTO):
     def __init__(self, id, name='', timer_up=None, timer_down=None, up_down_config=None,
                  group_1=None, group_2=None, room=None, steps=None):
         self.id = id  # type: int

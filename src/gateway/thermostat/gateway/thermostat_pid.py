@@ -1,4 +1,18 @@
-from __future__ import absolute_import
+# Copyright (C) 2020 OpenMotics BV
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 import logging
 from threading import Lock
 from simple_pid import PID
@@ -71,14 +85,14 @@ class ThermostatPid(object):
             self._cooling_valve_numbers = [valve.number for valve in thermostat.cooling_valves]
 
             if thermostat.mode == 'heating':
-                pid_p = thermostat.pid_heating_p if thermostat.pid_heating_p else self.DEFAULT_KP
-                pid_i = thermostat.pid_heating_i if thermostat.pid_heating_i else self.DEFAULT_KI
-                pid_d = thermostat.pid_heating_d if thermostat.pid_heating_d else self.DEFAULT_KD
+                pid_p = thermostat.pid_heating_p if thermostat.pid_heating_p is not None else self.DEFAULT_KP
+                pid_i = thermostat.pid_heating_i if thermostat.pid_heating_i is not None else self.DEFAULT_KI
+                pid_d = thermostat.pid_heating_d if thermostat.pid_heating_d is not None else self.DEFAULT_KD
                 setpoint = self._active_preset.heating_setpoint if self._active_preset is not None else 14.0
             else:
-                pid_p = thermostat.pid_cooling_p if thermostat.pid_cooling_p else self.DEFAULT_KP
-                pid_i = thermostat.pid_cooling_i if thermostat.pid_cooling_i else self.DEFAULT_KI
-                pid_d = thermostat.pid_cooling_d if thermostat.pid_cooling_d else self.DEFAULT_KD
+                pid_p = thermostat.pid_cooling_p if thermostat.pid_cooling_p is not None else self.DEFAULT_KP
+                pid_i = thermostat.pid_cooling_i if thermostat.pid_cooling_i is not None else self.DEFAULT_KI
+                pid_d = thermostat.pid_cooling_d if thermostat.pid_cooling_d is not None else self.DEFAULT_KD
                 setpoint = self._active_preset.cooling_setpoint if self._active_preset is not None else 30.0
 
             if self._pid is None:
@@ -102,13 +116,13 @@ class ThermostatPid(object):
         self._report_state_callbacks.append(callback)
 
     def report_state_change(self):
-        # TODO: only invoke callback if change occurred
+        # TODO: Only invoke callback if change occurred
         for callback in self._report_state_callbacks:
             callback(self.number, self._active_preset.name, self.setpoint, self.current_temperature,
                      self.get_active_valves_percentage(), self.thermostat.room)
 
     def tick(self):
-        logger.info('_pid_tick - thermostat {} is {} enabled in {} mode'.format(self.thermostat.number, '' if self.enabled else 'not', self._mode))
+        logger.info('_pid_tick - thermostat {} is {}abled in {} mode'.format(self.thermostat.number, 'en' if self.enabled else 'dis', self._mode))
         if not self.enabled:
             self.switch_off()
         else:
@@ -169,7 +183,7 @@ class ThermostatPid(object):
 
         # configure valves and set desired opening
         if power > 0:
-            # TODO: check union to avoid opening same valve_numbers in heating and cooling
+            # TODO: Check union to avoid opening same valve_numbers in heating and cooling
             self._pump_valve_controller.set_valves(0, self.cooling_valve_numbers, mode=self.thermostat.valve_config)
             self._pump_valve_controller.set_valves(power, self.heating_valve_numbers, mode=self.thermostat.valve_config)
         else:

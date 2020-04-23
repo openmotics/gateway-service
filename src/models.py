@@ -274,6 +274,8 @@ class Thermostat(BaseModel):
                           .order_by(DaySchedule.index)
 
     def v0_get_output_numbers(self, mode=None):
+        # TODO: Remove, will be replaced by mappers
+
         if mode is None:
             mode = self.thermostat_group.mode
         valves = self.cooling_valves if mode == 'cooling' else self.heating_valves
@@ -286,49 +288,6 @@ class Thermostat(BaseModel):
         output0 = db_outputs[0] if number_of_outputs > 0 else None
         output1 = db_outputs[1] if number_of_outputs > 1 else None
         return [output0, output1]
-
-    def to_v0_format(self, mode='heating', fields=None):
-        """
-        :returns: thermostat_configuration dict: contains 'id' (Id), 'auto_fri' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_mon' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sat' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_sun' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_thu' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_tue' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'auto_wed' ([temp_n(Temp),start_d1(Time),stop_d1(Time),temp_d1(Temp),start_d2(Time),stop_d2(Time),temp_d2(Temp)]), 'name' (String[16]), 'output0' (Byte), 'output1' (Byte), 'permanent_manual' (Boolean), 'pid_d' (Byte), 'pid_i' (Byte), 'pid_int' (Byte), 'pid_p' (Byte), 'room' (Byte), 'sensor' (Byte), 'setp0' (Temp), 'setp1' (Temp), 'setp2' (Temp), 'setp3' (Temp), 'setp4' (Temp), 'setp5' (Temp)
-        """
-        data = {}
-        data['id'] = self.number
-        data['name'] = self.name
-        data['sensor'] = self.sensor
-        if mode == 'heating':
-            data['pid_p'] = self.pid_heating_p
-            data['pid_i'] = self.pid_heating_i
-            data['pid_d'] = self.pid_heating_d
-        else:
-            data['pid_p'] = self.pid_cooling_p
-            data['pid_i'] = self.pid_cooling_i
-            data['pid_d'] = self.pid_cooling_d
-
-        for preset in self.presets:
-            setpoint = preset.heating_setpoint if mode == 'heating' else preset.cooling_setpoint
-            if preset.name == 'AWAY':
-                data['setp3'] = setpoint
-            if preset.name == 'VACATION':
-                data['setp4'] = setpoint
-            if preset.name == 'PARTY':
-                data['setp5'] = setpoint
-
-        data['permanent_manual'] = self.automatic
-        data['room'] = self.room
-        data['output0'], data['output1'] = self.v0_get_output_numbers(mode=mode)
-
-        day_schedules = sorted(self.day_schedules, key=lambda schedule: schedule.index, reverse=False)
-        start_day_of_week = (self.start / 86400 - 4) % 7  # 0: Monday, 1: Tuesday, ...
-        for (day_index, key) in [(0, 'auto_mon'),
-                                 (1, 'auto_tue'),
-                                 (2, 'auto_wed'),
-                                 (3, 'auto_thu'),
-                                 (4, 'auto_fri'),
-                                 (5, 'auto_sat'),
-                                 (6, 'auto_sun')]:
-            index = (7 - start_day_of_week + day_index) % 7
-            data[key] = day_schedules[index].to_v0_dict()
-        return data
 
 
 class ValveToThermostat(BaseModel):
@@ -429,31 +388,6 @@ class DaySchedule(BaseModel):
     def from_v0_dict(cls, thermostat, index, mode, v0_schedule,):
         data = cls._schedule_data_from_v0(v0_schedule)
         return cls.from_dict(thermostat, index, mode, data)
-
-    def to_v0_dict(self):
-        return_data = {}
-        schedule = self.schedule_data
-        n_entries = len(schedule)
-        if n_entries == 0:
-            logger.error('Serializing an empty temperature day schedule.')
-        elif n_entries < 4:
-            logger.warning('Not enough data to serialize day schedule in old format. Returning best effort data.')
-            first_value = six.itervalues(schedule)
-            return_data['temp_n'] = first_value
-            return_data['temp_d1'] = first_value
-            return_data['temp_d2'] = first_value
-        else:
-            index = 0
-            for timestamp in sorted(schedule.keys()):
-                temperature = schedule[timestamp]
-                if index == 0:
-                    return_data['temp_n'] = temperature
-                elif index == 1:
-                    return_data['temp_d1'] = temperature
-                elif index == 3:
-                    return_data['temp_d2'] = temperature
-                index += 1
-        return return_data
 
     def get_scheduled_temperature(self, seconds_in_day):
         seconds_in_day = seconds_in_day % 86400

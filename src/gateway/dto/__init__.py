@@ -13,8 +13,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import absolute_import
-from .feedback_led import FeedbackLedDTO
-from .output import OutputDTO
-from .shutter import ShutterDTO
-from .shutter_group import ShutterGroupDTO
+from gateway.dto.feedback_led import FeedbackLedDTO
+from gateway.dto.output import OutputDTO
+from gateway.dto.shutter import ShutterDTO
+from gateway.dto.shutter_group import ShutterGroupDTO
+from gateway.dto.thermostat import ThermostatDTO
+from gateway.dto.thermostat_schedule import ThermostatScheduleDTO

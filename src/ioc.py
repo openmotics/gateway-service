@@ -16,14 +16,11 @@ Example:
 
   Hello()  # This will print 'Hello Anonymous'
 """
-from __future__ import absolute_import
-from __future__ import print_function
 import collections
 import functools
 import inspect
 import logging
 import threading
-import six
 
 if False:  # MYPY
     from typing import Any
@@ -531,7 +528,7 @@ def SetUpTestInjections(**kwargs):
     """
     global _TEST_SCOPE
     _TEST_SCOPE = _TEST_SCOPE or _Scope(None)
-    for name, value in six.iteritems(kwargs):
+    for name, value in kwargs.items():
         _TEST_SCOPE.Injectable(_CreateCallable(name, value))
 
 

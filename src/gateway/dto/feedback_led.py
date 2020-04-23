@@ -16,12 +16,13 @@
 """
 Feedback LED DTO
 """
-from __future__ import absolute_import
+from gateway.dto.base import BaseDTO
+
 if False:  # MYPY
     from typing import Optional
 
 
-class FeedbackLedDTO(object):
+class FeedbackLedDTO(BaseDTO):
 
     class Functions(object):
         UNKNOWN = 'UNKNOWN'

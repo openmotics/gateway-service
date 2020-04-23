@@ -1,11 +1,23 @@
-from __future__ import absolute_import
+# Copyright (C) 2020 OpenMotics BV
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 import logging
 from threading import Lock
 from ioc import INJECTED, Inject
 from models import Valve
 from gateway.thermostat.gateway.valve_driver import ValveDriver
-import six
-from six.moves import range
 
 logger = logging.getLogger('openmotics')
 
@@ -78,7 +90,7 @@ class PumpValveController(object):
     def prepare_pumps_for_transition(self):
         active_pump_drivers = set()
         potential_inactive_pump_drivers = set()
-        for valve_number, valve_driver in six.iteritems(self._valve_drivers):
+        for valve_number, valve_driver in self._valve_drivers.items():
             if valve_driver.is_open():
                 for pump_driver in valve_driver.pump_drivers:
                     active_pump_drivers.add(pump_driver)
@@ -91,13 +103,13 @@ class PumpValveController(object):
             pump_driver.turn_off()
 
     def steer_valves(self):
-        for valve_number, valve_driver in six.iteritems(self._valve_drivers):
+        for valve_number, valve_driver in self._valve_drivers.items():
             valve_driver.steer_output()
 
     def steer_pumps(self):
         active_pump_drivers = set()
         potential_inactive_pump_drivers = set()
-        for valve_number, valve_driver in six.iteritems(self._valve_drivers):
+        for valve_number, valve_driver in self._valve_drivers.items():
             if valve_driver.is_open():
                 for pump_driver in valve_driver.pump_drivers:
                     active_pump_drivers.add(pump_driver)

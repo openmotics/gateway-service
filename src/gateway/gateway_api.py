@@ -340,7 +340,7 @@ class GatewayApi(object):
         """
         # TODO: work with sensor controller
         # TODO: add other sensors too (e.g. from database <-- plugins)
-        return self.__master_controller.save_sensor([config])
+        return self.__master_controller.save_sensors([config])
 
     def set_sensor_configurations(self, config):
         """
