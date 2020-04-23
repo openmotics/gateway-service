@@ -23,6 +23,7 @@ settings.load_profile(os.getenv('HYPOTHESIS_PROFILE', 'default'))
 def toolbox_session():
     toolbox = Toolbox()
     toolbox.initialize()
+    toolbox.print_logs()
     return toolbox
 
 
@@ -31,9 +32,4 @@ def toolbox(toolbox_session):
     toolbox = toolbox_session
     toolbox.tester.get('/plugins/syslog_receiver/reset', success=False)
     yield toolbox
-    try:
-        data = toolbox.tester.get('/plugins/syslog_receiver/logs', success=False)
-        for log in data['logs']:
-            print(log)
-    except Exception:
-        print('Failed to retrieve logs')
+    toolbox.print_logs()
