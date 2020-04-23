@@ -35,6 +35,7 @@ import ujson as json
 from threading import Thread, Lock
 from collections import deque
 from six.moves.configparser import ConfigParser
+from gateway.config import ConfigurationController
 from ioc import Injectable, INJECTED, Inject
 from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
@@ -341,7 +342,7 @@ class VPNService(object):
         self._eeprom_events = deque()
         self._gateway = Gateway()
         self._vpn_controller = VpnController()
-        self._config_controller = configuration_controller
+        self._config_controller = configuration_controller  # type: ConfigurationController
         self._cloud = Cloud(config.get('OpenMotics', 'vpn_check_url') % config.get('OpenMotics', 'uuid'),
                             self._message_client,
                             self._config_controller)

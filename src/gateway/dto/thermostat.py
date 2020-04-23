@@ -57,6 +57,13 @@ class ThermostatDTO(BaseDTO):
         self.auto_sat = auto_sat  # type: Optional[ThermostatScheduleDTO]
         self.auto_sun = auto_sun  # type: Optional[ThermostatScheduleDTO]
 
+    @property
+    def in_use(self):
+        return (self.output0 is not None and
+                self.output0 <= 240 and
+                self.sensor is not None and
+                (self.sensor <= 31 or self.sensor == 240))
+
     def __eq__(self, other):
         if not isinstance(other, ThermostatDTO):
             return False

@@ -18,15 +18,18 @@ ThermostatSchedule DTO
 """
 from gateway.dto.base import BaseDTO
 
+if False:  # MYPY
+    from typing import Optional
+
 
 class ThermostatScheduleDTO(BaseDTO):
     def __init__(self,
                  temp_night, temp_day_1, temp_day_2,
                  start_day_1, end_day_1,
                  start_day_2, end_day_2):
-        self.temp_night = float(temp_night)  # type: float
-        self.temp_day_1 = float(temp_day_1)  # type: float
-        self.temp_day_2 = float(temp_day_2)  # type: float
+        self.temp_night = float(temp_night) if temp_night is not None else temp_night  # type: Optional[float]
+        self.temp_day_1 = float(temp_day_1) if temp_day_1 is not None else temp_day_1  # type: Optional[float]
+        self.temp_day_2 = float(temp_day_2) if temp_day_2 is not None else temp_day_2  # type: Optional[float]
         self.start_day_1 = start_day_1  # type: str
         self.end_day_1 = end_day_1  # type: str
         self.start_day_2 = start_day_2  # type: str

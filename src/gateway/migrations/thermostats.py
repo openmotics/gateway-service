@@ -36,7 +36,7 @@ class Migrator(object):
                 return False
             for day in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']:
                 field_dto = getattr(dto_, 'auto_{0}'.format(day))  # type: ThermostatScheduleDTO
-                if 95.5 in [field_dto.temp_night, field_dto.temp_day_2, field_dto.temp_day_1]:
+                if None in [field_dto.temp_night, field_dto.temp_day_2, field_dto.temp_day_1]:
                     return False
                 if '42:30' in [field_dto.start_day_1, field_dto.end_day_1, field_dto.start_day_2, field_dto.end_day_2]:
                     return False

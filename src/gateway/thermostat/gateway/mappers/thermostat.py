@@ -234,7 +234,7 @@ class ThermostatMapper(object):
         return thermostat
 
     @staticmethod
-    def _schedule_dto_to_orm(schedule_dto):  # type: (ThermostatScheduleDTO) -> Dict[int, float]
+    def _schedule_dto_to_orm(schedule_dto):  # type: (ThermostatScheduleDTO) -> Dict[int, Optional[float]]
         def get_seconds(hour_timestamp):
             x = time.strptime(hour_timestamp, '%H:%M')
             return int(datetime.timedelta(hours=x.tm_hour, minutes=x.tm_min, seconds=x.tm_sec).total_seconds())
