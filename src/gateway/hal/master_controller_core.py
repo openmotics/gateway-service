@@ -493,6 +493,15 @@ class MasterCoreController(MasterController):
     def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
         raise NotImplementedError()
 
+    def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+        raise NotImplementedError()
+
+    def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
+        raise NotImplementedError()
+
+    def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+        raise NotImplementedError()
+
     # Can Led functions
 
     def load_can_led_configurations(self, fields=None):

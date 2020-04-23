@@ -19,7 +19,7 @@ Base DTO
 
 
 class BaseDTO(object):
-    def __set__(self):
+    def __str__(self):
         return str(self.__dict__)
 
     def __repr__(self):
