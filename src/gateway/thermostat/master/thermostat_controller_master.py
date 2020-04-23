@@ -545,13 +545,13 @@ class ThermostatControllerMaster(ThermostatController):
             self._thermostats_config = {thermostat.id: thermostat
                                         for thermostat in self.load_cooling_thermostats()}
         else:
-            self._thermostats_config = {thermostat.id: thermostat_info
+            self._thermostats_config = {thermostat.id: thermostat
                                         for thermostat in self.load_heating_thermostats()}
 
         thermostats = []
         for thermostat_id in range(32):
-            config = self._thermostats_config[thermostat_id]
-            if (config.sensor <= 31 or config.sensor == 240) and config.output0 <= 240:
+            thermostat_dto = self._thermostats_config[thermostat_id]  # type: ThermostatDTO
+            if thermostat_dto.in_use:
                 t_mode = thermostat_mode['mode{0}'.format(thermostat_id)]
                 t_automatic, t_setpoint = get_automatic_setpoint(t_mode)
                 thermostat = {'id': thermostat_id,
@@ -561,12 +561,12 @@ class ThermostatControllerMaster(ThermostatController):
                               'mode': t_mode,
                               'automatic': t_automatic,
                               'setpoint': t_setpoint,
-                              'name': config.name,
-                              'sensor_nr': config.sensor,
+                              'name': thermostat_dto.name,
+                              'sensor_nr': thermostat_dto.sensor,
                               'airco': aircos['ASB{0}'.format(thermostat_id)]}
                 for output in [0, 1]:
-                    output_nr = config['output{0}'.format(output)]
-                    if output_nr < len(outputs) and outputs[output_nr]['status']:
+                    output_nr = getattr(thermostat_dto, 'output{0}'.format(output))
+                    if output_nr is not None and output_nr < len(outputs) and outputs[output_nr]['status']:
                         thermostat['output{0}'.format(output)] = outputs[output_nr]['dimmer']
                     else:
                         thermostat['output{0}'.format(output)] = 0
