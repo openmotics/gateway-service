@@ -17,7 +17,6 @@ Module to work update a Core
 """
 
 from __future__ import absolute_import
-from __future__ import print_function
 from platform_utils import System
 System.import_libs()
 

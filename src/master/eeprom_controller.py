@@ -722,7 +722,7 @@ def append_tail(byte_str, length, delimiter='\xff'):
     of the string.
     """
     if len(byte_str) < length:
-        return str(byte_str) + delimiter * int((length - len(byte_str)) / len(delimiter))
+        return str(byte_str) + delimiter * ((length - len(byte_str)) // len(delimiter))
     return str(byte_str)
 
 

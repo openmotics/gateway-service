@@ -15,7 +15,6 @@
 """ The update modules provides the update functionality. """
 
 from __future__ import absolute_import
-from __future__ import print_function
 import sys
 import hashlib
 import traceback

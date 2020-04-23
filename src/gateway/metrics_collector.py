@@ -178,7 +178,7 @@ class MetricsCollector(object):
 
     def _sleep_manager(self):
         while True:
-            for sleep_data in self._sleepers.items():
+            for sleep_data in self._sleepers.values():
                 if not sleep_data['event'].is_set() and sleep_data['end'] < time.time():
                     sleep_data['event'].set()
             time.sleep(0.1)

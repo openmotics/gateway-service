@@ -19,7 +19,6 @@ Serial tools contains the RS485 wrapper, printable and CommunicationTimedOutExce
 """
 
 from __future__ import absolute_import
-from __future__ import print_function
 import struct
 import fcntl
 from threading import Thread

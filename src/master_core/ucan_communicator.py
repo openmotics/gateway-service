@@ -17,7 +17,6 @@ Module to communicate with the uCANs.
 """
 
 from __future__ import absolute_import
-from __future__ import print_function
 import logging
 from six.moves.queue import Queue, Empty
 from ioc import Injectable, Inject, INJECTED, Singleton
