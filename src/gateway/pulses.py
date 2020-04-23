@@ -23,7 +23,6 @@ import master.master_api as master_api
 from platform_utils import Platform
 from ioc import Injectable, Inject, INJECTED, Singleton
 from master.eeprom_models import PulseCounterConfiguration
-from six.moves import range
 
 logger = logging.getLogger('openmotics')
 MASTER_PULSE_COUNTERS = 24

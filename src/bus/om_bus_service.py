@@ -23,7 +23,6 @@ import ujson as json
 from multiprocessing.connection import Listener
 from threading import Thread
 from signal import signal, SIGTERM
-import six
 
 logger = logging.getLogger('openmotics')
 
@@ -38,12 +37,12 @@ class MessageService(object):
         self._stop = False
 
     def _multicast(self, source, msg):
-        for connection, client_name in six.iteritems(self.connections):
+        for connection, client_name in self.connections.items():
             if client_name != source and connection is not None:
                 self._send(connection, msg)
 
     def _unicast(self, destination, msg):
-        for connection, client_name in six.iteritems(self.connections):
+        for connection, client_name in self.connections.items():
             if client_name == destination and connection is not None:
                 self._send(connection, msg)
                 break

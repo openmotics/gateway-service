@@ -46,7 +46,6 @@ from master.master_communicator import BackgroundConsumer
 from master.outputs import OutputStatus
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
-from six.moves import range
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Tuple

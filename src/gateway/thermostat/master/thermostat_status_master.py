@@ -19,7 +19,6 @@ the master.
 
 from __future__ import absolute_import
 from threading import Lock
-from six.moves import range
 
 
 class ThermostatStatusMaster(object):

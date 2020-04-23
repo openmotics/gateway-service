@@ -23,7 +23,6 @@ import unittest
 import mock
 import xmlrunner
 from master.inputs import InputStatus
-from six.moves import range
 
 
 class InputStatusTest(unittest.TestCase):

@@ -18,7 +18,6 @@ and call the master_api to complete the actions.
 """
 
 from __future__ import absolute_import
-import six.moves.configparser
 import glob
 import logging
 import math
@@ -28,6 +27,7 @@ import sqlite3
 import subprocess
 import tempfile
 import threading
+from six.moves.configparser import ConfigParser
 
 import constants
 from bus.om_bus_events import OMBusEvents
@@ -37,8 +37,6 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Platform, System
 from power import power_api
 from serial_utils import CommunicationTimedOutException
-import six
-from six.moves import range
 
 if False:  # MYPY:
     from typing import Any, Dict, List, Tuple, Optional
@@ -140,7 +138,7 @@ class GatewayApi(object):
     def get_main_version(self):
         """ Gets reported main version """
         _ = self
-        config = six.moves.configparser.ConfigParser()
+        config = ConfigParser()
         config.read(constants.get_config_file())
         return str(config.get('OpenMotics', 'version'))
 
@@ -450,12 +448,12 @@ class GatewayApi(object):
             with open('{0}/master.eep'.format(tmp_sqlite_dir), 'w') as eeprom_file:
                 eeprom_file.write(self.get_master_backup())
 
-            for filename, source in six.iteritems({'config.db': constants.get_config_database_file(),
+            for filename, source in {'config.db': constants.get_config_database_file(),
                                      'scheduled.db': constants.get_scheduling_database_file(),
                                      'power.db': constants.get_power_database_file(),
                                      'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
                                      'metrics.db': constants.get_metrics_database_file(),
-                                     'pulse.db': constants.get_pulse_counter_database_file()}):
+                                     'pulse.db': constants.get_pulse_counter_database_file()}.items():
                 target = '{0}/{1}'.format(tmp_sqlite_dir, filename)
                 backup_sqlite_db(source, target)
 
@@ -517,13 +515,13 @@ class GatewayApi(object):
                 eeprom_content = eeprom_file.read()
                 self.master_restore(eeprom_content)
 
-            for filename, target in six.iteritems({'config.db': constants.get_config_database_file(),
+            for filename, target in {'config.db': constants.get_config_database_file(),
                                      'users.db': constants.get_config_database_file(),
                                      'scheduled.db': constants.get_scheduling_database_file(),
                                      'power.db': constants.get_power_database_file(),
                                      'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
                                      'metrics.db': constants.get_metrics_database_file(),
-                                     'pulse.db': constants.get_pulse_counter_database_file()}):
+                                     'pulse.db': constants.get_pulse_counter_database_file()}.items():
                 source = '{0}/{1}'.format(src_dir, filename)
                 if os.path.exists(source):
                     shutil.copyfile(source, target)

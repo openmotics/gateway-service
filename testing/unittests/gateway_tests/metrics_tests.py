@@ -30,7 +30,6 @@ from ioc import SetTestMode, SetUpTestInjections
 from gateway.config import ConfigurationController
 from gateway.metrics_controller import MetricsController
 from gateway.metrics_caching import MetricsCacheController
-from six.moves import range
 
 
 class MetricsTest(unittest.TestCase):

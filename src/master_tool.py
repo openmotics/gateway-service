@@ -18,9 +18,7 @@ Tool to control the master from the command line.
 @author: fryckbos
 """
 from __future__ import absolute_import
-from __future__ import print_function
 from platform_utils import System
-from six.moves import range
 System.import_libs()
 
 import argparse

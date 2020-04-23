@@ -28,7 +28,6 @@ from gateway.pulses import PulseCounterController
 import master.master_api as master_api
 from master_tests.eeprom_controller_tests import get_eeprom_controller_dummy
 from serial_tests import DummyPty
-from six.moves import range
 
 
 class PulseCounterControllerTest(unittest.TestCase):

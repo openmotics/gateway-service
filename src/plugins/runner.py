@@ -9,7 +9,6 @@ import ujson as json
 from threading import Thread, Lock
 from six.moves.queue import Queue, Empty, Full
 from toolbox import PluginIPCStream
-from six.moves import range
 
 logger = logging.getLogger("openmotics")
 

@@ -185,7 +185,7 @@ class MetricsController(object):
             log = self._plugin_controller.get_logger(plugin)
             for definition in plugin_definitions:
                 definition_ok = True
-                for key, key_type in six.iteritems(required_keys):
+                for key, key_type in required_keys.items():
                     if key not in definition:
                         log('Definitions should contain keys: {0}'.format(', '.join(list(required_keys.keys()))))
                         definition_ok = False
@@ -202,7 +202,7 @@ class MetricsController(object):
                                 log('Metric definitions should be dictionaries')
                                 definition_ok = False
                                 break
-                            for mkey, mkey_type in six.iteritems(metrics_keys):
+                            for mkey, mkey_type in metrics_keys.items():
                                 if mkey not in metric_definition:
                                     log('Metric definitions should contain keys: {0}'.format(', '.join(list(metrics_keys.keys()))))
                                     definition_ok = False
@@ -466,7 +466,7 @@ class MetricsController(object):
                              'values': dict,
                              'tags': dict}
             metric_ok = True
-            for key, key_type in six.iteritems(required_keys):
+            for key, key_type in required_keys.items():
                 if key not in metric:
                     log('Metric should contain keys {0}'.format(', '.join(list(required_keys.keys()))))
                     metric_ok = False

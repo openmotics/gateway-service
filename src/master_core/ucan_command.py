@@ -20,7 +20,6 @@ import logging
 import math
 from master_core.fields import PaddingField, UInt32Field, StringField
 from serial_utils import printable
-from six.moves import range
 
 
 logger = logging.getLogger('openmotics')

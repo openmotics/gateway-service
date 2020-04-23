@@ -11,7 +11,6 @@ from peewee import BooleanField, CharField, CompositeKey, DoesNotExist, \
     FloatField, ForeignKeyField, IntegerField, PrimaryKeyField, \
     SqliteDatabase, TextField
 from playhouse.signals import Model, post_save
-import six
 
 if False:  # MYPY
     from typing import Dict
@@ -351,7 +350,7 @@ class DaySchedule(BaseModel):
             }
         """
         # convert relative timestamps to int and temperature values to float
-        for key, value in six.iteritems(data):
+        for key, value in data.items():
             relative_timestamp = int(key)
             if relative_timestamp < 86400:
                 data[relative_timestamp] = float(value)

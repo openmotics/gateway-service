@@ -20,12 +20,10 @@ from __future__ import absolute_import
 import logging
 import os
 import struct
-import time
 from intelhex import IntelHex
 from master_core.ucan_api import UCANAPI
 from master_core.ucan_command import UCANPalletCommandSpec, SID
 from master_core.fields import UInt32Field
-from six.moves import range
 
 logger = logging.getLogger('openmotics')
 

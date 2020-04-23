@@ -17,7 +17,6 @@ Communication fields
 """
 from __future__ import absolute_import
 import struct
-from six.moves import range
 
 
 class Field(object):

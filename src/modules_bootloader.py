@@ -19,9 +19,7 @@ For more information, see:
 * https://wiki.openmotics.com/index.php/Bootloader_Error_Codes
 """
 from __future__ import absolute_import
-from __future__ import print_function
 from platform_utils import System
-from six.moves import range
 System.import_libs()
 
 import argparse

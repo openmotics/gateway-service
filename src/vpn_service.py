@@ -20,10 +20,9 @@ thermostats to the cloud, to keep the status information in the cloud in sync.
 
 from __future__ import absolute_import
 from platform_utils import System
-import six
-from six.moves import range
 System.import_libs()
 
+import six
 import logging
 import os
 import glob
@@ -37,7 +36,6 @@ from threading import Thread, Lock
 from collections import deque
 from six.moves.configparser import ConfigParser
 from ioc import Injectable, INJECTED, Inject
-from gateway.config import ConfigurationController
 from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
 
@@ -144,7 +142,7 @@ class Cloud(object):
             if 'configuration' in data:
                 configuration_changed = cmp(self.__configuration, data['configuration']) != 0
                 if configuration_changed:
-                    for setting, value in six.iteritems(data['configuration']):
+                    for setting, value in data['configuration'].items():
                         self.__config.set(setting, value)
                     logger.info('configuration changed: {0}'.format(data['configuration']))
 

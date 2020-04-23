@@ -18,7 +18,6 @@
 """
 from __future__ import absolute_import
 from toolbox import Toolbox
-import six
 
 if False:  # MYPY
     from typing import Dict, Any, List, Optional
@@ -34,7 +33,7 @@ class SerializerToolbox(object):
     @staticmethod
     def deserialize(dto, api_data, mapping):
         loaded_fields = []
-        for data_field, (dto_field, default) in six.iteritems(mapping):
+        for data_field, (dto_field, default) in mapping.items():
             if data_field in api_data:
                 loaded_fields.append(dto_field)
                 if default is None:

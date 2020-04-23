@@ -26,7 +26,6 @@ from master_core.exceptions import BootloadingException
 from master_core.ucan_communicator import UCANCommunicator, SID
 from master_core.ucan_command import UCANCommandSpec, UCANPalletCommandSpec, PalletType, Instruction
 from master_core.fields import AddressField, ByteArrayField, ByteField, UInt32Field, StringField
-from six.moves import range
 
 
 class UCANCommunicatorTest(unittest.TestCase):

@@ -23,7 +23,6 @@ from __future__ import absolute_import
 import math
 
 from serial_utils import printable
-from six.moves import range
 
 
 class MasterCommandSpec(object):

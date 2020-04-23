@@ -230,7 +230,7 @@ def _openmotics_api(f, *args, **kwargs):
     timings['serialization'] = 'Serialization', time.time() - serialization_start
     cherrypy.response.headers['Content-Type'] = 'application/json'
     cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
-                                                           for key, value in six.iteritems(timings)])
+                                                           for key, value in timings.items()])
     if hasattr(f, 'deprecated') and f.deprecated is not None:
         cherrypy.response.headers['Warning'] = 'Warning: 299 - "Deprecated, replaced by: {0}"'.format(f.deprecated)
     cherrypy.response.status = status

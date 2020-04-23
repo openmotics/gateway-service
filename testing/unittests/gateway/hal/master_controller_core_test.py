@@ -16,7 +16,6 @@ from master_core.core_communicator import BackgroundConsumer
 from master_core.memory_models import InputConfiguration
 from master_core.ucan_communicator import UCANCommunicator
 from six.moves import map
-from six.moves import range
 
 
 class MasterCoreControllerTest(unittest.TestCase):

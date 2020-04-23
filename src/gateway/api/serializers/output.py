@@ -20,7 +20,6 @@ from __future__ import absolute_import
 from toolbox import Toolbox
 from gateway.api.serializers.base import SerializerToolbox
 from gateway.dto import OutputDTO, FeedbackLedDTO
-from six.moves import range
 
 if False:  # MYPY
     from typing import Dict, Optional, List, Tuple

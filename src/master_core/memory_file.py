@@ -21,8 +21,6 @@ from ioc import Inject, INJECTED
 from master_core.core_api import CoreAPI
 from master_core.core_communicator import BackgroundConsumer
 from master_core.events import Event
-import six
-from six.moves import range
 
 logger = logging.getLogger("openmotics")
 
@@ -86,7 +84,7 @@ class MemoryFile(object):
         """
         :type data_map: dict[master_core.memory_types.MemoryAddress, list[int]]
         """
-        for address, data in six.iteritems(data_map):
+        for address, data in data_map.items():
             page_data = self.read_page(address.page)
             for index, data_byte in enumerate(data):
                 page_data[address.offset + index] = data_byte

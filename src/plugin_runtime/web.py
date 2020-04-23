@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 import re
 import requests
-from six.moves import range
 
 try:
     import ujson as json

@@ -19,7 +19,6 @@ Module to communicate with the uCANs.
 from __future__ import absolute_import
 from __future__ import print_function
 import logging
-import time
 from six.moves.queue import Queue, Empty
 from ioc import Injectable, Inject, INJECTED, Singleton
 from master_core.core_api import CoreAPI
@@ -28,7 +27,6 @@ from master_core.exceptions import BootloadingException
 from master_core.ucan_command import SID
 from master_core.ucan_api import UCANAPI
 from serial_utils import CommunicationTimedOutException, printable
-from six.moves import range
 
 logger = logging.getLogger('openmotics')
 

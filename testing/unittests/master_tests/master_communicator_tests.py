@@ -30,7 +30,6 @@ from master.master_communicator import BackgroundConsumer, \
     CrcCheckFailedException, MasterCommunicator
 from serial_tests import DummyPty
 from serial_utils import CommunicationTimedOutException
-from six.moves import range
 
 
 class MasterCommunicatorTest(unittest.TestCase):

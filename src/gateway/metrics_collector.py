@@ -32,7 +32,6 @@ from platform_utils import Hardware
 from power import power_api
 from serial_utils import CommunicationTimedOutException
 import six
-from six.moves import range
 
 logger = logging.getLogger("openmotics")
 
@@ -179,7 +178,7 @@ class MetricsCollector(object):
 
     def _sleep_manager(self):
         while True:
-            for sleep_data in six.itervalues(self._sleepers):
+            for sleep_data in self._sleepers.items():
                 if not sleep_data['event'].is_set() and sleep_data['end'] < time.time():
                     sleep_data['event'].set()
             time.sleep(0.1)
@@ -327,7 +326,7 @@ class MetricsCollector(object):
                     logger.error('Error loading disk metrics: {0}'.format(ex))
 
                 try:
-                    for key, val in Hardware.read_mmc_ext_csd():
+                    for key, val in Hardware.read_mmc_ext_csd().items():
                         values['disk_{}'.format(key)] = val
                 except Exception as ex:
                     logger.error('Error loading disk eMMC metrics: {0}'.format(ex))
@@ -437,7 +436,7 @@ class MetricsCollector(object):
                 temperatures = self._gateway_api.get_sensors_temperature_status()
                 humidities = self._gateway_api.get_sensors_humidity_status()
                 brightnesses = self._gateway_api.get_sensors_brightness_status()
-                for sensor_id, sensor in six.iteritems(self._environment['sensors']):
+                for sensor_id, sensor in self._environment['sensors'].items():
                     name = sensor['name']
                     if name == '' or name == 'NOT_IN_USE':
                         continue
@@ -548,7 +547,7 @@ class MetricsCollector(object):
             now = time.time()
             counters_data = {}
             try:
-                for counter_id, counter in six.iteritems(self._environment['pulse_counters']):
+                for counter_id, counter in self._environment['pulse_counters'].items():
                     counters_data[counter_id] = {'name': counter['name'],
                                                  'input': counter['input']}
                 result = self._gateway_api.get_pulse_counter_status()
@@ -600,7 +599,7 @@ class MetricsCollector(object):
                 logger.exception('Error getting power modules: {0}'.format(ex))
             try:
                 result = self._gateway_api.get_realtime_power()
-                for module_id, device_id in six.iteritems(mapping):
+                for module_id, device_id in mapping.items():
                     if module_id in result:
                         for index, entry in enumerate(result[module_id]):
                             voltage, frequency, current, power = entry
@@ -618,7 +617,7 @@ class MetricsCollector(object):
                 logger.exception('Error getting realtime power: {0}'.format(ex))
             try:
                 result = self._gateway_api.get_total_energy()
-                for module_id, device_id in six.iteritems(mapping):
+                for module_id, device_id in mapping.items():
                     if module_id in result:
                         for index, entry in enumerate(result[module_id]):
                             day, night = entry

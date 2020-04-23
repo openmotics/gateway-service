@@ -42,7 +42,6 @@ from master_core.memory_models import (
     SensorConfiguration, ShutterConfiguration
 )
 from serial_utils import CommunicationTimedOutException
-from six.moves import range
 
 if False:  # MYPY
     from typing import Any, Dict, List, Tuple

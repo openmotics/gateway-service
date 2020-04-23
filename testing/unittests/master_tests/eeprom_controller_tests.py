@@ -27,7 +27,6 @@ from master.eeprom_controller import EepromController, EepromFile, EepromModel, 
                                      EepromIBool, EextByte, EextString
 from master.eeprom_extension import EepromExtension
 import master.master_api as master_api
-from six.moves import range
 
 
 class Model1(EepromModel):

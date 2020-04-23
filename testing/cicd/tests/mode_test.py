@@ -20,7 +20,6 @@ import time
 
 import psutil
 import pytest
-from six.moves import range
 
 logger = logging.getLogger('openmotics')
 

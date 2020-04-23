@@ -25,7 +25,6 @@ import xmlrunner
 import master.master_api as master_api
 from master.master_command import MasterCommandSpec, Field, OutputFieldType, DimmerFieldType, \
                                   ErrorListFieldType
-from six.moves import range
 
 
 class MasterCommandSpecTest(unittest.TestCase):
