@@ -630,7 +630,23 @@ class MasterCoreController(MasterController):
         self._master_communicator.do_command(cmd, reset, timeout=None)
 
     def cold_reset(self):
-        raise NotImplementedError()
+        # type: () -> Dict[str,Any]
+        _ = self  # Must be an instance method
+        gpio_direction = open('/sys/class/gpio/gpio49/direction', 'w')
+        gpio_direction.write('out')
+        gpio_direction.close()
+
+        def power(master_on):
+            """ Set the power on the master. """
+            gpio_file = open('/sys/class/gpio/gpio49/value', 'w')
+            gpio_file.write('0' if master_on else '1')
+            gpio_file.close()
+
+        power(False)
+        time.sleep(5)
+        power(True)
+
+        return {'status': 'OK'}
 
     def get_modules(self):
         # TODO: implement
