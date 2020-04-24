@@ -17,8 +17,8 @@ Contains the definition of the Core API
 """
 
 from __future__ import absolute_import
-from master_core.core_command import CoreCommandSpec
-from master_core.fields import (ByteField, WordField, ByteArrayField, WordArrayField, LiteralBytesField,
+from master.core.core_command import CoreCommandSpec
+from master.core.fields import (ByteField, WordField, ByteArrayField, WordArrayField, LiteralBytesField,
                                 AddressField, CharField, PaddingField, VersionField, TemperatureArrayField,
                                 HumidityArrayField)
 

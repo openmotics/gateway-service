@@ -21,12 +21,12 @@ import unittest
 import xmlrunner
 import os
 from ioc import SetTestMode, SetUpTestInjections
-from master.eeprom_controller import EepromController, EepromFile, EepromModel, EepromAddress, \
+from master.classic.eeprom_controller import EepromController, EepromFile, EepromModel, EepromAddress, \
                                      EepromData, EepromId, EepromString, EepromByte, EepromWord, \
                                      CompositeDataType, EepromActions, EepromSignedTemp, \
                                      EepromIBool, EextByte, EextString
-from master.eeprom_extension import EepromExtension
-import master.master_api as master_api
+from master.classic.eeprom_extension import EepromExtension
+import master.classic.master_api as master_api
 
 
 class Model1(EepromModel):

@@ -29,12 +29,12 @@ import time
 import traceback
 import intelhex
 import constants
-import master.master_api as master_api
+import master.classic.master_api as master_api
 from ioc import Injectable, Inject, INJECTED
 from six.moves.configparser import ConfigParser
 from serial import Serial
-from master.master_communicator import MasterCommunicator, CommunicationTimedOutException
-from master.eeprom_controller import EepromFile, EepromAddress
+from master.classic.master_communicator import MasterCommunicator, CommunicationTimedOutException
+from master.classic.eeprom_controller import EepromFile, EepromAddress
 
 
 def create_bl_action(command, command_input):

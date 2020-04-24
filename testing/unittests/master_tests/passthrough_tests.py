@@ -25,8 +25,8 @@ import unittest
 import xmlrunner
 
 from ioc import SetTestMode, SetUpTestInjections
-from master.master_communicator import MasterCommunicator
-from master.passthrough import PassthroughService
+from master.classic.master_communicator import MasterCommunicator
+from master.classic.passthrough import PassthroughService
 from serial_tests import DummyPty, SerialMock, sin, sout
 
 

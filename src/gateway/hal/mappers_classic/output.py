@@ -20,8 +20,8 @@ from __future__ import absolute_import
 from toolbox import Toolbox
 from gateway.dto.output import OutputDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
-from master.eeprom_controller import EepromModel
-from master.eeprom_models import OutputConfiguration
+from master.classic.eeprom_controller import EepromModel
+from master.classic.eeprom_models import OutputConfiguration
 
 if False:  # MYPY
     from typing import List

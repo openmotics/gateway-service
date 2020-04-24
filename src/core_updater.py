@@ -26,7 +26,7 @@ import constants
 from six.moves.configparser import ConfigParser
 from serial import Serial
 from ioc import Injectable
-from master_core.core_updater import CoreUpdater
+from master.core.core_updater import CoreUpdater
 
 logger = logging.getLogger("openmotics")
 

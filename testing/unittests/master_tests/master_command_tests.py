@@ -22,8 +22,8 @@ from __future__ import absolute_import
 import unittest
 import xmlrunner
 
-import master.master_api as master_api
-from master.master_command import MasterCommandSpec, Field, OutputFieldType, DimmerFieldType, \
+import master.classic.master_api as master_api
+from master.classic.master_command import MasterCommandSpec, Field, OutputFieldType, DimmerFieldType, \
                                   ErrorListFieldType
 
 

@@ -25,8 +25,8 @@ import xmlrunner
 
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import SetTestMode, SetUpTestInjections
-from master import master_api
-from master.master_communicator import BackgroundConsumer, \
+from master.classic import master_api
+from master.classic.master_communicator import BackgroundConsumer, \
     CrcCheckFailedException, MasterCommunicator
 from serial_tests import DummyPty
 from serial_utils import CommunicationTimedOutException

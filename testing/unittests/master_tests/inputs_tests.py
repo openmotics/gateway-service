@@ -22,7 +22,7 @@ import unittest
 
 import mock
 import xmlrunner
-from master.inputs import InputStatus
+from master.classic.inputs import InputStatus
 
 
 class InputStatusTest(unittest.TestCase):

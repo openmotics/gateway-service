@@ -21,9 +21,10 @@ import logging
 import os
 import struct
 from intelhex import IntelHex
-from master_core.ucan_api import UCANAPI
-from master_core.ucan_command import UCANPalletCommandSpec, SID
-from master_core.fields import UInt32Field
+from master.core.ucan_api import UCANAPI
+from master.core.ucan_command import UCANPalletCommandSpec, SID
+from master.core.ucan_communicator import UCANCommunicator
+from master.core.fields import UInt32Field
 
 logger = logging.getLogger('openmotics')
 
@@ -46,12 +47,12 @@ class UCANUpdater(object):
 
     @staticmethod
     def update(cc_address, ucan_address, ucan_communicator, hex_filename):
+        # type: (str, str, UCANCommunicator, str) -> bool
         """
         Flashes the content from an Intel HEX file to the specified uCAN
         :param cc_address: CC address
         :param ucan_address: uCAN address
         :param ucan_communicator: uCAN commnicator
-        :type ucan_communicator: master_core.ucan_communicator.UCANCommunicator
         :param hex_filename: The filename of the hex file to flash
         """
         try:

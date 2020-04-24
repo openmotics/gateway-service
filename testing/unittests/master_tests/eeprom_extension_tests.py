@@ -21,7 +21,7 @@ import unittest
 import xmlrunner
 import os
 from ioc import SetTestMode, SetUpTestInjections
-from master.eeprom_extension import EepromExtension
+from master.classic.eeprom_extension import EepromExtension
 
 
 class EepromExtensionTest(unittest.TestCase):

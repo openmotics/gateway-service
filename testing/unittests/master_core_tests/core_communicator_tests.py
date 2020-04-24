@@ -18,9 +18,9 @@ import unittest
 import mock
 import xmlrunner
 
-import master_core.core_communicator
+import master.core.core_communicator
 from ioc import SetTestMode, SetUpTestInjections
-from master_core.core_communicator import Consumer, CoreCommunicator
+from master.core.core_communicator import Consumer, CoreCommunicator
 
 
 class CoreCommunicatorTest(unittest.TestCase):

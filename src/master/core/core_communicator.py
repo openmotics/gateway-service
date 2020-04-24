@@ -23,9 +23,13 @@ import time
 from threading import Thread, Lock
 from six.moves.queue import Queue, Empty
 from ioc import Injectable, Inject, INJECTED, Singleton
-from master_core.core_api import CoreAPI
-from master_core.fields import WordField
+from master.core.core_api import CoreAPI
+from master.core.fields import WordField
+from master.core.core_command import CoreCommandSpec
 from serial_utils import CommunicationTimedOutException, printable
+
+if False:  # MYPY
+    from typing import Optional, Dict, Any
 
 logger = logging.getLogger('openmotics')
 
@@ -192,19 +196,14 @@ class CoreCommunicator(object):
              'extra_parameter': extra_parameter}
         )
 
-    def do_command(self, command, fields, timeout=2):
+    def do_command(self, command, fields, timeout=2):  # type: (CoreCommandSpec, Dict[str, Any], Optional[int]) -> Optional[Dict[str, Any]]
         """
         Send a command over the serial port and block until an answer is received.
         If the Core does not respond within the timeout period, a CommunicationTimedOutException is raised
 
         :param command: specification of the command to execute
-        :type command: master_core.core_command.CoreCommandSpec
         :param fields: A dictionary with the command input field values
-        :type fields dict
         :param timeout: maximum allowed time before a CommunicationTimedOutException is raised
-        :type timeout: int
-        :raises: serial_utils.CommunicationTimedOutException
-        :returns: dict containing the output fields of the command
         """
         cid = self._get_cid()
         consumer = Consumer(command, cid)
@@ -230,17 +229,13 @@ class CoreCommunicator(object):
             self._communication_stats['calls_timedout'] = self._communication_stats['calls_timedout'][-50:]
             raise
 
-    def _send_command(self, cid, command, fields):
+    def _send_command(self, cid, command, fields):  # type: (int, CoreCommandSpec, Dict[str, Any]) -> None
         """
         Send a command over the serial port
 
         :param cid: The command ID
-        :type cid: int
         :param command: The Core CommandSpec
-        :type command: master_core.core_command.CoreCommandSpec
         :param fields: A dictionary with the command input field values
-        :type fields dict
-        :raises: serial_utils.CommunicationTimedOutException
         """
 
         payload = command.create_request_payload(fields)

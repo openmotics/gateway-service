@@ -24,7 +24,7 @@ import logging
 import threading
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.maintenance_communicator import InMaintenanceModeException
-from master.master_command import printable
+from master.classic.master_command import printable
 
 logger = logging.getLogger("openmotics")
 

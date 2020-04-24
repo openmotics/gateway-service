@@ -20,12 +20,15 @@ from __future__ import absolute_import
 import logging
 from six.moves.queue import Queue, Empty
 from ioc import Injectable, Inject, INJECTED, Singleton
-from master_core.core_api import CoreAPI
-from master_core.core_communicator import BackgroundConsumer
-from master_core.exceptions import BootloadingException
-from master_core.ucan_command import SID
-from master_core.ucan_api import UCANAPI
+from master.core.core_api import CoreAPI
+from master.core.core_communicator import CoreCommunicator, BackgroundConsumer
+from master.core.exceptions import BootloadingException
+from master.core.ucan_command import SID, UCANCommandSpec
+from master.core.ucan_api import UCANAPI
 from serial_utils import CommunicationTimedOutException, printable
+
+if False:  # MYPY
+    from typing import Optional, Dict, Any, Union
 
 logger = logging.getLogger('openmotics')
 
@@ -41,12 +44,10 @@ class UCANCommunicator(object):
     def __init__(self, master_communicator=INJECTED, verbose=False):
         """
         :param master_communicator: CoreCommunicator
-        :type master_communicator: master_core.core_communicator.CoreCommunicator
         :param verbose: Log all communication
-        :type verbose: boolean.
         """
-        self._verbose = verbose
-        self._communicator = master_communicator
+        self._verbose = verbose  # type: bool
+        self._communicator = master_communicator  # type: CoreCommunicator
         self._read_buffer = []
         self._consumers = {}
         self._cc_pallet_mode = {}
@@ -87,21 +88,16 @@ class UCANCommunicator(object):
             consumers.remove(consumer)
 
     def do_command(self, cc_address, command, identity, fields, timeout=2):
+        # type: (str, UCANCommandSpec, str, Dict[str, Any], Optional[int]) -> Optional[Dict[str, Any]]
         """
         Send a uCAN command over the Communicator and block until an answer is received.
         If the Core does not respond within the timeout period, a CommunicationTimedOutException is raised
 
         :param cc_address: An address of the CC connected to the uCAN
-        :type cc_address: str
         :param command: specification of the command to execute
-        :type command: master_core.ucan_command.UCANCommandSpec
         :param identity: The identity
-        :type identity: str
         :param fields: A dictionary with the command input field values
-        :type fields dict
         :param timeout: maximum allowed time before a CommunicationTimedOutException is raised
-        :type timeout: int or None
-        :raises: serial_utils.CommunicationTimedOutException
         :returns: dict containing the output fields of the command
         """
         if self._cc_pallet_mode.get(cc_address, False) is True:
@@ -110,7 +106,7 @@ class UCANCommunicator(object):
         command.set_identity(identity)
 
         if command.sid == SID.BOOTLOADER_PALLET:
-            consumer = PalletConsumer(cc_address, command, self._release_pallet_mode)
+            consumer = PalletConsumer(cc_address, command, self._release_pallet_mode)  # type: Union[PalletConsumer, Consumer]
             self._cc_pallet_mode[cc_address] = True
         else:
             consumer = Consumer(cc_address, command)
@@ -139,6 +135,7 @@ class UCANCommunicator(object):
             return consumer.get(0)
         if timeout is not None:
             return consumer.get(timeout)
+        return None
 
     def _release_pallet_mode(self, cc_address):
         print('Releasing pallet mode for {0}'.format(cc_address))

@@ -21,9 +21,9 @@ import unittest
 import xmlrunner
 from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
-from master_core.basic_action import BasicAction
-from master_core.memory_file import MemoryTypes
-from master_core.memory_types import *
+from master.core.basic_action import BasicAction
+from master.core.memory_file import MemoryTypes
+from master.core.memory_types import *
 
 logger = logging.getLogger('openmotics')
 

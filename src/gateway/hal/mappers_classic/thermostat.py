@@ -18,8 +18,8 @@ HeatingThermostat Mapper
 """
 from toolbox import Toolbox
 from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
-from master.eeprom_controller import EepromModel
-from master.eeprom_models import ThermostatConfiguration
+from master.classic.eeprom_controller import EepromModel
+from master.classic.eeprom_models import ThermostatConfiguration
 
 if False:  # MYPY
     from typing import List, Dict, Any

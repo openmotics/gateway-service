@@ -24,8 +24,8 @@ from threading import Event, Lock, Thread
 
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
-from master import master_api
-from .master_command import Field, printable
+from master.classic import master_api
+from master.classic.master_command import Field, printable
 from serial_utils import CommunicationTimedOutException
 from toolbox import Empty, Queue
 

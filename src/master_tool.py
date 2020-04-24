@@ -28,8 +28,8 @@ from six.moves.configparser import ConfigParser
 from ioc import Injectable
 from serial import Serial
 import constants
-import master.master_api as master_api
-from master.master_communicator import MasterCommunicator
+import master.classic.master_api as master_api
+from master.classic.master_communicator import MasterCommunicator
 from serial_utils import CommunicationTimedOutException
 
 

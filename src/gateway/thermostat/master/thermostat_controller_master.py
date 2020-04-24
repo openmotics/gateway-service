@@ -30,13 +30,13 @@ from gateway.thermostat.master.thermostat_status_master import (
 )
 from gateway.thermostat.thermostat_controller import ThermostatController
 from ioc import INJECTED, Inject, Injectable, Singleton
-from master import master_api
-from master.eeprom_models import (
+from master.classic import master_api
+from master.classic.eeprom_models import (
     GlobalThermostatConfiguration,
     PumpGroupConfiguration, CoolingPumpGroupConfiguration,
     GlobalRTD10Configuration, RTD10CoolingConfiguration, RTD10HeatingConfiguration
 )
-from master.master_communicator import CommunicationTimedOutException
+from master.classic.master_communicator import CommunicationTimedOutException
 
 if False:  # MYPY
     from typing import List, Tuple, Dict

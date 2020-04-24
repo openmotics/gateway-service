@@ -20,7 +20,7 @@ from __future__ import absolute_import
 import unittest
 import xmlrunner
 
-from master.outputs import OutputStatus
+from master.classic.outputs import OutputStatus
 
 
 class OutputStatusTest(unittest.TestCase):

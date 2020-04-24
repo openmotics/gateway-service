@@ -18,8 +18,11 @@ UCANCommandSpec defines payload handling; (de)serialization
 from __future__ import absolute_import
 import logging
 import math
-from master_core.fields import PaddingField, UInt32Field, StringField
+from master.core.fields import Field, PaddingField, UInt32Field, StringField
 from serial_utils import printable
+
+if False:  # MYPY
+    from typing import Optional, List, Dict
 
 
 logger = logging.getLogger('openmotics')
@@ -63,21 +66,16 @@ class UCANCommandSpec(object):
     """
 
     def __init__(self, sid, instruction, identifier, request_fields=None, response_instructions=None, response_fields=None):
+        # type: (int, Optional[Instruction], Field, List[Field], List[Instruction], List[Field]) -> None
         """
         Create a UCANCommandSpec.
 
         :param sid: SID
-        :type sid: master_core.ucan_command.UCANCommandSpec.SID
         :param instruction: Instruction object for this command
-        :type instruction: master_core.ucan_command.Instruction or None
         :param identifier: The field to be used as extra identifier
-        :type identifier: master_core.fields.Field
         :param request_fields: Fields in this request
-        :type request_fields: list of master_core.fields.Field
         :param response_instructions: List of all the response instruction bytes
-        :type response_instructions: list of master_core.ucan_command.Instruction
         :param response_fields: Fields in the response
-        :type response_fields: list of master_core.fields.Field
         """
         self.sid = sid
         self.instruction = instruction
@@ -88,8 +86,8 @@ class UCANCommandSpec(object):
         self.response_instructions = [] if response_instructions is None else response_instructions
 
         self.header_length = 2 + self._identifier.length
-        self.headers = []
-        self._response_instruction_by_hash = {}
+        self.headers = []  # type: List[str]
+        self._response_instruction_by_hash = {}  # type: Dict[str, Instruction]
 
     def set_identity(self, identity):
         self.headers = []
@@ -194,17 +192,14 @@ class UCANPalletCommandSpec(UCANCommandSpec):
     """
 
     def __init__(self, identifier, pallet_type, request_fields=None, response_fields=None):
+        # type: (Field, int, List[Field], List[Field]) -> None
         """
         Create a UCANCommandSpec.
 
         :param identifier: The field to be used as extra identifier
-        :type identifier: master_core.fields.Field
         :param pallet_type: The type of the pallet
-        :type pallet_type: int
         :param request_fields: Fields in this request
-        :type request_fields: list of master_core.fields.Field
         :param response_fields: Fields in the response
-        :type response_fields: list of master_core.fields.Field
         """
         super(UCANPalletCommandSpec, self).__init__(sid=SID.BOOTLOADER_PALLET,
                                                     instruction=None,

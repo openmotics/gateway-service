@@ -8,13 +8,13 @@ import mock
 import xmlrunner
 from gateway.hal.master_event import MasterEvent
 from ioc import Scope, SetTestMode, SetUpTestInjections
-from master import eeprom_models
-from master.eeprom_controller import EepromController
-from master_core.core_api import CoreAPI
-from master_core.memory_file import MemoryTypes
-from master_core.core_communicator import BackgroundConsumer
-from master_core.memory_models import InputConfiguration
-from master_core.ucan_communicator import UCANCommunicator
+from master.classic import eeprom_models
+from master.classic.eeprom_controller import EepromController
+from master.core.core_api import CoreAPI
+from master.core.memory_file import MemoryTypes
+from master.core.core_communicator import BackgroundConsumer
+from master.core.memory_models import InputConfiguration
+from master.core.ucan_communicator import UCANCommunicator
 from six.moves import map
 
 
@@ -221,7 +221,7 @@ class MasterInputState(unittest.TestCase):
 @Scope
 def get_core_controller_dummy(command_data=None):
     from gateway.hal.master_controller_core import MasterCoreController
-    from master.master_communicator import MasterCommunicator
+    from master.classic.master_communicator import MasterCommunicator
     communicator_mock = mock.Mock(MasterCommunicator)
     communicator_mock.do_command.return_value = command_data or {}
     SetUpTestInjections(configuration_controller=mock.Mock(),

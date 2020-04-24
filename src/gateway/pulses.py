@@ -19,10 +19,10 @@ The pulses module contains the PulseCounterController.
 from __future__ import absolute_import
 import sqlite3
 import logging
-import master.master_api as master_api
+import master.classic.master_api as master_api
 from platform_utils import Platform
 from ioc import Injectable, Inject, INJECTED, Singleton
-from master.eeprom_models import PulseCounterConfiguration
+from master.classic.eeprom_models import PulseCounterConfiguration
 
 logger = logging.getLogger('openmotics')
 MASTER_PULSE_COUNTERS = 24

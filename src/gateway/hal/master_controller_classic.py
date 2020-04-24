@@ -37,13 +37,13 @@ from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
-from master import eeprom_models, master_api
-from master.eeprom_models import CanLedConfiguration, DimmerConfiguration, \
+from master.classic import eeprom_models, master_api
+from master.classic.eeprom_models import CanLedConfiguration, DimmerConfiguration, \
     EepromAddress, GroupActionConfiguration, RoomConfiguration, \
     ScheduledActionConfiguration, StartupActionConfiguration
-from master.inputs import InputStatus
-from master.master_communicator import BackgroundConsumer
-from master.outputs import OutputStatus
+from master.classic.inputs import InputStatus
+from master.classic.master_communicator import BackgroundConsumer
+from master.classic.outputs import OutputStatus
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 

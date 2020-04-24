@@ -23,7 +23,7 @@ import mock
 import xmlrunner
 from gateway.observer import Observer
 from ioc import Scope, SetTestMode, SetUpTestInjections
-from master.inputs import InputStatus
+from master.classic.inputs import InputStatus
 
 
 class ObserverTest(unittest.TestCase):
