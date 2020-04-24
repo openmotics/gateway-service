@@ -31,13 +31,13 @@ from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
-from master_core.core_api import CoreAPI
-from master_core.core_communicator import BackgroundConsumer, CoreCommunicator
-from master_core.ucan_communicator import UCANCommunicator
-from master_core.errors import Error
-from master_core.events import Event as MasterCoreEvent
-from master_core.memory_file import MemoryTypes, MemoryFile
-from master_core.memory_models import (
+from master.core.core_api import CoreAPI
+from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
+from master.core.ucan_communicator import UCANCommunicator
+from master.core.errors import Error
+from master.core.events import Event as MasterCoreEvent
+from master.core.memory_file import MemoryTypes, MemoryFile
+from master.core.memory_models import (
     GlobalConfiguration, InputConfiguration, OutputConfiguration,
     SensorConfiguration, ShutterConfiguration
 )
@@ -302,9 +302,10 @@ class MasterCoreController(MasterController):
         if refresh:
             cmd = CoreAPI.device_information_list_inputs()
             data = self._master_communicator.do_command(cmd, {})
-            for event in self._input_state.refresh(data['information']):
-                for callback in self._event_callbacks:
-                    callback(event)
+            if data is not None:
+                for event in self._input_state.refresh(data['information']):
+                    for callback in self._event_callbacks:
+                        callback(event)
         return refresh
 
     # Outputs

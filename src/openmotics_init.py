@@ -90,11 +90,11 @@ if __name__ == '__main__':
     _ = config_controller
     if Platform.get_platform() == Platform.Type.CORE_PLUS:
         from gateway.hal import master_controller_core  # type: ignore
-        from master_core import maintenance, core_communicator, ucan_communicator  # type: ignore
+        from master.core import maintenance, core_communicator, ucan_communicator  # type: ignore
         _ = master_controller_core, maintenance, core_communicator, ucan_communicator  # type: ignore
     else:
         from gateway.hal import master_controller_classic  # type: ignore
-        from master import maintenance, master_communicator, eeprom_extension  # type: ignore
+        from master.classic import maintenance, master_communicator, eeprom_extension  # type: ignore
         _ = master_controller_classic, maintenance, master_communicator, eeprom_extension  # type: ignore
 
     lock_file = constants.get_init_lockfile()

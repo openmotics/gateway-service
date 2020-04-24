@@ -22,6 +22,8 @@ import os
 import time
 from intelhex import IntelHex
 from ioc import Inject, INJECTED
+from master.core.core_communicator import CoreCommunicator
+from master.core.maintenance import MaintenanceCommunicator
 
 logger = logging.getLogger('openmotics')
 
@@ -37,17 +39,14 @@ class CoreUpdater(object):
     @staticmethod
     @Inject
     def update(hex_filename, core_communicator=INJECTED, maintenance_communicator=INJECTED, cli_serial=INJECTED):
-        """
-        Flashes the content from an Intel HEX file to the Core
-        :param hex_filename: The filename of the hex file to flash
-        :type core_communicator: master_core.core_communicator.CoreCommunicator or None
-        :type maintenance_communicator: master_core.maintenance.MaintenanceCommunicator or None
-        :type cli_serial: serial.Serial
-        """
+        """ Flashes the content from an Intel HEX file to the Core """
         try:
             # TODO: Check version and skip update if the version is already active
 
             logger.info('Updating Core')
+
+            core_communicator = core_communicator  # type: CoreCommunicator
+            maintenance_communicator = maintenance_communicator  # type: MaintenanceCommunicator
 
             if core_communicator is not None and maintenance_communicator is not None:
                 maintenance_communicator.stop()

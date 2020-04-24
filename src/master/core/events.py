@@ -18,7 +18,7 @@ Module to handle Events from the Core
 
 from __future__ import absolute_import
 import logging
-from master_core.fields import WordField
+from master.core.fields import WordField
 
 logger = logging.getLogger('openmotics')
 

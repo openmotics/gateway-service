@@ -22,8 +22,8 @@ import xmlrunner
 import logging
 from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
-from master_core.memory_file import MemoryTypes, MemoryFile
-from master_core.memory_types import MemoryAddress
+from master.core.memory_file import MemoryTypes, MemoryFile
+from master.core.memory_types import MemoryAddress
 
 
 class MemoryFileTest(unittest.TestCase):

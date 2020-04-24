@@ -17,7 +17,7 @@ Contains Basic Action related code
 """
 
 from __future__ import absolute_import
-from master_core.memory_types import MemoryByteField, MemoryWordField
+from master.core.memory_types import MemoryByteField, MemoryWordField
 
 
 class BasicAction(object):

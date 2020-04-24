@@ -23,10 +23,10 @@ from threading import Lock
 
 import ujson as json
 from ioc import INJECTED, Inject
-from master_core.memory_file import MemoryFile
 
 if False:  # MYPY
     from typing import Any, Dict
+    from master.core.memory_file import MemoryFile
 
 logger = logging.getLogger("openmotics")
 
@@ -126,7 +126,7 @@ class MemoryModelDefinition(object):
                     field_name
                 ))
             field_container.save()
-        for memory_file in self._memory_files.items():
+        for memory_file in self._memory_files.values():
             memory_file.activate()
 
     @classmethod
@@ -219,10 +219,7 @@ class MemoryFieldContainer(object):
     """
 
     def __init__(self, memory_field, memory_address, memory_files):
-        """
-        :type memory_field: master_core.memory_types.MemoryField
-        :type memory_address: master_core.memory_types.MemoryAddress
-        """
+        # type: (MemoryField, MemoryAddress, Dict[str, MemoryFile]) -> None
         self._memory_field = memory_field
         self._memory_address = memory_address
         self._memory_files = memory_files
@@ -275,11 +272,9 @@ class MemoryField(object):
         else:
             raise TypeError('Parameter `address_spec` should be a tuple (page, offset) or a function that takes an id and returns the same tuple.')
 
-    def get_address(self, id):
+    def get_address(self, id):  # type: (int) -> MemoryAddress
         """
         Calculate the address for this field.
-
-        :rtype: master_core.memory_types.MemoryAddress
         """
         if id is None:
             if self._address_tuple is None:
@@ -389,14 +384,14 @@ class MemoryBasicActionField(MemoryByteArrayField):
         super(MemoryBasicActionField, self).__init__(memory_type, address_spec, 6)
 
     def encode(self, value):
-        from master_core.basic_action import BasicAction  # Prevent circular import
+        from master.core.basic_action import BasicAction  # Prevent circular import
 
         if not isinstance(value, BasicAction):
             raise ValueError('Value should be a BasicAction')
         return value.encode()
 
     def decode(self, data):
-        from master_core.basic_action import BasicAction  # Prevent circular import
+        from master.core.basic_action import BasicAction  # Prevent circular import
 
         return BasicAction.decode(data)
 
@@ -555,11 +550,7 @@ class CompositionContainer(object):
     """
 
     def __init__(self, composite_definition, composition_width, field_container):
-        """
-        :type composite_definition: master_core.memory_types.CompositeMemoryModelDefinition
-        :type composition_width: int
-        :type field_container: master_core.memory_types.MemoryFieldContainer
-        """
+        # type: (CompositeMemoryModelDefinition, int, MemoryFieldContainer) -> None
         self._composite_definition = composite_definition
         self._composition_width = composition_width
         self._field_container = field_container

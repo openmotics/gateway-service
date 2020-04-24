@@ -21,11 +21,11 @@ import unittest
 import xmlrunner
 import logging
 from mock import Mock
-from master_core.core_communicator import CoreCommunicator
-from master_core.exceptions import BootloadingException
-from master_core.ucan_communicator import UCANCommunicator, SID
-from master_core.ucan_command import UCANCommandSpec, UCANPalletCommandSpec, PalletType, Instruction
-from master_core.fields import AddressField, ByteArrayField, ByteField, UInt32Field, StringField
+from master.core.core_communicator import CoreCommunicator
+from master.core.exceptions import BootloadingException
+from master.core.ucan_communicator import UCANCommunicator, SID
+from master.core.ucan_command import UCANCommandSpec, UCANPalletCommandSpec, PalletType, Instruction
+from master.core.fields import AddressField, ByteArrayField, ByteField, UInt32Field, StringField
 
 
 class UCANCommunicatorTest(unittest.TestCase):

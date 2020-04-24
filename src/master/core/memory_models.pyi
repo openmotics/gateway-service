@@ -17,8 +17,8 @@ Memory models MyPy stub
 """
 from typing import List
 
-from master_core.basic_action import BasicAction
-from master_core.memory_types import MemoryModelDefinition, GlobalMemoryModelDefinition, CompositeMemoryModelDefinition
+from master.core.basic_action import BasicAction
+from master.core.memory_types import MemoryModelDefinition, GlobalMemoryModelDefinition, CompositeMemoryModelDefinition
 
 
 class GlobalConfiguration(GlobalMemoryModelDefinition):

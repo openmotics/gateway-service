@@ -18,7 +18,11 @@ CoreCommandSpec defines payload handling; (de)serialization
 from __future__ import absolute_import
 import logging
 from serial_utils import printable
-from master_core.fields import PaddingField
+from master.core.fields import PaddingField
+from master.core.fields import Field
+
+if False:  # MYPY
+    from typing import List, Dict, Any
 
 
 logger = logging.getLogger('openmotics')
@@ -33,44 +37,37 @@ class CoreCommandSpec(object):
     # TODO: Add some kind of byte bit field where that byte is represented as a dict or class where every bit can be named and get/set
 
     def __init__(self, instruction, request_fields=None, response_fields=None, response_instruction=None):
+        # type: (str, List[Field], List[Field], str) -> None
         """
-        Create a APICommandSpec.
+        Create a CoreCommandSpec.
 
         :param instruction: name of the instruction as described in the Core api.
-        :type instruction: str
         :param request_fields: Fields in this request
-        :type request_fields: list of master_core.fields.Field
         :param response_fields: Fields in the response
-        :type response_fields: list of master_core.fields.Field
         :param response_instruction: name of the instruction of the answer in case it would be different from the response
-        :type response_instruction: str
         """
         self.instruction = instruction
         self.request_fields = [] if request_fields is None else request_fields
         self.response_fields = [] if response_fields is None else response_fields
         self.response_instruction = response_instruction if response_instruction is not None else instruction
 
-    def create_request_payload(self, fields):
+    def create_request_payload(self, fields):  # type: (Dict[str, Any]) -> str
         """
         Create the request payload for the Core using this spec and the provided fields.
 
         :param fields: dictionary with values for the fields
-        :type fields: dict
-        :rtype: string
         """
         payload = ''
         for field in self.request_fields:
             payload += field.encode(fields.get(field.name))
         return payload
 
-    def consume_response_payload(self, payload):
+    def consume_response_payload(self, payload):  # type: (str) -> Dict[str, Any]
         """
         Consumes the payload bytes
 
         :param payload Payload from the Core response
-        :type payload: str
         :returns: Dictionary containing the parsed response
-        :rtype: dict
         """
         payload_length = len(payload)
         result = {}

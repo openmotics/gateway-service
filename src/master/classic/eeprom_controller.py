@@ -26,7 +26,7 @@ from .master_api import eeprom_list, write_eeprom, activate_eeprom
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Iterable, Type, TypeVar
-    from master.eeprom_extension import EepromExtension
+    from master.classic.eeprom_extension import EepromExtension
     M = TypeVar('M', bound='EepromModel')
 
 logger = logging.getLogger("openmotics")

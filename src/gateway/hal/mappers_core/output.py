@@ -18,7 +18,7 @@ Output Mapper
 """
 from __future__ import absolute_import
 from gateway.dto.output import OutputDTO
-from master_core.memory_models import OutputConfiguration
+from master.core.memory_models import OutputConfiguration
 
 if False:  # MYPY
     from typing import List, Dict, Any

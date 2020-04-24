@@ -32,7 +32,7 @@ import ujson as json
 import six
 
 if Platform.get_platform() == Platform.Type.CLASSIC:
-    from master.master_communicator import CommunicationTimedOutException
+    from master.classic.master_communicator import CommunicationTimedOutException
 else:
     # TODO: Replace for the Core+
     class CommunicationTimedOutException(Exception):  # type: ignore

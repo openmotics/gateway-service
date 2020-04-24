@@ -18,9 +18,13 @@ Contains a memory representation
 from __future__ import absolute_import
 import logging
 from ioc import Inject, INJECTED
-from master_core.core_api import CoreAPI
-from master_core.core_communicator import BackgroundConsumer
-from master_core.events import Event
+from master.core.core_api import CoreAPI
+from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
+from master.core.events import Event
+from master.core.memory_types import MemoryAddress
+
+if False:  # MYPY
+    from typing import List, Dict
 
 logger = logging.getLogger("openmotics")
 
@@ -37,14 +41,12 @@ class MemoryFile(object):
         """
         Initializes the MemoryFile instance, reprensenting one of the supported memory types.
         It provides caching for EEPROM, and direct write/read through for FRAM
-
-        :type master_communicator: master_core.core_communicator.CoreCommunicator
         """
         if not master_communicator:
             raise RuntimeError('Could not inject argument: core_communicator')
 
-        self._core_communicator = master_communicator
-        self.type = memory_type
+        self._core_communicator = master_communicator  # type: CoreCommunicator
+        self.type = memory_type  # type: str
         self._cache = {}
         self._eeprom_change_callback = None
         if memory_type == MemoryTypes.EEPROM:
@@ -70,20 +72,14 @@ class MemoryFile(object):
                 self._eeprom_change_callback()
             logger.info('Cache cleared: EEPROM_ACTIVATE')
 
-    def read(self, addresses):
-        """
-        :type addresses: list[master_core.memory_types.MemoryAddress]
-        """
+    def read(self, addresses):  # type: (List[MemoryAddress]) -> Dict[MemoryAddress, List[int]]
         data = {}
         for address in addresses:
             page_data = self.read_page(address.page)
             data[address] = page_data[address.offset:address.offset + address.length]
         return data
 
-    def write(self, data_map):
-        """
-        :type data_map: dict[master_core.memory_types.MemoryAddress, list[int]]
-        """
+    def write(self, data_map):  # type: (Dict[MemoryAddress, List[int]]) -> None
         for address, data in data_map.items():
             page_data = self.read_page(address.page)
             for index, data_byte in enumerate(data):

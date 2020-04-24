@@ -19,8 +19,8 @@ ShutterGroup Mapper
 from __future__ import absolute_import
 from toolbox import Toolbox
 from gateway.dto.shutter_group import ShutterGroupDTO
-from master.eeprom_controller import EepromModel
-from master.eeprom_models import ShutterGroupConfiguration
+from master.classic.eeprom_controller import EepromModel
+from master.classic.eeprom_models import ShutterGroupConfiguration
 
 if False:  # MYPY
     from typing import List

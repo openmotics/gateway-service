@@ -23,9 +23,9 @@ import unittest
 import xmlrunner
 import os
 from ioc import SetTestMode, SetUpTestInjections
-from master.master_communicator import MasterCommunicator
+from master.classic.master_communicator import MasterCommunicator
 from gateway.pulses import PulseCounterController
-import master.master_api as master_api
+import master.classic.master_api as master_api
 from master_tests.eeprom_controller_tests import get_eeprom_controller_dummy
 from serial_tests import DummyPty
 

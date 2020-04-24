@@ -21,7 +21,7 @@ import unittest
 import xmlrunner
 import logging
 from mock import Mock
-from master_core.fields import *
+from master.core.fields import *
 
 
 class APIFieldsTest(unittest.TestCase):

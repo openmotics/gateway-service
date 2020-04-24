@@ -80,12 +80,12 @@ class OpenmoticsService(object):
              power_controller, pulses, config_controller, metrics_caching, watchdog)
         if Platform.get_platform() == Platform.Type.CORE_PLUS:
             from gateway.hal import master_controller_core
-            from master_core import maintenance, core_communicator, ucan_communicator
-            from master import eeprom_extension  # TODO: Obsolete, need to be removed
+            from master.core import maintenance, core_communicator, ucan_communicator
+            from master.classic import eeprom_extension
             _ = master_controller_core, maintenance, core_communicator, ucan_communicator
         else:
             from gateway.hal import master_controller_classic
-            from master import maintenance, master_communicator, eeprom_extension
+            from master.classic import maintenance, master_communicator, eeprom_extension
             _ = master_controller_classic, maintenance, master_communicator, eeprom_extension
 
         thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
@@ -141,7 +141,7 @@ class OpenmoticsService(object):
         controller_serial_port = config.get('OpenMotics', 'controller_serial')
         Injectable.value(controller_serial=Serial(controller_serial_port, 115200))
         if Platform.get_platform() == Platform.Type.CORE_PLUS:
-            from master_core.memory_file import MemoryFile, MemoryTypes
+            from master.core.memory_file import MemoryFile, MemoryTypes
             core_cli_serial_port = config.get('OpenMotics', 'cli_serial')
             Injectable.value(cli_serial=Serial(core_cli_serial_port, 115200))
             Injectable.value(passthrough_service=None)  # Mark as "not needed"
@@ -154,7 +154,7 @@ class OpenmoticsService(object):
             Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
             if passthrough_serial_port:
                 Injectable.value(passthrough_serial=Serial(passthrough_serial_port, 115200))
-                from master.passthrough import PassthroughService
+                from master.classic.passthrough import PassthroughService
                 _ = PassthroughService  # IOC announcement
             else:
                 Injectable.value(passthrough_service=None)
