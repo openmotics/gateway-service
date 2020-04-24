@@ -223,6 +223,15 @@ class Toolbox(object):
             time.sleep(2)
             self.dut.get('/module_discover_stop')
 
+    def print_logs(self):
+        # type: () -> None
+        try:
+            data = self.tester.get('/plugins/syslog_receiver/logs', success=False)
+            for log in data['logs']:
+                print(log)
+        except Exception:
+            print('Failed to retrieve logs')
+
     def factory_reset(self, confirm=True):
         # type: (bool) -> Dict[str,Any]
         assert self.dut._auth
