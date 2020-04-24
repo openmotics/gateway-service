@@ -22,6 +22,8 @@ from platform_utils import System, Platform
 System.import_libs()
 
 import argparse
+import shutil
+import subprocess
 import sys
 import time
 from six.moves.configparser import ConfigParser
@@ -90,6 +92,37 @@ def classic_master_wipe(master_communicator=INJECTED):
     print('Done wiping the master')
 
 
+def classic_master_update(firmware):
+    if firmware:
+        try:
+            print('Updating master')
+            subprocess.check_call(['/opt/openmotics/bin/updateController.sh', 'H4', 'PIC18F67J11', firmware, '/opt/openmotics/firmware.hex'])
+            shutil.copy(firmware, '/opt/openmotics/firmware.hex')
+            print('Done update')
+        except subprocess.CalledProcessError:
+            print('Failed to update master')
+            sys.exit(1)
+    else:
+        print('error: --master-firmware-classic is required to update')
+        sys.exit(1)
+
+
+def core_master_update(firmware):
+    if firmware:
+        try:
+            print('Updating master')
+            # TODO should probably move to bin
+            subprocess.check_call(['python2', '/opt/openmotics/python/core_updater.py', firmware])
+            shutil.copy(firmware, '/opt/openmotics/firmware.hex')
+            print('Done update')
+        except subprocess.CalledProcessError:
+            print('Failed to update master')
+            sys.exit(1)
+    else:
+        print('error: --master-firmware-core is required to update')
+        sys.exit(1)
+
+
 @Inject
 def classic_master_reset(master_communicator=INJECTED):
     print('Resetting...')
@@ -136,6 +169,12 @@ def main():
                         help='get the version of the master')
     parser.add_argument('--wipe', dest='wipe', action='store_true',
                         help='wip the master eeprom')
+    parser.add_argument('--update', dest='update', action='store_true',
+                        help='update the master firmware')
+    parser.add_argument('--master-firmware-classic',
+                        help='path to the hexfile with the classic firmware')
+    parser.add_argument('--master-firmware-core',
+                        help='path to the hexfile with the core+ firmware')
 
     args = parser.parse_args()
 
@@ -147,6 +186,9 @@ def main():
     if args.port:
         print(port)
         return
+
+    if not any([args.sync, args.version, args.reset, args.wipe, args.update]):
+        parser.print_help()
 
     platform = Platform.get_platform()
 
@@ -171,39 +213,41 @@ def main():
         master_communicator.start()
     start()
 
-    if args.sync or args.version or args.reset or args.wipe:
+    try:
+
         if args.sync:
             if platform == Platform.Type.CORE_PLUS:
                 core_master_sync()
             else:
                 classic_master_sync()
-
         elif args.version:
             if platform == Platform.Type.CORE_PLUS:
                 raise NotImplementedError()
             else:
                 classic_master_version()
-
         elif args.reset:
             if platform == Platform.Type.CORE_PLUS:
                 core_master_reset()
             else:
                 classic_master_reset()
-
         elif args.wipe:
             if platform == Platform.Type.CORE_PLUS:
                 raise NotImplementedError()
             else:
                 classic_master_wipe()
+        elif args.update:
+            if platform == Platform.Type.CORE_PLUS:
+                core_master_update(args.master_firmware_core)
+            else:
+                classic_master_update(args.master_firmware_classic)
 
-    else:
-        parser.print_help()
+    finally:
 
-    @Inject
-    def stop(master_communicator=INJECTED):
-        master_communicator.stop()
-        time.sleep(4)
-    stop()
+        @Inject
+        def stop(master_communicator=INJECTED):
+            master_communicator.stop()
+            time.sleep(4)
+        stop()
 
 
 if __name__ == '__main__':
