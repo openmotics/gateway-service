@@ -22,6 +22,7 @@ from platform_utils import System, Platform
 System.import_libs()
 
 import argparse
+import logging
 import shutil
 import subprocess
 import sys
@@ -34,12 +35,26 @@ import master.classic.master_api as master_api
 from master.core.core_api import CoreAPI
 from serial_utils import CommunicationTimedOutException
 
+logger = logging.getLogger('openmotics')
+
+
+def setup_logger():
+    """ Setup the OpenMotics logger. """
+
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    logger.addHandler(handler)
+
 
 @Inject
-def core_master_sync(master_communicator=INJECTED):
+def master_sync(master_controller=INJECTED):
     print('Sync...')
     try:
-        master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})
+        master_controller.get_status()
         print('Done sync')
     except CommunicationTimedOutException:
         print('Failed sync')
@@ -47,11 +62,16 @@ def core_master_sync(master_communicator=INJECTED):
 
 
 @Inject
-def core_master_reset(master_communicator=INJECTED):
+def master_version(master_controller=INJECTED):
+    status = master_controller.get_status()
+    print(status['version'])
+
+
+@Inject
+def master_reset(master_controller=INJECTED):
     print('Resetting...')
     try:
-        reset_ba = {'type': 254, 'action': 0, 'device_nr': 0, 'extra_parameter': 0}
-        master_communicator.do_command(CoreAPI.basic_action(), reset_ba, timeout=None)
+        master_controller.reset()
         print('Done resetting')
     except CommunicationTimedOutException:
         print('Failed resetting')
@@ -59,36 +79,16 @@ def core_master_reset(master_communicator=INJECTED):
 
 
 @Inject
-def classic_master_sync(master_communicator=INJECTED):
-    print('Sync...')
-    try:
-        master_communicator.do_command(master_api.status())
-        print('Done sync')
-        sys.exit(0)
-    except CommunicationTimedOutException:
-        print('Failed sync')
-        sys.exit(1)
+def master_cold_reset(master_controller=INJECTED):
+    print('Performing hard reset...')
+    master_controller.cold_reset()
+    print('Done performing hard reset')
 
 
 @Inject
-def classic_master_version(master_communicator=INJECTED):
-    status = master_communicator.do_command(master_api.status())
-    print('{0}.{1}.{2} H{3}'.format(status['f1'], status['f2'], status['f3'], status['h']))
-
-
-@Inject
-def classic_master_wipe(master_communicator=INJECTED):
-    (num_banks, bank_size, write_size) = (256, 256, 10)
+def master_factory_reset(master_controller=INJECTED):
     print('Wiping the master...')
-    for bank in range(0, num_banks):
-        print('-  Wiping bank {0}'.format(bank))
-        for addr in range(0, bank_size, write_size):
-            master_communicator.do_command(
-                master_api.write_eeprom(),
-                {'bank': bank, 'address': addr, 'data': '\xff' * write_size}
-            )
-
-    master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0})
+    master_controller.factory_reset()
     print('Done wiping the master')
 
 
@@ -123,37 +123,6 @@ def core_master_update(firmware):
         sys.exit(1)
 
 
-@Inject
-def classic_master_reset(master_communicator=INJECTED):
-    print('Resetting...')
-    try:
-        master_communicator.do_command(master_api.reset())
-        print('Done resetting')
-        sys.exit(0)
-    except CommunicationTimedOutException:
-        print('Failed resetting')
-        sys.exit(1)
-
-
-def classic_hardreset():
-    # type: () -> None
-    print('Performing hard reset...')
-    gpio_dir = open('/sys/class/gpio/gpio44/direction', 'w')
-    gpio_dir.write('out')
-    gpio_dir.close()
-
-    def power(master_on):
-        """ Set the power on the master. """
-        gpio_file = open('/sys/class/gpio/gpio44/value', 'w')
-        gpio_file.write('1' if master_on else '0')
-        gpio_file.close()
-
-    power(False)
-    time.sleep(5)
-    power(True)
-    print('Done performing hard reset')
-
-
 def main():
     """ The main function. """
     parser = argparse.ArgumentParser(description='Tool to control the master.')
@@ -178,6 +147,8 @@ def main():
 
     args = parser.parse_args()
 
+    setup_logger()
+
     config = ConfigParser()
     config.read(constants.get_config_file())
 
@@ -187,54 +158,45 @@ def main():
         print(port)
         return
 
-    if not any([args.sync, args.version, args.reset, args.wipe, args.update]):
+    if not any([args.sync, args.version, args.reset, args.hardreset, args.wipe, args.update]):
         parser.print_help()
 
     platform = Platform.get_platform()
 
-    if args.hardreset:
-        if platform == Platform.Type.CORE_PLUS:
-            raise NotImplementedError()
-        else:
-            classic_hardreset()
-        return
-
     Injectable.value(controller_serial=Serial(port, 115200))
 
     if platform == Platform.Type.CORE_PLUS:
-        from master.core import core_communicator
-        _ = core_communicator
+        from master.core.memory_file import MemoryFile, MemoryTypes
+        Injectable.value(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
+                                       MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
+        from gateway.hal import master_controller_core
+        _ = master_controller_core
     else:
-        from master.classic import master_communicator
-        _ = master_communicator
+        Injectable.value(configuration_controller=None)
+        Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
+        from master.classic import eeprom_extension
+        from gateway.hal import master_controller_classic
+        _ = master_controller_classic
 
     @Inject
     def start(master_communicator=INJECTED):
+        # Explicitly only start the communicator and not the controller,
+        # to avoid the brackground synchronization, etc.
         master_communicator.start()
     start()
 
     try:
 
         if args.sync:
-            if platform == Platform.Type.CORE_PLUS:
-                core_master_sync()
-            else:
-                classic_master_sync()
+            master_sync()
         elif args.version:
-            if platform == Platform.Type.CORE_PLUS:
-                raise NotImplementedError()
-            else:
-                classic_master_version()
+            master_version()
         elif args.reset:
-            if platform == Platform.Type.CORE_PLUS:
-                core_master_reset()
-            else:
-                classic_master_reset()
+            master_reset()
+        elif args.hardreset:
+            master_cold_reset()
         elif args.wipe:
-            if platform == Platform.Type.CORE_PLUS:
-                raise NotImplementedError()
-            else:
-                classic_master_wipe()
+            master_factory_reset()
         elif args.update:
             if platform == Platform.Type.CORE_PLUS:
                 core_master_update(args.master_firmware_core)

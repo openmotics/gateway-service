@@ -612,6 +612,10 @@ class MasterCoreController(MasterController):
         raise NotImplementedError()
 
     def get_status(self):
+        # Used to synchronize, execute a trivial command since this
+        # isn't implemented yet
+        cmd = CoreAPI.general_configuration_number_of_modules()
+        self._master_communicator.do_command(cmd, {})
         # TODO: implement
         return {'time': '%02d:%02d' % (0, 0),
                 'date': '%02d/%02d/%d' % (0, 0, 0),
@@ -620,7 +624,10 @@ class MasterCoreController(MasterController):
                 'hw_version': 1}
 
     def reset(self):
-        raise NotImplementedError()
+        # type: () -> None
+        cmd = CoreAPI.basic_action()
+        reset = {'type': 254, 'action': 0, 'device_nr': 0, 'extra_parameter': 0}
+        self._master_communicator.do_command(cmd, reset, timeout=None)
 
     def cold_reset(self):
         raise NotImplementedError()
