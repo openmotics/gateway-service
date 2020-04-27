@@ -35,3 +35,8 @@ class RoomDTO(BaseDTO):
         return (self.id == other.id and
                 self.name == other.name and
                 self.floor == other.floor)
+
+    @property
+    def in_use(self):
+        return ((self.name is not None and self.name != '') or
+                self.floor is not None)

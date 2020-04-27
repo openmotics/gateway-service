@@ -30,20 +30,23 @@ class RoomSerializer(object):
     @staticmethod
     def serialize(room_dto, fields):  # type: (RoomDTO, Optional[List[str]]) -> Dict
         data = {'id': room_dto.id,
-                'name': room_dto.name,
-                'floor': None if room_dto.floor is None else room_dto.floor.id}
+                'name': Toolbox.denonify(room_dto.name, ''),
+                'floor': 255 if room_dto.floor is None else room_dto.floor.id}
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
     def deserialize(api_data):  # type: (Dict) -> Tuple[RoomDTO, List[str]]
         loaded_fields = ['id']
         room_dto = RoomDTO(id=api_data['id'])
-        loaded_fields += SerializerToolbox.deserialize(
-            dto=room_dto,  # Referenced
-            api_data=api_data,
-            mapping={'name': ('name', None)}
-        )
+        if 'name' in api_data:
+            loaded_fields.append('name')
+            name = api_data['name']
+            if name == '':
+                name = None
+            room_dto.name = name
         if 'floor' in api_data:
             loaded_fields.append('floor')
-            room_dto.floor = FloorDTO(id=api_data['floor'])
+            floor_id = api_data['floor']
+            if floor_id != 255:
+                room_dto.floor = FloorDTO(id=floor_id)
         return room_dto, loaded_fields

@@ -56,11 +56,14 @@ class RoomController(object):
     def save_rooms(self, rooms):  # type: (List[Tuple[RoomDTO, List[str]]]) -> None
         _ = self
         for room_dto, fields in rooms:
-            room = RoomMapper.dto_to_orm(room_dto, fields)
-            if 'floor' in fields:
-                floor = None
-                if room_dto.floor is not None:
-                    floor = FloorMapper.dto_to_orm(room_dto.floor, ['id'])
-                    floor.save()
-                room.floor = floor
-            room.save()
+            if room_dto.in_use:
+                room = RoomMapper.dto_to_orm(room_dto, fields)
+                if 'floor' in fields:
+                    floor = None
+                    if room_dto.floor is not None:
+                        floor = FloorMapper.dto_to_orm(room_dto.floor, ['id'])
+                        floor.save()
+                    room.floor = floor
+                room.save()
+            else:
+                Room.delete().where(number=room_dto.id).execute()

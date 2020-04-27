@@ -39,6 +39,7 @@ from gateway.api.serializers import (
     ShutterSerializer, ShutterGroupSerializer,
     ThermostatSerializer, RoomSerializer
 )
+from gateway.dto import RoomDTO
 from gateway.enums import ShutterEnums
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.websockets import EventsSocket, MaintenanceSocket, MetricsSocket, OMPlugin, OMSocketTool
@@ -1768,9 +1769,12 @@ class WebInterface(object):
         Get all room_configuration.
         :param fields: The field of the room_configuration to get, None if all
         """
-        # TODO: Add missing rooms (0-100)
-        return {'config': [RoomSerializer.serialize(room_dto=room, fields=fields)
-                           for room in self._room_controller.load_rooms()]}
+        data = []
+        rooms = {room.id: room for room in self._room_controller.load_rooms()}
+        for i in range(100):
+            room = rooms.get(i, RoomDTO(id=i))
+            data.append(RoomSerializer.serialize(room_dto=room, fields=fields))
+        return {'config': data}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_room_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
