@@ -28,10 +28,6 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 logger = logging.getLogger('openmotics')
 
 
-class EventSenderFailed(Exception):
-    pass
-
-
 @Injectable.named('event_sender')
 @Singleton
 class EventSender(object):
@@ -86,7 +82,7 @@ class EventSender(object):
             if not self._batch_send_events():
                 raise DaemonThreadWait
         except APIException as ex:
-            raise EventSenderFailed('Error sending events to the cloud: {}'.format(str(ex)))
+            logger.error('Error sending events to the cloud: {}'.format(str(ex)))
 
     def _batch_send_events(self):
         events = []
