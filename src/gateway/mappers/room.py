@@ -13,11 +13,29 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from gateway.dto.feedback_led import FeedbackLedDTO
-from gateway.dto.output import OutputDTO
-from gateway.dto.shutter import ShutterDTO
-from gateway.dto.shutter_group import ShutterGroupDTO
-from gateway.dto.thermostat import ThermostatDTO
-from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
-from gateway.dto.floor import FloorDTO
+"""
+Room Mapper
+"""
+from __future__ import absolute_import
 from gateway.dto.room import RoomDTO
+from gateway.models import Room
+
+if False:  # MYPY
+    from typing import List
+
+
+class RoomMapper(object):
+
+    @staticmethod
+    def orm_to_dto(orm_object):  # type: (Room) -> RoomDTO
+        return RoomDTO(id=orm_object.number,
+                       name=orm_object.name)
+
+    @staticmethod
+    def dto_to_orm(room_dto, fields):  # type: (RoomDTO, List[str]) -> Room
+        room = Room.get_or_none(number=room_dto.id)
+        if room is None:
+            room = Room(number=room_dto.id)
+        if 'name' in fields:
+            room.name = room_dto.name
+        return room

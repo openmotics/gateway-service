@@ -28,10 +28,17 @@ from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.events import GatewayEvent
 from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.models import Database
+from gateway.gateway_api import GatewayApi
+from gateway.pulses import PulseCounterController
+from gateway.thermostat.thermostat_controller import ThermostatController
+from gateway.output_controller import OutputController
 from platform_utils import Hardware
 from power import power_api
 from serial_utils import CommunicationTimedOutException
 import six
+
+if False:  # MYPY
+    from typing import Dict, Any, List
 
 logger = logging.getLogger("openmotics")
 
@@ -44,15 +51,8 @@ class MetricsCollector(object):
     """
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, pulse_controller=INJECTED, thermostat_controller=INJECTED):
-        """
-        :param gateway_api: Gateway API
-        :type gateway_api: gateway.gateway_api.GatewayApi
-        :param pulse_controller: Pulse Controller
-        :type pulse_controller: gateway.pulses.PulseCounterController
-        :param thermostat_controller: Thermostat Controller
-        :type thermostat_controller: gateway.thermostat.thermostat_controller.ThermostatController
-        """
+    def __init__(self, gateway_api=INJECTED, pulse_controller=INJECTED, thermostat_controller=INJECTED, output_controller=INJECTED):
+        # type: (GatewayApi, PulseCounterController, ThermostatController, OutputController) -> None
         self._start = time.time()
         self._last_service_uptime = 0
         self._stopped = True
@@ -61,7 +61,7 @@ class MetricsCollector(object):
         self._environment = {'inputs': {},
                              'outputs': {},
                              'sensors': {},
-                             'pulse_counters': {}}
+                             'pulse_counters': {}}  # type: Dict[str, Dict[int, Any]]
         self._min_intervals = {'system': 60,
                                'output': 60,
                                'sensor': 5,
@@ -71,8 +71,8 @@ class MetricsCollector(object):
                                'energy': 5,
                                'energy_analytics': 300}
         self.intervals = {metric_type: 900 for metric_type in self._min_intervals}
-        self._plugin_intervals = {metric_type: [] for metric_type in self._min_intervals}
-        self._websocket_intervals = {metric_type: {} for metric_type in self._min_intervals}
+        self._plugin_intervals = {metric_type: [] for metric_type in self._min_intervals}  # type: Dict[str, List[Any]]
+        self._websocket_intervals = {metric_type: {} for metric_type in self._min_intervals}  # type: Dict[str, Dict[Any, Any]]
         self._cloud_intervals = {metric_type: 900 for metric_type in self._min_intervals}
         self._sleepers = {metric_type: {'event': Event(),
                                         'start': 0,
@@ -81,7 +81,8 @@ class MetricsCollector(object):
         self._gateway_api = gateway_api
         self._thermostat_controller = thermostat_controller
         self._pulse_controller = pulse_controller
-        self._metrics_queue = deque()
+        self._output_controller = output_controller
+        self._metrics_queue = deque()  # type: deque
 
     def start(self):
         self._start = time.time()
@@ -734,7 +735,7 @@ class MetricsCollector(object):
                 logger.exception('Error while loading input configurations: {0}'.format(ex))
             # Outputs
             try:
-                result = self._gateway_api.get_output_configurations()
+                result = self._output_controller.load_outputs()
                 ids = []
                 for config in result:
                     if config.module_type not in ['o', 'O', 'd', 'D']:

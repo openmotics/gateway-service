@@ -16,7 +16,6 @@
 Module for communicating with the Master
 """
 from __future__ import absolute_import
-from exceptions import NotImplementedError
 from gateway.dto import (
     OutputDTO,
     ShutterDTO, ShutterGroupDTO,
@@ -371,24 +370,6 @@ class MasterController(object):
         raise NotImplementedError()
 
     def save_can_led_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        raise NotImplementedError()
-
-    # Room functions
-
-    def load_room_configuration(self, room_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        raise NotImplementedError()
-
-    def load_room_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        raise NotImplementedError()
-
-    def save_room_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        raise NotImplementedError()
-
-    def save_room_configurations(self, config):
         # type: (List[Dict[str,Any]]) -> None
         raise NotImplementedError()
 

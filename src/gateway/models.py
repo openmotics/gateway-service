@@ -73,9 +73,17 @@ class BaseModel(Model):
         database = Database.get_db()
 
 
+class Floor(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+    name = CharField(null=True)
+
+
 class Room(BaseModel):
     id = PrimaryKeyField()
     number = IntegerField(unique=True)
+    name = CharField(null=True)
+    floor = ForeignKeyField(Floor, null=True, on_delete='SET NULL', backref='rooms')
 
 
 class Feature(BaseModel):

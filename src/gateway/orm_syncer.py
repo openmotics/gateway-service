@@ -37,22 +37,16 @@ class ORMSyncer(object):
     @staticmethod
     @Inject
     def sync(master_controller=INJECTED):  # type: (MasterController) -> None
+        """
+        Synchronizes the Master state with the ORM and thus only happens for data where
+        the master is source of truth. For example, the amount of physical outputs connected
+        """
         logger.info('Sync ORM with Master/Core reality')
+
+        # Outputs
         output_ids = []
         for output_dto in master_controller.load_outputs():
             output_id = output_dto.id
             output_ids.append(output_id)
-            output, output_created = Output.get_or_create(number=output_id)  # type: Output, bool
-            room_id = output_dto.room
-            if room_id is None:
-                output.room = None
-            else:
-                room, room_created = Room.get_or_create(number=room_id)  # type: Room, bool
-                output.room = room
-            output.save()
+            Output.get_or_create(number=output_id)
         Output.delete().where(Output.number.not_in(output_ids)).execute()
-
-        for room in Room.select():
-            in_use = room.outputs.count() > 0
-            if not in_use:
-                room.delete()

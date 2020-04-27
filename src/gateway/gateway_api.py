@@ -870,50 +870,6 @@ class GatewayApi(object):
         """
         self.__master_controller.save_can_led_configurations(config)
 
-    def get_room_configuration(self, room_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        """
-        Get a specific room_configuration defined by its id.
-
-        :param room_id: The id of the room_configuration
-        :type room_id: Id
-        :param fields: The field of the room_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: room_configuration dict: contains 'id' (Id), 'floor' (Byte), 'name' (String)
-        """
-        return self.__master_controller.load_room_configuration(room_id, fields=fields)
-
-    def get_room_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        """
-        Get all room_configurations.
-
-        :param fields: The field of the room_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of room_configuration dict: contains 'id' (Id), 'floor' (Byte), 'name' (String)
-        """
-        return self.__master_controller.load_room_configurations(fields=fields)
-
-    def set_room_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set one room_configuration.
-
-        :param config: The room_configuration to set
-        :type config: room_configuration dict: contains 'id' (Id), 'floor' (Byte), 'name' (String)
-        """
-        return self.__master_controller.save_room_configuration(config)
-
-    def set_room_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        """
-        Set multiple room_configurations.
-
-        :param config: The list of room_configurations to set
-        :type config: list of room_configuration dict: contains 'id' (Id), 'floor' (Byte), 'name' (String)
-        """
-        return self.__master_controller.save_room_configurations(config)
-
     # End of auto generated functions
 
     def get_configuration_dirty_flag(self):

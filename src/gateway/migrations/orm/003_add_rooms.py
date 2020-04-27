@@ -21,11 +21,11 @@ Some examples (model - class or model name)::
 
 """
 from peewee import ForeignKeyField
-from gateway.models import Room, Output
+from gateway.models import Room, Floor
 
 
 def migrate(migrator, database, fake=False, **kwargs):
-    database.create_tables([Room])  # This will - for some reason - add the foreigns to Room as well
+    database.create_tables([Room, Floor])  # This will - for some reason - add the foreigns keys as well
 
 
 def rollback(migrator, database, fake=False, **kwargs):

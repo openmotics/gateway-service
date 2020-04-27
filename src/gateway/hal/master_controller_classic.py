@@ -33,17 +33,22 @@ from gateway.hal.mappers_classic import (
     ShutterGroupMapper, ShutterMapper,
     ThermostatMapper
 )
+from gateway.config import ConfigurationController
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master.classic import eeprom_models, master_api
-from master.classic.eeprom_models import CanLedConfiguration, DimmerConfiguration, \
-    EepromAddress, GroupActionConfiguration, RoomConfiguration, \
+from master.classic.eeprom_models import (
+    CanLedConfiguration, DimmerConfiguration, GroupActionConfiguration,
     ScheduledActionConfiguration, StartupActionConfiguration
+)
+from master.classic.eeprom_controller import EepromAddress
 from master.classic.inputs import InputStatus
 from master.classic.master_communicator import BackgroundConsumer
 from master.classic.outputs import OutputStatus
+from master.classic.master_communicator import MasterCommunicator
+from master.classic.eeprom_controller import EepromController
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
@@ -62,10 +67,7 @@ class MasterClassicController(MasterController):
                  master_communicator=INJECTED,
                  configuration_controller=INJECTED,
                  eeprom_controller=INJECTED):
-        """
-        :type master_communicator: master.master_communicator.MasterCommunicator
-        :type eeprom_controller: master.eeprom_controller.EepromController
-        """
+        # type: (MasterCommunicator, ConfigurationController, EepromController) -> None
         super(MasterClassicController, self).__init__(master_communicator)
         self._config_controller = configuration_controller
         self._eeprom_controller = eeprom_controller
@@ -81,8 +83,8 @@ class MasterClassicController(MasterController):
         self._master_version = None
         self._master_online = False
         self._input_interval = 300
-        self._input_last_updated = 0
-        self._input_config = {}
+        self._input_last_updated = 0.0
+        self._input_config = {}  # type: Dict[int, Dict[str, Any]]
         self._output_interval = 600
         self._output_last_updated = 0
         self._output_config = {}  # type: Dict[int, OutputDTO]
@@ -1125,24 +1127,6 @@ class MasterClassicController(MasterController):
     def save_can_led_configurations(self, config):
         # type: (List[Dict[str,Any]]) -> None
         self._eeprom_controller.write_batch([CanLedConfiguration.deserialize(o) for o in config])
-
-    # Room functions
-
-    def load_room_configuration(self, room_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        return self._eeprom_controller.read(RoomConfiguration, room_id, fields).serialize()
-
-    def load_room_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        return [o.serialize() for o in self._eeprom_controller.read_all(RoomConfiguration, fields)]
-
-    def save_room_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(RoomConfiguration.deserialize(config))
-
-    def save_room_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        self._eeprom_controller.write_batch([RoomConfiguration.deserialize(o) for o in config])
 
     # All lights off functions
 

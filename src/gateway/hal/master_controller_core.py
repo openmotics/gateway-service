@@ -596,16 +596,6 @@ class MasterCoreController(MasterController):
     def add_virtual_input_module(self):
         raise NotImplementedError()
 
-    # Rooms
-
-    def load_room_configuration(self, room_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        return {}  # TODO: Implement
-
-    def load_room_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        return []  # TODO: Implement
-
     # Generic
 
     def power_cycle_bus(self):

@@ -17,3 +17,4 @@ from gateway.api.serializers.output import OutputSerializer
 from gateway.api.serializers.shutter import ShutterSerializer
 from gateway.api.serializers.shutter_group import ShutterGroupSerializer
 from gateway.api.serializers.thermostat import ThermostatSerializer
+from gateway.api.serializers.room import RoomSerializer

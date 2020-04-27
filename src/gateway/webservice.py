@@ -37,7 +37,7 @@ from bus.om_bus_events import OMBusEvents
 from gateway.api.serializers import (
     OutputSerializer,
     ShutterSerializer, ShutterGroupSerializer,
-    ThermostatSerializer
+    ThermostatSerializer, RoomSerializer
 )
 from gateway.enums import ShutterEnums
 from gateway.maintenance_communicator import InMaintenanceModeException
@@ -62,6 +62,7 @@ if False:
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.users import UserController
     from gateway.output_controller import OutputController
+    from gateway.room_controller import RoomController
     from plugins.base import PluginController
 
 logger = logging.getLogger("openmotics")
@@ -264,7 +265,8 @@ class WebInterface(object):
     @Inject
     def __init__(self, user_controller=INJECTED, gateway_api=INJECTED, maintenance_controller=INJECTED,
                  message_client=INJECTED, configuration_controller=INJECTED, scheduling_controller=INJECTED,
-                 thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED):
+                 thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED,
+                 room_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -274,6 +276,7 @@ class WebInterface(object):
         self._thermostat_controller = thermostat_controller  # type: ThermostatController
         self._shutter_controller = shutter_controller  # type: ShutterController
         self._output_controller = output_controller  # type: OutputController
+        self._room_controller = room_controller  # type: RoomController
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
@@ -1747,53 +1750,44 @@ class WebInterface(object):
         self._gateway_api.set_can_led_configurations(config)
         return {}
 
+    # Room configurations
+
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_room_configuration(self, id, fields=None):
+    def get_room_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
         Get a specific room_configuration defined by its id.
-
         :param id: The id of the room_configuration
-        :type id: int
-        :param fields: The field of the room_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': room_configuration dict: contains 'id' (Id), 'floor' (Byte), 'name' (String)
-        :rtype: dict
+        :param fields: The fields of the room_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_room_configuration(id, fields)}
+        return {'config': RoomSerializer.serialize(room_dto=self._room_controller.load_room(room_id=id),
+                                                   fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_room_configurations(self, fields=None):
+    def get_room_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
-        Get all room_configurations.
-
-        :param fields: The field of the room_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of room_configuration dict: contains 'id' (Id), 'floor' (Byte), 'name' (String)
-        :rtype: dict
+        Get all room_configuration.
+        :param fields: The field of the room_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_room_configurations(fields)}
+        # TODO: Add missing rooms (0-100)
+        return {'config': [RoomSerializer.serialize(room_dto=room, fields=fields)
+                           for room in self._room_controller.load_rooms()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_room_configuration(self, config):
-        """
-        Set one room_configuration.
-
-        :param config: The room_configuration to set: room_configuration dict: contains 'id' (Id), 'floor' (Byte), 'name' (String)
-        :type config: dict
-        """
-        self._gateway_api.set_room_configuration(config)
+    def set_room_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one room_configuration. """
+        data = RoomSerializer.deserialize(config)
+        self._room_controller.save_rooms([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_room_configurations(self, config):
-        """
-        Set multiple room_configurations.
-
-        :param config: The list of room_configurations to set: list of room_configuration dict: contains 'id' (Id), 'floor' (Byte), 'name' (String)
-        :type config: list
-        """
-        self._gateway_api.set_room_configurations(config)
+    def set_room_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple room_configuration. """
+        # TODO: Skip "empty" configurations
+        data = [RoomSerializer.deserialize(entry) for entry in config]
+        self._room_controller.save_rooms(data)
         return {}
+
+    # Extra calls
 
     @openmotics_api(auth=True)
     def get_reset_dirty_flag(self):
@@ -1805,6 +1799,8 @@ class WebInterface(object):
         # eeprom key used here for compatibility
         return {'eeprom': self._gateway_api.get_configuration_dirty_flag(),
                 'power': power_dirty}
+
+    # Energy modules
 
     @openmotics_api(auth=True)
     def get_power_modules(self):

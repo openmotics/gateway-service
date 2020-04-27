@@ -13,11 +13,22 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from gateway.dto.feedback_led import FeedbackLedDTO
-from gateway.dto.output import OutputDTO
-from gateway.dto.shutter import ShutterDTO
-from gateway.dto.shutter_group import ShutterGroupDTO
-from gateway.dto.thermostat import ThermostatDTO
-from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
-from gateway.dto.floor import FloorDTO
-from gateway.dto.room import RoomDTO
+"""
+Floor DTO
+"""
+from gateway.dto.base import BaseDTO
+
+if False:  # MYPY
+    from typing import Optional
+
+
+class FloorDTO(BaseDTO):
+    def __init__(self, id, name=None):
+        self.id = id  # type: int
+        self.name = name  # type: Optional[str]
+
+    def __eq__(self, other):
+        if not isinstance(other, FloorDTO):
+            return False
+        return (self.id == other.id and
+                self.name == other.name)

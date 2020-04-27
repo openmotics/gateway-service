@@ -81,7 +81,8 @@ class SchedulingControllerTest(unittest.TestCase):
                             configuration_controller=None,
                             thermostat_controller=None,
                             shutter_controller=Mock(),
-                            output_controller=Mock())
+                            output_controller=Mock(),
+                            room_controller=Mock())
         controller = SchedulingController()
         SetUpTestInjections(scheduling_controller=controller)
         controller.set_webinterface(WebInterface())

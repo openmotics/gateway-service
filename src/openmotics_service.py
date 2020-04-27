@@ -24,6 +24,7 @@ import time
 import constants
 from gateway.models import Database, Feature
 from gateway.orm_syncer import ORMSyncer
+from gateway.migrations.rooms import RoomsMigrator
 from ioc import Injectable, Inject, INJECTED
 from bus.om_bus_service import MessageService
 from bus.om_bus_client import MessageClient
@@ -88,11 +89,12 @@ class OpenmoticsService(object):
         from plugins import base
         from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
                              maintenance_controller, comm_led_controller, users, pulses, config as config_controller,
-                             metrics_caching, watchdog, output_controller)
+                             metrics_caching, watchdog, output_controller, room_controller)
         from cloud import events
         _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
              maintenance_controller, base, events, power_communicator, comm_led_controller, users,
-             power_controller, pulses, config_controller, metrics_caching, watchdog, output_controller)
+             power_controller, pulses, config_controller, metrics_caching, watchdog, output_controller,
+             room_controller)
         if Platform.get_platform() == Platform.Type.CORE_PLUS:
             from gateway.hal import master_controller_core
             from master.core import maintenance, core_communicator, ucan_communicator
@@ -240,6 +242,7 @@ class OpenmoticsService(object):
         """ Main function. """
         logger.info('Starting OM core service...')
 
+        # First part of service startup
         master_controller.start()
         maintenance_controller.start()
         power_communicator.start()
@@ -250,13 +253,16 @@ class OpenmoticsService(object):
         thermostat_controller.start()
         metrics_collector.start()
         web_service.start()
-        plugin_controller.start()
         communication_led_controller.start()
         event_sender.start()
         watchdog.start()
 
         # Always
         ORMSyncer.sync()
+        RoomsMigrator.migrate()
+
+        # Last part of service startup (slower controllers)
+        plugin_controller.start()
 
         signal_request = {'stop': False}
 
