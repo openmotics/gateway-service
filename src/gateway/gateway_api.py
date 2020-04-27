@@ -674,28 +674,6 @@ class GatewayApi(object):
         """
         self.__pulse_controller.set_configurations(config)
 
-    # Outputs
-
-    def get_output_configuration(self, output_id):  # type: (int) -> OutputDTO
-        """ Get a specific output_configuration defined by its id. """
-        # TODO: work with output controller
-        return self.__master_controller.load_output(output_id)
-
-    def get_output_configurations(self):  # type: () -> List[OutputDTO]
-        """ Get all output_configurations. """
-        # TODO: work with output controller
-        return self.__master_controller.load_outputs()
-
-    def set_output_configuration(self, config):  # type: (Tuple[OutputDTO, List[str]]) -> None
-        """ Set one output_configuration. """
-        # TODO: work with output controller
-        self.__master_controller.save_outputs([config])
-
-    def set_output_configurations(self, config):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
-        """ Set multiple output_configurations. """
-        # TODO: work with output controller
-        self.__master_controller.save_outputs(config)
-
     # Inputs
 
     def get_input_configuration(self, input_id, fields=None):

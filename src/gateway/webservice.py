@@ -21,7 +21,6 @@ import logging
 import os
 import subprocess
 import sys
-import threading
 import time
 import uuid
 
@@ -44,7 +43,7 @@ from gateway.enums import ShutterEnums
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.websockets import EventsSocket, MaintenanceSocket, MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
-from models import Feature
+from gateway.models import Feature
 from platform_utils import System, Hardware, Platform
 from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
@@ -62,6 +61,7 @@ if False:
     from gateway.shutters import ShutterController
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.users import UserController
+    from gateway.output_controller import OutputController
     from plugins.base import PluginController
 
 logger = logging.getLogger("openmotics")
@@ -264,7 +264,7 @@ class WebInterface(object):
     @Inject
     def __init__(self, user_controller=INJECTED, gateway_api=INJECTED, maintenance_controller=INJECTED,
                  message_client=INJECTED, configuration_controller=INJECTED, scheduling_controller=INJECTED,
-                 thermostat_controller=INJECTED, shutter_controller=INJECTED):
+                 thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -273,6 +273,7 @@ class WebInterface(object):
         self._scheduling_controller = scheduling_controller  # type: SchedulingController
         self._thermostat_controller = thermostat_controller  # type: ThermostatController
         self._shutter_controller = shutter_controller  # type: ShutterController
+        self._output_controller = output_controller  # type: OutputController
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
@@ -1002,7 +1003,7 @@ class WebInterface(object):
         :param id: The id of the output_configuration
         :param fields: The fields of the output_configuration to get, None if all
         """
-        return {'config': OutputSerializer.serialize(output_dto=self._gateway_api.get_output_configuration(id),
+        return {'config': OutputSerializer.serialize(output_dto=self._output_controller.load_output(output_id=id),
                                                      fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
@@ -1012,20 +1013,20 @@ class WebInterface(object):
         :param fields: The field of the output_configuration to get, None if all
         """
         return {'config': [OutputSerializer.serialize(output_dto=output, fields=fields)
-                           for output in self._gateway_api.get_output_configurations()]}
+                           for output in self._output_controller.load_outputs()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_output_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
         """ Set one output_configuration. """
         data = OutputSerializer.deserialize(config)
-        self._gateway_api.set_output_configuration(data)
+        self._output_controller.save_outputs([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_output_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
         """ Set multiple output_configurations. """
         data = [OutputSerializer.deserialize(entry) for entry in config]
-        self._gateway_api.set_output_configurations(data)
+        self._output_controller.save_outputs(data)
         return {}
 
     # Shutter configurations

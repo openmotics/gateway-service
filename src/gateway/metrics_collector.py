@@ -27,7 +27,7 @@ import psutil
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.events import GatewayEvent
 from ioc import INJECTED, Inject, Injectable, Singleton
-from models import Database
+from gateway.models import Database
 from platform_utils import Hardware
 from power import power_api
 from serial_utils import CommunicationTimedOutException

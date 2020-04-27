@@ -21,7 +21,7 @@ from peewee import SqliteDatabase
 from mock import Mock
 
 from ioc import SetTestMode, SetUpTestInjections
-from models import (
+from gateway.models import (
     Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump,
     Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule
 )

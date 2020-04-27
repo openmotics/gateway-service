@@ -21,7 +21,7 @@ import time
 import datetime
 from peewee import DoesNotExist
 from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
-from models import Thermostat, DaySchedule, ValveToThermostat, Output, Valve, Preset
+from gateway.models import Thermostat, DaySchedule, ValveToThermostat, Output, Valve, Preset
 
 if False:  # MYPY
     from typing import List, Optional, Dict
@@ -108,19 +108,19 @@ class ThermostatMapper(object):
         kwargs = {}
         for timestamp in sorted(schedule.keys(), key=lambda t: int(t)):
             temperature = schedule[timestamp]
-            timestamp = int(timestamp)
+            timestamp_int = int(timestamp)
             if index == 0:
                 kwargs['temp_night'] = temperature
             elif index == 1:
                 kwargs['temp_day_1'] = temperature
-                kwargs['start_day_1'] = '{0:02d}:{1:02d}'.format(timestamp // 3600, (timestamp % 3600) // 60)
+                kwargs['start_day_1'] = '{0:02d}:{1:02d}'.format(timestamp_int // 3600, (timestamp_int % 3600) // 60)
             elif index == 2:
-                kwargs['end_day_1'] = '{0:02d}:{1:02d}'.format(timestamp // 3600, (timestamp % 3600) // 60)
+                kwargs['end_day_1'] = '{0:02d}:{1:02d}'.format(timestamp_int // 3600, (timestamp_int % 3600) // 60)
             elif index == 3:
                 kwargs['temp_day_2'] = temperature
-                kwargs['start_day_2'] = '{0:02d}:{1:02d}'.format(timestamp // 3600, (timestamp % 3600) // 60)
+                kwargs['start_day_2'] = '{0:02d}:{1:02d}'.format(timestamp_int // 3600, (timestamp_int % 3600) // 60)
             elif index == 4:
-                kwargs['end_day_2'] = '{0:02d}:{1:02d}'.format(timestamp // 3600, (timestamp % 3600) // 60)
+                kwargs['end_day_2'] = '{0:02d}:{1:02d}'.format(timestamp_int // 3600, (timestamp_int % 3600) // 60)
             index += 1
         return ThermostatScheduleDTO(**kwargs)
 

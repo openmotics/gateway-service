@@ -22,7 +22,8 @@ System.import_libs()
 import logging
 import time
 import constants
-from models import Database, Feature
+from gateway.models import Database, Feature
+from gateway.orm_syncer import ORMSyncer
 from ioc import Injectable, Inject, INJECTED
 from bus.om_bus_service import MessageService
 from bus.om_bus_client import MessageClient
@@ -33,6 +34,20 @@ from threading import Lock
 from serial_utils import RS485
 from six.moves.urllib.parse import urlparse
 from peewee_migrate import Router
+
+if False:  # MYPY
+    from gateway.metrics_controller import MetricsController
+    from gateway.metrics_collector import MetricsCollector
+    from gateway.webservice import WebInterface, WebService
+    from gateway.scheduling import SchedulingController
+    from gateway.observer import Observer
+    from gateway.gateway_api import GatewayApi
+    from gateway.maintenance_controller import MaintenanceController
+    from gateway.thermostat.thermostat_controller import ThermostatController
+    from gateway.shutters import ShutterController
+    from gateway.hal.master_controller import MasterController
+    from plugins.base import PluginController
+    from cloud.events import EventSender
 
 logger = logging.getLogger("openmotics")
 
@@ -73,11 +88,11 @@ class OpenmoticsService(object):
         from plugins import base
         from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
                              maintenance_controller, comm_led_controller, users, pulses, config as config_controller,
-                             metrics_caching, watchdog)
+                             metrics_caching, watchdog, output_controller)
         from cloud import events
         _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
              maintenance_controller, base, events, power_communicator, comm_led_controller, users,
-             power_controller, pulses, config_controller, metrics_caching, watchdog)
+             power_controller, pulses, config_controller, metrics_caching, watchdog, output_controller)
         if Platform.get_platform() == Platform.Type.CORE_PLUS:
             from gateway.hal import master_controller_core
             from master.core import maintenance, core_communicator, ucan_communicator
@@ -169,10 +184,22 @@ class OpenmoticsService(object):
 
     @staticmethod
     @Inject
-    def fix_dependencies(metrics_controller=INJECTED, message_client=INJECTED, web_interface=INJECTED, scheduling_controller=INJECTED,
-                         observer=INJECTED, gateway_api=INJECTED, metrics_collector=INJECTED, plugin_controller=INJECTED,
-                         web_service=INJECTED, event_sender=INJECTED, maintenance_controller=INJECTED, thermostat_controller=INJECTED,
-                         shutter_controller=INJECTED):
+    def fix_dependencies(
+                metrics_controller=INJECTED,  # type: MetricsController
+                message_client=INJECTED,  # type: MessageClient
+                web_interface=INJECTED,  # type: WebInterface
+                scheduling_controller=INJECTED,  # type: SchedulingController
+                observer=INJECTED,  # type: Observer
+                gateway_api=INJECTED,  # type: GatewayApi
+                metrics_collector=INJECTED,  # type: MetricsCollector
+                plugin_controller=INJECTED,  # type: PluginController
+                web_service=INJECTED,  # type: WebService
+                event_sender=INJECTED,  # type: EventSender
+                maintenance_controller=INJECTED,  # type: MaintenanceController
+                thermostat_controller=INJECTED,  # type: ThermostatController
+                shutter_controller=INJECTED,  # type: ShutterController
+                master_controller=INJECTED  # type: MasterController
+            ):
 
         # TODO: Fix circular dependencies
 
@@ -192,6 +219,8 @@ class OpenmoticsService(object):
         plugin_controller.set_metrics_controller(metrics_controller)
         plugin_controller.set_metrics_collector(metrics_collector)
         maintenance_controller.subscribe_maintenance_stopped(gateway_api.maintenance_mode_stopped)
+        maintenance_controller.subscribe_maintenance_stopped(ORMSyncer.sync)
+        master_controller.subscribe_event(ORMSyncer.handle_master_event)
         # TODO: Replace by event bus
         observer.subscribe_events(metrics_collector.process_observer_event)
         observer.subscribe_events(plugin_controller.process_observer_event)
@@ -226,6 +255,9 @@ class OpenmoticsService(object):
         event_sender.start()
         watchdog.start()
 
+        # Always
+        ORMSyncer.sync()
+
         signal_request = {'stop': False}
 
         def stop(signum, frame):
@@ -258,7 +290,7 @@ if __name__ == "__main__":
     logger.info("Applying migrations")
     # Run all unapplied migrations
     db = Database.get_db()
-    router = Router(db, migrate_dir='/opt/openmotics/python/migrations')
+    router = Router(db, migrate_dir='/opt/openmotics/python/gateway/migrations/orm')
     router.run()
 
     logger.info("Starting OpenMotics service")

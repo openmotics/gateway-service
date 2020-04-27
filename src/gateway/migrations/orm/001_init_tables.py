@@ -20,26 +20,15 @@ Some examples (model - class or model name)::
     > migrator.add_default(model, field_name, default)
 
 """
-
-from __future__ import absolute_import
-import peewee as pw
-import logging
-
-from models import ThermostatGroup, Feature
-
-try:
-    import playhouse.postgres_ext as pw_pext
-except ImportError:
-    pass
-
-SQL = pw.SQL
-
-logger = logging.getLogger('openmotics')
+from gateway.models import (
+    ThermostatGroup, Feature, Output, ValveToThermostat, OutputToThermostatGroup,
+    DaySchedule, Preset, Thermostat, Valve, PumpToValve, Pump
+)
 
 
 def migrate(migrator, database, fake=False, **kwargs):
-    ThermostatGroup.get_or_create(number=0, name='default', on=True)
-    Feature.get_or_create(name='thermostats_gateway', enabled=False)
+    database.create_tables([Output, ThermostatGroup, OutputToThermostatGroup, Thermostat, Valve,
+                            ValveToThermostat, Output, Preset, DaySchedule, Pump, PumpToValve, Feature])
 
 
 def rollback(migrator, database, fake=False, **kwargs):
