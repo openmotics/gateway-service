@@ -178,6 +178,16 @@ def main():
         from gateway.hal import master_controller_classic
         _ = master_controller_classic
 
+    if args.update:
+        if platform == Platform.Type.CORE_PLUS:
+            core_master_update(args.master_firmware_core)
+        else:
+            classic_master_update(args.master_firmware_classic)
+        return
+    elif args.hardreset:
+        master_cold_reset()
+        return
+
     @Inject
     def start(master_communicator=INJECTED):
         # Explicitly only start the communicator and not the controller,
@@ -193,15 +203,8 @@ def main():
             master_version()
         elif args.reset:
             master_reset()
-        elif args.hardreset:
-            master_cold_reset()
         elif args.wipe:
             master_factory_reset()
-        elif args.update:
-            if platform == Platform.Type.CORE_PLUS:
-                core_master_update(args.master_firmware_core)
-            else:
-                classic_master_update(args.master_firmware_classic)
 
     finally:
 
