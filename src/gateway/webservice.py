@@ -30,6 +30,7 @@ import requests
 import ujson as json
 from cherrypy.lib.static import serve_file
 from decorator import decorator
+from peewee import DoesNotExist
 
 import constants
 import gateway
@@ -222,6 +223,10 @@ def _openmotics_api(f, *args, **kwargs):
         logger.error('Communication timeout during API call %s', f.__name__)
         status = 200  # OK
         data = {'success': False, 'msg': 'Internal communication timeout'}
+    except DoesNotExist:
+        logger.error('Could not find the requested object')
+        status = 200  # OK
+        data = {'success': False, 'msg': 'Object not found'}
     except Exception as ex:
         logger.exception('Unexpected error during API call %s', f.__name__)
         status = 200  # OK
@@ -1760,7 +1765,14 @@ class WebInterface(object):
         :param id: The id of the room_configuration
         :param fields: The fields of the room_configuration to get, None if all
         """
-        return {'config': RoomSerializer.serialize(room_dto=self._room_controller.load_room(room_id=id),
+        try:
+            room_dto = self._room_controller.load_room(room_id=id)
+        except DoesNotExist:
+            if 0 <= id < 100:
+                room_dto = RoomDTO(id=id)
+            else:
+                raise
+        return {'config': RoomSerializer.serialize(room_dto=room_dto,
                                                    fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
@@ -1786,7 +1798,6 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(config='json'))
     def set_room_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
         """ Set multiple room_configuration. """
-        # TODO: Skip "empty" configurations
         data = [RoomSerializer.deserialize(entry) for entry in config]
         self._room_controller.save_rooms(data)
         return {}
