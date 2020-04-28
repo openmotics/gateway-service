@@ -20,12 +20,12 @@ Some examples (model - class or model name)::
     > migrator.add_default(model, field_name, default)
 
 """
-from peewee import ForeignKeyField
-from gateway.models import Room, Floor
+from gateway.models import Room, Floor, Shutter, ShutterGroup, Sensor, PulseCounter, Input
 
 
 def migrate(migrator, database, fake=False, **kwargs):
-    database.create_tables([Room, Floor])  # This will - for some reason - add the foreigns keys as well
+    database.create_tables([Room, Floor, Shutter, ShutterGroup,
+                            Sensor, PulseCounter, Input])  # This will - for some reason - add the foreigns keys as well
 
 
 def rollback(migrator, database, fake=False, **kwargs):

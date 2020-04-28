@@ -116,6 +116,36 @@ class Output(BaseModel):
 class OutputForeignKeyField(Output, ForeignKeyField): ...
 
 
+class Input(BaseModel):
+    id: MixedPrimaryKeyField
+    number: MixedIntegerField
+    room: Optional[RoomForeignKeyField]
+
+
+class Shutter(BaseModel):
+    id: MixedPrimaryKeyField
+    number: MixedIntegerField
+    room: Optional[RoomForeignKeyField]
+
+
+class ShutterGroup(BaseModel):
+    id: MixedPrimaryKeyField
+    number: MixedIntegerField
+    room: Optional[RoomForeignKeyField]
+
+
+class Sensor(BaseModel):
+    id: MixedPrimaryKeyField
+    number: MixedIntegerField
+    room: Optional[RoomForeignKeyField]
+
+
+class PulseCounter(BaseModel):
+    id: MixedPrimaryKeyField
+    number: MixedIntegerField
+    room: Optional[RoomForeignKeyField]
+
+
 class ThermostatGroup(BaseModel):
     id: MixedPrimaryKeyField
     number: MixedIntegerField

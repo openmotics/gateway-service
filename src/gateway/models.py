@@ -98,6 +98,36 @@ class Output(BaseModel):
     room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='outputs')
 
 
+class Input(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='inputs')
+
+
+class Shutter(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='shutters')
+
+
+class ShutterGroup(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='shutter_groups')
+
+
+class Sensor(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='sensors')
+
+
+class PulseCounter(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='pulse_counters')
+
+
 class ThermostatGroup(BaseModel):
     id = PrimaryKeyField()
     number = IntegerField(unique=True)
@@ -206,7 +236,7 @@ class Thermostat(BaseModel):
     pid_cooling_d = FloatField(default=0)
 
     automatic = BooleanField(default=True)
-    room = IntegerField()
+    room = IntegerField()  # TODO: Migrate to ForeignKey
     start = IntegerField()
 
     valve_config = CharField(default='cascade')  # options: cascade, equal

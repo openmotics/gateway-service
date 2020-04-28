@@ -40,10 +40,7 @@ class RoomSerializer(object):
         room_dto = RoomDTO(id=api_data['id'])
         if 'name' in api_data:
             loaded_fields.append('name')
-            name = api_data['name']
-            if name == '':
-                name = None
-            room_dto.name = name
+            room_dto.name = Toolbox.nonify(api_data['name'], '')
         if 'floor' in api_data:
             loaded_fields.append('floor')
             floor_id = api_data['floor']
