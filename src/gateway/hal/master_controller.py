@@ -17,7 +17,7 @@ Module for communicating with the Master
 """
 from __future__ import absolute_import
 from gateway.dto import (
-    OutputDTO,
+    OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
     ThermostatDTO
 )
@@ -84,13 +84,13 @@ class MasterController(object):
     def get_input_module_type(self, input_module_id):
         raise NotImplementedError()
 
-    def load_input(self, input_id, fields=None):
+    def load_input(self, input_id):  # type: (int) -> InputDTO
         raise NotImplementedError()
 
-    def load_inputs(self, fields=None):
+    def load_inputs(self):  # type: () -> List[InputDTO]
         raise NotImplementedError()
 
-    def save_inputs(self, inputs, fields=None):
+    def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
         raise NotImplementedError()
 
     def get_inputs_with_status(self):

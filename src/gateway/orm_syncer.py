@@ -22,7 +22,7 @@ import logging
 from ioc import Inject, INJECTED
 from gateway.hal.master_event import MasterEvent
 from gateway.hal.master_controller import MasterController
-from gateway.models import Output, Room
+from gateway.models import Output, Input
 
 logger = logging.getLogger("openmotics")
 
@@ -43,6 +43,7 @@ class ORMSyncer(object):
         """
         logger.info('Sync ORM with Master/Core reality')
 
+        logger.info('* Outputs')
         # Outputs
         output_ids = []
         for output_dto in master_controller.load_outputs():
@@ -50,3 +51,16 @@ class ORMSyncer(object):
             output_ids.append(output_id)
             Output.get_or_create(number=output_id)
         Output.delete().where(Output.number.not_in(output_ids)).execute()
+
+        logger.info('* Inputs')
+        # Inputs
+        input_ids = []
+        for input_dto in master_controller.load_inputs():
+            if input_dto.module_type not in ['i', 'I']:
+                continue
+            input_id = input_dto.id
+            input_ids.append(input_id)
+            Input.get_or_create(number=input_id)
+        Input.delete().where(Input.number.not_in(input_ids)).execute()
+
+        logger.info('Sync ORM completed')

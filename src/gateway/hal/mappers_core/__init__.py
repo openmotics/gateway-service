@@ -15,3 +15,4 @@
 
 from gateway.hal.mappers_core.output import OutputMapper
 from gateway.hal.mappers_core.shutter import ShutterMapper
+from gateway.hal.mappers_core.input import InputMapper

@@ -28,10 +28,6 @@ from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.events import GatewayEvent
 from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.models import Database
-from gateway.gateway_api import GatewayApi
-from gateway.pulses import PulseCounterController
-from gateway.thermostat.thermostat_controller import ThermostatController
-from gateway.output_controller import OutputController
 from platform_utils import Hardware
 from power import power_api
 from serial_utils import CommunicationTimedOutException
@@ -39,6 +35,11 @@ import six
 
 if False:  # MYPY
     from typing import Dict, Any, List
+    from gateway.input_controller import InputController
+    from gateway.output_controller import OutputController
+    from gateway.thermostat.thermostat_controller import ThermostatController
+    from gateway.pulses import PulseCounterController
+    from gateway.gateway_api import GatewayApi
 
 logger = logging.getLogger("openmotics")
 
@@ -51,8 +52,8 @@ class MetricsCollector(object):
     """
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, pulse_controller=INJECTED, thermostat_controller=INJECTED, output_controller=INJECTED):
-        # type: (GatewayApi, PulseCounterController, ThermostatController, OutputController) -> None
+    def __init__(self, gateway_api=INJECTED, pulse_controller=INJECTED, thermostat_controller=INJECTED,
+                 output_controller=INJECTED, input_controller=INJECTED):
         self._start = time.time()
         self._last_service_uptime = 0
         self._stopped = True
@@ -61,7 +62,7 @@ class MetricsCollector(object):
         self._environment = {'inputs': {},
                              'outputs': {},
                              'sensors': {},
-                             'pulse_counters': {}}  # type: Dict[str, Dict[int, Any]]
+                             'pulse_counters': {}}  # type: Dict[str, Any]
         self._min_intervals = {'system': 60,
                                'output': 60,
                                'sensor': 5,
@@ -78,10 +79,11 @@ class MetricsCollector(object):
                                         'start': 0,
                                         'end': 0} for metric_type in self._min_intervals}
 
-        self._gateway_api = gateway_api
-        self._thermostat_controller = thermostat_controller
-        self._pulse_controller = pulse_controller
-        self._output_controller = output_controller
+        self._gateway_api = gateway_api  # type: GatewayApi
+        self._thermostat_controller = thermostat_controller  # type: ThermostatController
+        self._pulse_controller = pulse_controller  # type: PulseCounterController
+        self._output_controller = output_controller  # type: OutputController
+        self._input_controller = input_controller  # type: InputController
         self._metrics_queue = deque()  # type: deque
 
     def start(self):
@@ -255,7 +257,7 @@ class MetricsCollector(object):
             inputs = self._environment['inputs']
             if input_id not in inputs:
                 return
-            input_name = inputs[input_id]['name']
+            input_name = inputs[input_id].name
             if input_name != '':
                 tags = {'type': 'input',
                         'id': input_id,
@@ -718,12 +720,12 @@ class MetricsCollector(object):
             start = time.time()
             # Inputs
             try:
-                result = self._gateway_api.get_input_configurations()
+                inputs = self._input_controller.load_inputs()
                 ids = []
-                for config in result:
-                    input_id = config['id']
+                for input_dto in inputs:
+                    input_id = input_dto.id
                     ids.append(input_id)
-                    self._environment['inputs'][input_id] = config
+                    self._environment['inputs'][input_id] = input_dto
                 for input_id in self._environment['inputs'].keys():
                     if input_id not in ids:
                         del self._environment['inputs'][input_id]
@@ -735,12 +737,12 @@ class MetricsCollector(object):
                 logger.exception('Error while loading input configurations: {0}'.format(ex))
             # Outputs
             try:
-                result = self._output_controller.load_outputs()
+                outputs = self._output_controller.load_outputs()
                 ids = []
-                for config in result:
-                    if config.module_type not in ['o', 'O', 'd', 'D']:
+                for output_dto in outputs:
+                    if output_dto.module_type not in ['o', 'O', 'd', 'D']:
                         continue
-                    output_id = config.id
+                    output_id = output_dto.id
                     ids.append(output_id)
                     type_mapping = {0: 'outlet',
                                     1: 'valve',
@@ -752,13 +754,13 @@ class MetricsCollector(object):
                                     7: 'motor',
                                     8: 'ventilation',
                                     255: 'light'}
-                    self._environment['outputs'][output_id] = {'name': config.name,
+                    self._environment['outputs'][output_id] = {'name': output_dto.name,
                                                                'module_type': {'o': 'output',
                                                                                'O': 'output',
                                                                                'd': 'dimmer',
-                                                                               'D': 'dimmer'}[config.module_type],
-                                                               'floor': config.floor,
-                                                               'type': type_mapping.get(config.output_type, 'generic')}
+                                                                               'D': 'dimmer'}[output_dto.module_type],
+                                                               'floor': output_dto.floor,
+                                                               'type': type_mapping.get(output_dto.output_type, 'generic')}
                 for output_id in self._environment['outputs'].keys():
                     if output_id not in ids:
                         del self._environment['outputs'][output_id]
@@ -770,9 +772,9 @@ class MetricsCollector(object):
                 logger.exception('Error while loading output configurations: {0}'.format(ex))
             # Sensors
             try:
-                result = self._gateway_api.get_sensor_configurations()
+                sensors = self._gateway_api.get_sensor_configurations()
                 ids = []
-                for config in result:
+                for config in sensors:
                     input_id = config['id']
                     ids.append(input_id)
                     self._environment['sensors'][input_id] = config
@@ -787,9 +789,9 @@ class MetricsCollector(object):
                 logger.exception('Error while loading sensor configurations: {0}'.format(ex))
             # Pulse counters
             try:
-                result = self._gateway_api.get_pulse_counter_configurations()
+                pulse_counters = self._gateway_api.get_pulse_counter_configurations()
                 ids = []
-                for config in result:
+                for config in pulse_counters:
                     input_id = config['id']
                     ids.append(input_id)
                     self._environment['pulse_counters'][input_id] = config

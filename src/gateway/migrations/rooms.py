@@ -16,7 +16,7 @@
 import logging
 from toolbox import Toolbox
 from ioc import INJECTED, Inject
-from gateway.models import Feature, Output, Room, Floor
+from gateway.models import Feature, Output, Room, Floor, Input
 from gateway.orm_syncer import ORMSyncer
 from platform_utils import Platform
 
@@ -49,7 +49,10 @@ class RoomsMigrator(object):
                 ORMSyncer.sync()
 
                 # Import legacy code
-                from master.classic.eeprom_models import OutputConfiguration, RoomConfiguration, FloorConfiguration
+                from master.classic.eeprom_models import (
+                    OutputConfiguration, RoomConfiguration, FloorConfiguration,
+                    InputConfiguration
+                )
 
                 rooms = {}  # type: Dict[int, Room]
                 floors = {}  # type: Dict[int, Floor]
@@ -72,6 +75,19 @@ class RoomsMigrator(object):
                     else:
                         output_orm.room = rooms.setdefault(room_id, RoomsMigrator._get_or_create_room(master_controller, room_id, rooms, floors))
                     output_orm.save()
+
+                # Inputs
+                for input_classic_orm in master_controller._eeprom_controller.read_all(InputConfiguration):
+                    if input_classic_orm.module_type in ['i', 'I']:
+                        continue
+                    input_id = input_classic_orm.id
+                    room_id = input_classic_orm.room
+                    input_orm, _ = Input.get_or_create(number=input_id)
+                    if room_id == 255:
+                        input_orm.room = None
+                    else:
+                        input_orm.room = rooms.setdefault(room_id, RoomsMigrator._get_or_create_room(master_controller, room_id, rooms, floors))
+                    input_orm.save()
 
                 # Migration complete
                 feature.enabled = True

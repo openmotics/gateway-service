@@ -54,7 +54,7 @@ class InputConfiguration(EepromModel):
     module_type: str
     name: str
     action: int
-    basic_actions: List[int]
+    basic_actions: str
     invert: int
     room: int
     can: str
@@ -122,7 +122,7 @@ class ThermostatConfiguration(EepromModel):
 
 class PumpGroupConfiguration(EepromModel):
     id: int
-    outputs = List[int]
+    outputs = str
     output: int
     room: int
 
@@ -156,7 +156,7 @@ class CoolingConfiguration(EepromModel):
 
 class CoolingPumpGroupConfiguration(EepromModel):
     id: int
-    outputs = List[int]
+    outputs = str
     output: int
     room: int
 
@@ -235,7 +235,7 @@ class SensorConfiguration(EepromModel):
 class GroupActionConfiguration(EepromModel):
     id: int
     name: str
-    actions: List[int]
+    actions: str
 
 
 class ScheduledActionConfiguration(EepromModel):
@@ -243,7 +243,7 @@ class ScheduledActionConfiguration(EepromModel):
     hour: int
     minute: int
     day: int
-    action: List[int]
+    action: str
 
 
 class PulseCounterConfiguration(EepromModel):
@@ -254,7 +254,7 @@ class PulseCounterConfiguration(EepromModel):
 
 
 class StartupActionConfiguration(EepromModel):
-    actions: List[int]
+    actions: str
 
 
 class DimmerConfiguration(EepromModel):

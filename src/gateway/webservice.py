@@ -36,7 +36,7 @@ import constants
 import gateway
 from bus.om_bus_events import OMBusEvents
 from gateway.api.serializers import (
-    OutputSerializer,
+    OutputSerializer, InputSerializer,
     ShutterSerializer, ShutterGroupSerializer,
     ThermostatSerializer, RoomSerializer
 )
@@ -64,6 +64,7 @@ if False:
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.users import UserController
     from gateway.output_controller import OutputController
+    from gateway.input_controller import InputController
     from gateway.room_controller import RoomController
     from plugins.base import PluginController
 
@@ -272,7 +273,7 @@ class WebInterface(object):
     def __init__(self, user_controller=INJECTED, gateway_api=INJECTED, maintenance_controller=INJECTED,
                  message_client=INJECTED, configuration_controller=INJECTED, scheduling_controller=INJECTED,
                  thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED,
-                 room_controller=INJECTED):
+                 room_controller=INJECTED, input_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -283,6 +284,7 @@ class WebInterface(object):
         self._shutter_controller = shutter_controller  # type: ShutterController
         self._output_controller = output_controller  # type: OutputController
         self._room_controller = room_controller  # type: RoomController
+        self._input_controller = input_controller  # type: InputController
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
@@ -1109,51 +1111,36 @@ class WebInterface(object):
     # Input configuration
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_input_configuration(self, id, fields=None):
+    def get_input_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
         Get a specific input_configuration defined by its id.
-
         :param id: The id of the input_configuration
-        :type id: int
-        :param fields: The field of the input_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': input_configuration dict: contains 'id' (Id), 'action' (Byte), 'basic_actions' (Actions[15]), 'invert' (Byte), 'module_type' (String[1]), 'name' (String[8]), 'room' (Byte)
-        :rtype: dict
+        :param fields: The field of the input_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_input_configuration(id, fields)}
+        return {'config': InputSerializer.serialize(input_dto=self._input_controller.load_input(input_id=id),
+                                                    fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_input_configurations(self, fields=None):
+    def get_input_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
         Get all input_configurations.
-
-        :param fields: The field of the input_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of input_configuration dict: contains 'id' (Id), 'action' (Byte), 'basic_actions' (Actions[15]), 'invert' (Byte), 'module_type' (String[1]), 'name' (String[8]), 'room' (Byte)
-        :rtype: dict
+        :param fields: The field of the input_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_input_configurations(fields)}
+        return {'config': [InputSerializer.serialize(input_dto=input_, fields=fields)
+                           for input_ in self._input_controller.load_inputs()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_input_configuration(self, config):
-        """
-        Set one input_configuration.
-
-        :param config: The input_configuration to set: input_configuration dict: contains 'id' (Id), 'action' (Byte), 'basic_actions' (Actions[15]), 'invert' (Byte), 'name' (String[8]), 'room' (Byte)
-        :type config: dict
-        """
-        self._gateway_api.set_input_configuration(config)
+    def set_input_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one input_configuration. """
+        data = InputSerializer.deserialize(config)
+        self._input_controller.save_inputs([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_input_configurations(self, config):
-        """
-        Set multiple input_configurations.
-
-        :param config: The list of input_configurations to set: list of input_configuration dict: contains 'id' (Id), 'action' (Byte), 'basic_actions' (Actions[15]), 'invert' (Byte), 'name' (String[8]), 'room' (Byte)
-        :type config: list
-        """
-        self._gateway_api.set_input_configurations(config)
+    def set_input_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple input_configurations. """
+        data = [InputSerializer.deserialize(entry) for entry in config]
+        self._input_controller.save_inputs(data)
         return {}
 
     # Heating thermostats

@@ -23,13 +23,13 @@ from threading import Timer
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import (
-    OutputDTO,
+    OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
     ThermostatDTO
 )
 from gateway.enums import ShutterEnums
 from gateway.hal.mappers_classic import (
-    OutputMapper,
+    OutputMapper, InputMapper,
     ShutterGroupMapper, ShutterMapper,
     ThermostatMapper
 )
@@ -84,7 +84,7 @@ class MasterClassicController(MasterController):
         self._master_online = False
         self._input_interval = 300
         self._input_last_updated = 0.0
-        self._input_config = {}  # type: Dict[int, Dict[str, Any]]
+        self._input_config = {}  # type: Dict[int, InputDTO]
         self._output_interval = 600
         self._output_last_updated = 0
         self._output_config = {}  # type: Dict[int, OutputDTO]
@@ -336,24 +336,26 @@ class MasterClassicController(MasterController):
         # type: () -> List[int]
         return self._input_status.get_recent()
 
-    def load_input(self, input_id, fields=None):
-        o = self._eeprom_controller.read(eeprom_models.InputConfiguration, input_id, fields)
-        if o.module_type not in ['i', 'I']:  # Only return 'real' inputs
-            raise TypeError('The given id {0} is not an input, but {1}'.format(input_id, o.module_type))
-        return o.serialize()
+    def load_input(self, input_id):  # type: (int) -> InputDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.InputConfiguration, input_id)
+        if classic_object.module_type not in ['i', 'I']:  # Only return 'real' inputs
+            raise TypeError('The given id {0} is not an input, but {1}'.format(input_id, classic_object.module_type))
+        return InputMapper.orm_to_dto(classic_object)
 
-    def load_inputs(self, fields=None):
-        return [o.serialize() for o in self._eeprom_controller.read_all(eeprom_models.InputConfiguration, fields)
+    def load_inputs(self):  # type: () -> List[InputDTO]
+        return [InputMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.InputConfiguration)
                 if o.module_type in ['i', 'I']]  # Only return 'real' inputs
 
-    def save_inputs(self, inputs, fields=None):
-        self._eeprom_controller.write_batch([eeprom_models.InputConfiguration.deserialize(input_)
-                                             for input_ in inputs])
+    def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
+        batch = []
+        for input_, fields in inputs:
+            batch.append(InputMapper.dto_to_orm(input_, fields))
+        self._eeprom_controller.write_batch(batch)
 
-    def _refresh_inputs(self):
-        # type: () -> None
+    def _refresh_inputs(self):  # type: () -> None
         # 1. refresh input configuration
-        self._input_config = {input_configuration['id']: input_configuration
+        self._input_config = {input_configuration.id: input_configuration
                               for input_configuration in self.load_inputs()}
         # 2. poll for latest input status
         try:
@@ -481,7 +483,7 @@ class MasterClassicController(MasterController):
         for callback in self._event_callbacks:
             event_data = {'id': input_id,
                           'status': status,
-                          'location': {'room_id': input_configuration.get('room', 255)}}
+                          'location': {'room_id': Toolbox.denonify(input_configuration.room, 255)}}
             callback(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
 
     def _refresh_outputs(self):

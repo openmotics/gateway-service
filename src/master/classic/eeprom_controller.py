@@ -1080,7 +1080,7 @@ class EextBool(EextDataType):
         return False
 
     def decode(self, value):
-        return bool(value)
+        return value == 'True'
 
     def encode(self, value):
         if value is None:

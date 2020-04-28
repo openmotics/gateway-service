@@ -21,3 +21,4 @@ from gateway.dto.thermostat import ThermostatDTO
 from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
 from gateway.dto.floor import FloorDTO
 from gateway.dto.room import RoomDTO
+from gateway.dto.input import InputDTO

@@ -8,6 +8,7 @@ import mock
 import xmlrunner
 from gateway.hal.master_event import MasterEvent
 from ioc import Scope, SetTestMode, SetUpTestInjections
+from gateway.dto import InputDTO
 from master.classic import eeprom_models
 from master.classic.eeprom_controller import EepromController
 from master.core.core_api import CoreAPI
@@ -28,7 +29,7 @@ class MasterCoreControllerTest(unittest.TestCase):
 
     def test_input_module_type(self):
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=get_input_dummy(1)):
+                               return_value=get_core_input_dummy(1)):
             controller = get_core_controller_dummy()
             data = controller.get_input_module_type(1)
             self.assertEqual('I', data)
@@ -36,46 +37,22 @@ class MasterCoreControllerTest(unittest.TestCase):
     def test_load_input(self):
         controller = get_core_controller_dummy()
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=get_input_dummy(1)):
+                               return_value=get_core_input_dummy(1)):
             data = controller.load_input(1)
-            self.assertEqual(data['id'], 1)
-
-    def test_load_input_with_fields(self):
-        controller = get_core_controller_dummy()
-        with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=get_input_dummy(1)):
-            data = controller.load_input(1, fields=['module_type'])
-            self.assertEqual(data['id'], 1)
-            self.assertIn('module_type', data)
-            self.assertNotIn('name', data)
-
-    def test_load_input_with_invalid_type(self):
-        controller = get_core_controller_dummy()
-        with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=get_input_dummy(1, module_type='O')):
-            self.assertRaises(TypeError, controller.load_input, 1)
+            self.assertEqual(data.id, 1)
 
     def test_load_inputs(self):
-        input_modules = list(map(get_input_dummy, range(1, 17)))
+        input_modules = list(map(get_core_input_dummy, range(1, 17)))
         controller = get_core_controller_dummy({'output': 0, 'input': 2})
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                side_effect=input_modules):
             inputs = controller.load_inputs()
-            self.assertEqual([x['id'] for x in inputs], list(range(1, 17)))
-
-    def test_load_inputs_skips_invalid_type(self):
-        input_modules = list(map(get_input_dummy, range(1, 9)))
-        input_modules += [get_input_dummy(i, module_type='O') for i in range(9, 17)]
-        controller = get_core_controller_dummy({'output': 0, 'input': 2})
-        with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               side_effect=input_modules):
-            inputs = controller.load_inputs()
-            self.assertNotIn(10, [x['id'] for x in inputs])
+            self.assertEqual([x.id for x in inputs], list(range(1, 17)))
 
     def test_save_inputs(self):
         controller = get_core_controller_dummy()
-        data = [{'id': 1, 'name': 'foo', 'module_type': 'I'},
-                {'id': 2, 'name': 'bar', 'module_type': 'I'}]
+        data = [(InputDTO(id=1, name='foo', module_type='I'), ['id', 'name', 'module_type']),
+                (InputDTO(id=2, name='bar', module_type='I'), ['id', 'name', 'module_type'])]
         input_mock = mock.Mock(InputConfiguration)
         with mock.patch.object(InputConfiguration, 'deserialize', return_value=input_mock) as deserialize, \
                 mock.patch.object(input_mock, 'save', return_value=None) as save:
@@ -138,11 +115,19 @@ class MasterCoreControllerCompatibilityTest(unittest.TestCase):
     def test_load_input(self):
         SetUpTestInjections(memory_files={MemoryTypes.EEPROM: mock.Mock()})
         core = get_core_controller_dummy()
+        core_input_orm = get_core_input_dummy(1)
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=get_input_dummy(1)):
+                               return_value=core_input_orm):
             core_data = core.load_input(1)
-        input_module = eeprom_models.InputConfiguration.deserialize(core_data)
-        classic = get_classic_controller_dummy([input_module])
+        classic_input_orm = eeprom_models.InputConfiguration.deserialize({'id': 1,
+                                                                          'name': 'foo',
+                                                                          'module_type': 'I',
+                                                                          'action': 255,
+                                                                          'basic_actions': '',
+                                                                          'invert': 255,
+                                                                          'can': ' ',
+                                                                          'event_enabled': False})
+        classic = get_classic_controller_dummy([classic_input_orm])
         classic_data = classic.load_input(1)
         self.assertEqual(classic_data, core_data)
 
@@ -243,12 +228,12 @@ def get_classic_controller_dummy(inputs):
     return MasterClassicController()
 
 
-def get_input_dummy(i, module_type='I'):
+def get_core_input_dummy(i):
     return InputConfiguration.deserialize({
         'id': i,
         'name': 'foo',
         'module': {'id': 20 + i,
-                   'device_type': module_type,
+                   'device_type': 'I',
                    'address': '0.0.0.0',
                    'firmware_version': '0.0.1'}
     })

@@ -31,7 +31,6 @@ from six.moves.configparser import ConfigParser
 
 import constants
 from bus.om_bus_events import OMBusEvents
-from gateway.dto import OutputDTO
 from gateway.hal.master_controller import MasterController
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Platform, System
@@ -39,7 +38,7 @@ from power import power_api
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY:
-    from typing import Any, Dict, List, Tuple, Optional
+    from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger('openmotics')
 
@@ -676,25 +675,9 @@ class GatewayApi(object):
 
     # Inputs
 
-    def get_input_configuration(self, input_id, fields=None):
-        """ Get a specific input_configuration defined by its id. """
-        return self.__master_controller.load_input(input_id, fields)
-
     def get_input_module_type(self, input_module_id):
         """ Gets the module type for a given Input Module ID """
         return self.__master_controller.get_input_module_type(input_module_id)
-
-    def get_input_configurations(self, fields=None):
-        """ Get all input_configurations. """
-        return self.__master_controller.load_inputs(fields)
-
-    def set_input_configuration(self, config):
-        """ Set one input_configuration. """
-        self.__master_controller.save_inputs([config])
-
-    def set_input_configurations(self, config):
-        """ Set multiple input_configurations. """
-        self.__master_controller.save_inputs(config)
 
     def get_group_action_configuration(self, group_action_id, fields=None):
         # type: (int, Any) -> Dict[str,Any]

@@ -17,3 +17,4 @@ from gateway.hal.mappers_classic.output import OutputMapper
 from gateway.hal.mappers_classic.shutter import ShutterMapper
 from gateway.hal.mappers_classic.shutter_group import ShutterGroupMapper
 from gateway.hal.mappers_classic.thermostat import ThermostatMapper
+from gateway.hal.mappers_classic.input import InputMapper

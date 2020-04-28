@@ -22,11 +22,11 @@ from threading import Thread
 
 from gateway.enums import ShutterEnums
 from gateway.dto import (
-    OutputDTO,
+    OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
     ThermostatDTO
 )
-from gateway.hal.mappers_core import OutputMapper, ShutterMapper
+from gateway.hal.mappers_core import OutputMapper, ShutterMapper, InputMapper
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
@@ -181,14 +181,6 @@ class MasterCoreController(MasterController):
         if online != self._master_online:
             self._master_online = online
 
-    def _serialize_input(self, input_module, fields=None):
-        data = {'id': input_module.id}
-        if fields is None or 'name' in fields:
-            data['name'] = input_module.name
-        if fields is None or 'module_type' in fields:
-            data['module_type'] = input_module.module.device_type
-        return data
-
     def _enumerate_io_modules(self, module_type, amount_per_module=8):
         cmd = CoreAPI.general_configuration_number_of_modules()
         module_count = self._master_communicator.do_command(cmd, {})[module_type]
@@ -272,29 +264,20 @@ class MasterCoreController(MasterController):
         # type: () -> List[int]
         return self._input_state.get_recent()
 
-    def load_input(self, input_module_id, fields=None):
-        input_module = InputConfiguration(input_module_id)
-        module_type = input_module.module.device_type
-        if module_type not in ['i', 'I']:
-            raise TypeError('The given id {0} is not an input, but {1}'.format(input_module_id, module_type))
-        return self._serialize_input(input_module, fields=fields)
+    def load_input(self, input_id):  # type: (int) -> InputDTO
+        input_ = InputConfiguration(input_id)
+        return InputMapper.orm_to_dto(input_)
 
-    def load_inputs(self, fields=None):
+    def load_inputs(self):  # type: () -> List[InputDTO]
         inputs = []
         for i in self._enumerate_io_modules('input'):
-            input_module = InputConfiguration(i)
-            module_type = input_module.module.device_type
-            if module_type in ['i', 'I']:
-                input_data = self._serialize_input(input_module, fields=fields)
-                inputs.append(input_data)
+            inputs.append(self.load_input(i))
         return inputs
 
-    def save_inputs(self, data, fields=None):
-        for input_data in data:
-            new_data = {'id': input_data['id'],
-                        'name': input_data['name']}
-            input_module = InputConfiguration.deserialize(new_data)
-            input_module.save()
+    def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
+        for input_dto, fields in inputs:
+            input_ = InputMapper.dto_to_orm(input_dto, fields)
+            input_.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
 
     def _refresh_input_states(self):
         # type: () -> bool
