@@ -15,3 +15,4 @@
 
 from gateway.mappers.room import RoomMapper
 from gateway.mappers.floor import FloorMapper
+from gateway.mappers.thermostat import ThermostatMapper

@@ -28,7 +28,7 @@ from gateway.models import Output, Preset, Thermostat, ThermostatGroup, OutputTo
 from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.thermostat.gateway.thermostat_pid import ThermostatPid
-from gateway.thermostat.gateway.mappers import ThermostatMapper
+from gateway.mappers import ThermostatMapper
 from apscheduler.schedulers.background import BackgroundScheduler
 
 if False:  # MYPY
