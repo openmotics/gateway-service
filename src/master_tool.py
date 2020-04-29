@@ -64,7 +64,7 @@ def master_sync(master_controller=INJECTED):
 @Inject
 def master_version(master_controller=INJECTED):
     status = master_controller.get_status()
-    print(status['version'])
+    print('{} H{}'.format(status['version'], status['hw_version']))
 
 
 @Inject
