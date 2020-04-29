@@ -24,9 +24,12 @@ from gateway.enums import ShutterEnums
 from gateway.dto import (
     OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
-    ThermostatDTO
+    ThermostatDTO, SensorDTO
 )
-from gateway.hal.mappers_core import OutputMapper, ShutterMapper, InputMapper
+from gateway.hal.mappers_core import (
+    OutputMapper, ShutterMapper, InputMapper,
+    SensorMapper
+)
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
@@ -529,29 +532,37 @@ class MasterCoreController(MasterController):
             brightnesses.append(self.get_sensor_brightness(sensor_id))
         return brightnesses
 
-    def load_sensor(self, sensor_id, fields=None):
-        sensor = SensorConfiguration(sensor_id)
-        data = {'id': sensor.id,
-                'name': sensor.name,
-                'offset': 0,
-                'virtual': False,
-                'room': 255}
-        if fields is None:
-            return data
-        return {field: data[field] for field in fields}
+    # def load_sensor(self, sensor_id, fields=None):
+    #     sensor = SensorConfiguration(sensor_id)
+    #     data = {'id': sensor.id,
+    #             'name': sensor.name,
+    #             'offset': 0,
+    #             'virtual': False,
+    #             'room': 255}
+    #     if fields is None:
+    #         return data
+    #     return {field: data[field] for field in fields}
+    #
+    # def save_sensors(self, sensors):
+    #     for sensor_data in sensors:
+    #         new_data = {'id': sensor_data['id'],
+    #                     'name': sensor_data['name']}  # TODO: Rest of the mapping
+    #         sensor = SensorConfiguration.deserialize(new_data)
+    #         sensor.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
 
-    def load_sensors(self, fields=None):
-        amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
+    def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
+        sensor = SensorConfiguration(sensor_id)
+        return SensorMapper.orm_to_dto(sensor)
+
+    def load_sensors(self):  # type: () -> List[SensorDTO]
         sensors = []
-        for i in range(amount_sensor_modules * 8):
-            sensors.append(self.load_sensor(i, fields))
+        for i in self._enumerate_io_modules('sensor'):
+            sensors.append(self.load_sensor(i))
         return sensors
 
-    def save_sensors(self, sensors):
-        for sensor_data in sensors:
-            new_data = {'id': sensor_data['id'],
-                        'name': sensor_data['name']}  # TODO: Rest of the mapping
-            sensor = SensorConfiguration.deserialize(new_data)
+    def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
+        for sensor_dto, fields in sensors:
+            sensor = SensorMapper.dto_to_orm(sensor_dto, fields)
             sensor.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
 
     def _refresh_sensor_states(self):

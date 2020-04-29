@@ -13,13 +13,26 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from gateway.dto.feedback_led import FeedbackLedDTO
-from gateway.dto.output import OutputDTO
-from gateway.dto.shutter import ShutterDTO
-from gateway.dto.shutter_group import ShutterGroupDTO
-from gateway.dto.thermostat import ThermostatDTO
-from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
-from gateway.dto.floor import FloorDTO
-from gateway.dto.room import RoomDTO
-from gateway.dto.input import InputDTO
+"""
+Sensor Mapper
+"""
+from __future__ import absolute_import
 from gateway.dto.sensor import SensorDTO
+from master.core.memory_models import SensorConfiguration
+
+if False:  # MYPY
+    from typing import List, Dict, Any
+
+
+class SensorMapper(object):
+    @staticmethod
+    def orm_to_dto(orm_object):  # type: (SensorConfiguration) -> SensorDTO
+        return SensorDTO(id=orm_object.id,
+                         name=orm_object.name)
+
+    @staticmethod
+    def dto_to_orm(sensor_dto, fields):  # type: (SensorDTO, List[str]) -> SensorConfiguration
+        new_data = {'id': sensor_dto.id}  # type: Dict[str, Any]
+        if 'name' in fields:
+            new_data['name'] = sensor_dto.name
+        return SensorConfiguration.deserialize(new_data)

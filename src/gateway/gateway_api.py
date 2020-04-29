@@ -302,54 +302,6 @@ class GatewayApi(object):
 
     # Sensors
 
-    def get_sensor_configuration(self, sensor_id, fields=None):
-        """
-        Get a specific sensor_configuration defined by its id.
-
-        :param sensor_id: The id of the sensor_configuration
-        :type sensor_id: Id
-        :param fields: The field of the sensor_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
-        """
-        # TODO: work with sensor controller
-        # TODO: add other sensors too (e.g. from database <-- plugins)
-        return self.__master_controller.load_sensor(sensor_id, fields=fields)
-
-    def get_sensor_configurations(self, fields=None):
-        """
-        Get all sensor_configurations.
-
-        :param fields: The field of the sensor_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
-        """
-        # TODO: work with sensor controller
-        # TODO: add other sensors too (e.g. from database <-- plugins)
-        return self.__master_controller.load_sensors(fields=fields)
-
-    def set_sensor_configuration(self, config):
-        """
-        Set one sensor_configuration.
-
-        :param config: The sensor_configuration to set
-        :type config: sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
-        """
-        # TODO: work with sensor controller
-        # TODO: add other sensors too (e.g. from database <-- plugins)
-        return self.__master_controller.save_sensors([config])
-
-    def set_sensor_configurations(self, config):
-        """
-        Set multiple sensor_configurations.
-
-        :param config: The list of sensor_configurations to set
-        :type config: list of sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
-        """
-        # TODO: work with sensor controller
-        # TODO: add other sensors too (e.g. from database <-- plugins)
-        return self.__master_controller.save_sensors(config)
-
     def get_sensors_temperature_status(self):
         """ Get the current temperature of all sensors.
 

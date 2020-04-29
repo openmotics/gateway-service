@@ -22,7 +22,7 @@ import logging
 from ioc import Inject, INJECTED
 from gateway.hal.master_event import MasterEvent
 from gateway.hal.master_controller import MasterController
-from gateway.models import Output, Input
+from gateway.models import Output, Input, Sensor
 
 logger = logging.getLogger("openmotics")
 
@@ -43,24 +43,17 @@ class ORMSyncer(object):
         """
         logger.info('Sync ORM with Master/Core reality')
 
-        logger.info('* Outputs')
-        # Outputs
-        output_ids = []
-        for output_dto in master_controller.load_outputs():
-            output_id = output_dto.id
-            output_ids.append(output_id)
-            Output.get_or_create(number=output_id)
-        Output.delete().where(Output.number.not_in(output_ids)).execute()
-
-        logger.info('* Inputs')
-        # Inputs
-        input_ids = []
-        for input_dto in master_controller.load_inputs():
-            if input_dto.module_type not in ['i', 'I']:
-                continue
-            input_id = input_dto.id
-            input_ids.append(input_id)
-            Input.get_or_create(number=input_id)
-        Input.delete().where(Input.number.not_in(input_ids)).execute()
+        for orm_model, name, filter_ in [(Output, 'output', lambda o: True),
+                                         (Input, 'input', lambda i: i.module_type in ['i', 'I']),
+                                         (Sensor, 'sensor', lambda s: True)]:
+            logger.info('* {0}s'.format(orm_model.__name__))
+            ids = []
+            for dto in getattr(master_controller, 'load_{0}s'.format(name))():
+                if not filter_(dto):
+                    continue
+                id_ = dto.id
+                ids.append(id_)
+                orm_model.get_or_create(number=id_)  # type: ignore
+            orm_model.delete().where(orm_model.number.not_in(ids)).execute()  # type: ignore
 
         logger.info('Sync ORM completed')

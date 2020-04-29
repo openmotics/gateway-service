@@ -16,7 +16,7 @@
 import logging
 from toolbox import Toolbox
 from ioc import INJECTED, Inject
-from gateway.models import Feature, Output, Room, Floor, Input
+from gateway.models import Feature, Output, Room, Floor, Input, Sensor
 from gateway.orm_syncer import ORMSyncer
 from platform_utils import Platform
 
@@ -51,7 +51,7 @@ class RoomsMigrator(object):
                 # Import legacy code
                 from master.classic.eeprom_models import (
                     OutputConfiguration, RoomConfiguration, FloorConfiguration,
-                    InputConfiguration
+                    InputConfiguration, SensorConfiguration
                 )
 
                 rooms = {}  # type: Dict[int, Room]
@@ -65,29 +65,21 @@ class RoomsMigrator(object):
                     room = RoomsMigrator._get_or_create_room(master_controller, room_id, rooms, floors)
                     rooms[room_id] = room
 
-                # Outputs
-                for output_classic_orm in master_controller._eeprom_controller.read_all(OutputConfiguration):
-                    output_id = output_classic_orm.id
-                    room_id = output_classic_orm.room
-                    output_orm, _ = Output.get_or_create(number=output_id)
-                    if room_id == 255:
-                        output_orm.room = None
-                    else:
-                        output_orm.room = rooms.setdefault(room_id, RoomsMigrator._get_or_create_room(master_controller, room_id, rooms, floors))
-                    output_orm.save()
-
-                # Inputs
-                for input_classic_orm in master_controller._eeprom_controller.read_all(InputConfiguration):
-                    if input_classic_orm.module_type in ['i', 'I']:
-                        continue
-                    input_id = input_classic_orm.id
-                    room_id = input_classic_orm.room
-                    input_orm, _ = Input.get_or_create(number=input_id)
-                    if room_id == 255:
-                        input_orm.room = None
-                    else:
-                        input_orm.room = rooms.setdefault(room_id, RoomsMigrator._get_or_create_room(master_controller, room_id, rooms, floors))
-                    input_orm.save()
+                # Main objects
+                for eeprom_model, orm_model, filter_ in [(OutputConfiguration, Output, lambda o: True),
+                                                         (InputConfiguration, Input, lambda i: i.module_type in ['i', 'I']),
+                                                         (SensorConfiguration, Sensor, lambda s: True)]:
+                    for classic_orm in master_controller._eeprom_controller.read_all(eeprom_model):
+                        if not filter_(classic_orm):
+                            continue
+                        object_id = classic_orm.id
+                        room_id = classic_orm.room  # type: ignore
+                        object_orm, _ = orm_model.get_or_create(number=object_id)  # type: ignore
+                        if room_id == 255:
+                            object_orm.room = None
+                        else:
+                            object_orm.room = rooms.setdefault(room_id, RoomsMigrator._get_or_create_room(master_controller, room_id, rooms, floors))
+                        object_orm.save()
 
                 # Migration complete
                 feature.enabled = True

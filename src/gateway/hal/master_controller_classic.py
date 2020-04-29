@@ -25,13 +25,13 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import (
     OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
-    ThermostatDTO
+    ThermostatDTO, SensorDTO
 )
 from gateway.enums import ShutterEnums
 from gateway.hal.mappers_classic import (
     OutputMapper, InputMapper,
     ShutterGroupMapper, ShutterMapper,
-    ThermostatMapper
+    ThermostatMapper, SensorMapper
 )
 from gateway.config import ConfigurationController
 from gateway.hal.master_controller import MasterController
@@ -1217,11 +1217,16 @@ class MasterClassicController(MasterController):
         )
         return dict()
 
-    def load_sensor(self, sensor_id, fields=None):
-        return self._eeprom_controller.read(eeprom_models.SensorConfiguration, sensor_id, fields).serialize()
+    def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.SensorConfiguration, sensor_id)
+        return SensorMapper.orm_to_dto(classic_object)
 
-    def load_sensors(self, fields=None):
-        return [o.serialize() for o in self._eeprom_controller.read_all(eeprom_models.SensorConfiguration, fields)]
+    def load_sensors(self):  # type: () -> List[SensorDTO]
+        return [SensorMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.SensorConfiguration)]
 
-    def save_sensors(self, config):
-        self._eeprom_controller.write_batch([eeprom_models.SensorConfiguration.deserialize(o) for o in config])
+    def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
+        batch = []
+        for sensor, fields in sensors:
+            batch.append(SensorMapper.dto_to_orm(sensor, fields))
+        self._eeprom_controller.write_batch(batch)

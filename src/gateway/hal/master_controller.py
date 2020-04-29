@@ -19,7 +19,7 @@ from __future__ import absolute_import
 from gateway.dto import (
     OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
-    ThermostatDTO
+    ThermostatDTO, SensorDTO
 )
 from gateway.hal.master_event import MasterEvent
 
@@ -205,13 +205,13 @@ class MasterController(object):
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         raise NotImplementedError()
 
-    def load_sensor(self, sensor_id, fields=None):
+    def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
         raise NotImplementedError()
 
-    def load_sensors(self, fields=None):
+    def load_sensors(self):  # type: () -> List[SensorDTO]
         raise NotImplementedError()
 
-    def save_sensors(self, config):
+    def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
         raise NotImplementedError()
 
     # Virtual modules

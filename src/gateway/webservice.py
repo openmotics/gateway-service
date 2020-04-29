@@ -38,7 +38,7 @@ from bus.om_bus_events import OMBusEvents
 from gateway.api.serializers import (
     OutputSerializer, InputSerializer,
     ShutterSerializer, ShutterGroupSerializer,
-    ThermostatSerializer, RoomSerializer
+    ThermostatSerializer, RoomSerializer, SensorSerializer
 )
 from gateway.dto import RoomDTO
 from gateway.enums import ShutterEnums
@@ -66,6 +66,7 @@ if False:
     from gateway.output_controller import OutputController
     from gateway.input_controller import InputController
     from gateway.room_controller import RoomController
+    from gateway.sensor_controller import SensorController
     from plugins.base import PluginController
 
 logger = logging.getLogger("openmotics")
@@ -79,7 +80,7 @@ class FloatWrapper(float):
 
 
 class BadRequestException(Exception):
-        pass
+    pass
 
 
 def limit_floats(struct):
@@ -273,7 +274,7 @@ class WebInterface(object):
     def __init__(self, user_controller=INJECTED, gateway_api=INJECTED, maintenance_controller=INJECTED,
                  message_client=INJECTED, configuration_controller=INJECTED, scheduling_controller=INJECTED,
                  thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED,
-                 room_controller=INJECTED, input_controller=INJECTED):
+                 room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -285,6 +286,7 @@ class WebInterface(object):
         self._output_controller = output_controller  # type: OutputController
         self._room_controller = room_controller  # type: RoomController
         self._input_controller = input_controller  # type: InputController
+        self._sensor_controller = sensor_controller  # type: SensorController
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
@@ -1181,51 +1183,36 @@ class WebInterface(object):
     # Sensor configurations
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_sensor_configuration(self, id, fields=None):
+    def get_sensor_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
         Get a specific sensor_configuration defined by its id.
-
         :param id: The id of the sensor_configuration
-        :type id: int
-        :param fields: The field of the sensor_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
-        :rtype: dict
+        :param fields: The field of the sensor_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_sensor_configuration(id, fields)}
+        return {'config': SensorSerializer.serialize(sensor_dto=self._sensor_controller.load_sensor(sensor_id=id),
+                                                     fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_sensor_configurations(self, fields=None):
+    def get_sensor_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
         Get all sensor_configurations.
-
-        :param fields: The field of the sensor_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
-        :rtype: dict
+        :param fields: The field of the sensor_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_sensor_configurations(fields)}
+        return {'config': [SensorSerializer.serialize(sensor_dto=sensor, fields=fields)
+                           for sensor in self._sensor_controller.load_sensors()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_sensor_configuration(self, config):
-        """
-        Set one sensor_configuration.
-
-        :param config: The sensor_configuration to set: sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
-        :type config: dict
-        """
-        self._gateway_api.set_sensor_configuration(config)
+    def set_sensor_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one sensor_configuration. """
+        data = SensorSerializer.deserialize(config)
+        self._sensor_controller.save_sensors([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_sensor_configurations(self, config):
-        """
-        Set multiple sensor_configurations.
-
-        :param config: The list of sensor_configurations to set: list of sensor_configuration dict: contains 'id' (Id), 'name' (String[16]), 'offset' (SignedTemp(-7.5 to 7.5 degrees)), 'room' (Byte), 'virtual' (Boolean)
-        :type config: list
-        """
-        self._gateway_api.set_sensor_configurations(config)
+    def set_sensor_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple sensor_configurations. """
+        data = [SensorSerializer.deserialize(entry) for entry in config]
+        self._sensor_controller.save_sensors(data)
         return {}
 
     # Heating Pump Group

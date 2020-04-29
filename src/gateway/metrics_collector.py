@@ -37,6 +37,7 @@ if False:  # MYPY
     from typing import Dict, Any, List
     from gateway.input_controller import InputController
     from gateway.output_controller import OutputController
+    from gateway.sensor_controller import SensorController
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.pulses import PulseCounterController
     from gateway.gateway_api import GatewayApi
@@ -53,7 +54,7 @@ class MetricsCollector(object):
 
     @Inject
     def __init__(self, gateway_api=INJECTED, pulse_controller=INJECTED, thermostat_controller=INJECTED,
-                 output_controller=INJECTED, input_controller=INJECTED):
+                 output_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED):
         self._start = time.time()
         self._last_service_uptime = 0
         self._stopped = True
@@ -84,6 +85,7 @@ class MetricsCollector(object):
         self._pulse_controller = pulse_controller  # type: PulseCounterController
         self._output_controller = output_controller  # type: OutputController
         self._input_controller = input_controller  # type: InputController
+        self._sensor_controller = sensor_controller  # type: SensorController
         self._metrics_queue = deque()  # type: deque
 
     def start(self):
@@ -439,8 +441,8 @@ class MetricsCollector(object):
                 temperatures = self._gateway_api.get_sensors_temperature_status()
                 humidities = self._gateway_api.get_sensors_humidity_status()
                 brightnesses = self._gateway_api.get_sensors_brightness_status()
-                for sensor_id, sensor in self._environment['sensors'].items():
-                    name = sensor['name']
+                for sensor_id, sensor_dto in self._environment['sensors'].items():
+                    name = sensor_dto.name
                     if name == '' or name == 'NOT_IN_USE':
                         continue
                     tags = {'id': sensor_id,
@@ -772,15 +774,15 @@ class MetricsCollector(object):
                 logger.exception('Error while loading output configurations: {0}'.format(ex))
             # Sensors
             try:
-                sensors = self._gateway_api.get_sensor_configurations()
+                sensors = self._sensor_controller.load_sensors()
                 ids = []
-                for config in sensors:
-                    input_id = config['id']
-                    ids.append(input_id)
-                    self._environment['sensors'][input_id] = config
-                for input_id in self._environment['sensors'].keys():
-                    if input_id not in ids:
-                        del self._environment['sensors'][input_id]
+                for sensor_dto in sensors:
+                    sensor_id = sensor_dto.id
+                    ids.append(sensor_id)
+                    self._environment['sensors'][sensor_id] = sensor_dto
+                for sensor_id in self._environment['sensors'].keys():
+                    if sensor_id not in ids:
+                        del self._environment['sensors'][sensor_id]
             except CommunicationTimedOutException:
                 logger.error('Error while loading sensor configurations: CommunicationTimedOutException')
             except InMaintenanceModeException:
