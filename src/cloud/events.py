@@ -19,6 +19,7 @@ from __future__ import absolute_import
 import logging
 import time
 from collections import deque
+from peewee import DoesNotExist
 
 from cloud.cloud_api_client import APIException, CloudAPIClient
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
@@ -68,8 +69,11 @@ class EventSender(object):
             input_id = event.data['id']
             # TODO: Below entry needs to be cached. But caching needs invalidation, so lets fix this
             #       when we have decent cache invalidation events to subscribe on
-            config = self._input_controller.load_input(input_id)
-            return config.event_enabled
+            try:
+                input_ = self._input_controller.load_input(input_id)
+            except DoesNotExist:
+                return False
+            return input_.event_enabled
         else:
             return False
 

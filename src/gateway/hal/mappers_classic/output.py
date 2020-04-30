@@ -39,7 +39,7 @@ class OutputMapper(object):
                          name=data['name'],
                          timer=Toolbox.nonify(data['timer'], OutputMapper.WORD_MAX),
                          floor=Toolbox.nonify(data['floor'], OutputMapper.BYTE_MAX),
-                         output_type=Toolbox.nonify(data['type'], OutputMapper.BYTE_MAX),
+                         output_type=data['type'],
                          can_led_1=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_1_id'], OutputMapper.BYTE_MAX),
                                                   function=data['can_led_1_function']),
                          can_led_2=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_2_id'], OutputMapper.BYTE_MAX),

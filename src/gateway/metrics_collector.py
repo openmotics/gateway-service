@@ -265,7 +265,7 @@ class MetricsCollector(object):
                         level = 0
                     tags = {'id': output_id,
                             'name': output_name,
-                            'module_type': MetricsCollector.OUTPUT_MODULES_TYPES[output_dto.module_type],
+                            'module_type': MetricsCollector.OUTPUT_MODULE_TYPES[output_dto.module_type],
                             'type': MetricsCollector.OUTPUT_OUTPUT_TYPES[output_dto.output_type],
                             'floor': output_dto.floor}
                     self._enqueue_metrics(metric_type=metric_type,
