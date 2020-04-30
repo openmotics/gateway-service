@@ -21,12 +21,17 @@ import fakesleep
 import time
 import unittest
 import xmlrunner
+from peewee import SqliteDatabase
 from mock import Mock
+
 from ioc import SetTestMode, SetUpTestInjections
 from gateway.enums import ShutterEnums
-from gateway.shutters import ShutterController
+from gateway.shutter_controller import ShutterController
 from gateway.dto import ShutterDTO
 from gateway.hal.master_controller_classic import MasterClassicController
+from gateway.models import Shutter, Room, Floor
+
+MODELS = [Shutter, Room, Floor]
 
 
 class ShutterControllerTest(unittest.TestCase):
@@ -53,10 +58,20 @@ class ShutterControllerTest(unittest.TestCase):
     def setUpClass(cls):
         SetTestMode()
         fakesleep.monkey_patch()
+        cls.test_db = SqliteDatabase(':memory:')
 
     @classmethod
     def tearDownClass(cls):
         fakesleep.monkey_restore()
+
+    def setUp(self):
+        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        self.test_db.connect()
+        self.test_db.create_tables(MODELS)
+
+    def tearDown(self):
+        self.test_db.drop_tables(MODELS)
+        self.test_db.close()
 
     def test_update_config(self):
         master_controller = Mock()

@@ -43,12 +43,12 @@ class SensorController(object):
         return sensor_dto
 
     def load_sensors(self):  # type: () -> List[SensorDTO]
-        sensors_dtos = []
+        sensor_dtos = []
         for sensor_ in Sensor.select():
             sensor_dto = self._master_controller.load_sensor(sensor_id=sensor_.number)
             sensor_dto.room = sensor_.room.number if sensor_.room is not None else None
-            sensors_dtos.append(sensor_dto)
-        return sensors_dtos
+            sensor_dtos.append(sensor_dto)
+        return sensor_dtos
 
     def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
         sensors_to_save = []

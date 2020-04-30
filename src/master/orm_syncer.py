@@ -22,7 +22,7 @@ import logging
 from ioc import Inject, INJECTED
 from gateway.hal.master_event import MasterEvent
 from gateway.hal.master_controller import MasterController
-from gateway.models import Output, Input, Sensor
+from gateway.models import Output, Input, Sensor, Shutter, ShutterGroup
 
 logger = logging.getLogger("openmotics")
 
@@ -45,7 +45,9 @@ class ORMSyncer(object):
 
         for orm_model, name, filter_ in [(Output, 'output', lambda o: True),
                                          (Input, 'input', lambda i: i.module_type in ['i', 'I']),
-                                         (Sensor, 'sensor', lambda s: True)]:
+                                         (Sensor, 'sensor', lambda s: True),
+                                         (Shutter, 'shutter', lambda s: True),
+                                         (ShutterGroup, 'shutter_group', lambda s: True)]:
             logger.info('* {0}s'.format(orm_model.__name__))
             ids = []
             for dto in getattr(master_controller, 'load_{0}s'.format(name))():

@@ -16,8 +16,8 @@
 import logging
 from toolbox import Toolbox
 from ioc import INJECTED, Inject
-from gateway.models import Feature, Output, Room, Floor, Input, Sensor
-from gateway.orm_syncer import ORMSyncer
+from gateway.models import Feature, Output, Room, Floor, Input, Sensor, ShutterGroup, Shutter
+from master.orm_syncer import ORMSyncer
 from platform_utils import Platform
 
 if False:  # MYPY
@@ -31,7 +31,7 @@ class RoomsMigrator(object):
 
     @staticmethod
     @Inject
-    def migrate(master_controller=INJECTED):  # type: (MasterClassicController) -> None
+    def migrate(master_controller=INJECTED, sync=True):  # type: (MasterClassicController, bool) -> None
         try:
             # Check if migration already done
             feature = Feature.get_or_none(name='orm_rooms')
@@ -46,12 +46,14 @@ class RoomsMigrator(object):
                     return
 
                 # Sync
-                ORMSyncer.sync()
+                if sync:
+                    ORMSyncer.sync()
 
                 # Import legacy code
                 from master.classic.eeprom_models import (
                     OutputConfiguration, RoomConfiguration, FloorConfiguration,
-                    InputConfiguration, SensorConfiguration
+                    InputConfiguration, SensorConfiguration, ShutterConfiguration,
+                    ShutterGroupConfiguration
                 )
 
                 rooms = {}  # type: Dict[int, Room]
@@ -68,7 +70,9 @@ class RoomsMigrator(object):
                 # Main objects
                 for eeprom_model, orm_model, filter_ in [(OutputConfiguration, Output, lambda o: True),
                                                          (InputConfiguration, Input, lambda i: i.module_type in ['i', 'I']),
-                                                         (SensorConfiguration, Sensor, lambda s: True)]:
+                                                         (SensorConfiguration, Sensor, lambda s: True),
+                                                         (ShutterConfiguration, Shutter, lambda s: True),
+                                                         (ShutterGroupConfiguration, ShutterGroup, lambda s: True)]:
                     for classic_orm in master_controller._eeprom_controller.read_all(eeprom_model):
                         if not filter_(classic_orm):
                             continue

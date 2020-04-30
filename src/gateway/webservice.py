@@ -60,7 +60,7 @@ if False:
     from gateway.metrics_collector import MetricsCollector
     from gateway.metrics_controller import MetricsController
     from gateway.scheduling import SchedulingController
-    from gateway.shutters import ShutterController
+    from gateway.shutter_controller import ShutterController
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.users import UserController
     from gateway.output_controller import OutputController

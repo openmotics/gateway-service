@@ -23,7 +23,7 @@ import logging
 import time
 import constants
 from gateway.models import Database, Feature
-from gateway.orm_syncer import ORMSyncer
+from master.orm_syncer import ORMSyncer
 from gateway.migrations.rooms import RoomsMigrator
 from ioc import Injectable, Inject, INJECTED
 from bus.om_bus_service import MessageService
@@ -45,7 +45,7 @@ if False:  # MYPY
     from gateway.gateway_api import GatewayApi
     from gateway.maintenance_controller import MaintenanceController
     from gateway.thermostat.thermostat_controller import ThermostatController
-    from gateway.shutters import ShutterController
+    from gateway.shutter_controller import ShutterController
     from gateway.hal.master_controller import MasterController
     from plugins.base import PluginController
     from cloud.events import EventSender
@@ -89,12 +89,12 @@ class OpenmoticsService(object):
         from plugins import base
         from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
                              maintenance_controller, comm_led_controller, users, pulses, config as config_controller,
-                             metrics_caching, watchdog, output_controller, room_controller)
+                             metrics_caching, watchdog, output_controller, room_controller, sensor_controller)
         from cloud import events
         _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
              maintenance_controller, base, events, power_communicator, comm_led_controller, users,
              power_controller, pulses, config_controller, metrics_caching, watchdog, output_controller,
-             room_controller)
+             room_controller, sensor_controller)
         if Platform.get_platform() == Platform.Type.CORE_PLUS:
             from gateway.hal import master_controller_core
             from master.core import maintenance, core_communicator, ucan_communicator
@@ -259,7 +259,7 @@ class OpenmoticsService(object):
 
         # Always
         ORMSyncer.sync()
-        RoomsMigrator.migrate()
+        RoomsMigrator.migrate(sync=False)
 
         # Last part of service startup (slower controllers)
         plugin_controller.start()

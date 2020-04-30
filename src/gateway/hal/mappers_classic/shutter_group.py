@@ -34,7 +34,7 @@ class ShutterGroupMapper(object):
     def orm_to_dto(orm_object):  # type: (EepromModel) -> ShutterGroupDTO
         data = orm_object.serialize()
         kwargs = {}
-        for field in ['timer_up', 'timer_down', 'room']:
+        for field in ['timer_up', 'timer_down']:
             kwargs[field] = Toolbox.nonify(data[field], ShutterGroupMapper.BYTE_MAX)
         return ShutterGroupDTO(id=data['id'],
                                **kwargs)
@@ -42,7 +42,7 @@ class ShutterGroupMapper(object):
     @staticmethod
     def dto_to_orm(shutter_dto, fields):  # type: (ShutterGroupDTO, List[str]) -> EepromModel
         data = {'id': shutter_dto.id}
-        for field in ['timer_up', 'timer_down', 'room']:
+        for field in ['timer_up', 'timer_down']:
             if field in fields:
                 data[field] = Toolbox.denonify(getattr(shutter_dto, field), ShutterGroupMapper.BYTE_MAX)
         return ShutterGroupConfiguration.deserialize(data)

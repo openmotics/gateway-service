@@ -22,7 +22,7 @@ import traceback
 from datetime import datetime
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.events import GatewayEvent
-from gateway.shutters import ShutterController
+from gateway.shutter_controller import ShutterController
 from plugins.runner import PluginRunner, RunnerWatchdog
 import six
 
