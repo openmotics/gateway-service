@@ -19,3 +19,4 @@ from gateway.hal.mappers_classic.shutter_group import ShutterGroupMapper
 from gateway.hal.mappers_classic.thermostat import ThermostatMapper
 from gateway.hal.mappers_classic.input import InputMapper
 from gateway.hal.mappers_classic.sensor import SensorMapper
+from gateway.hal.mappers_classic.pulse_counter import PulseCounterMapper

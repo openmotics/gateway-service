@@ -125,6 +125,9 @@ class Sensor(BaseModel):
 class PulseCounter(BaseModel):
     id = PrimaryKeyField()
     number = IntegerField(unique=True)
+    name = CharField()
+    source = CharField()  # Options: 'master' or 'gateway'
+    persistent = BooleanField()
     room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='pulse_counters')
 
 

@@ -19,12 +19,14 @@ from __future__ import absolute_import
 import logging
 import time
 from threading import Thread
+from peewee import DoesNotExist
 
 from gateway.enums import ShutterEnums
 from gateway.dto import (
     OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
-    ThermostatDTO, SensorDTO
+    ThermostatDTO, SensorDTO,
+    PulseCounterDTO
 )
 from gateway.hal.mappers_core import (
     OutputMapper, ShutterMapper, InputMapper,
@@ -532,24 +534,6 @@ class MasterCoreController(MasterController):
             brightnesses.append(self.get_sensor_brightness(sensor_id))
         return brightnesses
 
-    # def load_sensor(self, sensor_id, fields=None):
-    #     sensor = SensorConfiguration(sensor_id)
-    #     data = {'id': sensor.id,
-    #             'name': sensor.name,
-    #             'offset': 0,
-    #             'virtual': False,
-    #             'room': 255}
-    #     if fields is None:
-    #         return data
-    #     return {field: data[field] for field in fields}
-    #
-    # def save_sensors(self, sensors):
-    #     for sensor_data in sensors:
-    #         new_data = {'id': sensor_data['id'],
-    #                     'name': sensor_data['name']}  # TODO: Rest of the mapping
-    #         sensor = SensorConfiguration.deserialize(new_data)
-    #         sensor.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
-
     def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
         sensor = SensorConfiguration(sensor_id)
         return SensorMapper.orm_to_dto(sensor)
@@ -580,6 +564,26 @@ class MasterCoreController(MasterController):
 
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         raise NotImplementedError()
+
+    # PulseCounters
+
+    def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
+        # TODO: Implement PulseCounters
+        raise DoesNotExist('Could not find a PulseCounter with id {0}'.format(pulse_counter_id))
+
+    def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
+        # TODO: Implement PulseCounters
+        return []
+
+    def save_pulse_counters(self, pulse_counters):  # type: (List[Tuple[PulseCounterDTO, List[str]]]) -> None
+        # TODO: Implement PulseCounters
+        return
+
+    def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
+        # TODO: Implement PulseCounters
+        return {}
+
+    # Virtual modules
 
     def add_virtual_output_module(self):
         raise NotImplementedError()

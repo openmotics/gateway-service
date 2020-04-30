@@ -38,7 +38,8 @@ from bus.om_bus_events import OMBusEvents
 from gateway.api.serializers import (
     OutputSerializer, InputSerializer,
     ShutterSerializer, ShutterGroupSerializer,
-    ThermostatSerializer, RoomSerializer, SensorSerializer
+    ThermostatSerializer, RoomSerializer, SensorSerializer,
+    PulseCounterSerializer
 )
 from gateway.dto import RoomDTO
 from gateway.enums import ShutterEnums
@@ -67,6 +68,7 @@ if False:
     from gateway.input_controller import InputController
     from gateway.room_controller import RoomController
     from gateway.sensor_controller import SensorController
+    from gateway.pulse_counter_controller import PulseCounterController
     from plugins.base import PluginController
 
 logger = logging.getLogger("openmotics")
@@ -274,7 +276,8 @@ class WebInterface(object):
     def __init__(self, user_controller=INJECTED, gateway_api=INJECTED, maintenance_controller=INJECTED,
                  message_client=INJECTED, configuration_controller=INJECTED, scheduling_controller=INJECTED,
                  thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED,
-                 room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED):
+                 room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
+                 pulse_counter_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -287,6 +290,7 @@ class WebInterface(object):
         self._room_controller = room_controller  # type: RoomController
         self._input_controller = input_controller  # type: InputController
         self._sensor_controller = sensor_controller  # type: SensorController
+        self._pulse_counter_controller = pulse_counter_controller  # type: PulseCounterController
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
@@ -1565,53 +1569,65 @@ class WebInterface(object):
         self._gateway_api.set_scheduled_action_configurations(config)
         return {}
 
+    # PulseCounters
+
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_pulse_counter_configuration(self, id, fields=None):
+    def get_pulse_counter_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
         Get a specific pulse_counter_configuration defined by its id.
-
         :param id: The id of the pulse_counter_configuration
-        :type id: int
-        :param fields: The field of the pulse_counter_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': pulse_counter_configuration dict: contains 'id' (Id), 'input' (Byte), 'name' (String[16]), 'room' (Byte)
-        :rtype: dict
+        :param fields: The field of the pulse_counter_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_pulse_counter_configuration(id, fields)}
+        return {'config': PulseCounterSerializer.serialize(pulse_counter_dto=self._pulse_counter_controller.load_pulse_counter(pulse_counter_id=id),
+                                                           fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_pulse_counter_configurations(self, fields=None):
+    def get_pulse_counter_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
         Get all pulse_counter_configurations.
-
-        :param fields: The field of the pulse_counter_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of pulse_counter_configuration dict: contains 'id' (Id), 'input' (Byte), 'name' (String[16]), 'room' (Byte)
-        :rtype: dict
+        :param fields: The field of the pulse_counter_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_pulse_counter_configurations(fields)}
+        return {'config': [PulseCounterSerializer.serialize(pulse_counter_dto=pulse_counter, fields=fields)
+                           for pulse_counter in self._pulse_counter_controller.load_pulse_counters()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_pulse_counter_configuration(self, config):
-        """
-        Set one pulse_counter_configuration.
-
-        :param config: The pulse_counter_configuration to set: pulse_counter_configuration dict: contains 'id' (Id), 'input' (Byte), 'name' (String[16]), 'room' (Byte)
-        :type config: dict
-        """
-        self._gateway_api.set_pulse_counter_configuration(config)
+    def set_pulse_counter_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one pulse_counter_configuration. """
+        data = PulseCounterSerializer.deserialize(config)
+        self._pulse_counter_controller.save_pulse_counters([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_pulse_counter_configurations(self, config):
-        """
-        Set multiple pulse_counter_configurations.
-
-        :param config: The list of pulse_counter_configurations to set: list of pulse_counter_configuration dict: contains 'id' (Id), 'input' (Byte), 'name' (String[16]), 'room' (Byte)
-        :type config: list
-        """
-        self._gateway_api.set_pulse_counter_configurations(config)
+    def set_pulse_counter_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple pulse_counter_configurations. """
+        data = [PulseCounterSerializer.deserialize(entry) for entry in config]
+        self._pulse_counter_controller.save_pulse_counters(data)
         return {}
+
+    @openmotics_api(auth=True, check=types(amount=int))
+    def set_pulse_counter_amount(self, amount):  # type: (int) -> Dict
+        """
+        Set the number of pulse counters. The minimum is 24, these are the pulse counters
+        that can be linked to an input. An amount greater than 24 will result in virtual
+        pulse counter that can be set through the API.
+        """
+        return {'amount': self._pulse_counter_controller.set_amount_of_pulse_counters(amount)}
+
+    @openmotics_api(auth=True)
+    def get_pulse_counter_status(self):  # type: () -> Dict[str, List[Optional[int]]]
+        """ Get the pulse counter values. """
+        values = self._pulse_counter_controller.get_values()
+        return {'counters': [values[number] for number in sorted(values.keys())]}
+
+    @openmotics_api(auth=True, check=types(pulse_counter_id=int, value=int))
+    def set_pulse_counter_status(self, pulse_counter_id, value):  # type: (int, int) -> Dict
+        """
+        Sets a pulse counter to a value. This can only be done for virtual pulse counters,
+        with a pulse_counter_id >= 24.
+        """
+        return {'value': self._pulse_counter_controller.set_value(pulse_counter_id, value)}
+
+    # Startup actions
 
     @openmotics_api(auth=True, check=types(fields='json'))
     def get_startup_action_configuration(self, fields=None):
@@ -1875,45 +1891,6 @@ class WebInterface(object):
         :type voltage: float
         """
         return self._gateway_api.set_power_voltage(module_id, voltage)
-
-    @openmotics_api(auth=True, check=types(amount=int))
-    def set_pulse_counter_amount(self, amount):
-        """
-        Set the number of pulse counters. The minimum is 24, these are the pulse counters
-        that can be linked to an input. An amount greater than 24 will result in virtual
-        pulse counter that can be set through the API.
-
-        :param amount: The number of pulse counters.
-        :type amount: int
-        :returns: 'amount': number of pulse counters.
-        :rtype: dict
-        """
-        return {'amount': self._gateway_api.set_pulse_counter_amount(amount)}
-
-    @openmotics_api(auth=True)
-    def get_pulse_counter_status(self):
-        """
-        Get the pulse counter values.
-
-        :returns: 'counters': array with the pulse counter values.
-        :rtype: dict
-        """
-        return {'counters': self._gateway_api.get_pulse_counter_status()}
-
-    @openmotics_api(auth=True, check=types(pulse_counter_id=int, value=int))
-    def set_pulse_counter_status(self, pulse_counter_id, value):
-        """
-        Sets a pulse counter to a value. This can only be done for virtual pulse counters,
-        with a pulse_counter_id >= 24.
-
-        :param pulse_counter_id: The id of the pulse counter.
-        :type pulse_counter_id: int
-        :param value: The new value for the pulse counter.
-        :type value: int
-        :returns: 'value': the updated value of the pulse counter.
-        :rtype: dict
-        """
-        return {'value': self._gateway_api.set_pulse_counter_status(pulse_counter_id, value)}
 
     @openmotics_api(auth=True, check=types(module_id=int, input_id=int))
     def get_energy_time(self, module_id, input_id=None):

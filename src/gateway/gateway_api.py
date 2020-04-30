@@ -33,12 +33,17 @@ import constants
 from bus.om_bus_events import OMBusEvents
 from gateway.hal.master_controller import MasterController
 from ioc import INJECTED, Inject, Injectable, Singleton
-from platform_utils import Platform, System
+from platform_utils import System
 from power import power_api
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY:
-    from typing import Any, Dict, List, Optional
+    from typing import Any, Dict, List, Optional, Set
+    from power.power_communicator import PowerCommunicator
+    from power.power_controller import PowerController
+    from bus.om_bus_client import MessageClient
+    from gateway.observer import Observer
+    from gateway.config import ConfigurationController
 
 logger = logging.getLogger('openmotics')
 
@@ -63,34 +68,15 @@ class GatewayApi(object):
 
     @Inject
     def __init__(self,
-                 master_controller=INJECTED, power_communicator=INJECTED,
-                 power_controller=INJECTED, pulse_controller=INJECTED,
+                 master_controller=INJECTED, power_communicator=INJECTED, power_controller=INJECTED,
                  message_client=INJECTED, observer=INJECTED, configuration_controller=INJECTED):
-        """
-        :param master_controller: Master controller
-        :type master_controller: gateway.hal.master_controller.MasterController
-        :param power_communicator: Power communicator
-        :type power_communicator: power.power_communicator.PowerCommunicator
-        :param power_controller: Power controller
-        :type power_controller: power.power_controller.PowerController
-        :param pulse_controller: Pulse controller
-        :type pulse_controller: gateway.pulses.PulseCounterController
-        :param message_client: Om Message Client
-        :type message_client: bus.om_bus_client.MessageClient
-        :param observer: Observer
-        :type observer: gateway.observer.Observer
-        :param configuration_controller: Configuration controller
-        :type configuration_controller: gateway.config.ConfigurationController
-        """
+        # type: (MasterController, PowerCommunicator, PowerController, MessageClient, Observer, ConfigurationController) -> None
         self.__master_controller = master_controller  # type: MasterController
         self.__config_controller = configuration_controller
         self.__power_communicator = power_communicator
         self.__power_controller = power_controller
-        self.__pulse_controller = pulse_controller
         self.__message_client = message_client
         self.__observer = observer
-
-        self.__previous_on_outputs = set()
 
     def set_plugin_controller(self, plugin_controller):
         """ Set the plugin controller. """
@@ -406,8 +392,9 @@ class GatewayApi(object):
                                      'metrics.db': constants.get_metrics_database_file(),
                                      'gateway.db': constants.get_gateway_database_file(),
                                      'pulse.db': constants.get_pulse_counter_database_file()}.items():
-                target = '{0}/{1}'.format(tmp_sqlite_dir, filename)
-                backup_sqlite_db(source, target)
+                if os.path.exists(source):
+                    target = '{0}/{1}'.format(tmp_sqlite_dir, filename)
+                    backup_sqlite_db(source, target)
 
             # Backup plugins
             tmp_plugin_dir = '{0}/{1}'.format(tmp_dir, 'plugins')
@@ -556,82 +543,13 @@ class GatewayApi(object):
     def set_master_status_leds(self, status):
         self.__master_controller.set_status_leds(status)
 
-    # Pulse counter functions
-
-    def set_pulse_counter_amount(self, amount):
-        """
-        Set the number of pulse counters.
-
-        :param amount: The number of pulse counters.
-        :type amount: int
-        :returns: the number of pulse counters.
-        """
-        return self.__pulse_controller.set_pulse_counter_amount(amount)
-
-    def get_pulse_counter_status(self):
-        """
-        Get the pulse counter values.
-
-        :returns: array with the pulse counter values.
-        """
-        return self.__pulse_controller.get_pulse_counter_status()
-
-    def set_pulse_counter_status(self, pulse_counter_id, value):
-        """
-        Sets a pulse counter to a value.
-
-        :returns: the updated value of the pulse counter.
-        """
-        return self.__pulse_controller.set_pulse_counter_status(pulse_counter_id, value)
-
-    def get_pulse_counter_configuration(self, pulse_counter_id, fields=None):
-        """
-        Get a specific pulse_counter_configuration defined by its id.
-
-        :param pulse_counter_id: The id of the pulse_counter_configuration
-        :type pulse_counter_id: Id
-        :param fields: The field of the pulse_counter_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: pulse_counter_configuration dict: contains 'id' (Id), 'input' (Byte), 'name' (String[16]), 'room' (Byte)
-        """
-        return self.__pulse_controller.get_configuration(pulse_counter_id, fields)
-
-    def get_pulse_counter_configurations(self, fields=None):
-        """
-        Get all pulse_counter_configurations.
-
-        :param fields: The field of the pulse_counter_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of pulse_counter_configuration dict: contains 'id' (Id), 'input' (Byte), 'name' (String[16]), 'room' (Byte)
-        """
-        if Platform.get_platform() == Platform.Type.CLASSIC:
-            return self.__pulse_controller.get_configurations(fields)
-        else:
-            return []  # TODO: implement
-
-    def set_pulse_counter_configuration(self, config):
-        """
-        Set one pulse_counter_configuration.
-
-        :param config: The pulse_counter_configuration to set
-        :type config: pulse_counter_configuration dict: contains 'id' (Id), 'input' (Byte), 'name' (String[16]), 'room' (Byte)
-        """
-        self.__pulse_controller.set_configuration(config)
-
-    def set_pulse_counter_configurations(self, config):
-        """
-        Set multiple pulse_counter_configurations.
-
-        :param config: The list of pulse_counter_configurations to set
-        :type config: list of pulse_counter_configuration dict: contains 'id' (Id), 'input' (Byte), 'name' (String[16]), 'room' (Byte)
-        """
-        self.__pulse_controller.set_configurations(config)
-
     # Inputs
 
     def get_input_module_type(self, input_module_id):
         """ Gets the module type for a given Input Module ID """
         return self.__master_controller.get_input_module_type(input_module_id)
+
+    # Group Actions
 
     def get_group_action_configuration(self, group_action_id, fields=None):
         # type: (int, Any) -> Dict[str,Any]

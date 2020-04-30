@@ -20,3 +20,4 @@ from gateway.api.serializers.thermostat import ThermostatSerializer
 from gateway.api.serializers.room import RoomSerializer
 from gateway.api.serializers.input import InputSerializer
 from gateway.api.serializers.sensor import SensorSerializer
+from gateway.api.serializers.pulse_counter import PulseCounterSerializer

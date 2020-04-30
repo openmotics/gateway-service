@@ -22,7 +22,7 @@ import logging
 from ioc import Inject, INJECTED
 from gateway.hal.master_event import MasterEvent
 from gateway.hal.master_controller import MasterController
-from gateway.models import Output, Input, Sensor, Shutter, ShutterGroup
+from gateway.models import Output, Input, Shutter, ShutterGroup, Sensor, PulseCounter
 
 logger = logging.getLogger("openmotics")
 
@@ -45,9 +45,10 @@ class ORMSyncer(object):
 
         for orm_model, name, filter_ in [(Output, 'output', lambda o: True),
                                          (Input, 'input', lambda i: i.module_type in ['i', 'I']),
-                                         (Sensor, 'sensor', lambda s: True),
                                          (Shutter, 'shutter', lambda s: True),
-                                         (ShutterGroup, 'shutter_group', lambda s: True)]:
+                                         (ShutterGroup, 'shutter_group', lambda s: True),
+                                         (Sensor, 'sensor', lambda s: True),
+                                         (PulseCounter, 'pulse_counter', lambda p: True)]:
             logger.info('* {0}s'.format(orm_model.__name__))
             ids = []
             for dto in getattr(master_controller, 'load_{0}s'.format(name))():
@@ -55,7 +56,17 @@ class ORMSyncer(object):
                     continue
                 id_ = dto.id
                 ids.append(id_)
-                orm_model.get_or_create(number=id_)  # type: ignore
-            orm_model.delete().where(orm_model.number.not_in(ids)).execute()  # type: ignore
+                if orm_model == PulseCounter:
+                    pulse_counter = PulseCounter.get_or_none(number=id_)
+                    if pulse_counter is None:
+                        pulse_counter = PulseCounter(number=id_,
+                                                     name='PulseCounter {0}'.format(id_),
+                                                     source='master',
+                                                     persistent=False)
+                        pulse_counter.save()
+                else:
+                    orm_model.get_or_create(number=id_)  # type: ignore
+            if orm_model != PulseCounter:
+                orm_model.delete().where(orm_model.number.not_in(ids)).execute()  # type: ignore
 
         logger.info('Sync ORM completed')

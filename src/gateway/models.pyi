@@ -143,6 +143,9 @@ class Sensor(BaseModel):
 class PulseCounter(BaseModel):
     id: MixedPrimaryKeyField
     number: MixedIntegerField
+    name: str
+    source: Literal['master', 'gateway']
+    persistent: bool
     room: Optional[RoomForeignKeyField]
 
 

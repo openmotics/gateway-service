@@ -19,7 +19,8 @@ from __future__ import absolute_import
 from gateway.dto import (
     OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
-    ThermostatDTO, SensorDTO
+    ThermostatDTO, SensorDTO,
+    PulseCounterDTO
 )
 from gateway.hal.master_event import MasterEvent
 
@@ -212,6 +213,20 @@ class MasterController(object):
         raise NotImplementedError()
 
     def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
+        raise NotImplementedError()
+
+    # PulseCounters
+
+    def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
+        raise NotImplementedError()
+
+    def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
+        raise NotImplementedError()
+
+    def save_pulse_counters(self, pulse_counters):  # type: (List[Tuple[PulseCounterDTO, List[str]]]) -> None
+        raise NotImplementedError()
+
+    def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
         raise NotImplementedError()
 
     # Virtual modules

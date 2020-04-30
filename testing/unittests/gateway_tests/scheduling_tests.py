@@ -84,7 +84,8 @@ class SchedulingControllerTest(unittest.TestCase):
                             output_controller=Mock(),
                             room_controller=Mock(),
                             input_controller=Mock(),
-                            sensor_controller=Mock())
+                            sensor_controller=Mock(),
+                            pulse_counter_controller=Mock())
         controller = SchedulingController()
         SetUpTestInjections(scheduling_controller=controller)
         controller.set_webinterface(WebInterface())

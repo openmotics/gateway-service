@@ -21,13 +21,16 @@ Tests for the pulses module.
 from __future__ import absolute_import
 import unittest
 import xmlrunner
-import os
+from peewee import SqliteDatabase, DoesNotExist
+from mock import Mock
+
 from ioc import SetTestMode, SetUpTestInjections
-from master.classic.master_communicator import MasterCommunicator
-from gateway.pulses import PulseCounterController
-import master.classic.master_api as master_api
-from master_tests.eeprom_controller_tests import get_eeprom_controller_dummy
-from serial_tests import DummyPty
+from gateway.dto import PulseCounterDTO
+from gateway.pulse_counter_controller import PulseCounterController
+from gateway.hal.master_controller_classic import MasterClassicController
+from gateway.models import PulseCounter, Room
+
+MODELS = [PulseCounter, Room]
 
 
 class PulseCounterControllerTest(unittest.TestCase):
@@ -38,164 +41,137 @@ class PulseCounterControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
+        cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):  # pylint: disable=C0103
         """ Run before each test. """
-        if os.path.exists(PulseCounterControllerTest.FILE):
-            os.remove(PulseCounterControllerTest.FILE)
         self.maxDiff = None
+        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        self.test_db.connect()
+        self.test_db.create_tables(MODELS)
 
     def tearDown(self):  # pylint: disable=C0103
         """ Run after each test. """
-        if os.path.exists(PulseCounterControllerTest.FILE):
-            os.remove(PulseCounterControllerTest.FILE)
-
-    @staticmethod
-    def _get_controller(master_communicator):
-        """ Get a PulseCounterController using FILE. """
-        banks = []
-        for i in range(255):
-            banks.append("\xff" * 256)
-
-        eeprom_controller = get_eeprom_controller_dummy(banks)
-        SetUpTestInjections(pulse_db=PulseCounterControllerTest.FILE,
-                            master_communicator=master_communicator,
-                            eeprom_controller=eeprom_controller)
-        return PulseCounterController()
+        self.test_db.drop_tables(MODELS)
+        self.test_db.close()
 
     def test_pulse_counter_up_down(self):
         """ Test adding and removing pulse counters. """
-        controller = self._get_controller(None)
+        SetUpTestInjections(master_controller=Mock())
+        controller = PulseCounterController()
+
+        for i in range(24):
+            PulseCounter(number=i, name='PulseCounter {0}'.format(i), source='master', persistent=False).save()
 
         # Only master pulse counters
-        controller.set_pulse_counter_amount(24)
-        self.assertEqual(24, controller.get_pulse_counter_amount())
+        controller.set_amount_of_pulse_counters(24)
+        self.assertEqual(24, controller.get_amount_of_pulse_counters())
 
         # Add virtual pulse counters
-        controller.set_pulse_counter_amount(28)
-        self.assertEqual(28, controller.get_pulse_counter_amount())
+        controller.set_amount_of_pulse_counters(28)
+        self.assertEqual(28, controller.get_amount_of_pulse_counters())
 
         # Add virtual pulse counter
-        controller.set_pulse_counter_amount(29)
-        self.assertEqual(29, controller.get_pulse_counter_amount())
+        controller.set_amount_of_pulse_counters(29)
+        self.assertEqual(29, controller.get_amount_of_pulse_counters())
 
         # Remove virtual pulse counter
-        controller.set_pulse_counter_amount(28)
-        self.assertEqual(28, controller.get_pulse_counter_amount())
+        controller.set_amount_of_pulse_counters(28)
+        self.assertEqual(28, controller.get_amount_of_pulse_counters())
 
         # Set virtual pulse counters to 0
-        controller.set_pulse_counter_amount(24)
-        self.assertEqual(24, controller.get_pulse_counter_amount())
+        controller.set_amount_of_pulse_counters(24)
+        self.assertEqual(24, controller.get_amount_of_pulse_counters())
 
         # Set the number of pulse counters to low
-        try:
-            controller.set_pulse_counter_amount(23)
-            self.fail('Exception should have been thrown')
-        except ValueError as e:
-            self.assertEqual('Amount should be 24 or more', str(e))
+        with self.assertRaises(ValueError):
+            controller.set_amount_of_pulse_counters(23)
 
     def test_pulse_counter_status(self):
-        action = master_api.pulse_list()
+        data = {'pv0': 0, 'pv1': 1, 'pv2': 2, 'pv3': 3, 'pv4': 4, 'pv5': 5, 'pv6': 6, 'pv7': 7,
+                'pv8': 8, 'pv9': 9, 'pv10': 10, 'pv11': 11, 'pv12': 12, 'pv13': 13, 'pv14': 14,
+                'pv15': 15, 'pv16': 16, 'pv17': 17, 'pv18': 18, 'pv19': 19, 'pv20': 20, 'pv21': 21,
+                'pv22': 22, 'pv23': 23}
 
-        in_fields = {}
-        out_fields = {'pv0': 0, 'pv1': 1, 'pv2': 2, 'pv3': 3, 'pv4': 4, 'pv5': 5, 'pv6': 6, 'pv7': 7,
-                      'pv8': 8, 'pv9': 9, 'pv10': 10, 'pv11': 11, 'pv12': 12, 'pv13': 13, 'pv14': 14,
-                      'pv15': 15, 'pv16': 16, 'pv17': 17, 'pv18': 18, 'pv19': 19, 'pv20': 20, 'pv21': 21,
-                      'pv22': 22, 'pv23': 23, 'crc': [67, 1, 20]}
+        def _do_command(api):
+            return data
 
-        pty = DummyPty([action.create_input(1, in_fields)])
-        SetUpTestInjections(controller_serial=pty)
+        master_communicator = Mock()
+        master_communicator.do_command = _do_command
 
-        master_communicator = MasterCommunicator(init_master=False)
-        master_communicator.start()
+        SetUpTestInjections(master_communicator=master_communicator,
+                            configuration_controller=Mock(),
+                            eeprom_controller=Mock())
+        SetUpTestInjections(master_controller=MasterClassicController())
 
-        pty.master_reply(action.create_output(1, out_fields))
-        controller = self._get_controller(master_communicator)
-        controller.set_pulse_counter_amount(26)
-        controller.set_pulse_counter_status(24, 123)
-        controller.set_pulse_counter_status(25, 456)
+        for i in range(24):
+            PulseCounter(number=i, name='PulseCounter {0}'.format(i), source='master', persistent=False).save()
 
-        status = controller.get_pulse_counter_status()
-        self.assertEqual(list(range(0, 24)) + [123, 456], status)
+        controller = PulseCounterController()
+        controller.set_amount_of_pulse_counters(26)
+        controller.set_value(24, 123)
+        controller.set_value(25, 456)
+
+        values_dict = controller.get_values()
+        values = [values_dict[i] for i in sorted(values_dict.keys())]
+        self.assertEqual(list(range(0, 24)) + [123, 456], values)
 
         # Set pulse counter for unexisting pulse counter
-        try:
-            controller.set_pulse_counter_status(26, 789)
-            self.fail('Exception should have been thrown')
-        except ValueError as e:
-            self.assertEqual('Could not find pulse counter 26', str(e))
+        with self.assertRaises(DoesNotExist):
+            controller.set_value(26, 789)
 
         # Set pulse counter for physical pulse counter
-        try:
-            controller.set_pulse_counter_status(23, 789)
-            self.fail('Exception should have been thrown')
-        except ValueError as e:
-            self.assertEqual('Cannot set pulse counter status for 23 (should be > 23)', str(e))
+        with self.assertRaises(ValueError):
+            controller.set_value(23, 789)
 
     def test_config(self):
-        controller = self._get_controller(None)
+        master_pulse_counters = {}
 
-        controller.set_pulse_counter_amount(26)
-        controller.set_configurations([
-            {'id': 1, 'name': 'Water', 'input': 10, 'room': 1},
-            {'id': 4, 'name': 'Gas', 'input': 11, 'room': 2},
-            {'id': 25, 'name': 'Electricity', 'input': -1, 'room': 3, 'persistent': True}
+        def _save_pulse_counters(data):
+            for dto, fields in data:
+                master_pulse_counters[dto.id] = dto
+
+        master_controller_mock = Mock()
+        master_controller_mock.load_pulse_counter = lambda pulse_counter_id: master_pulse_counters[pulse_counter_id]
+        master_controller_mock.save_pulse_counters = _save_pulse_counters
+
+        SetUpTestInjections(master_controller=master_controller_mock)
+        controller = PulseCounterController()
+
+        # Simulate master contents & initial sync
+        for i in range(24):
+            master_pulse_counters[i] = PulseCounterDTO(id=i, name=u'PulseCounter {0}'.format(i), persistent=False)
+            PulseCounter(number=i, name='PulseCounter {0}'.format(i), source='master', persistent=False).save()
+
+        controller.set_amount_of_pulse_counters(26)
+        controller.save_pulse_counters([
+            (PulseCounterDTO(id=1, name='Water', input_id=10, room=1), ['name', 'input', 'room']),
+            (PulseCounterDTO(id=4, name='Gas', input_id=11, room=2), ['name', 'input', 'room']),
+            (PulseCounterDTO(id=25, name='Electricity', input_id=None, room=3, persistent=True), ['name', 'input', 'room', 'persistent'])
         ])
-        configs = controller.get_configurations()
+        received_dtos = controller.load_pulse_counters()
+        expected_dtos = [PulseCounterDTO(id=i, name=u'PulseCounter {0}'.format(i))
+                         for i in range(26)]
+        expected_dtos[1] = PulseCounterDTO(id=1, name='Water', input_id=10, room=1)
+        expected_dtos[4] = PulseCounterDTO(id=4, name='Gas', input_id=11, room=2)
+        expected_dtos[25] = PulseCounterDTO(id=25, name='Electricity', input_id=None, room=3)
 
-        self.assertEqual([{'input': 255, 'room': 255, 'id': 0, 'name': '', 'persistent': False},
-                          {'input': 10, 'room': 1, 'id': 1, 'name': 'Water', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 2, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 3, 'name': '', 'persistent': False},
-                          {'input': 11, 'room': 2, 'id': 4, 'name': 'Gas', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 5, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 6, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 7, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 8, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 9, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 10, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 11, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 12, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 13, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 14, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 15, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 16, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 17, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 18, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 19, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 20, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 21, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 22, 'name': '', 'persistent': False},
-                          {'input': 255, 'room': 255, 'id': 23, 'name': '', 'persistent': False},
-                          {'input': -1, 'room': 255, 'id': 24, 'name': '', 'persistent': False},
-                          {'input': -1, 'room': 3, 'id': 25, 'name': 'Electricity', 'persistent': True}], configs)
+        self.assertEqual(expected_dtos, received_dtos)
 
         # Try to set input on virtual pulse counter
-        try:
-            controller.set_configuration({'id': 25, 'name': 'Electricity', 'input': 22, 'room': 3})
-            self.fail('Exception should have been thrown')
-        except ValueError as e:
-            self.assertEqual('Virtual pulse counter 25 can only have input -1', str(e))
+        controller.save_pulse_counters([(PulseCounterDTO(id=25, name='Electricity', input_id=22, room=3), ['name', 'input_id'])])
+        self.assertEqual(PulseCounterDTO(id=25, name='Electricity', room=3), controller.load_pulse_counter(25))
 
         # Get configuration for existing master pulse counter
-        self.assertEqual({'input': 10, 'room': 1, 'id': 1, 'name': 'Water', 'persistent': False}, controller.get_configuration(1))
-
-        # Get configuration for existing virtual pulse counter
-        self.assertEqual({'input': -1, 'room': 3, 'id': 25, 'name': 'Electricity', 'persistent': True}, controller.get_configuration(25))
+        self.assertEqual(PulseCounterDTO(id=1, name='Water', input_id=10, room=1, persistent=False), controller.load_pulse_counter(1))
 
         # Get configuration for unexisting pulse counter
-        try:
-            controller.set_configuration({'id': 26, 'name': 'Electricity', 'input': -1, 'room': 3})
-            self.fail('Exception should have been thrown')
-        except ValueError as e:
-            self.assertEqual('Could not find pulse counter 26', str(e))
+        with self.assertRaises(DoesNotExist):
+            controller.save_pulse_counters([(PulseCounterDTO(id=26, name='Electricity'), ['name'])])
 
         # Set configuration for unexisting pulse counter
-        try:
-            controller.get_configuration(26)
-            self.fail('Exception should have been thrown')
-        except ValueError as e:
-            self.assertEqual('Could not find pulse counter 26', str(e))
+        with self.assertRaises(DoesNotExist):
+            controller.load_pulse_counter(26)
 
 
 if __name__ == '__main__':

@@ -54,6 +54,7 @@ class InputSerializer(object):
                      'basic_actions': ('basic_actions', lambda s: [] if s == '' else [int(a) for a in s.split(',')]),
                      'invert': ('invert', lambda i: i != 255),
                      'can': ('can', lambda s: s == 'C'),
-                     'event_enabled': ('event_enabled', None)}
+                     'event_enabled': ('event_enabled', None),
+                     'room': ('room', InputSerializer.BYTE_MAX)}
         )
         return input_dto, loaded_fields

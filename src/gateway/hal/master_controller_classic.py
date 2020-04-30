@@ -25,13 +25,15 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import (
     OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
-    ThermostatDTO, SensorDTO
+    ThermostatDTO, SensorDTO,
+    PulseCounterDTO
 )
 from gateway.enums import ShutterEnums
 from gateway.hal.mappers_classic import (
     OutputMapper, InputMapper,
     ShutterGroupMapper, ShutterMapper,
-    ThermostatMapper, SensorMapper
+    ThermostatMapper, SensorMapper,
+    PulseCounterMapper
 )
 from gateway.config import ConfigurationController
 from gateway.hal.master_controller import MasterController
@@ -1230,3 +1232,23 @@ class MasterClassicController(MasterController):
         for sensor, fields in sensors:
             batch.append(SensorMapper.dto_to_orm(sensor, fields))
         self._eeprom_controller.write_batch(batch)
+
+    # PulseCounters
+
+    def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.PulseCounterConfiguration, pulse_counter_id)
+        return PulseCounterMapper.orm_to_dto(classic_object)
+
+    def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
+        return [PulseCounterMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.PulseCounterConfiguration)]
+
+    def save_pulse_counters(self, pulse_counters):  # type: (List[Tuple[PulseCounterDTO, List[str]]]) -> None
+        batch = []
+        for pulse_counter, fields in pulse_counters:
+            batch.append(PulseCounterMapper.dto_to_orm(pulse_counter, fields))
+        self._eeprom_controller.write_batch(batch)
+
+    def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
+        out_dict = self._master_communicator.do_command(master_api.pulse_list())
+        return {i: out_dict['pv{0}'.format(i)] for i in range(24)}
