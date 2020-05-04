@@ -22,6 +22,7 @@ System.import_libs()
 
 import logging
 import os
+import time
 from six.moves.configparser import ConfigParser
 from threading import Lock
 
@@ -48,6 +49,10 @@ def setup_logger():
 def factory_reset(master_controller=INJECTED):
     import glob
     import shutil
+
+    logger.info('Rebooting master...')
+    master_controller.cold_reset()
+    time.sleep(5)
 
     logger.info('Wiping master eeprom...')
     master_controller.start()
