@@ -330,12 +330,6 @@ class MetricsCollector(object):
                         logger.error('Error loading disk metrics: {0}'.format(ex))
 
                     try:
-                        for key, val in Hardware.read_mmc_ext_csd():
-                            values['disk_{}'.format(key)] = val
-                    except Exception as ex:
-                        logger.error('Error loading disk eMMC metrics: {0}'.format(ex))
-
-                    try:
                         network = dict(psutil.net_io_counters()._asdict())
                         for reading in ['bytes_sent', 'bytes_recv', 'packets_sent', 'packets_recv']:
                             try:
@@ -346,6 +340,12 @@ class MetricsCollector(object):
                                 logger.error('Error loading network metric: {0}'.format(ex))
                     except Exception as ex:
                         logger.error('Error loading network metrics: {0}'.format(ex))
+
+                try:
+                    for key, val in Hardware.read_mmc_ext_csd():
+                        values['disk_{}'.format(key)] = val
+                except Exception as ex:
+                    logger.error('Error loading disk eMMC metrics: {0}'.format(ex))
 
                 # get database metrics
                 try:
