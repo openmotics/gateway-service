@@ -280,6 +280,8 @@ class MetricsCollector(object):
                 values['system_uptime'] = float(system_uptime)
 
                 try:
+                    # On some older environments `psutil` doesn't work properly.
+                    # Since these metrics are not critical they can be skipped
                     import psutil
                     collect_psutil_metrics = True
                 except ImportError:
