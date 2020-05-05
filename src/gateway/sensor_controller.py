@@ -18,9 +18,9 @@ Sensor BLL
 from __future__ import absolute_import
 import logging
 from ioc import Injectable, Inject, INJECTED, Singleton
+from gateway.base_controller import BaseController, SyncStructure
 from gateway.dto import SensorDTO
 from gateway.models import Sensor, Room
-from gateway.hal.master_controller import MasterController
 
 if False:  # MYPY
     from typing import List, Tuple
@@ -30,11 +30,13 @@ logger = logging.getLogger("openmotics")
 
 @Injectable.named('sensor_controller')
 @Singleton
-class SensorController(object):
+class SensorController(BaseController):
+
+    SYNC_STRUCTURES = [SyncStructure(Sensor, 'sensor')]
 
     @Inject
     def __init__(self, master_controller=INJECTED):
-        self._master_controller = master_controller  # type: MasterController
+        super(SensorController, self).__init__(master_controller)
 
     def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
         sensor = Sensor.get(number=sensor_id)  # type: Sensor

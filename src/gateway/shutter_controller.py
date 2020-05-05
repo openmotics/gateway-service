@@ -21,7 +21,7 @@ import time
 from threading import Lock
 from ioc import Injectable, Inject, INJECTED, Singleton
 from toolbox import Toolbox
-from gateway.hal.master_controller import MasterController
+from gateway.base_controller import BaseController, SyncStructure
 from gateway.hal.master_event import MasterEvent
 from gateway.enums import ShutterEnums
 from gateway.events import GatewayEvent
@@ -36,7 +36,7 @@ logger = logging.getLogger('openmotics')
 
 @Injectable.named('shutter_controller')
 @Singleton
-class ShutterController(object):
+class ShutterController(BaseController):
     """
     Controls everything related to shutters.
 
@@ -48,6 +48,8 @@ class ShutterController(object):
     # TODO: The states OPEN and CLOSED make more sense but is a reasonable heavy change at this moment. To be updated if/when a new Gateway API is introduced
     """
 
+    SYNC_STRUCTURES = [SyncStructure(Shutter, 'shutter'),
+                       SyncStructure(ShutterGroup, 'shutter_group')]
     DIRECTION_STATE_MAP = {ShutterEnums.Direction.UP: ShutterEnums.State.GOING_UP,
                            ShutterEnums.Direction.DOWN: ShutterEnums.State.GOING_DOWN,
                            ShutterEnums.Direction.STOP: ShutterEnums.State.STOPPED}
@@ -60,8 +62,7 @@ class ShutterController(object):
 
     @Inject
     def __init__(self, master_controller=INJECTED, verbose=False):
-        self._master_controller = master_controller  # type: MasterController
-        self._master_controller.subscribe_event(self._handle_master_event)
+        super(ShutterController, self).__init__(master_controller)
 
         self._shutters = {}  # type: Dict[int, ShutterDTO]
         self._actual_positions = {}
@@ -80,8 +81,9 @@ class ShutterController(object):
 
     # Update internal shutter configuration cache
 
-    def _handle_master_event(self, event):  # type: (MasterEvent) -> None
+    def handle_master_event(self, event):  # type: (MasterEvent) -> None
         if event.type == MasterEvent.Types.EEPROM_CHANGE:
+            self.sync_orm()
             self.update_config(self.load_shutters())
         if event.type == MasterEvent.Types.SHUTTER_CHANGE:
             self._report_shutter_state(event.data['id'], event.data['status'])

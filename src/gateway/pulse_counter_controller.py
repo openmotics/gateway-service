@@ -19,10 +19,10 @@ from __future__ import absolute_import
 import logging
 from peewee import fn, DoesNotExist
 from ioc import Injectable, Inject, INJECTED, Singleton
+from gateway.base_controller import BaseController
 from gateway.dto import PulseCounterDTO
 from gateway.models import PulseCounter, Room
 from gateway.mappers import PulseCounterMapper
-from gateway.hal.master_controller import MasterController
 
 if False:  # MYPY
     from typing import List, Tuple, Dict, Optional
@@ -32,12 +32,27 @@ logger = logging.getLogger("openmotics")
 
 @Injectable.named('pulse_counter_controller')
 @Singleton
-class PulseCounterController(object):
+class PulseCounterController(BaseController):
 
     @Inject
     def __init__(self, master_controller=INJECTED):
-        self._master_controller = master_controller  # type: MasterController
+        super(PulseCounterController, self).__init__(master_controller)
         self._counts = {}  # type: Dict[int, int]
+
+    def sync_orm(self):
+        logger.info('ORM sync (PulseCounter)')
+
+        for pulse_counter_dto in self._master_controller.load_pulse_counters():
+            pulse_counter_id = pulse_counter_dto.id
+            pulse_counter = PulseCounter.get_or_none(number=pulse_counter_id)
+            if pulse_counter is None:
+                pulse_counter = PulseCounter(number=pulse_counter_id,
+                                             name='PulseCounter {0}'.format(pulse_counter_id),
+                                             source='master',
+                                             persistent=False)
+                pulse_counter.save()
+
+        logger.info('ORM sync (PulseCounter): completed')
 
     def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
         pulse_counter = PulseCounter.get(number=pulse_counter_id)  # type: PulseCounter

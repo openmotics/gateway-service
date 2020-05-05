@@ -20,7 +20,7 @@ import logging
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.dto import InputDTO
 from gateway.models import Input, Room
-from gateway.hal.master_controller import MasterController
+from gateway.base_controller import BaseController, SyncStructure
 
 if False:  # MYPY
     from typing import List, Tuple
@@ -30,11 +30,13 @@ logger = logging.getLogger("openmotics")
 
 @Injectable.named('input_controller')
 @Singleton
-class InputController(object):
+class InputController(BaseController):
+
+    SYNC_STRUCTURES = [SyncStructure(Input, 'input', skip=lambda i: i.module_type not in ['i', 'I'])]
 
     @Inject
     def __init__(self, master_controller=INJECTED):
-        self._master_controller = master_controller  # type: MasterController
+        super(InputController, self).__init__(master_controller)
 
     def load_input(self, input_id):  # type: (int) -> InputDTO
         input_ = Input.get(number=input_id)  # type: Input

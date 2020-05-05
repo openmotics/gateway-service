@@ -18,9 +18,9 @@ Output BLL
 from __future__ import absolute_import
 import logging
 from ioc import Injectable, Inject, INJECTED, Singleton
+from gateway.base_controller import BaseController, SyncStructure
 from gateway.dto import OutputDTO
 from gateway.models import Output, Room
-from gateway.hal.master_controller import MasterController
 
 if False:  # MYPY
     from typing import List, Tuple
@@ -30,11 +30,13 @@ logger = logging.getLogger("openmotics")
 
 @Injectable.named('output_controller')
 @Singleton
-class OutputController(object):
+class OutputController(BaseController):
+
+    SYNC_STRUCTURES = [SyncStructure(Output, 'output')]
 
     @Inject
     def __init__(self, master_controller=INJECTED):
-        self._master_controller = master_controller  # type: MasterController
+        super(OutputController, self).__init__(master_controller)
 
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         output = Output.get(number=output_id)  # type: Output

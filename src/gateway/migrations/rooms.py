@@ -21,7 +21,6 @@ from gateway.models import (
     Feature, Output, Room, Floor, Input, Sensor,
     ShutterGroup, Shutter, PulseCounter
 )
-from master.orm_syncer import ORMSyncer
 from platform_utils import Platform
 
 if False:  # MYPY
@@ -36,7 +35,7 @@ class RoomsMigrator(object):
 
     @staticmethod
     @Inject
-    def migrate(master_controller=INJECTED, sync=True):  # type: (MasterClassicController, bool) -> None
+    def migrate(master_controller=INJECTED):  # type: (MasterClassicController) -> None
         try:
             # Check if migration already done
             feature = Feature.get_or_none(name='orm_rooms')
@@ -51,10 +50,6 @@ class RoomsMigrator(object):
                 feature.enabled = True
                 feature.save()
                 return
-
-            # Sync
-            if sync:
-                ORMSyncer.sync()
 
             logger.info('Migrating: Rooms...')
 
