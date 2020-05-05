@@ -21,8 +21,6 @@ import time
 from collections import deque
 from threading import Event, Thread
 
-import psutil
-
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.observer import Event as ObserverEvent
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -282,64 +280,72 @@ class MetricsCollector(object):
                 values['system_uptime'] = float(system_uptime)
 
                 try:
-                    values['cpu_percent'] = float(psutil.cpu_percent())
-                    cpu_load = [x / psutil.cpu_count() * 100 for x in psutil.getloadavg()]
-                    values['cpu_load_1'] = float(cpu_load[0])
-                    values['cpu_load_5'] = float(cpu_load[1])
-                    values['cpu_load_15'] = float(cpu_load[2])
-                except Exception as ex:
-                    logger.error('Error loading cpu metrics: {0}'.format(ex))
+                    import psutil
+                    collect_disk_metrics = True
+                except ImportError:
+                    psutil = None
+                    collect_disk_metrics = False
 
-                try:
-                    memory = dict(psutil.virtual_memory()._asdict())
-                    for reading in ['available', 'used', 'percent', 'free', 'inactive', 'shared', 'active', 'total']:
-                        try:
-                            key = 'memory_{0}'.format(reading)
-                            value = memory[reading]
-                            values[key] = int(value) if reading != 'percent' else float(value)
-                        except Exception as ex:
-                            logger.error('error loading memory metric: {0}'.format(ex))
-                except Exception as ex:
-                    logger.error('Error loading memory metrics: {0}'.format(ex))
+                if collect_disk_metrics:
+                    try:
+                        values['cpu_percent'] = float(psutil.cpu_percent())
+                        cpu_load = [x / psutil.cpu_count() * 100 for x in psutil.getloadavg()]
+                        values['cpu_load_1'] = float(cpu_load[0])
+                        values['cpu_load_5'] = float(cpu_load[1])
+                        values['cpu_load_15'] = float(cpu_load[2])
+                    except Exception as ex:
+                        logger.error('Error loading cpu metrics: {0}'.format(ex))
 
-                try:
-                    disk = dict(psutil.disk_usage('/')._asdict())
-                    for reading in ['total', 'used', 'percent', 'free']:
-                        try:
-                            key = 'disk_{0}'.format(reading)
-                            value = disk[reading]
-                            values[key] = int(value) if reading != 'percent' else float(value)
-                        except Exception as ex:
-                            logger.error('Error loading disk metric: {0}'.format(ex))
+                    try:
+                        memory = dict(psutil.virtual_memory()._asdict())
+                        for reading in ['available', 'used', 'percent', 'free', 'inactive', 'shared', 'active', 'total']:
+                            try:
+                                key = 'memory_{0}'.format(reading)
+                                value = memory[reading]
+                                values[key] = int(value) if reading != 'percent' else float(value)
+                            except Exception as ex:
+                                logger.error('error loading memory metric: {0}'.format(ex))
+                    except Exception as ex:
+                        logger.error('Error loading memory metrics: {0}'.format(ex))
 
-                    disk_io = dict(psutil.disk_io_counters()._asdict())
-                    for reading in ['read_count', 'write_count', 'read_bytes', 'write_bytes']:
-                        try:
-                            key = 'disk_{0}'.format(reading)
-                            value = disk_io[reading]
-                            values[key] = int(value)
-                        except Exception as ex:
-                            logger.error('Error loading disk io metric: {0}'.format(ex))
-                except Exception as ex:
-                    logger.error('Error loading disk metrics: {0}'.format(ex))
+                    try:
+                        disk = dict(psutil.disk_usage('/')._asdict())
+                        for reading in ['total', 'used', 'percent', 'free']:
+                            try:
+                                key = 'disk_{0}'.format(reading)
+                                value = disk[reading]
+                                values[key] = int(value) if reading != 'percent' else float(value)
+                            except Exception as ex:
+                                logger.error('Error loading disk metric: {0}'.format(ex))
 
-                try:
-                    for key, val in Hardware.read_mmc_ext_csd():
-                        values['disk_{}'.format(key)] = val
-                except Exception as ex:
-                    logger.error('Error loading disk eMMC metrics: {0}'.format(ex))
+                        disk_io = dict(psutil.disk_io_counters()._asdict())
+                        for reading in ['read_count', 'write_count', 'read_bytes', 'write_bytes']:
+                            try:
+                                key = 'disk_{0}'.format(reading)
+                                value = disk_io[reading]
+                                values[key] = int(value)
+                            except Exception as ex:
+                                logger.error('Error loading disk io metric: {0}'.format(ex))
+                    except Exception as ex:
+                        logger.error('Error loading disk metrics: {0}'.format(ex))
 
-                try:
-                    network = dict(psutil.net_io_counters()._asdict())
-                    for reading in ['bytes_sent', 'bytes_recv', 'packets_sent', 'packets_recv']:
-                        try:
-                            key = 'net_{0}'.format(reading)
-                            value = network[reading]
-                            values[key] = int(value)
-                        except Exception as ex:
-                            logger.error('Error loading network metric: {0}'.format(ex))
-                except Exception as ex:
-                    logger.error('Error loading network metrics: {0}'.format(ex))
+                    try:
+                        for key, val in Hardware.read_mmc_ext_csd():
+                            values['disk_{}'.format(key)] = val
+                    except Exception as ex:
+                        logger.error('Error loading disk eMMC metrics: {0}'.format(ex))
+
+                    try:
+                        network = dict(psutil.net_io_counters()._asdict())
+                        for reading in ['bytes_sent', 'bytes_recv', 'packets_sent', 'packets_recv']:
+                            try:
+                                key = 'net_{0}'.format(reading)
+                                value = network[reading]
+                                values[key] = int(value)
+                            except Exception as ex:
+                                logger.error('Error loading network metric: {0}'.format(ex))
+                    except Exception as ex:
+                        logger.error('Error loading network metrics: {0}'.format(ex))
 
                 # get database metrics
                 try:
