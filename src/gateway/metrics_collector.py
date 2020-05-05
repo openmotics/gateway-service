@@ -281,12 +281,12 @@ class MetricsCollector(object):
 
                 try:
                     import psutil
-                    collect_disk_metrics = True
+                    collect_psutil_metrics = True
                 except ImportError:
                     psutil = None
-                    collect_disk_metrics = False
+                    collect_psutil_metrics = False
 
-                if collect_disk_metrics:
+                if collect_psutil_metrics:
                     try:
                         values['cpu_percent'] = float(psutil.cpu_percent())
                         cpu_load = [x / psutil.cpu_count() * 100 for x in psutil.getloadavg()]
