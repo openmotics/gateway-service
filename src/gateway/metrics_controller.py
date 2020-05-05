@@ -424,6 +424,8 @@ class MetricsController(object):
         self.metrics_queue_openmotics.appendleft(metric)
 
     def _transform_counters(self, metric):
+        # TODO: The 'persist' policy should be a part of the PulseCounterController
+
         source = metric['source']
         mtype = metric['type']
         for counter, match_setting in six.iteritems(self._persist_counters.get(source, {}).get(mtype, {})):

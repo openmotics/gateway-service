@@ -70,8 +70,11 @@ class PulseCounterController(object):
                 pulse_counters_to_save.append((pulse_counter_dto, fields))
                 if 'name' in fields:
                     pulse_counter.name = pulse_counter_dto.name
-            else:
+            elif pulse_counter.source == 'gateway':
                 pulse_counter = PulseCounterMapper.dto_to_orm(pulse_counter_dto, fields)
+            else:
+                logger.warning('Trying to save a PulseCounter with unknown source {0}'.format(pulse_counter.source))
+                continue
             if 'room' in fields:
                 if pulse_counter_dto.room is None:
                     pulse_counter.room = None

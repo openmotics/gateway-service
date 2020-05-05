@@ -390,8 +390,7 @@ class GatewayApi(object):
                                      'power.db': constants.get_power_database_file(),
                                      'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
                                      'metrics.db': constants.get_metrics_database_file(),
-                                     'gateway.db': constants.get_gateway_database_file(),
-                                     'pulse.db': constants.get_pulse_counter_database_file()}.items():
+                                     'gateway.db': constants.get_gateway_database_file()}.items():
                 if os.path.exists(source):
                     target = '{0}/{1}'.format(tmp_sqlite_dir, filename)
                     backup_sqlite_db(source, target)
@@ -460,8 +459,7 @@ class GatewayApi(object):
                                      'power.db': constants.get_power_database_file(),
                                      'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
                                      'metrics.db': constants.get_metrics_database_file(),
-                                     'gateway.db': constants.get_gateway_database_file(),
-                                     'pulse.db': constants.get_pulse_counter_database_file()}.items():
+                                     'gateway.db': constants.get_gateway_database_file()}.items():
                 source = '{0}/{1}'.format(src_dir, filename)
                 if os.path.exists(source):
                     shutil.copyfile(source, target)

@@ -474,6 +474,7 @@ class MetricsCollector(object):
                 brightnesses = self._gateway_api.get_sensors_brightness_status()
                 for sensor_id, sensor_dto in self._environment_sensors.items():
                     name = sensor_dto.name
+                    # TODO: Add a flag to the ORM to store this "in use" metadata
                     if name == '' or name == 'NOT_IN_USE':
                         continue
                     tags = {'id': sensor_id,
@@ -776,6 +777,7 @@ class MetricsCollector(object):
                         continue
                     output_id = output_dto.id
                     ids.append(output_id)
+                    # TODO: Don't cache the status here, but ask it to the OutputController when relevant
                     self._environment_outputs[output_id] = (output_dto, {})
                 for output_id in self._environment_outputs.keys():
                     if output_id not in ids:
@@ -1083,7 +1085,7 @@ class MetricsCollector(object):
                                         'key': 'id',
                                         'matches': ['P{0}'.format(i)
                                                     for i in pulse_persistence
-                                                    if pulse_persistence[i]]},
+                                                    if not pulse_persistence[i]]},
                                        'buffer'],
                           'unit': ''}]},
             # energy

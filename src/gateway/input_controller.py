@@ -60,6 +60,7 @@ class InputController(object):
                 if input_dto.room is None:
                     input_.room = None
                 elif 0 <= input_dto.room <= 100:
+                    # TODO: Validation should happen on API layer
                     input_.room, _ = Room.get_or_create(number=input_dto.room)
                 input_.save()
             inputs_to_save.append((input_dto, fields))
