@@ -20,17 +20,6 @@ from typing import List, Optional, Any
 from master.classic.eeprom_controller import EepromModel
 
 
-class FloorConfiguration(EepromModel):
-    id: int
-    name: str
-
-
-class RoomConfiguration(EepromModel):
-    id: int
-    name: str
-    floor: int
-
-
 class OutputConfiguration(EepromModel):
     id: int
     module_type: str
@@ -46,7 +35,6 @@ class OutputConfiguration(EepromModel):
     can_led_3_function: str
     can_led_4_id: int
     can_led_4_function: str
-    room: int
 
 
 class InputConfiguration(EepromModel):
@@ -56,7 +44,6 @@ class InputConfiguration(EepromModel):
     action: int
     basic_actions: str
     invert: int
-    room: int
     can: str
     event_enabled: bool
 
@@ -71,7 +58,6 @@ class CanLedConfiguration(EepromModel):
     can_led_3_function: str
     can_led_4_id: int
     can_led_4_function: str
-    room: int
 
 
 class ShutterConfiguration(EepromModel):
@@ -82,7 +68,6 @@ class ShutterConfiguration(EepromModel):
     name: str
     group_1: int
     group_2: int
-    room: int
     steps: int
 
 
@@ -90,7 +75,6 @@ class ShutterGroupConfiguration(EepromModel):
     id: int
     timer_up: int
     timer_down: int
-    room: int
 
 
 class ThermostatConfiguration(EepromModel):
@@ -229,7 +213,6 @@ class SensorConfiguration(EepromModel):
     name: str
     offset: Optional[float]
     virtual: bool
-    room: int
 
 
 class GroupActionConfiguration(EepromModel):
@@ -250,7 +233,6 @@ class PulseCounterConfiguration(EepromModel):
     id: int
     name: str
     input: int
-    room: int
 
 
 class StartupActionConfiguration(EepromModel):

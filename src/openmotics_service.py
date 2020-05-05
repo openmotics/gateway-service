@@ -242,8 +242,11 @@ class OpenmoticsService(object):
         """ Main function. """
         logger.info('Starting OM core service...')
 
-        # First part of service startup
         master_controller.start()
+
+        ORMSyncer.sync()
+        RoomsMigrator.migrate(sync=False)
+
         maintenance_controller.start()
         power_communicator.start()
         metrics_controller.start()
@@ -256,12 +259,6 @@ class OpenmoticsService(object):
         communication_led_controller.start()
         event_sender.start()
         watchdog.start()
-
-        # Always
-        ORMSyncer.sync()
-        RoomsMigrator.migrate(sync=False)
-
-        # Last part of service startup (slower controllers)
         plugin_controller.start()
 
         signal_request = {'stop': False}

@@ -68,6 +68,12 @@ class EepromExtension(object):
                 self._cursor.execute("INSERT INTO extensions (model, model_id, field, value) VALUES (?, ?, ?, ?)",
                                      (model_name, model_id, field_name, value))
 
+    def delete_data(self, eeprom_model_name, model_id, field_name):
+        model_id = 0 if model_id is None else model_id
+        with self._lock:
+            self._cursor.execute("DELETE FROM extensions WHERE model=? AND model_id=? AND field=?",
+                                 (eeprom_model_name, model_id, field_name))
+
     def close(self):
         """ Commit the changes and close the database connection. """
         with self._lock:

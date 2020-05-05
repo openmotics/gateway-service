@@ -66,19 +66,6 @@ def get_led_functions():
     return led_functions
 
 
-class FloorConfiguration(EepromModel):
-    """ Models a floor. A floor has a name. """
-    id = EepromId(10)
-    name = EextString()
-
-
-class RoomConfiguration(EepromModel):
-    """ Models a room. A room has a name and is located on a floor. """
-    id = EepromId(100)
-    name = EextString()
-    floor = EextByte()
-
-
 class OutputConfiguration(EepromModel):
     """
     Models an output. The maximum number of inputs is 240 (30 modules), the actual number of
@@ -98,7 +85,6 @@ class OutputConfiguration(EepromModel):
     can_led_3_function = EepromEnum(gen_address(221, 32, 5), get_led_functions())
     can_led_4_id = EepromByte(gen_address(221, 32, 6))
     can_led_4_function = EepromEnum(gen_address(221, 32, 7), get_led_functions())
-    room = EextByte()
 
 
 class InputConfiguration(EepromModel):
@@ -112,7 +98,6 @@ class InputConfiguration(EepromModel):
     action = EepromByte(page_per_module(8, 2, 4, 1))
     basic_actions = EepromActions(15, page_per_module(8, 2, 12, 30))
     invert = EepromByte(lambda mid: (32, mid))
-    room = EextByte()
     can = EepromString(1, lambda mid: (2 + mid / 8, 252), read_only=True, shared=True)
     event_enabled = EextBool()
 
@@ -134,7 +119,6 @@ class CanLedConfiguration(EepromModel):
     can_led_3_function = EepromEnum(gen_address(229, 32, 5), get_led_functions())
     can_led_4_id = EepromByte(gen_address(229, 32, 6))
     can_led_4_function = EepromEnum(gen_address(229, 32, 7), get_led_functions())
-    room = EextByte()
 
 
 class ShutterConfiguration(EepromModel):
@@ -149,7 +133,6 @@ class ShutterConfiguration(EepromModel):
     name = EepromString(16, page_per_module(4, 33, 189, 16))
     group_1 = EepromByte(lambda mid: (63, (mid * 2) + 0))
     group_2 = EepromByte(lambda mid: (63, (mid * 2) + 1))
-    room = EextByte()
     steps = EextWord()
 
 
@@ -158,7 +141,6 @@ class ShutterGroupConfiguration(EepromModel):
     id = EepromId(30)
     timer_up = EepromByte(lambda mid: (64, (mid * 2) + 0))
     timer_down = EepromByte(lambda mid: (64, (mid * 2) + 1))
-    room = EextByte()
 
 
 class ThermostatConfiguration(EepromModel):
@@ -417,7 +399,6 @@ class SensorConfiguration(EepromModel):
     name = EepromString(16, lambda mid: (193 + (mid / 16), (mid % 16) * 16))
     offset = EepromSignedTemp(lambda mid: (0, 60 + mid))
     virtual = EepromIBool(lambda mid: (195, mid))
-    room = EextByte()
 
 
 class GroupActionConfiguration(EepromModel):
@@ -443,7 +424,6 @@ class PulseCounterConfiguration(EepromModel):
     id = EepromId(24)
     name = EepromString(16, lambda mid: (98 + (mid / 16), 16 * (mid % 16)))
     input = EepromByte(lambda mid: (0, 160+mid))
-    room = EextByte()
 
 
 class StartupActionConfiguration(EepromModel):
