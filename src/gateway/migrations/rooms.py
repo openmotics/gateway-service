@@ -71,7 +71,10 @@ class RoomsMigrator(object):
             # Rooms and floors
             logger.info('* Rooms & floors')
             for room_id in range(100):
-                RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, floors, skip_empty=True)
+                try:
+                    RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, floors, skip_empty=True)
+                except Exception:
+                    logger.exception('Could not migrate single RoomConfiguration')
 
             # Main objects
             for eeprom_model, orm_model, filter_ in [(OutputConfiguration, Output, lambda o: True),
