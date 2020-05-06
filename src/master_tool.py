@@ -52,55 +52,55 @@ def setup_logger():
 
 @Inject
 def master_sync(master_controller=INJECTED):
-    print('Sync...')
+    logger.info('Sync...')
     try:
         master_controller.get_status()
-        print('Done sync')
+        logger.info('Done sync')
     except CommunicationTimedOutException:
-        print('Failed sync')
+        logger.error('Failed sync')
         sys.exit(1)
 
 
 @Inject
 def master_version(master_controller=INJECTED):
     status = master_controller.get_status()
-    print(status['version'])
+    print('{} H{}'.format(status['version'], status['hw_version']))
 
 
 @Inject
 def master_reset(master_controller=INJECTED):
-    print('Resetting...')
+    logger.info('Resetting...')
     try:
         master_controller.reset()
-        print('Done resetting')
+        logger.info('Done resetting')
     except CommunicationTimedOutException:
-        print('Failed resetting')
+        logger.error('Failed resetting')
         sys.exit(1)
 
 
 @Inject
 def master_cold_reset(master_controller=INJECTED):
-    print('Performing hard reset...')
+    logger.info('Performing hard reset...')
     master_controller.cold_reset()
-    print('Done performing hard reset')
+    logger.info('Done performing hard reset')
 
 
 @Inject
 def master_factory_reset(master_controller=INJECTED):
-    print('Wiping the master...')
+    logger.info('Wiping the master...')
     master_controller.factory_reset()
-    print('Done wiping the master')
+    logger.info('Done wiping the master')
 
 
 def classic_master_update(firmware):
     if firmware:
         try:
-            print('Updating master')
+            logger.info('Updating master')
             subprocess.check_call(['/opt/openmotics/bin/updateController.sh', 'H4', 'PIC18F67J11', firmware, '/opt/openmotics/firmware.hex'])
             shutil.copy(firmware, '/opt/openmotics/firmware.hex')
-            print('Done update')
+            logger.info('Done update')
         except subprocess.CalledProcessError:
-            print('Failed to update master')
+            logger.error('Failed to update master')
             sys.exit(1)
     else:
         print('error: --master-firmware-classic is required to update')
@@ -110,13 +110,13 @@ def classic_master_update(firmware):
 def core_master_update(firmware):
     if firmware:
         try:
-            print('Updating master')
+            logger.info('Updating master')
             # TODO should probably move to bin
             subprocess.check_call(['python2', '/opt/openmotics/python/core_updater.py', firmware])
             shutil.copy(firmware, '/opt/openmotics/firmware.hex')
-            print('Done update')
+            logger.info('Done update')
         except subprocess.CalledProcessError:
-            print('Failed to update master')
+            logger.error('Failed to update master')
             sys.exit(1)
     else:
         print('error: --master-firmware-core is required to update')
@@ -178,6 +178,16 @@ def main():
         from gateway.hal import master_controller_classic
         _ = master_controller_classic
 
+    if args.hardreset:
+        master_cold_reset()
+        return
+    elif args.update:
+        if platform == Platform.Type.CORE_PLUS:
+            core_master_update(args.master_firmware_core)
+        else:
+            classic_master_update(args.master_firmware_classic)
+        return
+
     @Inject
     def start(master_communicator=INJECTED):
         # Explicitly only start the communicator and not the controller,
@@ -185,31 +195,19 @@ def main():
         master_communicator.start()
     start()
 
-    try:
+    if args.sync:
+        master_sync()
+    elif args.version:
+        master_version()
+    elif args.reset:
+        master_reset()
+    elif args.wipe:
+        master_factory_reset()
 
-        if args.sync:
-            master_sync()
-        elif args.version:
-            master_version()
-        elif args.reset:
-            master_reset()
-        elif args.hardreset:
-            master_cold_reset()
-        elif args.wipe:
-            master_factory_reset()
-        elif args.update:
-            if platform == Platform.Type.CORE_PLUS:
-                core_master_update(args.master_firmware_core)
-            else:
-                classic_master_update(args.master_firmware_classic)
-
-    finally:
-
-        @Inject
-        def stop(master_communicator=INJECTED):
-            master_communicator.stop()
-            time.sleep(4)
-        stop()
+    @Inject
+    def stop(master_communicator=INJECTED):
+        master_communicator.stop()
+    stop()
 
 
 if __name__ == '__main__':
