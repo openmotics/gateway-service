@@ -43,8 +43,9 @@ class BaseController(object):
     def __init__(self, master_controller):
         self._master_controller = master_controller  # type: MasterController
         self._sync_thread = None  # type: Optional[DaemonThread]
+        self._master_controller.subscribe_event(self._handle_master_event)
 
-    def handle_master_event(self, master_event):  # type: (MasterEvent) -> None
+    def _handle_master_event(self, master_event):  # type: (MasterEvent) -> None
         if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
             self.sync_orm()
 
