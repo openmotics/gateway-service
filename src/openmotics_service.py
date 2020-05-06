@@ -283,7 +283,7 @@ class OpenmoticsService(object):
         sensor_controller.sync_orm()
         shutter_controller.sync_orm()
 
-        # Execute migration(s)
+        # Execute master migration(s)
         RoomsMigrator.migrate()
 
         # Start rest of the stack
