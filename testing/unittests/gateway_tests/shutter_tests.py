@@ -343,6 +343,7 @@ class ShutterControllerTest(unittest.TestCase):
         SetUpTestInjections(master_controller=master_controller)
 
         controller = ShutterController()
+        master_controller.subscribe_event(controller.handle_master_event)
         controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)
 
         def shutter_callback(event):
