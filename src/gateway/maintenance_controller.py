@@ -44,7 +44,7 @@ class MaintenanceController(object):
         self._maintenance_communicator = maintenance_communicator
         self._maintenance_communicator.set_receiver(self._received_data)
         self._maintenance_communicator.set_deactivated(self._deactivated)
-        self._maintenance_stopped_callback = None
+        self._maintenance_stopped_callbacks = []
         self._connection = None
         self._server_thread = None
 
@@ -79,8 +79,8 @@ class MaintenanceController(object):
             self._maintenance_communicator.deactivate()
 
     def _deactivated(self):
-        if self._maintenance_stopped_callback is not None:
-            self._maintenance_stopped_callback()
+        for callback in self._maintenance_stopped_callbacks:
+            callback()
 
     #################
     # Subscriptions #
@@ -97,7 +97,7 @@ class MaintenanceController(object):
             self._deactivate()
 
     def subscribe_maintenance_stopped(self, callback):
-        self._maintenance_stopped_callback = callback
+        self._maintenance_stopped_callbacks.append(callback)
 
     ##########
     # Socket #

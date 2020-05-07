@@ -76,7 +76,8 @@ class ShutterControllerTest(unittest.TestCase):
     def test_update_config(self):
         master_controller = Mock()
         master_controller.load_shutters = lambda: []
-        SetUpTestInjections(master_controller=master_controller)
+        SetUpTestInjections(master_controller=master_controller,
+                            maintenance_controller=Mock())
         controller = ShutterController()
 
         # Basic configuration
@@ -127,7 +128,8 @@ class ShutterControllerTest(unittest.TestCase):
         master_controller.shutter_up = lambda id: shutter_direction('up', id)
         master_controller.shutter_down = lambda id: shutter_direction('down', id)
         master_controller.shutter_stop = lambda id: shutter_direction('stop', id)
-        SetUpTestInjections(master_controller=master_controller)
+        SetUpTestInjections(master_controller=master_controller,
+                            maintenance_controller=Mock())
 
         controller = ShutterController()
         controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)
@@ -171,7 +173,8 @@ class ShutterControllerTest(unittest.TestCase):
         master_controller.shutter_up = lambda id: shutter_direction('up', id)
         master_controller.shutter_down = lambda id: shutter_direction('down', id)
         master_controller.shutter_stop = lambda id: shutter_direction('stop', id)
-        SetUpTestInjections(master_controller=master_controller)
+        SetUpTestInjections(master_controller=master_controller,
+                            maintenance_controller=Mock())
 
         controller = ShutterController()
         controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)
@@ -218,7 +221,8 @@ class ShutterControllerTest(unittest.TestCase):
         master_controller.shutter_up = lambda id: shutter_direction('up', id)
         master_controller.shutter_down = lambda id: shutter_direction('down', id)
         master_controller.shutter_stop = lambda id: shutter_direction('stop', id)
-        SetUpTestInjections(master_controller=master_controller)
+        SetUpTestInjections(master_controller=master_controller,
+                            maintenance_controller=Mock())
 
         controller = ShutterController()
         controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)
@@ -289,7 +293,8 @@ class ShutterControllerTest(unittest.TestCase):
         master_controller.shutter_up = lambda id: shutter_direction('up', id)
         master_controller.shutter_down = lambda id: shutter_direction('down', id)
         master_controller.shutter_stop = lambda id: shutter_direction('stop', id)
-        SetUpTestInjections(master_controller=master_controller)
+        SetUpTestInjections(master_controller=master_controller,
+                            maintenance_controller=Mock())
 
         controller = ShutterController()
         controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)
@@ -340,7 +345,8 @@ class ShutterControllerTest(unittest.TestCase):
 
         master_controller = MasterClassicController()
         master_controller._shutter_config = {shutter.id: shutter for shutter in ShutterControllerTest.SHUTTER_CONFIG}
-        SetUpTestInjections(master_controller=master_controller)
+        SetUpTestInjections(master_controller=master_controller,
+                            maintenance_controller=Mock())
 
         controller = ShutterController()
         controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)

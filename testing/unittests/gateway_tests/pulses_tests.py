@@ -57,7 +57,8 @@ class PulseCounterControllerTest(unittest.TestCase):
 
     def test_pulse_counter_up_down(self):
         """ Test adding and removing pulse counters. """
-        SetUpTestInjections(master_controller=Mock())
+        SetUpTestInjections(master_controller=Mock(),
+                            maintenance_controller=Mock())
         controller = PulseCounterController()
 
         for i in range(24):
@@ -102,7 +103,8 @@ class PulseCounterControllerTest(unittest.TestCase):
         SetUpTestInjections(master_communicator=master_communicator,
                             configuration_controller=Mock(),
                             eeprom_controller=Mock())
-        SetUpTestInjections(master_controller=MasterClassicController())
+        SetUpTestInjections(master_controller=MasterClassicController(),
+                            maintenance_controller=Mock())
 
         for i in range(24):
             PulseCounter(number=i, name='PulseCounter {0}'.format(i), source='master', persistent=False).save()
@@ -135,7 +137,8 @@ class PulseCounterControllerTest(unittest.TestCase):
         master_controller_mock.load_pulse_counter = lambda pulse_counter_id: master_pulse_counters[pulse_counter_id]
         master_controller_mock.save_pulse_counters = _save_pulse_counters
 
-        SetUpTestInjections(master_controller=master_controller_mock)
+        SetUpTestInjections(master_controller=master_controller_mock,
+                            maintenance_controller=Mock())
         controller = PulseCounterController()
 
         # Simulate master contents & initial sync
