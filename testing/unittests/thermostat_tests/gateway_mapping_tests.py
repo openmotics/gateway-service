@@ -21,7 +21,7 @@ from peewee import SqliteDatabase
 from mock import Mock
 
 from ioc import SetTestMode, SetUpTestInjections
-from models import (
+from gateway.models import (
     Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump,
     Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule
 )
@@ -63,7 +63,8 @@ class GatewayThermostatMappingTests(unittest.TestCase):
 
         SetUpTestInjections(gateway_api=gateway_api,
                             message_client=Mock(),
-                            observer=Mock())
+                            observer=Mock(),
+                            output_controller=Mock())
         thermostat_controller = ThermostatControllerGateway()
         SetUpTestInjections(thermostat_controller=thermostat_controller)
         return thermostat_controller

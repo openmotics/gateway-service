@@ -19,14 +19,19 @@ from __future__ import absolute_import
 import logging
 import time
 from threading import Thread
+from peewee import DoesNotExist
 
 from gateway.enums import ShutterEnums
 from gateway.dto import (
-    OutputDTO,
+    OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
-    ThermostatDTO
+    ThermostatDTO, SensorDTO,
+    PulseCounterDTO
 )
-from gateway.hal.mappers_core import OutputMapper, ShutterMapper
+from gateway.hal.mappers_core import (
+    OutputMapper, ShutterMapper, InputMapper,
+    SensorMapper
+)
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
@@ -181,14 +186,6 @@ class MasterCoreController(MasterController):
         if online != self._master_online:
             self._master_online = online
 
-    def _serialize_input(self, input_module, fields=None):
-        data = {'id': input_module.id}
-        if fields is None or 'name' in fields:
-            data['name'] = input_module.name
-        if fields is None or 'module_type' in fields:
-            data['module_type'] = input_module.module.device_type
-        return data
-
     def _enumerate_io_modules(self, module_type, amount_per_module=8):
         cmd = CoreAPI.general_configuration_number_of_modules()
         module_count = self._master_communicator.do_command(cmd, {})[module_type]
@@ -272,29 +269,20 @@ class MasterCoreController(MasterController):
         # type: () -> List[int]
         return self._input_state.get_recent()
 
-    def load_input(self, input_module_id, fields=None):
-        input_module = InputConfiguration(input_module_id)
-        module_type = input_module.module.device_type
-        if module_type not in ['i', 'I']:
-            raise TypeError('The given id {0} is not an input, but {1}'.format(input_module_id, module_type))
-        return self._serialize_input(input_module, fields=fields)
+    def load_input(self, input_id):  # type: (int) -> InputDTO
+        input_ = InputConfiguration(input_id)
+        return InputMapper.orm_to_dto(input_)
 
-    def load_inputs(self, fields=None):
+    def load_inputs(self):  # type: () -> List[InputDTO]
         inputs = []
         for i in self._enumerate_io_modules('input'):
-            input_module = InputConfiguration(i)
-            module_type = input_module.module.device_type
-            if module_type in ['i', 'I']:
-                input_data = self._serialize_input(input_module, fields=fields)
-                inputs.append(input_data)
+            inputs.append(self.load_input(i))
         return inputs
 
-    def save_inputs(self, data, fields=None):
-        for input_data in data:
-            new_data = {'id': input_data['id'],
-                        'name': input_data['name']}
-            input_module = InputConfiguration.deserialize(new_data)
-            input_module.save()
+    def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
+        for input_dto, fields in inputs:
+            input_ = InputMapper.dto_to_orm(input_dto, fields)
+            input_.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
 
     def _refresh_input_states(self):
         # type: () -> bool
@@ -546,29 +534,19 @@ class MasterCoreController(MasterController):
             brightnesses.append(self.get_sensor_brightness(sensor_id))
         return brightnesses
 
-    def load_sensor(self, sensor_id, fields=None):
+    def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
         sensor = SensorConfiguration(sensor_id)
-        data = {'id': sensor.id,
-                'name': sensor.name,
-                'offset': 0,
-                'virtual': False,
-                'room': 255}
-        if fields is None:
-            return data
-        return {field: data[field] for field in fields}
+        return SensorMapper.orm_to_dto(sensor)
 
-    def load_sensors(self, fields=None):
-        amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
+    def load_sensors(self):  # type: () -> List[SensorDTO]
         sensors = []
-        for i in range(amount_sensor_modules * 8):
-            sensors.append(self.load_sensor(i, fields))
+        for i in self._enumerate_io_modules('sensor'):
+            sensors.append(self.load_sensor(i))
         return sensors
 
-    def save_sensors(self, sensors):
-        for sensor_data in sensors:
-            new_data = {'id': sensor_data['id'],
-                        'name': sensor_data['name']}  # TODO: Rest of the mapping
-            sensor = SensorConfiguration.deserialize(new_data)
+    def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
+        for sensor_dto, fields in sensors:
+            sensor = SensorMapper.dto_to_orm(sensor_dto, fields)
             sensor.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
 
     def _refresh_sensor_states(self):
@@ -587,6 +565,26 @@ class MasterCoreController(MasterController):
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         raise NotImplementedError()
 
+    # PulseCounters
+
+    def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
+        # TODO: Implement PulseCounters
+        raise DoesNotExist('Could not find a PulseCounter with id {0}'.format(pulse_counter_id))
+
+    def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
+        # TODO: Implement PulseCounters
+        return []
+
+    def save_pulse_counters(self, pulse_counters):  # type: (List[Tuple[PulseCounterDTO, List[str]]]) -> None
+        # TODO: Implement PulseCounters
+        return
+
+    def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
+        # TODO: Implement PulseCounters
+        return {}
+
+    # Virtual modules
+
     def add_virtual_output_module(self):
         raise NotImplementedError()
 
@@ -595,16 +593,6 @@ class MasterCoreController(MasterController):
 
     def add_virtual_input_module(self):
         raise NotImplementedError()
-
-    # Rooms
-
-    def load_room_configuration(self, room_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        return {}  # TODO: Implement
-
-    def load_room_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        return []  # TODO: Implement
 
     # Generic
 

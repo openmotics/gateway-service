@@ -68,7 +68,7 @@ class _InjectionSentinel(object):
         self._DO_NOT_USE_INJECTION_SENTINEL()
 
 
-IN = INJECTED = _InjectionSentinel()
+IN = INJECTED = _InjectionSentinel()  # type: Any
 
 
 class _Scope(object):

@@ -16,7 +16,6 @@
 The maintenance module contains the MaintenanceService class.
 """
 from __future__ import absolute_import
-from exceptions import NotImplementedError
 
 
 # TODO: This needs to be moved to a general `master` folder with `classic` and `core` subfolders

@@ -38,6 +38,8 @@ class SerializerToolbox(object):
                 loaded_fields.append(dto_field)
                 if default is None:
                     setattr(dto, dto_field, api_data[data_field])
+                elif callable(default):
+                    setattr(dto, dto_field, default(api_data[data_field]))
                 else:
                     setattr(dto, dto_field, Toolbox.nonify(api_data[data_field], default))
         return loaded_fields

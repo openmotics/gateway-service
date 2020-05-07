@@ -1,4 +1,4 @@
-"""Peewee migrations -- 001_init_tables.py.
+"""Peewee migrations -- 003_add_rooms.py.
 
 Some examples (model - class or model name)::
 
@@ -20,28 +20,12 @@ Some examples (model - class or model name)::
     > migrator.add_default(model, field_name, default)
 
 """
-
-from __future__ import absolute_import
-import peewee as pw
-import logging
-
-
-from models import ThermostatGroup, Feature, Output, ValveToThermostat, OutputToThermostatGroup, DaySchedule, Preset, \
-                   Thermostat, Valve, PumpToValve, Pump
-
-try:
-    import playhouse.postgres_ext as pw_pext
-except ImportError:
-    pass
-
-SQL = pw.SQL
-
-logger = logging.getLogger('openmotics')
+from gateway.models import Room, Floor, Shutter, ShutterGroup, Sensor, PulseCounter, Input
 
 
 def migrate(migrator, database, fake=False, **kwargs):
-    database.create_tables([Output, ThermostatGroup, OutputToThermostatGroup, Thermostat, Valve,
-                            ValveToThermostat, Output, Preset, DaySchedule, Pump, PumpToValve, Feature])
+    database.create_tables([Room, Floor, Shutter, ShutterGroup,
+                            Sensor, PulseCounter, Input])  # This will - for some reason - add the foreigns keys as well
 
 
 def rollback(migrator, database, fake=False, **kwargs):

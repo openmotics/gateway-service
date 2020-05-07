@@ -13,10 +13,29 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from gateway.hal.mappers_classic.output import OutputMapper
-from gateway.hal.mappers_classic.shutter import ShutterMapper
-from gateway.hal.mappers_classic.shutter_group import ShutterGroupMapper
-from gateway.hal.mappers_classic.thermostat import ThermostatMapper
-from gateway.hal.mappers_classic.input import InputMapper
-from gateway.hal.mappers_classic.sensor import SensorMapper
-from gateway.hal.mappers_classic.pulse_counter import PulseCounterMapper
+"""
+Room Mapper
+"""
+from __future__ import absolute_import
+from gateway.dto.room import RoomDTO
+from gateway.models import Room
+
+if False:  # MYPY
+    from typing import List
+
+
+class RoomMapper(object):
+
+    @staticmethod
+    def orm_to_dto(orm_object):  # type: (Room) -> RoomDTO
+        return RoomDTO(id=orm_object.number,
+                       name=orm_object.name)
+
+    @staticmethod
+    def dto_to_orm(room_dto, fields):  # type: (RoomDTO, List[str]) -> Room
+        room = Room.get_or_none(number=room_dto.id)
+        if room is None:
+            room = Room(number=room_dto.id)
+        if 'name' in fields:
+            room.name = room_dto.name
+        return room

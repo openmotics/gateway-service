@@ -21,11 +21,12 @@ import time
 from threading import Lock
 from ioc import Injectable, Inject, INJECTED, Singleton
 from toolbox import Toolbox
-from gateway.hal.master_controller import MasterController
+from gateway.base_controller import BaseController, SyncStructure
 from gateway.hal.master_event import MasterEvent
 from gateway.enums import ShutterEnums
 from gateway.events import GatewayEvent
 from gateway.dto import ShutterDTO, ShutterGroupDTO
+from gateway.models import ShutterGroup, Shutter, Room
 
 if False:  # MYPY
     from typing import List, Dict, Optional, Tuple
@@ -35,7 +36,7 @@ logger = logging.getLogger('openmotics')
 
 @Injectable.named('shutter_controller')
 @Singleton
-class ShutterController(object):
+class ShutterController(BaseController):
     """
     Controls everything related to shutters.
 
@@ -47,6 +48,8 @@ class ShutterController(object):
     # TODO: The states OPEN and CLOSED make more sense but is a reasonable heavy change at this moment. To be updated if/when a new Gateway API is introduced
     """
 
+    SYNC_STRUCTURES = [SyncStructure(Shutter, 'shutter'),
+                       SyncStructure(ShutterGroup, 'shutter_group')]
     DIRECTION_STATE_MAP = {ShutterEnums.Direction.UP: ShutterEnums.State.GOING_UP,
                            ShutterEnums.Direction.DOWN: ShutterEnums.State.GOING_DOWN,
                            ShutterEnums.Direction.STOP: ShutterEnums.State.STOPPED}
@@ -59,8 +62,7 @@ class ShutterController(object):
 
     @Inject
     def __init__(self, master_controller=INJECTED, verbose=False):
-        self._master_controller = master_controller  # type: MasterController
-        self._master_controller.subscribe_event(self._handle_master_event)
+        super(ShutterController, self).__init__(master_controller)
 
         self._shutters = {}  # type: Dict[int, ShutterDTO]
         self._actual_positions = {}
@@ -81,7 +83,8 @@ class ShutterController(object):
 
     def _handle_master_event(self, event):  # type: (MasterEvent) -> None
         if event.type == MasterEvent.Types.EEPROM_CHANGE:
-            self.update_config(self._master_controller.load_shutters())
+            self.sync_orm()
+            self.update_config(self.load_shutters())
         if event.type == MasterEvent.Types.SHUTTER_CHANGE:
             self._report_shutter_state(event.data['id'], event.data['status'])
 
@@ -139,23 +142,63 @@ class ShutterController(object):
     # Configure shutters
 
     def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
-        return self._master_controller.load_shutter(shutter_id)
+        shutter = Shutter.get(number=shutter_id)  # type: Shutter
+        shutter_dto = self._master_controller.load_shutter(shutter_id=shutter.number)
+        shutter_dto.room = shutter.room.number if shutter.room is not None else None
+        return shutter_dto
 
     def load_shutters(self):  # type: () -> List[ShutterDTO]
-        return self._master_controller.load_shutters()
+        shutter_dtos = []
+        for shutter in Shutter.select():
+            shutter_dto = self._master_controller.load_shutter(shutter_id=shutter.number)
+            shutter_dto.room = shutter.room.number if shutter.room is not None else None
+            shutter_dtos.append(shutter_dto)
+        return shutter_dtos
 
-    def save_shutters(self, config):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
-        self._master_controller.save_shutters(config)
+    def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
+        shutters_to_save = []
+        for shutter_dto, fields in shutters:
+            shutter = Shutter.get_or_none(number=shutter_dto.id)  # type: Shutter
+            if shutter is None:
+                continue
+            if 'room' in fields:
+                if shutter_dto.room is None:
+                    shutter.room = None
+                elif 0 <= shutter_dto.room <= 100:
+                    shutter.room, _ = Room.get_or_create(number=shutter_dto.room)
+                shutter.save()
+            shutters_to_save.append((shutter_dto, fields))
+        self._master_controller.save_shutters(shutters_to_save)
         self.update_config(self.load_shutters())
 
     def load_shutter_group(self, group_id):  # type: (int) -> ShutterGroupDTO
-        return self._master_controller.load_shutter_group(group_id)
+        shutter_group = ShutterGroup.get(number=group_id)  # type: ShutterGroup
+        shutter_group_dto = self._master_controller.load_shutter_group(shutter_group_id=shutter_group.number)
+        shutter_group_dto.room = shutter_group.room.number if shutter_group.room is not None else None
+        return shutter_group_dto
 
     def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
-        return self._master_controller.load_shutter_groups()
+        shutter_group_dtos = []
+        for shutter_group in ShutterGroup.select():
+            shutter_group_dto = self._master_controller.load_shutter_group(shutter_group_id=shutter_group.number)
+            shutter_group_dto.room = shutter_group.room.number if shutter_group.room is not None else None
+            shutter_group_dtos.append(shutter_group_dto)
+        return shutter_group_dtos
 
-    def save_shutter_groups(self, config):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
-        self._master_controller.save_shutter_groups(config)
+    def save_shutter_groups(self, shutter_groups):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
+        shutter_groups_to_save = []
+        for shutter_group_dto, fields in shutter_groups:
+            shutter_group = ShutterGroup.get_or_none(number=shutter_group_dto.id)  # type: ShutterGroup
+            if shutter_group is None:
+                continue
+            if 'room' in fields:
+                if shutter_group_dto.room is None:
+                    shutter_group.room = None
+                elif 0 <= shutter_group_dto.room <= 100:
+                    shutter_group.room, _ = Room.get_or_create(number=shutter_group_dto.room)
+                shutter_group.save()
+            shutter_groups_to_save.append((shutter_group_dto, fields))
+        self._master_controller.save_shutter_groups(shutter_groups_to_save)
 
     # Control shutters
 
@@ -238,7 +281,7 @@ class ShutterController(object):
     def _get_shutter(self, shutter_id):
         shutter = self._shutters.get(shutter_id)
         if shutter is None:
-            self.update_config(self._master_controller.load_shutters())
+            self.update_config(self.load_shutters())
             shutter = self._shutters.get(shutter_id)
             if shutter is None:
                 raise RuntimeError('Shutter {0} is not available'.format(shutter_id))

@@ -15,8 +15,8 @@
 
 import logging
 from threading import Lock
-from ioc import INJECTED, Inject
-from models import Valve
+from ioc import Inject
+from gateway.models import Valve
 from gateway.thermostat.gateway.valve_driver import ValveDriver
 
 logger = logging.getLogger('openmotics')

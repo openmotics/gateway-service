@@ -56,7 +56,7 @@ class EepromController(object):
         self._eeprom_file.invalidate_cache()
 
     def read(self, eeprom_model, id=None, fields=None):
-        # type: (Type[M], Optional[int], List[str]) -> M
+        # type: (Type[M], Optional[int], Optional[List[str]]) -> M
         """
         Create an instance of an EepromModel by reading it from the EepromFile. The id has to
         be specified if the model has an EepromId field.
@@ -1080,7 +1080,7 @@ class EextBool(EextDataType):
         return False
 
     def decode(self, value):
-        return bool(value)
+        return value == 'True'
 
     def encode(self, value):
         if value is None:

@@ -16,11 +16,11 @@
 Module for communicating with the Master
 """
 from __future__ import absolute_import
-from exceptions import NotImplementedError
 from gateway.dto import (
-    OutputDTO,
+    OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
-    ThermostatDTO
+    ThermostatDTO, SensorDTO,
+    PulseCounterDTO
 )
 from gateway.hal.master_event import MasterEvent
 
@@ -85,13 +85,13 @@ class MasterController(object):
     def get_input_module_type(self, input_module_id):
         raise NotImplementedError()
 
-    def load_input(self, input_id, fields=None):
+    def load_input(self, input_id):  # type: (int) -> InputDTO
         raise NotImplementedError()
 
-    def load_inputs(self, fields=None):
+    def load_inputs(self):  # type: () -> List[InputDTO]
         raise NotImplementedError()
 
-    def save_inputs(self, inputs, fields=None):
+    def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
         raise NotImplementedError()
 
     def get_inputs_with_status(self):
@@ -206,13 +206,27 @@ class MasterController(object):
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         raise NotImplementedError()
 
-    def load_sensor(self, sensor_id, fields=None):
+    def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
         raise NotImplementedError()
 
-    def load_sensors(self, fields=None):
+    def load_sensors(self):  # type: () -> List[SensorDTO]
         raise NotImplementedError()
 
-    def save_sensors(self, config):
+    def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
+        raise NotImplementedError()
+
+    # PulseCounters
+
+    def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
+        raise NotImplementedError()
+
+    def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
+        raise NotImplementedError()
+
+    def save_pulse_counters(self, pulse_counters):  # type: (List[Tuple[PulseCounterDTO, List[str]]]) -> None
+        raise NotImplementedError()
+
+    def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
         raise NotImplementedError()
 
     # Virtual modules
@@ -371,24 +385,6 @@ class MasterController(object):
         raise NotImplementedError()
 
     def save_can_led_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        raise NotImplementedError()
-
-    # Room functions
-
-    def load_room_configuration(self, room_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        raise NotImplementedError()
-
-    def load_room_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        raise NotImplementedError()
-
-    def save_room_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        raise NotImplementedError()
-
-    def save_room_configurations(self, config):
         # type: (List[Dict[str,Any]]) -> None
         raise NotImplementedError()
 

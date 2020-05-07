@@ -24,11 +24,11 @@ from ioc import Injectable, Inject, Singleton, INJECTED
 from bus.om_bus_events import OMBusEvents
 from gateway.events import GatewayEvent
 from gateway.dto import ThermostatDTO
-from models import Output, Preset, Thermostat, ThermostatGroup, OutputToThermostatGroup, Pump
+from gateway.models import Output, Preset, Thermostat, ThermostatGroup, OutputToThermostatGroup, Pump
 from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.thermostat.gateway.thermostat_pid import ThermostatPid
-from gateway.thermostat.gateway.mappers import ThermostatMapper
+from gateway.mappers import ThermostatMapper
 from apscheduler.schedulers.background import BackgroundScheduler
 
 if False:  # MYPY

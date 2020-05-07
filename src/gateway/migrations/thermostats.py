@@ -15,7 +15,7 @@
 
 import logging
 from gateway.dto import ThermostatScheduleDTO, ThermostatDTO
-from models import Feature
+from gateway.models import Feature
 
 logger = logging.getLogger('openmotics')
 

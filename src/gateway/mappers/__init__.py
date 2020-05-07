@@ -13,10 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from gateway.hal.mappers_classic.output import OutputMapper
-from gateway.hal.mappers_classic.shutter import ShutterMapper
-from gateway.hal.mappers_classic.shutter_group import ShutterGroupMapper
-from gateway.hal.mappers_classic.thermostat import ThermostatMapper
-from gateway.hal.mappers_classic.input import InputMapper
-from gateway.hal.mappers_classic.sensor import SensorMapper
-from gateway.hal.mappers_classic.pulse_counter import PulseCounterMapper
+from gateway.mappers.room import RoomMapper
+from gateway.mappers.floor import FloorMapper
+from gateway.mappers.thermostat import ThermostatMapper
+from gateway.mappers.pulse_counter import PulseCounterMapper

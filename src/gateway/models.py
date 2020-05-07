@@ -1,3 +1,18 @@
+# Copyright (C) 2020 OpenMotics BV
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 from __future__ import absolute_import
 import datetime
 import inspect
@@ -7,13 +22,12 @@ import sys
 import time
 
 import constants
-from peewee import BooleanField, CharField, CompositeKey, DoesNotExist, \
-    FloatField, ForeignKeyField, IntegerField, PrimaryKeyField, \
+from peewee import (
+    BooleanField, CharField, CompositeKey, DoesNotExist,
+    FloatField, ForeignKeyField, IntegerField, PrimaryKeyField,
     SqliteDatabase, TextField
+)
 from playhouse.signals import Model, post_save
-
-if False:  # MYPY
-    from typing import Dict
 
 logger = logging.getLogger('openmotics')
 
@@ -23,8 +37,8 @@ class Database(object):
     filename = constants.get_gateway_database_file()
     _db = SqliteDatabase(filename, pragmas={'foreign_keys': 1})
 
-    # used to store database metrics (e.g. number of saves)
-    _metrics = {}  # type: Dict[str,int]
+    # Used to store database metrics (e.g. number of saves)
+    _metrics = {}
 
     @classmethod
     def get_db(cls):
@@ -59,6 +73,19 @@ class BaseModel(Model):
         database = Database.get_db()
 
 
+class Floor(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+    name = CharField(null=True)
+
+
+class Room(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+    name = CharField(null=True)
+    floor = ForeignKeyField(Floor, null=True, on_delete='SET NULL', backref='rooms')
+
+
 class Feature(BaseModel):
     id = PrimaryKeyField()
     name = CharField(unique=True)
@@ -68,7 +95,40 @@ class Feature(BaseModel):
 class Output(BaseModel):
     id = PrimaryKeyField()
     number = IntegerField(unique=True)
-    # TODO: model AnalagOutput and DigitalOutput and use as dimmer etc
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='outputs')
+
+
+class Input(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='inputs')
+
+
+class Shutter(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='shutters')
+
+
+class ShutterGroup(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='shutter_groups')
+
+
+class Sensor(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='sensors')
+
+
+class PulseCounter(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+    name = CharField()
+    source = CharField()  # Options: 'master' or 'gateway'
+    persistent = BooleanField()
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='pulse_counters')
 
 
 class ThermostatGroup(BaseModel):
@@ -179,7 +239,7 @@ class Thermostat(BaseModel):
     pid_cooling_d = FloatField(default=0)
 
     automatic = BooleanField(default=True)
-    room = IntegerField()
+    room = IntegerField()  # TODO: Migrate to ForeignKey
     start = IntegerField()
 
     valve_config = CharField(default='cascade')  # options: cascade, equal
@@ -337,25 +397,6 @@ class DaySchedule(BaseModel):
     mode = CharField(default='heating')
     thermostat = ForeignKeyField(Thermostat, backref='day_schedules', on_delete='CASCADE')
 
-    @classmethod
-    def from_dict(cls, thermostat, day_index, mode, data):
-        """
-        "data":
-            {
-                "0": <temperature from this timestamp>,
-                "23400": <temperature from this timestamp>,
-                "30600": <temperature from this timestamp>,
-                "61200": <temperature from this timestamp>,
-                "84600": <temperature from this timestamp>
-            }
-        """
-        # convert relative timestamps to int and temperature values to float
-        for key, value in data.items():
-            relative_timestamp = int(key)
-            if relative_timestamp < 86400:
-                data[relative_timestamp] = float(value)
-        return cls(thermostat=thermostat, index=day_index, mode=mode, content=json.dumps(data))
-
     @property
     def schedule_data(self):
         return json.loads(self.content)
@@ -382,11 +423,6 @@ class DaySchedule(BaseModel):
     def update_schedule_from_v0(self, v0_schedule):
         data = DaySchedule._schedule_data_from_v0(v0_schedule)
         self.schedule_data = data
-
-    @classmethod
-    def from_v0_dict(cls, thermostat, index, mode, v0_schedule,):
-        data = cls._schedule_data_from_v0(v0_schedule)
-        return cls.from_dict(thermostat, index, mode, data)
 
     def get_scheduled_temperature(self, seconds_in_day):
         seconds_in_day = seconds_in_day % 86400

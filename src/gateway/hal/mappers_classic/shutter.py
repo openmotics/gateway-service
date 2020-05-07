@@ -34,7 +34,7 @@ class ShutterMapper(object):
     def orm_to_dto(orm_object):  # type: (EepromModel) -> ShutterDTO
         data = orm_object.serialize()
         kwargs = {}
-        for field in ['timer_up', 'timer_down', 'up_down_config', 'group_1', 'group_2', 'room']:
+        for field in ['timer_up', 'timer_down', 'up_down_config', 'group_1', 'group_2']:
             kwargs[field] = Toolbox.nonify(data[field], ShutterMapper.BYTE_MAX)
         for field in ['steps']:
             kwargs[field] = Toolbox.nonify(data[field], ShutterMapper.WORD_MAX)
@@ -49,7 +49,7 @@ class ShutterMapper(object):
         for field in ['name']:
             if field in fields:
                 data[field] = getattr(shutter_dto, field)
-        for field in ['timer_up', 'timer_down', 'up_down_config', 'group_1', 'group_2', 'room']:
+        for field in ['timer_up', 'timer_down', 'up_down_config', 'group_1', 'group_2']:
             if field in fields:
                 data[field] = Toolbox.denonify(getattr(shutter_dto, field), ShutterMapper.BYTE_MAX)
         for field in ['steps']:

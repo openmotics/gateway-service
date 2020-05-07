@@ -17,8 +17,12 @@ import time
 import logging
 from threading import Lock
 from ioc import INJECTED, Inject
-from models import Valve
+from gateway.models import Valve
 from gateway.thermostat.gateway.pump_driver import PumpDriver
+from gateway.output_controller import OutputController
+
+if False:  # MYPY
+    from gateway.gateway_api import GatewayApi
 
 logger = logging.getLogger('openmotics')
 
@@ -26,14 +30,10 @@ logger = logging.getLogger('openmotics')
 @Inject
 class ValveDriver(object):
 
-    def __init__(self, valve, gateway_api=INJECTED):
-        """ Create a valve object
-        :param valve: The database valve object
-        :type valve: gateway.thermostat.gateway.models.Valve
-        :param gateway_api: Gateway API Controller
-        :type gateway_api: gateway.gateway_api.GatewayApi
-        """
+    def __init__(self, valve, gateway_api=INJECTED, output_controller=INJECTED):  # type: (Valve, GatewayApi, OutputController) -> None
+        """ Create a valve object """
         self._gateway_api = gateway_api
+        self._output_controller = output_controller
         self._valve = valve
         self._percentage = 0
 
@@ -81,7 +81,7 @@ class ValveDriver(object):
 
                 self._gateway_api.set_output_status(self._valve.output.number, output_status, dimmer=self._desired_percentage)
                 try:
-                    dimmable_output = self._gateway_api.get_output_configuration(output_nr).module_type in ['d', 'D']
+                    dimmable_output = self._output_controller.load_output(output_nr).module_type in ['d', 'D']
                 except Exception:
                     dimmable_output = False
                 if not dimmable_output:
