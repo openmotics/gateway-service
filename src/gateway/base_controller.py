@@ -17,6 +17,7 @@ Base Controller
 """
 from __future__ import absolute_import
 import logging
+from ioc import INJECTED, Inject
 from gateway.daemon_thread import DaemonThread
 from gateway.hal.master_event import MasterEvent
 from gateway.hal.master_controller import MasterController
@@ -25,6 +26,7 @@ from gateway.models import BaseModel
 if False:  # MYPY
     from typing import Optional, Callable, Type, List
     from gateway.hal.master_event import MasterEvent
+    from gateway.maintenance_controller import MaintenanceController
 
 logger = logging.getLogger("openmotics")
 
@@ -40,10 +42,13 @@ class BaseController(object):
 
     SYNC_STRUCTURES = None  # type: Optional[List[SyncStructure]]
 
-    def __init__(self, master_controller):
+    @Inject
+    def __init__(self, master_controller, maintenance_controller=INJECTED):
         self._master_controller = master_controller  # type: MasterController
+        self._maintenance_controller = maintenance_controller  # type: MaintenanceController
         self._sync_thread = None  # type: Optional[DaemonThread]
         self._master_controller.subscribe_event(self._handle_master_event)
+        self._maintenance_controller.subscribe_maintenance_stopped(self.sync_orm)
 
     def _handle_master_event(self, master_event):  # type: (MasterEvent) -> None
         if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
