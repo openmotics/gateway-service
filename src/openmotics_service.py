@@ -23,7 +23,6 @@ import logging
 import time
 import constants
 from gateway.models import Database, Feature
-from master.orm_syncer import ORMSyncer
 from gateway.migrations.rooms import RoomsMigrator
 from ioc import Injectable, Inject, INJECTED
 from bus.om_bus_service import MessageService
