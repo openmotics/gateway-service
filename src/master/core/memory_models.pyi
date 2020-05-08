@@ -178,3 +178,8 @@ class ExtraSensorConfiguration(MemoryModelDefinition):
 class ValidationBitConfiguration(MemoryModelDefinition):
     grouaction_changed: int
     name: str
+
+
+class GroupActionAllocationTable(MemoryModelDefinition):
+    addresses_0: List[int]
+    addresses_1: List[int]

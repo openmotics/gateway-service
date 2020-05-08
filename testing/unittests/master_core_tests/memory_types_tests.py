@@ -22,8 +22,8 @@ import xmlrunner
 from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
 from master.core.basic_action import BasicAction
-from master.core.memory_file import MemoryTypes
 from master.core.memory_types import *
+from master.core.memory_file import MemoryTypes, MemoryFile
 
 logger = logging.getLogger('openmotics')
 
@@ -84,12 +84,22 @@ class MemoryTypesTest(unittest.TestCase):
                                              [[], 2 ** 24, ValueError]])
 
     def test_bytearray_field(self):
-        self._test_field(MemoryByteArrayField, [[[1], [-1], ValueError],
+        self._test_field(MemoryByteArrayField, [[[1], [], ValueError],
+                                                [[1], [-1], ValueError],
                                                 [[1], [0], [0]],
                                                 [[2], [0], ValueError],
                                                 [[2], [0, 0, 0], ValueError],
                                                 [[2], [10, 0], [10, 0]],
                                                 [[2], [10, 265], ValueError]])
+
+    def test_memoryarray_field(self):
+        self._test_field(MemoryWordArrayField, [[[1], [], ValueError],
+                                                [[1], [-1], ValueError],
+                                                [[1], [0], [0, 0]],
+                                                [[2], [0], ValueError],
+                                                [[2], [0, 0], [0, 0, 0, 0]],
+                                                [[2], [2 ** 8, 2 ** 16 - 1], [1, 0, 255, 255]],
+                                                [[2], [2 ** 8, 2 ** 16], ValueError]])
 
     def test_basicaction_field(self):
         self._test_field(MemoryBasicActionField, [[[], BasicAction(10, 10, 0, 0), [10, 10, 0, 0, 0, 0]],
@@ -166,21 +176,21 @@ class MemoryTypesTest(unittest.TestCase):
             info = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, id))
 
         class Child(MemoryModelDefinition):
-            class _Composed(CompositeMemoryModelDefinition):
+            class _ChildComposed(CompositeMemoryModelDefinition):
                 info = CompositeNumberField(start_bit=0, width=3, value_offset=2)
                 bit = CompositeBitField(bit=3)
 
-            parent = MemoryRelation(Parent, id_spec=lambda id: id / 2)
+            parent = MemoryRelation(Parent, id_spec=lambda id: id // 2)
             info = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (id, 0))
-            composed = _Composed(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (id, 1)))
+            composed = _ChildComposed(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (id, 1)))
 
         parent_0 = {'id': 0, 'info': 30}
         parent_1 = {'id': 1, 'info': 31}
         parent_2 = {'id': 2, 'info': 32}
         for entry in [[1, {'id': 1, 'info': 40, 'composed': {'bit': False, 'info': 3}}, parent_0],
                       [2, {'id': 2, 'info': 41, 'composed': {'bit': True, 'info': 1}}, parent_1],
-                      [3, {'id': 3, 'info': 42, 'composed': {'bit': True, 'info': None}}, parent_1],
-                      [4, {'id': 4, 'info': 43, 'composed': {'bit': False, 'info': None}}, parent_2]]:
+                      [3, {'id': 3, 'info': 42, 'composed': {'bit': True, 'info': -2}}, parent_1],
+                      [4, {'id': 4, 'info': 43, 'composed': {'bit': False, 'info': -2}}, parent_2]]:
             child_id, child_data, parent_data = entry
             child = Child(child_id)
             self.assertEqual(child_data, child.serialize())
@@ -201,7 +211,7 @@ class MemoryTypesTest(unittest.TestCase):
         self.assertEqual({'id': 4,
                           'info': 10,
                           'composed': {'bit': True,
-                                       'info': None}}, child.serialize())
+                                       'info': -2}}, child.serialize())
         self.assertEqual({'id': 0,
                           'info': 5}, child.parent.serialize())
         with self.assertRaises(ValueError):
@@ -241,11 +251,11 @@ class MemoryTypesTest(unittest.TestCase):
         SetUpTestInjections(memory_files={MemoryTypes.EEPROM: memory_file_mock})
 
         class Object(MemoryModelDefinition):
-            class _Composed(CompositeMemoryModelDefinition):
+            class _ObjectComposed(CompositeMemoryModelDefinition):
                 field_0 = CompositeNumberField(start_bit=0, width=8, value_factor=2)
                 field_1 = CompositeNumberField(start_bit=0, width=8, value_offset=-1, value_factor=2)
 
-            composed = _Composed(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (id, 0)))
+            composed = _ObjectComposed(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (id, 0)))
 
         instance = Object(0)
         self.assertEqual(0, instance.composed.field_0)

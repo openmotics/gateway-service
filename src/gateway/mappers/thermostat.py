@@ -89,7 +89,7 @@ class ThermostatMapper(object):
             return None
         if amount_of_entries < 5:
             logger.warning('Not enough data to map day schedule. Returning best effort data.')
-            first_value = schedule.itervalues().next()
+            first_value = schedule[list(schedule.keys())[0]]
             return ThermostatScheduleDTO(temp_night=first_value,
                                          start_day_1='42:30',
                                          end_day_1='42:30',

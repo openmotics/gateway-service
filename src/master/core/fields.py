@@ -140,7 +140,7 @@ class WordField(Field):
     def encode_bytes(cls, value):
         if not (0 <= value <= 65535):
             raise ValueError('Value `{0}` out of limits: 0 <= value <= 65535'.format(value))
-        return [value / 256, value % 256]
+        return [value // 256, value % 256]
 
     @classmethod
     def decode_bytes(cls, data):

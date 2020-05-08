@@ -67,6 +67,9 @@ python2 master_core_tests/ucan_communicator_tests.py
 echo "Running Core memory file tests"
 python2 master_core_tests/memory_file_tests.py
 
+echo "Running Core memory types tests"
+python2 master_core_tests/memory_types_tests.py
+
 echo "Running Core api field tests"
 python2 master_core_tests/api_field_tests.py
 
