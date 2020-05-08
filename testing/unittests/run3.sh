@@ -16,15 +16,16 @@ pytest master_tests/outputs_tests.py --log-level=DEBUG --durations=2 --junit-xml
 echo "Running inputs tests"
 pytest master_tests/inputs_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterInputsTest.xml
 
-echo "Running passthrough tests"
+#echo "Running passthrough tests"
 #pytest master_tests/passthrough_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterPassthroughTest.xml
 
 echo "Running eeprom controller tests"
 pytest master_tests/eeprom_controller_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterEEPROMControllerTest.xml
+
 echo "Running eeprom extension tests"
 pytest master_tests/eeprom_extension_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterEEPROMExtensionTest.xml
 
-echo "Running users tests"
+#echo "Running users tests"
 #pytest gateway_tests/users_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/GatewayUsersTest.xml
 
 #echo "Running scheduling tests"
@@ -48,7 +49,7 @@ pytest power_tests/time_keeper_tests.py --log-level=DEBUG --durations=2 --junit-
 echo "Running plugin interfaces tests"
 pytest plugins_tests/interfaces_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/PluginsInterfacesTest.xml
 
-echo "Running pulse counter controller tests"
+#echo "Running pulse counter controller tests"
 #python3 gateway_tests/pulses_tests.py
 
 #echo "Running classic controller tests"
@@ -60,17 +61,20 @@ echo "Running pulse counter controller tests"
 #echo "Running observer tests"
 #python3 gateway/observer_test.py
 
-echo "Running Core uCAN tests"
+#echo "Running Core uCAN tests"
 #python3 master_core_tests/ucan_communicator_tests.py
 
 #echo "Running Core memory file tests"
 #python3 master_core_tests/memory_file_tests.py
 
-echo "Running Core api field tests"
-#python3 master_core_tests/api_field_tests.py
+echo "Running Core memory types tests"
+pytest master_core_tests/memory_types_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/CoreMemoryTypesTest.xml
+
+#echo "Running Core api field tests"
+#pytest master_core_tests/api_field_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/CoreAPIFieldsTest.xml
 
 echo "running Core communicator tests"
-pytest master_core_tests/core_communicator_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterCoreCommunicator.xml
+pytest master_core_tests/core_communicator_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterCoreCommunicatorTest.xml
 
 #echo "Running metrics tests"
 #python3 gateway_tests/metrics_tests.py

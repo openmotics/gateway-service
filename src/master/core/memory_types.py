@@ -338,7 +338,7 @@ class MemoryWordField(MemoryField):
         max_value = 2 ** 16 - 1
         if not (0 <= value <= max_value):
             raise ValueError('Value {0} out of limits: 0 <= value <= {1}'.format(value, max_value))
-        return [value / 256, value % 256]
+        return [value // 256, value % 256]
 
     @classmethod
     def decode(cls, data):
@@ -352,15 +352,15 @@ class Memory3BytesField(MemoryField):
     @classmethod
     def encode(cls, value):
         max_value = 2 ** 24 - 1
-        if not (0 <= value < max_value):
+        if not (0 <= value <= max_value):
             raise ValueError('Value {0} out of limits: 0 <= value <= {1}'.format(value, max_value))
-        ms_byte = value / (256 * 256)
+        ms_byte = value // (256 * 256)
         rest = value % (256 * 256)
-        return [ms_byte, rest / 256, rest % 256]
+        return [ms_byte, rest // 256, rest % 256]
 
     @classmethod
     def decode(cls, data):
-        return (data[0] * 256 * 266) + (data[1] * 256) + data[2]
+        return (data[0] * 256 * 256) + (data[1] * 256) + data[2]
 
 
 class MemoryByteArrayField(MemoryField):
@@ -370,13 +370,34 @@ class MemoryByteArrayField(MemoryField):
     def encode(self, value):
         if len(value) != self._length:
             raise ValueError('Value {0} should be an array of {1} items with 0 <= item <= 255'.format(value, self._length))
+        data = []
         for item in value:
-            if not (0 <= item <= 255):
-                raise ValueError('One of the items {0} in value is out of limits: 0 <= item <= 255'.format(value))
-        return value
+            data += MemoryByteField.encode(item)
+        return data
 
     def decode(self, data):
         return data
+
+
+class MemoryWordArrayField(MemoryField):
+    def __init__(self, memory_type, address_spec, length):
+        super(MemoryWordArrayField, self).__init__(memory_type, address_spec, length * 2)
+        self._word_length = length
+
+    def encode(self, value):
+        max_value = 2 ** 16 - 1
+        if len(value) != self._word_length:
+            raise ValueError('Value {0} should be an array of {1} items with 0 <= item <= {2}'.format(value, self._word_length, max_value))
+        data = []
+        for item in value:
+            data += MemoryWordField.encode(item)
+        return data
+
+    def decode(self, data):
+        value = []
+        for i in range(0, len(data), 2):
+            value.append(MemoryWordField.decode(data[i:i + 2]))
+        return value
 
 
 class MemoryBasicActionField(MemoryByteArrayField):
@@ -508,7 +529,7 @@ class CompositeNumberField(CompositeField):
             return current_composition
         if self._max_value is not None and not (0 <= value <= self._max_value):
             raise ValueError('Value out of limits: 0 <= value <= {0}'.format(self._max_value))
-        value = (((value + self._value_offset) / self._value_factor) << self._start_bit) & self._mask
+        value = (((value + self._value_offset) // self._value_factor) << self._start_bit) & self._mask
         current_composition = current_composition & ~self._mask & (2 ** composition_width - 1)
         return current_composition | value
 

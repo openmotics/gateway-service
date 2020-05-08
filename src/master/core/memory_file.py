@@ -89,7 +89,7 @@ class MemoryFile(object):
     def read_page(self, page):
         def _read_page():
             page_data = []
-            for i in range(self._page_length / 32):
+            for i in range(self._page_length // 32):
                 page_data += self._core_communicator.do_command(
                     CoreAPI.memory_read(),
                     {'type': self.type, 'page': page, 'start': i * 32, 'length': 32}
@@ -108,7 +108,7 @@ class MemoryFile(object):
             self._cache[page] = data
 
         length = 32
-        for i in range(self._page_length / length):
+        for i in range(self._page_length // length):
             start = i * length
             self._core_communicator.do_command(
                 CoreAPI.memory_write(length),
