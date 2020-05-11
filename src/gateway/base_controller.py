@@ -52,7 +52,8 @@ class BaseController(object):
 
     def _handle_master_event(self, master_event):  # type: (MasterEvent) -> None
         if master_event.type in [MasterEvent.Types.EEPROM_CHANGE, MasterEvent.Types.MODULE_DISCOVERY]:
-            self._sync_thread.request_single_run()
+            if self._sync_thread is not None:
+                self._sync_thread.request_single_run()
 
     def start(self):
         self._sync_thread = DaemonThread(name='ORM syncer for {0}'.format(self.__class__.__name__),
