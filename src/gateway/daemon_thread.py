@@ -54,6 +54,7 @@ class DaemonThread(object):
 
     def sleep(self, timeout):
         # type: (float) -> None
+        self._tick.clear()
         self._tick.wait(timeout)
 
     def set_interval(self, interval):
