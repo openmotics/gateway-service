@@ -58,7 +58,7 @@ def test_status_timezone(toolbox, set_timezone):
     assert 'timezone' in data
     assert data['timezone'] == 'UTC'
 
-    now = datetime.strptime(datetime.now().strftime('%H:%M'), '%H:%M')
+    now = datetime.strptime(datetime.utcnow().strftime('%H:%M'), '%H:%M')
     data = toolbox.dut.get('/get_status')
     assert 'time' in data
     time = datetime.strptime(data['time'], '%H:%M')

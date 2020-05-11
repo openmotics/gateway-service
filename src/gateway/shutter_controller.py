@@ -82,8 +82,8 @@ class ShutterController(BaseController):
     # Update internal shutter configuration cache
 
     def _handle_master_event(self, event):  # type: (MasterEvent) -> None
+        super(ShutterController, self)._handle_master_event(event)
         if event.type == MasterEvent.Types.EEPROM_CHANGE:
-            self.sync_orm()
             self.update_config(self.load_shutters())
         if event.type == MasterEvent.Types.SHUTTER_CHANGE:
             self._report_shutter_state(event.data['id'], event.data['status'])
