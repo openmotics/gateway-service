@@ -131,6 +131,11 @@ class PulseCounter(BaseModel):
     room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='pulse_counters')
 
 
+class GroupAction(BaseModel):
+    id = PrimaryKeyField()
+    number = IntegerField(unique=True)
+
+
 class ThermostatGroup(BaseModel):
     id = PrimaryKeyField()
     number = IntegerField(unique=True)

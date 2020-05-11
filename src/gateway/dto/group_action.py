@@ -13,8 +13,25 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from gateway.hal.mappers_core.output import OutputMapper
-from gateway.hal.mappers_core.shutter import ShutterMapper
-from gateway.hal.mappers_core.input import InputMapper
-from gateway.hal.mappers_core.sensor import SensorMapper
-from gateway.hal.mappers_core.group_action import GroupActionMapper
+"""
+GroupAction DTO
+"""
+from gateway.dto.base import BaseDTO
+
+if False:  # MYPY
+    from typing import Optional, List
+
+
+class GroupActionDTO(BaseDTO):
+    def __init__(self, id, name='', actions=None):
+        # The argument `actions` is None since you should not set a reference type as default value
+        self.id = id  # type: int
+        self.name = name  # type: str
+        self.actions = [] if actions is None else actions  # type: List[int]
+
+    def __eq__(self, other):
+        if not isinstance(other, GroupActionDTO):
+            return False
+        return (self.id == other.id and
+                self.name == other.name and
+                self.actions == other.actions)

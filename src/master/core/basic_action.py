@@ -19,42 +19,49 @@ Contains Basic Action related code
 from __future__ import absolute_import
 from master.core.memory_types import MemoryByteField, MemoryWordField
 
+if False:  # MYPY
+    from typing import List, Optional, Any
+
 
 class BasicAction(object):
-    def __init__(self, action_type, action, device_nr=None, extra_parameter=None):
-        self._action_type = MemoryByteField.encode(action_type)
-        self._action = MemoryByteField.encode(action)
-        self._device_nr = MemoryWordField.encode(device_nr if device_nr is not None else 0)
-        self._extra_parameter = MemoryWordField.encode(extra_parameter if extra_parameter is not None else 0)
+    def __init__(self, action_type, action, device_nr=None, extra_parameter=None):  # type: (int, int, Optional[int], Optional[int]) -> None
+        self._action_type = MemoryByteField.encode(action_type)  # type: List[int]
+        self._action = MemoryByteField.encode(action)  # type: List[int]
+        self._device_nr = MemoryWordField.encode(device_nr if device_nr is not None else 0)  # type: List[int]
+        self._extra_parameter = MemoryWordField.encode(extra_parameter if extra_parameter is not None else 0)  # type: List[int]
 
     @property
-    def action_type(self):
+    def action_type(self):  # type: () -> int
         return MemoryByteField.decode(self._action_type)
 
     @property
-    def action(self):
+    def action(self):  # type: () -> int
         return MemoryByteField.decode(self._action)
 
     @property
-    def device_nr(self):
+    def device_nr(self):  # type: () -> int
         return MemoryWordField.decode(self._device_nr)
 
     @property
-    def extra_parameter(self):
+    def extra_parameter(self):  # type: () -> int
         return MemoryWordField.decode(self._extra_parameter)
 
-    def encode(self):
+    def encode(self):  # type: () -> List[int]
         return self._action_type + self._action + self._device_nr + self._extra_parameter
 
+    @property
+    def in_use(self):  # type: () -> bool
+        return self.encode() != [255, 255, 255, 255, 255, 255]
+
     @staticmethod
-    def decode(data):
+    def decode(data):  # type: (List[int]) -> BasicAction
         basic_action = BasicAction(action_type=data[0],
                                    action=data[1])
         basic_action._device_nr = data[2:4]
         basic_action._extra_parameter = data[4:6]
         return basic_action
 
-    def __eq__(self, other):
+    def __eq__(self, other):  # type: (Any) -> bool
         if not isinstance(other, BasicAction):
             return False
         return self.encode() == other.encode()

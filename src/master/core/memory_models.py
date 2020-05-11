@@ -178,7 +178,7 @@ class CanControlModuleConfiguration(MemoryModelDefinition):
 
 class ExtraSensorConfiguration(MemoryModelDefinition):
     grouaction_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (471, id * 2))  # 471, 0-255
-    name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (476 + id // 16, (id % 16) * 16), length=16)  # 472-479, 0-255
+    name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (476 + id // 16, (id % 16) * 16), length=16)  # 476-479, 0-255
 
 
 class ValidationBitConfiguration(MemoryModelDefinition):
@@ -189,3 +189,11 @@ class ValidationBitConfiguration(MemoryModelDefinition):
 class GroupActionAllocationTable(MemoryModelDefinition):
     addresses_0 = MemoryWordArrayField(MemoryTypes.EEPROM, address_spec=(256, 0), length=256)
     addresses_1 = MemoryWordArrayField(MemoryTypes.EEPROM, address_spec=(257, 0), length=256)
+
+
+class GroupActionConfiguration(MemoryModelDefinition):
+    name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (259 + id // 16, (id % 16) * 16), length=16)  # 259-274, 0-255
+
+
+class GroupActionBasicAction(MemoryModelDefinition):
+    basic_action = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (283 + id // 42, (id % 42) * 6))  # 283-382, 0-251

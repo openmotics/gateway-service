@@ -39,7 +39,7 @@ from gateway.api.serializers import (
     OutputSerializer, InputSerializer,
     ShutterSerializer, ShutterGroupSerializer,
     ThermostatSerializer, RoomSerializer, SensorSerializer,
-    PulseCounterSerializer
+    PulseCounterSerializer, GroupActionSerializer
 )
 from gateway.dto import RoomDTO
 from gateway.enums import ShutterEnums
@@ -69,6 +69,7 @@ if False:
     from gateway.room_controller import RoomController
     from gateway.sensor_controller import SensorController
     from gateway.pulse_counter_controller import PulseCounterController
+    from gateway.group_action_controller import GroupActionController
     from plugins.base import PluginController
 
 logger = logging.getLogger("openmotics")
@@ -277,7 +278,7 @@ class WebInterface(object):
                  message_client=INJECTED, configuration_controller=INJECTED, scheduling_controller=INJECTED,
                  thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED,
                  room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
-                 pulse_counter_controller=INJECTED):
+                 pulse_counter_controller=INJECTED, group_action_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -291,6 +292,7 @@ class WebInterface(object):
         self._input_controller = input_controller  # type: InputController
         self._sensor_controller = sensor_controller  # type: SensorController
         self._pulse_counter_controller = pulse_counter_controller  # type: PulseCounterController
+        self._group_action_controller = group_action_controller  # type: GroupActionController
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
@@ -906,7 +908,8 @@ class WebInterface(object):
         :param action_number: The number provided to the basic action, its meaning depends on the action_type.
         :type action_number: int
         """
-        return self._gateway_api.do_basic_action(action_type, action_number)
+        self._gateway_api.do_basic_action(action_type, action_number)
+        return {}
 
     @openmotics_api(auth=True, check=types(group_action_id=int))
     def do_group_action(self, group_action_id):
@@ -916,7 +919,8 @@ class WebInterface(object):
         :param group_action_id: The id of the group action
         :type group_action_id: int
         """
-        return self._gateway_api.do_group_action(group_action_id)
+        self._gateway_api.do_group_action(group_action_id)
+        return {}
 
     @openmotics_api(auth=True, check=types(status=bool))
     def set_master_status_leds(self, status):
@@ -1477,53 +1481,42 @@ class WebInterface(object):
         self._thermostat_controller.v0_set_rtd10_cooling_configurations(config)
         return {}
 
+    # Group Actions
+
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_group_action_configuration(self, id, fields=None):
+    def get_group_action_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
         Get a specific group_action_configuration defined by its id.
-
         :param id: The id of the group_action_configuration
-        :type id: int
-        :param fields: The field of the group_action_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': group_action_configuration dict: contains 'id' (Id), 'actions' (Actions[16]), 'name' (String[16])
-        :rtype: dict
+        :param fields: The field of the group_action_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_group_action_configuration(id, fields)}
+        return {'config': GroupActionSerializer.serialize(group_action_dto=self._group_action_controller.load_group_action(id),
+                                                          fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_group_action_configurations(self, fields=None):
+    def get_group_action_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
         Get all group_action_configurations.
-
-        :param fields: The field of the group_action_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of group_action_configuration dict: contains 'id' (Id), 'actions' (Actions[16]), 'name' (String[16])
-        :rtype: dict
+        :param fields: The field of the group_action_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_group_action_configurations(fields)}
+        return {'config': [GroupActionSerializer.serialize(group_action_dto=group_action, fields=fields)
+                           for group_action in self._group_action_controller.load_group_actions()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_group_action_configuration(self, config):
-        """
-        Set one group_action_configuration.
-
-        :param config: The group_action_configuration to set: group_action_configuration dict: contains 'id' (Id), 'actions' (Actions[16]), 'name' (String[16])
-        :type config: dict
-        """
-        self._gateway_api.set_group_action_configuration(config)
+    def set_group_action_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one group_action_configuration. """
+        data = GroupActionSerializer.deserialize(config)
+        self._group_action_controller.save_group_actions([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_group_action_configurations(self, config):
-        """
-        Set multiple group_action_configurations.
-
-        :param config: The list of group_action_configurations to set: list of group_action_configuration dict: contains 'id' (Id), 'actions' (Actions[16]), 'name' (String[16])
-        :type config: list
-        """
-        self._gateway_api.set_group_action_configurations(config)
+    def set_group_action_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple group_action_configurations. """
+        data = [GroupActionSerializer.deserialize(entry) for entry in config]
+        self._group_action_controller.save_group_actions([data])
         return {}
+
+    # Schedules
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
     def get_scheduled_action_configuration(self, id, fields=None):

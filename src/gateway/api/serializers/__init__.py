@@ -21,3 +21,4 @@ from gateway.api.serializers.room import RoomSerializer
 from gateway.api.serializers.input import InputSerializer
 from gateway.api.serializers.sensor import SensorSerializer
 from gateway.api.serializers.pulse_counter import PulseCounterSerializer
+from gateway.api.serializers.group_action import GroupActionSerializer

@@ -26,11 +26,11 @@ from gateway.dto import (
     OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
     ThermostatDTO, SensorDTO,
-    PulseCounterDTO
+    PulseCounterDTO, GroupActionDTO
 )
 from gateway.hal.mappers_core import (
     OutputMapper, ShutterMapper, InputMapper,
-    SensorMapper
+    SensorMapper, GroupActionMapper
 )
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
@@ -46,6 +46,7 @@ from master.core.memory_models import (
     GlobalConfiguration, InputConfiguration, OutputConfiguration,
     SensorConfiguration, ShutterConfiguration
 )
+from master.core.group_action import GroupActionController
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
@@ -583,6 +584,28 @@ class MasterCoreController(MasterController):
         # TODO: Implement PulseCounters
         return {}
 
+    # (Group)Actions
+
+    def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
+        # TODO: Implement
+        raise NotImplementedError()
+
+    def do_group_action(self, group_action_id):  # type: (int) -> None
+        # TODO: Implement
+        raise NotImplementedError()
+
+    def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
+        return GroupActionMapper.orm_to_dto(GroupActionController.load_group_action(group_action_id))
+
+    def load_group_actions(self):  # type: () -> List[GroupActionDTO]
+        return [GroupActionMapper.orm_to_dto(o)
+                for o in GroupActionController.load_group_actions()]
+
+    def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
+        for group_action_dto, fields in group_actions:
+            group_action = GroupActionMapper.dto_to_orm(group_action_dto, fields)
+            GroupActionController.save_group_action(group_action, fields)
+
     # Virtual modules
 
     def add_virtual_output_module(self):
@@ -665,12 +688,6 @@ class MasterCoreController(MasterController):
         raise NotImplementedError()
 
     def set_status_leds(self, status):
-        raise NotImplementedError()
-
-    def do_basic_action(self, action_type, action_number):
-        raise NotImplementedError()
-
-    def do_group_action(self, group_action_id):
         raise NotImplementedError()
 
     def set_all_lights_off(self):

@@ -26,14 +26,14 @@ from gateway.dto import (
     OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
     ThermostatDTO, SensorDTO,
-    PulseCounterDTO
+    PulseCounterDTO, GroupActionDTO
 )
 from gateway.enums import ShutterEnums
 from gateway.hal.mappers_classic import (
     OutputMapper, InputMapper,
     ShutterGroupMapper, ShutterMapper,
     ThermostatMapper, SensorMapper,
-    PulseCounterMapper
+    PulseCounterMapper, GroupActionMapper
 )
 from gateway.config import ConfigurationController
 from gateway.hal.master_controller import MasterController
@@ -1022,16 +1022,14 @@ class MasterClassicController(MasterController):
         )
         return dict()
 
-    # Actions
+    # (Group)Actions
 
-    def do_basic_action(self, action_type, action_number):
-        """ Execute a basic action.
+    def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
+        """
+        Execute a basic action.
 
         :param action_type: The type of the action as defined by the master api.
-        :type action_type: Integer [0, 254]
-        :param action_number: The number provided to the basic action, its meaning depends on the \
-        action_type.
-        :type action_number: Integer [0, 254]
+        :param action_number: The number provided to the basic action, its meaning depends on the action_type.
         """
         if action_type < 0 or action_type > 254:
             raise ValueError('action_type not in [0, 254]: %d' % action_type)
@@ -1045,15 +1043,7 @@ class MasterClassicController(MasterController):
              'action_number': action_number}
         )
 
-        return dict()
-
-    def do_group_action(self, group_action_id):
-        """ Execute a group action.
-
-        :param group_action_id: The id of the group action
-        :type group_action_id: Integer (0 - 159)
-        :returns: empty dict.
-        """
+    def do_group_action(self, group_action_id):  # type: (int) -> None
         if group_action_id < 0 or group_action_id > 159:
             raise ValueError('group_action_id not in [0, 160]: %d' % group_action_id)
 
@@ -1063,25 +1053,21 @@ class MasterClassicController(MasterController):
              'action_number': group_action_id}
         )
 
-        return dict()
+    def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.GroupActionConfiguration, group_action_id)
+        return GroupActionMapper.orm_to_dto(classic_object)
 
-    # Actions functions
+    def load_group_actionss(self):  # type: () -> List[GroupActionDTO]
+        return [GroupActionMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.GroupActionConfiguration)]
 
-    def load_group_action_configuration(self, group_action_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        return self._eeprom_controller.read(GroupActionConfiguration, group_action_id, fields).serialize()
+    def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
+        batch = []
+        for group_action, fields in group_actions:
+            batch.append(GroupActionMapper.dto_to_orm(group_action, fields))
+        self._eeprom_controller.write_batch(batch)
 
-    def load_group_action_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        return [o.serialize() for o in self._eeprom_controller.read_all(GroupActionConfiguration, fields)]
-
-    def save_group_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(GroupActionConfiguration.deserialize(config))
-
-    def save_group_action_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        self._eeprom_controller.write_batch([GroupActionConfiguration.deserialize(o) for o in config])
+    # Schedules
 
     def load_scheduled_action_configuration(self, scheduled_action_id, fields=None):
         # type: (int, Any) -> Dict[str,Any]
