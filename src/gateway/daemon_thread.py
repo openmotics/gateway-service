@@ -63,6 +63,9 @@ class DaemonThread(object):
         if changed:
             self._tick.set()
 
+    def request_single_run(self):
+        self._tick.set()
+
     def _run(self):
         # type: () -> None
         backoff = 0

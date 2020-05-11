@@ -44,6 +44,7 @@ class MasterEvent(object):
         INPUT_CHANGE = 'INPUT_CHANGE'
         OUTPUT_CHANGE = 'OUTPUT_CHANGE'
         SHUTTER_CHANGE = 'SHUTTER_CHANGE'
+        MODULE_DISCOVERY = 'MODULE_DISCOVERY'
 
     def __init__(self, event_type, data):
         self.type = event_type

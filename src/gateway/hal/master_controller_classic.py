@@ -957,7 +957,6 @@ class MasterClassicController(MasterController):
         self._discover_mode_timer.start()
 
         self._module_log = []
-
         return {'status': ret['resp']}
 
     def module_discover_stop(self):
@@ -969,6 +968,10 @@ class MasterClassicController(MasterController):
         self._eeprom_controller.invalidate_cache()
         self._eeprom_controller.dirty = True
         ret = self._master_communicator.do_command(master_api.module_discover_stop())
+
+        for callback in self._event_callbacks:
+            callback(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
+
         self._module_log = []
         return {'status': ret['resp']}
 
