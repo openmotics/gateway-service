@@ -301,9 +301,13 @@ class WebInterface(object):
 
         self._ws_metrics_registered = False
         self._power_dirty = False
+        self._service_state = False
 
     def in_authorized_mode(self):
         return self._message_client.get_state('led_service', {}).get('authorized_mode', False)
+
+    def set_service_state(self, state):
+        self._service_state = state
 
     def distribute_metric(self, metric):
         try:
@@ -2234,7 +2238,7 @@ class WebInterface(object):
     @openmotics_api(auth=False)
     def health_check(self):
         """ Requests the state of the various services and checks the returned value for the global state """
-        health = {'openmotics': {'state': True}}
+        health = {'openmotics': {'state': self._service_state}}
         try:
             state = self._message_client.get_state('vpn_service', {})
             health['vpn_service'] = {'state': state.get('last_cycle', 0) > time.time() - 300}

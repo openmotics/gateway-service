@@ -253,6 +253,7 @@ class OpenmoticsService(object):
                 scheduling_controller=INJECTED,  # type: SchedulingController
                 metrics_collector=INJECTED,  # type: MetricsCollector
                 web_service=INJECTED,  # type: WebService
+                web_interface=INJECTED,  # type: WebInterface
                 watchdog=INJECTED,  # type: Watchdog
                 plugin_controller=INJECTED,  # type: PluginController
                 communication_led_controller=INJECTED,  # type: CommunicationLedController
@@ -300,6 +301,7 @@ class OpenmoticsService(object):
         sensor_controller.start()
         shutter_controller.start()
 
+        web_interface.set_service_state(True)
         signal_request = {'stop': False}
 
         def stop(signum, frame):
