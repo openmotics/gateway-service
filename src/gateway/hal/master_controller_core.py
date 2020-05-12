@@ -199,6 +199,8 @@ class MasterCoreController(MasterController):
     def _check_master_time(self):
         # type: () -> None
         date_time = self._master_communicator.do_command(CoreAPI.get_date_time(), {})
+        if date_time is None:
+            return
         core_value = datetime(2000 + date_time['year'], max(1, date_time['month']), max(1, date_time['day']),
                               date_time['hours'], date_time['minutes'], date_time['seconds'])
         core_weekday = date_time['weekday']
