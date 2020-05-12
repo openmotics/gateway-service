@@ -246,7 +246,8 @@ class MasterCoreController(MasterController):
         self._output_last_updated = 0
 
     def get_firmware_version(self):
-        return 0, 0, 0  # TODO
+        version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
+        return tuple(version.split('.'))
 
     # Memory (eeprom/fram)
 
@@ -626,16 +627,16 @@ class MasterCoreController(MasterController):
         raise NotImplementedError()
 
     def get_status(self):
-        # Used to synchronize, execute a trivial command since this
-        # isn't implemented yet
-        cmd = CoreAPI.general_configuration_number_of_modules()
-        self._master_communicator.do_command(cmd, {})
-        # TODO: implement
-        return {'time': '%02d:%02d' % (0, 0),
-                'date': '%02d/%02d/%d' % (0, 0, 0),
-                'mode': 42,
-                'version': '%d.%d.%d' % (0, 0, 1),
-                'hw_version': 1}
+        firmware_version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
+        bus_mode = self._master_communicator.do_command(CoreAPI.get_rs485_bus_mode(), {})['mode']
+        date_time = self._master_communicator.do_command(CoreAPI.get_date_time(), {})
+        return {'time': '{0:02}:{1:02}'.format(date_time['hours'], date_time['minutes']),
+                'date': '{0:02}/{1:02}/20{2:02}'.format(date_time['day'], date_time['month'], date_time['year']),
+                'mode': {CoreAPI.RS485Mode.INIT: 'I',
+                         CoreAPI.RS485Mode.LIVE: 'L',
+                         CoreAPI.RS485Mode.TRANSPARENT: 'T'}[bus_mode],
+                'version': firmware_version,
+                'hw_version': 1}  # TODO: Hardware version
 
     def reset(self):
         # type: () -> None

@@ -45,6 +45,7 @@ class Error(object):
         SM_EXECUTE_GROUP_ACTION = 'SM_EXECUTE_GROUP_ACTION'
         SM_GROUP_DELAY_QUEUE = 'SM_GROUP_DELAY_QUEUE'
         SM_CAN_TX_QUEUE = 'SM_CAN_TX_QUEUE'
+        SM_INCORRECT_MODE = 'SM_INCORRECT_MODE'
         MICRO_CAN_WATCHDOG_RESET = 'MICRO_CAN_WATCHDOG_RESET'
         MICRO_CAN_WARM_RESET = 'MICRO_CAN_WARM_RESET'
         MISSING_ENDIF = 'MISSING_ENDIF'
@@ -86,6 +87,7 @@ class Error(object):
                     19: Error.Types.MISSING_ENDIF,
                     20: Error.Types.SM_GROUP_DELAY_QUEUE,
                     21: Error.Types.SM_CAN_TX_QUEUE,
+                    22: Error.Types.SM_INCORRECT_MODE,
                     254: Error.Types.COMMAND_ERROR}
         return type_map.get(self._type, Error.Types.UNKNOWN)
 
@@ -128,6 +130,8 @@ class Error(object):
                     return 'CRC error: An API instruction {0} has generated a CRC error and has not been interpreted'.format(Error._extract_command(self._parameter_b))
                 if self._parameter_b == 10:
                     return 'API parameters send on instruction {0} not in range to be an acceptable value'.format(Error._extract_command(self._parameter_b))
+            if self.type == Error.Types.SM_INCORRECT_MODE:
+                return 'API Instruction SM has set the wrong RS485 mode: {0} vs allowed 0 -> {1}'.format(self._parameter_b, self._parameter_c)
             else:
                 return 'Unknown error type {0}. Parameters {1} / {2} / {3}'.format(self._type, self._parameter_a, self._parameter_b, self._parameter_c)
         except Exception as ex:
