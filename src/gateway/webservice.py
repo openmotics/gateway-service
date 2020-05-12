@@ -912,14 +912,12 @@ class WebInterface(object):
         return {}
 
     @openmotics_api(auth=True, check=types(group_action_id=int))
-    def do_group_action(self, group_action_id):
+    def do_group_action(self, group_action_id):  # type: (int) -> Dict[str, Any]
         """
         Execute a group action.
-
         :param group_action_id: The id of the group action
-        :type group_action_id: int
         """
-        self._gateway_api.do_group_action(group_action_id)
+        self._group_action_controller.do_group_action(group_action_id)
         return {}
 
     @openmotics_api(auth=True, check=types(status=bool))
@@ -1513,7 +1511,7 @@ class WebInterface(object):
     def set_group_action_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
         """ Set multiple group_action_configurations. """
         data = [GroupActionSerializer.deserialize(entry) for entry in config]
-        self._group_action_controller.save_group_actions([data])
+        self._group_action_controller.save_group_actions(data)
         return {}
 
     # Schedules

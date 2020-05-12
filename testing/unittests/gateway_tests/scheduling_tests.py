@@ -32,25 +32,9 @@ from gateway.webservice import WebInterface
 from gateway.scheduling import SchedulingController
 
 
-class GatewayApi(object):
+class SchedulingControllerTest(unittest.TestCase):
     RETURN_DATA = {}
 
-    def get_timezone(self):
-        _ = self
-        return 'Europe/Brussels'
-
-    def do_group_action(self, group_action_id):
-        _ = self
-        GatewayApi.RETURN_DATA['do_group_action'] = group_action_id
-        return {}
-
-    def do_basic_action(self, action_type, action_number):
-        _ = self
-        GatewayApi.RETURN_DATA['do_basic_action'] = (action_type, action_number)
-        return {}
-
-
-class SchedulingControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
@@ -62,19 +46,34 @@ class SchedulingControllerTest(unittest.TestCase):
 
     def setUp(self):
         self._db = "test.schedule.{0}.db".format(time.time())
-        GatewayApi.RETURN_DATA = {}
+        SchedulingControllerTest.RETURN_DATA = {}
         if os.path.exists(self._db):
             os.remove(self._db)
 
     def tearDown(self):
-        GatewayApi.RETURN_DATA = {}
+        SchedulingControllerTest.RETURN_DATA = {}
         if os.path.exists(self._db):
             os.remove(self._db)
 
     def _get_controller(self):
+        def _do_group_action(group_action_id):
+            SchedulingControllerTest.RETURN_DATA['do_group_action'] = group_action_id
+            return {}
+
+        def _do_basic_action(action_type, action_number):
+            SchedulingControllerTest.RETURN_DATA['do_basic_action'] = (action_type, action_number)
+            return {}
+
+        gateway_api = Mock()
+        gateway_api.get_timezone = lambda: 'Europe/Brussels'
+        gateway_api.do_basic_action = _do_basic_action
+
+        group_action_controller = Mock()
+        group_action_controller.do_group_action = _do_group_action
+
         SetUpTestInjections(scheduling_db=self._db,
                             scheduling_db_lock=Lock(),
-                            gateway_api=GatewayApi(),
+                            gateway_api=gateway_api,
                             user_controller=None,
                             maintenance_controller=None,
                             message_client=None,
@@ -85,7 +84,8 @@ class SchedulingControllerTest(unittest.TestCase):
                             room_controller=Mock(),
                             input_controller=Mock(),
                             sensor_controller=Mock(),
-                            pulse_counter_controller=Mock())
+                            pulse_counter_controller=Mock(),
+                            group_action_controller=group_action_controller)
         controller = SchedulingController()
         SetUpTestInjections(scheduling_controller=controller)
         controller.set_webinterface(WebInterface())
@@ -130,7 +130,7 @@ class SchedulingControllerTest(unittest.TestCase):
         self.assertEqual(controller.schedules[0].status, 'ACTIVE')
         controller.start()
         semaphore.acquire()
-        self.assertEqual(GatewayApi.RETURN_DATA['do_group_action'], 1)
+        self.assertEqual(SchedulingControllerTest.RETURN_DATA['do_group_action'], 1)
         self.assertEqual(len(controller.schedules), 1)
         self.assertEqual(controller.schedules[0].name, 'group_action')
         self.assertEqual(controller.schedules[0].status, 'COMPLETED')
@@ -161,7 +161,7 @@ class SchedulingControllerTest(unittest.TestCase):
         self.assertEqual(controller.schedules[0].status, 'ACTIVE')
         controller.start()
         semaphore.acquire()
-        self.assertEqual(GatewayApi.RETURN_DATA['do_basic_action'], (1, 2))
+        self.assertEqual(SchedulingControllerTest.RETURN_DATA['do_basic_action'], (1, 2))
         self.assertEqual(len(controller.schedules), 1)
         self.assertEqual(controller.schedules[0].name, 'basic_action')
         self.assertEqual(controller.schedules[0].status, 'COMPLETED')
@@ -202,7 +202,7 @@ class SchedulingControllerTest(unittest.TestCase):
         self.assertEqual(controller.schedules[0].status, 'ACTIVE')
         controller.start()
         semaphore.acquire()
-        self.assertEqual(GatewayApi.RETURN_DATA['do_basic_action'], (3, 4))
+        self.assertEqual(SchedulingControllerTest.RETURN_DATA['do_basic_action'], (3, 4))
         self.assertEqual(len(controller.schedules), 1)
         self.assertEqual(controller.schedules[0].name, 'local_api')
         self.assertEqual(controller.schedules[0].status, 'COMPLETED')

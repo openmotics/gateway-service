@@ -38,6 +38,9 @@ class GroupActionController(BaseController):
     def __init__(self, master_controller=INJECTED):
         super(GroupActionController, self).__init__(master_controller)
 
+    def do_group_action(self, group_action_id):  # type: (int) -> None
+        self._master_controller.do_group_action(group_action_id)
+
     def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
         group_action = GroupAction.get(number=group_action_id)  # type: GroupAction
         group_action_dto = self._master_controller.load_group_action(group_action_id=group_action.number)

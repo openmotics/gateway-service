@@ -347,10 +347,6 @@ class GatewayApi(object):
     def do_basic_action(self, action_type, action_number):
         return self.__master_controller.do_basic_action(action_type, action_number)
 
-    def do_group_action(self, group_action_id):
-        # TODO: do we need more group actions than just with the master?
-        return self.__master_controller.do_group_action(group_action_id)
-
     # Backup and restore functions
 
     def get_full_backup(self):
@@ -547,51 +543,7 @@ class GatewayApi(object):
         """ Gets the module type for a given Input Module ID """
         return self.__master_controller.get_input_module_type(input_module_id)
 
-    # Group Actions
-
-    def get_group_action_configuration(self, group_action_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        """
-        Get a specific group_action_configuration defined by its id.
-
-        :param group_action_id: The id of the group_action_configuration
-        :type group_action_id: Id
-        :param fields: The field of the group_action_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: group_action_configuration dict: contains 'id' (Id), 'actions' (Actions[16]), 'name' (String[16])
-        """
-        return self.__master_controller.load_group_action_configuration(group_action_id, fields=fields)
-
-    def get_group_action_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        """
-        Get all group_action_configurations.
-
-        :param fields: The field of the group_action_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of group_action_configuration dict: contains 'id' (Id), 'actions' (Actions[16]), 'name' (String[16])
-        """
-        return self.__master_controller.load_group_action_configurations(fields=fields)
-
-    def set_group_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set one group_action_configuration.
-
-        :param config: The group_action_configuration to set
-        :type config: group_action_configuration dict: contains 'id' (Id), 'actions' (Actions[16]), 'name' (String[16])
-        """
-        self.__master_controller.save_group_action_configuration(config)
-
-    def set_group_action_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        """
-        Set multiple group_action_configurations.
-
-        :param config: The list of group_action_configurations to set
-        :type config: list of group_action_configuration dict: contains 'id' (Id), 'actions' (Actions[16]), 'name' (String[16])
-        """
-        self.__master_controller.save_group_action_configurations(config)
+    # Schedules
 
     def get_scheduled_action_configuration(self, scheduled_action_id, fields=None):
         # type: (int, Any) -> Dict[str,Any]
