@@ -268,6 +268,7 @@ class Platform(object):
 
     @staticmethod
     def get_platform():
+        # type: () -> str
         config = ConfigParser()
         config.read(constants.get_config_file())
 
