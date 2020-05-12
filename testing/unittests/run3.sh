@@ -81,3 +81,6 @@ pytest master_core_tests/core_communicator_tests.py --log-level=DEBUG --duration
 
 echo "Running thermostat tests"
 pytest thermostat_tests/gateway_mapping_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/GatewayThermostatMappingTest.xml
+
+echo "Running master_tool.py tests"
+pytest master_tool_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterToolTests.xml
