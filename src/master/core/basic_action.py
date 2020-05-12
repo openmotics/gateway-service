@@ -51,7 +51,7 @@ class BasicAction(object):
 
     @property
     def in_use(self):  # type: () -> bool
-        return self.encode() != [255, 255, 255, 255, 255, 255]
+        return self._action_type != 255 and self.action != 255
 
     @staticmethod
     def decode(data):  # type: (List[int]) -> BasicAction
