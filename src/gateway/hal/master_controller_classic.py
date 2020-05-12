@@ -35,7 +35,6 @@ from gateway.hal.mappers_classic import (
     ThermostatMapper, SensorMapper,
     PulseCounterMapper
 )
-from gateway.config import ConfigurationController
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
@@ -56,6 +55,7 @@ from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Tuple
+    from gateway.config import ConfigurationController
 
 logger = logging.getLogger("openmotics")
 

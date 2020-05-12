@@ -71,18 +71,21 @@ class BaseController(object):
 
         for structure in self.SYNC_STRUCTURES:
             orm_model = structure.orm_model
-            name = structure.name
-            skip = structure.skip
+            try:
+                name = structure.name
+                skip = structure.skip
 
-            logger.info('ORM sync ({0})'.format(orm_model.__name__))
+                logger.info('ORM sync ({0})'.format(orm_model.__name__))
 
-            ids = []
-            for dto in getattr(self._master_controller, 'load_{0}s'.format(name))():
-                if skip is not None and skip(dto):
-                    continue
-                id_ = dto.id
-                ids.append(id_)
-                orm_model.get_or_create(number=id_)  # type: ignore
-            orm_model.delete().where(orm_model.number.not_in(ids)).execute()  # type: ignore
+                ids = []
+                for dto in getattr(self._master_controller, 'load_{0}s'.format(name))():
+                    if skip is not None and skip(dto):
+                        continue
+                    id_ = dto.id
+                    ids.append(id_)
+                    orm_model.get_or_create(number=id_)  # type: ignore
+                orm_model.delete().where(orm_model.number.not_in(ids)).execute()  # type: ignore
 
-            logger.info('ORM sync ({0}): completed'.format(orm_model.__name__))
+                logger.info('ORM sync ({0}): completed'.format(orm_model.__name__))
+            except Exception:
+                logger.exception('ORM sync ({0}): Failed'.format(orm_model.__name__))
