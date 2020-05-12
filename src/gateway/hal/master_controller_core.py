@@ -20,6 +20,7 @@ import logging
 import time
 from threading import Thread
 from peewee import DoesNotExist
+from datetime import datetime
 
 from gateway.enums import ShutterEnums
 from gateway.dto import (
@@ -76,6 +77,7 @@ class MasterCoreController(MasterController):
         self._sensor_states = {}
         self._shutters_interval = 600
         self._shutters_last_updated = 0
+        self._time_last_updated = 0
         self._output_shutter_map = {}  # type: Dict[int, int]
 
         self._memory_files[MemoryTypes.EEPROM].subscribe_eeprom_change(self._handle_eeprom_change)
@@ -160,6 +162,8 @@ class MasterCoreController(MasterController):
         while True:
             try:
                 # Refresh if required
+                if self._time_last_updated + 300 < time.time():
+                    self._check_master_time()
                 if self._refresh_input_states():
                     self._set_master_state(True)
                 if self._output_last_updated + self._output_interval < time.time():
@@ -191,6 +195,33 @@ class MasterCoreController(MasterController):
         cmd = CoreAPI.general_configuration_number_of_modules()
         module_count = self._master_communicator.do_command(cmd, {})[module_type]
         return range(module_count * amount_per_module)
+
+    def _check_master_time(self):
+        # type: () -> None
+        date_time = self._master_communicator.do_command(CoreAPI.get_date_time(), {})
+        core_value = datetime(2000 + date_time['year'], max(1, date_time['month']), max(1, date_time['day']),
+                              date_time['hours'], date_time['minutes'], date_time['seconds'])
+        core_weekday = date_time['weekday']
+
+        now = datetime.now()
+        expected_weekday = now.weekday() + 1
+        expected_value = now.replace(microsecond=0)
+
+        sync = False
+        if abs((core_value - expected_value).total_seconds()) > 180:  # Allow 3 minutes difference
+            sync = True
+        if core_weekday != expected_weekday:
+            sync = True
+
+        if sync is True:
+            if expected_value.hour == 0 and expected_value.minute < 15:
+                logger.info('Skip setting time between 00:00 and 00:15')
+            else:
+                logger.info('Time - core: {0} ({1}) - gateway: {2} ({3})'.format(
+                    core_value, core_weekday, expected_value, expected_weekday)
+                )
+                self.sync_time()
+        self._time_last_updated = time.time()
 
     #######################
     # Internal management #
@@ -248,6 +279,16 @@ class MasterCoreController(MasterController):
     def get_firmware_version(self):
         version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
         return tuple(version.split('.'))
+
+    def sync_time(self):
+        # type: () -> None
+        logger.info('Setting the time on the core.')
+        now = datetime.now()
+        self._master_communicator.do_command(
+            CoreAPI.set_date_time(),
+            {'hours': now.hour, 'minutes': now.minute, 'seconds': now.second,
+             'weekday': now.isoweekday(), 'day': now.day, 'month': now.month, 'year': now.year % 100}
+        )
 
     # Memory (eeprom/fram)
 

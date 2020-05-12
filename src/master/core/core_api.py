@@ -122,7 +122,7 @@ class CoreAPI(object):
     @staticmethod
     def set_date_time():
         """ Writes the date/time from the Core """
-        return CoreCommandSpec(instruction='TR',
+        return CoreCommandSpec(instruction='TW',
                                request_fields=[LiteralBytesField(0),
                                                ByteField('hours'), ByteField('minutes'), ByteField('seconds'),
                                                ByteField('weekday'), ByteField('day'), ByteField('month'), ByteField('year')],
