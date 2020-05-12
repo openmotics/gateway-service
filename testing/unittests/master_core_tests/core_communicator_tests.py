@@ -32,7 +32,7 @@ class CoreCommunicatorTest(unittest.TestCase):
         communicator = CoreCommunicator(controller_serial=mock.Mock())
         with mock.patch.object(communicator, 'discard_cid') as discard:
             self.assertRaises(AttributeError, communicator.do_command, None, {})
-            discard.assert_called_with(2)
+            discard.assert_called_with(3)
 
 
 if __name__ == "__main__":
