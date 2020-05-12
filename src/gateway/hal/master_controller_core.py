@@ -587,12 +587,15 @@ class MasterCoreController(MasterController):
     # (Group)Actions
 
     def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
-        # TODO: Implement
-        raise NotImplementedError()
+        basic_actions = GroupActionMapper.classic_actions_to_core_actions([action_type, action_number])
+        for basic_action in basic_actions:
+            self._master_communicator.do_basic_action(action_type=basic_action.action_type,
+                                                      action=basic_action.action,
+                                                      device_nr=basic_action.device_nr,
+                                                      extra_parameter=basic_action.extra_parameter)
 
     def do_group_action(self, group_action_id):  # type: (int) -> None
-        # TODO: Implement
-        raise NotImplementedError()
+        self._master_communicator.do_basic_action(action_type=19, action=0, device_nr=group_action_id)
 
     def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
         return GroupActionMapper.orm_to_dto(GroupActionController.load_group_action(group_action_id))
