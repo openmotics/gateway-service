@@ -278,12 +278,12 @@ class ShutterController(BaseController):
 
     # Internal checks and validators
 
-    def _get_shutter(self, shutter_id):
+    def _get_shutter(self, shutter_id, return_none=False):
         shutter = self._shutters.get(shutter_id)
         if shutter is None:
             self.update_config(self.load_shutters())
             shutter = self._shutters.get(shutter_id)
-            if shutter is None:
+            if shutter is None and return_none is False:
                 raise RuntimeError('Shutter {0} is not available'.format(shutter_id))
         return shutter
 
@@ -332,7 +332,10 @@ class ShutterController(BaseController):
     # Reporting
 
     def _report_shutter_state(self, shutter_id, new_state):
-        shutter = self._get_shutter(shutter_id)
+        shutter = self._get_shutter(shutter_id, return_none=True)
+        if shutter is None:
+            logger.warning('Shutter {0} unknown'.format(shutter_id))
+            return
         steps = ShutterController._get_steps(shutter)
 
         self._directions[shutter_id] = ShutterController.STATE_DIRECTION_MAP[new_state]
