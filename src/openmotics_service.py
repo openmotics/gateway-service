@@ -24,15 +24,11 @@ import logging
 import time
 from signal import SIGTERM, signal
 
-from peewee_migrate import Router
-
 from bus.om_bus_client import MessageClient
 from bus.om_bus_service import MessageService
+from gateway.initialize import initialize
 from gateway.migrations.rooms import RoomsMigrator
-from gateway.models import Database
 from ioc import INJECTED, Inject
-from master import setup_platform
-from openmotics_init import initialize
 
 
 if False:  # MYPY
