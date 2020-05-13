@@ -90,18 +90,20 @@ class GroupActionController(object):
             group_action_configuration.name = group_action.name
             group_action_configuration.save()
         if 'actions' in fields:
-            addresses = GroupActionAddressConfiguration(group_action_id)
-            previous_length = addresses.end - addresses.start + 1
+            address_configuration = GroupActionAddressConfiguration(group_action_id)
+            previous_length = address_configuration.end - address_configuration.start + 1
+            if GroupActionController.MAX_WORD in [address_configuration.start, address_configuration.end]:
+                previous_length = 0
             needed_length = len(group_action.actions)
             if needed_length == 0:
                 # Empty, clear addresses
-                addresses.start = GroupActionController.MAX_WORD
-                addresses.end = GroupActionController.MAX_WORD
-                addresses.save()
+                address_configuration.start = GroupActionController.MAX_WORD
+                address_configuration.end = GroupActionController.MAX_WORD
+                address_configuration.save()
             else:
                 if needed_length == previous_length:
                     # No new location needed
-                    start_address = addresses.start
+                    start_address = address_configuration.start
                 else:
                     # Different length, search for (better) location
                     free_space_map = GroupActionController._free_address_space_map(group_action_id)
@@ -111,19 +113,19 @@ class GroupActionController(object):
                             found_length = length
                             break
                     if found_length is None:
-                        logger.error('Insufficient storage saving GroupAction: {0}'.format(free_space_map))
+                        logger.error('Insufficient storage saving GroupAction with {0} BAs: {1}'.format(needed_length, free_space_map))
                         raise RuntimeError('Cannot save GroupAction {0}. Insufficient storage'.format(group_action_id))
                     available_start_addresses = free_space_map[found_length]
-                    if addresses.start in available_start_addresses:
-                        start_address = addresses.start  # Prefer same location
+                    if address_configuration.start in available_start_addresses:
+                        start_address = address_configuration.start  # Prefer same location
                     else:
                         start_address = available_start_addresses[0]
-                    addresses.start = start_address
-                    addresses.end = start_address + needed_length - 1
-                    addresses.save()
+                    address_configuration.start = start_address
+                    address_configuration.end = start_address + needed_length - 1
+                    address_configuration.save()
 
                 for i, new_action in enumerate(group_action.actions):
-                    basic_action = GroupActionBasicAction(start_address + 1)
+                    basic_action = GroupActionBasicAction(start_address + i)
                     basic_action.basic_action = new_action
                     basic_action.save()
 
