@@ -76,6 +76,9 @@ python2 master_core_tests/api_field_tests.py
 echo "running Core communicator tests"
 python2 master_core_tests/core_communicator_tests.py
 
+echo "running Core group action tests"
+python2 master_core_tests/group_action_tests.py
+
 echo "Running metrics tests"
 python2 gateway_tests/metrics_tests.py
 

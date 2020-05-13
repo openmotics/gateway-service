@@ -180,9 +180,9 @@ class ValidationBitConfiguration(MemoryModelDefinition):
     name: str
 
 
-class GroupActionAllocationTable(MemoryModelDefinition):
-    addresses_0: List[int]
-    addresses_1: List[int]
+class GroupActionAddressConfiguration(MemoryModelDefinition):
+    start: int
+    end: int
 
 
 class GroupActionConfiguration(MemoryModelDefinition):
