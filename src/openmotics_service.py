@@ -216,14 +216,7 @@ class OpenmoticsService(object):
 
 if __name__ == "__main__":
     setup_logger()
-    setup_platform()
     initialize()
-
-    logger.info("Applying migrations")
-    # Run all unapplied migrations
-    db = Database.get_db()
-    router = Router(db, migrate_dir='/opt/openmotics/python/gateway/migrations/orm')
-    router.run()
 
     logger.info("Starting OpenMotics service")
     # TODO: move message service to separate process

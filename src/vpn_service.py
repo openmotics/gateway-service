@@ -30,7 +30,7 @@ import subprocess
 import time
 import traceback
 from collections import deque
-from threading import Lock, Thread
+from threading import Thread
 
 import requests
 import six
@@ -41,8 +41,7 @@ import constants
 from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
 from gateway.config import ConfigurationController
-from ioc import INJECTED, Inject, Injectable
-from master import setup_platform
+from ioc import INJECTED, Inject
 from openmotics_init import initialize
 
 
@@ -560,10 +559,8 @@ class VPNService(object):
 
 if __name__ == '__main__':
     setup_logger()
-    logger.info("Starting VPN service")
-
-    setup_platform()
     initialize()
 
+    logger.info("Starting VPN service")
     vpn_service = VPNService()
     vpn_service.start()

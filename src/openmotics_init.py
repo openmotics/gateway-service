@@ -26,7 +26,10 @@ import os
 import time
 from contextlib import contextmanager
 
+from peewee_migrate import Router
+
 import constants
+from gateway.models import Database
 from ioc import INJECTED, Inject
 from master import setup_platform
 
@@ -41,26 +44,39 @@ def initialize():
     # type: () -> None
     logger.info('Initializing')
     init_lock = constants.get_init_lockfile()
-    if os.path.isfile(init_lock):
-        logger.info('Waiting for lock')
-        with lock_file(init_lock) as fd:
-            content = fd.read()
-            if content == 'factory_reset':
-                logger.info('Running factory reset...')
-                factory_reset()
-                logger.info('Running factory reset, done')
-            else:
-                logger.warning('unknown initialization {}'.format(content))
+    logger.info('Waiting for lock')
+    with lock_file(init_lock) as fd:
+        content = fd.read()
+        apply_migrations()
+        setup_platform()
+        if content == '':
+            logger.info('Initializing, done')
+        elif content == 'factory_reset':
+            logger.info('Running factory reset...')
+            factory_reset()
+            logger.info('Running factory reset, done')
+        else:
+            logger.warning('unknown initialization {}'.format(content))
 
 
 @contextmanager
 def lock_file(file):
     # type: (str) -> Any
-    with open(file, 'r') as fd:
-        fcntl.flock(fd, fcntl.LOCK_EX)
-        yield fd
+    with open(file, 'a') as wfd:
+        fcntl.flock(wfd, fcntl.LOCK_EX)
+        with open(file, 'r') as rfd:
+            yield rfd
         # fcntl.flock(fd, fcntl.LOCK_UN)
         os.unlink(file)
+
+
+def apply_migrations():
+    # type: () -> None
+    logger.info('Applying migrations')
+    # Run all unapplied migrations
+    db = Database.get_db()
+    router = Router(db, migrate_dir='/opt/openmotics/python/gateway/migrations/orm')
+    router.run()
 
 
 @Inject
@@ -111,7 +127,5 @@ def setup_logger():
 
 if __name__ == '__main__':
     setup_logger()
-
-    setup_platform()
     initialize()
     logger.info('Ready')
