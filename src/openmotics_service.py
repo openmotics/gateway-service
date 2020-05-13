@@ -32,6 +32,7 @@ from gateway.migrations.rooms import RoomsMigrator
 from gateway.models import Database
 from ioc import INJECTED, Inject
 from master import setup_platform
+from openmotics_init import initialize
 
 
 if False:  # MYPY
@@ -215,6 +216,8 @@ class OpenmoticsService(object):
 
 if __name__ == "__main__":
     setup_logger()
+    setup_platform()
+    initialize()
 
     logger.info("Applying migrations")
     # Run all unapplied migrations
@@ -227,6 +230,5 @@ if __name__ == "__main__":
     message_service = MessageService()
     message_service.start()
 
-    setup_platform()
     OpenmoticsService.fix_dependencies()
     OpenmoticsService.start()

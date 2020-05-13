@@ -20,31 +20,52 @@ from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 
+import fcntl
 import logging
 import os
 import time
+from contextlib import contextmanager
 
 import constants
 from ioc import INJECTED, Inject
 from master import setup_platform
 
-logger = logging.getLogger("openmotics")
+if False:  # MYPY
+    from typing import Any
+    from master_controller import MasterController
+
+logger = logging.getLogger('openmotics')
 
 
-def setup_logger():
-    """ Setup the OpenMotics logger. """
+def initialize():
+    # type: () -> None
+    logger.info('Initializing')
+    init_lock = constants.get_init_lockfile()
+    if os.path.isfile(init_lock):
+        logger.info('Waiting for lock')
+        with lock_file(init_lock) as fd:
+            content = fd.read()
+            if content == 'factory_reset':
+                logger.info('Running factory reset...')
+                factory_reset()
+                logger.info('Running factory reset, done')
+            else:
+                logger.warning('unknown initialization {}'.format(content))
 
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
 
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-    logger.addHandler(handler)
+@contextmanager
+def lock_file(file):
+    # type: (str) -> Any
+    with open(file, 'r') as fd:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield fd
+        # fcntl.flock(fd, fcntl.LOCK_UN)
+        os.unlink(file)
 
 
 @Inject
 def factory_reset(master_controller=INJECTED):
+    # type: (MasterController) -> None
     import glob
     import shutil
 
@@ -76,23 +97,21 @@ def factory_reset(master_controller=INJECTED):
         os.remove(config_file)
 
 
+def setup_logger():
+    """ Setup the OpenMotics logger. """
+
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger.addHandler(handler)
+
+
 if __name__ == '__main__':
     setup_logger()
+
     setup_platform()
-
-    lock_file = constants.get_init_lockfile()
-    if os.path.isfile(lock_file):
-        with open(lock_file) as fd:
-            content = fd.read()
-
-        if content == 'factory_reset':
-            logger.info('Running factory reset...')
-
-            factory_reset()
-
-            logger.info('Running factory reset, done')
-        else:
-            logger.warning('unknown initialization {}'.format(content))
-        os.unlink(lock_file)
-
+    initialize()
     logger.info('Ready')

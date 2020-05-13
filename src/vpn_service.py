@@ -19,26 +19,32 @@ thermostats to the cloud, to keep the status information in the cloud in sync.
 """
 
 from __future__ import absolute_import
+
 from platform_utils import System
 System.import_libs()
 
-import six
+import glob
 import logging
 import os
-import glob
-import requests
-import time
 import subprocess
+import time
 import traceback
-import constants
-import ujson as json
-from threading import Thread, Lock
 from collections import deque
+from threading import Lock, Thread
+
+import requests
+import six
+import ujson as json
 from six.moves.configparser import ConfigParser
-from gateway.config import ConfigurationController
-from ioc import Injectable, INJECTED, Inject
+
+import constants
 from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
+from gateway.config import ConfigurationController
+from ioc import INJECTED, Inject, Injectable
+from master import setup_platform
+from openmotics_init import initialize
+
 
 REBOOT_TIMEOUT = 900
 DEFAULT_SLEEP_TIME = 30
@@ -556,8 +562,8 @@ if __name__ == '__main__':
     setup_logger()
     logger.info("Starting VPN service")
 
-    Injectable.value(config_db=constants.get_config_database_file())
-    Injectable.value(config_db_lock=Lock())
+    setup_platform()
+    initialize()
 
     vpn_service = VPNService()
     vpn_service.start()
