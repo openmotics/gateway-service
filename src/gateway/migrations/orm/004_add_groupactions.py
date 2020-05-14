@@ -13,8 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from gateway.hal.mappers_core.output import OutputMapper
-from gateway.hal.mappers_core.shutter import ShutterMapper
-from gateway.hal.mappers_core.input import InputMapper
-from gateway.hal.mappers_core.sensor import SensorMapper
-from gateway.hal.mappers_core.group_action import GroupActionMapper
+from gateway.models import GroupAction
+
+
+def migrate(migrator, database, fake=False, **kwargs):
+    database.create_tables([GroupAction])
+
+
+def rollback(migrator, database, fake=False, **kwargs):
+    pass

@@ -76,6 +76,9 @@ pytest master_core_tests/memory_types_tests.py --log-level=DEBUG --durations=2 -
 echo "running Core communicator tests"
 pytest master_core_tests/core_communicator_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterCoreCommunicatorTest.xml
 
+echo "running Core group action tests"
+pytest master_core_tests/group_action_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterCoreGATest.xml
+
 #echo "Running metrics tests"
 #python3 gateway_tests/metrics_tests.py
 

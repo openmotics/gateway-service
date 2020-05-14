@@ -25,6 +25,11 @@ from master.core.fields import (ByteField, WordField, ByteArrayField, WordArrayF
 
 class CoreAPI(object):
 
+    class RS485Mode(object):
+        LIVE = 0
+        INIT = DISCOVERY = 1
+        TRANSPARENT = 2
+
     # Direct control
     # TODO: Use property
 
@@ -92,6 +97,42 @@ class CoreAPI(object):
                                                 AddressField('address'), WordField('bus_errors'), ByteField('module_status')])
 
     @staticmethod
+    def get_rs485_bus_mode():
+        """ Receives the RS485 bus mode """
+        return CoreCommandSpec(instruction='ST',
+                               request_fields=[LiteralBytesField(0)],
+                               response_fields=[ByteField('info_type'), ByteField('mode')])
+
+    @staticmethod
+    def get_firmware_version():
+        """ Receives the Core firmware version """
+        return CoreCommandSpec(instruction='ST',
+                               request_fields=[LiteralBytesField(1)],
+                               response_fields=[ByteField('info_type'), VersionField('version')])
+
+    @staticmethod
+    def get_date_time():
+        """ Reads the date/time from the Core """
+        return CoreCommandSpec(instruction='TR',
+                               request_fields=[LiteralBytesField(0)],
+                               response_fields=[ByteField('info_type'),
+                                                ByteField('hours'), ByteField('minutes'), ByteField('seconds'),
+                                                ByteField('weekday'), ByteField('day'), ByteField('month'), ByteField('year')])
+
+    @staticmethod
+    def set_date_time():
+        """ Writes the date/time from the Core """
+        return CoreCommandSpec(instruction='TW',
+                               request_fields=[LiteralBytesField(0),
+                                               ByteField('hours'), ByteField('minutes'), ByteField('seconds'),
+                                               ByteField('weekday'), ByteField('day'), ByteField('month'), ByteField('year')],
+                               response_fields=[ByteField('info_type'),
+                                                ByteField('hours'), ByteField('minutes'), ByteField('seconds'),
+                                                ByteField('weekday'), ByteField('day'), ByteField('month'), ByteField('year')])
+
+    # States
+
+    @staticmethod
     def output_detail():
         """ Received output detail information """
         return CoreCommandSpec(instruction='OD',
@@ -154,6 +195,28 @@ class CoreAPI(object):
         return CoreCommandSpec(instruction='MW',
                                request_fields=[CharField('type'), WordField('page'), ByteField('start'), ByteArrayField('data', length)],
                                response_fields=[CharField('type'), WordField('page'), ByteField('start'), ByteField('length'), CharField('result')])
+
+    # RS485 bus
+
+    @staticmethod
+    def set_rs485_bus_mode():
+        """ Sets the RS485 bus to a different mode"""
+        return CoreCommandSpec(instruction='SM',
+                               request_fields=[ByteField('mode')],
+                               response_fields=[ByteField('mode')])
+
+    @staticmethod
+    def rs485_tx_transport_message(length):
+        """ RS485 transport layer packages """
+        return CoreCommandSpec(instruction='TC',
+                               request_fields=[ByteArrayField('data', length)],
+                               response_fields=[ByteField('length')])
+
+    @staticmethod
+    def rs485_rx_transport_message():
+        """ RS485 transport layer packages """
+        return CoreCommandSpec(instruction='TM',
+                               response_fields=[ByteArrayField('data', lambda length: length)])
 
     # CAN
 

@@ -20,7 +20,7 @@ from gateway.dto import (
     OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
     ThermostatDTO, SensorDTO,
-    PulseCounterDTO
+    PulseCounterDTO, GroupActionDTO
 )
 from gateway.hal.master_event import MasterEvent
 
@@ -312,29 +312,24 @@ class MasterController(object):
     def set_status_leds(self, status):
         raise NotImplementedError()
 
-    # Actions functions
+    # (Group)Actions
 
-    def do_basic_action(self, action_type, action_number):
+    def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
         raise NotImplementedError()
 
-    def do_group_action(self, group_action_id):
+    def do_group_action(self, group_action_id):  # type: (int) -> None
         raise NotImplementedError()
 
-    def load_group_action_configuration(self, group_action_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
+    def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
         raise NotImplementedError()
 
-    def load_group_action_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
+    def load_group_actions(self):  # type: () -> List[GroupActionDTO]
         raise NotImplementedError()
 
-    def save_group_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
+    def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
         raise NotImplementedError()
 
-    def save_group_action_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        raise NotImplementedError()
+    # Schedule
 
     def load_scheduled_action_configuration(self, scheduled_action_id, fields=None):
         # type: (int, Any) -> Dict[str,Any]

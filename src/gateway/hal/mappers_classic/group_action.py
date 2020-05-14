@@ -14,34 +14,33 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-Sensor Mapper
+GroupAction Mapper
 """
 from __future__ import absolute_import
-from gateway.dto.sensor import SensorDTO
+from gateway.dto import GroupActionDTO
 from master.classic.eeprom_controller import EepromModel
-from master.classic.eeprom_models import SensorConfiguration
+from master.classic.eeprom_models import GroupActionConfiguration
 
 if False:  # MYPY
     from typing import List, Dict, Any
 
 
-class SensorMapper(object):
+class GroupActionMapper(object):
     BYTE_MAX = 255
 
     @staticmethod
-    def orm_to_dto(orm_object):  # type: (EepromModel) -> SensorDTO
+    def orm_to_dto(orm_object):  # type: (EepromModel) -> GroupActionDTO
         data = orm_object.serialize()
-        return SensorDTO(id=data['id'],
-                         name=data['name'],
-                         offset=data['offset'],
-                         virtual=data['virtual'])
+        return GroupActionDTO(id=data['id'],
+                              name=data['name'],
+                              actions=[] if data['actions'] == '' else [int(i) for i in data['actions'].split(',')])
 
     @staticmethod
-    def dto_to_orm(sensor_dto, fields):  # type: (SensorDTO, List[str]) -> EepromModel
-        data = {'id': sensor_dto.id}  # type: Dict[str, Any]
-        for dto_field, data_field in {'name': 'name',
-                                      'offset': 'offset',
-                                      'virtual': 'virtual'}.items():
+    def dto_to_orm(group_action_dto, fields):  # type: (GroupActionDTO, List[str]) -> EepromModel
+        data = {'id': group_action_dto.id}  # type: Dict[str, Any]
+        for dto_field, data_field in {'name': 'name'}.items():
             if dto_field in fields:
-                data[data_field] = getattr(sensor_dto, dto_field)
-        return SensorConfiguration.deserialize(data)
+                data[data_field] = getattr(group_action_dto, dto_field)
+        if 'actions' in fields:
+            data['actions'] = ','.join([str(action) for action in group_action_dto.actions])
+        return GroupActionConfiguration.deserialize(data)

@@ -149,6 +149,11 @@ class PulseCounter(BaseModel):
     room: Optional[RoomForeignKeyField]
 
 
+class GroupAction(BaseModel):
+    id: MixedPrimaryKeyField
+    number: MixedIntegerField
+
+
 class ThermostatGroup(BaseModel):
     id: MixedPrimaryKeyField
     number: MixedIntegerField

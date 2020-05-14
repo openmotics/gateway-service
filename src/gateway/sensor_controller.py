@@ -57,7 +57,7 @@ class SensorController(BaseController):
         for sensor_dto, fields in sensors:
             sensor_ = Sensor.get_or_none(number=sensor_dto.id)  # type: Sensor
             if sensor_ is None:
-                continue
+                logger.info('Ignored saving non-existing Sensor {0}'.format(sensor_dto.id))
             if 'room' in fields:
                 if sensor_dto.room is None:
                     sensor_.room = None

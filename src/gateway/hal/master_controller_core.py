@@ -20,17 +20,18 @@ import logging
 import time
 from threading import Thread
 from peewee import DoesNotExist
+from datetime import datetime
 
 from gateway.enums import ShutterEnums
 from gateway.dto import (
     OutputDTO, InputDTO,
     ShutterDTO, ShutterGroupDTO,
     ThermostatDTO, SensorDTO,
-    PulseCounterDTO
+    PulseCounterDTO, GroupActionDTO
 )
 from gateway.hal.mappers_core import (
     OutputMapper, ShutterMapper, InputMapper,
-    SensorMapper
+    SensorMapper, GroupActionMapper
 )
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
@@ -46,6 +47,7 @@ from master.core.memory_models import (
     GlobalConfiguration, InputConfiguration, OutputConfiguration,
     SensorConfiguration, ShutterConfiguration
 )
+from master.core.group_action import GroupActionController
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
@@ -75,6 +77,7 @@ class MasterCoreController(MasterController):
         self._sensor_states = {}
         self._shutters_interval = 600
         self._shutters_last_updated = 0
+        self._time_last_updated = 0
         self._output_shutter_map = {}  # type: Dict[int, int]
 
         self._memory_files[MemoryTypes.EEPROM].subscribe_eeprom_change(self._handle_eeprom_change)
@@ -159,6 +162,8 @@ class MasterCoreController(MasterController):
         while True:
             try:
                 # Refresh if required
+                if self._time_last_updated + 300 < time.time():
+                    self._check_master_time()
                 if self._refresh_input_states():
                     self._set_master_state(True)
                 if self._output_last_updated + self._output_interval < time.time():
@@ -190,6 +195,39 @@ class MasterCoreController(MasterController):
         cmd = CoreAPI.general_configuration_number_of_modules()
         module_count = self._master_communicator.do_command(cmd, {})[module_type]
         return range(module_count * amount_per_module)
+
+    def _check_master_time(self):
+        # type: () -> None
+        date_time = self._master_communicator.do_command(CoreAPI.get_date_time(), {})
+        if date_time is None:
+            return
+        try:
+            core_value = datetime(2000 + date_time['year'], date_time['month'], date_time['day'],
+                                  date_time['hours'], date_time['minutes'], date_time['seconds'])
+            core_weekday = date_time['weekday']
+        except ValueError:
+            core_value = datetime(2000, 1, 1, 0, 0, 0)
+            core_weekday = 0
+
+        now = datetime.now()
+        expected_weekday = now.weekday() + 1
+        expected_value = now.replace(microsecond=0)
+
+        sync = False
+        if abs((core_value - expected_value).total_seconds()) > 180:  # Allow 3 minutes difference
+            sync = True
+        if core_weekday != expected_weekday:
+            sync = True
+
+        if sync is True:
+            if expected_value.hour == 0 and expected_value.minute < 15:
+                logger.info('Skip setting time between 00:00 and 00:15')
+            else:
+                logger.info('Time - core: {0} ({1}) - gateway: {2} ({3})'.format(
+                    core_value, core_weekday, expected_value, expected_weekday)
+                )
+                self.sync_time()
+        self._time_last_updated = time.time()
 
     #######################
     # Internal management #
@@ -245,7 +283,18 @@ class MasterCoreController(MasterController):
         self._output_last_updated = 0
 
     def get_firmware_version(self):
-        return 0, 0, 0  # TODO
+        version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
+        return tuple(version.split('.'))
+
+    def sync_time(self):
+        # type: () -> None
+        logger.info('Setting the time on the core.')
+        now = datetime.now()
+        self._master_communicator.do_command(
+            CoreAPI.set_date_time(),
+            {'hours': now.hour, 'minutes': now.minute, 'seconds': now.second,
+             'weekday': now.isoweekday(), 'day': now.day, 'month': now.month, 'year': now.year % 100}
+        )
 
     # Memory (eeprom/fram)
 
@@ -583,6 +632,31 @@ class MasterCoreController(MasterController):
         # TODO: Implement PulseCounters
         return {}
 
+    # (Group)Actions
+
+    def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
+        basic_actions = GroupActionMapper.classic_actions_to_core_actions([action_type, action_number])
+        for basic_action in basic_actions:
+            self._master_communicator.do_basic_action(action_type=basic_action.action_type,
+                                                      action=basic_action.action,
+                                                      device_nr=basic_action.device_nr,
+                                                      extra_parameter=basic_action.extra_parameter)
+
+    def do_group_action(self, group_action_id):  # type: (int) -> None
+        self._master_communicator.do_basic_action(action_type=19, action=0, device_nr=group_action_id)
+
+    def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
+        return GroupActionMapper.orm_to_dto(GroupActionController.load_group_action(group_action_id))
+
+    def load_group_actions(self):  # type: () -> List[GroupActionDTO]
+        return [GroupActionMapper.orm_to_dto(o)
+                for o in GroupActionController.load_group_actions()]
+
+    def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
+        for group_action_dto, fields in group_actions:
+            group_action = GroupActionMapper.dto_to_orm(group_action_dto, fields)
+            GroupActionController.save_group_action(group_action, fields)
+
     # Virtual modules
 
     def add_virtual_output_module(self):
@@ -600,22 +674,20 @@ class MasterCoreController(MasterController):
         raise NotImplementedError()
 
     def get_status(self):
-        # Used to synchronize, execute a trivial command since this
-        # isn't implemented yet
-        cmd = CoreAPI.general_configuration_number_of_modules()
-        self._master_communicator.do_command(cmd, {})
-        # TODO: implement
-        return {'time': '%02d:%02d' % (0, 0),
-                'date': '%02d/%02d/%d' % (0, 0, 0),
-                'mode': 42,
-                'version': '%d.%d.%d' % (0, 0, 1),
-                'hw_version': 1}
+        firmware_version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
+        bus_mode = self._master_communicator.do_command(CoreAPI.get_rs485_bus_mode(), {})['mode']
+        date_time = self._master_communicator.do_command(CoreAPI.get_date_time(), {})
+        return {'time': '{0:02}:{1:02}'.format(date_time['hours'], date_time['minutes']),
+                'date': '{0:02}/{1:02}/20{2:02}'.format(date_time['day'], date_time['month'], date_time['year']),
+                'mode': {CoreAPI.RS485Mode.INIT: 'I',
+                         CoreAPI.RS485Mode.LIVE: 'L',
+                         CoreAPI.RS485Mode.TRANSPARENT: 'T'}[bus_mode],
+                'version': firmware_version,
+                'hw_version': 1}  # TODO: Hardware version
 
     def reset(self):
         # type: () -> None
-        cmd = CoreAPI.basic_action()
-        reset = {'type': 254, 'action': 0, 'device_nr': 0, 'extra_parameter': 0}
-        self._master_communicator.do_command(cmd, reset, timeout=None)
+        self._master_communicator.do_basic_action(action_type=254, action=0, timeout=None)
 
     def cold_reset(self):
         # type: () -> Dict[str,Any]
@@ -665,12 +737,6 @@ class MasterCoreController(MasterController):
         raise NotImplementedError()
 
     def set_status_leds(self, status):
-        raise NotImplementedError()
-
-    def do_basic_action(self, action_type, action_number):
-        raise NotImplementedError()
-
-    def do_group_action(self, group_action_id):
         raise NotImplementedError()
 
     def set_all_lights_off(self):

@@ -49,6 +49,7 @@ if False:  # MYPY
     from gateway.input_controller import InputController
     from gateway.sensor_controller import SensorController
     from gateway.pulse_counter_controller import PulseCounterController
+    from gateway.group_action_controller import GroupActionController
     from gateway.watchdog import Watchdog
     from gateway.comm_led_controller import CommunicationLedController
     from gateway.hal.master_controller import MasterController
@@ -96,12 +97,13 @@ class OpenmoticsService(object):
         from plugins import base
         from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
                              maintenance_controller, comm_led_controller, users, pulse_counter_controller, config as config_controller,
-                             metrics_caching, watchdog, output_controller, room_controller, sensor_controller)
+                             metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
+                             group_action_controller)
         from cloud import events
         _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
              maintenance_controller, base, events, power_communicator, comm_led_controller, users,
              power_controller, pulse_counter_controller, config_controller, metrics_caching, watchdog, output_controller,
-             room_controller, sensor_controller)
+             room_controller, sensor_controller, group_action_controller)
         if Platform.get_platform() == Platform.Type.CORE_PLUS:
             from gateway.hal import master_controller_core
             from master.core import maintenance, core_communicator, ucan_communicator
@@ -206,12 +208,7 @@ class OpenmoticsService(object):
                 event_sender=INJECTED,  # type: EventSender
                 maintenance_controller=INJECTED,  # type: MaintenanceController
                 thermostat_controller=INJECTED,  # type: ThermostatController
-                shutter_controller=INJECTED,  # type: ShutterController
-                master_controller=INJECTED,  # type: MasterController
-                output_controller=INJECTED,  # type: OutputController
-                input_controller=INJECTED,  # type: InputController
-                pulse_counter_controller=INJECTED,  # type: PulseCounterController
-                sensor_controller=INJECTED  # type: SensorController
+                shutter_controller=INJECTED  # type: ShutterController
             ):
 
         # TODO: Fix circular dependencies
@@ -263,7 +260,8 @@ class OpenmoticsService(object):
                 input_controller=INJECTED,  # type: InputController
                 pulse_counter_controller=INJECTED,  # type: PulseCounterController
                 sensor_controller=INJECTED,  # type: SensorController
-                shutter_controller=INJECTED  # type: ShutterController
+                shutter_controller=INJECTED,  # type: ShutterController
+                group_action_controller=INJECTED  # type: GroupActionController
             ):
         """ Main function. """
         logger.info('Starting OM core service...')
@@ -300,6 +298,7 @@ class OpenmoticsService(object):
         pulse_counter_controller.start()
         sensor_controller.start()
         shutter_controller.start()
+        group_action_controller.start()
 
         web_interface.set_service_state(True)
         signal_request = {'stop': False}
@@ -314,6 +313,7 @@ class OpenmoticsService(object):
             pulse_counter_controller.stop()
             sensor_controller.stop()
             shutter_controller.stop()
+            group_action_controller.stop()
             web_service.stop()
             power_communicator.stop()
             master_controller.stop()

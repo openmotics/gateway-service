@@ -20,7 +20,6 @@ from __future__ import absolute_import
 import unittest
 import xmlrunner
 import logging
-from mock import Mock
 from master.core.fields import *
 
 

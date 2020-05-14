@@ -63,7 +63,7 @@ class CoreCommunicator(object):
         self._serial_bytes_written = 0
         self._serial_bytes_read = 0
 
-        self._cid = None  # Reserved CIDs: 0, 1
+        self._cid = None  # Reserved CIDs: 0 = Core events, 1 = uCAN transport, 2 = RS485 transport
         self._cids_in_use = set()
         self._consumers = {}
         self._last_success = 0
@@ -104,7 +104,8 @@ class CoreCommunicator(object):
     def _get_cid(self):
         """ Get a communication id. 0 and 1 are reserved. """
         def _increment_cid(current_cid):
-            return current_cid + 1 if (current_cid is not None and current_cid < 255) else 2
+            # Reserved CIDs: 0 = Core events, 1 = uCAN transport, 2 = RS485 transport
+            return current_cid + 1 if (current_cid is not None and current_cid < 255) else 3
 
         def _available(candidate_cid):
             if candidate_cid is None:
@@ -173,27 +174,17 @@ class CoreCommunicator(object):
             consumers.remove(consumer)
         self.discard_cid(consumer.cid)
 
-    def do_basic_action(self, action_type, action, device_nr=0, extra_parameter=0):
-        """
-        Sends a basic action to the Core with the given action type and action number
-        :param action_type: The action type to execute
-        :type action_type: int
-        :param action: The action number to execute
-        :type action: int
-        :param device_nr: Device number
-        :type device_nr: int
-        :param extra_parameter: Optional extra argument
-        :type extra_parameter: int
-        :raises: :class`CommunicationTimedOutException` if Core did not respond in time
-        :returns: dict containing the output fields of the command
-        """
+    def do_basic_action(self, action_type, action, device_nr=0, extra_parameter=0, timeout=2):
+        # type: (int, int, int, int, Optional[int]) -> Optional[Dict[str, Any]]
+        """ Sends a basic action to the Core with the given action type and action number """
         logger.info('BA: Execute {0} {1} {2} {3}'.format(action_type, action, device_nr, extra_parameter))
         return self.do_command(
             CoreAPI.basic_action(),
             {'type': action_type,
              'action': action,
              'device_nr': device_nr,
-             'extra_parameter': extra_parameter}
+             'extra_parameter': extra_parameter},
+            timeout=timeout
         )
 
     def do_command(self, command, fields, timeout=2):  # type: (CoreCommandSpec, Dict[str, Any], Optional[int]) -> Optional[Dict[str, Any]]
