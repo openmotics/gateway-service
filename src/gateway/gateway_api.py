@@ -495,7 +495,7 @@ class GatewayApi(object):
         def _restart():
             # type: () -> None
             logger.info('Restarting for factory reset...')
-            System.restart_service('openmotics.service')
+            System.restart_service('openmotics')
 
         threading.Timer(2, _restart).start()
         return {'factory_reset': 'pending'}

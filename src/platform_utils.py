@@ -151,7 +151,7 @@ class System(object):
         if is_systemd:
             subprocess.Popen(['systemctl', 'restart', '--no-block', service])
         else:
-            raise NotImplementedError('only implemented for systemd services')
+            subprocess.Popen(['supervisorctl', 'restart', service])
 
     @staticmethod
     def get_operating_system():
