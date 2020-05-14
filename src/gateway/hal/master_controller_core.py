@@ -201,9 +201,13 @@ class MasterCoreController(MasterController):
         date_time = self._master_communicator.do_command(CoreAPI.get_date_time(), {})
         if date_time is None:
             return
-        core_value = datetime(2000 + date_time['year'], max(1, date_time['month']), max(1, date_time['day']),
-                              date_time['hours'], date_time['minutes'], date_time['seconds'])
-        core_weekday = date_time['weekday']
+        try:
+            core_value = datetime(2000 + date_time['year'], date_time['month'], date_time['day'],
+                                  date_time['hours'], date_time['minutes'], date_time['seconds'])
+            core_weekday = date_time['weekday']
+        except ValueError:
+            core_value = datetime(2000, 1, 1, 0, 0, 0)
+            core_weekday = 0
 
         now = datetime.now()
         expected_weekday = now.weekday() + 1

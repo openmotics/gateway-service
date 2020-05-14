@@ -118,7 +118,7 @@ class MemoryModelDefinition(object):
 
     def save(self):
         for field_name in self._loaded_fields:
-            field_container = getattr(self, '_{0}'.format(field_name))
+            field_container = getattr(self, '_{0}'.format(field_name))  # type: MemoryFieldContainer
             if self._verbose:
                 logger.info('Saving {0}({1}).{2}'.format(
                     self.__class__.__name__,
@@ -305,7 +305,7 @@ class MemoryStringField(MemoryField):
         data = []
         for char in value:
             data.append(ord(char))
-        data += [255] * (len(data) - self._length)
+        data += [255] * (self._length - len(data))
         return data
 
     def decode(self, data):

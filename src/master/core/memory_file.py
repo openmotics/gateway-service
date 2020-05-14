@@ -16,6 +16,7 @@
 Contains a memory representation
 """
 from __future__ import absolute_import
+import copy
 import logging
 from ioc import Inject, INJECTED
 from master.core.core_api import CoreAPI
@@ -35,6 +36,11 @@ class MemoryTypes(object):
 
 
 class MemoryFile(object):
+
+    WRITE_TIMEOUT = 5
+    READ_TIMEOUT = 5
+    ACTIVATE_TIMEOUT = 5
+    WRITE_CHUNK_SIZE = 32
 
     @Inject
     def __init__(self, memory_type, master_communicator=INJECTED):
@@ -91,8 +97,9 @@ class MemoryFile(object):
             page_data = []
             for i in range(self._page_length // 32):
                 page_data += self._core_communicator.do_command(
-                    CoreAPI.memory_read(),
-                    {'type': self.type, 'page': page, 'start': i * 32, 'length': 32}
+                    command=CoreAPI.memory_read(),
+                    fields={'type': self.type, 'page': page, 'start': i * 32, 'length': 32},
+                    timeout=MemoryFile.READ_TIMEOUT
                 )['data']
             return page_data
 
@@ -101,23 +108,34 @@ class MemoryFile(object):
 
         if page not in self._cache:
             self._cache[page] = _read_page()
-        return self._cache[page]
+        return copy.copy(self._cache[page])
 
     def write_page(self, page, data):
+        cached_data = None
+        if self.type == MemoryTypes.EEPROM:
+            cached_data = self._cache[page]
+
+        for i in range(self._page_length // MemoryFile.WRITE_CHUNK_SIZE):
+            start = i * MemoryFile.WRITE_CHUNK_SIZE
+            cache_chunk = None
+            if cached_data is not None:
+                cache_chunk = cached_data[start:start + MemoryFile.WRITE_CHUNK_SIZE]
+            data_chunk = data[start:start + MemoryFile.WRITE_CHUNK_SIZE]
+            if data_chunk != cache_chunk:
+                logger.info('MEMORY.{0}: Write P{1} S{2} D[{3}]'.format(self.type, page, start, ' '.join(str(b) for b in data_chunk)))
+                self._core_communicator.do_command(
+                    command=CoreAPI.memory_write(MemoryFile.WRITE_CHUNK_SIZE),
+                    fields={'type': self.type, 'page': page, 'start': start, 'data': data_chunk},
+                    timeout=MemoryFile.WRITE_TIMEOUT
+                )
+
         if self.type == MemoryTypes.EEPROM:
             self._cache[page] = data
 
-        length = 32
-        for i in range(self._page_length // length):
-            start = i * length
-            self._core_communicator.do_command(
-                CoreAPI.memory_write(length),
-                {'type': self.type, 'page': page, 'start': start, 'data': data[start:start + length]}
-            )
-
     def activate(self):
         if self.type == MemoryTypes.EEPROM:
-            self._core_communicator.do_basic_action(action_type=200, action=1)
+            logger.info('MEMORY.{0}: Activate'.format(self.type))
+            self._core_communicator.do_basic_action(action_type=200, action=1, timeout=MemoryFile.ACTIVATE_TIMEOUT)
 
     def invalidate_cache(self, page=None):
         pages = [page]

@@ -77,12 +77,13 @@ class GroupActionTest(unittest.TestCase):
 
     @staticmethod
     def _setup_master_communicator(memory):
-        def _do_command(api, payload):
-            if api.instruction == 'MW':
-                page = payload['page']
-                start = payload['start']
+        def _do_command(command, fields, timeout=None):
+            _ = timeout
+            if command.instruction == 'MW':
+                page = fields['page']
+                start = fields['start']
                 page_data = memory.setdefault(page, [255] * 256)
-                for index, data_byte in enumerate(payload['data']):
+                for index, data_byte in enumerate(fields['data']):
                     page_data[start + index] = data_byte
 
         master_communicator = Mock()

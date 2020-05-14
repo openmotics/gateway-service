@@ -43,6 +43,6 @@ class GroupActionSerializer(object):
             dto=group_action_dto,  # Referenced
             api_data=api_data,
             mapping={'name': ('name', None),
-                     'actions': ('actions', lambda s: [] if s == '' else [int(a) for a in s.split(',')]),}
+                     'actions': ('actions', lambda s: [] if s == '' else [int(a) for a in s.split(',')])}
         )
         return group_action_dto, loaded_fields
