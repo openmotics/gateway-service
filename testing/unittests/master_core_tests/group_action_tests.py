@@ -250,10 +250,10 @@ class GroupActionTest(unittest.TestCase):
         GroupActionTest._setup_master_communicator(memory)
 
         space_map = GroupActionController._free_address_space_map()
-        self.assertEqual({4200: [0]}, space_map)
         self.assertEqual('__________________________________________', GroupActionTest._get_readable_ba_block(memory))
         #                 |    |    |    |    |    |    |    |    |
         #                 0    5    10   15   20   25   30   35   40
+        self.assertEqual({4200: [0]}, space_map)
 
         # Generate "pre-defined" GAs
         for group_action_id, address in {10: 0, 11: 2, 12: 5, 13: 8, 14: 14, 15: 25, 16: (41, 4199)}.items():
@@ -262,41 +262,41 @@ class GroupActionTest(unittest.TestCase):
             memory[GroupActionTest.ACTIONS_START_PAGE][start * 6] = 100 + group_action_id
 
         space_map = GroupActionController._free_address_space_map()
+        self.assertEqual('X_X__X__X_____X__________X_______________X', GroupActionTest._get_readable_ba_block(memory))
+        #                 |    |    |    |    |    |    |    |    |
+        #                 0    5    10   15   20   25   30   35   40
         self.assertEqual({1: [1],
                           2: [3, 6],
                           5: [9],
                           10: [15],
                           15: [26]}, space_map)
-        self.assertEqual('X_X__X__X_____X__________X_______________X', GroupActionTest._get_readable_ba_block(memory))
-        #                 |    |    |    |    |    |    |    |    |
-        #                 0    5    10   15   20   25   30   35   40
 
         # Store GA with 1 BA
         group_action_1 = GroupAction(id=1, actions=[BasicAction(1, 0)])
         GroupActionController.save_group_action(group_action_1, ['actions'])
 
         space_map = GroupActionController._free_address_space_map()
+        self.assertEqual('X1X__X__X_____X__________X_______________X', GroupActionTest._get_readable_ba_block(memory))
+        #                 |    |    |    |    |    |    |    |    |
+        #                 0    5    10   15   20   25   30   35   40
         self.assertEqual({2: [3, 6],
                           5: [9],
                           10: [15],
                           15: [26]}, space_map)
-        self.assertEqual('X1X__X__X_____X__________X_______________X', GroupActionTest._get_readable_ba_block(memory))
-        #                 |    |    |    |    |    |    |    |    |
-        #                 0    5    10   15   20   25   30   35   40
 
         # Store another GA with 1 BA
         group_action_2 = GroupAction(id=2, actions=[BasicAction(2, 0)])
         GroupActionController.save_group_action(group_action_2, ['actions'])
 
         space_map = GroupActionController._free_address_space_map()
+        self.assertEqual('X1X2_X__X_____X__________X_______________X', GroupActionTest._get_readable_ba_block(memory))
+        #                 |    |    |    |    |    |    |    |    |
+        #                 0    5    10   15   20   25   30   35   40
         self.assertEqual({1: [4],
                           2: [6],
                           5: [9],
                           10: [15],
                           15: [26]}, space_map)
-        self.assertEqual('X1X2_X__X_____X__________X_______________X', GroupActionTest._get_readable_ba_block(memory))
-        #                 |    |    |    |    |    |    |    |    |
-        #                 0    5    10   15   20   25   30   35   40
 
         # GA is update dto two BAs
         group_action_2 = GroupAction(id=2, actions=[BasicAction(3, 0),
@@ -304,13 +304,13 @@ class GroupActionTest(unittest.TestCase):
         GroupActionController.save_group_action(group_action_2, ['actions'])
 
         space_map = GroupActionController._free_address_space_map()
+        self.assertEqual('X1X33X__X_____X__________X_______________X', GroupActionTest._get_readable_ba_block(memory))
+        #                 |    |    |    |    |    |    |    |    |
+        #                 0    5    10   15   20   25   30   35   40
         self.assertEqual({2: [6],
                           5: [9],
                           10: [15],
                           15: [26]}, space_map)
-        self.assertEqual('X1X33X__X_____X__________X_______________X', GroupActionTest._get_readable_ba_block(memory))
-        #                 |    |    |    |    |    |    |    |    |
-        #                 0    5    10   15   20   25   30   35   40
 
         # First GA is extended
         group_action_1 = GroupAction(id=1, actions=[BasicAction(4, 0),
@@ -318,13 +318,13 @@ class GroupActionTest(unittest.TestCase):
         GroupActionController.save_group_action(group_action_1, ['actions'])
 
         space_map = GroupActionController._free_address_space_map()
+        self.assertEqual('X1X33X44X_____X__________X_______________X', GroupActionTest._get_readable_ba_block(memory))
+        #                 |    |    |    |    |    |    |    |    |
+        #                 0    5    10   15   20   25   30   35   40
         self.assertEqual({1: [1],
                           5: [9],
                           10: [15],
                           15: [26]}, space_map)
-        self.assertEqual('X1X33X44X_____X__________X_______________X', GroupActionTest._get_readable_ba_block(memory))
-        #                 |    |    |    |    |    |    |    |    |
-        #                 0    5    10   15   20   25   30   35   40
 
         # Add large GA
         group_action_3 = GroupAction(id=3, actions=[BasicAction(5, 0), BasicAction(5, 0), BasicAction(5, 0),
@@ -332,38 +332,38 @@ class GroupActionTest(unittest.TestCase):
         GroupActionController.save_group_action(group_action_3, ['actions'])
 
         space_map = GroupActionController._free_address_space_map()
+        self.assertEqual('X1X33X44X_____X555555____X_______________X', GroupActionTest._get_readable_ba_block(memory))
+        #                 |    |    |    |    |    |    |    |    |
+        #                 0    5    10   15   20   25   30   35   40
         self.assertEqual({1: [1],
                           4: [21],
                           5: [9],
                           15: [26]}, space_map)
-        self.assertEqual('X1X33X44X_____X555555____X_______________X', GroupActionTest._get_readable_ba_block(memory))
-        #                 |    |    |    |    |    |    |    |    |
-        #                 0    5    10   15   20   25   30   35   40
 
         # Large GA is reduced
         group_action_3 = GroupAction(id=3, actions=[BasicAction(6, 0), BasicAction(6, 0), BasicAction(6, 0)])
         GroupActionController.save_group_action(group_action_3, ['actions'])
 
         space_map = GroupActionController._free_address_space_map()
+        self.assertEqual('X1X33X44X666__X555555____X_______________X', GroupActionTest._get_readable_ba_block(memory))
+        #                 |    |    |    |    |    |    |    |    |
+        #                 0    5    10   15   20   25   30   35   40
         self.assertEqual({1: [1],
                           2: [12],
                           10: [15],
                           15: [26]}, space_map, 'Reduced GA should be moved')
-        self.assertEqual('X1X33X44X666__X555555____X_______________X', GroupActionTest._get_readable_ba_block(memory))
-        #                 |    |    |    |    |    |    |    |    |
-        #                 0    5    10   15   20   25   30   35   40
 
         # Another GA is added with only one BA
         group_action_4 = GroupAction(id=4, actions=[BasicAction(7, 0)])
         GroupActionController.save_group_action(group_action_4, ['actions'])
 
         space_map = GroupActionController._free_address_space_map()
-        self.assertEqual({2: [12],
-                          10: [15],
-                          15: [26]}, space_map, 'Reduced GA should be moved')
         self.assertEqual('X7X33X44X666__X555555____X_______________X', GroupActionTest._get_readable_ba_block(memory))
         #                 |    |    |    |    |    |    |    |    |
         #                 0    5    10   15   20   25   30   35   40
+        self.assertEqual({2: [12],
+                          10: [15],
+                          15: [26]}, space_map, 'Reduced GA should be moved')
 
         # Another large GA is added
         group_action_5 = GroupAction(id=5, actions=[BasicAction(8, 0), BasicAction(8, 0), BasicAction(8, 0),
@@ -371,24 +371,24 @@ class GroupActionTest(unittest.TestCase):
         GroupActionController.save_group_action(group_action_5, ['actions'])
 
         space_map = GroupActionController._free_address_space_map()
-        self.assertEqual({2: [12],
-                          6: [19],
-                          15: [26]}, space_map, 'Reduced GA should be moved')
         self.assertEqual('X7X33X44X666__X888855____X_______________X', GroupActionTest._get_readable_ba_block(memory))
         #                 |    |    |    |    |    |    |    |    |
         #                 0    5    10   15   20   25   30   35   40
+        self.assertEqual({2: [12],
+                          6: [19],
+                          15: [26]}, space_map, 'Reduced GA should be moved')
 
         # Large GA is "deleted"
         group_action_5 = GroupAction(id=5, actions=[])
         GroupActionController.save_group_action(group_action_5, ['actions'])
 
         space_map = GroupActionController._free_address_space_map()
-        self.assertEqual({2: [12],
-                          10: [15],
-                          15: [26]}, space_map, 'Reduced GA should be moved')
         self.assertEqual('X7X33X44X666__X888855____X_______________X', GroupActionTest._get_readable_ba_block(memory))
         #                 |    |    |    |    |    |    |    |    |
         #                 0    5    10   15   20   25   30   35   40
+        self.assertEqual({2: [12],
+                          10: [15],
+                          15: [26]}, space_map, 'Reduced GA should be moved')
 
         # A GA with too many BAs is added
         group_action_6 = GroupAction(id=6, actions=[BasicAction(8, 0)] * 16)
@@ -396,12 +396,12 @@ class GroupActionTest(unittest.TestCase):
             GroupActionController.save_group_action(group_action_6, ['actions'])
 
         space_map = GroupActionController._free_address_space_map()
-        self.assertEqual({2: [12],
-                          10: [15],
-                          15: [26]}, space_map, 'Reduced GA should be moved')
         self.assertEqual('X7X33X44X666__X888855____X_______________X', GroupActionTest._get_readable_ba_block(memory))
         #                 |    |    |    |    |    |    |    |    |
         #                 0    5    10   15   20   25   30   35   40
+        self.assertEqual({2: [12],
+                          10: [15],
+                          15: [26]}, space_map, 'Memory is not changed')
 
 
 if __name__ == "__main__":

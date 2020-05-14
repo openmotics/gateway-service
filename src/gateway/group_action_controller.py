@@ -32,7 +32,7 @@ logger = logging.getLogger("openmotics")
 @Singleton
 class GroupActionController(BaseController):
 
-    SYNC_STRUCTURES = [SyncStructure(GroupAction, 'output')]
+    SYNC_STRUCTURES = [SyncStructure(GroupAction, 'group_action')]
 
     @Inject
     def __init__(self, master_controller=INJECTED):
@@ -58,6 +58,7 @@ class GroupActionController(BaseController):
         for group_action_dto, fields in group_actions:
             group_action = GroupAction.get_or_none(number=group_action_dto.id)  # type: GroupAction
             if group_action is None:
+                logger.info('Ignored saving non-existing GroupAction {0}'.format(group_action_dto.id))
                 continue
             group_actions_to_save.append((group_action_dto, fields))
         self._master_controller.save_group_actions(group_actions_to_save)

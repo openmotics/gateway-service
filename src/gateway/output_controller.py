@@ -57,7 +57,7 @@ class OutputController(BaseController):
         for output_dto, fields in outputs:
             output = Output.get_or_none(number=output_dto.id)  # type: Output
             if output is None:
-                continue
+                logger.info('Ignored saving non-existing Output {0}'.format(output_dto.id))
             if 'room' in fields:
                 if output_dto.room is None:
                     output.room = None

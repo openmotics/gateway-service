@@ -160,7 +160,7 @@ class ShutterController(BaseController):
         for shutter_dto, fields in shutters:
             shutter = Shutter.get_or_none(number=shutter_dto.id)  # type: Shutter
             if shutter is None:
-                continue
+                logger.info('Ignored saving non-existing Shutter {0}'.format(shutter_dto.id))
             if 'room' in fields:
                 if shutter_dto.room is None:
                     shutter.room = None

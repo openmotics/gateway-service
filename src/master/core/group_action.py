@@ -136,7 +136,7 @@ class GroupActionController(object):
     @staticmethod
     def _free_address_space_map(exclude_group_action_id=None):  # type: (Optional[int]) -> Dict[int, List[int]]
         free_addresses_set = set(range(4200))
-        for i in range(255):
+        for i in range(256):
             if i == exclude_group_action_id:
                 continue
             used_address_configuration = GroupActionAddressConfiguration(i)
@@ -145,24 +145,22 @@ class GroupActionController(object):
                 free_addresses_set -= set(range(used_address_configuration.start, used_address_configuration.end + 1))
         free_addresses = sorted(list(free_addresses_set))
         space_map = {}  # type: Dict[int, List[int]]
-        sequence = []  # type: List[int]
-        length = last_address = 0
+        length = start_address = last_address = 0
         for i in range(len(free_addresses)):
             address = free_addresses[i]
             if length == 0:
                 # Empty sequence
-                sequence.append(address)
+                start_address = address
                 length = 1
             elif address == last_address + 1:
                 # Consecutive
-                sequence.append(address)
                 length += 1
             else:
                 # Found a gap
-                space_map.setdefault(length, []).append(sequence[0])
-                sequence = [address]
+                space_map.setdefault(length, []).append(start_address)
+                start_address = address
                 length = 1
             last_address = address
-        if length > 0 and len(sequence) > 0:
-            space_map.setdefault(length, []).append(sequence[0])
+        if length > 0:
+            space_map.setdefault(length, []).append(start_address)
         return space_map

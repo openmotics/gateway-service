@@ -687,9 +687,7 @@ class MasterCoreController(MasterController):
 
     def reset(self):
         # type: () -> None
-        cmd = CoreAPI.basic_action()
-        reset = {'type': 254, 'action': 0, 'device_nr': 0, 'extra_parameter': 0}
-        self._master_communicator.do_command(cmd, reset, timeout=None)
+        self._master_communicator.do_basic_action(action_type=254, action=0, timeout=None)
 
     def cold_reset(self):
         # type: () -> Dict[str,Any]

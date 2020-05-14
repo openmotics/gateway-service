@@ -57,7 +57,7 @@ class InputController(BaseController):
         for input_dto, fields in inputs:
             input_ = Input.get_or_none(number=input_dto.id)  # type: Input
             if input_ is None:
-                continue
+                logger.info('Ignored saving non-existing Input {0}'.format(input_dto.id))
             if 'room' in fields:
                 if input_dto.room is None:
                     input_.room = None
