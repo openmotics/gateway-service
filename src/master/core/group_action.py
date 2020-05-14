@@ -19,6 +19,7 @@ Contains Group Action related code
 from __future__ import absolute_import
 import logging
 from master.core.memory_models import GroupActionAddressConfiguration, GroupActionConfiguration, GroupActionBasicAction
+from master.core.memory_types import MemoryActivator
 
 if False:  # MYPY
     from typing import List, Dict, Optional
@@ -85,10 +86,6 @@ class GroupActionController(object):
         if not (0 <= group_action_id <= 255):
             raise ValueError('GroupAction ID {0} not in range 0 <= id <= 255'.format(group_action_id))
 
-        if 'name' in fields:
-            group_action_configuration = GroupActionConfiguration(group_action.id)
-            group_action_configuration.name = group_action.name
-            group_action_configuration.save()
         if 'actions' in fields:
             address_configuration = GroupActionAddressConfiguration(group_action_id)
             previous_length = address_configuration.end - address_configuration.start + 1
@@ -99,7 +96,7 @@ class GroupActionController(object):
                 # Empty, clear addresses
                 address_configuration.start = GroupActionController.MAX_WORD
                 address_configuration.end = GroupActionController.MAX_WORD
-                address_configuration.save()
+                address_configuration.save(activate=False)
             else:
                 if needed_length == previous_length:
                     # No new location needed
@@ -122,12 +119,19 @@ class GroupActionController(object):
                         start_address = available_start_addresses[0]
                     address_configuration.start = start_address
                     address_configuration.end = start_address + needed_length - 1
-                    address_configuration.save()
-
+                    address_configuration.save(activate=False)
+                # Store BAs
                 for i, new_action in enumerate(group_action.actions):
                     basic_action = GroupActionBasicAction(start_address + i)
                     basic_action.basic_action = new_action
-                    basic_action.save()
+                    basic_action.save(activate=False)
+        if 'name' in fields:
+            group_action_configuration = GroupActionConfiguration(group_action.id)
+            group_action_configuration.name = group_action.name
+            group_action_configuration.save(activate=False)
+
+        if fields:
+            MemoryActivator.activate()
 
     @staticmethod
     def _free_address_space_map(exclude_group_action_id=None):  # type: (Optional[int]) -> Dict[int, List[int]]

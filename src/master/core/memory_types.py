@@ -116,7 +116,7 @@ class MemoryModelDefinition(object):
         self._loaded_fields.add(field_name)
         return getattr(self, '_{0}'.format(field_name))
 
-    def save(self):
+    def save(self, activate=True):
         for field_name in self._loaded_fields:
             field_container = getattr(self, '_{0}'.format(field_name))  # type: MemoryFieldContainer
             if self._verbose:
@@ -126,8 +126,9 @@ class MemoryModelDefinition(object):
                     field_name
                 ))
             field_container.save()
-        for memory_file in self._memory_files.values():
-            memory_file.activate()
+        if activate:
+            for memory_file in self._memory_files.values():
+                memory_file.activate()
 
     @classmethod
     def deserialize(cls, data):
@@ -202,6 +203,15 @@ class MemoryModelDefinition(object):
                 cache[field_name] = field_type.get_address(id)
             class_cache[id] = cache
         return cache
+
+
+class MemoryActivator(object):
+    """ Holds a static method to activate memory """
+    @staticmethod
+    @Inject
+    def activate(memory_files=INJECTED):
+        for memory_file in memory_files.values():
+            memory_file.activate()
 
 
 class GlobalMemoryModelDefinition(MemoryModelDefinition):
