@@ -1057,7 +1057,7 @@ class MasterClassicController(MasterController):
         classic_object = self._eeprom_controller.read(eeprom_models.GroupActionConfiguration, group_action_id)
         return GroupActionMapper.orm_to_dto(classic_object)
 
-    def load_group_actionss(self):  # type: () -> List[GroupActionDTO]
+    def load_group_actions(self):  # type: () -> List[GroupActionDTO]
         return [GroupActionMapper.orm_to_dto(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.GroupActionConfiguration)]
 
