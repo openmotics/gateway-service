@@ -132,11 +132,11 @@ def get_module_firmware_version(module_address, version, power_communicator):
     :param version: The version
     :param power_communicator: Communication with the power modules.
     """
-    raw_version = power_communicator.do_command(module_address, power_api.get_version(version))[0]
+    raw_version = power_communicator.do_command(module_address, power_api.get_version(version))
     if version == power_api.P1_CONCENTRATOR:
         return '{0}.{1}.{2} ({3})'.format(raw_version[1], raw_version[2], raw_version[3], raw_version[0])
     else:
-        cleaned_version = raw_version.split('\x00', 1)[0]
+        cleaned_version = raw_version[0].split('\x00', 1)[0]
         parsed_version = cleaned_version.split('_')
         if len(parsed_version) != 4:
             return cleaned_version
