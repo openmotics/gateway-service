@@ -19,26 +19,31 @@ thermostats to the cloud, to keep the status information in the cloud in sync.
 """
 
 from __future__ import absolute_import
+
 from platform_utils import System
 System.import_libs()
 
-import six
+import glob
 import logging
 import os
-import glob
-import requests
-import time
 import subprocess
+import time
 import traceback
-import constants
-import ujson as json
-from threading import Thread, Lock
 from collections import deque
+from threading import Thread
+
+import requests
+import six
+import ujson as json
 from six.moves.configparser import ConfigParser
-from gateway.config import ConfigurationController
-from ioc import Injectable, INJECTED, Inject
+
+import constants
 from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
+from gateway.config import ConfigurationController
+from gateway.initialize import initialize
+from ioc import INJECTED, Inject
+
 
 if False:  # MYPY
     from typing import Any, Deque, Dict, Optional
@@ -567,10 +572,8 @@ class VPNService(object):
 
 if __name__ == '__main__':
     setup_logger()
+    initialize()
+
     logger.info("Starting VPN service")
-
-    Injectable.value(config_db=constants.get_config_database_file())
-    Injectable.value(config_db_lock=Lock())
-
     vpn_service = VPNService()
     vpn_service.start()
