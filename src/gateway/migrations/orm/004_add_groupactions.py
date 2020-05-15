@@ -13,12 +13,32 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from gateway.models import GroupAction
+from peewee import (
+    Model, Database, SqliteDatabase,
+    PrimaryKeyField, IntegerField
+)
+from peewee_migrate import Migrator
+import constants
+
+if False:  # MYPY
+    from typing import Dict, Any
 
 
 def migrate(migrator, database, fake=False, **kwargs):
-    database.create_tables([GroupAction])
+    # type: (Migrator, Database, bool, Dict[Any, Any]) -> None
+
+    class BaseModel(Model):
+        class Meta:
+            database = SqliteDatabase(constants.get_gateway_database_file(),
+                                      pragmas={'foreign_keys': 1})
+
+    class GroupAction(BaseModel):
+        id = PrimaryKeyField()
+        number = IntegerField(unique=True)
+
+    migrator.create_model(GroupAction)
 
 
 def rollback(migrator, database, fake=False, **kwargs):
+    # type: (Migrator, Database, bool, Dict[Any, Any]) -> None
     pass
