@@ -84,3 +84,6 @@ python2 gateway_tests/metrics_tests.py
 
 echo "Running thermostat tests"
 python2 thermostat_tests/gateway_mapping_tests.py
+
+echo "Running master_tool.py tests"
+pytest master_tool_tests.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterToolTests.xml
