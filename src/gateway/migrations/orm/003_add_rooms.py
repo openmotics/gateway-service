@@ -41,6 +41,7 @@ def migrate(migrator, database, fake=False, **kwargs):
         id = PrimaryKeyField()
         number = IntegerField(unique=True)
         name = CharField(null=True)
+        floor = ForeignKeyField(Floor, null=True, on_delete='SET NULL', backref='rooms')
 
     class Input(BaseModel):
         id = PrimaryKeyField()
