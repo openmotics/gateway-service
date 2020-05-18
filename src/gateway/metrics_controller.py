@@ -531,6 +531,7 @@ class MetricsController(object):
                 try:
                     receiver(metric)
                 except Exception as ex:
+                    logger.exception('error distributing metrics')
                     raise MetricsDistributeFailed('Error distributing metrics to internal receivers: {0}'.format(ex))
                 rate_key = '{0}.{1}'.format(metric['source'].lower(), metric['type'].lower())
                 if rate_key not in self.outbound_rates:
