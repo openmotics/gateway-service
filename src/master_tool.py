@@ -18,7 +18,8 @@ Tool to control the master from the command line.
 @author: fryckbos
 """
 from __future__ import absolute_import
-from platform_utils import System, Platform
+from platform_utils import Platform, System
+
 System.import_libs()
 
 import argparse
@@ -27,13 +28,21 @@ import shutil
 import subprocess
 import sys
 import time
-from six.moves.configparser import ConfigParser
-from ioc import INJECTED, Inject, Injectable
+
 from serial import Serial
+from six.moves.configparser import ConfigParser
+
 import constants
 import master.classic.master_api as master_api
+from gateway.hal.master_controller_classic import MasterClassicController
+from gateway.hal.master_controller_core import MasterCoreController
+from ioc import INJECTED, Inject, Injectable
+from master.classic.master_communicator import MasterCommunicator
 from master.core.core_api import CoreAPI
+from master.core.core_communicator import CoreCommunicator
+from master.core.memory_file import MemoryFile, MemoryTypes
 from serial_utils import CommunicationTimedOutException
+
 
 logger = logging.getLogger('openmotics')
 
@@ -165,18 +174,23 @@ def main():
 
     Injectable.value(controller_serial=Serial(port, 115200))
 
+    # TODO use platform_setup?
     if platform == Platform.Type.CORE_PLUS:
-        from master.core.memory_file import MemoryFile, MemoryTypes
+        from master.core import ucan_communicator
+        _ = ucan_communicator
+        Injectable.value(master_communicator=CoreCommunicator())
+        Injectable.value(maintenance_communicator=None)
         Injectable.value(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
                                        MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
-        from gateway.hal import master_controller_core
-        _ = master_controller_core
+        Injectable.value(master_controller=MasterCoreController())
     else:
         Injectable.value(configuration_controller=None)
         Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
         from master.classic import eeprom_extension
-        from gateway.hal import master_controller_classic
-        _ = master_controller_classic
+        _ = eeprom_extension
+        Injectable.value(master_communicator=MasterCommunicator())
+        Injectable.value(maintenance_communicator=None)
+        Injectable.value(master_controller=MasterClassicController())
 
     if args.hardreset:
         master_cold_reset()
