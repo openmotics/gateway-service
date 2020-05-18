@@ -22,7 +22,6 @@ from __future__ import absolute_import
 import unittest
 import xmlrunner
 import time
-import os
 from threading import Lock
 from ioc import SetTestMode, SetUpTestInjections
 from gateway.users import UserController
@@ -35,20 +34,9 @@ class UserControllerTest(unittest.TestCase):
     def setUpClass(cls):
         SetTestMode()
 
-    def setUp(self):  # pylint: disable=C0103
-        """ Run before each test. """
-        self._db = "test.user.{0}.db".format(time.time())
-        if os.path.exists(self._db):
-            os.remove(self._db)
-
-    def tearDown(self):  # pylint: disable=C0103
-        """ Run after each test. """
-        if os.path.exists(self._db):
-            os.remove(self._db)
-
     def _get_controller(self):
         """ Get a UserController using FILE. """
-        SetUpTestInjections(user_db=self._db,
+        SetUpTestInjections(user_db=':memory:',
                             user_db_lock=Lock(),
                             config={'username': 'om', 'password': 'pass'},
                             token_timeout=10)
