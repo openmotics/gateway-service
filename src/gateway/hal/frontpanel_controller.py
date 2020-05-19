@@ -164,7 +164,7 @@ class FrontpanelController(object):
 
             with open('/proc/net/dev', 'r') as fh_stat:
                 for line in fh_stat.readlines():
-                    if 'eth0' in line:
+                    if FrontpanelController.MAIN_INTERFACE in line:
                         received, transmitted = 0, 0
                         parts = line.split()
                         if len(parts) == 17:
