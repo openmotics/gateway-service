@@ -38,7 +38,7 @@ from serial_utils import RS485
 
 if False:  # MYPY
     from typing import Any
-    from master_controller import MasterController
+    from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger('openmotics')
 
@@ -154,14 +154,14 @@ def setup_target_platform(target_platform):
          power_controller, pulse_counter_controller, config_controller, metrics_caching, watchdog, output_controller,
          room_controller, sensor_controller, group_action_controller)
     if target_platform == Platform.Type.CORE_PLUS:
-        from gateway.hal import master_controller_core
+        from gateway.hal import master_controller_core, frontpanel_controller_core
         from master.core import maintenance, core_communicator, ucan_communicator
         from master.classic import eeprom_extension
-        _ = master_controller_core, maintenance, core_communicator, ucan_communicator
+        _ = master_controller_core, maintenance, core_communicator, ucan_communicator, frontpanel_controller_core
     else:
-        from gateway.hal import master_controller_classic
+        from gateway.hal import master_controller_classic, frontpanel_controller_classic
         from master.classic import maintenance, master_communicator, eeprom_extension  # type: ignore
-        _ = master_controller_classic, maintenance, master_communicator, eeprom_extension
+        _ = master_controller_classic, maintenance, master_communicator, eeprom_extension, frontpanel_controller_classic
 
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
     thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled
@@ -171,6 +171,10 @@ def setup_target_platform(target_platform):
     else:
         from gateway.thermostat.master import thermostat_controller_master
         _ = thermostat_controller_master
+
+    # Hardware
+    if Platform.get_platform() == Platform.Type.CLASSIC:
+        Injectable.value(leds_i2c_address=int(config.get('OpenMotics', 'leds_i2c_address'), 16))
 
     # IPC
     Injectable.value(message_client=MessageClient('openmotics_service'))
