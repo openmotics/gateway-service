@@ -12,8 +12,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import absolute_import
 
-import logging
+import os
 import subprocess
 import sys
 import unittest
@@ -23,7 +24,8 @@ import xmlrunner
 
 class MasterToolTests(unittest.TestCase):
     def test_help(self):
-        subprocess.check_call([sys.executable, '../../src/master_tool.py', '--help'])
+        subprocess.check_call([sys.executable, '../../src/master_tool.py', '--help'],
+                              cwd=os.path.dirname(__file__))
 
 
 if __name__ == '__main__':

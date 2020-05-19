@@ -1,4 +1,9 @@
-#!/bin/bash -e
-export PYTHONPATH=$PYTHONPATH:`pwd`/../../src
+#!/usr/bin/env bash
+set -e
 
-pytest . --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports/gateway.xml
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+
+# TODO install egglink instead
+export PYTHONPATH=$PYTHONPATH:$PWD/src
+
+pytest testing/unittests --log-level=DEBUG --durations=2 --junit-xml testing/gw-unit-reports/gateway.xml
