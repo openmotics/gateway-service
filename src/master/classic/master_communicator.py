@@ -23,7 +23,7 @@ import time
 from threading import Event, Lock, Thread
 
 from gateway.maintenance_communicator import InMaintenanceModeException
-from ioc import INJECTED, Inject, Injectable, Singleton
+from ioc import INJECTED, Inject
 from master.classic import master_api
 from master.classic.master_command import Field, printable
 from serial_utils import CommunicationTimedOutException
@@ -32,8 +32,6 @@ from toolbox import Empty, Queue
 logger = logging.getLogger("openmotics")
 
 
-@Injectable.named('master_communicator')
-@Singleton
 class MasterCommunicator(object):
     """
     Uses a serial port to communicate with the master and updates the output state.

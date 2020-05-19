@@ -20,14 +20,12 @@ from __future__ import absolute_import
 import time
 import logging
 from threading import Timer, Thread
-from ioc import Injectable, Inject, INJECTED, Singleton
+from ioc import Inject, INJECTED
 from gateway.maintenance_communicator import MaintenanceCommunicator
 
 logger = logging.getLogger('openmotics')
 
 
-@Injectable.named('maintenance_communicator')
-@Singleton
 class MaintenanceClassicCommunicator(MaintenanceCommunicator):
     """
     The maintenance communicator handles maintenance communication with the Master

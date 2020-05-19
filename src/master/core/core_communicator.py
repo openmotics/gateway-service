@@ -22,7 +22,7 @@ import logging
 import time
 from threading import Thread, Lock
 from six.moves.queue import Queue, Empty
-from ioc import Injectable, Inject, INJECTED, Singleton
+from ioc import Inject, INJECTED
 from master.core.core_api import CoreAPI
 from master.core.fields import WordField
 from master.core.core_command import CoreCommandSpec
@@ -34,8 +34,6 @@ if False:  # MYPY
 logger = logging.getLogger('openmotics')
 
 
-@Injectable.named('master_communicator')
-@Singleton
 class CoreCommunicator(object):
     """
     Uses a serial port to communicate with the Core and updates the output state.

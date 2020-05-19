@@ -36,7 +36,7 @@ from gateway.hal.mappers_core import (
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
-from ioc import INJECTED, Inject, Injectable, Singleton
+from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.ucan_communicator import UCANCommunicator
@@ -56,8 +56,6 @@ if False:  # MYPY
 logger = logging.getLogger("openmotics")
 
 
-@Injectable.named('master_controller')
-@Singleton
 class MasterCoreController(MasterController):
 
     @Inject

@@ -38,10 +38,10 @@ from gateway.hal.mappers_classic import (
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
-from ioc import INJECTED, Inject, Injectable, Singleton
+from ioc import INJECTED, Inject
 from master.classic import eeprom_models, master_api
 from master.classic.eeprom_models import (
-    CanLedConfiguration, DimmerConfiguration, GroupActionConfiguration,
+    CanLedConfiguration, DimmerConfiguration,
     ScheduledActionConfiguration, StartupActionConfiguration
 )
 from master.classic.eeprom_controller import EepromAddress
@@ -60,8 +60,6 @@ if False:  # MYPY
 logger = logging.getLogger("openmotics")
 
 
-@Injectable.named('master_controller')
-@Singleton
 class MasterClassicController(MasterController):
 
     @Inject
