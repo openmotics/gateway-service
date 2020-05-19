@@ -17,6 +17,7 @@ Tests for MasterCommunicator module.
 """
 
 from __future__ import absolute_import
+
 import threading
 import time
 import unittest
@@ -28,7 +29,7 @@ from ioc import SetTestMode, SetUpTestInjections
 from master.classic import master_api
 from master.classic.master_communicator import BackgroundConsumer, \
     CrcCheckFailedException, MasterCommunicator
-from serial_tests import DummyPty
+from serial_test import DummyPty
 from serial_utils import CommunicationTimedOutException
 
 
