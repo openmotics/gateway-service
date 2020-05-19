@@ -19,26 +19,34 @@ thermostats to the cloud, to keep the status information in the cloud in sync.
 """
 
 from __future__ import absolute_import
+
 from platform_utils import System
 System.import_libs()
 
-import six
+import glob
 import logging
 import os
-import glob
-import requests
-import time
 import subprocess
+import time
 import traceback
-import constants
-import ujson as json
-from threading import Thread, Lock
 from collections import deque
+from threading import Thread
+
+import requests
+import six
+import ujson as json
 from six.moves.configparser import ConfigParser
-from gateway.config import ConfigurationController
-from ioc import Injectable, INJECTED, Inject
+
+import constants
 from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
+from gateway.config import ConfigurationController
+from gateway.initialize import initialize
+from ioc import INJECTED, Inject
+
+
+if False:  # MYPY
+    from typing import Any, Deque, Dict, Optional
 
 REBOOT_TIMEOUT = 900
 DEFAULT_SLEEP_TIME = 30
@@ -324,6 +332,7 @@ class VPNService(object):
 
     @Inject
     def __init__(self, configuration_controller=INJECTED):
+        # type: (ConfigurationController) -> None
         config = ConfigParser()
         config.read(constants.get_config_file())
 
@@ -332,14 +341,14 @@ class VPNService(object):
         self._message_client.set_state_handler(self._check_state)
 
         self._iterations = 0
-        self._last_cycle = 0
+        self._last_cycle = 0.0
         self._cloud_enabled = True
-        self._sleep_time = 0
+        self._sleep_time = 0.0  # type: Optional[float]
         self._previous_sleep_time = 0
         self._vpn_open = False
         self._debug_data = {'energy': {},
-                            'master': {}}
-        self._eeprom_events = deque()
+                            'master': {}}  # type: Dict[str,Dict[float,Any]]
+        self._eeprom_events = deque()  # type: Deque[bool]
         self._gateway = Gateway()
         self._vpn_controller = VpnController()
         self._config_controller = configuration_controller  # type: ConfigurationController
@@ -414,18 +423,18 @@ class VPNService(object):
         return False
 
     def _get_debug_dumps(self, dump_type):
-        if not self._config_controller.get('cloud_support', False):
-            return {}
+        # type: (str) -> Dict[float,Dict[str,Any]]
         debug_data = self._debug_data[dump_type]
         found_timestamps = []
         for filename in glob.glob('/tmp/debug_{0}_*.json'.format(dump_type)):
-            timestamp = int(filename.replace('/tmp/debug_{0}_'.format(dump_type), '').replace('.json', ''))
+            timestamp = os.path.getmtime(filename)
             if timestamp not in debug_data:
                 with open(filename, 'r') as debug_file:
                     try:
                         debug_data[timestamp] = json.load(debug_file)
                     except ValueError as ex:
                         logger.warning('Error parsing crash dump: {0}'.format(ex))
+                        debug_data[timestamp] = {}
             found_timestamps.append(timestamp)
         for timestamp in debug_data.keys():
             if timestamp not in found_timestamps:
@@ -433,12 +442,14 @@ class VPNService(object):
         return debug_data
 
     def _clean_debug_dumps(self, dump_type):
-        for timestamp in self._debug_data[dump_type]:
-            filename = '/tmp/debug_{0}_{1}.json'.format(dump_type, timestamp)
-            try:
-                os.remove(filename)
-            except Exception as ex:
-                logger.error('Could not remove debug file {0}: {1}'.format(filename, ex))
+        # type: (str) -> None
+        for filename in glob.glob('/tmp/debug_{0}_*.json'.format(dump_type)):
+            timestamp = os.path.getmtime(filename)
+            if timestamp in self._debug_data[dump_type]:
+                try:
+                    os.remove(filename)
+                except Exception as ex:
+                    logger.error('Could not remove debug file {0}: {1}'.format(filename, ex))
 
     @staticmethod
     def _get_gateway():
@@ -487,6 +498,7 @@ class VPNService(object):
         self._check_vpn()
 
     def _check_vpn(self):
+        # type: () -> None
         while True:
             self._last_cycle = time.time()
             try:
@@ -503,7 +515,7 @@ class VPNService(object):
                     time.sleep(DEFAULT_SLEEP_TIME)
                     continue
 
-                call_data = {'events': {}}
+                call_data = {'events': {}}  # type: Dict[str,Dict[str,Any]]
 
                 # Events  # TODO: Replace this by websocket events in the future
                 dirty_events = VPNService._unload_queue(self._eeprom_events)
@@ -520,7 +532,13 @@ class VPNService(object):
                 dumps = {}
                 dumps.update(self._get_debug_dumps('energy'))
                 dumps.update(self._get_debug_dumps('master'))
-                call_data['debug'] = {'dumps': dumps}
+
+                dump_info = {k: v.get('info', {}) for k, v in dumps.items()}
+                call_data['debug'] = {'dumps': {}, 'dump_info': dump_info}
+
+                # Include full dumps when support is enabled
+                if self._config_controller.get('cloud_support', False):
+                    call_data['debug']['dumps'] = dumps
 
                 # Send data to the cloud and see if the VPN should be opened
                 feedback = self._cloud.call_home(call_data)
@@ -554,10 +572,8 @@ class VPNService(object):
 
 if __name__ == '__main__':
     setup_logger()
+    initialize()
+
     logger.info("Starting VPN service")
-
-    Injectable.value(config_db=constants.get_config_database_file())
-    Injectable.value(config_db_lock=Lock())
-
     vpn_service = VPNService()
     vpn_service.start()

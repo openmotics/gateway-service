@@ -27,6 +27,9 @@ import ujson as json
 from gateway.daemon_thread import DaemonThread
 from ioc import INJECTED, Inject, Injectable, Singleton
 
+if False:  # MYPY
+    from typing import Any, Optional
+
 logger = logging.getLogger("openmotics")
 
 
@@ -75,6 +78,7 @@ class Watchdog(object):
             os._exit(1)
 
     def _controller_check(self, name, controller):
+        # type: (str, Any) -> Optional[str]
         recovery_data_key = 'communication_recovery_{0}'.format(name)
         recovery_data = self._config_controller.get(recovery_data_key, {})
 
@@ -86,13 +90,13 @@ class Watchdog(object):
             # If there are no timeouts at all
             if len(calls_succeeded) > 30:
                 self._config_controller.remove(recovery_data_key)
-            return
+            return None
         if len(all_calls) <= 10:
             # Not enough calls made to have a decent view on what's going on
-            return
+            return None
         if not any(t in calls_timedout for t in all_calls[-10:]):
             # The last X calls are successfull
-            return
+            return None
         calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
         ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
         if ratio < 0.25:
@@ -100,7 +104,7 @@ class Watchdog(object):
             logger.warning('Noticed communication timeouts for \'{0}\', but there\'s only a failure ratio of {1:.2f}%.'.format(
                 name, ratio * 100
             ))
-            return
+            return None
 
         service_restart = None
         device_reset = None
@@ -126,11 +130,12 @@ class Watchdog(object):
             # Log debug information
             try:
                 debug_buffer = controller.get_debug_buffer()
+                action = 'service_restart' if service_restart is not None else 'device_reset'
                 debug_data = {'type': 'communication_recovery',
+                              'info': {'controller': name, 'action': action},
                               'data': {'buffer': debug_buffer,
                                        'calls': {'timedout': calls_timedout,
-                                                 'succeeded': calls_succeeded},
-                                       'action': 'service_restart' if service_restart is not None else 'device_reset'}}
+                                                 'succeeded': calls_succeeded}}}
                 with open('/tmp/debug_{0}_{1}.json'.format(name, int(time.time())), 'w') as recovery_file:
                     recovery_file.write(json.dumps(debug_data, indent=4, sort_keys=True))
                 check_output(
@@ -141,15 +146,16 @@ class Watchdog(object):
                 logger.exception('Could not store debug file: {0}'.format(ex))
 
         if service_restart is not None:
-            logger.fatal('Major issues in communication with {0}. Restarting service...'.format(name))
+            logger.error('Major issues in communication with {0}. Restarting service...'.format(name))
             recovery_data['service_restart'] = {'reason': service_restart,
                                                 'time': time.time(),
                                                 'backoff': backoff}
             self._config_controller.set(recovery_data_key, recovery_data)
             return 'service'
         if device_reset is not None:
-            logger.fatal('Major issues in communication with {0}. Resetting {0} & service'.format(name))
+            logger.error('Major issues in communication with {0}. Resetting {0} & service'.format(name))
             recovery_data['device_reset'] = {'reason': device_reset,
                                              'time': time.time()}
             self._config_controller.set(recovery_data_key, recovery_data)
             return 'device'
+        return None
