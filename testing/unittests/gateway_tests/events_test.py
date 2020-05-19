@@ -16,15 +16,18 @@
 Tests for events.
 """
 from __future__ import absolute_import
+
 import unittest
+
 import xmlrunner
+
 from cloud.cloud_api_client import CloudAPIClient
-from gateway.events import GatewayEvent
 from cloud.events import EventSender
+from gateway.events import GatewayEvent
 
 
 class EventsTest(unittest.TestCase):
-
+    @unittest.skip('FIXME event tests where never included in the testruns')
     def test_events_sent_to_cloud(self):
         container = {}
 
