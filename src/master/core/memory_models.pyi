@@ -22,6 +22,7 @@ from master.core.memory_types import MemoryModelDefinition, GlobalMemoryModelDef
 
 
 class GlobalConfiguration(GlobalMemoryModelDefinition):
+    hardware_detection: int
     number_of_output_modules: int
     number_of_input_modules: int
     number_of_sensor_modules: int

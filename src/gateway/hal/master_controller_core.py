@@ -111,7 +111,8 @@ class MasterCoreController(MasterController):
         # type: (Dict[str,Any]) -> None
         core_event = MasterCoreEvent(data)
         if core_event.type not in [MasterCoreEvent.Types.LED_BLINK,
-                                   MasterCoreEvent.Types.LED_ON]:
+                                   MasterCoreEvent.Types.LED_ON,
+                                   MasterCoreEvent.Types.BUTTON_PRESS]:
             # Interesting for debug purposes, but not for everything
             logger.info('Got master event: {0}'.format(core_event))
         if core_event.type == MasterCoreEvent.Types.OUTPUT:
@@ -236,7 +237,10 @@ class MasterCoreController(MasterController):
     def start(self):
         super(MasterCoreController, self).start()
         self._synchronization_thread.start()
-        self._log_stats()
+        try:
+            self._log_stats()
+        except Exception:
+            pass
 
     def set_plugin_controller(self, plugin_controller):
         """ Set the plugin controller. """

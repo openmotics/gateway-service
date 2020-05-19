@@ -25,6 +25,7 @@ from master.core.memory_types import (MemoryModelDefinition, GlobalMemoryModelDe
 
 
 class GlobalConfiguration(GlobalMemoryModelDefinition):
+    hardware_detection = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 0))  # 0, 0
     number_of_output_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1))  # 0, 1
     number_of_input_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 2))  # 0, 1
     number_of_sensor_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 3))  # 0, 3

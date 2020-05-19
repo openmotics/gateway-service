@@ -53,6 +53,7 @@ if False:  # MYPY
     from gateway.watchdog import Watchdog
     from gateway.comm_led_controller import CommunicationLedController
     from gateway.hal.master_controller import MasterController
+    from gateway.hal.frontpanel_controller import FrontpanelController
     from plugins.base import PluginController
     from power.power_communicator import PowerCommunicator
     from master.classic.passthrough import PassthroughService
@@ -105,14 +106,14 @@ class OpenmoticsService(object):
              power_controller, pulse_counter_controller, config_controller, metrics_caching, watchdog, output_controller,
              room_controller, sensor_controller, group_action_controller)
         if Platform.get_platform() == Platform.Type.CORE_PLUS:
-            from gateway.hal import master_controller_core
+            from gateway.hal import master_controller_core, frontpanel_controller_core
             from master.core import maintenance, core_communicator, ucan_communicator
             from master.classic import eeprom_extension
-            _ = master_controller_core, maintenance, core_communicator, ucan_communicator
+            _ = master_controller_core, maintenance, core_communicator, ucan_communicator, frontpanel_controller_core
         else:
-            from gateway.hal import master_controller_classic
+            from gateway.hal import master_controller_classic, frontpanel_controller_classic
             from master.classic import maintenance, master_communicator, eeprom_extension
-            _ = master_controller_classic, maintenance, master_communicator, eeprom_extension
+            _ = master_controller_classic, maintenance, master_communicator, eeprom_extension, frontpanel_controller_classic
 
         thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
         thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled
@@ -122,6 +123,10 @@ class OpenmoticsService(object):
         else:
             from gateway.thermostat.master import thermostat_controller_master
             _ = thermostat_controller_master
+
+        # Hardware
+        if Platform.get_platform() == Platform.Type.CLASSIC:
+            Injectable.value(leds_i2c_address=int(config.get('OpenMotics', 'leds_i2c_address'), 16))
 
         # IPC
         Injectable.value(message_client=MessageClient('openmotics_service'))
@@ -261,7 +266,8 @@ class OpenmoticsService(object):
                 pulse_counter_controller=INJECTED,  # type: PulseCounterController
                 sensor_controller=INJECTED,  # type: SensorController
                 shutter_controller=INJECTED,  # type: ShutterController
-                group_action_controller=INJECTED  # type: GroupActionController
+                group_action_controller=INJECTED,  # type: GroupActionController
+                frontpanel_controller=INJECTED  # type: FrontpanelController
             ):
         """ Main function. """
         logger.info('Starting OM core service...')
@@ -290,6 +296,7 @@ class OpenmoticsService(object):
         metrics_collector.start()
         web_service.start()
         communication_led_controller.start()
+        frontpanel_controller.start()
         event_sender.start()
         watchdog.start()
         plugin_controller.start()
@@ -323,6 +330,7 @@ class OpenmoticsService(object):
             thermostat_controller.stop()
             plugin_controller.stop()
             communication_led_controller.stop()
+            frontpanel_controller.stop()
             event_sender.stop()
             logger.info('Stopping OM core service... Done')
             signal_request['stop'] = True
