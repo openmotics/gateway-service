@@ -35,8 +35,6 @@ logger = logging.getLogger("openmotics")
 class FrontpanelCoreController(FrontpanelController):
 
     # TODO:
-    #  * Send button press events
-    #  * Support various reports
     #  * Support authorized mode
 
     LED_MAPPING_ID_TO_ENUM = {0: {0: FrontpanelController.Leds.RS485,
@@ -56,6 +54,20 @@ class FrontpanelCoreController(FrontpanelController):
                                   14: FrontpanelController.Leds.OUTPUTS_DIG_5_7,
                                   15: FrontpanelController.Leds.OUTPUTS_ANA_1_4,
                                   16: FrontpanelController.Leds.INPUTS_1_4}}
+    LED_TO_BA = {FrontpanelController.Leds.P1: 6,
+                 FrontpanelController.Leds.LAN_GREEN: 7,
+                 FrontpanelController.Leds.LAN_RED: 8,
+                 FrontpanelController.Leds.CLOUD: 9}
+    BLINKING_MAP = {FrontpanelController.LedStates.BLINKING_25: 25,
+                    FrontpanelController.LedStates.BLINKING_50: 50,
+                    FrontpanelController.LedStates.BLINKING_75: 75,
+                    FrontpanelController.LedStates.SOLID: 100}
+    BUTTON_STATE_MAPPING_ID_TO_ENUM = {0: FrontpanelController.ButtonStates.RELEASED,
+                                       1: FrontpanelController.ButtonStates.PRESSED}
+    BUTTON_MAPPING_ID_TO_ENUM = {0: FrontpanelController.Buttons.SETUP,
+                                 1: FrontpanelController.Buttons.ACTION,
+                                 2: FrontpanelController.Buttons.CAN_POWER,
+                                 3: FrontpanelController.Buttons.SELECT}
 
     @Inject
     def __init__(self, master_communicator=INJECTED):  # type: (CoreCommunicator) -> None
@@ -66,6 +78,11 @@ class FrontpanelCoreController(FrontpanelController):
         )
         self._led_states = {}  # type: Dict[int, str]
         self._active_leds = set()  # type: Set[int]
+        self._carrier = False
+        self._cloud = False
+        self._vpn = False
+        self._lan_green_on = None
+        self._serial_port_on = None
         self._authorized_mode = True  # TODO: Replace
 
     def _handle_event(self, data):
@@ -82,11 +99,6 @@ class FrontpanelCoreController(FrontpanelController):
                     if new_state != current_state:
                         logger.info('LED {0} state change: {1} > {2}'.format(led_id, current_state, new_state))
                         self._led_states[led_id] = new_state
-                        for callback in self._led_change_callbacks:
-                            callback(FrontpanelController.LedChangedEvent(
-                                led=FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[chip][led_id],
-                                state=new_state
-                            ))
         elif core_event.type == MasterCoreEvent.Types.LED_ON:
             chip = core_event.data['chip']
             if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM:
@@ -97,7 +109,10 @@ class FrontpanelCoreController(FrontpanelController):
                     else:
                         self._active_leds.add(led_id)
         elif core_event.type == MasterCoreEvent.Types.BUTTON_PRESS:
-            logger.info('Got button press: {0}'.format(core_event))
+            state = FrontpanelCoreController.BUTTON_STATE_MAPPING_ID_TO_ENUM.get(core_event.data['state'])
+            if state is not None:
+                button = FrontpanelCoreController.BUTTON_MAPPING_ID_TO_ENUM[core_event.data['button']]
+                logger.info('Button {0} was {1}'.format(button, state))
 
     def start(self):
         super(FrontpanelCoreController, self).start()
@@ -106,16 +121,58 @@ class FrontpanelCoreController(FrontpanelController):
         super(FrontpanelCoreController, self).stop()
 
     def _report_carrier(self, carrier):
-        pass  # TODO: Set correct led
+        self._set_led(led=FrontpanelController.Leds.LAN_RED,
+                      on=not carrier,
+                      mode=FrontpanelController.LedStates.SOLID)
 
     def _report_network_activity(self, activity):
-        pass  # TODO: Set correct led
+        lan_green = activity and self._carrier,
+        if self._lan_green_on != lan_green:
+            self._lan_green_on = lan_green
+            self._set_led(led=FrontpanelController.Leds.LAN_GREEN,
+                          on=lan_green,
+                          mode=FrontpanelController.LedStates.BLINKING_50)
 
     def report_serial_activity(self, serial_port, activity):
-        pass  # TODO: Set correct led
+        if serial_port != FrontpanelController.SerialPorts.P1:
+            return
+        if self._serial_port_on != activity:
+            self._serial_port_on = activity
+            self._set_led(led=FrontpanelController.Leds.P1,
+                          on=activity,
+                          mode=FrontpanelController.LedStates.BLINKING_50)
 
     def _report_cloud_reachable(self, reachable):
-        pass  # TODO: Set correct led
+        if self._cloud != reachable:
+            self._cloud = reachable
+            self._update_cloud_led()
 
     def _report_vpn_open(self, vpn_open):
-        pass  # TODO: Set correct led
+        if self._vpn != vpn_open:
+            self._vpn = vpn_open
+            self._update_cloud_led()
+
+    def _update_cloud_led(self):
+        # Cloud led state:
+        # * Off: No heartbeat
+        # * Blinking: Heartbeat but VPN not (yet) open
+        # * Solid: Heartbeat and VPN is open
+        blinking_mode = FrontpanelController.LedStates.SOLID
+        if self._cloud and not self._vpn:
+            blinking_mode = FrontpanelController.LedStates.BLINKING_50
+
+        self._set_led(led=FrontpanelController.Leds.CLOUD,
+                      on=self._cloud,
+                      mode=blinking_mode)
+
+    def _set_led(self, led, on, mode):
+        if led not in FrontpanelCoreController.LED_TO_BA:
+            return
+        action = FrontpanelCoreController.LED_TO_BA[led]
+        if mode not in FrontpanelCoreController.BLINKING_MAP:
+            return
+        extra_parameter = FrontpanelCoreController.BLINKING_MAP[mode]
+        self._master_communicator.do_basic_action(action_type=210,
+                                                  action=action,
+                                                  device_nr=1 if on else 0,
+                                                  extra_parameter=extra_parameter)

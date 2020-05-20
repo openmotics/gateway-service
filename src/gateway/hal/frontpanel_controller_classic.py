@@ -34,9 +34,6 @@ logger = logging.getLogger("openmotics")
 @Singleton
 class FrontpanelClassicController(FrontpanelController):
 
-    # TODO:
-    #  * Send led change events
-
     IOCTL_I2C_SLAVE = 0x0703
     BOARD_TYPE = Hardware.get_board_type()
     ACTION_BUTTON_GPIO = 38 if BOARD_TYPE == Hardware.BoardType.BB else 26
@@ -79,33 +76,21 @@ class FrontpanelClassicController(FrontpanelController):
         self._button_released = False
         self._indicate_pointer = 0
 
-    @property
-    def authorized_mode(self):
-        return self._authorized_mode
-
     def _poll_button(self):
         # Check new state
         with open('/sys/class/gpio/gpio{0}/value'.format(FrontpanelClassicController.ACTION_BUTTON_GPIO), 'r') as fh_inp:
             line = fh_inp.read()
-        new_state = int(line) == 0
-
-        # Send event if there's a change
-        current_state = self._button_states.get(FrontpanelClassicController.BUTTON, None)
-        if new_state != current_state:
-            for callback in self._button_press_callbacks:
-                callback(FrontpanelController.ButtonPressEvent(button=FrontpanelClassicController.BUTTON,
-                                                               state={True: FrontpanelController.ButtonStates.PRESSED,
-                                                                      False: FrontpanelController.ButtonStates.RELEASED}[new_state]))
-            self._button_states[FrontpanelClassicController.BUTTON] = new_state
+        button_pressed = int(line) == 0
+        self._button_states[FrontpanelClassicController.BUTTON] = button_pressed
 
         # Check for authorized mode
-        if not new_state:
+        if not button_pressed:
             self._button_released = True
         if self._authorized_mode:
-            if time.time() > self._authorized_mode_timeout or (new_state and self._button_released):
+            if time.time() > self._authorized_mode_timeout or (button_pressed and self._button_released):
                 self._authorized_mode = False
         else:
-            if new_state:
+            if button_pressed:
                 self._button_released = False
                 if self._button_pressed_since is None:
                     self._button_pressed_since = time.time()
@@ -152,7 +137,9 @@ class FrontpanelClassicController(FrontpanelController):
 
     def report_serial_activity(self, serial_port, activity):
         led = {FrontpanelController.SerialPorts.ENERGY: FrontpanelController.Leds.COMMUNICATION_1,
-               FrontpanelController.SerialPorts.MASTER_API: FrontpanelController.Leds.COMMUNICATION_2}[serial_port]
+               FrontpanelController.SerialPorts.MASTER_API: FrontpanelController.Leds.COMMUNICATION_2}.get(serial_port)
+        if led is None:
+            return
         if activity:
             self._toggle_led(led)
         else:

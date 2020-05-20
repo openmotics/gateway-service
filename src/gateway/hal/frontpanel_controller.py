@@ -22,9 +22,6 @@ from bus.om_bus_client import MessageClient, OMBusEvents
 from platform_utils import Hardware
 from gateway.daemon_thread import DaemonThread
 
-if False:  # MYPY
-    from typing import Callable, List
-
 logger = logging.getLogger("openmotics")
 
 
@@ -40,11 +37,6 @@ class FrontpanelController(object):
         MAIN_INTERFACE = 'wlan0'
     else:
         MAIN_INTERFACE = 'lo'
-
-    class LedChangedEvent(object):
-        def __init__(self, led, state):
-            self.led = led
-            self.state = state
 
     class Leds(object):
         RS485 = 'RS485'
@@ -77,11 +69,6 @@ class FrontpanelController(object):
         BLINKING_75 = 'BLINKING_75'
         SOLID = 'SOLID'
 
-    class ButtonPressEvent(object):
-        def __init__(self, button, state):  # type: (str, str) -> None
-            self.button = button
-            self.state = state
-
     class Buttons(object):
         SELECT = 'SELECT'
         SETUP = 'SETUP'
@@ -95,11 +82,11 @@ class FrontpanelController(object):
     class SerialPorts(object):
         MASTER_API = 'MASTER_API'
         ENERGY = 'ENERGY'
+        P1 = 'P1'
 
     def __init__(self):  # type: () -> None
-        self._led_change_callbacks = []  # type: List[Callable[[FrontpanelController.LedChangedEvent], None]]
-        self._button_press_callbacks = []  # type: List[Callable[[FrontpanelController.ButtonPressEvent], None]]
         self._network_carrier = None
+        self._network_activity = None
         self._network_bytes = 0
         self._check_network_activity_thread = None
         self._authorized_mode = False
@@ -108,17 +95,15 @@ class FrontpanelController(object):
         self._indicate_timeout = 0
         self._message_client = None
 
+    @property
+    def authorized_mode(self):
+        return self._authorized_mode
+
     def _event_receiver(self, event, payload):
         if event == OMBusEvents.CLOUD_REACHABLE:
             self._report_cloud_reachable(payload)
         elif event == OMBusEvents.VPN_OPEN:
             self._report_vpn_open(payload)
-
-    def subscribe_led_change(self, callback):
-        self._led_change_callbacks.append(callback)
-
-    def subscribe_button_presses(self, callback):
-        self._button_press_callbacks.append(callback)
 
     def start(self):
         self._check_network_activity_thread = DaemonThread(name='Frontpanel runner',
@@ -179,7 +164,9 @@ class FrontpanelController(object):
                             network_activity = True
                         else:
                             network_activity = False
-                        self._report_network_activity(network_activity)
+                        if self._network_activity != network_activity or network_activity:
+                            self._report_network_activity(network_activity)
+                        self._network_activity = network_activity
         except Exception as exception:
             logger.error('Error while checking network activity: {0}'.format(exception))
 

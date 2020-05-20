@@ -309,7 +309,7 @@ class WebInterface(object):
         self._service_state = False
 
     def in_authorized_mode(self):
-        return self._frontpanel_controller._authorized_mode
+        return self._frontpanel_controller.authorized_mode
 
     def set_service_state(self, state):
         self._service_state = state
