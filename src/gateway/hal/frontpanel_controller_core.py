@@ -92,12 +92,13 @@ class FrontpanelCoreController(FrontpanelController):
             chip = core_event.data['chip']
             if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM:
                 for led_id in range(16):
+                    led_name = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[chip][led_id]
                     current_state = self._led_states.get(led_id)
                     new_state = FrontpanelController.LedStates.OFF
                     if led_id in self._active_leds:
                         new_state = core_event.data['leds'][led_id]
                     if new_state != current_state:
-                        logger.info('LED {0} state change: {1} > {2}'.format(led_id, current_state, new_state))
+                        logger.info('Led {0} state change: {1} > {2}'.format(led_name, current_state, new_state))
                         self._led_states[led_id] = new_state
         elif core_event.type == MasterCoreEvent.Types.LED_ON:
             chip = core_event.data['chip']
