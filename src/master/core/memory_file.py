@@ -41,6 +41,8 @@ class MemoryFile(object):
     READ_TIMEOUT = 5
     ACTIVATE_TIMEOUT = 5
     WRITE_CHUNK_SIZE = 32
+    SIZES = {MemoryTypes.EEPROM: (512, 256),
+             MemoryTypes.FRAM: (128, 256)}
 
     @Inject
     def __init__(self, memory_type, master_communicator=INJECTED):
@@ -55,12 +57,7 @@ class MemoryFile(object):
         self.type = memory_type  # type: str
         self._cache = {}
         self._eeprom_change_callback = None
-        if memory_type == MemoryTypes.EEPROM:
-            self._pages = 512
-            self._page_length = 256
-        elif memory_type == MemoryTypes.FRAM:
-            self._pages = 128
-            self._page_length = 256
+        self._pages, self._page_length = MemoryFile.SIZES[memory_type]
 
         if memory_type == MemoryTypes.EEPROM:
             self._core_communicator.register_consumer(
@@ -113,7 +110,7 @@ class MemoryFile(object):
     def write_page(self, page, data):
         cached_data = None
         if self.type == MemoryTypes.EEPROM:
-            cached_data = self._cache[page]
+            cached_data = self._cache.get(page)
 
         for i in range(self._page_length // MemoryFile.WRITE_CHUNK_SIZE):
             start = i * MemoryFile.WRITE_CHUNK_SIZE
