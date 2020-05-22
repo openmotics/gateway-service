@@ -19,6 +19,7 @@ Tests for the passthrough module.
 """
 
 from __future__ import absolute_import
+
 import time
 import unittest
 
@@ -27,7 +28,7 @@ import xmlrunner
 from ioc import SetTestMode, SetUpTestInjections
 from master.classic.master_communicator import MasterCommunicator
 from master.classic.passthrough import PassthroughService
-from serial_tests import DummyPty, SerialMock, sin, sout
+from serial_test import DummyPty, SerialMock, sin, sout
 
 
 class PassthroughServiceTest(unittest.TestCase):

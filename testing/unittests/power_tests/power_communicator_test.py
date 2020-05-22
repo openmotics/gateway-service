@@ -17,17 +17,19 @@ Tests for PowerCommunicator module.
 """
 
 from __future__ import absolute_import
-import unittest
-import xmlrunner
+
 import os
 import time
-from ioc import SetTestMode, SetUpTestInjections
-import power.power_api as power_api
-from power.power_controller import PowerController
-from power.power_communicator import PowerCommunicator, InAddressModeException
+import unittest
 
-from serial_tests import SerialMock, sin, sout
-from serial_utils import CommunicationTimedOutException, RS485
+import xmlrunner
+
+import power.power_api as power_api
+from ioc import SetTestMode, SetUpTestInjections
+from power.power_communicator import InAddressModeException, PowerCommunicator
+from power.power_controller import PowerController
+from serial_test import SerialMock, sin, sout
+from serial_utils import RS485, CommunicationTimedOutException
 
 
 class PowerCommunicatorTest(unittest.TestCase):
