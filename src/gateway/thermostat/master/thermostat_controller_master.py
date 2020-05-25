@@ -29,6 +29,7 @@ from gateway.thermostat.master.thermostat_status_master import (
     ThermostatStatusMaster
 )
 from gateway.thermostat.thermostat_controller import ThermostatController
+from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master.classic import master_api
 from master.classic.eeprom_models import (
@@ -531,9 +532,13 @@ class ThermostatControllerMaster(ThermostatController):
             _automatic = bool(_mode & 1 << 3)
             return _automatic, 0 if _automatic else (_mode & 0b00000111)
 
-        thermostat_info = self._master_communicator.do_command(master_api.thermostat_list())
-        thermostat_mode = self._master_communicator.do_command(master_api.thermostat_mode_list())
-        aircos = self._master_communicator.do_command(master_api.read_airco_status_bits())
+        try:
+            thermostat_info = self._master_communicator.do_command(master_api.thermostat_list())
+            thermostat_mode = self._master_communicator.do_command(master_api.thermostat_mode_list())
+            aircos = self._master_communicator.do_command(master_api.read_airco_status_bits())
+        except InMaintenanceModeException:
+            return
+
         outputs = self._observer.get_outputs()
 
         mode = thermostat_info['mode']
@@ -541,12 +546,15 @@ class ThermostatControllerMaster(ThermostatController):
         cooling = bool(mode & 1 << 4)
         automatic, setpoint = get_automatic_setpoint(thermostat_mode['mode0'])
 
-        if cooling:
-            self._thermostats_config = {thermostat.id: thermostat
-                                        for thermostat in self.load_cooling_thermostats()}
-        else:
-            self._thermostats_config = {thermostat.id: thermostat
-                                        for thermostat in self.load_heating_thermostats()}
+        try:
+            if cooling:
+                self._thermostats_config = {thermostat.id: thermostat
+                                            for thermostat in self.load_cooling_thermostats()}
+            else:
+                self._thermostats_config = {thermostat.id: thermostat
+                                            for thermostat in self.load_heating_thermostats()}
+        except InMaintenanceModeException:
+            return
 
         thermostats = []
         for thermostat_id in range(32):
