@@ -78,9 +78,9 @@ class FrontpanelCoreController(FrontpanelController):
         )
         self._led_states = {}  # type: Dict[int, str]
         self._active_leds = set()  # type: Set[int]
-        self._carrier = False
-        self._cloud = False
-        self._vpn = False
+        self._carrier = None
+        self._cloud = None
+        self._vpn = None
         self._lan_green_on = None
         self._serial_port_on = None
         self._authorized_mode = True  # TODO: Replace
@@ -122,12 +122,13 @@ class FrontpanelCoreController(FrontpanelController):
         super(FrontpanelCoreController, self).stop()
 
     def _report_carrier(self, carrier):
+        self._carrier = carrier
         self._set_led(led=FrontpanelController.Leds.LAN_RED,
                       on=not carrier,
                       mode=FrontpanelController.LedStates.SOLID)
 
     def _report_network_activity(self, activity):
-        lan_green = activity and self._carrier,
+        lan_green = activity and self._carrier
         if self._lan_green_on != lan_green:
             self._lan_green_on = lan_green
             self._set_led(led=FrontpanelController.Leds.LAN_GREEN,
