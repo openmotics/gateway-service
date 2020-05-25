@@ -32,9 +32,17 @@ from six.moves.urllib.parse import urlparse
 
 import constants
 from bus.om_bus_client import MessageClient
+from gateway.hal.master_controller_classic import MasterClassicController
+from gateway.hal.master_controller_core import MasterCoreController
 from gateway.models import Database, Feature
 from ioc import INJECTED, Inject, Injectable
+from master.classic.maintenance import MaintenanceClassicCommunicator
+from master.classic.master_communicator import MasterCommunicator
+from master.core.core_communicator import CoreCommunicator
+from master.core.maintenance import MaintenanceCoreCommunicator
+from master.core.memory_file import MemoryFile, MemoryTypes
 from serial_utils import RS485
+
 
 if False:  # MYPY
     from typing import Any
@@ -154,14 +162,11 @@ def setup_target_platform(target_platform):
          power_controller, pulse_counter_controller, config_controller, metrics_caching, watchdog, output_controller,
          room_controller, sensor_controller, group_action_controller)
     if target_platform == Platform.Type.CORE_PLUS:
-        from gateway.hal import master_controller_core, frontpanel_controller_core
-        from master.core import maintenance, core_communicator, ucan_communicator
-        from master.classic import eeprom_extension
-        _ = master_controller_core, maintenance, core_communicator, ucan_communicator, frontpanel_controller_core
+        from gateway.hal import frontpanel_controller_core
+        _ = frontpanel_controller_core
     else:
-        from gateway.hal import master_controller_classic, frontpanel_controller_classic
-        from master.classic import maintenance, master_communicator, eeprom_extension  # type: ignore
-        _ = master_controller_classic, maintenance, master_communicator, eeprom_extension, frontpanel_controller_classic
+        from gateway.hal import frontpanel_controller_classic
+        _ = frontpanel_controller_classic
 
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
     thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled
@@ -171,10 +176,6 @@ def setup_target_platform(target_platform):
     else:
         from gateway.thermostat.master import thermostat_controller_master
         _ = thermostat_controller_master
-
-    # Hardware
-    if Platform.get_platform() == Platform.Type.CLASSIC:
-        Injectable.value(leds_i2c_address=int(config.get('OpenMotics', 'leds_i2c_address'), 16))
 
     # IPC
     Injectable.value(message_client=MessageClient('openmotics_service'))
@@ -220,15 +221,24 @@ def setup_target_platform(target_platform):
     controller_serial_port = config.get('OpenMotics', 'controller_serial')
     Injectable.value(controller_serial=Serial(controller_serial_port, 115200))
     if target_platform == Platform.Type.CORE_PLUS:
-        from master.core.memory_file import MemoryFile, MemoryTypes
+        # FIXME don't create singleton for optional controller?
+        from master.core import ucan_communicator
+        _ = ucan_communicator
         core_cli_serial_port = config.get('OpenMotics', 'cli_serial')
         Injectable.value(cli_serial=Serial(core_cli_serial_port, 115200))
         Injectable.value(passthrough_service=None)  # Mark as "not needed"
-        Injectable.value(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
-                                       MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
         # TODO: Remove; should not be needed for Core
         Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
+
+        Injectable.value(master_communicator=CoreCommunicator())
+        Injectable.value(maintenance_communicator=MaintenanceCoreCommunicator())
+        Injectable.value(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
+                                       MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
+        Injectable.value(master_controller=MasterCoreController())
     else:
+        # FIXME don't create singleton for optional controller?
+        from master.classic import eeprom_extension
+        _ = eeprom_extension
         passthrough_serial_port = config.get('OpenMotics', 'passthrough_serial')
         Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
         if passthrough_serial_port:
@@ -237,6 +247,9 @@ def setup_target_platform(target_platform):
             _ = PassthroughService  # IOC announcement
         else:
             Injectable.value(passthrough_service=None)
+        Injectable.value(master_communicator=MasterCommunicator())
+        Injectable.value(maintenance_communicator=MaintenanceClassicCommunicator())
+        Injectable.value(master_controller=MasterClassicController())
 
     # Metrics Controller
     Injectable.value(metrics_db=constants.get_metrics_database_file())

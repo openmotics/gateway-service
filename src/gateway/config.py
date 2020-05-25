@@ -72,7 +72,7 @@ class ConfigurationController(object):
                                    'cloud_support': False,
                                    'cors_enabled': False}.items():
             if self.get(key) is None:
-                self.get(key, default_value)
+                self.set(key, default_value)
 
     def get(self, key, fallback=None):
         for entry in self.__execute('SELECT data FROM settings WHERE setting=?;', (key.lower(),)):
