@@ -46,7 +46,7 @@ from serial_utils import RS485
 
 if False:  # MYPY
     from typing import Any
-    from master_controller import MasterController
+    from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger('openmotics')
 
@@ -161,6 +161,12 @@ def setup_target_platform(target_platform):
          maintenance_controller, base, events, power_communicator, comm_led_controller, users,
          power_controller, pulse_counter_controller, config_controller, metrics_caching, watchdog, output_controller,
          room_controller, sensor_controller, group_action_controller)
+    if target_platform == Platform.Type.CORE_PLUS:
+        from gateway.hal import frontpanel_controller_core
+        _ = frontpanel_controller_core
+    else:
+        from gateway.hal import frontpanel_controller_classic
+        _ = frontpanel_controller_classic
 
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
     thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled

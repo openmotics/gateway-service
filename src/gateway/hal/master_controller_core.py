@@ -109,7 +109,8 @@ class MasterCoreController(MasterController):
         # type: (Dict[str,Any]) -> None
         core_event = MasterCoreEvent(data)
         if core_event.type not in [MasterCoreEvent.Types.LED_BLINK,
-                                   MasterCoreEvent.Types.LED_ON]:
+                                   MasterCoreEvent.Types.LED_ON,
+                                   MasterCoreEvent.Types.BUTTON_PRESS]:
             # Interesting for debug purposes, but not for everything
             logger.info('Got master event: {0}'.format(core_event))
         if core_event.type == MasterCoreEvent.Types.OUTPUT:
@@ -234,7 +235,10 @@ class MasterCoreController(MasterController):
     def start(self):
         super(MasterCoreController, self).start()
         self._synchronization_thread.start()
-        self._log_stats()
+        try:
+            self._log_stats()
+        except Exception:
+            pass
 
     def set_plugin_controller(self, plugin_controller):
         """ Set the plugin controller. """
@@ -717,13 +721,40 @@ class MasterCoreController(MasterController):
         raise NotImplementedError()
 
     def get_backup(self):
-        raise NotImplementedError()
+        data = []
+        pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
+        for page in range(pages):
+            data += self._memory_files[MemoryTypes.EEPROM].read_page(page)
+        return ''.join(chr(entry) for entry in data)
 
     def restore(self, data):
-        raise NotImplementedError()
+        pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
+        data_structure = {}
+        for page in range(pages):
+            page_data = [ord(entry) for entry in data[page * page_length:(page + 1) * page_length]]
+            if len(page_data) < page_length:
+                page_data += [255] * (page_length - len(page_data))
+            data_structure[page] = page_data
+        self._restore(data_structure)
 
     def factory_reset(self):
-        raise NotImplementedError()
+        pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
+        self._restore({page: [255] * page_length for page in range(pages)})
+
+    def _restore(self, data):  # type: (Dict[int, List[int]]) -> None
+        pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
+        page_retry = None
+        page = 0
+        while page < pages:
+            try:
+                self._memory_files[MemoryTypes.EEPROM].write_page(page, data[page])
+                page += 1
+            except CommunicationTimedOutException:
+                if page_retry == page:
+                    raise
+                page_retry = page
+                time.sleep(10)
+        self._memory_files[MemoryTypes.EEPROM].activate()
 
     def error_list(self):
         return []  # TODO: Implement

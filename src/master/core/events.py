@@ -31,6 +31,7 @@ class Event(object):
         THERMOSTAT = 'THERMOSTAT'
         SYSTEM = 'SYSTEM'
         POWER = 'POWER'
+        BUTTON_PRESS = 'BUTTON_PRESS'
         LED_ON = 'LED_ON'
         LED_BLINK = 'LED_BLINK'
         UNKNOWN = 'UNKNOWN'
@@ -56,7 +57,7 @@ class Event(object):
         CAN = 'CAN'
 
     class Leds(object):
-        LED_0 = 0  # TODO: Rename these enums to more relevant names once known
+        LED_0 = 0
         LED_1 = 1
         LED_2 = 2
         LED_3 = 3
@@ -75,10 +76,25 @@ class Event(object):
 
     class LedStates(object):
         OFF = 'OFF'
+        ON = 'ON'
+
+    class LedFrequencies(object):
         BLINKING_25 = 'BLINKING_25'
         BLINKING_50 = 'BLINKING_50'
         BLINKING_75 = 'BLINKING_75'
-        ON = 'ON'
+        SOLID = 'SOLID'
+
+    class Buttons(object):
+        SETUP = 0
+        ACTION = 1
+        CAN_POWER = 2
+        SELECT = 3
+
+    class ButtonStates(object):
+        RELEASED = 0
+        PRESSED = 1
+        PRESSED_5S = 2
+        PRESSED_LONG = 3
 
     def __init__(self, data):
         self._type = data['type']
@@ -92,6 +108,7 @@ class Event(object):
                     1: Event.Types.INPUT,
                     2: Event.Types.SENSOR,
                     20: Event.Types.THERMOSTAT,
+                    250: Event.Types.BUTTON_PRESS,
                     251: Event.Types.LED_BLINK,
                     252: Event.Types.LED_ON,
                     253: Event.Types.POWER,
@@ -141,6 +158,9 @@ class Event(object):
                     'thermostat': self._device_nr,
                     'mode': self._data[0],
                     'setpoint': self._data[1]}
+        if self.type == Event.Types.BUTTON_PRESS:
+            return {'button': self._device_nr,
+                    'state': self._data[0]}
         if self.type == Event.Types.LED_BLINK:
             word_25 = self._device_nr
             word_50 = Event._word_decode(self._data[0:2])
@@ -148,13 +168,13 @@ class Event(object):
             leds = {}
             for i in range(16):
                 if word_25 & (1 << i):
-                    leds[i] = Event.LedStates.BLINKING_25
+                    leds[i] = Event.LedFrequencies.BLINKING_25
                 elif word_50 & (1 << i):
-                    leds[i] = Event.LedStates.BLINKING_50
+                    leds[i] = Event.LedFrequencies.BLINKING_50
                 elif word_75 & (1 << i):
-                    leds[i] = Event.LedStates.BLINKING_75
+                    leds[i] = Event.LedFrequencies.BLINKING_75
                 else:
-                    leds[i] = Event.LedStates.OFF
+                    leds[i] = Event.LedFrequencies.SOLID
             return {'chip': self._device_nr,
                     'leds': leds}
         if self.type == Event.Types.LED_ON:

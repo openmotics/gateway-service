@@ -59,6 +59,12 @@ pytest plugins_tests/interfaces_test.py --log-level=DEBUG --durations=2 --junit-
 #echo "Running core controller tests"
 #python3 gateway/hal/master_controller_core_test.py
 
+echo "Running frontpanel classic controller tests"
+python3 gateway/hal/frontpanel_controller_classic_test.py
+
+echo "Running frontpanel core controller tests"
+python3 gateway/hal/frontpanel_controller_core_test.py
+
 #echo "Running observer tests"
 #python3 gateway/observer_test.py
 

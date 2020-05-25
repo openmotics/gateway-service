@@ -98,6 +98,9 @@ class Watchdog(object):
             # The last X calls are successfull
             return None
         calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
+        if len(calls_last_x_minutes) <= 5:
+            # Not enough recent calls
+            return None
         ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
         if ratio < 0.25:
             # Less than 25% of the calls fail, let's assume everything is just "fine"

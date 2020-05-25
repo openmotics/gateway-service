@@ -70,6 +70,7 @@ if False:
     from gateway.sensor_controller import SensorController
     from gateway.pulse_counter_controller import PulseCounterController
     from gateway.group_action_controller import GroupActionController
+    from gateway.hal.frontpanel_controller import FrontpanelController
     from plugins.base import PluginController
 
 logger = logging.getLogger("openmotics")
@@ -278,7 +279,8 @@ class WebInterface(object):
                  message_client=INJECTED, configuration_controller=INJECTED, scheduling_controller=INJECTED,
                  thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED,
                  room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
-                 pulse_counter_controller=INJECTED, group_action_controller=INJECTED):
+                 pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
+                 frontpanel_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -293,6 +295,7 @@ class WebInterface(object):
         self._sensor_controller = sensor_controller  # type: SensorController
         self._pulse_counter_controller = pulse_counter_controller  # type: PulseCounterController
         self._group_action_controller = group_action_controller  # type: GroupActionController
+        self._frontpanel_controller = frontpanel_controller  # type: FrontpanelController
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
@@ -306,7 +309,7 @@ class WebInterface(object):
         self._service_state = False
 
     def in_authorized_mode(self):
-        return self._message_client.get_state('led_service', {}).get('authorized_mode', False)
+        return self._frontpanel_controller.authorized_mode
 
     def set_service_state(self, state):
         self._service_state = state
@@ -2236,22 +2239,13 @@ class WebInterface(object):
         except Exception as ex:
             logger.error('Error loading vpn_service health: %s', ex)
             health['vpn_service'] = {'state': False}
-        try:
-            state = self._message_client.get_state('led_service', {})
-            state_ok = True
-            for run in ['run_gpio', 'run_i2c', 'run_buttons', 'run_state_check']:
-                state_ok = state_ok and (state.get(run, 0) > time.time() - 5)
-            health['led_service'] = {'state': state_ok}
-        except Exception as ex:
-            logger.error('Error loading led_service health: %s', ex)
-            health['led_service'] = {'state': False}
         return {'health': health,
                 'health_version': 1.0}
 
     @openmotics_api(auth=True)
     def indicate(self):
         """ Blinks the Status led on the Gateway to indicate the module """
-        self._message_client.send_event(OMBusEvents.INDICATE_GATEWAY, None)
+        self._frontpanel_controller.indicate()
         return {}
 
     @cherrypy.expose

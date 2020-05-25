@@ -49,6 +49,7 @@ if False:  # MYPY
     from gateway.watchdog import Watchdog
     from gateway.comm_led_controller import CommunicationLedController
     from gateway.hal.master_controller import MasterController
+    from gateway.hal.frontpanel_controller import FrontpanelController
     from plugins.base import PluginController
     from power.power_communicator import PowerCommunicator
     from master.classic.passthrough import PassthroughService
@@ -138,7 +139,8 @@ class OpenmoticsService(object):
                 pulse_counter_controller=INJECTED,  # type: PulseCounterController
                 sensor_controller=INJECTED,  # type: SensorController
                 shutter_controller=INJECTED,  # type: ShutterController
-                group_action_controller=INJECTED  # type: GroupActionController
+                group_action_controller=INJECTED,  # type: GroupActionController
+                frontpanel_controller=INJECTED  # type: FrontpanelController
             ):
         """ Main function. """
         logger.info('Starting OM core service...')
@@ -166,6 +168,7 @@ class OpenmoticsService(object):
         thermostat_controller.start()
         metrics_collector.start()
         web_service.start()
+        frontpanel_controller.start()
         communication_led_controller.start()
         event_sender.start()
         watchdog.start()
@@ -200,6 +203,7 @@ class OpenmoticsService(object):
             thermostat_controller.stop()
             plugin_controller.stop()
             communication_led_controller.stop()
+            frontpanel_controller.stop()
             event_sender.stop()
             logger.info('Stopping OM core service... Done')
             signal_request['stop'] = True

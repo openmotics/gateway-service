@@ -30,23 +30,12 @@ class Hardware(object):
     """
     Abstracts the hardware related functions
     """
-
-    class Led(object):
-        POWER = 'POWER'
-        STATUS = 'STATUS'
-        ALIVE = 'ALIVE'
-        CLOUD = 'CLOUD'
-        VPN = 'VPN'
-        COMM_1 = 'COMM_1'
-        COMM_2 = 'COMM_2'
-
     class BoardType(object):
         BB = 'BB'
         BBB = 'BBB'
         BBGW = 'BBGW'
 
     BoardTypes = [BoardType.BB, BoardType.BBB, BoardType.BBGW]
-    IOCTL_I2C_SLAVE = 0x0703
 
     # eMMC registers
     EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B = 269
@@ -88,46 +77,6 @@ class Hardware(object):
             if '510716 kB' in mem_total:
                 return Hardware.BoardType.BBB
         return  # Unknown
-
-    @staticmethod
-    def get_i2c_device():
-        return '/dev/i2c-2' if Hardware.get_board_type() == Hardware.BoardType.BB else '/dev/i2c-1'
-
-    @staticmethod
-    def get_local_interface():
-        board_type = Hardware.get_board_type()
-        if board_type in [Hardware.BoardType.BB, Hardware.BoardType.BBB]:
-            return 'eth0'
-        elif board_type == Hardware.BoardType.BBGW:
-            return 'wlan0'
-        else:
-            return 'lo'
-
-    @staticmethod
-    def get_i2c_led_config():
-        if not Hardware.get_board_type() == Hardware.BoardType.BB:
-            return {'COMM_1': 64,
-                    'COMM_2': 128,
-                    'VPN': 16,
-                    'ALIVE': 1,
-                    'CLOUD': 4}
-        return {'COMM_1': 64,
-                'COMM_2': 128,
-                'VPN': 16,
-                'CLOUD': 4}
-
-    @staticmethod
-    def get_gpio_led_config():
-        if not Hardware.get_board_type() == Hardware.BoardType.BB:
-            return {'POWER': 60,
-                    'STATUS': 48}
-        return {'POWER': 75,
-                'STATUS': 60,
-                'ALIVE': 49}
-
-    @staticmethod
-    def get_gpio_input():
-        return 38 if Hardware.get_board_type() == Hardware.BoardType.BB else 26
 
 
 class System(object):
