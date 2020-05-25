@@ -161,15 +161,15 @@ class FrontpanelClassicController(FrontpanelController):
 
         # Drive I2C leds
         try:
-            code = 0
+            code = 0x0
             for led in FrontpanelClassicController.I2C_LED_CONFIG:
                 if self._enabled_leds.get(led, False) is True:
                     code |= FrontpanelClassicController.I2C_LED_CONFIG[led]
             if self._authorized_mode:
                 # Light all leds in authorized mode
                 for led in FrontpanelClassicController.AUTH_MODE_LEDS:
-                    code |= FrontpanelClassicController.I2C_LED_CONFIG.get(led, 0)
-            code = (~ code) & 255
+                    code |= FrontpanelClassicController.I2C_LED_CONFIG.get(led, 0x0)
+            code = (~ code) & 0xFF
 
             # Push code if needed
             if code != self._last_i2c_led_code:
