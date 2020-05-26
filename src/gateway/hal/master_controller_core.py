@@ -18,7 +18,7 @@ Module for communicating with the Master
 from __future__ import absolute_import
 import logging
 import time
-from threading import Thread
+from threading import Thread, Timer
 from peewee import DoesNotExist
 from datetime import datetime
 
@@ -45,13 +45,14 @@ from master.core.events import Event as MasterCoreEvent
 from master.core.memory_file import MemoryTypes, MemoryFile
 from master.core.memory_models import (
     GlobalConfiguration, InputConfiguration, OutputConfiguration,
-    SensorConfiguration, ShutterConfiguration
+    SensorConfiguration, ShutterConfiguration, OutputModuleConfiguration,
+    InputModuleConfiguration, SensorModuleConfiguration
 )
 from master.core.group_action import GroupActionController
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Tuple
+    from typing import Any, Dict, List, Tuple, Optional
 
 logger = logging.getLogger("openmotics")
 
@@ -66,6 +67,7 @@ class MasterCoreController(MasterController):
         self._memory_files = memory_files  # type: Dict[str, MemoryFile]
         self._synchronization_thread = Thread(target=self._synchronize, name='CoreMasterSynchronization')
         self._master_online = False
+        self._discover_mode_timer = None  # type: Optional[Timer]
         self._input_state = MasterInputState()
         self._output_interval = 600
         self._output_last_updated = 0
@@ -670,6 +672,90 @@ class MasterCoreController(MasterController):
     def add_virtual_input_module(self):
         raise NotImplementedError()
 
+    # Module management
+
+    def module_discover_start(self, timeout):  # type: (int) -> None
+        def _stop(): self.module_discover_stop()
+
+        self._master_communicator.do_basic_action(action_type=200,
+                                                  action=0,
+                                                  extra_parameter=0)
+
+        if self._discover_mode_timer is not None:
+            self._discover_mode_timer.cancel()
+        self._discover_mode_timer = Timer(timeout, _stop)
+        self._discover_mode_timer.start()
+
+    def module_discover_stop(self):  # type: () -> None
+        if self._discover_mode_timer is not None:
+            self._discover_mode_timer.cancel()
+            self._discover_mode_timer = None
+
+        self._master_communicator.do_basic_action(action_type=200,
+                                                  action=0,
+                                                  extra_parameter=255)
+
+        for callback in self._event_callbacks:
+            callback(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
+
+    def module_discover_status(self):  # type: () -> bool
+        return self._discover_mode_timer is not None
+
+    def get_module_log(self):  # type: () -> List[Tuple[str, str]]
+        return []
+
+    def get_modules(self):
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
+        general_configuration = GlobalConfiguration()
+
+        outputs = []
+        nr_of_output_modules = _default_if_255(general_configuration.number_of_output_modules, 0)
+        for module_id in range(nr_of_output_modules):
+            output_module_info = OutputModuleConfiguration(module_id)
+            device_type = output_module_info.device_type
+            if device_type == 'o' and output_module_info.address[4:15] in ['000.000.000',
+                                                                           '000.000.001',
+                                                                           '000.000.002']:
+                outputs.append('O')  # Internal output module
+            else:
+                # Use device_type, except for shutters, which are now kinda output module alike
+                outputs.append({'r': 'o',
+                                'R': 'O'}.get(device_type, device_type))
+
+        inputs = []
+        can_inputs = []
+        nr_of_input_modules = _default_if_255(general_configuration.number_of_input_modules, 0)
+        nr_of_sensor_modules = _default_if_255(general_configuration.number_of_sensor_modules, 0)
+        nr_of_can_controls = _default_if_255(general_configuration.number_of_can_control_modules, 0)
+        for module_id in range(nr_of_input_modules):
+            input_module_info = InputModuleConfiguration(module_id)
+            device_type = input_module_info.device_type
+            if device_type == 'i' and input_module_info.address.endswith('000.000.000'):
+                inputs.append('I')  # Internal input module
+            elif device_type == 'b':
+                can_inputs.append('I')  # uCAN input "module"
+            elif device_type in ['I', 'i']:
+                inputs.append(device_type)  # RS485 and virtual input module
+        for module_id in range(nr_of_sensor_modules):
+            sensor_module_info = SensorModuleConfiguration(module_id)
+            device_type = sensor_module_info.device_type
+            if device_type == 'T':
+                inputs.append('T')
+            elif device_type == 's':
+                can_inputs.append('T')  # uCAN sensor "module"
+        for module_id in range(nr_of_can_controls):
+            can_inputs.append('C')
+
+        return {'outputs': outputs, 'inputs': inputs, 'shutters': [], 'can_inputs': can_inputs}
+
+    def get_modules_information(self):
+        raise NotImplementedError()
+
+    def flash_leds(self, led_type, led_id):
+        raise NotImplementedError()
+
     # Generic
 
     def power_cycle_bus(self):
@@ -709,16 +795,6 @@ class MasterCoreController(MasterController):
         power(True)
 
         return {'status': 'OK'}
-
-    def get_modules(self):
-        # TODO: implement
-        return {'outputs': [], 'inputs': [], 'shutters': [], 'can_inputs': []}
-
-    def get_modules_information(self):
-        raise NotImplementedError()
-
-    def flash_leds(self, led_type, led_id):
-        raise NotImplementedError()
 
     def get_backup(self):
         data = []
