@@ -161,12 +161,6 @@ def setup_target_platform(target_platform):
          maintenance_controller, base, events, power_communicator, comm_led_controller, users,
          power_controller, pulse_counter_controller, config_controller, metrics_caching, watchdog, output_controller,
          room_controller, sensor_controller, group_action_controller)
-    if target_platform == Platform.Type.CORE_PLUS:
-        from gateway.hal import frontpanel_controller_core
-        _ = frontpanel_controller_core
-    else:
-        from gateway.hal import frontpanel_controller_classic
-        _ = frontpanel_controller_classic
 
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
     thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled
@@ -239,8 +233,10 @@ def setup_target_platform(target_platform):
         # FIXME don't create singleton for optional controller?
         from master.classic import eeprom_extension
         _ = eeprom_extension
+        leds_i2c_address = config.get('OpenMotics', 'leds_i2c_address')
         passthrough_serial_port = config.get('OpenMotics', 'passthrough_serial')
         Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
+        Injectable.value(leds_i2c_address=int(leds_i2c_address, 16))
         if passthrough_serial_port:
             Injectable.value(passthrough_serial=Serial(passthrough_serial_port, 115200))
             from master.classic.passthrough import PassthroughService
@@ -250,6 +246,13 @@ def setup_target_platform(target_platform):
         Injectable.value(master_communicator=MasterCommunicator())
         Injectable.value(maintenance_communicator=MaintenanceClassicCommunicator())
         Injectable.value(master_controller=MasterClassicController())
+
+    if target_platform == Platform.Type.CORE_PLUS:
+        from gateway.hal import frontpanel_controller_core
+        _ = frontpanel_controller_core
+    else:
+        from gateway.hal import frontpanel_controller_classic
+        _ = frontpanel_controller_classic
 
     # Metrics Controller
     Injectable.value(metrics_db=constants.get_metrics_database_file())
