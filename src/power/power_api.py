@@ -17,7 +17,12 @@ Contains the definition of the power modules Api.
 """
 
 from __future__ import absolute_import
+
+from collections import namedtuple
+
 from power.power_command import PowerCommand
+
+RealtimePower = namedtuple('RealtimePower', ('voltage', 'frequency', 'current', 'power'))
 
 BROADCAST_ADDRESS = 255
 
@@ -91,6 +96,16 @@ def get_status_p1(version):
     """ Gets the status from a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'SP\x00', '', 'B', module_type='C')
+    else:
+        raise ValueError("Unknown power api version")
+
+
+def get_meter_p1(version, type=None):
+    """ Gets the meter id from a P1 concentrator """
+    if version == P1_CONCENTRATOR:
+        if type is None:
+            raise ValueError('A type is required')
+        return PowerCommand('G', 'M{0}\x00'.format(type), '', '224s', module_type='C')
     else:
         raise ValueError("Unknown power api version")
 

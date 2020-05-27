@@ -18,6 +18,7 @@ and call the master_api to complete the actions.
 """
 
 from __future__ import absolute_import
+
 import glob
 import logging
 import math
@@ -27,6 +28,7 @@ import sqlite3
 import subprocess
 import tempfile
 import threading
+
 from six.moves.configparser import ConfigParser
 
 import constants
@@ -35,12 +37,13 @@ from gateway.hal.master_controller import MasterController
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import System
 from power import power_api
+from power.power_api import RealtimePower
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY:
     from typing import Any, Dict, List, Optional, Tuple
     from power.power_communicator import PowerCommunicator
-    from power.power_controller import PowerController
+    from power.power_controller import PowerController, P1Controller
     from bus.om_bus_client import MessageClient
     from gateway.observer import Observer
     from gateway.config import ConfigurationController
@@ -69,11 +72,13 @@ class GatewayApi(object):
     @Inject
     def __init__(self,
                  master_controller=INJECTED, power_communicator=INJECTED, power_controller=INJECTED,
-                 message_client=INJECTED, observer=INJECTED, configuration_controller=INJECTED):
-        # type: (MasterController, PowerCommunicator, PowerController, MessageClient, Observer, ConfigurationController) -> None
+                 p1_controller=INJECTED, message_client=INJECTED, observer=INJECTED,
+                 configuration_controller=INJECTED):
+        # type: (MasterController, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer, ConfigurationController) -> None
         self.__master_controller = master_controller  # type: MasterController
         self.__config_controller = configuration_controller
         self.__power_communicator = power_communicator
+        self.__p1_controller = p1_controller
         self.__power_controller = power_controller
         self.__message_client = message_client
         self.__observer = observer
@@ -667,6 +672,7 @@ class GatewayApi(object):
     # Power functions
 
     def get_power_modules(self):
+        # type: () -> List[Dict[str,Any]]
         """ Get information on the power modules.
 
         :returns: List of dict depending on the version of the power module. All versions \
@@ -755,20 +761,17 @@ class GatewayApi(object):
         return dict()
 
     def get_realtime_power(self):
-        # type: () -> Dict[str,List[List[Optional[float]]]]
-        """ Get the realtime power measurement values.
-
-        :returns: dict with the module id as key and the following array as value: \
-        [voltage, frequency, current, power].
+        # type: () -> Dict[str,List[RealtimePower]]
+        """
+        Get the realtime power measurement values.
         """
         output = {}
-        if self.__power_communicator is None or self.__power_controller is None:
+        if self.__power_controller is None:
             return output
 
         modules = self.__power_controller.get_power_modules()
         for module_id in sorted(modules.keys()):
             try:
-                addr = modules[module_id]['address']
                 version = modules[module_id]['version']
                 num_ports = power_api.NUM_PORTS[version]
 
@@ -778,37 +781,37 @@ class GatewayApi(object):
                 power = [0.0] * num_ports
                 if version in [power_api.POWER_MODULE, power_api.ENERGY_MODULE]:
                     if version == power_api.POWER_MODULE:
-                        raw_volt = self.__power_communicator.do_command(addr, power_api.get_voltage(version))
-                        raw_freq = self.__power_communicator.do_command(addr, power_api.get_frequency(version))
+                        raw_volt = self.__power_controller.get_module_voltage(modules[module_id])
+                        raw_freq = self.__power_controller.get_module_frequency(modules[module_id])
 
                         volt = [raw_volt[0]] * num_ports
                         freq = [raw_freq[0]] * num_ports
                     else:
-                        volt = self.__power_communicator.do_command(addr, power_api.get_voltage(version))
-                        freq = self.__power_communicator.do_command(addr, power_api.get_frequency(version))
+                        volt = self.__power_controller.get_module_voltage(modules[module_id])
+                        freq = self.__power_controller.get_module_frequency(modules[module_id])
 
-                    current = self.__power_communicator.do_command(addr, power_api.get_current(version))
-                    power = self.__power_communicator.do_command(addr, power_api.get_power(version))
+                    current = self.__power_controller.get_module_current(modules[module_id])
+                    power = self.__power_controller.get_module_power(modules[module_id])
                 elif version == power_api.P1_CONCENTRATOR:
-                    status = self.__power_communicator.do_command(addr, power_api.get_status_p1(version))[0]
-                    raw_volt = self.__power_communicator.do_command(addr, power_api.get_voltage(version, phase=1))[0]  # TODO: Average?
-                    raw_current_ph1 = self.__power_communicator.do_command(addr, power_api.get_current(version, phase=1))[0]
-                    raw_current_ph2 = self.__power_communicator.do_command(addr, power_api.get_current(version, phase=2))[0]
-                    raw_current_ph3 = self.__power_communicator.do_command(addr, power_api.get_current(version, phase=3))[0]
-                    delivered_power = self.__power_communicator.do_command(addr, power_api.get_delivered_power(version))[0]
-                    received_power = self.__power_communicator.do_command(addr, power_api.get_received_power(version))[0]
+                    status = self.__p1_controller.get_module_status(modules[module_id])[0]
+                    volt_buf = self.__power_controller.get_module_voltage(modules[module_id], phase=1)[0]  # TODO: Average?
+                    current_ph1_buf = self.__power_controller.get_module_current(modules[module_id], phase=1)[0]
+                    current_ph2_buf = self.__power_controller.get_module_current(modules[module_id], phase=2)[0]
+                    current_ph3_buf = self.__power_controller.get_module_current(modules[module_id], phase=3)[0]
+                    delivered_power = self.__p1_controller.get_module_delivered_power(modules[module_id])[0]
+                    received_power = self.__p1_controller.get_module_received_power(modules[module_id])[0]
                     for port in range(num_ports):
                         try:
                             if status & 1 << port:
-                                volt[port] = float(raw_volt[port * 7:(port + 1) * 7][:5])
+                                volt[port] = float(volt_buf[port * 7:(port + 1) * 7][:5])
                                 power[port] = (float(delivered_power[port * 9:(port + 1) * 9][:6]) -
                                                float(received_power[port * 9:(port + 1) * 9][:6])) * 1000
-                                current[port] = float(raw_current_ph1[port * 5:(port + 1) * 6][:3])
+                                current[port] = float(current_ph1_buf[port * 5:(port + 1) * 6][:3])
                                 try:
                                     # Phase 2 and 3 might be available on 3-phase meters. If not, the data will be
                                     # empty and generate a ValueError. In such case, ignore the exception and move on
-                                    current[port] += (float(raw_current_ph2[port * 5:(port + 1) * 6][:3]) +
-                                                      float(raw_current_ph3[port * 5:(port + 1) * 6][:3]))
+                                    current[port] += (float(current_ph2_buf[port * 5:(port + 1) * 6][:3]) +
+                                                      float(current_ph3_buf[port * 5:(port + 1) * 6][:3]))
                                 except ValueError:
                                     pass
                         except ValueError:
@@ -818,8 +821,11 @@ class GatewayApi(object):
 
                 out = []
                 for i in range(num_ports):
-                    out.append([convert_nan(volt[i], default=0.0), convert_nan(freq[i], default=0.0),
-                                convert_nan(current[i], default=0.0), convert_nan(power[i], default=0.0)])
+                    data = {'voltage': convert_nan(volt[i], default=0.0),
+                            'frequency': convert_nan(freq[i], default=0.0),
+                            'current': convert_nan(current[i], default=0.0),
+                            'power': convert_nan(power[i], default=0.0)}
+                    out.append(RealtimePower(**data))
 
                 output[str(module_id)] = out
             except CommunicationTimedOutException:
@@ -836,13 +842,12 @@ class GatewayApi(object):
         :returns: dict with the module id as key and the following array as value: [day, night].
         """
         output = {}
-        if self.__power_communicator is None or self.__power_controller is None:
+        if self.__power_controller is None:
             return output
 
         modules = self.__power_controller.get_power_modules()
         for module_id in sorted(modules.keys()):
             try:
-                addr = modules[module_id]['address']
                 version = modules[module_id]['version']
                 num_ports = power_api.NUM_PORTS[version]
 
@@ -850,13 +855,13 @@ class GatewayApi(object):
                 night = [None] * num_ports  # type: List[Optional[float]]
                 if version in [power_api.ENERGY_MODULE, power_api.POWER_MODULE]:
                     day = [convert_nan(entry, default=None)
-                           for entry in self.__power_communicator.do_command(addr, power_api.get_day_energy(version))]
+                           for entry in self.__power_controller.get_module_day_energy(modules[module_id])]
                     night = [convert_nan(entry, default=None)
-                             for entry in self.__power_communicator.do_command(addr, power_api.get_night_energy(version))]
+                             for entry in self.__power_controller.get_module_night_energy(modules[module_id])]
                 elif version == power_api.P1_CONCENTRATOR:
-                    status = self.__power_communicator.do_command(addr, power_api.get_status_p1(version))[0]
-                    raw_day = self.__power_communicator.do_command(addr, power_api.get_day_energy(version))[0]
-                    raw_night = self.__power_communicator.do_command(addr, power_api.get_night_energy(version))[0]
+                    status = self.__p1_controller.get_module_status(modules[module_id])[0]
+                    raw_day = self.__power_controller.get_module_day_energy(modules[module_id])[0]
+                    raw_night = self.__power_controller.get_module_night_energy(modules[module_id])[0]
                     for port in range(num_ports):
                         try:
                             if status & 1 << port:
