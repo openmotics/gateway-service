@@ -129,12 +129,16 @@ class UCANCommunicator(object):
                 break
 
         consumer.check_send_only()
-        if master_timeout:
-            # When there's a communication timeout with the master, catch this exception and timeout the consumer
-            # so it uses a flow expected by the caller
-            return consumer.get(0)
-        if timeout is not None:
-            return consumer.get(timeout)
+        try:
+            if master_timeout:
+                # When there's a communication timeout with the master, catch this exception and timeout the consumer
+                # so it uses a flow expected by the caller
+                return consumer.get(0)
+            if timeout is not None:
+                return consumer.get(timeout)
+        except CommunicationTimedOutException:
+            self.unregister_consumer(consumer)
+            raise
         return None
 
     def _release_pallet_mode(self, cc_address):

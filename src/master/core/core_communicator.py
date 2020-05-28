@@ -214,6 +214,7 @@ class CoreCommunicator(object):
             self._communication_stats['calls_succeeded'] = self._communication_stats['calls_succeeded'][-50:]
             return result
         except CommunicationTimedOutException:
+            self.unregister_consumer(consumer)
             self._communication_stats['calls_timedout'].append(time.time())
             self._communication_stats['calls_timedout'] = self._communication_stats['calls_timedout'][-50:]
             raise
