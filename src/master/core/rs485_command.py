@@ -80,20 +80,13 @@ class RS485CommandSpec(object):
 
     def consume_response_payload(self, payload):  # type: (bytearray) -> Optional[Dict[str, Any]]
         """ Consumes the payload bytes """
-        payload_data = payload[self.header_length:-self._response_footer_length]
         crc = RS485CommandSpec.decode_crc(payload[-(self._response_footer_length - 1):-len(RS485CommandSpec.RESPONSE_SUFFIX)])
         expected_crc = RS485CommandSpec.decode_crc(RS485CommandSpec.calculate_crc(payload[self._response_prefix_length:-self._response_footer_length]))
         if crc != expected_crc:
             logger.info('Unexpected CRC ({0} vs expected {1}): {2}'.format(crc, expected_crc, printable(payload)))
             return None
+        payload_data = payload[self.header_length + self._instruction_length:-self._response_footer_length]
         return self._parse_payload(payload_data)
-
-    def extract_hash_from_payload(self, payload):  # type: (bytearray) -> Optional[int]
-        if len(payload) < self.header_length + self._instruction_length:
-            return None
-        address = payload[self._response_prefix_length:self._response_prefix_length + 4]
-        instruction = payload[self.header_length:self.header_length + self._instruction_length]
-        return RS485CommandSpec.hash(address + instruction)
 
     def _parse_payload(self, payload_data):  # type: (bytearray) -> Dict[str, Any]
         result = {}
@@ -110,6 +103,13 @@ class RS485CommandSpec(object):
                 result[field.name] = field.decode_bytes(list(data))
             payload_data = payload_data[field_length:]
         return result
+
+    def extract_hash_from_payload(self, payload):  # type: (bytearray) -> Optional[int]
+        if len(payload) < self.header_length + self._instruction_length:
+            return None
+        address = payload[self._response_prefix_length:self._response_prefix_length + 4]
+        instruction = payload[self.header_length:self.header_length + self._instruction_length]
+        return RS485CommandSpec.hash(address + instruction)
 
     @staticmethod
     def calculate_crc(data):  # type: (bytearray) -> bytearray

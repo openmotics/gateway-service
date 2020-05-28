@@ -79,7 +79,7 @@ class RS485Communicator(object):
     def exit_transparent_mode(self):
         response = self._communicator.do_command(command=CoreAPI.set_rs485_bus_mode(),
                                                  fields={'mode': CoreAPI.RS485Mode.LIVE})
-        self._transparent_mode = response['mode'] != CoreAPI.RS485Mode.TRANSPARENT
+        self._transparent_mode = response['mode'] == CoreAPI.RS485Mode.TRANSPARENT
 
     def __enter__(self):
         self.enter_transparent_mode()
@@ -114,13 +114,12 @@ class RS485Communicator(object):
             logger.error('Internal timeout during RS485 transport: {0}'.format(ex))
             master_timeout = True
 
-        consumer.check_send_only()
         try:
             if master_timeout:
                 # When there's a communication timeout with the master, catch this exception and timeout the consumer
                 # so it uses a flow expected by the caller
                 return consumer.get(0)
-            if timeout is not None:
+            if timeout is not None and not consumer.send_only():
                 return consumer.get(timeout)
         except CommunicationTimedOutException:
             self.unregister_consumer(consumer)
@@ -170,9 +169,8 @@ class Consumer(object):
         self._queue.put(self.command.consume_response_payload(payload[:self.command.response_length]))
         return self.command.response_length
 
-    def check_send_only(self):  # type: () -> None
-        if len(self.command.response_fields) == 0:
-            self._queue.put(None)
+    def send_only(self):  # type: () -> bool
+        return len(self.command.response_fields) == 0
 
     def get(self, timeout):  # type: (int) -> Any
         """ Wait until the slave module replies or the timeout expires. """
@@ -184,9 +182,3 @@ class Consumer(object):
             return value
         except Empty:
             raise CommunicationTimedOutException('No RS485 data received in {0}s'.format(timeout))
-
-    def __str__(self):
-        return 'Communicator({0})'.format(self.command.instruction.instruction)
-
-    def __repr__(self):
-        return str(self)

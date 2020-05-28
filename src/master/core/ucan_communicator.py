@@ -128,13 +128,12 @@ class UCANCommunicator(object):
                 master_timeout = True
                 break
 
-        consumer.check_send_only()
         try:
             if master_timeout:
                 # When there's a communication timeout with the master, catch this exception and timeout the consumer
                 # so it uses a flow expected by the caller
                 return consumer.get(0)
-            if timeout is not None:
+            if timeout is not None and not consumer.send_only():
                 return consumer.get(timeout)
         except CommunicationTimedOutException:
             self.unregister_consumer(consumer)
@@ -181,9 +180,8 @@ class Consumer(object):
             return True
         return False
 
-    def check_send_only(self):
-        if len(self.command.response_instructions) == 0:
-            self._queue.put(None)
+    def send_only(self):
+        return len(self.command.response_instructions) == 0
 
     def get(self, timeout):
         """
@@ -201,12 +199,6 @@ class Consumer(object):
             return value
         except Empty:
             raise CommunicationTimedOutException('No uCAN data received in {0}s'.format(timeout))
-
-    def __str__(self):
-        return 'Consumer(\'{0}\', {1})'.format(self.cc_address, self.command.instruction.instruction)
-
-    def __repr__(self):
-        return str(self)
 
 
 class PalletConsumer(Consumer):
@@ -244,8 +236,5 @@ class PalletConsumer(Consumer):
         finally:
             self._finished_callback(self.cc_address)
 
-    def check_send_only(self):
-        pass
-
-    def __str__(self):
-        return 'PalletConsumer(\'{0}\')'.format(self.cc_address)
+    def send_only(self):
+        return False
