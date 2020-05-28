@@ -199,7 +199,7 @@ class Consumer(object):
             raise CommunicationTimedOutException('No uCAN data received in {0}s'.format(timeout))
 
     def __str__(self):
-        return 'Communicator(\'{0}\', {1})'.format(self.cc_address, self.command.instruction.instruction)
+        return 'Consumer(\'{0}\', {1})'.format(self.cc_address, self.command.instruction.instruction)
 
     def __repr__(self):
         return str(self)
@@ -244,4 +244,4 @@ class PalletConsumer(Consumer):
         pass
 
     def __str__(self):
-        return 'PalletsConsumer(\'{0}\')'.format(self.cc_address)
+        return 'PalletConsumer(\'{0}\')'.format(self.cc_address)

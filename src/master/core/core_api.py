@@ -209,14 +209,14 @@ class CoreAPI(object):
     def rs485_tx_transport_message(length):
         """ RS485 transport layer packages """
         return CoreCommandSpec(instruction='TC',
-                               request_fields=[ByteArrayField('data', length)],
+                               request_fields=[ByteArrayField('payload', length)],
                                response_fields=[ByteField('length')])
 
     @staticmethod
     def rs485_rx_transport_message():
         """ RS485 transport layer packages """
         return CoreCommandSpec(instruction='TM',
-                               response_fields=[ByteArrayField('data', lambda length: length)])
+                               response_fields=[ByteArrayField('payload', lambda length: length)])
 
     # CAN
 

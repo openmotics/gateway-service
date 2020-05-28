@@ -40,6 +40,8 @@ from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.ucan_communicator import UCANCommunicator
+from master.core.rs485_communicator import RS485Communicator
+from master.core.rs485_api import RS485API
 from master.core.errors import Error
 from master.core.events import Event as MasterCoreEvent
 from master.core.memory_file import MemoryTypes, MemoryFile
@@ -60,10 +62,11 @@ logger = logging.getLogger("openmotics")
 class MasterCoreController(MasterController):
 
     @Inject
-    def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, memory_files=INJECTED):
+    def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, rs485_communicator=INJECTED, memory_files=INJECTED):
         super(MasterCoreController, self).__init__(master_communicator)
         self._master_communicator = master_communicator  # type: CoreCommunicator
         self._ucan_communicator = ucan_communicator  # type: UCANCommunicator
+        self._rs485_communicator = rs485_communicator  # type: RS485Communicator
         self._memory_files = memory_files  # type: Dict[str, MemoryFile]
         self._synchronization_thread = Thread(target=self._synchronize, name='CoreMasterSynchronization')
         self._master_online = False

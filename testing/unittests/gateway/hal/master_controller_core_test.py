@@ -16,6 +16,7 @@ from master.core.memory_file import MemoryTypes
 from master.core.core_communicator import BackgroundConsumer
 from master.core.memory_models import InputConfiguration
 from master.core.ucan_communicator import UCANCommunicator
+from master.core.rs485_communicator import RS485Communicator
 from six.moves import map
 
 
@@ -206,13 +207,13 @@ class MasterInputState(unittest.TestCase):
 @Scope
 def get_core_controller_dummy(command_data=None):
     from gateway.hal.master_controller_core import MasterCoreController
-    from master.classic.master_communicator import MasterCommunicator
-    communicator_mock = mock.Mock(MasterCommunicator)
+    from master.core.core_communicator import CoreCommunicator
+    communicator_mock = mock.Mock(CoreCommunicator)
     communicator_mock.do_command.return_value = command_data or {}
     SetUpTestInjections(configuration_controller=mock.Mock(),
-                        master_communicator=communicator_mock)
-    ucan_mock = UCANCommunicator()
-    SetUpTestInjections(ucan_communicator=ucan_mock)
+                        master_communicator=communicator_mock,
+                        ucan_communicator=UCANCommunicator(),
+                        rs485_communicator=RS485Communicator())
     return MasterCoreController()
 
 

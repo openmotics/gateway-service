@@ -18,17 +18,20 @@ Communication fields
 from __future__ import absolute_import
 import struct
 
+if False:  # MYPY
+    from typing import Any, List
+
 
 class Field(object):
     """
     Field of a command
     """
 
-    def __init__(self, name, length):
+    def __init__(self, name, length):  # type: (str, int) -> None
         self.name = name
         self.length = length
 
-    def encode(self, value):
+    def encode(self, value):  # type: (Any) -> str
         """
         Encodes a high-level value into a byte string
         :param value: The high-level value (e.g. 'foobar', 23475, 15, '10.2.25.6')
@@ -37,7 +40,7 @@ class Field(object):
         value_bytes = self.encode_bytes(value)
         return ''.join(str(chr(byte)) for byte in value_bytes)
 
-    def encode_bytes(self, value):
+    def encode_bytes(self, value):  # type: (Any) -> List[int]
         """
         Encodes a high-level value into a byte array
         :param value: The high-level value (e.g. 'foobar', 23475, 15, '10.2.25.6')
@@ -45,7 +48,7 @@ class Field(object):
         """
         raise NotImplementedError()
 
-    def decode(self, data):
+    def decode(self, data):  # type: (str) -> Any
         """
         Decodes a low-level byte string into a high-level value
         :param data: Bytes to decode (e.g. 'd%_\xf8\xa5?@_1')
@@ -54,7 +57,7 @@ class Field(object):
         data_bytes = [ord(item) for item in data]
         return self.decode_bytes(data_bytes)
 
-    def decode_bytes(self, data):
+    def decode_bytes(self, data):  # type: (List[int]) -> Any
         """
         Decodes a low-level byte array into a high-level value
         :param data: Bytes to decode (e.g. [234, 12, 65, 23, 119])
