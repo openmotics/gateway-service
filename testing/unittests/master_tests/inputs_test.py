@@ -17,11 +17,14 @@ Tests for InputStatus.
 """
 
 from __future__ import absolute_import
+
 import time
 import unittest
 
 import mock
 import xmlrunner
+from pytest import mark
+
 from master.classic.inputs import InputStatus
 
 
@@ -102,6 +105,7 @@ class InputStatusTest(unittest.TestCase):
         self.assertEqual(current_status['status'], None)
         self.assertEqual(len(changed), 2)
 
+    @mark.slow
     def test_timeout(self):
         """ Test timeout of InputStatus data. """
         inps = InputStatus(5, 1)
