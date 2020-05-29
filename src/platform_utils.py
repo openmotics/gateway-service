@@ -16,12 +16,15 @@
 The hardware_utils module contains various classes helping with Hardware and System abstraction
 """
 from __future__ import absolute_import
-import os
-import sys
-import subprocess
+
 import logging
-import constants
+import os
+import subprocess
+import sys
+
 from six.moves.configparser import ConfigParser
+
+import constants
 
 logger = logging.getLogger('openmotics')
 
@@ -70,12 +73,16 @@ class Hardware(object):
                     return Hardware.BoardType.BBGW
         except IOError:
             pass
-        with open('/proc/meminfo', 'r') as memfh:
-            mem_total = memfh.readline()
-            if '254228 kB' in mem_total:
-                return Hardware.BoardType.BB
-            if '510716 kB' in mem_total:
-                return Hardware.BoardType.BBB
+        try:
+            with open('/proc/meminfo', 'r') as memfh:
+                mem_total = memfh.readline()
+                if '254228 kB' in mem_total:
+                    return Hardware.BoardType.BB
+                if '510716 kB' in mem_total:
+                    return Hardware.BoardType.BBB
+        except IOError:
+            pass
+        logger.warning('could not detect board type, unknown')
         return  # Unknown
 
 
@@ -105,12 +112,15 @@ class System(object):
     @staticmethod
     def get_operating_system():
         operating_system = {}
-        with open('/etc/os-release', 'r') as osfh:
-            lines = osfh.readlines()
-            for line in lines:
-                k, v = line.strip().split('=')
-                operating_system[k] = v
-        operating_system['ID'] = operating_system['ID'].lower()
+        try:
+            with open('/etc/os-release', 'r') as osfh:
+                lines = osfh.readlines()
+                for line in lines:
+                    k, v = line.strip().split('=')
+                    operating_system[k] = v
+            operating_system['ID'] = operating_system['ID'].lower()
+        except IOError:
+            logger.warning('could not detect operating system, unknown')
         return operating_system
 
     @staticmethod
@@ -194,8 +204,11 @@ class System(object):
 
     @staticmethod
     def import_libs():
-        operating_system = System.get_operating_system()['ID']
-        sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
+        operating_system = System.get_operating_system().get('ID')
+        if operating_system in (System.OS.ANGSTROM, System.OS.DEBIAN):
+            sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
+        else:
+            logger.warning('could not configure imports for unknown platform, skipped')
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:
