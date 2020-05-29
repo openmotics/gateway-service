@@ -43,6 +43,7 @@ from serial_utils import CommunicationTimedOutException
 if False:  # MYPY:
     from typing import Any, Dict, List, Optional, Tuple
     from power.power_communicator import PowerCommunicator
+    from power.power_store import PowerStore
     from power.power_controller import PowerController, P1Controller
     from bus.om_bus_client import MessageClient
     from gateway.observer import Observer
@@ -71,12 +72,13 @@ class GatewayApi(object):
 
     @Inject
     def __init__(self,
-                 master_controller=INJECTED, power_communicator=INJECTED, power_controller=INJECTED,
-                 p1_controller=INJECTED, message_client=INJECTED, observer=INJECTED,
-                 configuration_controller=INJECTED):
-        # type: (MasterController, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer, ConfigurationController) -> None
+                 master_controller=INJECTED, power_store=INJECTED, power_communicator=INJECTED,
+                 power_controller=INJECTED, p1_controller=INJECTED, message_client=INJECTED,
+                 observer=INJECTED, configuration_controller=INJECTED):
+        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer, ConfigurationController) -> None
         self.__master_controller = master_controller  # type: MasterController
         self.__config_controller = configuration_controller
+        self.__power_store = power_store
         self.__power_communicator = power_communicator
         self.__p1_controller = p1_controller
         self.__power_controller = power_controller
@@ -177,8 +179,8 @@ class GatewayApi(object):
             return 'U'
 
         # Energy/power modules
-        if self.__power_communicator is not None and self.__power_controller is not None:
-            modules = self.__power_controller.get_power_modules().values()
+        if self.__power_communicator is not None and self.__power_store is not None:
+            modules = self.__power_store.get_power_modules().values()
             for module in modules:
                 module_address = module['address']
                 module_version = module['version']
@@ -683,10 +685,10 @@ class GatewayApi(object):
         contains 'input8', 'input9', 'input10', 'input11', 'times8', 'times9', 'times10', \
         'times11'.
         """
-        if self.__power_controller is None:
+        if self.__power_store is None:
             return []
 
-        modules = self.__power_controller.get_power_modules().values()
+        modules = self.__power_store.get_power_modules().values()
 
         def translate_address(_module):
             """ Translate the address from an integer to the external address format (eg. E1). """
@@ -711,14 +713,14 @@ class GatewayApi(object):
         'times11'.
         :returns: empty dict.
         """
-        if self.__power_communicator is None or self.__power_controller is None:
+        if self.__power_communicator is None or self.__power_store is None:
             return {}
 
         for mod in modules:
-            self.__power_controller.update_power_module(mod)
+            self.__power_store.update_power_module(mod)
 
-            version = self.__power_controller.get_version(mod['id'])
-            addr = self.__power_controller.get_address(mod['id'])
+            version = self.__power_store.get_version(mod['id'])
+            addr = self.__power_store.get_address(mod['id'])
             if version == power_api.P1_CONCENTRATOR:
                 continue  # TODO: Should raise an exception once the frontends know about the P1C
             elif version == power_api.POWER_MODULE:
@@ -766,10 +768,10 @@ class GatewayApi(object):
         Get the realtime power measurement values.
         """
         output = {}
-        if self.__power_controller is None:
+        if self.__power_store is None or self.__power_controller is None:
             return output
 
-        modules = self.__power_controller.get_power_modules()
+        modules = self.__power_store.get_power_modules()
         for module_id in sorted(modules.keys()):
             try:
                 version = modules[module_id]['version']
@@ -831,37 +833,11 @@ class GatewayApi(object):
         """
         Get the realtime p1 measurement values.
         """
-        values = []
         if self.__power_controller is None:
-            return values
+            return []
 
-        modules = self.__power_controller.get_power_modules()
-        for module_id, module in sorted(modules.items()):
-            if module['version'] == power_api.P1_CONCENTRATOR:
-                statuses = self.__p1_controller.get_module_status(modules[module_id])
-                meters = self.__p1_controller.get_module_meter(modules[module_id], type=1)
-                tariffs1 = self.__p1_controller.get_module_injection_tariff(modules[module_id], type=1)
-                tariffs2 = self.__p1_controller.get_module_injection_tariff(modules[module_id], type=2)
-                tariff_indicators = self.__p1_controller.get_module_tariff_indicator(modules[module_id])
-                timestamps = self.__p1_controller.get_module_timestamp(modules[module_id])
-                gasses = self.__p1_controller.get_module_consumption_gas(modules[module_id])
-                voltages = self.__p1_controller.get_module_voltage(modules[module_id])
-                currents = self.__p1_controller.get_module_current(modules[module_id])
-
-                for port_id, status in enumerate(statuses):
-                    if status:
-                        values.append({'module_id': module_id,
-                                       'port_id': port_id,
-                                       'meter': meters[port_id],
-                                       'timestamp': timestamps[port_id],
-                                       'gas': gasses[port_id],
-                                       'tariff': {'tariff1': tariffs1[port_id],
-                                                  'tariff2': tariffs2[port_id],
-                                                  'indicator': tariff_indicators[port_id]},
-                                       'voltage': voltages[port_id],
-                                       'current': currents[port_id]})
-
-        return values
+        modules = self.__power_store.get_power_modules()
+        return self.__p1_controller.get_realtime(modules)
 
     def get_total_energy(self):
         # type: () -> Dict[str,List[List[Optional[float]]]]
@@ -873,7 +849,7 @@ class GatewayApi(object):
         if self.__power_controller is None:
             return output
 
-        modules = self.__power_controller.get_power_modules()
+        modules = self.__power_store.get_power_modules()
         for module_id in sorted(modules.keys()):
             try:
                 version = modules[module_id]['version']
@@ -950,8 +926,8 @@ class GatewayApi(object):
         if self.__power_communicator is None or self.__power_controller is None:
             return {}
 
-        addr = self.__power_controller.get_address(module_id)
-        version = self.__power_controller.get_version(module_id)
+        addr = self.__power_store.get_address(module_id)
+        version = self.__power_store.get_version(module_id)
         if version != power_api.ENERGY_MODULE:
             raise ValueError('Unknown power api version')
         self.__power_communicator.do_command(addr, power_api.set_voltage(), voltage)
@@ -965,8 +941,8 @@ class GatewayApi(object):
         if self.__power_communicator is None or self.__power_controller is None:
             return {}
 
-        addr = self.__power_controller.get_address(module_id)
-        version = self.__power_controller.get_version(module_id)
+        addr = self.__power_store.get_address(module_id)
+        version = self.__power_store.get_version(module_id)
         if version != power_api.ENERGY_MODULE:
             raise ValueError('Unknown power api version')
         if input_id is None:
@@ -1000,8 +976,8 @@ class GatewayApi(object):
         if self.__power_communicator is None or self.__power_controller is None:
             return {}
 
-        addr = self.__power_controller.get_address(module_id)
-        version = self.__power_controller.get_version(module_id)
+        addr = self.__power_store.get_address(module_id)
+        version = self.__power_store.get_version(module_id)
         if version != power_api.ENERGY_MODULE:
             raise ValueError('Unknown power api version')
         if input_id is None:
