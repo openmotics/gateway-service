@@ -85,6 +85,7 @@ class CoreCommunicator(object):
 
     def stop(self):
         self._stop = True
+        self._read_thread.join()
 
     def get_communication_statistics(self):
         return self._communication_stats

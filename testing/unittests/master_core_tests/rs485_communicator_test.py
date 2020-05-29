@@ -59,6 +59,7 @@ class RS485CommunicatorTest(unittest.TestCase):
         core_communicator = CoreCommunicator(controller_serial=Mock())
         core_communicator.do_command = do_command
         rs485_communicator = RS485Communicator(master_communicator=core_communicator, verbose=True)
+        address = '000.000.000.000'
 
         command_spec = RS485CommandSpec(instruction=Instruction(instruction='AB'),
                                         request_fields=[ByteField('foo')],
@@ -66,7 +67,7 @@ class RS485CommunicatorTest(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             # Transparent mode inactive
-            rs485_communicator.do_command(command_spec, '000.000.000.000', {'foo': 0}, timeout=None)
+            rs485_communicator.do_command(address, command_spec, {'foo': 0}, timeout=None)
 
         self.assertFalse(rs485_communicator._transparent_mode)
         with rs485_communicator:
@@ -88,12 +89,13 @@ class RS485CommunicatorTest(unittest.TestCase):
         core_communicator.do_command = do_command
         rs485_communicator = RS485Communicator(master_communicator=core_communicator, verbose=True)
         rs485_communicator._transparent_mode = True
+        address = '000.000.000.000'
 
         command_spec = RS485CommandSpec(instruction=Instruction(instruction='AB'),
                                         request_fields=[ByteField('foo')],
                                         response_fields=[ByteField('bar')])
 
-        rs485_communicator.do_command(command_spec, '000.000.000.000', {'foo': 0}, timeout=None)
+        rs485_communicator.do_command(address, command_spec, {'foo': 0}, timeout=None)
         self.assertEqual(1, len(received_commands))
         self.assertTrue('payload' in received_commands[0])
         payload = received_commands[0]['payload']
@@ -106,14 +108,14 @@ class RS485CommunicatorTest(unittest.TestCase):
         rs485_communicator._process_transport_message({'payload': RS485CommunicatorTest._build_response_message(b'\x00\x00\x00\x00AB\x02', bad_crc=True)})
         with self.assertRaises(CommunicationTimedOutException):
             self.assertEqual({'bar': 1}, consumer.get(1))  # Invalid CRC
-        rs485_communicator.do_command(command_spec, '000.000.000.000', {'foo': 0}, timeout=None)
+        rs485_communicator.do_command(address, command_spec, {'foo': 0}, timeout=None)
         consumer = rs485_communicator._consumers[0]
         rs485_communicator._process_transport_message({'payload': RS485CommunicatorTest._build_response_message(b'\x00\x00\x00\x00AB\x01')})
         self.assertEqual({'bar': 1}, consumer.get(1))
 
         command_spec = RS485CommandSpec(instruction=Instruction(instruction='AB'),
                                         request_fields=[ByteField('foo')])
-        rs485_communicator.do_command(command_spec, '000.000.000.000', {'foo': 0}, timeout=None)
+        rs485_communicator.do_command(address, command_spec, {'foo': 0}, timeout=None)
         consumer = rs485_communicator._consumers[0]
         with self.assertRaises(CommunicationTimedOutException):
             consumer.get(0)
@@ -123,6 +125,7 @@ class RS485CommunicatorTest(unittest.TestCase):
         core_communicator.do_command = Mock()
         rs485_communicator = RS485Communicator(master_communicator=core_communicator, verbose=True)
         rs485_communicator._transparent_mode = True
+        address = '000.000.000.000'
 
         command_spec = RS485CommandSpec(instruction=Instruction(instruction='AB'),
                                         request_fields=[ByteField('foo')],
@@ -130,10 +133,10 @@ class RS485CommunicatorTest(unittest.TestCase):
 
         with self.assertRaises(CommunicationTimedOutException):
             core_communicator.do_command.side_effect = lambda command, fields, timeout=None: time.sleep(2)
-            rs485_communicator.do_command(command_spec, '000.000.000.000', {'foo': 0}, timeout=1)  # No RS485 response
+            rs485_communicator.do_command(address, command_spec, {'foo': 0}, timeout=1)  # No RS485 response
         with self.assertRaises(CommunicationTimedOutException):
             core_communicator.do_command.side_effect = CommunicationTimedOutException('Master unresponsive')
-            rs485_communicator.do_command(command_spec, '000.000.000.000', {'foo': 0}, timeout=1)
+            rs485_communicator.do_command(address, command_spec, {'foo': 0}, timeout=1)
 
     @staticmethod
     def _build_request_message(payload):

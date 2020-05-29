@@ -303,6 +303,23 @@ class VersionField(AddressField):
     def __init__(self, name):
         super(VersionField, self).__init__(name, 3)
 
+    def encode_bytes(self, value):
+        example = '.'.join(['F{0}'.format(i) for i in range(self.length)])
+        error_message = 'Value `{0}` should be a string in the format of {1}, where 0 <= Fx <= 255'.format(value, example)
+        parts = str(value).split('.')
+        if len(parts) != self.length:
+            raise ValueError(error_message)
+        data = []
+        for part in parts:
+            try:
+                part = int(part)
+            except ValueError:
+                raise ValueError(error_message)
+            if not (0 <= part <= 255):
+                raise ValueError(error_message)
+            data.append(part)
+        return data
+
     def decode_bytes(self, data):
         return '.'.join(str(item) for item in data)
 

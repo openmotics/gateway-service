@@ -88,8 +88,8 @@ class RS485Communicator(object):
         _ = exc_type, exc_val, exc_tb
         self.exit_transparent_mode()
 
-    def do_command(self, command, address, fields, timeout=2):
-        # type: (RS485CommandSpec, str, Dict[str, Any], Optional[int]) -> Optional[Dict[str, Any]]
+    def do_command(self, address, command, fields, timeout=2):
+        # type: (str, RS485CommandSpec, Dict[str, Any], Optional[int]) -> Optional[Dict[str, Any]]
         """
         Send an RS485 command over the Communicator and block until an answer is received.
         If the Core does not respond within the timeout period, a CommunicationTimedOutException is raised
