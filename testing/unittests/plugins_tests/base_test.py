@@ -17,19 +17,22 @@ Tests for plugins.base.
 """
 
 from __future__ import absolute_import
+
 import hashlib
 import inspect
 import os
-import plugin_runtime
 import shutil
 import tempfile
 import time
 import unittest
-import xmlrunner
-from mock import Mock
 from subprocess import call
-from ioc import SetUpTestInjections, SetTestMode
+
+from mock import Mock
+from pytest import mark
+
+import plugin_runtime
 from gateway.events import GatewayEvent
+from ioc import SetTestMode, SetUpTestInjections
 from plugin_runtime.base import PluginConfigChecker, PluginException
 
 
@@ -107,6 +110,7 @@ class PluginControllerTest(unittest.TestCase):
         finally:
             shutil.rmtree(temp_directory)
 
+    @mark.slow
     def test_get_one_plugin(self):
         """ Test getting one plugin in the plugins package. """
         controller = None
@@ -129,6 +133,7 @@ class P1(OMPluginBase):
                 controller.stop()
             PluginControllerTest._destroy_plugin('P1')
 
+    @mark.slow
     def test_get_two_plugins(self):
         """ Test getting two plugins in the plugins package. """
         controller = None
@@ -163,6 +168,7 @@ class P2(OMPluginBase):
             PluginControllerTest._destroy_plugin('P1')
             PluginControllerTest._destroy_plugin('P2')
 
+    @mark.slow
     def test_get_special_methods(self):
         """ Test getting special methods on a plugin. """
         controller = None
@@ -268,6 +274,7 @@ class P1(OMPluginBase):
                 controller.stop()
             PluginControllerTest._destroy_plugin('P1')
 
+    @mark.slow
     def test_update_plugin(self):
         """ Validates whether a plugin can be updated """
         test_1_md5, test_1_data = PluginControllerTest._create_plugin_package('Test', """
@@ -301,6 +308,7 @@ class Test(OMPluginBase):
         self.assertEqual(result, 'Plugin successfully installed')
         self.assertEqual([r.name for r in controller.get_plugins()], ['Test'])
 
+    @mark.slow
     def test_plugin_metric_reference(self):
         """ Validates whether two plugins won't get the same metric instance """
         controller = None
@@ -729,7 +737,3 @@ class PluginConfigCheckerTest(unittest.TestCase):
             self.assertEqual(arg_spec.args[1:], call_info)
             ramaining_methods.remove(method_name)
         self.assertEqual(ramaining_methods, [])
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

@@ -23,6 +23,7 @@ import time
 import unittest
 
 import xmlrunner
+from pytest import mark
 
 import power.power_api as power_api
 from ioc import SetTestMode, SetUpTestInjections
@@ -137,6 +138,7 @@ class PowerCommunicatorTest(unittest.TestCase):
         with self.assertRaises(Exception):
             comm.do_command(1, action_1)
 
+    @mark.slow
     def test_address_mode(self):
         """ Test the address mode. """
         sad = power_api.set_addressmode(power_api.POWER_MODULE)
@@ -172,6 +174,7 @@ class PowerCommunicatorTest(unittest.TestCase):
         self.assertEqual(controller.get_free_address(), 4)
         self.assertFalse(comm.in_address_mode())
 
+    @mark.slow
     def test_do_command_in_address_mode(self):
         """ Test the behavior of do_command in address mode."""
         action = power_api.get_voltage(power_api.POWER_MODULE)
@@ -201,6 +204,7 @@ class PowerCommunicatorTest(unittest.TestCase):
 
         self.assertEqual((49.5, ), comm.do_command(1, action))
 
+    @mark.slow
     def test_address_mode_timeout(self):
         """ Test address mode timeout. """
         action = power_api.get_voltage(power_api.POWER_MODULE)
@@ -226,6 +230,7 @@ class PowerCommunicatorTest(unittest.TestCase):
 
         self.assertEqual((49.5, ), comm.do_command(1, action))
 
+    @mark.slow
     def test_timekeeper(self):
         """ Test the TimeKeeper. """
         SetUpTestInjections(power_db=PowerCommunicatorTest.FILE)

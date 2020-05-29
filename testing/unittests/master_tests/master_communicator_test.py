@@ -23,6 +23,7 @@ import time
 import unittest
 
 import xmlrunner
+from pytest import mark
 
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import SetTestMode, SetUpTestInjections
@@ -54,6 +55,7 @@ class MasterCommunicatorTest(unittest.TestCase):
         output = comm.do_command(action, fields)
         self.assertEqual('OK', output['resp'])
 
+    @mark.slow
     def test_timeout(self):
         action = master_api.basic_action()
         fields = {'action_type': 1, 'action_number': 2}
@@ -84,6 +86,7 @@ class MasterCommunicatorTest(unittest.TestCase):
         output = comm.do_command(action, fields)
         self.assertEqual('OK', output['resp'])
 
+    @mark.slow
     def test_split_data(self):
         action = master_api.basic_action()
         fields = {'action_type': 1, 'action_number': 2}
