@@ -31,12 +31,7 @@ class FrontpanelController(object):
     AUTH_MODE_PRESS_DURATION = 5.75
     AUTH_MODE_TIMEOUT = 60
     BOARD_TYPE = Hardware.get_board_type()
-    if BOARD_TYPE in [Hardware.BoardType.BB, Hardware.BoardType.BBB]:
-        MAIN_INTERFACE = 'eth0'
-    elif BOARD_TYPE == Hardware.BoardType.BBGW:
-        MAIN_INTERFACE = 'wlan0'
-    else:
-        MAIN_INTERFACE = 'lo'
+    MAIN_INTERFACE = Hardware.get_main_interface()
 
     class Leds(object):
         RS485 = 'RS485'
