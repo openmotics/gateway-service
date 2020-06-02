@@ -19,12 +19,16 @@ Tests for the users module.
 """
 
 from __future__ import absolute_import
-import unittest
-import xmlrunner
+
 import time
+import unittest
 from threading import Lock
-from ioc import SetTestMode, SetUpTestInjections
+
+import xmlrunner
+from pytest import mark
+
 from gateway.users import UserController
+from ioc import SetTestMode, SetUpTestInjections
 
 
 class UserControllerTest(unittest.TestCase):
@@ -87,6 +91,7 @@ class UserControllerTest(unittest.TestCase):
 
         self.assertEqual('admin', user_controller.get_role('fred'))
 
+    @mark.slow
     def test_token_timeout(self):
         """ Test the timeout on the tokens. """
         SetUpTestInjections(config={'username': 'om', 'password': 'pass'},

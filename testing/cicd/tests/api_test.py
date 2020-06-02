@@ -26,7 +26,6 @@ logger = logging.getLogger('openmotics')
 def test_health_check(toolbox):
     data = toolbox.dut.get('/health_check')
     assert 'health' in data
-    assert data['health']['led_service']['state']
     assert data['health']['vpn_service']['state']
     assert data['health']['openmotics']['state']
 
