@@ -20,15 +20,20 @@ from __future__ import absolute_import
 import logging
 import os
 import time
+from ioc import INJECTED, Inject
 from intelhex import IntelHex
-from ioc import Inject, INJECTED
+from master.core.memory_models import (
+    GlobalConfiguration,
+    InputModuleConfiguration, OutputModuleConfiguration, SensorModuleConfiguration,
+    CanControlModuleConfiguration
+)
 from master.core.rs485_communicator import RS485Communicator, CommunicationTimedOutException
 from master.core.rs485_api import RS485API
 
 logger = logging.getLogger('openmotics')
 
 if False:  # MYPY
-    from typing import Tuple, Optional, List, Dict, Any
+    from typing import Tuple, Optional, List, Dict, Any, Union
 
 
 class RS485Updater(object):
@@ -44,8 +49,36 @@ class RS485Updater(object):
     BLOCK_SIZE = 64
 
     @staticmethod
+    def update_all(module_type, hex_filename, version):  # type: (str, str, Optional[str]) -> bool
+        general_configuration = GlobalConfiguration()
+        # All module types: ['O', 'R', 'D', 'I', 'T', 'C']  # TODO: Implement `D`
+        update_map = {'I': (InputModuleConfiguration, general_configuration.number_of_input_modules),
+                      'O': (OutputModuleConfiguration, general_configuration.number_of_output_modules),
+                      'T': (SensorModuleConfiguration, general_configuration.number_of_sensor_modules),
+                      'C': (CanControlModuleConfiguration, general_configuration.number_of_can_control_modules)}
+        if module_type in update_map:
+            module_configuration_class, number_of_modules = update_map[module_type]
+            addresses = []
+            for module_id in range(number_of_modules):
+                module_configuration = module_configuration_class(module_id)  # type: Union[InputModuleConfiguration, OutputModuleConfiguration, SensorModuleConfiguration, CanControlModuleConfiguration]
+                if module_configuration.device_type == module_type:
+                    addresses.append(module_configuration.address)
+                else:
+                    logger.warning('Skip updating unsupported module {0}: {1} != {2}'.format(
+                        module_configuration.address, module_type, module_configuration.device_type
+                    ))
+        else:
+            logger.warning('Skip updating unsupported modules of type: {0}'.format(module_type))
+            return True
+
+        success = True
+        for address in addresses:
+            success &= RS485Updater.update(address, hex_filename, version)
+        return success
+
+    @staticmethod
     @Inject
-    def update(address, hex_filename, version, rs485_communicator=INJECTED):  # type: (str, str, str, RS485Communicator) -> bool
+    def update(address, hex_filename, version, rs485_communicator=INJECTED):  # type: (str, str, Optional[str], RS485Communicator) -> bool
         """ Flashes the content from an Intel HEX file to a slave module """
         try:
             with rs485_communicator:
@@ -83,10 +116,11 @@ class RS485Updater(object):
                     logger.error('{0} - Could not enter bootloader. Aborting'.format(address))
                     return False
 
-                response = rs485_communicator.do_command(address=address,
-                                                         command=RS485API.set_firmware_version(),
-                                                         fields={'version': version})
-                RS485Updater._validate_response(response)
+                if version is not None:
+                    response = rs485_communicator.do_command(address=address,
+                                                             command=RS485API.set_firmware_version(),
+                                                             fields={'version': version})
+                    RS485Updater._validate_response(response)
 
                 blocks = RS485Updater.BLOCKS_SMALL_SLAVE
                 if len(firmware) // RS485Updater.BLOCK_SIZE + 1 > blocks:

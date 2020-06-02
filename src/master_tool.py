@@ -14,8 +14,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 Tool to control the master from the command line.
-
-@author: fryckbos
 """
 from __future__ import absolute_import
 from platform_utils import Platform, System
@@ -27,18 +25,15 @@ import logging
 import shutil
 import subprocess
 import sys
-import time
 
 from serial import Serial
 from six.moves.configparser import ConfigParser
 
 import constants
-import master.classic.master_api as master_api
 from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.hal.master_controller_core import MasterCoreController
 from ioc import INJECTED, Inject, Injectable
 from master.classic.master_communicator import MasterCommunicator
-from master.core.core_api import CoreAPI
 from master.core.core_communicator import CoreCommunicator
 from master.core.memory_file import MemoryFile, MemoryTypes
 from serial_utils import CommunicationTimedOutException
