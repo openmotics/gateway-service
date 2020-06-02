@@ -92,7 +92,7 @@ def main():
 
         update_success = bootload_modules(module_type=module_type,
                                           filename=filename,
-                                          logger=logger)
+                                          logger=logger.info)
 
     return update_success
 
