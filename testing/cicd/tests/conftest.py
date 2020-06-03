@@ -22,8 +22,10 @@ settings.load_profile(os.getenv('HYPOTHESIS_PROFILE', 'default'))
 @fixture(scope='session')
 def toolbox_session():
     toolbox = Toolbox()
-    toolbox.initialize()
-    toolbox.print_logs()
+    try:
+        toolbox.initialize()
+    finally:
+        toolbox.print_logs()
     return toolbox
 
 
