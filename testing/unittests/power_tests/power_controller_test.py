@@ -124,7 +124,6 @@ class PowerP1Test(unittest.TestCase):
             ]
 
     def test_get_module_meter(self):
-        # TODO confirm this is correct
         payload = '11111111111111111111111111112222222222222222222222222222                            4444444444444444444444444444'
         with mock.patch.object(self.power_communicator, 'do_command',
                                return_value=[payload]) as cmd:
@@ -158,7 +157,6 @@ class PowerP1Test(unittest.TestCase):
             ]
 
     def test_get_module_gas(self):
-        # TODO confirm this is correct
         payload = '000000001*m300002.300*m3            00012.000*m3'
         with mock.patch.object(self.power_communicator, 'do_command',
                                return_value=[payload]) as cmd:
@@ -169,7 +167,7 @@ class PowerP1Test(unittest.TestCase):
                 0.0, 0.0, 0.0, 0.0,
             ]
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'cG\x00', '', '96s', module_type='C'))
+                mock.call('11.0', PowerCommand('G', 'cG\x00', '', '112s', module_type='C'))
             ]
 
     def test_get_module_injection_tariff(self):
