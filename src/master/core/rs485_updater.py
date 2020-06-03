@@ -141,7 +141,7 @@ class RS485Updater(object):
                     else:
                         payload = (
                             bytearray(firmware.tobinarray(start=start, end=start + RS485Updater.BLOCK_SIZE - 1 - 8)) +
-                            bytearray(firmware.tobinarray(start=0, end=7))
+                            bytearray(firmware.tobinarray(start=0, end=7))  # Store jump address to the end of the flash space
                         )
 
                     try:

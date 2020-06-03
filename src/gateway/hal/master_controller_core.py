@@ -705,7 +705,7 @@ class MasterCoreController(MasterController):
         return self._discover_mode_timer is not None
 
     def get_module_log(self):  # type: () -> List[Tuple[str, str]]
-        return []
+        raise NotImplementedError()  # No need to implement. Not used and rather obsolete code anyway
 
     def get_modules(self):
         def _default_if_255(value, default):
