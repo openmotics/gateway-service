@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Module to update an RS485 slave module
+Module to update a slave module
 """
 
 from __future__ import absolute_import
@@ -27,8 +27,8 @@ from master.core.memory_models import (
     InputModuleConfiguration, OutputModuleConfiguration, SensorModuleConfiguration,
     CanControlModuleConfiguration
 )
-from master.core.rs485_communicator import RS485Communicator, CommunicationTimedOutException
-from master.core.rs485_api import RS485API
+from master.core.slave_communicator import SlaveCommunicator, CommunicationTimedOutException
+from master.core.slave_api import SlaveAPI
 
 logger = logging.getLogger('openmotics')
 
@@ -36,9 +36,9 @@ if False:  # MYPY
     from typing import Tuple, Optional, List, Dict, Any, Union
 
 
-class RS485Updater(object):
+class SlaveUpdater(object):
     """
-    This is a class holding tools to execute RS485 slave updates
+    This is a class holding tools to execute slave updates
     """
 
     BLOCKS_SMALL_SLAVE = 410
@@ -73,23 +73,23 @@ class RS485Updater(object):
 
         success = True
         for address in addresses:
-            success &= RS485Updater.update(address, hex_filename, version)
+            success &= SlaveUpdater.update(address, hex_filename, version)
         return success
 
     @staticmethod
     @Inject
-    def update(address, hex_filename, version, rs485_communicator=INJECTED):  # type: (str, str, Optional[str], RS485Communicator) -> bool
+    def update(address, hex_filename, version, slave_communicator=INJECTED):  # type: (str, str, Optional[str], SlaveCommunicator) -> bool
         """ Flashes the content from an Intel HEX file to a slave module """
         try:
-            with rs485_communicator:
-                logger.info('Updating RS485 slave')
+            with slave_communicator:
+                logger.info('Updating slave')
 
                 if not os.path.exists(hex_filename):
                     raise RuntimeError('The given path does not point to an existing file')
                 firmware = IntelHex(hex_filename)  # Using the IntelHex library read and validate contents
 
                 logger.info('{0} - Loading current firmware version'.format(address))
-                current_version = RS485Updater._get_version(rs485_communicator, address, tries=30)
+                current_version = SlaveUpdater._get_version(slave_communicator, address, tries=30)
                 if current_version is None:
                     logger.info('{0} - Could not request current firmware version'.format(address))
                     logger.info('{0} - Module does not support bootloading. Skipping'.format(address))
@@ -103,11 +103,11 @@ class RS485Updater(object):
 
                 logger.info('{0} - Entering bootloader'.format(address))
                 try:
-                    response = rs485_communicator.do_command(address=address,
-                                                             command=RS485API.goto_bootloader(),
-                                                             fields={'timeout': RS485Updater.BOOTLOADER_TIMEOUT},
-                                                             timeout=RS485Updater.SWITCH_MODE_TIMEOUT)
-                    RS485Updater._validate_response(response)
+                    response = slave_communicator.do_command(address=address,
+                                                             command=SlaveAPI.goto_bootloader(),
+                                                             fields={'timeout': SlaveUpdater.BOOTLOADER_TIMEOUT},
+                                                             timeout=SlaveUpdater.SWITCH_MODE_TIMEOUT)
+                    SlaveUpdater._validate_response(response)
                     # The return code can't be used to verify whether the bootloader is actually active, since it is
                     # answered by the active code. E.g. if the application was active, it's the application that will
                     # answer this call with the return_code APPLICATION_ACTIVE
@@ -117,39 +117,39 @@ class RS485Updater(object):
                     return False
 
                 if version is not None:
-                    response = rs485_communicator.do_command(address=address,
-                                                             command=RS485API.set_firmware_version(),
+                    response = slave_communicator.do_command(address=address,
+                                                             command=SlaveAPI.set_firmware_version(),
                                                              fields={'version': version})
-                    RS485Updater._validate_response(response)
+                    SlaveUpdater._validate_response(response)
 
-                blocks = RS485Updater.BLOCKS_SMALL_SLAVE
-                if len(firmware) // RS485Updater.BLOCK_SIZE + 1 > blocks:
-                    blocks = RS485Updater.BLOCKS_LARGE_SLAVE
+                blocks = SlaveUpdater.BLOCKS_SMALL_SLAVE
+                if len(firmware) // SlaveUpdater.BLOCK_SIZE + 1 > blocks:
+                    blocks = SlaveUpdater.BLOCKS_LARGE_SLAVE
 
-                crc = RS485Updater._get_crc(firmware, blocks)
-                response = rs485_communicator.do_command(address=address,
-                                                         command=RS485API.set_firmware_crc(),
+                crc = SlaveUpdater._get_crc(firmware, blocks)
+                response = slave_communicator.do_command(address=address,
+                                                         command=SlaveAPI.set_firmware_crc(),
                                                          fields={'crc': crc})
-                RS485Updater._validate_response(response)
+                SlaveUpdater._validate_response(response)
 
                 logger.info('{0} - Flashing contents of {1}'.format(address, os.path.basename(hex_filename)))
                 logger.info('{0} - Flashing...'.format(address))
                 for block in range(blocks):
-                    start = block * RS485Updater.BLOCK_SIZE
+                    start = block * SlaveUpdater.BLOCK_SIZE
                     if block < (blocks - 1):
-                        payload = bytearray(firmware.tobinarray(start=start, end=start + RS485Updater.BLOCK_SIZE - 1))
+                        payload = bytearray(firmware.tobinarray(start=start, end=start + SlaveUpdater.BLOCK_SIZE - 1))
                     else:
                         payload = (
-                            bytearray(firmware.tobinarray(start=start, end=start + RS485Updater.BLOCK_SIZE - 1 - 8)) +
-                            bytearray(firmware.tobinarray(start=0, end=7))  # Store jump address to the end of the flash space
+                                bytearray(firmware.tobinarray(start=start, end=start + SlaveUpdater.BLOCK_SIZE - 1 - 8)) +
+                                bytearray(firmware.tobinarray(start=0, end=7))  # Store jump address to the end of the flash space
                         )
 
                     try:
-                        response = rs485_communicator.do_command(address=address,
-                                                                 command=RS485API.write_firmware_block(),
+                        response = slave_communicator.do_command(address=address,
+                                                                 command=SlaveAPI.write_firmware_block(),
                                                                  fields={'address': block, 'payload': payload},
-                                                                 timeout=RS485Updater.WRITE_FLASH_BLOCK_TIMEOUT)
-                        RS485Updater._validate_response(response)
+                                                                 timeout=SlaveUpdater.WRITE_FLASH_BLOCK_TIMEOUT)
+                        SlaveUpdater._validate_response(response)
                         if block % int(blocks / 10) == 0 and block != 0:
                             logger.info('{0} - Flashing... {1}%'.format(address, int(block * 100 / blocks)))
                     except CommunicationTimedOutException:
@@ -159,20 +159,20 @@ class RS485Updater(object):
                 logger.info('{0} - Flashing... Done'.format(address))
 
                 logger.info('{0} - Running integrity check'.format(address))
-                response = rs485_communicator.do_command(address=address,
-                                                         command=RS485API.integrity_check(),
+                response = slave_communicator.do_command(address=address,
+                                                         command=SlaveAPI.integrity_check(),
                                                          fields={})
-                RS485Updater._validate_response(response)
+                SlaveUpdater._validate_response(response)
                 logger.info('{0} - Integrity OK'.format(address))
 
                 logger.info('{0} - Entering application'.format(address))
                 try:
-                    response = rs485_communicator.do_command(address=address,
-                                                             command=RS485API.goto_application(),
+                    response = slave_communicator.do_command(address=address,
+                                                             command=SlaveAPI.goto_application(),
                                                              fields={},
-                                                             timeout=RS485Updater.SWITCH_MODE_TIMEOUT)
-                    return_code = RS485Updater._validate_response(response)
-                    if return_code != RS485API.ReturnCode.APPLICATION_ACTIVE:
+                                                             timeout=SlaveUpdater.SWITCH_MODE_TIMEOUT)
+                    return_code = SlaveUpdater._validate_response(response)
+                    if return_code != SlaveAPI.ReturnCode.APPLICATION_ACTIVE:
                         logger.error('{0} - Could not enter application: {1}. Aborting'.format(address, return_code))
                         return False
                     logger.info('{0} - Application active'.format(address))
@@ -182,7 +182,7 @@ class RS485Updater(object):
                     # return False
 
                 logger.info('{0} - Loading new firmware version'.format(address))
-                new_version = RS485Updater._get_version(rs485_communicator, address, tries=60)
+                new_version = SlaveUpdater._get_version(slave_communicator, address, tries=60)
                 if new_version is None:
                     logger.error('{0} - Could not request new firmware version'.format(address))
                     return False
@@ -196,12 +196,12 @@ class RS485Updater(object):
             return False
 
     @staticmethod
-    def _get_version(rs485_communicator, address, tries=1):  # type: (RS485Communicator, str, int) -> Optional[Tuple[str, str]]
+    def _get_version(slave_communicator, address, tries=1):  # type: (SlaveCommunicator, str, int) -> Optional[Tuple[str, str]]
         tries_counter = tries
         while True:
             try:
-                response = rs485_communicator.do_command(address=address,
-                                                         command=RS485API.get_firmware_version(),
+                response = slave_communicator.do_command(address=address,
+                                                         command=SlaveAPI.get_firmware_version(),
                                                          fields={})
                 if response is None:
                     raise CommunicationTimedOutException()
@@ -231,7 +231,7 @@ class RS485Updater(object):
     def _validate_response(response):  # type: (Optional[Dict[str, Any]]) -> Optional[str]
         if response is None:
             return None
-        return_code = RS485API.ReturnCode.code_to_enum(response['return_code'])
-        if return_code in RS485API.ReturnCode.ERRORS:
+        return_code = SlaveAPI.ReturnCode.code_to_enum(response['return_code'])
+        if return_code in SlaveAPI.ReturnCode.ERRORS:
             raise RuntimeError('Got unexpected response: {0}'.format(return_code))
         return return_code

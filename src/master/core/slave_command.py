@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-RS485CommandSpec defines payload handling; (de)serialization
+SlaveCommandSpec defines payload handling; (de)serialization
 """
 from __future__ import absolute_import
 import logging
@@ -33,7 +33,7 @@ class Instruction(object):
         self.padding = padding
 
 
-class RS485CommandSpec(object):
+class SlaveCommandSpec(object):
     """
     Defines payload handling and de(serialization)
     """
@@ -54,8 +54,8 @@ class RS485CommandSpec(object):
         self.header_length = 6  # Literal 'ST/RC' + 4 address bytes
         self._instruction_length = len(self.instruction.instruction)
         self._request_padded_suffix = bytearray([0] * self.instruction.padding) + b'\r\n\r\n'
-        self._response_prefix_length = len(RS485CommandSpec.RESPONSE_PREFIX)
-        self._response_footer_length = 3 + len(RS485CommandSpec.RESPONSE_SUFFIX)  # Literal 'C' + 2 CRC bytes + RESPONSE_SUFFIX
+        self._response_prefix_length = len(SlaveCommandSpec.RESPONSE_PREFIX)
+        self._response_footer_length = 3 + len(SlaveCommandSpec.RESPONSE_SUFFIX)  # Literal 'C' + 2 CRC bytes + RESPONSE_SUFFIX
         self.response_length = (
             self.header_length +
             self._instruction_length +
@@ -65,23 +65,23 @@ class RS485CommandSpec(object):
 
     def set_address(self, address):  # type: (str) -> None
         self.address = bytearray(self._address_field.encode_bytes(address))  # TODO: Probably need to change once bytearrays are used everywhere
-        self.expected_response_hash = RS485CommandSpec.hash(self.address + self.instruction.instruction.encode())
+        self.expected_response_hash = SlaveCommandSpec.hash(self.address + self.instruction.instruction.encode())
 
     def create_request_payload(self, fields):  # type: (Dict[str, Any]) -> bytearray
-        """ Create the request payloads for RS485 using this spec and the provided fields. """
+        """ Create the request payloads for slaves using this spec and the provided fields. """
         if self.address is None:
             raise RuntimeError('Cannot create request payload when address is not set.')
-        prefix = bytearray(RS485CommandSpec.REQUEST_PREFIX)
+        prefix = bytearray(SlaveCommandSpec.REQUEST_PREFIX)
         payload = self.address + self.instruction.instruction.encode()
         for field in self._request_fields:
             payload += bytearray(field.encode_bytes(fields.get(field.name)))
-        checksum = bytearray(b'C') + RS485CommandSpec.calculate_crc(payload)
+        checksum = bytearray(b'C') + SlaveCommandSpec.calculate_crc(payload)
         return prefix + payload + checksum + self._request_padded_suffix
 
     def consume_response_payload(self, payload):  # type: (bytearray) -> Optional[Dict[str, Any]]
         """ Consumes the payload bytes """
-        crc = RS485CommandSpec.decode_crc(payload[-(self._response_footer_length - 1):-len(RS485CommandSpec.RESPONSE_SUFFIX)])
-        expected_crc = RS485CommandSpec.decode_crc(RS485CommandSpec.calculate_crc(payload[self._response_prefix_length:-self._response_footer_length]))
+        crc = SlaveCommandSpec.decode_crc(payload[-(self._response_footer_length - 1):-len(SlaveCommandSpec.RESPONSE_SUFFIX)])
+        expected_crc = SlaveCommandSpec.decode_crc(SlaveCommandSpec.calculate_crc(payload[self._response_prefix_length:-self._response_footer_length]))
         if crc != expected_crc:
             logger.info('Unexpected CRC ({0} vs expected {1}): {2}'.format(crc, expected_crc, printable(payload)))
             return None
@@ -109,7 +109,7 @@ class RS485CommandSpec(object):
             return None
         address = payload[self._response_prefix_length:self._response_prefix_length + 4]
         instruction = payload[self.header_length:self.header_length + self._instruction_length]
-        return RS485CommandSpec.hash(address + instruction)
+        return SlaveCommandSpec.hash(address + instruction)
 
     @staticmethod
     def calculate_crc(data):  # type: (bytearray) -> bytearray

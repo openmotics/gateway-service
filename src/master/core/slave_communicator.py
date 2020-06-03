@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Module to communicate with the RS485 bus.
+Module to communicate with the Slave bus.
 """
 
 from __future__ import absolute_import
@@ -22,7 +22,7 @@ from six.moves.queue import Queue, Empty
 from ioc import Injectable, Inject, INJECTED, Singleton
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import CoreCommunicator, BackgroundConsumer
-from master.core.rs485_command import RS485CommandSpec
+from master.core.slave_command import SlaveCommandSpec
 from serial_utils import CommunicationTimedOutException, printable
 
 if False:  # MYPY
@@ -31,11 +31,11 @@ if False:  # MYPY
 logger = logging.getLogger('openmotics')
 
 
-@Injectable.named('rs485_communicator')
+@Injectable.named('slave_communicator')
 @Singleton
-class RS485Communicator(object):
+class SlaveCommunicator(object):
     """
-    Uses a CoreCommunicator to communicate with the RS485 bus
+    Uses a CoreCommunicator to communicate with the slave bus
     """
 
     @Inject
@@ -51,7 +51,7 @@ class RS485Communicator(object):
         self._transparent_mode = False
         self._read_buffer = bytearray()
 
-        self._background_consumer = BackgroundConsumer(CoreAPI.rs485_rx_transport_message(), 2, self._process_transport_message)
+        self._background_consumer = BackgroundConsumer(CoreAPI.slave_rx_transport_message(), 2, self._process_transport_message)
         self._communicator.register_consumer(self._background_consumer)
 
     def register_consumer(self, consumer):
@@ -72,14 +72,14 @@ class RS485Communicator(object):
             self._consumers.remove(consumer)
 
     def enter_transparent_mode(self):
-        response = self._communicator.do_command(command=CoreAPI.set_rs485_bus_mode(),
-                                                 fields={'mode': CoreAPI.RS485Mode.TRANSPARENT})
-        self._transparent_mode = response['mode'] == CoreAPI.RS485Mode.TRANSPARENT
+        response = self._communicator.do_command(command=CoreAPI.set_slave_bus_mode(),
+                                                 fields={'mode': CoreAPI.SlaveBusMode.TRANSPARENT})
+        self._transparent_mode = response['mode'] == CoreAPI.SlaveBusMode.TRANSPARENT
 
     def exit_transparent_mode(self):
-        response = self._communicator.do_command(command=CoreAPI.set_rs485_bus_mode(),
-                                                 fields={'mode': CoreAPI.RS485Mode.LIVE})
-        self._transparent_mode = response['mode'] == CoreAPI.RS485Mode.TRANSPARENT
+        response = self._communicator.do_command(command=CoreAPI.set_slave_bus_mode(),
+                                                 fields={'mode': CoreAPI.SlaveBusMode.LIVE})
+        self._transparent_mode = response['mode'] == CoreAPI.SlaveBusMode.TRANSPARENT
 
     def __enter__(self):
         self.enter_transparent_mode()
@@ -89,9 +89,9 @@ class RS485Communicator(object):
         self.exit_transparent_mode()
 
     def do_command(self, address, command, fields, timeout=2):
-        # type: (str, RS485CommandSpec, Dict[str, Any], Optional[int]) -> Optional[Dict[str, Any]]
+        # type: (str, SlaveCommandSpec, Dict[str, Any], Optional[int]) -> Optional[Dict[str, Any]]
         """
-        Send an RS485 command over the Communicator and block until an answer is received.
+        Send an slave command over the Communicator and block until an answer is received.
         If the Core does not respond within the timeout period, a CommunicationTimedOutException is raised
         """
         if not self._transparent_mode:
@@ -105,13 +105,13 @@ class RS485Communicator(object):
         master_timeout = False
         payload = command.create_request_payload(fields)
         if self._verbose:
-            logger.info('Writing to RS485 transport:   Address: {0} - Data: {1}'.format(address, printable(payload)))
+            logger.info('Writing to slave transport:   Address: {0} - Data: {1}'.format(address, printable(payload)))
         try:
-            self._communicator.do_command(command=CoreAPI.rs485_tx_transport_message(len(payload)),
+            self._communicator.do_command(command=CoreAPI.slave_tx_transport_message(len(payload)),
                                           fields={'payload': list(payload)},  # TODO: Remove list() once CoreCommunicator uses bytearrays
                                           timeout=timeout)
         except CommunicationTimedOutException as ex:
-            logger.error('Internal timeout during RS485 transport: {0}'.format(ex))
+            logger.error('Internal timeout during slave transport: {0}'.format(ex))
             master_timeout = True
 
         try:
@@ -129,13 +129,13 @@ class RS485Communicator(object):
     def _process_transport_message(self, package):
         payload = bytearray(package['payload'])  # TODO: Remove bytearray() once the CoreCommunicator uses bytearrays
         if self._verbose:
-            logger.info('Reading from RS485 transport: Data: {0}'.format(printable(payload)))
+            logger.info('Reading from slave transport: Data: {0}'.format(printable(payload)))
 
         self._read_buffer += payload
-        if RS485CommandSpec.RESPONSE_PREFIX not in self._read_buffer:
+        if SlaveCommandSpec.RESPONSE_PREFIX not in self._read_buffer:
             return
 
-        index = self._read_buffer.index(RS485CommandSpec.RESPONSE_PREFIX)
+        index = self._read_buffer.index(SlaveCommandSpec.RESPONSE_PREFIX)
         if index > 0:
             self._read_buffer = self._read_buffer[index:]
 
@@ -145,7 +145,7 @@ class RS485Communicator(object):
             if consumed_bytes > 0:
                 self.unregister_consumer(consumer)
                 break
-        self._read_buffer = self._read_buffer[max(len(RS485CommandSpec.RESPONSE_PREFIX), consumed_bytes):]
+        self._read_buffer = self._read_buffer[max(len(SlaveCommandSpec.RESPONSE_PREFIX), consumed_bytes):]
 
 
 class Consumer(object):
@@ -154,7 +154,7 @@ class Consumer(object):
     matches the consumer, the output will unblock the get() caller.
     """
 
-    def __init__(self, command):  # type: (RS485CommandSpec) -> None
+    def __init__(self, command):  # type: (SlaveCommandSpec) -> None
         self.command = command
         self._queue = Queue()  # type: Queue
 
@@ -178,7 +178,7 @@ class Consumer(object):
             value = self._queue.get(timeout=timeout)
             if value is None:
                 # No valid data could be received
-                raise CommunicationTimedOutException('Empty or invalid RS485 data received')
+                raise CommunicationTimedOutException('Empty or invalid slave data received')
             return value
         except Empty:
-            raise CommunicationTimedOutException('No RS485 data received in {0}s'.format(timeout))
+            raise CommunicationTimedOutException('No slave data received in {0}s'.format(timeout))

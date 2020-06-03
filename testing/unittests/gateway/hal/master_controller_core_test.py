@@ -16,7 +16,7 @@ from master.core.memory_file import MemoryTypes, MemoryFile
 from master.core.core_communicator import BackgroundConsumer
 from master.core.memory_models import InputConfiguration
 from master.core.ucan_communicator import UCANCommunicator
-from master.core.rs485_communicator import RS485Communicator
+from master.core.slave_communicator import SlaveCommunicator
 from six.moves import map
 
 
@@ -264,7 +264,7 @@ def get_core_controller_dummy(command_data=None):
                         master_communicator=communicator_mock)
     SetUpTestInjections(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM)},
                         ucan_communicator=UCANCommunicator(),
-                        rs485_communicator=RS485Communicator())
+                        slave_communicator=SlaveCommunicator())
     return MasterCoreController()
 
 

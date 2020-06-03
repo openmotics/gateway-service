@@ -64,7 +64,7 @@ def main():
     setup_platform()
 
     if Platform.get_platform() == Platform.Type.CORE_PLUS:
-        from master.core.rs485_updater import RS485Updater
+        from master.core.slave_updater import SlaveUpdater
 
         @Inject
         def get_communicator(master_communicator=INJECTED):
@@ -73,7 +73,7 @@ def main():
         core_communicator = get_communicator()
         core_communicator.start()
         try:
-            update_success = RS485Updater.update_all(module_type=module_type,
+            update_success = SlaveUpdater.update_all(module_type=module_type,
                                                      hex_filename=filename,
                                                      version=version)
         finally:

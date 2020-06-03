@@ -40,8 +40,7 @@ from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.ucan_communicator import UCANCommunicator
-from master.core.rs485_communicator import RS485Communicator
-from master.core.rs485_api import RS485API
+from master.core.slave_communicator import SlaveCommunicator
 from master.core.errors import Error
 from master.core.events import Event as MasterCoreEvent
 from master.core.memory_file import MemoryTypes, MemoryFile
@@ -62,11 +61,11 @@ logger = logging.getLogger("openmotics")
 class MasterCoreController(MasterController):
 
     @Inject
-    def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, rs485_communicator=INJECTED, memory_files=INJECTED):
+    def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, slave_communicator=INJECTED, memory_files=INJECTED):
         super(MasterCoreController, self).__init__(master_communicator)
         self._master_communicator = master_communicator  # type: CoreCommunicator
         self._ucan_communicator = ucan_communicator  # type: UCANCommunicator
-        self._rs485_communicator = rs485_communicator  # type: RS485Communicator
+        self._slave_communicator = slave_communicator  # type: SlaveCommunicator
         self._memory_files = memory_files  # type: Dict[str, MemoryFile]
         self._synchronization_thread = Thread(target=self._synchronize, name='CoreMasterSynchronization')
         self._master_online = False
@@ -740,7 +739,7 @@ class MasterCoreController(MasterController):
             elif device_type == 'b':
                 can_inputs.append('I')  # uCAN input "module"
             elif device_type in ['I', 'i']:
-                inputs.append(device_type)  # RS485 and virtual input module
+                inputs.append(device_type)  # Slave and virtual input module
         for module_id in range(nr_of_sensor_modules):
             sensor_module_info = SensorModuleConfiguration(module_id)
             device_type = sensor_module_info.device_type
@@ -771,13 +770,13 @@ class MasterCoreController(MasterController):
 
     def get_status(self):
         firmware_version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
-        bus_mode = self._master_communicator.do_command(CoreAPI.get_rs485_bus_mode(), {})['mode']
+        bus_mode = self._master_communicator.do_command(CoreAPI.get_slave_bus_mode(), {})['mode']
         date_time = self._master_communicator.do_command(CoreAPI.get_date_time(), {})
         return {'time': '{0:02}:{1:02}'.format(date_time['hours'], date_time['minutes']),
                 'date': '{0:02}/{1:02}/20{2:02}'.format(date_time['day'], date_time['month'], date_time['year']),
-                'mode': {CoreAPI.RS485Mode.INIT: 'I',
-                         CoreAPI.RS485Mode.LIVE: 'L',
-                         CoreAPI.RS485Mode.TRANSPARENT: 'T'}[bus_mode],
+                'mode': {CoreAPI.SlaveBusMode.INIT: 'I',
+                         CoreAPI.SlaveBusMode.LIVE: 'L',
+                         CoreAPI.SlaveBusMode.TRANSPARENT: 'T'}[bus_mode],
                 'version': firmware_version,
                 'hw_version': 1}  # TODO: Hardware version
 
