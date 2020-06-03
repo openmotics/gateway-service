@@ -813,11 +813,10 @@ class GatewayApi(object):
 
                 out = []
                 for i in range(num_ports):
-                    data = {'voltage': convert_nan(volt[i], default=0.0),
-                            'frequency': convert_nan(freq[i], default=0.0),
-                            'current': convert_nan(current[i], default=0.0),
-                            'power': convert_nan(power[i], default=0.0)}
-                    out.append(RealtimePower(**data))
+                    out.append(RealtimePower(voltage=convert_nan(volt[i], default=0.0),
+                                             frequency=convert_nan(freq[i], default=0.0),
+                                             current=convert_nan(current[i], default=0.0),
+                                             power=convert_nan(power[i], default=0.0)))
 
                 output[str(module_id)] = out
             except CommunicationTimedOutException:
@@ -833,7 +832,7 @@ class GatewayApi(object):
         """
         Get the realtime p1 measurement values.
         """
-        if self.__power_controller is None:
+        if self.__power_store is None or self.__p1_controller is None:
             return []
 
         modules = self.__power_store.get_power_modules()

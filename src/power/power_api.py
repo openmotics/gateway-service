@@ -118,7 +118,7 @@ def get_timestamp_p1(version):
         raise ValueError("Unknown power api version")
 
 
-def get_consumption_gas_p1(version):
+def get_gas_consumption_p1(version):
     """ Gets the gas consumption from a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'cG\x00', '', '112s', module_type='C')

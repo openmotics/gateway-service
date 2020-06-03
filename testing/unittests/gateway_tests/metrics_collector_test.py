@@ -58,34 +58,52 @@ class MetricsCollectorTest(unittest.TestCase):
                                       values={'current': 5.0, 'frequency': 2.1, 'power': 3.6, 'voltage': 10.0})
             assert enqueue.call_args_list == [expected_call]
 
-    def test_realtime_p1_metrics(self):
+    def test_realtime_p1_electricity_metrics(self):
         self.gateway_api.get_realtime_p1.return_value = [
-            {'module_id': 10,
+            {'electricity': {'current': {'phase1': 1.1, 'phase2': 1.2, 'phase3': 1.3},
+                             'ean': '1111111111111111111111111111',
+                             'tariff_indicator': 2.0,
+                             'tariff_low': 2.3,
+                             'tariff_normal': 2.0,
+                             'voltage': {'phase1': 1.0, 'phase2': 2.0, 'phase3': 3.0}},
+             'gas': {'ean': ''},
+             'module_id': 10,
              'port_id': 0,
-             'meter': '1111111111111111111111111111',
-             'timestamp': 190527083152.0,
-             'gas': 1.0,
-             'tariff': {'tariff1': 1.0, 'tariff2': 2.3, 'indicator': 1.0},
-             'voltage': {'phase1': 1.0, 'phase2': 2.0, 'phase3': 3.0},
-             'current': {'phase1': 1.1, 'phase2': 1.2, 'phase3': 1.3}},
+             'timestamp': 190527083152.0},
         ]
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
             self.controller._run_power_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy_p1',
                                       tags={'type': 'openmotics', 'id': '11.0',
-                                            'meter': '1111111111111111111111111111'},
-                                      values={'timestamp': 190527083152.0,
-                                              'consumption_gas': 1.0,
-                                              'tariff1': 1.0,
-                                              'tariff2': 2.3,
-                                              'tariff_indicator': 1.0,
-                                              'voltage_phase1': 1.0,
-                                              'voltage_phase2': 2.0,
-                                              'voltage_phase3': 3.0,
-                                              'current_phase1': 1.1,
-                                              'current_phase2': 1.2,
-                                              'current_phase3': 1.3})
+                                            'ean': '1111111111111111111111111111'},
+                                      values={'electricity_tariff_low': 2.3,
+                                              'electricity_tariff_normal': 2.0,
+                                              'electricity_tariff_indicator': 2.0,
+                                              'electricity_voltage_phase1': 1.0,
+                                              'electricity_voltage_phase2': 2.0,
+                                              'electricity_voltage_phase3': 3.0,
+                                              'electricity_current_phase1': 1.1,
+                                              'electricity_current_phase2': 1.2,
+                                              'electricity_current_phase3': 1.3})
+            assert enqueue.call_args_list == [expected_call]
+
+    def test_realtime_p1_gas_metrics(self):
+        self.gateway_api.get_realtime_p1.return_value = [
+            {'electricity': {'ean': ''},
+             'gas': {'ean': '2222222222222222222222222222',
+                      'consumption': 2.3},
+             'module_id': 10,
+             'port_id': 0,
+             'timestamp': 190527083152.0},
+        ]
+        with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
+            self.controller._run_power_metrics('energy')
+            expected_call = mock.call(timestamp=mock.ANY,
+                                      metric_type='energy_p1',
+                                      tags={'type': 'openmotics', 'id': '11.0',
+                                            'ean': '2222222222222222222222222222'},
+                                      values={'gas_consumption': 2.3})
             assert enqueue.call_args_list == [expected_call]
 
     def test_total_power_metrics(self):

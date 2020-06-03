@@ -47,15 +47,20 @@ class PowerP1Test(unittest.TestCase):
                                    False, False, False, False
                                ]), \
              mock.patch.object(self.controller, 'get_module_meter',
-                               return_value=[
+                               side_effect=([
                                    '1111111111111111111111111111',
+                                   '3333333333333333333333333333',
+                                   '                            ',
+                                   '                            '
+                               ], [
                                    '2222222222222222222222222222',
                                    '                            ',
+                                   '                            ',
                                    '4444444444444444444444444444'
-                               ]), \
+                               ])), \
              mock.patch.object(self.controller, 'get_module_timestamp',
                                return_value=[1.0, 2.0, 0.0, 190527083152.0]), \
-             mock.patch.object(self.controller, 'get_module_consumption_gas',
+             mock.patch.object(self.controller, 'get_module_gas_consumption',
                                return_value=[1.0, 2.3, 0.0, 12.0]), \
              mock.patch.object(self.controller, 'get_module_injection_tariff',
                                return_value=[1.0, 2.3, 0.0, 12.0]), \
@@ -83,30 +88,40 @@ class PowerP1Test(unittest.TestCase):
                 {10: {'address': 11, 'version': P1_CONCENTRATOR}}
             )
             assert result == [
-                {'module_id': 10,
+                {'electricity': {'current': {'phase1': 1.0, 'phase2': 1.0, 'phase3': 1.0},
+                                 'ean': '1111111111111111111111111111',
+                                 'tariff_indicator': 1.0,
+                                 'tariff_low': 1.0,
+                                 'tariff_normal': 1.0,
+                                 'voltage': {'phase1': 1.0, 'phase2': 1.0, 'phase3': 1.0}},
+                 'gas': {'consumption': 1.0, 'ean': '2222222222222222222222222222'},
+                 'module_id': 10,
                  'port_id': 0,
-                 'meter': '1111111111111111111111111111',
-                 'timestamp': 1.0,
-                 'gas': 1.0,
-                 'tariff': {'tariff1': 1.0, 'tariff2': 1.0, 'indicator': 1.0},
-                 'current': {'phase1': 1.0, 'phase2': 1.0, 'phase3': 1.0},
-                 'voltage': {'phase1': 1.0, 'phase2': 1.0, 'phase3': 1.0}},
-                {'module_id': 10,
+                 'timestamp': 1.0},
+                {'electricity': {'current': {'phase1': 2.0, 'phase2': 2.0, 'phase3': 2.0},
+                                 'ean': '3333333333333333333333333333',
+                                 'tariff_indicator': 2.0,
+                                 'tariff_low': 2.3,
+                                 'tariff_normal': 2.3,
+                                 'voltage': {'phase1': 2.3, 'phase2': 2.3, 'phase3': 2.3}},
+                 'gas': {'consumption': 2.3, 'ean': ''},
+                 'module_id': 10,
                  'port_id': 1,
-                 'meter': '2222222222222222222222222222',
-                 'timestamp': 2.0,
-                 'gas': 2.3,
-                 'tariff': {'tariff1': 2.3, 'tariff2': 2.3, 'indicator': 2.0},
-                 'current': {'phase1': 2.0, 'phase2': 2.0, 'phase3': 2.0},
-                 'voltage': {'phase1': 2.3, 'phase2': 2.3, 'phase3': 2.3}},
-                {'module_id': 10,
+                 'timestamp': 2.0},
+                {'electricity': {'current': {'phase1': 12.0,
+                                             'phase2': 12.0,
+                                             'phase3': 12.0},
+                                 'ean': '',
+                                 'tariff_indicator': 12.0,
+                                 'tariff_low': 12.0,
+                                 'tariff_normal': 12.0,
+                                 'voltage': {'phase1': 12.0,
+                                             'phase2': 12.0,
+                                             'phase3': 12.0}},
+                 'gas': {'consumption': 12.0, 'ean': '4444444444444444444444444444'},
+                 'module_id': 10,
                  'port_id': 3,
-                 'timestamp': 190527083152.0,
-                 'meter': '4444444444444444444444444444',
-                 'gas': 12.0,
-                 'tariff': {'tariff1': 12.0, 'tariff2': 12.0, 'indicator': 12.0},
-                 'current': {'phase1': 12.0, 'phase2': 12.0, 'phase3': 12.0},
-                 'voltage': {'phase1': 12.0, 'phase2': 12.0, 'phase3': 12.0}},
+                 'timestamp': 190527083152.0}
             ]
 
     def test_get_module_status(self):
@@ -160,8 +175,8 @@ class PowerP1Test(unittest.TestCase):
         payload = '000000001*m300002.300*m3            00012.000*m3'
         with mock.patch.object(self.power_communicator, 'do_command',
                                return_value=[payload]) as cmd:
-            meters = self.controller.get_module_consumption_gas({'version': P1_CONCENTRATOR,
-                                                                 'address': '11.0'})
+            meters = self.controller.get_module_gas_consumption({'version': P1_CONCENTRATOR,
+                                                                  'address': '11.0'})
             assert meters == [
                 1.0, 2.3, 0.0, 12.0,
                 0.0, 0.0, 0.0, 0.0,

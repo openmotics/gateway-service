@@ -100,27 +100,29 @@ class P1Controller(object):
         for module_id, module in sorted(modules.items()):
             if module['version'] == power_api.P1_CONCENTRATOR:
                 statuses = self.get_module_status(modules[module_id])
-                meters = self.get_module_meter(modules[module_id], type=1)
+                timestamps = self.get_module_timestamp(modules[module_id])
+                eans1 = self.get_module_meter(modules[module_id], type=1)
+                eans2 = self.get_module_meter(modules[module_id], type=2)
+                currents = self.get_module_current(modules[module_id])
+                voltages = self.get_module_voltage(modules[module_id])
                 tariffs1 = self.get_module_injection_tariff(modules[module_id], type=1)
                 tariffs2 = self.get_module_injection_tariff(modules[module_id], type=2)
                 tariff_indicators = self.get_module_tariff_indicator(modules[module_id])
-                timestamps = self.get_module_timestamp(modules[module_id])
-                gasses = self.get_module_consumption_gas(modules[module_id])
-                voltages = self.get_module_voltage(modules[module_id])
-                currents = self.get_module_current(modules[module_id])
+                gas_consumptions = self.get_module_gas_consumption(modules[module_id])
 
                 for port_id, status in enumerate(statuses):
                     if status:
                         values.append({'module_id': module_id,
                                        'port_id': port_id,
-                                       'meter': meters[port_id],
                                        'timestamp': timestamps[port_id],
-                                       'gas': gasses[port_id],
-                                       'tariff': {'tariff1': tariffs1[port_id],
-                                                  'tariff2': tariffs2[port_id],
-                                                  'indicator': tariff_indicators[port_id]},
-                                       'voltage': voltages[port_id],
-                                       'current': currents[port_id]})
+                                       'gas': {'ean': eans2[port_id].strip(),
+                                               'consumption': gas_consumptions[port_id]},
+                                       'electricity': {'ean': eans1[port_id].strip(),
+                                                       'current': currents[port_id],
+                                                       'voltage': voltages[port_id],
+                                                       'tariff_low': tariffs1[port_id],
+                                                       'tariff_normal': tariffs2[port_id],
+                                                       'tariff_indicator': tariff_indicators[port_id]}})
 
         return values
 
@@ -163,12 +165,12 @@ class P1Controller(object):
                 timestamps.append(0.0)
         return timestamps
 
-    def get_module_consumption_gas(self, module):
+    def get_module_gas_consumption(self, module):
         # type: (Dict[str,Any]) -> List[float]
         """
         Request gas consumptions for all meters and parse repsonse.
         """
-        cmd = power_api.get_consumption_gas_p1(module['version'])
+        cmd = power_api.get_gas_consumption_p1(module['version'])
         payload = self._power_communicator.do_command(module['address'], cmd)[0]
 
         consumptions = []
