@@ -282,20 +282,16 @@ class MasterController(object):
 
     # Module functions
 
-    def module_discover_start(self, timeout):
-        # type: (int) -> Dict[str,Any]
+    def module_discover_start(self, timeout):  # type: (int) -> None
         raise NotImplementedError()
 
-    def module_discover_stop(self):
-        # type: () -> Dict[str,Any]
+    def module_discover_stop(self):  # type: () -> None
         raise NotImplementedError()
 
-    def module_discover_status(self):
-        # type: () -> Dict[str,bool]
+    def module_discover_status(self):  # type: () -> bool
         raise NotImplementedError()
 
-    def get_module_log(self):
-        # type: () -> Dict[str,Any]
+    def get_module_log(self):  # type: () -> List[Tuple[str, str]]
         raise NotImplementedError()
 
     # Error functions

@@ -34,7 +34,7 @@ class CommunicationTimedOutException(Exception):
 def printable(data):
     """ prints data in a human-redable way """
 
-    if isinstance(data, list):
+    if isinstance(data, list) or isinstance(data, bytearray):
         byte_notation = ' '.join(['{0: >3}'.format(i) for i in data])
         string_notation = ''.join([str(chr(i)) if 32 < i <= 126 else '.' for i in data])
     else:

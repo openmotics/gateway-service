@@ -943,11 +943,10 @@ class MasterClassicController(MasterController):
 
         self._module_log.append((log_level, message))
 
-    def module_discover_start(self, timeout):
-        # type: (int) -> Dict[str,Any]
+    def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
 
-        ret = self._master_communicator.do_command(master_api.module_discover_start())
+        self._master_communicator.do_command(master_api.module_discover_start())
 
         if self._discover_mode_timer is not None:
             self._discover_mode_timer.cancel()
@@ -955,32 +954,27 @@ class MasterClassicController(MasterController):
         self._discover_mode_timer.start()
 
         self._module_log = []
-        return {'status': ret['resp']}
 
-    def module_discover_stop(self):
-        # type: () -> Dict[str,Any]
+    def module_discover_stop(self):  # type: () -> None
         if self._discover_mode_timer is not None:
             self._discover_mode_timer.cancel()
             self._discover_mode_timer = None
 
         self._eeprom_controller.invalidate_cache()
         self._eeprom_controller.dirty = True
-        ret = self._master_communicator.do_command(master_api.module_discover_stop())
+        self._master_communicator.do_command(master_api.module_discover_stop())
 
         for callback in self._event_callbacks:
             callback(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
 
         self._module_log = []
-        return {'status': ret['resp']}
 
-    def module_discover_status(self):
-        # type: () -> Dict[str,bool]
-        return {'running': self._discover_mode_timer is not None}
+    def module_discover_status(self):  # type: () -> bool
+        return self._discover_mode_timer is not None
 
-    def get_module_log(self):
-        # type: () -> Dict[str,Any]
+    def get_module_log(self):  # type: () -> List[Tuple[str, str]]
         (log, self._module_log) = (self._module_log, [])
-        return {'log': log}
+        return log
 
     # Error functions
 

@@ -85,6 +85,16 @@ class Hardware(object):
         logger.warning('could not detect board type, unknown')
         return  # Unknown
 
+    @staticmethod
+    def get_main_interface():
+        board_type = Hardware.get_board_type()
+        if board_type in [Hardware.BoardType.BB, Hardware.BoardType.BBB]:
+            return 'eth0'
+        if board_type == Hardware.BoardType.BBGW:
+            return 'wlan0'
+        logger.warning('Could not detect local interface. Fallback: lo')
+        return 'lo'
+
 
 class System(object):
     """
@@ -126,7 +136,7 @@ class System(object):
     @staticmethod
     def get_ip_address():
         """ Get the local ip address. """
-        interface = Hardware.get_local_interface()
+        interface = Hardware.get_main_interface()
         operating_system = System.get_operating_system()
         try:
             lines = subprocess.check_output('ifconfig {0}'.format(interface), shell=True)

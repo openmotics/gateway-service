@@ -12,10 +12,11 @@ from gateway.dto import InputDTO
 from master.classic import eeprom_models
 from master.classic.eeprom_controller import EepromController
 from master.core.core_api import CoreAPI
-from master.core.memory_file import MemoryTypes
+from master.core.memory_file import MemoryTypes, MemoryFile
 from master.core.core_communicator import BackgroundConsumer
 from master.core.memory_models import InputConfiguration
 from master.core.ucan_communicator import UCANCommunicator
+from master.core.slave_communicator import SlaveCommunicator
 from six.moves import map
 
 
@@ -25,7 +26,6 @@ class MasterCoreControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: mock.Mock()})
 
     def test_input_module_type(self):
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
@@ -105,6 +105,57 @@ class MasterCoreControllerTest(unittest.TestCase):
                                                            'status': True,
                                                            'location': {'room_id': 255}}})
         subscriber.callback.assert_called_with(expected_event)
+
+    def test_get_modules(self):
+        memory = {}
+
+        def _do_command(command, fields, timeout=None):
+            _ = timeout
+            if command.instruction == 'MR':
+                page = fields['page']
+                start = fields['start']
+                length = fields['length']
+                return {'data': memory.get(page, [255] * 256)[start:start + length]}
+            if command.instruction == 'MW':
+                page = fields['page']
+                start = fields['start']
+                page_data = memory.setdefault(page, [255] * 256)
+                for index, data_byte in enumerate(fields['data']):
+                    page_data[start + index] = data_byte
+
+        controller = get_core_controller_dummy()
+        controller._master_communicator.do_command = _do_command
+
+        from master.core.memory_models import (
+            InputModuleConfiguration, OutputModuleConfiguration, SensorModuleConfiguration,
+            GlobalConfiguration
+        )
+        global_configuration = GlobalConfiguration()
+        global_configuration.number_of_output_modules = 5
+        global_configuration.number_of_input_modules = 4
+        global_configuration.number_of_sensor_modules = 2
+        global_configuration.number_of_can_control_modules = 2
+        global_configuration.save()
+        for module_id, module_class, device_type, address in [(0, InputModuleConfiguration, 'I', '{0}.123.123.123'.format(ord('I'))),
+                                                              (1, InputModuleConfiguration, 'i', '{0}.123.123.123'.format(ord('i'))),
+                                                              (2, InputModuleConfiguration, 'i', '{0}.000.000.000'.format(ord('i'))),
+                                                              (3, InputModuleConfiguration, 'b', '{0}.123.132.123'.format(ord('b'))),
+                                                              (0, OutputModuleConfiguration, 'o', '{0}.000.000.000'.format(ord('o'))),
+                                                              (1, OutputModuleConfiguration, 'o', '{0}.000.000.001'.format(ord('o'))),
+                                                              (2, OutputModuleConfiguration, 'o', '{0}.000.000.002'.format(ord('o'))),
+                                                              (3, OutputModuleConfiguration, 'o', '{0}.123.123.123'.format(ord('o'))),
+                                                              (4, OutputModuleConfiguration, 'O', '{0}.123.123.123'.format(ord('O'))),
+                                                              (0, SensorModuleConfiguration, 's', '{0}.123.123.123'.format(ord('s'))),
+                                                              (1, SensorModuleConfiguration, 'T', '{0}.123.123.123'.format(ord('T')))]:
+            instance = module_class(module_id)
+            instance.device_type = device_type
+            instance.address = address
+            instance.save()
+
+        self.assertEqual({'can_inputs': ['I', 'T', 'C', 'E'],
+                          'inputs': ['I', 'i', 'J', 'T'],
+                          'outputs': ['P', 'P', 'P', 'o', 'O'],
+                          'shutters': []}, controller.get_modules())
 
 
 class MasterCoreControllerCompatibilityTest(unittest.TestCase):
@@ -206,13 +257,14 @@ class MasterInputState(unittest.TestCase):
 @Scope
 def get_core_controller_dummy(command_data=None):
     from gateway.hal.master_controller_core import MasterCoreController
-    from master.classic.master_communicator import MasterCommunicator
-    communicator_mock = mock.Mock(MasterCommunicator)
+    from master.core.core_communicator import CoreCommunicator
+    communicator_mock = mock.Mock(CoreCommunicator)
     communicator_mock.do_command.return_value = command_data or {}
     SetUpTestInjections(configuration_controller=mock.Mock(),
                         master_communicator=communicator_mock)
-    ucan_mock = UCANCommunicator()
-    SetUpTestInjections(ucan_communicator=ucan_mock)
+    SetUpTestInjections(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM)},
+                        ucan_communicator=UCANCommunicator(),
+                        slave_communicator=SlaveCommunicator())
     return MasterCoreController()
 
 

@@ -81,8 +81,8 @@ class CoreUpdater(object):
                     raise RuntimeError('Unexpected NOK while flashing: {0}'.format(response))
                 if not response.startswith('ok'):
                     raise RuntimeError('Unexpected answer while flashing: {0}'.format(response))
-                if index % int(amount_lines / 10) == 0:
-                    logger.info('Flashing... {0}%'.format(int(index * 100 / amount_lines) + 1))
+                if index % int(amount_lines / 10) == 0 and index != 0:
+                    logger.info('Flashing... {0}%'.format(int(index * 100 / amount_lines)))
             logger.info('Flashing... Done')
 
             logger.info('Verify Core communication')

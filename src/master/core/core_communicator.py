@@ -61,7 +61,7 @@ class CoreCommunicator(object):
         self._serial_bytes_written = 0
         self._serial_bytes_read = 0
 
-        self._cid = None  # Reserved CIDs: 0 = Core events, 1 = uCAN transport, 2 = RS485 transport
+        self._cid = None  # Reserved CIDs: 0 = Core events, 1 = uCAN transport, 2 = Slave transport
         self._cids_in_use = set()
         self._consumers = {}
         self._last_success = 0
@@ -85,6 +85,7 @@ class CoreCommunicator(object):
 
     def stop(self):
         self._stop = True
+        self._read_thread.join()
 
     def get_communication_statistics(self):
         return self._communication_stats
@@ -102,7 +103,7 @@ class CoreCommunicator(object):
     def _get_cid(self):
         """ Get a communication id. 0 and 1 are reserved. """
         def _increment_cid(current_cid):
-            # Reserved CIDs: 0 = Core events, 1 = uCAN transport, 2 = RS485 transport
+            # Reserved CIDs: 0 = Core events, 1 = uCAN transport, 2 = Slave transport
             return current_cid + 1 if (current_cid is not None and current_cid < 255) else 3
 
         def _available(candidate_cid):
@@ -214,6 +215,7 @@ class CoreCommunicator(object):
             self._communication_stats['calls_succeeded'] = self._communication_stats['calls_succeeded'][-50:]
             return result
         except CommunicationTimedOutException:
+            self.unregister_consumer(consumer)
             self._communication_stats['calls_timedout'].append(time.time())
             self._communication_stats['calls_timedout'] = self._communication_stats['calls_timedout'][-50:]
             raise

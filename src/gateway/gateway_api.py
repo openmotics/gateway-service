@@ -38,7 +38,7 @@ from power import power_api
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY:
-    from typing import Any, Dict, List, Optional, Set
+    from typing import Any, Dict, List, Optional, Tuple
     from power.power_communicator import PowerCommunicator
     from power.power_controller import PowerController
     from bus.om_bus_client import MessageClient
@@ -132,40 +132,23 @@ class GatewayApi(object):
 
     # Master module functions
 
-    def module_discover_start(self, timeout=900):
-        # type: (int) -> Dict[str,Any]
-        """ Start the module discover mode on the master.
+    def module_discover_start(self, timeout=900):  # type: (int) -> None
+        """ Start the module discover mode on the master. """
+        self.__master_controller.module_discover_start(timeout)
 
-        :returns: dict with 'status' ('OK').
-        """
-        return self.__master_controller.module_discover_start(timeout)
-
-    def module_discover_stop(self):
-        # type: () -> Dict[str,Any]
-        """ Stop the module discover mode on the master.
-
-        :returns: dict with 'status' ('OK').
-        """
-        status = self.__master_controller.module_discover_stop()
-
+    def module_discover_stop(self):  # type: () -> None
+        """ Stop the module discover mode on the master. """
+        self.__master_controller.module_discover_stop()
         self.__message_client.send_event(OMBusEvents.DIRTY_EEPROM, None)
 
-        return status
-
-    def module_discover_status(self):
-        # type: () -> Dict[str,bool]
-        """ Gets the status of the module discover mode on the master.
-
-        :returns dict with 'running': True|False
-        """
+    def module_discover_status(self):  # type: () -> bool
+        """ Gets the status of the module discover mode on the master. """
         return self.__master_controller.module_discover_status()
 
-    def get_module_log(self):
-        # type: () -> Dict[str,Any]
-        """ Get the log messages from the module discovery mode. This returns the current log
+    def get_module_log(self):  # type: () -> List[Tuple[str, str]]
+        """
+        Get the log messages from the module discovery mode. This returns the current log
         messages and clear the log messages.
-
-        :returns: dict with 'log' (list of tuples (log_level, message)).
         """
         return self.__master_controller.get_module_log()
 

@@ -216,8 +216,8 @@ def setup_target_platform(target_platform):
     Injectable.value(controller_serial=Serial(controller_serial_port, 115200))
     if target_platform == Platform.Type.CORE_PLUS:
         # FIXME don't create singleton for optional controller?
-        from master.core import ucan_communicator
-        _ = ucan_communicator
+        from master.core import ucan_communicator, slave_communicator
+        _ = ucan_communicator, slave_communicator
         core_cli_serial_port = config.get('OpenMotics', 'cli_serial')
         Injectable.value(cli_serial=Serial(core_cli_serial_port, 115200))
         Injectable.value(passthrough_service=None)  # Mark as "not needed"

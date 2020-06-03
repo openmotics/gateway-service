@@ -25,7 +25,7 @@ from master.core.fields import (ByteField, WordField, ByteArrayField, WordArrayF
 
 class CoreAPI(object):
 
-    class RS485Mode(object):
+    class SlaveBusMode(object):
         LIVE = 0
         INIT = DISCOVERY = 1
         TRANSPARENT = 2
@@ -97,8 +97,8 @@ class CoreAPI(object):
                                                 AddressField('address'), WordField('bus_errors'), ByteField('module_status')])
 
     @staticmethod
-    def get_rs485_bus_mode():
-        """ Receives the RS485 bus mode """
+    def get_slave_bus_mode():
+        """ Receives the slave bus mode """
         return CoreCommandSpec(instruction='ST',
                                request_fields=[LiteralBytesField(0)],
                                response_fields=[ByteField('info_type'), ByteField('mode')])
@@ -196,27 +196,27 @@ class CoreAPI(object):
                                request_fields=[CharField('type'), WordField('page'), ByteField('start'), ByteArrayField('data', length)],
                                response_fields=[CharField('type'), WordField('page'), ByteField('start'), ByteField('length'), CharField('result')])
 
-    # RS485 bus
+    # Slave bus
 
     @staticmethod
-    def set_rs485_bus_mode():
-        """ Sets the RS485 bus to a different mode"""
+    def set_slave_bus_mode():
+        """ Sets the slave bus to a different mode"""
         return CoreCommandSpec(instruction='SM',
                                request_fields=[ByteField('mode')],
                                response_fields=[ByteField('mode')])
 
     @staticmethod
-    def rs485_tx_transport_message(length):
-        """ RS485 transport layer packages """
+    def slave_tx_transport_message(length):
+        """ Slave transport layer packages """
         return CoreCommandSpec(instruction='TC',
-                               request_fields=[ByteArrayField('data', length)],
+                               request_fields=[ByteArrayField('payload', length)],
                                response_fields=[ByteField('length')])
 
     @staticmethod
-    def rs485_rx_transport_message():
-        """ RS485 transport layer packages """
+    def slave_rx_transport_message():
+        """ Slave transport layer packages """
         return CoreCommandSpec(instruction='TM',
-                               response_fields=[ByteArrayField('data', lambda length: length)])
+                               response_fields=[ByteArrayField('payload', lambda length: length)])
 
     # CAN
 

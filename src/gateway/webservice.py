@@ -34,7 +34,6 @@ from peewee import DoesNotExist
 
 import constants
 import gateway
-from bus.om_bus_events import OMBusEvents
 from gateway.api.serializers import (
     OutputSerializer, InputSerializer,
     ShutterSerializer, ShutterGroupSerializer,
@@ -53,7 +52,7 @@ from serial_utils import CommunicationTimedOutException
 import six
 
 if False:
-    from typing import Dict, Optional, Any, List
+    from typing import Dict, Optional, Any, List, Tuple
     from bus.om_bus_client import MessageClient
     from gateway.config import ConfigurationController
     from gateway.gateway_api import GatewayApi
@@ -485,45 +484,29 @@ class WebInterface(object):
         return self._gateway_api.reset_master()
 
     @openmotics_api(auth=True)
-    def module_discover_start(self):
-        """
-        Start the module discover mode on the master.
-
-        :returns: 'status': 'OK'.
-        :rtype: dict
-        """
-        return self._gateway_api.module_discover_start()
+    def module_discover_start(self):  # type: () -> Dict[str, str]
+        """ Start the module discover mode on the master. """
+        self._gateway_api.module_discover_start()
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True)
-    def module_discover_stop(self):
-        """
-        Stop the module discover mode on the master.
-
-        :returns: 'status': 'OK'.
-        :rtype: dict
-        """
-        return self._gateway_api.module_discover_stop()
+    def module_discover_stop(self):  # type: () -> Dict[str, str]
+        """ Stop the module discover mode on the master. """
+        self._gateway_api.module_discover_stop()
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True)
-    def module_discover_status(self):
-        """
-        Gets the status of the module discover mode on the master.
-
-        :returns 'running': true|false
-        :rtype: dict
-        """
-        return self._gateway_api.module_discover_status()
+    def module_discover_status(self):  # type: () -> Dict[str, bool]
+        """ Gets the status of the module discover mode on the master. """
+        return {'running': self._gateway_api.module_discover_status()}
 
     @openmotics_api(auth=True)
-    def get_module_log(self):
+    def get_module_log(self):  # type: () -> Dict[str, List[Tuple[str, str]]]
         """
         Get the log messages from the module discovery mode. This returns the current log
         messages and clear the log messages.
-
-        :returns: 'log': list of tuples (log_level, message).
-        :rtype: dict
         """
-        return self._gateway_api.get_module_log()
+        return {'log': self._gateway_api.get_module_log()}
 
     @openmotics_api(auth=True)
     def get_modules(self):
