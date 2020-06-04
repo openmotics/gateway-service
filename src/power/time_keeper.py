@@ -16,12 +16,13 @@
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import logging
-import time
 from datetime import datetime
-from threading import Thread
 
+from gateway.daemon_thread import DaemonThread
 import power.power_api as power_api
+
 logger = logging.getLogger("openmotics")
 
 
@@ -39,37 +40,29 @@ class TimeKeeper(object):
         self.__stop = False
 
     def start(self):
+        # type: () -> None
         """ Start the background thread of the TimeKeeper. """
         if self.__thread is None:
             logger.info("Starting TimeKeeper")
             self.__stop = False
-            self.__thread = Thread(target=self.__run, name="TimeKeeper thread")
-            self.__thread.daemon = True
+            self.__thread = DaemonThread(name='TimeKeeper thread',
+                                         target=self.__run,
+                                         interval=self.__period)
             self.__thread.start()
         else:
             raise Exception("TimeKeeper thread already running.")
 
     def stop(self):
+        # type: () -> None
         """ Stop the background thread in the TimeKeeper. """
         if self.__thread is not None:
-            self.__stop = True
+            self.__thread.stop()
+            self.__thread = None
         else:
             raise Exception("TimeKeeper thread not running.")
 
     def __run(self):
-        """ Code for the background thread. """
-        while not self.__stop:
-            try:
-                self.__run_once()
-            except Exception:
-                logger.exception("Exception in TimeKeeper")
-
-            time.sleep(self.__period)
-
-        logger.info("Stopped TimeKeeper")
-        self.__thread = None
-
-    def __run_once(self):
+        # type: () -> None
         """ One run of the background thread. """
         date = datetime.now()
         for module in self.__power_controller.get_power_modules().values():

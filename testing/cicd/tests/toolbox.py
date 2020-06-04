@@ -12,6 +12,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import absolute_import
 import logging
 import os
 import time
@@ -55,14 +56,22 @@ class Client(object):
         else:
             return None
 
-    def get(self, path, params=None, headers=None, success=True, use_token=True, timeout=30):
-        # type: (str, Dict[str,Any], Dict[str,Any], bool, bool, float) -> Any
+    def get(self, path, params=None, success=True, use_token=True, timeout=30):
+        # type: (str, Dict[str,Any], bool, bool, float) -> Any
         params = params or {}
-        headers = headers or {}
+        headers = requests.utils.default_headers()
         uri = 'https://{}{}'.format(self._host, path)
         if use_token:
             headers['Authorization'] = 'Bearer {}'.format(self.token)
             logger.debug('GET {} {}'.format(path, params))
+
+        job_name = os.getenv('JOB_NAME')
+        build_number = os.getenv('BUILD_NUMBER')
+        if job_name and build_number:
+            headers['User-Agent'] += ' {}/{}'.format(job_name, build_number)
+        _, _, current_test = os.getenv('PYTEST_CURRENT_TEST', '').rpartition('::')
+        if current_test:
+            headers['User-Agent'] += ' pytest/{}'.format(current_test)
 
         since = time.time()
         while since > time.time() - timeout:
@@ -96,9 +105,9 @@ class TesterGateway(object):
         else:
             return []
 
-    def get(self, path, params=None, headers=None, success=True, use_token=True):
-        # type: (str, Dict[str,Any], Dict[str,Any], bool, bool) -> Any
-        return self._client.get(path, params=params, headers=headers, success=True, use_token=use_token)
+    def get(self, path, params=None, success=True, use_token=True):
+        # type: (str, Dict[str,Any], bool, bool) -> Any
+        return self._client.get(path, params=params, success=True, use_token=use_token)
 
     def log_events(self):
         # type: () -> None
@@ -182,14 +191,14 @@ class Toolbox(object):
         # type: () -> List[int]
         if self._dut_inputs is None:
             input_modules = self.list_modules('I')
-            self._dut_inputs = range(0, len(input_modules) * 8 - 1)
+            self._dut_inputs = list(range(0, len(input_modules) * 8 - 1))
         return self._dut_inputs
 
     @property
     def dut_outputs(self):
         if self._dut_outputs is None:
             output_modules = self.list_modules('O')
-            self._dut_outputs = range(0, len(output_modules) * 8 - 1)
+            self._dut_outputs = list(range(0, len(output_modules) * 8 - 1))
         return self._dut_outputs
 
     def initialize(self):
@@ -213,6 +222,15 @@ class Toolbox(object):
             self.discover_output_module()
             time.sleep(2)
             self.dut.get('/module_discover_stop')
+
+    def print_logs(self):
+        # type: () -> None
+        try:
+            data = self.tester.get('/plugins/syslog_receiver/logs', success=False)
+            for log in data['logs']:
+                print(log)
+        except Exception:
+            print('Failed to retrieve logs')
 
     def factory_reset(self, confirm=True):
         # type: (bool) -> Dict[str,Any]
@@ -256,7 +274,7 @@ class Toolbox(object):
     def start_module_discovery(self):
         # type: () -> None
         self.dut.get('/module_discover_start')
-        for _ in xrange(10):
+        for _ in range(10):
             data = self.dut.get('/module_discover_status')
             if data['running']:
                 return

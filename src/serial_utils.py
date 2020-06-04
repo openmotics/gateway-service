@@ -18,10 +18,11 @@ Serial tools contains the RS485 wrapper, printable and CommunicationTimedOutExce
 @author: fryckbos
 """
 
+from __future__ import absolute_import
 import struct
 import fcntl
 from threading import Thread
-from Queue import Queue
+from six.moves.queue import Queue
 
 
 class CommunicationTimedOutException(Exception):
@@ -33,7 +34,7 @@ class CommunicationTimedOutException(Exception):
 def printable(data):
     """ prints data in a human-redable way """
 
-    if isinstance(data, list):
+    if isinstance(data, list) or isinstance(data, bytearray):
         byte_notation = ' '.join(['{0: >3}'.format(i) for i in data])
         string_notation = ''.join([str(chr(i)) if 32 < i <= 126 else '.' for i in data])
     else:
@@ -54,7 +55,8 @@ class RS485(object):
             fcntl.ioctl(fileno, 0x542F, serial_rs485)
 
         serial.timeout = None
-        self.__thread = Thread(target=self._reader)
+        self.__thread = Thread(target=self._reader,
+                               name='RS485 reader')
         self.__thread.daemon = True
         self.__thread.start()
         self.read_queue = Queue()
@@ -74,4 +76,4 @@ class RS485(object):
                     for byte in self.__serial.read(size):
                         self.read_queue.put(byte)
         except Exception as ex:
-            print 'Error in reader: {0}'.format(ex)
+            print('Error in reader: {0}'.format(ex))

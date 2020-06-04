@@ -16,6 +16,7 @@
 Configuration controller
 """
 
+from __future__ import absolute_import
 import time
 import sqlite3
 import logging
@@ -69,9 +70,9 @@ class ConfigurationController(object):
                                    'cloud_metrics_batch_size': 50,
                                    'cloud_metrics_min_interval': 300,
                                    'cloud_support': False,
-                                   'cors_enabled': False}.iteritems():
+                                   'cors_enabled': False}.items():
             if self.get(key) is None:
-                self.get(key, default_value)
+                self.set(key, default_value)
 
     def get(self, key, fallback=None):
         for entry in self.__execute('SELECT data FROM settings WHERE setting=?;', (key.lower(),)):

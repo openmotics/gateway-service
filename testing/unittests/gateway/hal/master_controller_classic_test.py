@@ -14,18 +14,20 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
+from __future__ import absolute_import
 import unittest
 
 import gateway.hal.master_controller_classic
-import master.master_api
-import master.master_communicator
+import master.classic.master_api
+import master.classic.master_communicator
 import mock
 import xmlrunner
 from ioc import Scope, SetTestMode, SetUpTestInjections
-from master.eeprom_controller import EepromController
-from master.eeprom_models import InputConfiguration
-from master.inputs import InputStatus
-from master.master_communicator import BackgroundConsumer
+from gateway.dto import InputDTO
+from master.classic.eeprom_controller import EepromController
+from master.classic.eeprom_models import InputConfiguration
+from master.classic.inputs import InputStatus
+from master.classic.master_communicator import BackgroundConsumer
 
 
 class MasterClassicControllerTest(unittest.TestCase):
@@ -41,49 +43,55 @@ class MasterClassicControllerTest(unittest.TestCase):
             InputConfiguration.deserialize(input_data)
         ])
         data = controller.get_input_module_type(1)
-        self.assertEquals(data, 'I')
+        self.assertEqual(data, 'I')
 
     def test_load_input(self):
-        input_data = {'id': 1, 'module_type': 'I'}
+        input_data = {'id': 1, 'module_type': 'I', 'name': 'foo', 'action': 255,
+                      'basic_actions': '', 'invert': 255, 'can': ' ', 'event_enabled': False}
         controller = get_classic_controller_dummy([
             InputConfiguration.deserialize(input_data)
         ])
         data = controller.load_input(1)
-        self.assertEquals(data['id'], 1)
+        self.assertEqual(data.id, 1)
 
     def test_load_input_with_invalid_type(self):
-        input_data = {'id': 1, 'module_type': 'O'}
+        input_data = {'id': 1, 'module_type': 'O', 'name': 'foo', 'action': 255,
+                      'basic_actions': '', 'invert': 255, 'can': ' ', 'event_enabled': False}
         controller = get_classic_controller_dummy([
             InputConfiguration.deserialize(input_data)
         ])
         self.assertRaises(TypeError, controller.load_input, 1)
 
     def test_load_inputs(self):
-        input_data1 = {'id': 1, 'module_type': 'I'}
-        input_data2 = {'id': 2, 'module_type': 'I'}
+        input_data1 = {'id': 1, 'module_type': 'I', 'name': 'foo', 'action': 255,
+                       'basic_actions': '', 'invert': 255, 'can': ' ', 'event_enabled': False}
+        input_data2 = {'id': 2, 'module_type': 'I', 'name': 'foo', 'action': 255,
+                       'basic_actions': '', 'invert': 255, 'can': ' ', 'event_enabled': False}
         controller = get_classic_controller_dummy([
             InputConfiguration.deserialize(input_data1),
             InputConfiguration.deserialize(input_data2)
         ])
         inputs = controller.load_inputs()
-        self.assertEquals([x['id'] for x in inputs], [1, 2])
+        self.assertEqual([x.id for x in inputs], [1, 2])
 
     def test_load_inputs_skips_invalid_type(self):
-        input_data1 = {'id': 1, 'module_type': 'I'}
-        input_data2 = {'id': 2, 'module_type': 'O'}
+        input_data1 = {'id': 1, 'module_type': 'I', 'name': 'foo', 'action': 255,
+                       'basic_actions': '', 'invert': 255, 'can': ' ', 'event_enabled': False}
+        input_data2 = {'id': 2, 'module_type': 'O', 'name': 'foo', 'action': 255,
+                       'basic_actions': '', 'invert': 255, 'can': ' ', 'event_enabled': False}
         controller = get_classic_controller_dummy([
             InputConfiguration.deserialize(input_data1),
             InputConfiguration.deserialize(input_data2)
         ])
         inputs = controller.load_inputs()
-        self.assertEquals([x['id'] for x in inputs], [1])
+        self.assertEqual([x.id for x in inputs], [1])
 
     def test_input_event_consumer(self):
         with mock.patch.object(gateway.hal.master_controller_classic, 'BackgroundConsumer',
                                return_value=None) as consumer:
             controller = get_classic_controller_dummy()
             controller._register_version_depending_background_consumers()
-            expected_call = mock.call(master.master_api.input_list(None), 0, mock.ANY)
+            expected_call = mock.call(master.classic.master_api.input_list(None), 0, mock.ANY)
             self.assertIn(expected_call, consumer.call_args_list)
 
     def test_subscribe_input_events(self):
@@ -99,11 +107,11 @@ class MasterClassicControllerTest(unittest.TestCase):
                                side_effect=new_consumer) as new_consumer:
             controller = get_classic_controller_dummy()
             controller._register_version_depending_background_consumers()
-            controller._input_config = {1: {}}  # TODO: cleanup
+            controller._input_config = {1: InputDTO(id=1)}  # TODO: cleanup
             controller.subscribe_event(subscriber.callback)
             new_consumer.assert_called()
-            consumer_list[-1].deliver({'input': 1})
-            from gateway.hal.master_controller_classic import MasterEvent
+            consumer_list[-2].deliver({'input': 1})
+            from gateway.hal.master_event import MasterEvent
             expected_event = MasterEvent.deserialize({'type': 'INPUT_CHANGE',
                                                       'data': {'id': 1,
                                                                'status': True,

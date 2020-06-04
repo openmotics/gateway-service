@@ -1,18 +1,23 @@
+from __future__ import absolute_import
 import time
 import unittest
-from Queue import Queue
+from six.moves.queue import Queue
 
 import gateway.hal.master_controller_core
 import mock
 import xmlrunner
-from gateway.hal.master_controller import MasterEvent
+from gateway.hal.master_event import MasterEvent
 from ioc import Scope, SetTestMode, SetUpTestInjections
-from master import eeprom_models
-from master.eeprom_controller import EepromController
-from master_core.core_api import CoreAPI
-from master_core.core_communicator import BackgroundConsumer
-from master_core.memory_models import InputConfiguration
-from master_core.ucan_communicator import UCANCommunicator
+from gateway.dto import InputDTO
+from master.classic import eeprom_models
+from master.classic.eeprom_controller import EepromController
+from master.core.core_api import CoreAPI
+from master.core.memory_file import MemoryTypes, MemoryFile
+from master.core.core_communicator import BackgroundConsumer
+from master.core.memory_models import InputConfiguration
+from master.core.ucan_communicator import UCANCommunicator
+from master.core.slave_communicator import SlaveCommunicator
+from six.moves import map
 
 
 class MasterCoreControllerTest(unittest.TestCase):
@@ -21,58 +26,33 @@ class MasterCoreControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        SetUpTestInjections(memory_files={})
 
     def test_input_module_type(self):
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=get_input_dummy(1)):
+                               return_value=get_core_input_dummy(1)):
             controller = get_core_controller_dummy()
             data = controller.get_input_module_type(1)
-            self.assertEquals('I', data)
+            self.assertEqual('I', data)
 
     def test_load_input(self):
         controller = get_core_controller_dummy()
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=get_input_dummy(1)):
+                               return_value=get_core_input_dummy(1)):
             data = controller.load_input(1)
-            self.assertEquals(data['id'], 1)
-
-    def test_load_input_with_fields(self):
-        controller = get_core_controller_dummy()
-        with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=get_input_dummy(1)):
-            data = controller.load_input(1, fields=['module_type'])
-            self.assertEquals(data['id'], 1)
-            self.assertIn('module_type', data)
-            self.assertNotIn('name', data)
-
-    def test_load_input_with_invalid_type(self):
-        controller = get_core_controller_dummy()
-        with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=get_input_dummy(1, module_type='O')):
-            self.assertRaises(TypeError, controller.load_input, 1)
+            self.assertEqual(data.id, 1)
 
     def test_load_inputs(self):
-        input_modules = map(get_input_dummy, xrange(1, 17))
+        input_modules = list(map(get_core_input_dummy, range(1, 17)))
         controller = get_core_controller_dummy({'output': 0, 'input': 2})
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                side_effect=input_modules):
             inputs = controller.load_inputs()
-            self.assertEqual([x['id'] for x in inputs], range(1, 17))
-
-    def test_load_inputs_skips_invalid_type(self):
-        input_modules = map(get_input_dummy, xrange(1, 9))
-        input_modules += map(lambda i: get_input_dummy(i, module_type='O'), xrange(9, 17))
-        controller = get_core_controller_dummy({'output': 0, 'input': 2})
-        with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               side_effect=input_modules):
-            inputs = controller.load_inputs()
-            self.assertNotIn(10, [x['id'] for x in inputs])
+            self.assertEqual([x.id for x in inputs], list(range(1, 17)))
 
     def test_save_inputs(self):
         controller = get_core_controller_dummy()
-        data = [{'id': 1, 'name': 'foo', 'module_type': 'I'},
-                {'id': 2, 'name': 'bar', 'module_type': 'I'}]
+        data = [(InputDTO(id=1, name='foo', module_type='I'), ['id', 'name', 'module_type']),
+                (InputDTO(id=2, name='bar', module_type='I'), ['id', 'name', 'module_type'])]
         input_mock = mock.Mock(InputConfiguration)
         with mock.patch.object(InputConfiguration, 'deserialize', return_value=input_mock) as deserialize, \
                 mock.patch.object(input_mock, 'save', return_value=None) as save:
@@ -126,6 +106,57 @@ class MasterCoreControllerTest(unittest.TestCase):
                                                            'location': {'room_id': 255}}})
         subscriber.callback.assert_called_with(expected_event)
 
+    def test_get_modules(self):
+        memory = {}
+
+        def _do_command(command, fields, timeout=None):
+            _ = timeout
+            if command.instruction == 'MR':
+                page = fields['page']
+                start = fields['start']
+                length = fields['length']
+                return {'data': memory.get(page, [255] * 256)[start:start + length]}
+            if command.instruction == 'MW':
+                page = fields['page']
+                start = fields['start']
+                page_data = memory.setdefault(page, [255] * 256)
+                for index, data_byte in enumerate(fields['data']):
+                    page_data[start + index] = data_byte
+
+        controller = get_core_controller_dummy()
+        controller._master_communicator.do_command = _do_command
+
+        from master.core.memory_models import (
+            InputModuleConfiguration, OutputModuleConfiguration, SensorModuleConfiguration,
+            GlobalConfiguration
+        )
+        global_configuration = GlobalConfiguration()
+        global_configuration.number_of_output_modules = 5
+        global_configuration.number_of_input_modules = 4
+        global_configuration.number_of_sensor_modules = 2
+        global_configuration.number_of_can_control_modules = 2
+        global_configuration.save()
+        for module_id, module_class, device_type, address in [(0, InputModuleConfiguration, 'I', '{0}.123.123.123'.format(ord('I'))),
+                                                              (1, InputModuleConfiguration, 'i', '{0}.123.123.123'.format(ord('i'))),
+                                                              (2, InputModuleConfiguration, 'i', '{0}.000.000.000'.format(ord('i'))),
+                                                              (3, InputModuleConfiguration, 'b', '{0}.123.132.123'.format(ord('b'))),
+                                                              (0, OutputModuleConfiguration, 'o', '{0}.000.000.000'.format(ord('o'))),
+                                                              (1, OutputModuleConfiguration, 'o', '{0}.000.000.001'.format(ord('o'))),
+                                                              (2, OutputModuleConfiguration, 'o', '{0}.000.000.002'.format(ord('o'))),
+                                                              (3, OutputModuleConfiguration, 'o', '{0}.123.123.123'.format(ord('o'))),
+                                                              (4, OutputModuleConfiguration, 'O', '{0}.123.123.123'.format(ord('O'))),
+                                                              (0, SensorModuleConfiguration, 's', '{0}.123.123.123'.format(ord('s'))),
+                                                              (1, SensorModuleConfiguration, 'T', '{0}.123.123.123'.format(ord('T')))]:
+            instance = module_class(module_id)
+            instance.device_type = device_type
+            instance.address = address
+            instance.save()
+
+        self.assertEqual({'can_inputs': ['I', 'T', 'C', 'E'],
+                          'inputs': ['I', 'i', 'J', 'T'],
+                          'outputs': ['P', 'P', 'P', 'o', 'O'],
+                          'shutters': []}, controller.get_modules())
+
 
 class MasterCoreControllerCompatibilityTest(unittest.TestCase):
     @classmethod
@@ -133,13 +164,21 @@ class MasterCoreControllerCompatibilityTest(unittest.TestCase):
         SetTestMode()
 
     def test_load_input(self):
-        SetUpTestInjections(memory_files={})
+        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: mock.Mock()})
         core = get_core_controller_dummy()
+        core_input_orm = get_core_input_dummy(1)
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=get_input_dummy(1)):
+                               return_value=core_input_orm):
             core_data = core.load_input(1)
-        input_module = eeprom_models.InputConfiguration.deserialize(core_data)
-        classic = get_classic_controller_dummy([input_module])
+        classic_input_orm = eeprom_models.InputConfiguration.deserialize({'id': 1,
+                                                                          'name': 'foo',
+                                                                          'module_type': 'I',
+                                                                          'action': 255,
+                                                                          'basic_actions': '',
+                                                                          'invert': 255,
+                                                                          'can': ' ',
+                                                                          'event_enabled': False})
+        classic = get_classic_controller_dummy([classic_input_orm])
         classic_data = classic.load_input(1)
         self.assertEqual(classic_data, core_data)
 
@@ -197,7 +236,7 @@ class MasterInputState(unittest.TestCase):
             self.assertEqual([1], state.get_recent())
 
         with mock.patch.object(time, 'time', return_value=30):
-            for i in xrange(2, 10):
+            for i in range(2, 10):
                 core_event = MasterCoreEvent({'type': 1, 'action': 1, 'device_nr': i, 'data': {}})
                 state.handle_event(core_event)
             devices = state.get_recent()
@@ -218,13 +257,14 @@ class MasterInputState(unittest.TestCase):
 @Scope
 def get_core_controller_dummy(command_data=None):
     from gateway.hal.master_controller_core import MasterCoreController
-    from master.master_communicator import MasterCommunicator
-    communicator_mock = mock.Mock(MasterCommunicator)
+    from master.core.core_communicator import CoreCommunicator
+    communicator_mock = mock.Mock(CoreCommunicator)
     communicator_mock.do_command.return_value = command_data or {}
     SetUpTestInjections(configuration_controller=mock.Mock(),
                         master_communicator=communicator_mock)
-    ucan_mock = UCANCommunicator()
-    SetUpTestInjections(ucan_communicator=ucan_mock)
+    SetUpTestInjections(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM)},
+                        ucan_communicator=UCANCommunicator(),
+                        slave_communicator=SlaveCommunicator())
     return MasterCoreController()
 
 
@@ -240,12 +280,12 @@ def get_classic_controller_dummy(inputs):
     return MasterClassicController()
 
 
-def get_input_dummy(i, module_type='I'):
+def get_core_input_dummy(i):
     return InputConfiguration.deserialize({
         'id': i,
         'name': 'foo',
         'module': {'id': 20 + i,
-                   'device_type': module_type,
+                   'device_type': 'I',
                    'address': '0.0.0.0',
                    'firmware_version': '0.0.1'}
     })

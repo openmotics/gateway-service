@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import os
 import logging
 
@@ -21,7 +22,10 @@ settings.load_profile(os.getenv('HYPOTHESIS_PROFILE', 'default'))
 @fixture(scope='session')
 def toolbox_session():
     toolbox = Toolbox()
-    toolbox.initialize()
+    try:
+        toolbox.initialize()
+    finally:
+        toolbox.print_logs()
     return toolbox
 
 
@@ -30,9 +34,4 @@ def toolbox(toolbox_session):
     toolbox = toolbox_session
     toolbox.tester.get('/plugins/syslog_receiver/reset', success=False)
     yield toolbox
-    try:
-        data = toolbox.tester.get('/plugins/syslog_receiver/logs', success=False)
-        for log in data['logs']:
-            print(log)
-    except Exception:
-        print('Failed to retrieve logs')
+    toolbox.print_logs()

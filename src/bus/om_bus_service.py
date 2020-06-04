@@ -16,6 +16,7 @@
 IPC Bus messaging service
 """
 
+from __future__ import absolute_import
 import logging
 import time
 import ujson as json
@@ -36,12 +37,12 @@ class MessageService(object):
         self._stop = False
 
     def _multicast(self, source, msg):
-        for connection, client_name in self.connections.iteritems():
+        for connection, client_name in self.connections.items():
             if client_name != source and connection is not None:
                 self._send(connection, msg)
 
     def _unicast(self, destination, msg):
-        for connection, client_name in self.connections.iteritems():
+        for connection, client_name in self.connections.items():
             if client_name == destination and connection is not None:
                 self._send(connection, msg)
                 break
@@ -103,7 +104,7 @@ class MessageService(object):
             try:
                 conn = self.listener.accept()
                 logger.info('connection accepted from {0}'.format(self.listener.last_accepted))
-                receiver = Thread(target=self._receiver, args=(conn,))
+                receiver = Thread(target=self._receiver, args=(conn,), name='MessageService receiver')
                 receiver.daemon = True
                 receiver.start()
             except IOError as io_error:
@@ -123,6 +124,6 @@ class MessageService(object):
             logger.info('Stopping OM messaging service... Done')
         signal(SIGTERM, stop)
 
-        server = Thread(target=self._server)
+        server = Thread(target=self._server, name='MessageService server')
         server.daemon = True
         server.start()

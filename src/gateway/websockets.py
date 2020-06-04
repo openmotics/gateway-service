@@ -15,13 +15,14 @@
 
 """ Module contains all websocket related logic """
 
+from __future__ import absolute_import
 import msgpack
 import cherrypy
 import logging
 from ws4py import WS_VERSION
 from ws4py.server.cherrypyserver import WebSocketPlugin, WebSocketTool
 from ws4py.websocket import WebSocket
-from gateway.observer import Event
+from gateway.events import GatewayEvent
 
 logger = logging.getLogger('openmotics')
 
@@ -186,23 +187,23 @@ class EventsSocket(OMSocket):
     def received_message(self, message):
         if not hasattr(self, 'metadata'):
             return
-        allowed_types = [Event.Types.OUTPUT_CHANGE,
-                         Event.Types.THERMOSTAT_CHANGE,
-                         Event.Types.THERMOSTAT_GROUP_CHANGE,
-                         Event.Types.SHUTTER_CHANGE,
-                         Event.Types.INPUT_CHANGE]
+        allowed_types = [GatewayEvent.Types.OUTPUT_CHANGE,
+                         GatewayEvent.Types.THERMOSTAT_CHANGE,
+                         GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
+                         GatewayEvent.Types.SHUTTER_CHANGE,
+                         GatewayEvent.Types.INPUT_CHANGE]
         try:
             data = msgpack.loads(message.data)
-            event = Event.deserialize(data)
-            if event.type == Event.Types.ACTION:
+            event = GatewayEvent.deserialize(data)
+            if event.type == GatewayEvent.Types.ACTION:
                 if event.data['action'] == 'set_subscription':
                     subscribed_types = [stype for stype in event.data['types'] if stype in allowed_types]
                     cherrypy.engine.publish('update-events-receiver',
                                             self.metadata['client_id'],
                                             {'subscribed_types': subscribed_types})
-            elif event.type == Event.Types.PING:
-                self.send(msgpack.dumps(Event(event_type=Event.Types.PONG,
-                                              data=None).serialize()), binary=True)
+            elif event.type == GatewayEvent.Types.PING:
+                self.send(msgpack.dumps(GatewayEvent(event_type=GatewayEvent.Types.PONG,
+                                                     data=None).serialize()), binary=True)
         except Exception as ex:
             logger.exception('Error receiving message: %s', ex)
             # Ignore malformed data processing; in that case there's nothing that will happen

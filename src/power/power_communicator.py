@@ -16,9 +16,10 @@
 Module to communicate with the power modules.
 """
 
+from __future__ import absolute_import
 import logging
 import time
-from Queue import Empty
+from six.moves.queue import Empty
 from ioc import Injectable, Inject, INJECTED, Singleton
 from threading import Thread, RLock
 from serial_utils import printable, CommunicationTimedOutException
@@ -72,9 +73,15 @@ class PowerCommunicator(object):
         self.__verbose = verbose
 
     def start(self):
+        # type: () -> None
         """ Start the power communicator. """
         if self.__time_keeper is not None:
             self.__time_keeper.start()
+
+    def stop(self):
+        # type: () -> None
+        if self.__time_keeper is not None:
+            self.__time_keeper.stop()
 
     def get_communication_statistics(self):
         return self.__communication_stats

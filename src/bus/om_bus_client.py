@@ -16,6 +16,7 @@
 IPC Bus messaging client
 """
 
+from __future__ import absolute_import
 import logging
 import time
 from multiprocessing.connection import Client
@@ -118,7 +119,7 @@ class MessageClient(object):
             self._stop = True
         signal(SIGTERM, stop)
 
-        receiver = Thread(target=self._message_receiver)
+        receiver = Thread(target=self._message_receiver, name='MessageClient receiver')
         receiver.daemon = True
         receiver.start()
 

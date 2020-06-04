@@ -14,22 +14,117 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 Tool to control the master from the command line.
-
-@author: fryckbos
 """
-from platform_utils import System
+from __future__ import absolute_import
+from platform_utils import Platform, System
+
 System.import_libs()
 
 import argparse
+import logging
+import shutil
+import subprocess
 import sys
-import time
-from ConfigParser import ConfigParser
-from ioc import Injectable
+
 from serial import Serial
+from six.moves.configparser import ConfigParser
+
 import constants
-import master.master_api as master_api
-from master.master_communicator import MasterCommunicator
+from gateway.hal.master_controller_classic import MasterClassicController
+from gateway.hal.master_controller_core import MasterCoreController
+from ioc import INJECTED, Inject, Injectable
+from master.classic.master_communicator import MasterCommunicator
+from master.core.core_communicator import CoreCommunicator
+from master.core.memory_file import MemoryFile, MemoryTypes
 from serial_utils import CommunicationTimedOutException
+
+
+logger = logging.getLogger('openmotics')
+
+
+def setup_logger():
+    """ Setup the OpenMotics logger. """
+
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    logger.addHandler(handler)
+
+
+@Inject
+def master_sync(master_controller=INJECTED):
+    logger.info('Sync...')
+    try:
+        master_controller.get_status()
+        logger.info('Done sync')
+    except CommunicationTimedOutException:
+        logger.error('Failed sync')
+        sys.exit(1)
+
+
+@Inject
+def master_version(master_controller=INJECTED):
+    status = master_controller.get_status()
+    print('{} H{}'.format(status['version'], status['hw_version']))
+
+
+@Inject
+def master_reset(master_controller=INJECTED):
+    logger.info('Resetting...')
+    try:
+        master_controller.reset()
+        logger.info('Done resetting')
+    except CommunicationTimedOutException:
+        logger.error('Failed resetting')
+        sys.exit(1)
+
+
+@Inject
+def master_cold_reset(master_controller=INJECTED):
+    logger.info('Performing hard reset...')
+    master_controller.cold_reset()
+    logger.info('Done performing hard reset')
+
+
+@Inject
+def master_factory_reset(master_controller=INJECTED):
+    logger.info('Wiping the master...')
+    master_controller.factory_reset()
+    logger.info('Done wiping the master')
+
+
+def classic_master_update(firmware):
+    if firmware:
+        try:
+            logger.info('Updating master')
+            subprocess.check_call(['/opt/openmotics/bin/updateController.sh', 'H4', 'PIC18F67J11', firmware, '/opt/openmotics/firmware.hex'])
+            shutil.copy(firmware, '/opt/openmotics/firmware.hex')
+            logger.info('Done update')
+        except subprocess.CalledProcessError:
+            logger.error('Failed to update master')
+            sys.exit(1)
+    else:
+        print('error: --master-firmware-classic is required to update')
+        sys.exit(1)
+
+
+def core_master_update(firmware):
+    if firmware:
+        try:
+            logger.info('Updating master')
+            # TODO should probably move to bin
+            subprocess.check_call(['python2', '/opt/openmotics/python/core_updater.py', firmware])
+            shutil.copy(firmware, '/opt/openmotics/firmware.hex')
+            logger.info('Done update')
+        except subprocess.CalledProcessError:
+            logger.error('Failed to update master')
+            sys.exit(1)
+    else:
+        print('error: --master-firmware-core is required to update')
+        sys.exit(1)
 
 
 def main():
@@ -47,8 +142,16 @@ def main():
                         help='get the version of the master')
     parser.add_argument('--wipe', dest='wipe', action='store_true',
                         help='wip the master eeprom')
+    parser.add_argument('--update', dest='update', action='store_true',
+                        help='update the master firmware')
+    parser.add_argument('--master-firmware-classic',
+                        help='path to the hexfile with the classic firmware')
+    parser.add_argument('--master-firmware-core',
+                        help='path to the hexfile with the core+ firmware')
 
     args = parser.parse_args()
+
+    setup_logger()
 
     config = ConfigParser()
     config.read(constants.get_config_file())
@@ -56,74 +159,64 @@ def main():
     port = config.get('OpenMotics', 'controller_serial')
 
     if args.port:
-        print port
+        print(port)
+        return
 
-    elif args.hardreset:
-        print 'Performing hard reset...'
-
-        gpio_dir = open('/sys/class/gpio/gpio44/direction', 'w')
-        gpio_dir.write('out')
-        gpio_dir.close()
-
-        def power(master_on):
-            """ Set the power on the master. """
-            gpio_file = open('/sys/class/gpio/gpio44/value', 'w')
-            gpio_file.write('1' if master_on else '0')
-            gpio_file.close()
-
-        power(False)
-        time.sleep(5)
-        power(True)
-        print 'Done performing hard reset'
-
-    elif args.sync or args.version or args.reset or args.wipe:
-        master_serial = Serial(port, 115200)
-
-        Injectable.value(controller_serial=master_serial)
-
-        master_communicator = MasterCommunicator()
-        master_communicator.start()
-
-        if args.sync:
-            print 'Sync...'
-            try:
-                master_communicator.do_command(master_api.status())
-                print 'Done sync'
-                sys.exit(0)
-            except CommunicationTimedOutException:
-                print 'Failed sync'
-                sys.exit(1)
-
-        elif args.version:
-            status = master_communicator.do_command(master_api.status())
-            print '{0}.{1}.{2} H{3}'.format(status['f1'], status['f2'], status['f3'], status['h'])
-
-        elif args.reset:
-            print 'Resetting...'
-            try:
-                master_communicator.do_command(master_api.reset())
-                print 'Done resetting'
-                sys.exit(0)
-            except CommunicationTimedOutException:
-                print 'Failed resetting'
-                sys.exit(1)
-
-        elif args.wipe:
-            (num_banks, bank_size, write_size) = (256, 256, 10)
-            print 'Wiping the master...'
-            for bank in range(0, num_banks):
-                print '-  Wiping bank {0}'.format(bank)
-                for addr in range(0, bank_size, write_size):
-                    master_communicator.do_command(
-                        master_api.write_eeprom(),
-                        {'bank': bank, 'address': addr, 'data': '\xff' * write_size}
-                    )
-
-            master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0})
-            print 'Done wiping the master'
-
-    else:
+    if not any([args.sync, args.version, args.reset, args.hardreset, args.wipe, args.update]):
         parser.print_help()
+
+    platform = Platform.get_platform()
+
+    Injectable.value(controller_serial=Serial(port, 115200))
+
+    # TODO use platform_setup?
+    if platform == Platform.Type.CORE_PLUS:
+        from master.core import ucan_communicator
+        _ = ucan_communicator
+        Injectable.value(master_communicator=CoreCommunicator())
+        Injectable.value(maintenance_communicator=None)
+        Injectable.value(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
+                                       MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
+        Injectable.value(master_controller=MasterCoreController())
+    else:
+        Injectable.value(configuration_controller=None)
+        Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
+        from master.classic import eeprom_extension
+        _ = eeprom_extension
+        Injectable.value(master_communicator=MasterCommunicator())
+        Injectable.value(maintenance_communicator=None)
+        Injectable.value(master_controller=MasterClassicController())
+
+    if args.hardreset:
+        master_cold_reset()
+        return
+    elif args.update:
+        if platform == Platform.Type.CORE_PLUS:
+            core_master_update(args.master_firmware_core)
+        else:
+            classic_master_update(args.master_firmware_classic)
+        return
+
+    @Inject
+    def start(master_communicator=INJECTED):
+        # Explicitly only start the communicator and not the controller,
+        # to avoid the brackground synchronization, etc.
+        master_communicator.start()
+    start()
+
+    if args.sync:
+        master_sync()
+    elif args.version:
+        master_version()
+    elif args.reset:
+        master_reset()
+    elif args.wipe:
+        master_factory_reset()
+
+    @Inject
+    def stop(master_communicator=INJECTED):
+        master_communicator.stop()
+    stop()
 
 
 if __name__ == '__main__':

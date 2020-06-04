@@ -16,6 +16,7 @@
 The scheduling module contains the SchedulingController, this controller is used for scheduling various actions
 """
 
+from __future__ import absolute_import
 import sqlite3
 import logging
 import time
@@ -28,13 +29,20 @@ from ioc import Injectable, Inject, INJECTED, Singleton
 from platform_utils import Platform
 from gateway.webservice import params_parser
 import ujson as json
+import six
 
 if Platform.get_platform() == Platform.Type.CLASSIC:
-    from master.master_communicator import CommunicationTimedOutException
+    from master.classic.master_communicator import CommunicationTimedOutException
 else:
     # TODO: Replace for the Core+
     class CommunicationTimedOutException(Exception):  # type: ignore
         pass
+
+if False:  # MYPY
+    from typing import Dict
+    from threading import Lock
+    from gateway.group_action_controller import GroupActionController
+    from gateway.gateway_api import GatewayApi
 
 
 logger = logging.getLogger('openmotics')
@@ -125,16 +133,16 @@ class SchedulingController(object):
     """
 
     @Inject
-    def __init__(self, scheduling_db=INJECTED, scheduling_db_lock=INJECTED, gateway_api=INJECTED):
+    def __init__(self, scheduling_db=INJECTED, scheduling_db_lock=INJECTED, gateway_api=INJECTED, group_action_controller=INJECTED):
+        # type: (str, Lock, GatewayApi, GroupActionController) -> None
         """
         Constructs a new ConfigController.
 
         :param scheduling_db: filename of the sqlite database used to store the scheduling
-        :param scheduling_db_lock: DB lock
         :param gateway_api: GatewayAPI
-        :type gateway_api: gateway.gateway_api.GatewayApi
         """
         self._gateway_api = gateway_api
+        self._group_action_controller = group_action_controller
         self._web_interface = None
 
         self._lock = scheduling_db_lock
@@ -144,7 +152,7 @@ class SchedulingController(object):
                                            isolation_level=None)
         self._cursor = self._connection.cursor()
         self._check_tables()
-        self._schedules = {}
+        self._schedules = {}  # type: Dict[int, Schedule]
         self._stop = False
         self._processor = None
         self._semaphore = None
@@ -161,7 +169,7 @@ class SchedulingController(object):
 
     @property
     def schedules(self):
-        return self._schedules.values()
+        return list(self._schedules.values())
 
     def _execute(self, *args, **kwargs):
         with self._lock:
@@ -214,7 +222,7 @@ class SchedulingController(object):
 
     def start(self):
         self._stop = False
-        self._processor = Thread(target=self._process)
+        self._processor = Thread(target=self._process, name='SchedulingController processor')
         self._processor.daemon = True
         self._processor.start()
 
@@ -225,7 +233,8 @@ class SchedulingController(object):
         while self._stop is False:
             for schedule in self._schedules.values():
                 if schedule.status == 'ACTIVE' and schedule.is_due:
-                    thread = Thread(target=self._execute_schedule, args=(schedule,))
+                    thread = Thread(target=self._execute_schedule, args=(schedule,),
+                                    name='SchedulingController executor')
                     thread.daemon = True
                     thread.start()
             now = int(time.time())
@@ -239,7 +248,7 @@ class SchedulingController(object):
         try:
             # Execute
             if schedule.schedule_type == 'GROUP_ACTION':
-                self._gateway_api.do_group_action(schedule.arguments)
+                self._group_action_controller.do_group_action(schedule.arguments)
             elif schedule.schedule_type == 'BASIC_ACTION':
                 self._gateway_api.do_basic_action(**schedule.arguments)
             elif schedule.schedule_type == 'LOCAL_API':
@@ -262,7 +271,7 @@ class SchedulingController(object):
                 self._semaphore.release()
 
     def _validate(self, name, start, schedule_type, arguments, repeat, duration, end):
-        if name is None or not isinstance(name, basestring) or name.strip() == '':
+        if name is None or not isinstance(name, six.string_types) or name.strip() == '':
             raise RuntimeError('A schedule must have a name')
         # Check whether the requested type is valid
         accepted_types = ['GROUP_ACTION', 'BASIC_ACTION', 'LOCAL_API']

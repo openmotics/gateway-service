@@ -16,17 +16,25 @@
 The metrics module collects and re-distributes metric data
 """
 
+from __future__ import absolute_import
+import logging
 import re
 import time
-import logging
+from collections import deque
+
 import requests
 import ujson as json
-from threading import Thread
-from collections import deque
-from ioc import Injectable, Inject, INJECTED, Singleton
+
 from bus.om_bus_events import OMBusEvents
+from gateway.daemon_thread import DaemonThread
+from ioc import INJECTED, Inject, Injectable, Singleton
+import six
 
 logger = logging.getLogger("openmotics")
+
+
+class MetricsDistributeFailed(Exception):
+    pass
 
 
 @Injectable.named('metrics_controller')
@@ -50,8 +58,6 @@ class MetricsController(object):
         :param gateway_uuid: Gateway UUID
         :type gateway_uuid: basestring
         """
-        self._thread = None
-        self._stopped = False
         self._plugin_controller = plugin_controller
         self._metrics_collector = metrics_collector
         self._metrics_cache_controller = metrics_cache_controller
@@ -96,25 +102,29 @@ class MetricsController(object):
             self._buffer_counters.setdefault('OpenMotics', {})[definition['type']] = settings['buffer']
 
     def start(self):
-        self._collector_plugins = Thread(target=self._collect_plugins)
-        self._collector_plugins.setName('Metrics Controller collector for plugins')
-        self._collector_plugins.daemon = True
+        self._collector_plugins = DaemonThread(name='MetricsController plugin collector',
+                                               target=self._collect_plugins,
+                                               interval=1)
         self._collector_plugins.start()
-        self._collector_openmotics = Thread(target=self._collect_openmotics)
-        self._collector_openmotics.setName('Metrics Controller collector for OpenMotics')
-        self._collector_openmotics.daemon = True
+        self._collector_openmotics = DaemonThread(name='MetricsController plugin distributor',
+                                                  target=self._collect_openmotics,
+                                                  interval=1)
         self._collector_openmotics.start()
-        self._distributor_plugins = Thread(target=self._distribute_plugins)
-        self._distributor_plugins.setName('Metrics Controller distributor for plugins')
-        self._distributor_plugins.daemon = True
+        self._distributor_plugins = DaemonThread(name='MetricsController plugin distributor',
+                                                 target=self._distribute_plugins,
+                                                 interval=0.1)
         self._distributor_plugins.start()
-        self._distributor_openmotics = Thread(target=self._distribute_openmotics)
-        self._distributor_openmotics.setName('Metrics Controller distributor for OpenMotics')
-        self._distributor_openmotics.daemon = True
+        self._distributor_openmotics = DaemonThread(name='MetricsController openmotics distributor',
+                                                    target=self._distribute_openmotics,
+                                                    interval=0.1)
         self._distributor_openmotics.start()
 
     def stop(self):
-        self._stopped = True
+        # type: () -> None
+        self._collector_plugins.stop()
+        self._collector_openmotics.stop()
+        self._distributor_plugins.stop()
+        self._distributor_openmotics.stop()
 
     def set_cloud_interval(self, metric_type, interval, save=True):
         logger.info('Setting cloud interval {0}_{1}'.format(metric_type, interval))
@@ -163,21 +173,21 @@ class MetricsController(object):
         #                  "type": "counter",
         #                  "unit": "kWh"}]
         # }
-        required_keys = {'type': basestring,
+        required_keys = {'type': six.string_types,
                          'metrics': list,
                          'tags': list}
-        metrics_keys = {'name': basestring,
-                        'description': basestring,
-                        'type': basestring,
-                        'unit': basestring}
+        metrics_keys = {'name': six.string_types,
+                        'description': six.string_types,
+                        'type': six.string_types,
+                        'unit': six.string_types}
         expected_plugins = []
-        for plugin, plugin_definitions in definitions.iteritems():
+        for plugin, plugin_definitions in six.iteritems(definitions):
             log = self._plugin_controller.get_logger(plugin)
             for definition in plugin_definitions:
                 definition_ok = True
-                for key, key_type in required_keys.iteritems():
+                for key, key_type in required_keys.items():
                     if key not in definition:
-                        log('Definitions should contain keys: {0}'.format(', '.join(required_keys.keys())))
+                        log('Definitions should contain keys: {0}'.format(', '.join(list(required_keys.keys()))))
                         definition_ok = False
                         break
                     if not isinstance(definition[key], key_type):
@@ -192,9 +202,9 @@ class MetricsController(object):
                                 log('Metric definitions should be dictionaries')
                                 definition_ok = False
                                 break
-                            for mkey, mkey_type in metrics_keys.iteritems():
+                            for mkey, mkey_type in metrics_keys.items():
                                 if mkey not in metric_definition:
-                                    log('Metric definitions should contain keys: {0}'.format(', '.join(metrics_keys.keys())))
+                                    log('Metric definitions should contain keys: {0}'.format(', '.join(list(metrics_keys.keys()))))
                                     definition_ok = False
                                     break
                                 if not isinstance(metric_definition[mkey], mkey_type):
@@ -392,7 +402,7 @@ class MetricsController(object):
         time_ago_try = int(now - self._cloud_last_try)
         if time_ago_send > time_ago_try and include_this_metric is True and len(counters_to_buffer) > 0:
             cache_data = {}
-            for counter, match_setting in counters_to_buffer.iteritems():
+            for counter, match_setting in six.iteritems(counters_to_buffer):
                 if match_setting is not True:
                     if metric['tags'][match_setting['key']] not in match_setting['matches']:
                         continue
@@ -414,9 +424,11 @@ class MetricsController(object):
         self.metrics_queue_openmotics.appendleft(metric)
 
     def _transform_counters(self, metric):
+        # TODO: The 'persist' policy should be a part of the PulseCounterController
+
         source = metric['source']
         mtype = metric['type']
-        for counter, match_setting in self._persist_counters.get(source, {}).get(mtype, {}).iteritems():
+        for counter, match_setting in six.iteritems(self._persist_counters.get(source, {}).get(mtype, {})):
             if counter not in metric['values']:
                 continue
             if match_setting is not True:
@@ -446,97 +458,90 @@ class MetricsController(object):
         >                            "id": 0},
         >                   "values": {"power": 1234}}
         """
-        while not self._stopped:
-            start = time.time()
-            for metric in self._plugin_controller.collect_metrics():
-                # Validation, part 1
-                source = metric['source']
-                log = self._plugin_controller.get_logger(source)
-                required_keys = {'type': basestring,
-                                 'timestamp': (float, int),
-                                 'values': dict,
-                                 'tags': dict}
-                metric_ok = True
-                for key, key_type in required_keys.iteritems():
-                    if key not in metric:
-                        log('Metric should contain keys {0}'.format(', '.join(required_keys.keys())))
-                        metric_ok = False
-                        break
-                    if not isinstance(metric[key], key_type):
-                        log('Metric key {0} should be of type {1}'.format(key, key_type))
-                        metric_ok = False
-                        break
-                if metric_ok is False:
-                    continue
-                # Get metric definition
-                definition = self.definitions.get(metric['source'], {}).get(metric['type'])
-                if definition is None:
-                    continue
-                # Validate metric based on definition
-                for tag in definition['tags']:
-                    if tag not in metric['tags'] or metric['tags'][tag] is None:
-                        log('Metric tag {0} should be defined'.format(tag))
-                        metric_ok = False
-                metric_values = set(metric['values'].keys())
-                if len(metric_values) == 0:
-                    log('Metric should have at least one value')
+        start = time.time()
+        for metric in self._plugin_controller.collect_metrics():
+            # Validation, part 1
+            source = metric['source']
+            log = self._plugin_controller.get_logger(source)
+            required_keys = {'type': six.string_types,
+                             'timestamp': (float, int),
+                             'values': dict,
+                             'tags': dict}
+            metric_ok = True
+            for key, key_type in required_keys.items():
+                if key not in metric:
+                    log('Metric should contain keys {0}'.format(', '.join(list(required_keys.keys()))))
                     metric_ok = False
-                unknown_metrics = metric_values - set([mdef['name'] for mdef in definition['metrics']])
-                if len(unknown_metrics) > 0:
-                    log('Metric contains unknown values: {0}'.format(', '.join(unknown_metrics)))
+                    break
+                if not isinstance(metric[key], key_type):
+                    log('Metric key {0} should be of type {1}'.format(key, key_type))
                     metric_ok = False
-                if metric_ok is False:
-                    continue
-                self._put(metric)
-            if not self._stopped:
-                time.sleep(max(0.1, 1 - (time.time() - start)))
+                    break
+            if metric_ok is False:
+                continue
+            # Get metric definition
+            definition = self.definitions.get(metric['source'], {}).get(metric['type'])
+            if definition is None:
+                continue
+            # Validate metric based on definition
+            for tag in definition['tags']:
+                if tag not in metric['tags'] or metric['tags'][tag] is None:
+                    log('Metric tag {0} should be defined'.format(tag))
+                    metric_ok = False
+            metric_values = set(metric['values'].keys())
+            if len(metric_values) == 0:
+                log('Metric should have at least one value')
+                metric_ok = False
+            unknown_metrics = metric_values - set([mdef['name'] for mdef in definition['metrics']])
+            if len(unknown_metrics) > 0:
+                log('Metric contains unknown values: {0}'.format(', '.join(unknown_metrics)))
+                metric_ok = False
+            if metric_ok is False:
+                continue
+            self._put(metric)
 
     def _collect_openmotics(self):
-        while not self._stopped:
-            start = time.time()
-            for metric in self._metrics_collector.collect_metrics():
-                self._put(metric)
-            if not self._stopped:
-                time.sleep(max(0.1, 1 - (time.time() - start)))
+        # type: () -> None
+        start = time.time()
+        for metric in self._metrics_collector.collect_metrics():
+            self._put(metric)
 
     def _distribute_plugins(self):
-        while not self._stopped:
+        try:
+            metrics = []
             try:
-                metrics = []
-                try:
-                    while len(metrics) < 250:
-                        metrics.append(self.metrics_queue_plugins.pop())
-                except IndexError:
-                    pass
-                if metrics:
-                    rates = self._plugin_controller.distribute_metrics(metrics)
-                    for key, rate in rates.iteritems():
-                        if key not in self.outbound_rates:
-                            self.outbound_rates[key] = 0
-                        self.outbound_rates[key] += rate
-                else:
-                    time.sleep(0.1)
-            except Exception as ex:
-                logger.exception('Error distributing metrics to plugins: {0}'.format(ex))
+                while len(metrics) < 250:
+                    metrics.append(self.metrics_queue_plugins.pop())
+            except IndexError:
+                pass
+            if metrics:
+                rates = self._plugin_controller.distribute_metrics(metrics)
+                for key, rate in six.iteritems(rates):
+                    if key not in self.outbound_rates:
+                        self.outbound_rates[key] = 0
+                    self.outbound_rates[key] += rate
+        except Exception as ex:
+            raise MetricsDistributeFailed('Error distributing metrics to plugins: {0}'.format(ex))
 
     def _distribute_openmotics(self):
-        while not self._stopped:
-            try:
-                metric = self.metrics_queue_openmotics.pop()
-                for receiver in self._openmotics_receivers:
-                    try:
-                        receiver(metric)
-                    except Exception as ex:
-                        logger.exception('Error distributing metrics to internal receivers: {0}'.format(ex))
-                    rate_key = '{0}.{1}'.format(metric['source'].lower(), metric['type'].lower())
-                    if rate_key not in self.outbound_rates:
-                        self.outbound_rates[rate_key] = 0
-                    self.outbound_rates[rate_key] += 1
-                    self.outbound_rates['total'] += 1
-            except IndexError:
-                time.sleep(0.1)
+        # type: () -> None
+        try:
+            metric = self.metrics_queue_openmotics.pop()
+            for receiver in self._openmotics_receivers:
+                try:
+                    receiver(metric)
+                except Exception as ex:
+                    logger.exception('error distributing metrics')
+                    raise MetricsDistributeFailed('Error distributing metrics to internal receivers: {0}'.format(ex))
+                rate_key = '{0}.{1}'.format(metric['source'].lower(), metric['type'].lower())
+                if rate_key not in self.outbound_rates:
+                    self.outbound_rates[rate_key] = 0
+                self.outbound_rates[rate_key] += 1
+                self.outbound_rates['total'] += 1
+        except IndexError:
+            pass
 
     def event_receiver(self, event, payload):
         if event == OMBusEvents.METRICS_INTERVAL_CHANGE:
-            for metric_type, interval in payload.iteritems():
+            for metric_type, interval in six.iteritems(payload):
                 self.set_cloud_interval(metric_type, interval)

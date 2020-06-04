@@ -16,13 +16,14 @@
 Tests for InputStatus.
 """
 
+from __future__ import absolute_import
 import unittest
 
 import mock
 import xmlrunner
 from gateway.observer import Observer
 from ioc import Scope, SetTestMode, SetUpTestInjections
-from master.inputs import InputStatus
+from master.classic.inputs import InputStatus
 
 
 class ObserverTest(unittest.TestCase):
@@ -34,7 +35,6 @@ class ObserverTest(unittest.TestCase):
 
     def test_get_inputs(self):
         observer = get_observer()
-        observer.set_gateway_api(mock.Mock())
         input_status = {'id': 1, 'output': 2, 'status': True}
         with mock.patch.object(InputStatus, 'get_inputs',
                                return_value=[input_status]):
@@ -43,7 +43,6 @@ class ObserverTest(unittest.TestCase):
 
     def test_get_recent_inputs(self):
         observer = get_observer()
-        observer.set_gateway_api(mock.Mock())
         input_status = {'id': 1, 'output': 2, 'status': True}
         with mock.patch.object(InputStatus, 'get_recent',
                                return_value=[input_status]):
@@ -59,8 +58,7 @@ def get_observer():
     from gateway.hal.master_controller_classic import MasterClassicController
     master = MasterClassicController()
     return Observer(master_controller=master,
-                    message_client=mock.Mock(),
-                    shutter_controller=mock.Mock())
+                    message_client=mock.Mock())
 
 
 if __name__ == "__main__":

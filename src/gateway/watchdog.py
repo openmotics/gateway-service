@@ -16,13 +16,19 @@
 Contains a watchdog that monitors internal service threads
 """
 
+from __future__ import absolute_import
+import logging
 import os
 import time
-import logging
-import ujson as json
-from threading import Thread
 from subprocess import check_output
-from ioc import Injectable, Inject, INJECTED, Singleton
+
+import ujson as json
+
+from gateway.daemon_thread import DaemonThread
+from ioc import INJECTED, Inject, Injectable, Singleton
+
+if False:  # MYPY
+    from typing import Any, Optional
 
 logger = logging.getLogger("openmotics")
 
@@ -40,48 +46,39 @@ class Watchdog(object):
         self._power_communicator = power_communicator
         self._config_controller = configuration_controller
 
-        self._watchdog_thread = None
-        self._stopped = False
+        self._watchdog_thread = DaemonThread(name='Watchdog watcher',
+                                             target=self._watch,
+                                             interval=60, delay=10)
 
     def start(self):
+        # type: () -> None
         self._stopped = False
-        self._watchdog_thread = Thread(target=self._watch)
-        self._watchdog_thread.daemon = True
         self._watchdog_thread.start()
 
     def stop(self):
-        self._stopped = True
+        # type: () -> None
+        self._watchdog_thread.stop()
 
     def _watch(self):
+        # type: () -> None
         # Cleanup legacy
         self._config_controller.remove('communication_recovery')
 
-        # Start actual watching
-        while not self._stopped:
-            try:
-                reset_requirement = self._controller_check('master', self._master_controller)
-                if reset_requirement is not None:
-                    if reset_requirement == 'device':
-                        self._master_controller.cold_reset()
-                    time.sleep(15)
-                    os._exit(1)
-                reset_requirement = self._controller_check('energy', self._power_communicator)
-                if reset_requirement is not None:
-                    if reset_requirement == 'device':
-                        self._master_controller.power_cycle_bus()
-                    time.sleep(15)
-                    os._exit(1)
-                sleep = 60
-            except Exception:
-                logger.exception('Unexpected exception when watching')
-                sleep = 60
-
-            for _ in xrange(sleep):
-                if self._stopped:
-                    return
-                time.sleep(1)
+        reset_requirement = self._controller_check('master', self._master_controller)
+        if reset_requirement is not None:
+            if reset_requirement == 'device':
+                self._master_controller.cold_reset()
+            time.sleep(15)
+            os._exit(1)
+        reset_requirement = self._controller_check('energy', self._power_communicator)
+        if reset_requirement is not None:
+            if reset_requirement == 'device':
+                self._master_controller.power_cycle_bus()
+            time.sleep(15)
+            os._exit(1)
 
     def _controller_check(self, name, controller):
+        # type: (str, Any) -> Optional[str]
         recovery_data_key = 'communication_recovery_{0}'.format(name)
         recovery_data = self._config_controller.get(recovery_data_key, {})
 
@@ -93,21 +90,24 @@ class Watchdog(object):
             # If there are no timeouts at all
             if len(calls_succeeded) > 30:
                 self._config_controller.remove(recovery_data_key)
-            return
+            return None
         if len(all_calls) <= 10:
             # Not enough calls made to have a decent view on what's going on
-            return
+            return None
         if not any(t in calls_timedout for t in all_calls[-10:]):
             # The last X calls are successfull
-            return
+            return None
         calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
+        if len(calls_last_x_minutes) <= 5:
+            # Not enough recent calls
+            return None
         ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
         if ratio < 0.25:
             # Less than 25% of the calls fail, let's assume everything is just "fine"
             logger.warning('Noticed communication timeouts for \'{0}\', but there\'s only a failure ratio of {1:.2f}%.'.format(
                 name, ratio * 100
             ))
-            return
+            return None
 
         service_restart = None
         device_reset = None
@@ -133,11 +133,12 @@ class Watchdog(object):
             # Log debug information
             try:
                 debug_buffer = controller.get_debug_buffer()
+                action = 'service_restart' if service_restart is not None else 'device_reset'
                 debug_data = {'type': 'communication_recovery',
+                              'info': {'controller': name, 'action': action},
                               'data': {'buffer': debug_buffer,
                                        'calls': {'timedout': calls_timedout,
-                                                 'succeeded': calls_succeeded},
-                                       'action': 'service_restart' if service_restart is not None else 'device_reset'}}
+                                                 'succeeded': calls_succeeded}}}
                 with open('/tmp/debug_{0}_{1}.json'.format(name, int(time.time())), 'w') as recovery_file:
                     recovery_file.write(json.dumps(debug_data, indent=4, sort_keys=True))
                 check_output(
@@ -148,15 +149,16 @@ class Watchdog(object):
                 logger.exception('Could not store debug file: {0}'.format(ex))
 
         if service_restart is not None:
-            logger.fatal('Major issues in communication with {0}. Restarting service...'.format(name))
+            logger.error('Major issues in communication with {0}. Restarting service...'.format(name))
             recovery_data['service_restart'] = {'reason': service_restart,
                                                 'time': time.time(),
                                                 'backoff': backoff}
             self._config_controller.set(recovery_data_key, recovery_data)
             return 'service'
         if device_reset is not None:
-            logger.fatal('Major issues in communication with {0}. Resetting {0} & service'.format(name))
+            logger.error('Major issues in communication with {0}. Resetting {0} & service'.format(name))
             recovery_data['device_reset'] = {'reason': device_reset,
                                              'time': time.time()}
             self._config_controller.set(recovery_data_key, recovery_data)
             return 'device'
+        return None

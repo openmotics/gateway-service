@@ -15,24 +15,45 @@
 """
 The main module for the OpenMotics
 """
-from platform_utils import System, Platform
+from __future__ import absolute_import
+
+from platform_utils import System
 System.import_libs()
 
 import logging
 import time
-import constants
-from models import Database, Feature
-from ioc import Injectable, Inject, INJECTED
-from bus.om_bus_service import MessageService
+from signal import SIGTERM, signal
+
 from bus.om_bus_client import MessageClient
-from serial import Serial
-from signal import signal, SIGTERM
-from ConfigParser import ConfigParser
-from threading import Lock
-from serial_utils import RS485
-from gateway.observer import Observer
-from urlparse import urlparse
-from peewee_migrate import Router
+from bus.om_bus_service import MessageService
+from gateway.initialize import initialize
+from gateway.migrations.rooms import RoomsMigrator
+from ioc import INJECTED, Inject
+
+
+if False:  # MYPY
+    from gateway.metrics_controller import MetricsController
+    from gateway.metrics_collector import MetricsCollector
+    from gateway.webservice import WebInterface, WebService
+    from gateway.scheduling import SchedulingController
+    from gateway.observer import Observer
+    from gateway.gateway_api import GatewayApi
+    from gateway.maintenance_controller import MaintenanceController
+    from gateway.thermostat.thermostat_controller import ThermostatController
+    from gateway.shutter_controller import ShutterController
+    from gateway.output_controller import OutputController
+    from gateway.input_controller import InputController
+    from gateway.sensor_controller import SensorController
+    from gateway.pulse_counter_controller import PulseCounterController
+    from gateway.group_action_controller import GroupActionController
+    from gateway.watchdog import Watchdog
+    from gateway.comm_led_controller import CommunicationLedController
+    from gateway.hal.master_controller import MasterController
+    from gateway.hal.frontpanel_controller import FrontpanelController
+    from plugins.base import PluginController
+    from power.power_communicator import PowerCommunicator
+    from master.classic.passthrough import PassthroughService
+    from cloud.events import EventSender
 
 logger = logging.getLogger("openmotics")
 
@@ -50,129 +71,26 @@ def setup_logger():
 
 
 class OpenmoticsService(object):
-
-    @staticmethod
-    def build_graph():
-        config = ConfigParser()
-        config.read(constants.get_config_file())
-
-        config_lock = Lock()
-        scheduling_lock = Lock()
-        metrics_lock = Lock()
-
-        config_database_file = constants.get_config_database_file()
-
-        # TODO: Clean up dependencies more to reduce complexity
-
-        # IOC announcements
-        # When below modules are imported, the classes are registerd in the IOC graph. This is required for
-        # instances that are used in @Inject decorated functions below, and is also needed to specify
-        # abstract implementations depending on e.g. the platform (classic vs core) or certain settings (classic
-        # thermostats vs gateway thermostats)
-        from power import power_communicator, power_controller
-        from plugins import base
-        from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
-                             maintenance_controller, comm_led_controller, users, pulses, config as config_controller,
-                             metrics_caching, watchdog)
-        from cloud import events
-        _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
-             maintenance_controller, base, events, power_communicator, comm_led_controller, users,
-             power_controller, pulses, config_controller, metrics_caching, watchdog)
-        if Platform.get_platform() == Platform.Type.CORE_PLUS:
-            from gateway.hal import master_controller_core
-            from master_core import maintenance, core_communicator, ucan_communicator
-            from master import eeprom_extension  # TODO: Obsolete, need to be removed
-            _ = master_controller_core, maintenance, core_communicator, ucan_communicator
-        else:
-            from gateway.hal import master_controller_classic
-            from master import maintenance, master_communicator, eeprom_extension
-            _ = master_controller_classic, maintenance, master_communicator, eeprom_extension
-
-        thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
-        thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled
-        if Platform.get_platform() == Platform.Type.CORE_PLUS or thermostats_gateway_enabled:
-            from gateway.thermostat.gateway import thermostat_controller_gateway
-            _ = thermostat_controller_gateway
-        else:
-            from gateway.thermostat.master import thermostat_controller_master
-            _ = thermostat_controller_master
-
-        # IPC
-        Injectable.value(message_client=MessageClient('openmotics_service'))
-
-        # Cloud API
-        parsed_url = urlparse(config.get('OpenMotics', 'vpn_check_url'))
-        Injectable.value(gateway_uuid=config.get('OpenMotics', 'uuid'))
-        Injectable.value(cloud_endpoint=parsed_url.hostname)
-        Injectable.value(cloud_port=parsed_url.port)
-        Injectable.value(cloud_ssl=parsed_url.scheme == 'https')
-        Injectable.value(cloud_api_version=0)
-
-        # User Controller
-        Injectable.value(user_db=config_database_file)
-        Injectable.value(user_db_lock=config_lock)
-        Injectable.value(token_timeout=3600)
-        Injectable.value(config={'username': config.get('OpenMotics', 'cloud_user'),
-                                 'password': config.get('OpenMotics', 'cloud_pass')})
-
-        # Configuration Controller
-        Injectable.value(config_db=config_database_file)
-        Injectable.value(config_db_lock=config_lock)
-
-        # Energy Controller
-        power_serial_port = config.get('OpenMotics', 'power_serial')
-        Injectable.value(power_db=constants.get_power_database_file())
-        if power_serial_port:
-            Injectable.value(power_serial=RS485(Serial(power_serial_port, 115200, timeout=None)))
-        else:
-            Injectable.value(power_serial=None)
-            Injectable.value(power_communicator=None)
-            Injectable.value(power_controller=None)
-
-        # Pulse Controller
-        Injectable.value(pulse_db=constants.get_pulse_counter_database_file())
-
-        # Scheduling Controller
-        Injectable.value(scheduling_db=constants.get_scheduling_database_file())
-        Injectable.value(scheduling_db_lock=scheduling_lock)
-
-        # Master Controller
-        controller_serial_port = config.get('OpenMotics', 'controller_serial')
-        Injectable.value(controller_serial=Serial(controller_serial_port, 115200))
-        if Platform.get_platform() == Platform.Type.CORE_PLUS:
-            from master_core.memory_file import MemoryFile, MemoryTypes
-            core_cli_serial_port = config.get('OpenMotics', 'cli_serial')
-            Injectable.value(cli_serial=Serial(core_cli_serial_port, 115200))
-            Injectable.value(passthrough_service=None)  # Mark as "not needed"
-            Injectable.value(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
-                                           MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
-            # TODO: Remove; should not be needed for Core
-            Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
-        else:
-            passthrough_serial_port = config.get('OpenMotics', 'passthrough_serial')
-            Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
-            if passthrough_serial_port:
-                Injectable.value(passthrough_serial=Serial(passthrough_serial_port, 115200))
-                from master.passthrough import PassthroughService
-                _ = PassthroughService  # IOC announcement
-            else:
-                Injectable.value(passthrough_service=None)
-
-        # Metrics Controller
-        Injectable.value(metrics_db=constants.get_metrics_database_file())
-        Injectable.value(metrics_db_lock=metrics_lock)
-
-        # Webserver / Presentation layer
-        Injectable.value(ssl_private_key=constants.get_ssl_private_key_file())
-        Injectable.value(ssl_certificate=constants.get_ssl_certificate_file())
-
     @staticmethod
     @Inject
-    def fix_dependencies(metrics_controller=INJECTED, message_client=INJECTED, web_interface=INJECTED, scheduling_controller=INJECTED,
-                         observer=INJECTED, gateway_api=INJECTED, metrics_collector=INJECTED, plugin_controller=INJECTED,
-                         web_service=INJECTED, event_sender=INJECTED, maintenance_controller=INJECTED, thermostat_controller=INJECTED):
+    def fix_dependencies(
+                metrics_controller=INJECTED,  # type: MetricsController
+                message_client=INJECTED,  # type: MessageClient
+                web_interface=INJECTED,  # type: WebInterface
+                scheduling_controller=INJECTED,  # type: SchedulingController
+                observer=INJECTED,  # type: Observer
+                gateway_api=INJECTED,  # type: GatewayApi
+                metrics_collector=INJECTED,  # type: MetricsCollector
+                plugin_controller=INJECTED,  # type: PluginController
+                web_service=INJECTED,  # type: WebService
+                event_sender=INJECTED,  # type: EventSender
+                maintenance_controller=INJECTED,  # type: MaintenanceController
+                thermostat_controller=INJECTED,  # type: ThermostatController
+                shutter_controller=INJECTED  # type: ShutterController
+            ):
 
         # TODO: Fix circular dependencies
+        # TODO: Introduce some kind of generic event/message bus
 
         thermostat_controller.subscribe_events(web_interface.send_event_websocket)
         thermostat_controller.subscribe_events(event_sender.enqueue_event)
@@ -189,30 +107,59 @@ class OpenmoticsService(object):
         plugin_controller.set_webservice(web_service)
         plugin_controller.set_metrics_controller(metrics_controller)
         plugin_controller.set_metrics_collector(metrics_collector)
-        observer.set_gateway_api(gateway_api)
+        maintenance_controller.subscribe_maintenance_stopped(gateway_api.maintenance_mode_stopped)
         observer.subscribe_events(metrics_collector.process_observer_event)
         observer.subscribe_events(plugin_controller.process_observer_event)
         observer.subscribe_events(web_interface.send_event_websocket)
         observer.subscribe_events(event_sender.enqueue_event)
-
-        # TODO: make sure all subscribers only subscribe to the observer, not master directly
-        observer.subscribe_master(Observer.LegacyMasterEvents.ON_SHUTTER_UPDATE, plugin_controller.process_shutter_status)
-        observer.subscribe_master(Observer.LegacyMasterEvents.ONLINE, gateway_api.master_online_event)
-
-        maintenance_controller.subscribe_maintenance_stopped(gateway_api.maintenance_mode_stopped)
+        shutter_controller.subscribe_events(metrics_collector.process_observer_event)
+        shutter_controller.subscribe_events(plugin_controller.process_observer_event)
+        shutter_controller.subscribe_events(web_interface.send_event_websocket)
+        shutter_controller.subscribe_events(event_sender.enqueue_event)
 
     @staticmethod
     @Inject
-    def start(master_controller=INJECTED, maintenance_controller=INJECTED,
-              observer=INJECTED, power_communicator=INJECTED, metrics_controller=INJECTED, passthrough_service=INJECTED,
-              scheduling_controller=INJECTED, metrics_collector=INJECTED, web_service=INJECTED, watchdog=INJECTED, plugin_controller=INJECTED,
-              communication_led_controller=INJECTED, event_sender=INJECTED, thermostat_controller=INJECTED):
+    def start(
+                master_controller=INJECTED,  # type: MasterController
+                maintenance_controller=INJECTED,  # type: MaintenanceController
+                power_communicator=INJECTED,  # type: PowerCommunicator
+                metrics_controller=INJECTED,  # type: MetricsController
+                passthrough_service=INJECTED,  # type: PassthroughService
+                scheduling_controller=INJECTED,  # type: SchedulingController
+                metrics_collector=INJECTED,  # type: MetricsCollector
+                web_service=INJECTED,  # type: WebService
+                web_interface=INJECTED,  # type: WebInterface
+                watchdog=INJECTED,  # type: Watchdog
+                plugin_controller=INJECTED,  # type: PluginController
+                communication_led_controller=INJECTED,  # type: CommunicationLedController
+                event_sender=INJECTED,  # type: EventSender
+                thermostat_controller=INJECTED,  # type: ThermostatController
+                output_controller=INJECTED,  # type: OutputController
+                input_controller=INJECTED,  # type: InputController
+                pulse_counter_controller=INJECTED,  # type: PulseCounterController
+                sensor_controller=INJECTED,  # type: SensorController
+                shutter_controller=INJECTED,  # type: ShutterController
+                group_action_controller=INJECTED,  # type: GroupActionController
+                frontpanel_controller=INJECTED  # type: FrontpanelController
+            ):
         """ Main function. """
         logger.info('Starting OM core service...')
 
+        # MasterController should be running
         master_controller.start()
+
+        # Sync ORM with sources of thruth
+        output_controller.sync_orm()
+        input_controller.sync_orm()
+        pulse_counter_controller.sync_orm()
+        sensor_controller.sync_orm()
+        shutter_controller.sync_orm()
+
+        # Execute master migration(s)
+        RoomsMigrator.migrate()
+
+        # Start rest of the stack
         maintenance_controller.start()
-        observer.start()
         power_communicator.start()
         metrics_controller.start()
         if passthrough_service:
@@ -221,11 +168,19 @@ class OpenmoticsService(object):
         thermostat_controller.start()
         metrics_collector.start()
         web_service.start()
-        plugin_controller.start()
+        frontpanel_controller.start()
         communication_led_controller.start()
         event_sender.start()
         watchdog.start()
+        plugin_controller.start()
+        output_controller.start()
+        input_controller.start()
+        pulse_counter_controller.start()
+        sensor_controller.start()
+        shutter_controller.start()
+        group_action_controller.start()
 
+        web_interface.set_service_state(True)
         signal_request = {'stop': False}
 
         def stop(signum, frame):
@@ -233,13 +188,22 @@ class OpenmoticsService(object):
             _ = signum, frame
             logger.info('Stopping OM core service...')
             watchdog.stop()
+            output_controller.stop()
+            input_controller.stop()
+            pulse_counter_controller.stop()
+            sensor_controller.stop()
+            shutter_controller.stop()
+            group_action_controller.stop()
+            web_service.stop()
+            power_communicator.stop()
             master_controller.stop()
             maintenance_controller.stop()
-            web_service.stop()
             metrics_collector.stop()
             metrics_controller.stop()
             thermostat_controller.stop()
             plugin_controller.stop()
+            communication_led_controller.stop()
+            frontpanel_controller.stop()
             event_sender.stop()
             logger.info('Stopping OM core service... Done')
             signal_request['stop'] = True
@@ -252,18 +216,12 @@ class OpenmoticsService(object):
 
 if __name__ == "__main__":
     setup_logger()
-
-    logger.info("Applying migrations")
-    # Run all unapplied migrations
-    db = Database.get_db()
-    router = Router(db, migrate_dir='/opt/openmotics/python/migrations')
-    router.run()
+    initialize()
 
     logger.info("Starting OpenMotics service")
     # TODO: move message service to separate process
     message_service = MessageService()
     message_service.start()
 
-    OpenmoticsService.build_graph()
     OpenmoticsService.fix_dependencies()
     OpenmoticsService.start()

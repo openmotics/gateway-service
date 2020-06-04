@@ -15,32 +15,51 @@
 """
 Module for communicating with the Master
 """
+from __future__ import absolute_import
 import logging
 import time
 from datetime import datetime
-from threading import Thread, Timer
+from threading import Timer
 
-from gateway.hal.master_controller import MasterController, MasterEvent
+from gateway.daemon_thread import DaemonThread, DaemonThreadWait
+from gateway.dto import (
+    OutputDTO, InputDTO,
+    ShutterDTO, ShutterGroupDTO,
+    ThermostatDTO, SensorDTO,
+    PulseCounterDTO, GroupActionDTO
+)
+from gateway.enums import ShutterEnums
+from gateway.hal.mappers_classic import (
+    OutputMapper, InputMapper,
+    ShutterGroupMapper, ShutterMapper,
+    ThermostatMapper, SensorMapper,
+    PulseCounterMapper, GroupActionMapper
+)
+from gateway.hal.master_controller import MasterController
+from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
-from ioc import INJECTED, Inject, Injectable, Singleton
-from master import eeprom_models, master_api
-from master.eeprom_models import CanLedConfiguration, DimmerConfiguration, \
-    EepromAddress, GroupActionConfiguration, RoomConfiguration, \
-    ScheduledActionConfiguration, ShutterConfiguration, \
-    ShutterGroupConfiguration, StartupActionConfiguration
-from master.inputs import InputStatus
-from master.master_communicator import BackgroundConsumer
-from master.outputs import OutputStatus
+from ioc import INJECTED, Inject
+from master.classic import eeprom_models, master_api
+from master.classic.eeprom_models import (
+    CanLedConfiguration, DimmerConfiguration,
+    ScheduledActionConfiguration, StartupActionConfiguration
+)
+from master.classic.eeprom_controller import EepromAddress
+from master.classic.inputs import InputStatus
+from master.classic.master_communicator import BackgroundConsumer
+from master.classic.outputs import OutputStatus
+from master.classic.master_communicator import MasterCommunicator
+from master.classic.eeprom_controller import EepromController
 from serial_utils import CommunicationTimedOutException
+from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Tuple
+    from gateway.config import ConfigurationController
 
 logger = logging.getLogger("openmotics")
 
 
-@Injectable.named('master_controller')
-@Singleton
 class MasterClassicController(MasterController):
 
     @Inject
@@ -48,10 +67,7 @@ class MasterClassicController(MasterController):
                  master_communicator=INJECTED,
                  configuration_controller=INJECTED,
                  eeprom_controller=INJECTED):
-        """
-        :type master_communicator: master.master_communicator.MasterCommunicator
-        :type eeprom_controller: master.eeprom_controller.EepromController
-        """
+        # type: (MasterCommunicator, ConfigurationController, EepromController) -> None
         super(MasterClassicController, self).__init__(master_communicator)
         self._config_controller = configuration_controller
         self._eeprom_controller = eeprom_controller
@@ -61,16 +77,20 @@ class MasterClassicController(MasterController):
         self._output_status = OutputStatus(on_output_change=self._output_changed)
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
-        self._synchronization_thread = Thread(target=self._synchronize, name='ClassicMasterSynchronization')
-        self._synchronization_thread.daemon = True
+        self._synchronization_thread = DaemonThread(name='MasterClassicController synchronization',
+                                                    target=self._synchronize,
+                                                    interval=30, delay=10)
         self._master_version = None
         self._master_online = False
         self._input_interval = 300
-        self._input_last_updated = 0
-        self._input_config = {}
+        self._input_last_updated = 0.0
+        self._input_config = {}  # type: Dict[int, InputDTO]
         self._output_interval = 600
         self._output_last_updated = 0
-        self._output_config = {}
+        self._output_config = {}  # type: Dict[int, OutputDTO]
+        self._shutters_interval = 600
+        self._shutters_last_updated = 0
+        self._shutter_config = {}  # type: Dict[int, ShutterDTO]
 
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._module_log = []  # type: List[Tuple[str,str]]
@@ -91,35 +111,33 @@ class MasterClassicController(MasterController):
 
     def _synchronize(self):
         # type: () -> None
-        while True:
-            try:
-                now = time.time()
-                self._get_master_version()
-                # Validate communicator checks
-                if self._time_last_updated < now - 300:
-                    self._check_master_time()
-                    self._time_last_updated = now
-                if self._settings_last_updated < now - 900:
-                    self._check_master_settings()
-                    self._settings_last_updated = now
-                # Refresh if required
-                if self._output_last_updated + self._output_interval < now:
-                    self._refresh_outputs()
-                    self._set_master_state(True)
-                if self._input_last_updated + self._input_interval < now:
-                    self._refresh_inputs()
-                    self._set_master_state(True)
-                time.sleep(1)
-            except CommunicationTimedOutException:
-                logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
-                self._set_master_state(False)
-                time.sleep(10)
-            except InMaintenanceModeException:
-                # This is an expected situation
-                time.sleep(10)
-            except Exception as ex:
-                logger.exception('Unexpected error during synchronization: {0}'.format(ex))
-                time.sleep(10)
+        try:
+            now = time.time()
+            self._get_master_version()
+            # Validate communicator checks
+            if self._time_last_updated < now - 300:
+                self._check_master_time()
+                self._time_last_updated = now
+            if self._settings_last_updated < now - 900:
+                self._check_master_settings()
+                self._settings_last_updated = now
+            # Refresh if required
+            if self._output_last_updated + self._output_interval < now:
+                self._refresh_outputs()
+                self._set_master_state(True)
+            if self._input_last_updated + self._input_interval < now:
+                self._refresh_inputs()
+                self._set_master_state(True)
+            if self._shutters_last_updated + self._shutters_interval < time.time():
+                self._refresh_shutter_states()
+                self._set_master_state(True)
+        except CommunicationTimedOutException:
+            logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
+            self._set_master_state(False)
+            raise DaemonThreadWait
+        except InMaintenanceModeException:
+            # This is an expected situation
+            raise DaemonThreadWait
 
     def _get_master_version(self):
         if self._master_version is None:
@@ -135,6 +153,10 @@ class MasterClassicController(MasterController):
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.input_list(self._master_version), 0,
                                self._on_master_input_change)
+        )
+        self._master_communicator.register_consumer(
+            BackgroundConsumer(master_api.shutter_status(self._master_version), 0,
+                               self._on_master_shutter_change)
         )
 
     def _check_master_time(self):
@@ -258,8 +280,14 @@ class MasterClassicController(MasterController):
     #######################
 
     def start(self):
+        # type: () -> None
         super(MasterClassicController, self).start()
         self._synchronization_thread.start()
+
+    def stop(self):
+        # type: () -> None
+        self._synchronization_thread.stop()
+        super(MasterClassicController, self).stop()
 
     def set_plugin_controller(self, plugin_controller):
         """
@@ -279,6 +307,7 @@ class MasterClassicController(MasterController):
         self._eeprom_controller.dirty = True
         self._input_last_updated = 0
         self._output_last_updated = 0
+        self._shutters_last_updated = 0
 
     def get_firmware_version(self):
         out_dict = self._master_communicator.do_command(master_api.status())
@@ -307,30 +336,32 @@ class MasterClassicController(MasterController):
         # type: () -> List[int]
         return self._input_status.get_recent()
 
-    def load_input(self, input_id, fields=None):
-        o = self._eeprom_controller.read(eeprom_models.InputConfiguration, input_id, fields)
-        if o.module_type not in ['i', 'I']:  # Only return 'real' inputs
-            raise TypeError('The given id {0} is not an input, but {1}'.format(input_id, o.module_type))
-        return o.serialize()
+    def load_input(self, input_id):  # type: (int) -> InputDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.InputConfiguration, input_id)
+        if classic_object.module_type not in ['i', 'I']:  # Only return 'real' inputs
+            raise TypeError('The given id {0} is not an input, but {1}'.format(input_id, classic_object.module_type))
+        return InputMapper.orm_to_dto(classic_object)
 
-    def load_inputs(self, fields=None):
-        return [o.serialize() for o in self._eeprom_controller.read_all(eeprom_models.InputConfiguration, fields)
+    def load_inputs(self):  # type: () -> List[InputDTO]
+        return [InputMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.InputConfiguration)
                 if o.module_type in ['i', 'I']]  # Only return 'real' inputs
 
-    def save_inputs(self, inputs, fields=None):
-        self._eeprom_controller.write_batch([eeprom_models.InputConfiguration.deserialize(input_)
-                                             for input_ in inputs])
+    def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
+        batch = []
+        for input_, fields in inputs:
+            batch.append(InputMapper.dto_to_orm(input_, fields))
+        self._eeprom_controller.write_batch(batch)
 
-    def _refresh_inputs(self):
-        # type: () -> None
+    def _refresh_inputs(self):  # type: () -> None
         # 1. refresh input configuration
-        self._input_config = {input_configuration['id']: input_configuration
+        self._input_config = {input_configuration.id: input_configuration
                               for input_configuration in self.load_inputs()}
         # 2. poll for latest input status
         try:
             number_of_input_modules = self._master_communicator.do_command(master_api.number_of_io_modules())['in']
             inputs = []
-            for i in xrange(number_of_input_modules):
+            for i in range(number_of_input_modules):
                 # we could be dealing with e.g. a temperature module, skip those
                 module_type = self.get_input_module_type(i)
                 if module_type not in ['i', 'I']:
@@ -338,7 +369,7 @@ class MasterClassicController(MasterController):
                 result = self._master_communicator.do_command(master_api.read_input_module(self._master_version), {'input_module_nr': i})
                 module_status = result['input_status']
                 # module_status byte contains bits for each individual input, use mask and bitshift to get status
-                for n in xrange(8):
+                for n in range(8):
                     input_nr = i * 8 + n
                     input_status = module_status & (1 << n) != 0
                     data = {'input': input_nr, 'status': input_status}
@@ -413,21 +444,24 @@ class MasterClassicController(MasterController):
             {'action_type': master_api.BA_LIGHT_TOGGLE, 'action_number': output_id}
         )
 
-    def load_output(self, output_id, fields=None):
-        return self._eeprom_controller.read(eeprom_models.OutputConfiguration, output_id, fields).serialize()
+    def load_output(self, output_id):  # type: (int) -> OutputDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.OutputConfiguration, output_id)
+        return OutputMapper.orm_to_dto(classic_object)
 
-    def load_outputs(self, fields=None):
-        return [o.serialize() for o in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration, fields)]
+    def load_outputs(self):  # type: () -> List[OutputDTO]
+        return [OutputMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration)]
 
-    def save_outputs(self, outputs, fields=None):
-        self._eeprom_controller.write_batch([eeprom_models.OutputConfiguration.deserialize(output)
-                                             for output in outputs])
-        for output in outputs:
-            output_nr, timer = output['id'], output.get('timer')
-            if timer is not None:
+    def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
+        batch = []
+        for output, fields in outputs:
+            batch.append(OutputMapper.dto_to_orm(output, fields))
+        self._eeprom_controller.write_batch(batch)
+        for output, _ in outputs:
+            if output.timer is not None:
                 self._master_communicator.do_command(
                     master_api.write_timer(),
-                    {'id': output_nr, 'timer': timer}
+                    {'id': output.id, 'timer': output.timer}
                 )
         self._output_last_updated = 0
 
@@ -449,14 +483,14 @@ class MasterClassicController(MasterController):
         for callback in self._event_callbacks:
             event_data = {'id': input_id,
                           'status': status,
-                          'location': {'room_id': input_configuration.get('room', 255)}}
+                          'location': {'room_id': Toolbox.denonify(input_configuration.room, 255)}}
             callback(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
 
     def _refresh_outputs(self):
-        self._output_config = self.load_outputs()
+        self._output_config = {output_dto.id: output_dto for output_dto in self.load_outputs()}
         number_of_outputs = self._master_communicator.do_command(master_api.number_of_io_modules())['out'] * 8
         outputs = []
-        for i in xrange(number_of_outputs):
+        for i in range(number_of_outputs):
             outputs.append(self._master_communicator.do_command(master_api.read_output(), {'id': i}))
         self._output_status.full_update(outputs)
         self._output_last_updated = time.time()
@@ -465,12 +499,12 @@ class MasterClassicController(MasterController):
         """ Executed by the Output Status tracker when an output changed state """
         event_status = {'on': status['on']}
         # 1. only add value to status when handling dimmers
-        if self._output_config[output_id]['module_type'] in ['d', 'D']:
+        if self._output_config[output_id].module_type in ['d', 'D']:
             event_status['value'] = status['value']
         # 2. format response data
         event_data = {'id': output_id,
                       'status': event_status,
-                      'location': {'room_id': self._output_config[output_id]['room']}}
+                      'location': {'room_id': Toolbox.denonify(self._output_config[output_id].room, 255)}}
         for callback in self._event_callbacks:
             callback(MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE, data=event_data))
 
@@ -480,107 +514,149 @@ class MasterClassicController(MasterController):
 
     # Shutters
 
-    def shutter_up(self, shutter_id):
+    def shutter_up(self, shutter_id):  # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_SHUTTER_UP, shutter_id)
 
-    def shutter_down(self, shutter_id):
+    def shutter_down(self, shutter_id):  # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_SHUTTER_DOWN, shutter_id)
 
-    def shutter_stop(self, shutter_id):
+    def shutter_stop(self, shutter_id):  # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_SHUTTER_STOP, shutter_id)
 
-    def shutter_group_up(self, group_id):
-        """ Make a shutter group go up. The shutters stop automatically when the up position is
-        reached (after the predefined number of seconds).
+    def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.ShutterConfiguration, shutter_id)
+        return ShutterMapper.orm_to_dto(classic_object)
 
-        :param group_id: The id of the shutter group.
-        :type group_id: Byte
-        :returns:'status': 'OK'.
+    def load_shutters(self):  # type: () -> List[ShutterDTO]
+        return [ShutterMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.ShutterConfiguration)]
+
+    def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
+        batch = []
+        for shutter, fields in shutters:
+            batch.append(ShutterMapper.dto_to_orm(shutter, fields))
+        self._eeprom_controller.write_batch(batch)
+
+    def _refresh_shutter_states(self):
+        self._shutter_config = {shutter.id: shutter for shutter in self.load_shutters()}
+        number_of_shutter_modules = self._master_communicator.do_command(master_api.number_of_io_modules())['shutter']
+        for module_id in range(number_of_shutter_modules):
+            self._update_from_master_state(
+                {'module_nr': module_id,
+                 'status': self._master_communicator.do_command(master_api.shutter_status(self._master_version),
+                                                                {'module_nr': module_id})['status']}
+            )
+        self._shutters_last_updated = time.time()
+
+    def _on_master_shutter_change(self, data):
+        self._update_from_master_state(data)
+
+    def _update_from_master_state(self, data):
         """
-        if group_id < 0 or group_id > 30:
-            raise ValueError('id not in [0, 30]: %d' % group_id)
+        Called with Master event information.
+        """
+        module_id = data['module_nr']
+        new_state = self._interprete_output_states(module_id, data['status'])
+        if new_state is None:
+            return  # Failsafe for master event handler
+        for i in range(4):
+            shutter_id = module_id * 4 + i
+            for callback in self._event_callbacks:
+                event_data = {'id': shutter_id,
+                              'status': new_state[i],
+                              'location': {'room_id': self._shutter_config[shutter_id].room}}
+                callback(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
 
+    def _interprete_output_states(self, module_id, output_states):
+        states = []
+        for i in range(4):
+            shutter_id = module_id * 4 + i
+            if shutter_id not in self._shutter_config:
+                return  # Failsafe for master event handler
+
+            # first_up = 0 -> output 0 = up, output 1 = down
+            # first_up = 1 -> output 0 = down, output 1 = up
+            first_up = 0 if self._shutter_config[shutter_id].up_down_config == 0 else 1
+
+            up = (output_states >> (i * 2 + (1 - first_up))) & 0x1
+            down = (output_states >> (i * 2 + first_up)) & 0x1
+
+            if up == 1 and down == 0:
+                states.append(ShutterEnums.State.GOING_UP)
+            elif down == 1 and up == 0:
+                states.append(ShutterEnums.State.GOING_DOWN)
+            else:  # Both are off or - unlikely - both are on
+                states.append(ShutterEnums.State.STOPPED)
+
+        return states
+
+    def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
+        if not (0 <= shutter_group_id <= 30):
+            raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
         self._master_communicator.do_command(
             master_api.basic_action(),
-            {'action_type': master_api.BA_SHUTTER_GROUP_UP, 'action_number': id}
+            {'action_type': master_api.BA_SHUTTER_GROUP_UP, 'action_number': shutter_group_id}
         )
 
-        return {'status': 'OK'}
-
-    def shutter_group_down(self, group_id):
-        """ Make a shutter group go down. The shutters stop automatically when the down position is
-        reached (after the predefined number of seconds).
-
-        :param group_id: The id of the shutter group.
-        :type group_id: Byte
-        :returns:'status': 'OK'.
-        """
-        if group_id < 0 or group_id > 30:
-            raise ValueError('id not in [0, 30]: %d' % group_id)
-
+    def shutter_group_down(self, shutter_group_id):  # type: (int) -> None
+        if not (0 <= shutter_group_id <= 30):
+            raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
         self._master_communicator.do_command(
             master_api.basic_action(),
-            {'action_type': master_api.BA_SHUTTER_GROUP_DOWN, 'action_number': group_id}
+            {'action_type': master_api.BA_SHUTTER_GROUP_DOWN, 'action_number': shutter_group_id}
         )
 
-        return {'status': 'OK'}
-
-    def shutter_group_stop(self, group_id):
-        """ Make a shutter group stop.
-
-        :param group_id: The id of the shutter group.
-        :type group_id: Byte
-        :returns:'status': 'OK'.
-        """
-        if group_id < 0 or group_id > 30:
-            raise ValueError('id not in [0, 30]: %d' % group_id)
-
+    def shutter_group_stop(self, shutter_group_id):  # type: (int) -> None
+        if not (0 <= shutter_group_id <= 30):
+            raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
         self._master_communicator.do_command(
             master_api.basic_action(),
-            {'action_type': master_api.BA_SHUTTER_GROUP_STOP, 'action_number': group_id}
+            {'action_type': master_api.BA_SHUTTER_GROUP_STOP, 'action_number': shutter_group_id}
         )
 
-        return {'status': 'OK'}
+    def load_shutter_group(self, shutter_group_id):  # type: (int) -> ShutterGroupDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.ShutterGroupConfiguration, shutter_group_id)
+        return ShutterGroupMapper.orm_to_dto(classic_object)
 
-    def load_shutter_configuration(self, shutter_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        # TODO: work with shutter controller
-        return self._eeprom_controller.read(ShutterConfiguration, shutter_id, fields).serialize()
+    def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
+        return [ShutterGroupMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.ShutterGroupConfiguration)]
 
-    def load_shutter_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        # TODO: work with shutter controller
-        return [o.serialize() for o in self._eeprom_controller.read_all(ShutterConfiguration, fields)]
+    def save_shutter_groups(self, shutter_groups):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
+        batch = []
+        for shutter_group, fields in shutter_groups:
+            batch.append(ShutterGroupMapper.dto_to_orm(shutter_group, fields))
+        self._eeprom_controller.write_batch(batch)
 
-    def save_shutter_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        # TODO: work with shutter controller
-        self._eeprom_controller.write(ShutterConfiguration.deserialize(config))
+    # Thermostats
 
-    def save_shutter_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        # TODO: work with shutter controller
-        self._eeprom_controller.write_batch([ShutterConfiguration.deserialize(o) for o in config])
+    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.ThermostatConfiguration, thermostat_id)
+        return ThermostatMapper.orm_to_dto(classic_object)
 
-    def load_shutter_group_configuration(self, group_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        # TODO: work with shutter controller
-        return self._eeprom_controller.read(ShutterGroupConfiguration, group_id, fields).serialize()
+    def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
+        return [ThermostatMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.ThermostatConfiguration)]
 
-    def load_shutter_group_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        # TODO: work with shutter controller
-        return [o.serialize() for o in self._eeprom_controller.read_all(ShutterGroupConfiguration, fields)]
+    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+        batch = []
+        for thermostat, fields in thermostats:
+            batch.append(ThermostatMapper.dto_to_orm(thermostat, fields))
+        self._eeprom_controller.write_batch(batch)
 
-    def save_shutter_group_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        # TODO: work with shutter controller
-        self._eeprom_controller.write(ShutterGroupConfiguration.deserialize(config))
+    def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.CoolingConfiguration, thermostat_id)
+        return ThermostatMapper.orm_to_dto(classic_object)
 
-    def save_shutter_group_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        # TODO: work with shutter controller
-        self._eeprom_controller.write_batch([ShutterGroupConfiguration.deserialize(o) for o in config])
+    def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
+        return [ThermostatMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.CoolingConfiguration)]
+
+    def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+        batch = []
+        for thermostat, fields in thermostats:
+            batch.append(ThermostatMapper.dto_to_orm(thermostat, fields))
+        self._eeprom_controller.write_batch(batch)
 
     # Virtual modules
 
@@ -867,11 +943,10 @@ class MasterClassicController(MasterController):
 
         self._module_log.append((log_level, message))
 
-    def module_discover_start(self, timeout):
-        # type: (int) -> Dict[str,Any]
+    def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
 
-        ret = self._master_communicator.do_command(master_api.module_discover_start())
+        self._master_communicator.do_command(master_api.module_discover_start())
 
         if self._discover_mode_timer is not None:
             self._discover_mode_timer.cancel()
@@ -880,28 +955,26 @@ class MasterClassicController(MasterController):
 
         self._module_log = []
 
-        return {'status': ret['resp']}
-
-    def module_discover_stop(self):
-        # type: () -> Dict[str,Any]
+    def module_discover_stop(self):  # type: () -> None
         if self._discover_mode_timer is not None:
             self._discover_mode_timer.cancel()
             self._discover_mode_timer = None
 
         self._eeprom_controller.invalidate_cache()
         self._eeprom_controller.dirty = True
-        ret = self._master_communicator.do_command(master_api.module_discover_stop())
+        self._master_communicator.do_command(master_api.module_discover_stop())
+
+        for callback in self._event_callbacks:
+            callback(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
+
         self._module_log = []
-        return {'status': ret['resp']}
 
-    def module_discover_status(self):
-        # type: () -> Dict[str,bool]
-        return {'running': self._discover_mode_timer is not None}
+    def module_discover_status(self):  # type: () -> bool
+        return self._discover_mode_timer is not None
 
-    def get_module_log(self):
-        # type: () -> Dict[str,Any]
+    def get_module_log(self):  # type: () -> List[Tuple[str, str]]
         (log, self._module_log) = (self._module_log, [])
-        return {'log': log}
+        return log
 
     # Error functions
 
@@ -941,16 +1014,14 @@ class MasterClassicController(MasterController):
         )
         return dict()
 
-    # Actions
+    # (Group)Actions
 
-    def do_basic_action(self, action_type, action_number):
-        """ Execute a basic action.
+    def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
+        """
+        Execute a basic action.
 
         :param action_type: The type of the action as defined by the master api.
-        :type action_type: Integer [0, 254]
-        :param action_number: The number provided to the basic action, its meaning depends on the \
-        action_type.
-        :type action_number: Integer [0, 254]
+        :param action_number: The number provided to the basic action, its meaning depends on the action_type.
         """
         if action_type < 0 or action_type > 254:
             raise ValueError('action_type not in [0, 254]: %d' % action_type)
@@ -964,15 +1035,7 @@ class MasterClassicController(MasterController):
              'action_number': action_number}
         )
 
-        return dict()
-
-    def do_group_action(self, group_action_id):
-        """ Execute a group action.
-
-        :param group_action_id: The id of the group action
-        :type group_action_id: Integer (0 - 159)
-        :returns: empty dict.
-        """
+    def do_group_action(self, group_action_id):  # type: (int) -> None
         if group_action_id < 0 or group_action_id > 159:
             raise ValueError('group_action_id not in [0, 160]: %d' % group_action_id)
 
@@ -982,25 +1045,21 @@ class MasterClassicController(MasterController):
              'action_number': group_action_id}
         )
 
-        return dict()
+    def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.GroupActionConfiguration, group_action_id)
+        return GroupActionMapper.orm_to_dto(classic_object)
 
-    # Actions functions
+    def load_group_actions(self):  # type: () -> List[GroupActionDTO]
+        return [GroupActionMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.GroupActionConfiguration)]
 
-    def load_group_action_configuration(self, group_action_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        return self._eeprom_controller.read(GroupActionConfiguration, group_action_id, fields).serialize()
+    def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
+        batch = []
+        for group_action, fields in group_actions:
+            batch.append(GroupActionMapper.dto_to_orm(group_action, fields))
+        self._eeprom_controller.write_batch(batch)
 
-    def load_group_action_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        return [o.serialize() for o in self._eeprom_controller.read_all(GroupActionConfiguration, fields)]
-
-    def save_group_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(GroupActionConfiguration.deserialize(config))
-
-    def save_group_action_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        self._eeprom_controller.write_batch([GroupActionConfiguration.deserialize(o) for o in config])
+    # Schedules
 
     def load_scheduled_action_configuration(self, scheduled_action_id, fields=None):
         # type: (int, Any) -> Dict[str,Any]
@@ -1054,24 +1113,6 @@ class MasterClassicController(MasterController):
         # type: (List[Dict[str,Any]]) -> None
         self._eeprom_controller.write_batch([CanLedConfiguration.deserialize(o) for o in config])
 
-    # Room functions
-
-    def load_room_configuration(self, room_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        return self._eeprom_controller.read(RoomConfiguration, room_id, fields).serialize()
-
-    def load_room_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        return [o.serialize() for o in self._eeprom_controller.read_all(RoomConfiguration, fields)]
-
-    def save_room_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(RoomConfiguration.deserialize(config))
-
-    def save_room_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        self._eeprom_controller.write_batch([RoomConfiguration.deserialize(o) for o in config])
-
     # All lights off functions
 
     def set_all_lights_off(self):
@@ -1118,7 +1159,7 @@ class MasterClassicController(MasterController):
     def get_sensors_temperature(self):
         temperatures = []
         sensor_list = self._master_communicator.do_command(master_api.sensor_temperature_list())
-        for i in xrange(32):
+        for i in range(32):
             temperatures.append(sensor_list['tmp{0}'.format(i)].get_temperature())
         return temperatures
 
@@ -1130,7 +1171,7 @@ class MasterClassicController(MasterController):
     def get_sensors_humidity(self):
         humidities = []
         sensor_list = self._master_communicator.do_command(master_api.sensor_humidity_list())
-        for i in xrange(32):
+        for i in range(32):
             humidities.append(sensor_list['hum{0}'.format(i)].get_humidity())
         return humidities
 
@@ -1142,7 +1183,7 @@ class MasterClassicController(MasterController):
     def get_sensors_brightness(self):
         brightnesses = []
         sensor_list = self._master_communicator.do_command(master_api.sensor_brightness_list())
-        for i in xrange(32):
+        for i in range(32):
             brightnesses.append(sensor_list['bri{0}'.format(i)].get_brightness())
         return brightnesses
 
@@ -1159,11 +1200,36 @@ class MasterClassicController(MasterController):
         )
         return dict()
 
-    def load_sensor(self, sensor_id, fields=None):
-        return self._eeprom_controller.read(eeprom_models.SensorConfiguration, sensor_id, fields).serialize()
+    def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.SensorConfiguration, sensor_id)
+        return SensorMapper.orm_to_dto(classic_object)
 
-    def load_sensors(self, fields=None):
-        return [o.serialize() for o in self._eeprom_controller.read_all(eeprom_models.SensorConfiguration, fields)]
+    def load_sensors(self):  # type: () -> List[SensorDTO]
+        return [SensorMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.SensorConfiguration)]
 
-    def save_sensors(self, config):
-        self._eeprom_controller.write_batch([eeprom_models.SensorConfiguration.deserialize(o) for o in config])
+    def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
+        batch = []
+        for sensor, fields in sensors:
+            batch.append(SensorMapper.dto_to_orm(sensor, fields))
+        self._eeprom_controller.write_batch(batch)
+
+    # PulseCounters
+
+    def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.PulseCounterConfiguration, pulse_counter_id)
+        return PulseCounterMapper.orm_to_dto(classic_object)
+
+    def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
+        return [PulseCounterMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.PulseCounterConfiguration)]
+
+    def save_pulse_counters(self, pulse_counters):  # type: (List[Tuple[PulseCounterDTO, List[str]]]) -> None
+        batch = []
+        for pulse_counter, fields in pulse_counters:
+            batch.append(PulseCounterMapper.dto_to_orm(pulse_counter, fields))
+        self._eeprom_controller.write_batch(batch)
+
+    def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
+        out_dict = self._master_communicator.do_command(master_api.pulse_list())
+        return {i: out_dict['pv{0}'.format(i)] for i in range(24)}

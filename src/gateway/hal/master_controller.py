@@ -15,61 +15,24 @@
 """
 Module for communicating with the Master
 """
-from exceptions import NotImplementedError
-
-import ujson as json
+from __future__ import absolute_import
+from gateway.dto import (
+    OutputDTO, InputDTO,
+    ShutterDTO, ShutterGroupDTO,
+    ThermostatDTO, SensorDTO,
+    PulseCounterDTO, GroupActionDTO
+)
+from gateway.hal.master_event import MasterEvent
 
 if False:  # MYPY
-    from typing import Any, Callable, Dict, List
-
-
-class MasterEvent(object):
-    """
-    MasterEvent object
-
-    Data formats:
-    * OUTPUT CHANGE
-      {'id': int,                     # Output ID
-       'status': {'on': bool,         # On/off
-                  'value': int},      # Optional, dimmer value
-       'location': {'room_id': int}}  # Room ID
-    """
-
-    class Types(object):
-        INPUT_CHANGE = 'INPUT_CHANGE'
-        OUTPUT_CHANGE = 'OUTPUT_CHANGE'
-
-    def __init__(self, event_type, data):
-        self.type = event_type
-        self.data = data
-
-    def serialize(self):
-        return {'type': self.type,
-                'data': self.data}
-
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        return self.type == other.type \
-            and self.data == other.data
-
-    def __repr__(self):
-        # type: () -> str
-        return '<MasterEvent {} {}>'.format(self.type, self.data)
-
-    def __str__(self):
-        return json.dumps(self.serialize())
-
-    @staticmethod
-    def deserialize(data):
-        return MasterEvent(event_type=data['type'],
-                           data=data['data'])
+    from typing import Any, Callable, Dict, List, Tuple
 
 
 class MasterController(object):
 
     def __init__(self, master_communicator):
         self._master_communicator = master_communicator
-        self._event_callbacks = []  # type: List[Callable[[MasterEvent],None]]
+        self._event_callbacks = []  # type: List[Callable[[MasterEvent], None]]
 
     #######################
     # Internal management #
@@ -88,7 +51,7 @@ class MasterController(object):
     # Subscriptions #
     #################
 
-    def subscribe_event(self, callback):
+    def subscribe_event(self, callback):  # type: (Callable[[MasterEvent], None]) -> None
         self._event_callbacks.append(callback)
 
     ##############
@@ -122,13 +85,13 @@ class MasterController(object):
     def get_input_module_type(self, input_module_id):
         raise NotImplementedError()
 
-    def load_input(self, input_id, fields=None):
+    def load_input(self, input_id):  # type: (int) -> InputDTO
         raise NotImplementedError()
 
-    def load_inputs(self, fields=None):
+    def load_inputs(self):  # type: () -> List[InputDTO]
         raise NotImplementedError()
 
-    def save_inputs(self, inputs, fields=None):
+    def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
         raise NotImplementedError()
 
     def get_inputs_with_status(self):
@@ -147,13 +110,13 @@ class MasterController(object):
     def toggle_output(self, output_id):
         raise NotImplementedError()
 
-    def load_output(self, output_id, fields=None):
+    def load_output(self, output_id):  # type: (int) -> OutputDTO
         raise NotImplementedError()
 
-    def load_outputs(self, fields=None):
+    def load_outputs(self):  # type: () -> List[OutputDTO]
         raise NotImplementedError()
 
-    def save_outputs(self, outputs, fields=None):
+    def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
         raise NotImplementedError()
 
     def get_output_status(self, output_id):
@@ -173,42 +136,51 @@ class MasterController(object):
     def shutter_stop(self, shutter_id):
         raise NotImplementedError()
 
+    def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
+        raise NotImplementedError()
+
+    def load_shutters(self):  # type: () -> List[ShutterDTO]
+        raise NotImplementedError()
+
+    def save_shutters(self, config):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
+        raise NotImplementedError()
+
     def shutter_group_down(self, group_id):
         raise NotImplementedError()
 
     def shutter_group_up(self, group_id):
         raise NotImplementedError()
 
-    def load_shutter_configuration(self, shutter_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
+    def shutter_group_stop(self, group_id):
         raise NotImplementedError()
 
-    def load_shutter_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
+    def load_shutter_group(self, shutter_group_id):  # type: (int) -> ShutterGroupDTO
         raise NotImplementedError()
 
-    def save_shutter_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
+    def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
         raise NotImplementedError()
 
-    def save_shutter_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
+    def save_shutter_groups(self, config):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
         raise NotImplementedError()
 
-    def load_shutter_group_configuration(self, group_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
+    # Thermostats
+
+    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         raise NotImplementedError()
 
-    def load_shutter_group_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
+    def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
         raise NotImplementedError()
 
-    def save_shutter_group_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
+    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
         raise NotImplementedError()
 
-    def save_shutter_group_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
+    def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+        raise NotImplementedError()
+
+    def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
+        raise NotImplementedError()
+
+    def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
         raise NotImplementedError()
 
     # Sensors
@@ -234,13 +206,27 @@ class MasterController(object):
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         raise NotImplementedError()
 
-    def load_sensor(self, sensor_id, fields=None):
+    def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
         raise NotImplementedError()
 
-    def load_sensors(self, fields=None):
+    def load_sensors(self):  # type: () -> List[SensorDTO]
         raise NotImplementedError()
 
-    def save_sensors(self, config):
+    def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
+        raise NotImplementedError()
+
+    # PulseCounters
+
+    def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
+        raise NotImplementedError()
+
+    def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
+        raise NotImplementedError()
+
+    def save_pulse_counters(self, pulse_counters):  # type: (List[Tuple[PulseCounterDTO, List[str]]]) -> None
+        raise NotImplementedError()
+
+    def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
         raise NotImplementedError()
 
     # Virtual modules
@@ -296,20 +282,16 @@ class MasterController(object):
 
     # Module functions
 
-    def module_discover_start(self, timeout):
-        # type: (int) -> Dict[str,Any]
+    def module_discover_start(self, timeout):  # type: (int) -> None
         raise NotImplementedError()
 
-    def module_discover_stop(self):
-        # type: () -> Dict[str,Any]
+    def module_discover_stop(self):  # type: () -> None
         raise NotImplementedError()
 
-    def module_discover_status(self):
-        # type: () -> Dict[str,bool]
+    def module_discover_status(self):  # type: () -> bool
         raise NotImplementedError()
 
-    def get_module_log(self):
-        # type: () -> Dict[str,Any]
+    def get_module_log(self):  # type: () -> List[Tuple[str, str]]
         raise NotImplementedError()
 
     # Error functions
@@ -326,29 +308,24 @@ class MasterController(object):
     def set_status_leds(self, status):
         raise NotImplementedError()
 
-    # Actions functions
+    # (Group)Actions
 
-    def do_basic_action(self, action_type, action_number):
+    def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
         raise NotImplementedError()
 
-    def do_group_action(self, group_action_id):
+    def do_group_action(self, group_action_id):  # type: (int) -> None
         raise NotImplementedError()
 
-    def load_group_action_configuration(self, group_action_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
+    def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
         raise NotImplementedError()
 
-    def load_group_action_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
+    def load_group_actions(self):  # type: () -> List[GroupActionDTO]
         raise NotImplementedError()
 
-    def save_group_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
+    def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
         raise NotImplementedError()
 
-    def save_group_action_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        raise NotImplementedError()
+    # Schedule
 
     def load_scheduled_action_configuration(self, scheduled_action_id, fields=None):
         # type: (int, Any) -> Dict[str,Any]
@@ -399,24 +376,6 @@ class MasterController(object):
         raise NotImplementedError()
 
     def save_can_led_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        raise NotImplementedError()
-
-    # Room functions
-
-    def load_room_configuration(self, room_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        raise NotImplementedError()
-
-    def load_room_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        raise NotImplementedError()
-
-    def save_room_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        raise NotImplementedError()
-
-    def save_room_configurations(self, config):
         # type: (List[Dict[str,Any]]) -> None
         raise NotImplementedError()
 

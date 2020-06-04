@@ -15,6 +15,7 @@
 """
 Tool to bootload the power modules from the command line.
 """
+from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 
@@ -25,7 +26,7 @@ import argparse
 import logging
 import time
 from ioc import Injectable
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 from serial import Serial
 from serial_utils import RS485, CommunicationTimedOutException
 from power.power_communicator import PowerCommunicator
@@ -131,11 +132,11 @@ def get_module_firmware_version(module_address, version, power_communicator):
     :param version: The version
     :param power_communicator: Communication with the power modules.
     """
-    raw_version = power_communicator.do_command(module_address, power_api.get_version(version))[0]
+    raw_version = power_communicator.do_command(module_address, power_api.get_version(version))
     if version == power_api.P1_CONCENTRATOR:
         return '{0}.{1}.{2} ({3})'.format(raw_version[1], raw_version[2], raw_version[3], raw_version[0])
     else:
-        cleaned_version = raw_version.split('\x00', 1)[0]
+        cleaned_version = raw_version[0].split('\x00', 1)[0]
         parsed_version = cleaned_version.split('_')
         if len(parsed_version) != 4:
             return cleaned_version
@@ -292,9 +293,9 @@ def main():
 
     if args.scan:
         logger.info('Scanning addresses 0-255...')
-        for address in xrange(256):
+        for address in range(256):
             for module_type, version in {'E/P': power_api.ENERGY_MODULE,
-                                         'C': power_api.P1_CONCENTRATOR}.iteritems():
+                                         'C': power_api.P1_CONCENTRATOR}.items():
                 try:
                     logger.info('{0}{1} - Version: {2}'.format(
                         module_type, address, get_module_firmware_version(address, version, power_communicator)

@@ -68,7 +68,7 @@ class _InjectionSentinel(object):
         self._DO_NOT_USE_INJECTION_SENTINEL()
 
 
-IN = INJECTED = _InjectionSentinel()
+IN = INJECTED = _InjectionSentinel()  # type: Any
 
 
 class _Scope(object):
@@ -82,8 +82,8 @@ class _Scope(object):
     @property
     def name(self):
         if self.func:
-            parent = (getattr(self.func, 'im_class', None) or
-                      getattr(self.func, '__module__'))
+            parent = getattr(self.func, 'im_class', None) or \
+                getattr(self.func, '__module__')
             return '%s.%s' % (parent, self.func.__name__)
         elif self is _ROOT_SCOPE:
             return 'Root'
@@ -196,7 +196,8 @@ def _FillInInjections(injections, arguments):
     injection_scope_map = _GetCurrentInjectionInfo()
 
     for injection in injections:
-        if injection in arguments: continue
+        if injection in arguments:
+            continue
         try:
             if _IN_TEST_MODE:
                 if _TEST_SCOPE is None:
@@ -252,18 +253,19 @@ def _CreateInjectWrapper(f, injections):
         return f
 
     @functools.wraps(f)
-    def Wrapper(*args, **kwargs):
+    def _Wrapper(*args, **kwargs):
         logging.debug('Injecting %r with %r - %r', f.__name__, injections, kwargs)
         _FillInInjections(injections, kwargs)
         return f(*args, **kwargs)
 
+    Wrapper = _Wrapper  # type: Any
     Wrapper.ioc_wrapper = f
     return Wrapper
 
 
 def _CreateSingletonInjectableWrapper(f, injections):
     @functools.wraps(f)
-    def Wrapper(*args, **kwargs):
+    def _Wrapper(*args, **kwargs):
         logging.debug(
             'Injecting singleton %r with %r - %r', f.__name__, injections, kwargs)
         for scope in _MyScopes():
@@ -277,6 +279,7 @@ def _CreateSingletonInjectableWrapper(f, injections):
             'Attaching singleton %r to scope %s', f.__name__, dep_scope.name)
         return dep_scope.singletons[f.__name__]
 
+    Wrapper = _Wrapper  # type: Any
     Wrapper.ioc_wrapper = f
     return Wrapper
 
@@ -501,7 +504,7 @@ def Warmup():
 
 def DumpInjectionStack():
     for scope in _MyScopes():
-        print scope
+        print(scope)
 
 
 def SetTestMode(enabled=True):
@@ -528,7 +531,7 @@ def SetUpTestInjections(**kwargs):
     """
     global _TEST_SCOPE
     _TEST_SCOPE = _TEST_SCOPE or _Scope(None)
-    for name, value in kwargs.iteritems():
+    for name, value in kwargs.items():
         _TEST_SCOPE.Injectable(_CreateCallable(name, value))
 
 

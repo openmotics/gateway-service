@@ -17,6 +17,7 @@ Contains PowerCommandClass that describes a command to the power modules. The Po
 class is used to create the power_api.
 """
 
+from __future__ import absolute_import
 import struct
 
 CRC_TABLE = [0, 49, 98, 83, 196, 245, 166, 151, 185, 136, 219, 234, 125, 76, 31, 46, 67, 114, 33,

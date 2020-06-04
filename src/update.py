@@ -14,12 +14,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """ The update modules provides the update functionality. """
 
+from __future__ import absolute_import
 import sys
 import hashlib
 import traceback
 import subprocess
 
-from ConfigParser import ConfigParser
+from six.moves.configparser import ConfigParser
 
 from constants import get_config_file, get_update_script, get_update_output_file, get_update_file
 
@@ -84,7 +85,7 @@ def update(version, md5_server):
 def main():
     """ The main function. """
     if len(sys.argv) != 3:
-        print 'Usage: python ' + __file__ + ' version md5sum'
+        print('Usage: python ' + __file__ + ' version md5sum')
         sys.exit(1)
     else:
         (version, md5_sum) = (sys.argv[1], sys.argv[2])

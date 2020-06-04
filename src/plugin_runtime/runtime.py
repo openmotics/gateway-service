@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import os
 import sys
 import traceback
@@ -10,7 +11,7 @@ from platform_utils import System
 System.import_libs()
 
 from toolbox import PluginIPCStream
-from gateway.observer import Event
+from gateway.events import GatewayEvent
 from plugin_runtime import base
 from plugin_runtime.utils import get_plugin_class, check_plugin, get_special_methods
 from plugin_runtime.interfaces import has_interface
@@ -74,7 +75,7 @@ class PluginRuntime:
                             'shutter_status': self._shutter_status_receivers,
                             'receive_events': self._event_receivers}
 
-        for method_attribute, target in receiver_mapping.iteritems():
+        for method_attribute, target in receiver_mapping.items():
             for method in get_special_methods(self._plugin, method_attribute):
                 target.append(method)
 
@@ -198,7 +199,7 @@ class PluginRuntime:
         self._stopped = True
 
     def _handle_input_status(self, event_json):
-        event = Event.deserialize(event_json)
+        event = GatewayEvent.deserialize(event_json)
         # get relevant event details
         input_id = event.data['id']
         status = event.data['status']

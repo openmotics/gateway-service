@@ -12,6 +12,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import absolute_import
 import logging
 from datetime import datetime, timedelta
 
@@ -25,7 +26,6 @@ logger = logging.getLogger('openmotics')
 def test_health_check(toolbox):
     data = toolbox.dut.get('/health_check')
     assert 'health' in data
-    assert data['health']['led_service']['state']
     assert data['health']['vpn_service']['state']
     assert data['health']['openmotics']['state']
 
@@ -57,7 +57,7 @@ def test_status_timezone(toolbox, set_timezone):
     assert 'timezone' in data
     assert data['timezone'] == 'UTC'
 
-    now = datetime.strptime(datetime.now().strftime('%H:%M'), '%H:%M')
+    now = datetime.strptime(datetime.utcnow().strftime('%H:%M'), '%H:%M')
     data = toolbox.dut.get('/get_status')
     assert 'time' in data
     time = datetime.strptime(data['time'], '%H:%M')

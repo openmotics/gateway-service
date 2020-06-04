@@ -16,18 +16,30 @@
 This module collects OpenMotics metrics and makes them available to the MetricsController
 """
 
+from __future__ import absolute_import
 import logging
 import time
 from collections import deque
 from threading import Event, Thread
 
 from gateway.maintenance_communicator import InMaintenanceModeException
-from gateway.observer import Event as ObserverEvent
+from gateway.events import GatewayEvent
 from ioc import INJECTED, Inject, Injectable, Singleton
-from models import Database
+from gateway.models import Database
 from platform_utils import Hardware
 from power import power_api
 from serial_utils import CommunicationTimedOutException
+import six
+
+if False:  # MYPY
+    from typing import Dict, Any, List, Tuple
+    from gateway.input_controller import InputController
+    from gateway.output_controller import OutputController
+    from gateway.sensor_controller import SensorController
+    from gateway.thermostat.thermostat_controller import ThermostatController
+    from gateway.pulse_counter_controller import PulseCounterController
+    from gateway.gateway_api import GatewayApi
+    from gateway.dto import InputDTO, SensorDTO, OutputDTO, PulseCounterDTO
 
 logger = logging.getLogger("openmotics")
 
@@ -39,25 +51,33 @@ class MetricsCollector(object):
     The Metrics Collector collects OpenMotics metrics and makes them available.
     """
 
+    OUTPUT_MODULE_TYPES = {'o': 'output',
+                           'O': 'output',
+                           'd': 'dimmer',
+                           'D': 'dimmer'}
+    OUTPUT_OUTPUT_TYPES = {0: 'outlet',
+                           1: 'valve',
+                           2: 'alarm',
+                           3: 'appliance',
+                           4: 'pump',
+                           5: 'hvac',
+                           6: 'generic',
+                           7: 'motor',
+                           8: 'ventilation',
+                           255: 'light'}
+
     @Inject
-    def __init__(self, gateway_api=INJECTED, pulse_controller=INJECTED, thermostat_controller=INJECTED):
-        """
-        :param gateway_api: Gateway API
-        :type gateway_api: gateway.gateway_api.GatewayApi
-        :param pulse_controller: Pulse Controller
-        :type pulse_controller: gateway.pulses.PulseCounterController
-        :param thermostat_controller: Thermostat Controller
-        :type thermostat_controller: gateway.thermostat.thermostat_controller.ThermostatController
-        """
+    def __init__(self, gateway_api=INJECTED, pulse_counter_controller=INJECTED, thermostat_controller=INJECTED,
+                 output_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED):
         self._start = time.time()
         self._last_service_uptime = 0
         self._stopped = True
         self._metrics_controller = None
         self._plugin_controller = None
-        self._environment = {'inputs': {},
-                             'outputs': {},
-                             'sensors': {},
-                             'pulse_counters': {}}
+        self._environment_inputs = {}  # type: Dict[int, InputDTO]
+        self._environment_outputs = {}  # type: Dict[int, Tuple[OutputDTO, Dict[str, int]]]
+        self._environment_sensors = {}  # type: Dict[int, SensorDTO]
+        self._environment_pulse_counters = {}  # type: Dict[int, PulseCounterDTO]
         self._min_intervals = {'system': 60,
                                'output': 60,
                                'sensor': 5,
@@ -67,17 +87,20 @@ class MetricsCollector(object):
                                'energy': 5,
                                'energy_analytics': 300}
         self.intervals = {metric_type: 900 for metric_type in self._min_intervals}
-        self._plugin_intervals = {metric_type: [] for metric_type in self._min_intervals}
-        self._websocket_intervals = {metric_type: {} for metric_type in self._min_intervals}
+        self._plugin_intervals = {metric_type: [] for metric_type in self._min_intervals}  # type: Dict[str, List[Any]]
+        self._websocket_intervals = {metric_type: {} for metric_type in self._min_intervals}  # type: Dict[str, Dict[Any, Any]]
         self._cloud_intervals = {metric_type: 900 for metric_type in self._min_intervals}
         self._sleepers = {metric_type: {'event': Event(),
                                         'start': 0,
                                         'end': 0} for metric_type in self._min_intervals}
 
-        self._gateway_api = gateway_api
-        self._thermostat_controller = thermostat_controller
-        self._pulse_controller = pulse_controller
-        self._metrics_queue = deque()
+        self._gateway_api = gateway_api  # type: GatewayApi
+        self._thermostat_controller = thermostat_controller  # type: ThermostatController
+        self._pulse_counter_controller = pulse_counter_controller  # type: PulseCounterController
+        self._output_controller = output_controller  # type: OutputController
+        self._input_controller = input_controller  # type: InputController
+        self._sensor_controller = sensor_controller  # type: SensorController
+        self._metrics_queue = deque()  # type: deque
 
     def start(self):
         self._start = time.time()
@@ -174,7 +197,7 @@ class MetricsCollector(object):
 
     def _sleep_manager(self):
         while True:
-            for sleep_data in self._sleepers.itervalues():
+            for sleep_data in self._sleepers.values():
                 if not sleep_data['event'].is_set() and sleep_data['end'] < time.time():
                     sleep_data['event'].set()
             time.sleep(0.1)
@@ -205,38 +228,44 @@ class MetricsCollector(object):
             time.sleep(sleep)
 
     def process_observer_event(self, event):
-        # type: (ObserverEvent) -> None
-        if event.type == ObserverEvent.Types.OUTPUT_CHANGE:
+        # type: (GatewayEvent) -> None
+        if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             output_id = event.data['id']
-            output = self._environment['outputs'].get(output_id)
-            if output is not None:
-                output.update({'status': 1 if event.data['status']['on'] else 0,
-                               'dimmer': int(event.data['status'].get('value', 0))})
-                self._process_outputs([output_id], 'output')
-        if event.type == ObserverEvent.Types.INPUT_CHANGE:
+            output_info = self._environment_outputs.get(output_id)
+            if output_info is None:
+                return
+            output_dto, output_status = output_info
+            output_status.update({'status': 1 if event.data['status']['on'] else 0,
+                                  'dimmer': int(event.data['status'].get('value', 0))})
+            self._process_outputs([output_id], 'output')
+        if event.type == GatewayEvent.Types.INPUT_CHANGE:
             event_id = event.data['id']
             self._process_input(event_id, event.data.get('status'))
 
     def _process_outputs(self, output_ids, metric_type):
         try:
             now = time.time()
-            outputs = self._environment['outputs']
+            outputs = self._environment_outputs
             for output_id in output_ids:
-                output_name = outputs[output_id].get('name')
-                status = outputs[output_id].get('status')
-                dimmer = outputs[output_id].get('dimmer')
+                output_info = outputs.get(output_id)
+                if output_info is None:
+                    continue
+                output_dto, output_status = output_info
+                output_name = output_dto.name
+                status = output_status.get('status')
+                dimmer = output_status.get('dimmer')
                 if output_name != '' and status is not None and dimmer is not None:
-                    if outputs[output_id]['module_type'] == 'output':
+                    if output_dto.module_type in ['O', 'o']:
                         level = 100
                     else:
                         level = dimmer
                     if status == 0:
                         level = 0
                     tags = {'id': output_id,
-                            'name': output_name}
-                    for key in ['module_type', 'type', 'floor']:
-                        if key in outputs[output_id]:
-                            tags[key] = outputs[output_id][key]
+                            'name': output_name,
+                            'module_type': MetricsCollector.OUTPUT_MODULE_TYPES[output_dto.module_type],
+                            'type': MetricsCollector.OUTPUT_OUTPUT_TYPES[output_dto.output_type],
+                            'floor': output_dto.floor}
                     self._enqueue_metrics(metric_type=metric_type,
                                           values={'value': int(level)},
                                           tags=tags,
@@ -247,10 +276,10 @@ class MetricsCollector(object):
     def _process_input(self, input_id, status):
         try:
             now = time.time()
-            inputs = self._environment['inputs']
+            inputs = self._environment_inputs
             if input_id not in inputs:
                 return
-            input_name = inputs[input_id]['name']
+            input_name = inputs[input_id].name
             if input_name != '':
                 tags = {'type': 'input',
                         'id': input_id,
@@ -344,14 +373,14 @@ class MetricsCollector(object):
                         logger.error('Error loading network metrics: {0}'.format(ex))
 
                 try:
-                    for key, val in Hardware.read_mmc_ext_csd():
+                    for key, val in Hardware.read_mmc_ext_csd().items():
                         values['disk_{}'.format(key)] = val
                 except Exception as ex:
                     logger.error('Error loading disk eMMC metrics: {0}'.format(ex))
 
                 # get database metrics
                 try:
-                    for model, counter in Database.get_metrics().iteritems():
+                    for model, counter in six.iteritems(Database.get_metrics()):
                         try:
                             key = 'db_{0}'.format(model)
                             values[key] = int(counter)
@@ -419,17 +448,18 @@ class MetricsCollector(object):
                 result = self._gateway_api.get_outputs_status()
                 for output in result:
                     output_id = output['id']
-                    if output_id not in self._environment['outputs']:
+                    if output_id not in self._environment_outputs:
                         continue
-                    self._environment['outputs'][output_id]['status'] = output['status']
-                    self._environment['outputs'][output_id]['dimmer'] = output['dimmer']
+                    output_dto, output_status = self._environment_outputs[output_id]
+                    output_status.update({'status': output['status'],
+                                          'dimmer': output['dimmer']})
             except CommunicationTimedOutException:
                 logger.error('Error getting output status: CommunicationTimedOutException')
             except InMaintenanceModeException:
                 logger.info('Error getting output status: InMaintenanceModeException')
             except Exception as ex:
                 logger.exception('Error getting output status: {0}'.format(ex))
-            self._process_outputs(self._environment['outputs'].keys(), metric_type)
+            self._process_outputs(list(self._environment_outputs.keys()), metric_type)
             if self._stopped:
                 return
             self._pause(start, metric_type)
@@ -442,8 +472,9 @@ class MetricsCollector(object):
                 temperatures = self._gateway_api.get_sensors_temperature_status()
                 humidities = self._gateway_api.get_sensors_humidity_status()
                 brightnesses = self._gateway_api.get_sensors_brightness_status()
-                for sensor_id, sensor in self._environment['sensors'].iteritems():
-                    name = sensor['name']
+                for sensor_id, sensor_dto in self._environment_sensors.items():
+                    name = sensor_dto.name
+                    # TODO: Add a flag to the ORM to store this "in use" metadata
                     if name == '' or name == 'NOT_IN_USE':
                         continue
                     tags = {'id': sensor_id,
@@ -553,14 +584,13 @@ class MetricsCollector(object):
             now = time.time()
             counters_data = {}
             try:
-                for counter_id, counter in self._environment['pulse_counters'].iteritems():
-                    counters_data[counter_id] = {'name': counter['name'],
-                                                 'input': counter['input']}
-                result = self._gateway_api.get_pulse_counter_status()
-                counters = result
+                for counter_id, counter_dto in self._environment_pulse_counters.items():
+                    counters_data[counter_id] = {'name': counter_dto.name,
+                                                 'input': counter_dto.input_id}
+                values = self._pulse_counter_controller.get_values()
                 for counter_id in counters_data:
-                    if len(counters) > counter_id:
-                        counters_data[counter_id]['count'] = counters[counter_id]
+                    if counter_id in values:
+                        counters_data[counter_id]['count'] = values[counter_id]
                 for counter_id in counters_data:
                     counter = counters_data[counter_id]
                     if counter['name'] != '' and counter['count'] is not None:
@@ -581,6 +611,10 @@ class MetricsCollector(object):
             self._pause(start, metric_type)
 
     def _run_power_openmotics(self, metric_type):
+        def _add_if_not_none(dictionary, field, value):
+            if value is not None:
+                dictionary[field] = float(value)
+
         while not self._stopped:
             start = time.time()
             now = time.time()
@@ -591,7 +625,7 @@ class MetricsCollector(object):
                 for power_module in result:
                     device_id = '{0}.{{0}}'.format(power_module['address'])
                     mapping[str(power_module['id'])] = device_id
-                    for i in xrange(power_api.NUM_PORTS[power_module['version']]):
+                    for i in range(power_api.NUM_PORTS[power_module['version']]):
                         power_data[device_id.format(i)] = {'name': power_module['input{0}'.format(i)]}
             except CommunicationTimedOutException:
                 logger.error('Error getting power modules: CommunicationTimedOutException')
@@ -601,15 +635,16 @@ class MetricsCollector(object):
                 logger.exception('Error getting power modules: {0}'.format(ex))
             try:
                 result = self._gateway_api.get_realtime_power()
-                for module_id, device_id in mapping.iteritems():
+                for module_id, device_id in mapping.items():
                     if module_id in result:
                         for index, entry in enumerate(result[module_id]):
+                            voltage, frequency, current, power = entry
                             if device_id.format(index) in power_data:
                                 usage = power_data[device_id.format(index)]
-                                usage.update({'voltage': entry[0],
-                                              'frequency': entry[1],
-                                              'current': entry[2],
-                                              'power': entry[3]})
+                                _add_if_not_none(usage, 'voltage', voltage)
+                                _add_if_not_none(usage, 'frequency', frequency)
+                                _add_if_not_none(usage, 'current', current)
+                                _add_if_not_none(usage, 'power', power)
             except CommunicationTimedOutException:
                 logger.error('Error getting realtime power: CommunicationTimedOutException')
             except InMaintenanceModeException:
@@ -618,14 +653,18 @@ class MetricsCollector(object):
                 logger.exception('Error getting realtime power: {0}'.format(ex))
             try:
                 result = self._gateway_api.get_total_energy()
-                for module_id, device_id in mapping.iteritems():
+                for module_id, device_id in mapping.items():
                     if module_id in result:
                         for index, entry in enumerate(result[module_id]):
+                            day, night = entry
+                            total = None
+                            if day is not None and night is not None:
+                                total = day + night
                             if device_id.format(index) in power_data:
                                 usage = power_data[device_id.format(index)]
-                                usage.update({'counter': entry[0] + entry[1],
-                                              'counter_day': entry[0],
-                                              'counter_night': entry[1]})
+                                _add_if_not_none(usage, 'counter', total)
+                                _add_if_not_none(usage, 'counter_day', day)
+                                _add_if_not_none(usage, 'counter_night', night)
             except CommunicationTimedOutException:
                 logger.error('Error getting total energy: CommunicationTimedOutException')
             except InMaintenanceModeException:
@@ -635,18 +674,13 @@ class MetricsCollector(object):
             for device_id in power_data:
                 device = power_data[device_id]
                 try:
-                    if device['name'] != '' and 'voltage' in device and 'counter' in device:
+                    if device['name'] != '' and len(device) > 1:
+                        name = device.pop('name')
                         self._enqueue_metrics(metric_type=metric_type,
-                                              values={'voltage': device['voltage'],
-                                                      'current': device['current'],
-                                                      'frequency': device['frequency'],
-                                                      'power': device['power'],
-                                                      'counter': float(device['counter']),
-                                                      'counter_day': float(device['counter_day']),
-                                                      'counter_night': float(device['counter_night'])},
+                                              values=device,
                                               tags={'type': 'openmotics',
                                                     'id': device_id,
-                                                    'name': device['name']},
+                                                    'name': name},
                                               timestamp=now)
                 except Exception as ex:
                     logger.exception('Error processing OpenMotics power device {0}: {1}'.format(device_id, ex))
@@ -666,7 +700,7 @@ class MetricsCollector(object):
                         continue
                     result = self._gateway_api.get_energy_time(power_module['id'])
                     abort = False
-                    for i in xrange(12):
+                    for i in range(12):
                         if abort is True:
                             break
                         name = power_module['input{0}'.format(i)]
@@ -674,7 +708,7 @@ class MetricsCollector(object):
                             continue
                         timestamp = now
                         length = min(len(result[str(i)]['current']), len(result[str(i)]['voltage']))
-                        for j in xrange(length):
+                        for j in range(length):
                             self._enqueue_metrics(metric_type=metric_type,
                                                   values={'current': result[str(i)]['current'][j],
                                                           'voltage': result[str(i)]['voltage'][j]},
@@ -685,7 +719,7 @@ class MetricsCollector(object):
                             timestamp += 0.250  # Stretch actual data by 1000 for visualtisation purposes
                     result = self._gateway_api.get_energy_frequency(power_module['id'])
                     abort = False
-                    for i in xrange(12):
+                    for i in range(12):
                         if abort is True:
                             break
                         name = power_module['input{0}'.format(i)]
@@ -693,7 +727,7 @@ class MetricsCollector(object):
                             continue
                         timestamp = now
                         length = min(len(result[str(i)]['current'][0]), len(result[str(i)]['voltage'][0]))
-                        for j in xrange(length):
+                        for j in range(length):
                             self._enqueue_metrics(metric_type=metric_type,
                                                   values={'current_harmonics': result[str(i)]['current'][0][j],
                                                           'current_phase': result[str(i)]['current'][1][j],
@@ -714,20 +748,20 @@ class MetricsCollector(object):
                 return
             self._pause(start, metric_type)
 
-    def _load_environment_configurations(self, name, interval):
+    def _load_environment_configurations(self, name, interval):  # type: (str, int) -> None
         while not self._stopped:
             start = time.time()
             # Inputs
             try:
-                result = self._gateway_api.get_input_configurations()
+                inputs = self._input_controller.load_inputs()
                 ids = []
-                for config in result:
-                    input_id = config['id']
+                for input_dto in inputs:
+                    input_id = input_dto.id
                     ids.append(input_id)
-                    self._environment['inputs'][input_id] = config
-                for input_id in self._environment['inputs'].keys():
+                    self._environment_inputs[input_id] = input_dto
+                for input_id in self._environment_inputs.keys():
                     if input_id not in ids:
-                        del self._environment['inputs'][input_id]
+                        del self._environment_inputs[input_id]
             except CommunicationTimedOutException:
                 logger.error('Error while loading input configurations: CommunicationTimedOutException')
             except InMaintenanceModeException:
@@ -736,33 +770,18 @@ class MetricsCollector(object):
                 logger.exception('Error while loading input configurations: {0}'.format(ex))
             # Outputs
             try:
-                result = self._gateway_api.get_output_configurations()
+                outputs = self._output_controller.load_outputs()
                 ids = []
-                for config in result:
-                    if config['module_type'] not in ['o', 'O', 'd', 'D']:
+                for output_dto in outputs:
+                    if output_dto.module_type not in ['o', 'O', 'd', 'D']:
                         continue
-                    output_id = config['id']
+                    output_id = output_dto.id
                     ids.append(output_id)
-                    type_mapping = {0: 'outlet',
-                                    1: 'valve',
-                                    2: 'alarm',
-                                    3: 'appliance',
-                                    4: 'pump',
-                                    5: 'hvac',
-                                    6: 'generic',
-                                    7: 'motor',
-                                    8: 'ventilation',
-                                    255: 'light'}
-                    self._environment['outputs'][output_id] = {'name': config['name'],
-                                                               'module_type': {'o': 'output',
-                                                                               'O': 'output',
-                                                                               'd': 'dimmer',
-                                                                               'D': 'dimmer'}[config['module_type']],
-                                                               'floor': config['floor'],
-                                                               'type': type_mapping.get(config['type'], 'generic')}
-                for output_id in self._environment['outputs'].keys():
+                    # TODO: Don't cache the status here, but ask it to the OutputController when relevant
+                    self._environment_outputs[output_id] = (output_dto, {})
+                for output_id in self._environment_outputs.keys():
                     if output_id not in ids:
-                        del self._environment['outputs'][output_id]
+                        del self._environment_outputs[output_id]
             except CommunicationTimedOutException:
                 logger.error('Error while loading output configurations: CommunicationTimedOutException')
             except InMaintenanceModeException:
@@ -771,15 +790,15 @@ class MetricsCollector(object):
                 logger.exception('Error while loading output configurations: {0}'.format(ex))
             # Sensors
             try:
-                result = self._gateway_api.get_sensor_configurations()
+                sensors = self._sensor_controller.load_sensors()
                 ids = []
-                for config in result:
-                    input_id = config['id']
-                    ids.append(input_id)
-                    self._environment['sensors'][input_id] = config
-                for input_id in self._environment['sensors'].keys():
-                    if input_id not in ids:
-                        del self._environment['sensors'][input_id]
+                for sensor_dto in sensors:
+                    sensor_id = sensor_dto.id
+                    ids.append(sensor_id)
+                    self._environment_sensors[sensor_id] = sensor_dto
+                for sensor_id in self._environment_sensors.keys():
+                    if sensor_id not in ids:
+                        del self._environment_sensors[sensor_id]
             except CommunicationTimedOutException:
                 logger.error('Error while loading sensor configurations: CommunicationTimedOutException')
             except InMaintenanceModeException:
@@ -788,15 +807,15 @@ class MetricsCollector(object):
                 logger.exception('Error while loading sensor configurations: {0}'.format(ex))
             # Pulse counters
             try:
-                result = self._gateway_api.get_pulse_counter_configurations()
+                pulse_counters = self._pulse_counter_controller.load_pulse_counters()
                 ids = []
-                for config in result:
-                    input_id = config['id']
-                    ids.append(input_id)
-                    self._environment['pulse_counters'][input_id] = config
-                for input_id in self._environment['pulse_counters'].keys():
-                    if input_id not in ids:
-                        del self._environment['pulse_counters'][input_id]
+                for pulse_counter_dto in pulse_counters:
+                    pulse_counter_id = pulse_counter_dto.id
+                    ids.append(pulse_counter_id)
+                    self._environment_pulse_counters[pulse_counter_id] = pulse_counter_dto
+                for pulse_counter_id in self._environment_pulse_counters.keys():
+                    if pulse_counter_id not in ids:
+                        del self._environment_pulse_counters[pulse_counter_id]
             except CommunicationTimedOutException:
                 logger.error('Error while loading pulse counter configurations: CommunicationTimedOutException')
             except InMaintenanceModeException:
@@ -816,7 +835,7 @@ class MetricsCollector(object):
         >                                    "type": "counter",
         >                                    "unit": "kWh"}]}
         """
-        pulse_persistence = self._pulse_controller.get_persistence()
+        pulse_persistence = self._pulse_counter_controller.get_persistence()  # type: Dict[int, bool]
         db_definitions = [{'name': database_model,
                            'description': database_model,
                            'type': 'counter',
@@ -1064,7 +1083,8 @@ class MetricsCollector(object):
                           'type': 'counter',
                           'policies': [{'policy': 'persist',
                                         'key': 'id',
-                                        'matches': ['P{0}'.format(i) for i in xrange(0, len(pulse_persistence))
+                                        'matches': ['P{0}'.format(i)
+                                                    for i in pulse_persistence
                                                     if not pulse_persistence[i]]},
                                        'buffer'],
                           'unit': ''}]},

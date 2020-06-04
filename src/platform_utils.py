@@ -15,12 +15,16 @@
 """"
 The hardware_utils module contains various classes helping with Hardware and System abstraction
 """
-import os
-import sys
-import subprocess
+from __future__ import absolute_import
+
 import logging
+import os
+import subprocess
+import sys
+
+from six.moves.configparser import ConfigParser
+
 import constants
-from ConfigParser import ConfigParser
 
 logger = logging.getLogger('openmotics')
 
@@ -29,23 +33,12 @@ class Hardware(object):
     """
     Abstracts the hardware related functions
     """
-
-    class Led(object):
-        POWER = 'POWER'
-        STATUS = 'STATUS'
-        ALIVE = 'ALIVE'
-        CLOUD = 'CLOUD'
-        VPN = 'VPN'
-        COMM_1 = 'COMM_1'
-        COMM_2 = 'COMM_2'
-
     class BoardType(object):
         BB = 'BB'
         BBB = 'BBB'
         BBGW = 'BBGW'
 
     BoardTypes = [BoardType.BB, BoardType.BBB, BoardType.BBGW]
-    IOCTL_I2C_SLAVE = 0x0703
 
     # eMMC registers
     EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B = 269
@@ -67,7 +60,7 @@ class Hardware(object):
         for reg, i in registers.items():
             pos = i * 2
             ecsd_info[reg] = int(ecsd[pos:pos + 2], 16)
-        return ecsd_info.iteritems()
+        return ecsd_info
 
     @staticmethod
     def get_board_type():
@@ -80,53 +73,27 @@ class Hardware(object):
                     return Hardware.BoardType.BBGW
         except IOError:
             pass
-        with open('/proc/meminfo', 'r') as memfh:
-            mem_total = memfh.readline()
-            if '254228 kB' in mem_total:
-                return Hardware.BoardType.BB
-            if '510716 kB' in mem_total:
-                return Hardware.BoardType.BBB
+        try:
+            with open('/proc/meminfo', 'r') as memfh:
+                mem_total = memfh.readline()
+                if '254228 kB' in mem_total:
+                    return Hardware.BoardType.BB
+                if '510716 kB' in mem_total:
+                    return Hardware.BoardType.BBB
+        except IOError:
+            pass
+        logger.warning('could not detect board type, unknown')
         return  # Unknown
 
     @staticmethod
-    def get_i2c_device():
-        return '/dev/i2c-2' if Hardware.get_board_type() == Hardware.BoardType.BB else '/dev/i2c-1'
-
-    @staticmethod
-    def get_local_interface():
+    def get_main_interface():
         board_type = Hardware.get_board_type()
         if board_type in [Hardware.BoardType.BB, Hardware.BoardType.BBB]:
             return 'eth0'
-        elif board_type == Hardware.BoardType.BBGW:
+        if board_type == Hardware.BoardType.BBGW:
             return 'wlan0'
-        else:
-            return 'lo'
-
-    @staticmethod
-    def get_i2c_led_config():
-        if not Hardware.get_board_type() == Hardware.BoardType.BB:
-            return {'COMM_1': 64,
-                    'COMM_2': 128,
-                    'VPN': 16,
-                    'ALIVE': 1,
-                    'CLOUD': 4}
-        return {'COMM_1': 64,
-                'COMM_2': 128,
-                'VPN': 16,
-                'CLOUD': 4}
-
-    @staticmethod
-    def get_gpio_led_config():
-        if not Hardware.get_board_type() == Hardware.BoardType.BB:
-            return {'POWER': 60,
-                    'STATUS': 48}
-        return {'POWER': 75,
-                'STATUS': 60,
-                'ALIVE': 49}
-
-    @staticmethod
-    def get_gpio_input():
-        return 38 if Hardware.get_board_type() == Hardware.BoardType.BB else 26
+        logger.warning('Could not detect local interface. Fallback: lo')
+        return 'lo'
 
 
 class System(object):
@@ -150,23 +117,26 @@ class System(object):
         if is_systemd:
             subprocess.Popen(['systemctl', 'restart', '--no-block', service])
         else:
-            raise NotImplementedError('only implemented for systemd services')
+            subprocess.Popen(['supervisorctl', 'restart', service])
 
     @staticmethod
     def get_operating_system():
         operating_system = {}
-        with open('/etc/os-release', 'r') as osfh:
-            lines = osfh.readlines()
-            for line in lines:
-                k, v = line.strip().split('=')
-                operating_system[k] = v
-        operating_system['ID'] = operating_system['ID'].lower()
+        try:
+            with open('/etc/os-release', 'r') as osfh:
+                lines = osfh.readlines()
+                for line in lines:
+                    k, v = line.strip().split('=')
+                    operating_system[k] = v
+            operating_system['ID'] = operating_system['ID'].lower()
+        except IOError:
+            logger.warning('could not detect operating system, unknown')
         return operating_system
 
     @staticmethod
     def get_ip_address():
         """ Get the local ip address. """
-        interface = Hardware.get_local_interface()
+        interface = Hardware.get_main_interface()
         operating_system = System.get_operating_system()
         try:
             lines = subprocess.check_output('ifconfig {0}'.format(interface), shell=True)
@@ -244,8 +214,11 @@ class System(object):
 
     @staticmethod
     def import_libs():
-        operating_system = System.get_operating_system()['ID']
-        sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
+        operating_system = System.get_operating_system().get('ID')
+        if operating_system in (System.OS.ANGSTROM, System.OS.DEBIAN):
+            sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
+        else:
+            logger.warning('could not configure imports for unknown platform, skipped')
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:
@@ -267,6 +240,7 @@ class Platform(object):
 
     @staticmethod
     def get_platform():
+        # type: () -> str
         config = ConfigParser()
         config.read(constants.get_config_file())
 

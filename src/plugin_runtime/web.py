@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import re
 import requests
 
@@ -14,7 +15,7 @@ def _load_webinterface():
     It uses this method to prevent the runtime from having to load the file and its dependencies.
     """
     import gateway
-    def_regex = re.compile(r'^\s*?def ([^(]+)\((.*?)\):\s*$')
+    def_regex = re.compile(r'^\s*?def ([^(]+)\((.*?)\):')
     with open('{0}/webservice.py'.format(gateway.__path__[0]), 'r') as source:
         contents = source.readlines()
     calls = {}
@@ -72,7 +73,7 @@ class WebInterfaceDispatcher(object):
                 if len(args) + len(kwargs) > len(params) or len(kwargs) == 0:
                     del args[0]
             # 2. Convert to kwargs, so it's possible to do parameter parsing
-            for i in xrange(len(args)):
+            for i in range(len(args)):
                 kwargs[params[i]] = args[i]
             # 3. Make sure empty (`None` value) params are included
             for arg in kwargs:
