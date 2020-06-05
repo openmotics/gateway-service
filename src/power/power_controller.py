@@ -61,7 +61,7 @@ class PowerController(object):
         return self._power_communicator.do_command(module['address'], cmd)
 
     def get_module_day_energy(self, module):
-        # type: (Dict[str,Any]) -> List[float]
+        # type: (Dict[str,Any]) -> List[int]
         if module['version'] == P1_CONCENTRATOR:
             raise ValueError("Unknown power api version")
         else:
@@ -69,7 +69,7 @@ class PowerController(object):
             return self._power_communicator.do_command(module['address'], cmd)
 
     def get_module_night_energy(self, module):
-        # type: (Dict[str,Any]) -> List[float]
+        # type: (Dict[str,Any]) -> List[int]
         if module['version'] == P1_CONCENTRATOR:
             raise ValueError("Unknown power api version")
         else:

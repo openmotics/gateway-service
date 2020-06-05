@@ -41,7 +41,7 @@ from power.power_api import RealtimePower
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY:
-    from typing import Any, Dict, List, Optional, Tuple
+    from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union
     from power.power_communicator import PowerCommunicator
     from power.power_store import PowerStore
     from power.power_controller import PowerController, P1Controller
@@ -49,10 +49,12 @@ if False:  # MYPY:
     from gateway.observer import Observer
     from gateway.config import ConfigurationController
 
+    T = TypeVar('T', bound=Union[int, float])
+
 logger = logging.getLogger('openmotics')
 
 
-def convert_nan(number, default):  # type: (float, Optional[float]) -> Optional[float]
+def convert_nan(number, default):  # type: (T, Optional[T]) -> Optional[T]
     """ Convert nan to a default value """
     if math.isnan(number):
         logger.warning('Got an unexpected NaN')
@@ -839,7 +841,7 @@ class GatewayApi(object):
         return self.__p1_controller.get_realtime(modules)
 
     def get_total_energy(self):
-        # type: () -> Dict[str,List[List[Optional[float]]]]
+        # type: () -> Dict[str,List[List[Optional[int]]]]
         """ Get the total energy (kWh) consumed by the power modules.
 
         :returns: dict with the module id as key and the following array as value: [day, night].
@@ -854,8 +856,8 @@ class GatewayApi(object):
                 version = modules[module_id]['version']
                 num_ports = power_api.NUM_PORTS[version]
 
-                day = [None] * num_ports  # type: List[Optional[float]]
-                night = [None] * num_ports  # type: List[Optional[float]]
+                day = [None] * num_ports  # type: List[Optional[int]]
+                night = [None] * num_ports  # type: List[Optional[int]]
                 if version in [power_api.ENERGY_MODULE, power_api.POWER_MODULE]:
                     day = [convert_nan(entry, default=None)
                            for entry in self.__power_controller.get_module_day_energy(modules[module_id])]
