@@ -20,7 +20,7 @@ import mock
 
 from gateway.gateway_api import GatewayApi
 from ioc import SetTestMode, SetUpTestInjections
-from power.power_api import P1_CONCENTRATOR, POWER_MODULE, RealtimePower
+from power.power_api import ENERGY_MODULE, P1_CONCENTRATOR, POWER_MODULE, RealtimePower
 
 
 class GatewayApiTest(unittest.TestCase):
@@ -70,6 +70,30 @@ class GatewayApiTest(unittest.TestCase):
                 RealtimePower(1.0, 1.0, 6.0, 6.0),
                 RealtimePower(1.0, 1.0, 7.0, 7.0),
                 RealtimePower(1.0, 1.0, 8.0, 8.0)
+            ]
+        }
+
+    def test_get_realtime_energy(self):
+        self.power_store.get_power_modules.return_value = {10: {'address': 11, 'version': ENERGY_MODULE}}
+        self.power_controller.get_module_current.return_value = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]
+        self.power_controller.get_module_frequency.return_value = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]
+        self.power_controller.get_module_power.return_value = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]
+        self.power_controller.get_module_voltage.return_value = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]
+        result = self.api.get_realtime_power()
+        assert result == {
+            '10': [
+                RealtimePower(1.0, 1.0, 1.0, 1.0),
+                RealtimePower(2.0, 2.0, 2.0, 2.0),
+                RealtimePower(3.0, 3.0, 3.0, 3.0),
+                RealtimePower(4.0, 4.0, 4.0, 4.0),
+                RealtimePower(5.0, 5.0, 5.0, 5.0),
+                RealtimePower(6.0, 6.0, 6.0, 6.0),
+                RealtimePower(7.0, 7.0, 7.0, 7.0),
+                RealtimePower(8.0, 8.0, 8.0, 8.0),
+                RealtimePower(9.0, 9.0, 9.0, 9.0),
+                RealtimePower(10.0, 10.0, 10.0, 10.0),
+                RealtimePower(11.0, 11.0, 11.0, 11.0),
+                RealtimePower(12.0, 12.0, 12.0, 12.0),
             ]
         }
 

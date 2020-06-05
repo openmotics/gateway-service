@@ -29,15 +29,72 @@ from power.power_api import P1_CONCENTRATOR, POWER_MODULE, PowerCommand
 from power.power_controller import P1Controller, PowerController
 
 
-class PowerP1Test(unittest.TestCase):
+class PowerControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
 
     def setUp(self):
         self.power_communicator = mock.Mock()
-        SetUpTestInjections(power_communicator=self.power_communicator,
-                            power_db=':memory:')
+        SetUpTestInjections(power_communicator=self.power_communicator)
+        self.controller = PowerController()
+
+    def test_get_module_current(self):
+        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+            self.controller.get_module_current({'version': POWER_MODULE,
+                                                'address': '11.0'})
+            assert cmd.call_args_list == [
+                mock.call('11.0', PowerCommand('G', 'CUR', '', '8f', module_type='E'))
+            ]
+
+    def test_get_module_frequency(self):
+        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+            self.controller.get_module_frequency({'version': POWER_MODULE,
+                                                'address': '11.0'})
+            assert cmd.call_args_list == [
+                mock.call('11.0', PowerCommand('G', 'FRE', '', 'f', module_type='E'))
+            ]
+
+    def test_get_module_power(self):
+        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+            self.controller.get_module_power({'version': POWER_MODULE,
+                                              'address': '11.0'})
+            assert cmd.call_args_list == [
+                mock.call('11.0', PowerCommand('G', 'POW', '', '8f', module_type='E'))
+            ]
+
+    def test_get_module_voltage(self):
+        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+            self.controller.get_module_voltage({'version': POWER_MODULE,
+                                                'address': '11.0'})
+            assert cmd.call_args_list == [
+                mock.call('11.0', PowerCommand('G', 'VOL', '', 'f', module_type='E'))
+            ]
+
+    def test_get_module_day_energy(self):
+        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+            self.controller.get_module_day_energy({'version': POWER_MODULE,
+                                                   'address': '11.0'})
+            assert cmd.call_args_list == [
+                mock.call('11.0', PowerCommand('G', 'EDA', '', '8L', module_type='E'))
+            ]
+
+    def test_get_module_night_energy(self):
+        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+            self.controller.get_module_night_energy({'version': POWER_MODULE,
+                                                     'address': '11.0'})
+            assert cmd.call_args_list == [
+                mock.call('11.0', PowerCommand('G', 'ENI', '', '8L', module_type='E'))
+            ]
+
+class P1ControllerTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        SetTestMode()
+
+    def setUp(self):
+        self.power_communicator = mock.Mock()
+        SetUpTestInjections(power_communicator=self.power_communicator)
         self.controller = P1Controller()
 
     def test_get_realtime_p1(self):
