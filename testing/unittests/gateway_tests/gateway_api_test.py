@@ -107,6 +107,40 @@ class GatewayApiTest(unittest.TestCase):
             ]
         }
 
+    def test_get_realtime_power_p1_partial(self):
+        self.power_store.get_power_modules.return_value = {10: {'address': 11, 'version': P1_CONCENTRATOR}}
+        self.p1_controller.get_module_status.return_value = [
+                True, True, False, True,
+                False, False, False, False
+        ]
+        self.p1_controller.get_module_current.return_value = [
+            {'phase1': 1.0, 'phase2': None, 'phase3': None},
+            {'phase1': 2.0, 'phase2': None, 'phase3': None},
+            {'phase1': 0.0, 'phase2': None, 'phase3': None},
+            {'phase1': 12.0, 'phase2': None, 'phase3': None},
+        ]
+        self.p1_controller.get_module_voltage.return_value = [
+            {'phase1': 1.0, 'phase2': None, 'phase3': None},
+            {'phase1': 2.3, 'phase2': None, 'phase3': None},
+            {'phase1': 0.0, 'phase2': None, 'phase3': None},
+            {'phase1': 12.0, 'phase2': None, 'phase3': None},
+        ]
+        self.p1_controller.get_module_delivered_power.return_value = [2.0, 3.0, 0.0, 10.0, 0.0, 0.0, 0.0, 0.0]
+        self.p1_controller.get_module_received_power.return_value = [None, None, None, None, None, None, None, None]
+        result = self.api.get_realtime_power()
+        assert result == {
+            '10': [
+                RealtimePower(1.0, 0.0, 1.0, 2000.0),
+                RealtimePower(2.3, 0.0, 2.0, 3000.0),
+                RealtimePower(0.0, 0.0, 0.0, 0.0),
+                RealtimePower(12.0, 0.0, 12.0, 10000.0),
+                RealtimePower(0.0, 0.0, 0.0, 0.0),
+                RealtimePower(0.0, 0.0, 0.0, 0.0),
+                RealtimePower(0.0, 0.0, 0.0, 0.0),
+                RealtimePower(0.0, 0.0, 0.0, 0.0)
+            ]
+        }
+
     def test_get_total_energy(self):
         self.power_store.get_power_modules.return_value = {10: {'address': 11, 'version': POWER_MODULE}}
         self.power_controller.get_module_day_energy.return_value = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]

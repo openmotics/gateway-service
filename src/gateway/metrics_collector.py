@@ -663,32 +663,37 @@ class MetricsCollector(object):
         except Exception as ex:
             logger.exception('Error getting realtime power: {0}'.format(ex))
         try:
-            realtime_p1_data = self._gateway_api.get_realtime_p1()
-            for realtime_p1 in realtime_p1_data:
+            for realtime_p1 in self._gateway_api.get_realtime_p1():
                 electricity_p1 = realtime_p1.get('electricity', {})
                 if electricity_p1.get('ean'):
-                    self._enqueue_metrics(metric_type='energy_p1',
-                                          values={'electricity_tariff_low': electricity_p1['tariff_low'],
-                                                  'electricity_tariff_normal': electricity_p1['tariff_normal'],
-                                                  'electricity_tariff_indicator': electricity_p1['tariff_indicator'],
-                                                  'electricity_voltage_phase1': electricity_p1['voltage']['phase1'],
-                                                  'electricity_voltage_phase2': electricity_p1['voltage']['phase2'],
-                                                  'electricity_voltage_phase3': electricity_p1['voltage']['phase3'],
-                                                  'electricity_current_phase1': electricity_p1['current']['phase1'],
-                                                  'electricity_current_phase2': electricity_p1['current']['phase2'],
-                                                  'electricity_current_phase3': electricity_p1['current']['phase3']},
-                                          tags={'type': 'openmotics',
-                                                'id': realtime_p1['device_id'],
-                                                'ean': electricity_p1['ean']},
-                                          timestamp=now)
+                    values = {'electricity_tariff_low': electricity_p1['tariff_low'],
+                              'electricity_tariff_normal': electricity_p1['tariff_normal'],
+                              'electricity_tariff_indicator': electricity_p1['tariff_indicator'],
+                              'electricity_voltage_phase1': electricity_p1['voltage']['phase1'],
+                              'electricity_voltage_phase2': electricity_p1['voltage']['phase2'],
+                              'electricity_voltage_phase3': electricity_p1['voltage']['phase3'],
+                              'electricity_current_phase1': electricity_p1['current']['phase1'],
+                              'electricity_current_phase2': electricity_p1['current']['phase2'],
+                              'electricity_current_phase3': electricity_p1['current']['phase3']}
+                    values = {k: v for k, v in values.items() if v is not None}
+                    if values:
+                        self._enqueue_metrics(metric_type='energy_p1',
+                                              values=values,
+                                              tags={'type': 'openmotics',
+                                                    'id': realtime_p1['device_id'],
+                                                    'ean': electricity_p1['ean']},
+                                              timestamp=now)
                 gas_p1 = realtime_p1.get('gas', {})
                 if gas_p1.get('ean'):
-                    self._enqueue_metrics(metric_type='energy_p1',
-                                          values={'gas_consumption': gas_p1['consumption']},
-                                          tags={'type': 'openmotics',
-                                                'id': realtime_p1['device_id'],
-                                                'ean': gas_p1['ean']},
-                                          timestamp=now)
+                    values = {'gas_consumption': gas_p1['consumption']}
+                    values = {k: v for k, v in values.items() if v is not None}
+                    if values:
+                        self._enqueue_metrics(metric_type='energy_p1',
+                                              values=values,
+                                              tags={'type': 'openmotics',
+                                                    'id': realtime_p1['device_id'],
+                                                    'ean': gas_p1['ean']},
+                                              timestamp=now)
         except CommunicationTimedOutException:
             logger.error('Error getting realtime power: CommunicationTimedOutException')
         except InMaintenanceModeException:

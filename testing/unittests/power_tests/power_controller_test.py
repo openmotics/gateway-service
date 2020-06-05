@@ -166,10 +166,7 @@ class PowerP1Test(unittest.TestCase):
                                return_value=[payload]) as cmd:
             meters = self.controller.get_module_timestamp({'version': P1_CONCENTRATOR,
                                                            'address': '11.0'})
-            assert meters == [
-                1.0, 2.0, 0.0, 12.0,
-                0.0, 0.0, 0.0, 0.0,
-            ]
+            assert meters == [1.0, 2.0, None, 12.0, None, None, None, None]
             assert cmd.call_args_list == [
                 mock.call('11.0', PowerCommand('G', 'TS\x00', '', '104s', module_type='C'))
             ]
@@ -180,10 +177,7 @@ class PowerP1Test(unittest.TestCase):
                                return_value=[payload]) as cmd:
             meters = self.controller.get_module_gas_consumption({'version': P1_CONCENTRATOR,
                                                                   'address': '11.0'})
-            assert meters == [
-                1.0, 2.3, 0.0, 12.0,
-                0.0, 0.0, 0.0, 0.0,
-            ]
+            assert meters == [1.0, 2.3, None, 12.0, None, None, None, None]
             assert cmd.call_args_list == [
                 mock.call('11.0', PowerCommand('G', 'cG\x00', '', '112s', module_type='C'))
             ]
@@ -196,10 +190,7 @@ class PowerP1Test(unittest.TestCase):
             meters = self.controller.get_module_injection_tariff({'version': P1_CONCENTRATOR,
                                                                   'address': '11.0'},
                                                                  type=1)
-            assert meters == [
-                1.0, 2.3, 0.0, 12.0,
-                0.0, 0.0, 0.0, 0.0,
-            ]
+            assert meters == [1.0, 2.3, None, 12.0, None, None, None, None]
             assert cmd.call_args_list == [
                 mock.call('11.0', PowerCommand('G', 'i1\x00', '', '112s', module_type='C'))
             ]
@@ -211,10 +202,7 @@ class PowerP1Test(unittest.TestCase):
                                return_value=[payload]) as cmd:
             meters = self.controller.get_module_tariff_indicator({'version': P1_CONCENTRATOR,
                                                                   'address': '11.0'})
-            assert meters == [
-                1.0, 2.0, 0.0, 12.0,
-                0.0, 0.0, 0.0, 0.0,
-            ]
+            assert meters == [1.0, 2.0, None, 12.0, None, None, None, None]
             assert cmd.call_args_list == [
                 mock.call('11.0', PowerCommand('G', 'ti\x00', '', '32s', module_type='C'))
             ]
@@ -228,12 +216,12 @@ class PowerP1Test(unittest.TestCase):
             assert voltages == [
                 {'phase1': 1.0, 'phase2': 1.0, 'phase3': 1.0},
                 {'phase1': 2.0, 'phase2': 2.0, 'phase3': 2.0},
-                {'phase1': 0.0, 'phase2': 0.0, 'phase3': 0.0},
+                {'phase1': None, 'phase2': None, 'phase3': None},
                 {'phase1': 12.0, 'phase2': 12.0, 'phase3': 12.0},
-                {'phase1': 0.0, 'phase2': 0.0, 'phase3': 0.0},
-                {'phase1': 0.0, 'phase2': 0.0, 'phase3': 0.0},
-                {'phase1': 0.0, 'phase2': 0.0, 'phase3': 0.0},
-                {'phase1': 0.0, 'phase2': 0.0, 'phase3': 0.0}
+                {'phase1': None, 'phase2': None, 'phase3': None},
+                {'phase1': None, 'phase2': None, 'phase3': None},
+                {'phase1': None, 'phase2': None, 'phase3': None},
+                {'phase1': None, 'phase2': None, 'phase3': None}
             ]
             self.assertIn(mock.call('11.0', PowerCommand('G', 'C1\x00', '', '40s', module_type='C')),
                           cmd.call_args_list)
@@ -251,12 +239,12 @@ class PowerP1Test(unittest.TestCase):
             assert voltages == [
                 {'phase1': 1.0, 'phase2': 1.0, 'phase3': 1.0},
                 {'phase1': 2.3, 'phase2': 2.3, 'phase3': 2.3},
-                {'phase1': 0.0, 'phase2': 0.0, 'phase3': 0.0},
+                {'phase1': None, 'phase2': None, 'phase3': None},
                 {'phase1': 12.0, 'phase2': 12.0, 'phase3': 12.0},
-                {'phase1': 0.0, 'phase2': 0.0, 'phase3': 0.0},
-                {'phase1': 0.0, 'phase2': 0.0, 'phase3': 0.0},
-                {'phase1': 0.0, 'phase2': 0.0, 'phase3': 0.0},
-                {'phase1': 0.0, 'phase2': 0.0, 'phase3': 0.0}
+                {'phase1': None, 'phase2': None, 'phase3': None},
+                {'phase1': None, 'phase2': None, 'phase3': None},
+                {'phase1': None, 'phase2': None, 'phase3': None},
+                {'phase1': None, 'phase2': None, 'phase3': None}
             ]
             self.assertIn(mock.call('11.0', PowerCommand('G', 'V1\x00', '', '56s', module_type='C')),
                           cmd.call_args_list)
@@ -271,7 +259,7 @@ class PowerP1Test(unittest.TestCase):
                                return_value=[payload]) as cmd:
             delivered = self.controller.get_module_delivered_power({'version': P1_CONCENTRATOR,
                                                                     'address': '11.0'})
-            assert delivered == [1.0, 2.0, 0.0, 12.0, 0.0, 0.0, 0.0, 0.0]
+            assert delivered == [1.0, 2.0, None, 12.0, None, None, None, None]
             assert cmd.call_args_list == [
                 mock.call('11.0', PowerCommand('G', 'PD\x00', '', '72s', module_type='C')),
             ]
@@ -282,7 +270,7 @@ class PowerP1Test(unittest.TestCase):
                                return_value=[payload]) as cmd:
             received = self.controller.get_module_received_power({'version': P1_CONCENTRATOR,
                                                                   'address': '11.0'})
-            assert received == [1.0, 2.0, 0.0, 12.0, 0.0, 0.0, 0.0, 0.0]
+            assert received == [1.0, 2.0, None, 12.0, None, None, None, None]
             assert cmd.call_args_list == [
                 mock.call('11.0', PowerCommand('G', 'PR\x00', '', '72s', module_type='C')),
             ]
@@ -293,7 +281,7 @@ class PowerP1Test(unittest.TestCase):
                                return_value=[payload]) as cmd:
             received = self.controller.get_module_day_energy({'version': P1_CONCENTRATOR,
                                                               'address': '11.0'})
-            assert received == [0.001, 0.002, 0.0, 0.012, 0.0, 0.0, 0.0, 0.0]
+            assert received == [0.001, 0.002, None, 0.012, None, None, None, None]
             assert cmd.call_args_list == [
                 mock.call('11.0', PowerCommand('G', 'c1\x00', '', '112s', module_type='C')),
             ]
@@ -304,7 +292,7 @@ class PowerP1Test(unittest.TestCase):
                                return_value=[payload]) as cmd:
             received = self.controller.get_module_night_energy({'version': P1_CONCENTRATOR,
                                                                 'address': '11.0'})
-            assert received == [0.001, 0.002, 0.0, 0.012, 0.0, 0.0, 0.0, 0.0]
+            assert received == [0.001, 0.002, None, 0.012, None, None, None, None]
             assert cmd.call_args_list == [
                 mock.call('11.0', PowerCommand('G', 'c2\x00', '', '112s', module_type='C')),
             ]

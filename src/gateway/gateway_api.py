@@ -805,9 +805,9 @@ class GatewayApi(object):
                     for port, status in enumerate(statuses):
                         try:
                             if status:
-                                volt[port] = voltages[port]['phase1']
-                                power[port] = (delivered_power[port] - received_power[port]) * 1000
-                                current[port] = sum(currents[port].values())
+                                volt[port] = voltages[port]['phase1'] or 0.0
+                                power[port] = ((delivered_power[port] or 0.0) - (received_power[port] or 0.0)) * 1000
+                                current[port] = sum(x for x in currents[port].values() if x is not None)
                         except ValueError:
                             pass
                 else:
@@ -870,8 +870,8 @@ class GatewayApi(object):
                     for port, status in enumerate(statuses):
                         try:
                             if status:
-                                day[port] = int(days[port] * 1000)
-                                night[port] = int(nights[port] * 1000)
+                                day[port] = int((days[port] or 0.0) * 1000)
+                                night[port] = int((nights[port] or 0.0) * 1000)
                         except ValueError:
                             pass
                 else:
