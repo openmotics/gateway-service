@@ -43,7 +43,7 @@ def next_output(draw):
 @hypothesis.given(next_output(), booleans())
 def test_events(toolbox, next_output, output_status):
     output_id = next_output(toolbox)
-    logger.info('output status o#{}, expect event {} -> {}'.format(output_id, not output_status, output_status))
+    logger.debug('output status o#{}, expect event {} -> {}'.format(output_id, not output_status, output_status))
     toolbox.ensure_output(output_id, not output_status, DEFAULT_OUTPUT_CONFIG)
 
     toolbox.set_output(output_id, output_status)
@@ -55,7 +55,7 @@ def test_events(toolbox, next_output, output_status):
 @hypothesis.given(next_output(), booleans())
 def test_status(toolbox, next_output, output_status):
     output_id = next_output(toolbox)
-    logger.info('output status o#{}, expect status ? -> {}'.format(output_id, output_status))
+    logger.debug('output status o#{}, expect status ? -> {}'.format(output_id, output_status))
     toolbox.configure_output(output_id, DEFAULT_OUTPUT_CONFIG)
 
     toolbox.set_output(output_id, output_status)
@@ -66,7 +66,7 @@ def test_status(toolbox, next_output, output_status):
 @hypothesis.given(next_output(), just(True))
 def test_timers(toolbox, next_output, output_status):
     output_id = next_output(toolbox)
-    logger.info('output timer o#{}, expect event {} -> {}'.format(output_id, output_status, not output_status))
+    logger.debug('output timer o#{}, expect event {} -> {}'.format(output_id, output_status, not output_status))
     output_config = {'type': 0, 'timer': 5}  # FIXME: event reordering with timer of <2s
     toolbox.ensure_output(output_id, False, output_config)
 
@@ -79,7 +79,7 @@ def test_timers(toolbox, next_output, output_status):
 @hypothesis.given(next_output(), integers(min_value=0, max_value=254), just(True))
 def test_floor_lights(toolbox, next_output, floor_id, output_status):
     light_id, other_light_id, other_output_id = (next_output(toolbox), next_output(toolbox), next_output(toolbox))
-    logger.info('light o#{} on floor {}, expect event {} -> {}'.format(light_id, floor_id, not output_status, output_status))
+    logger.debug('light o#{} on floor {}, expect event {} -> {}'.format(light_id, floor_id, not output_status, output_status))
 
     output_config = {'floor': floor_id}
     output_config.update(DEFAULT_LIGHT_CONFIG)
@@ -92,13 +92,13 @@ def test_floor_lights(toolbox, next_output, floor_id, output_status):
     toolbox.ensure_output(other_output_id, not output_status, output_config)
     time.sleep(2)
 
-    logger.info('enable all lights on floor {}'.format(floor_id))
+    logger.debug('enable all lights on floor {}'.format(floor_id))
     toolbox.dut.get('/set_all_lights_floor_on', params={'floor': floor_id})
     toolbox.assert_output_changed(light_id, output_status)
     toolbox.assert_output_status(other_light_id, not output_status)
     toolbox.assert_output_status(other_output_id, not output_status)
 
-    logger.info('disable all lights on floor {}'.format(floor_id))
+    logger.debug('disable all lights on floor {}'.format(floor_id))
     toolbox.dut.get('/set_all_lights_floor_off', params={'floor': floor_id})
     toolbox.assert_output_changed(light_id, not output_status)
     toolbox.assert_output_status(other_light_id, not output_status)
@@ -110,7 +110,7 @@ def test_floor_lights(toolbox, next_output, floor_id, output_status):
 @hypothesis.given(next_output(), integers(min_value=0, max_value=159), booleans())
 def test_group_action_toggle(toolbox, next_output, group_action_id, output_status):
     (output_id, other_output_id) = (next_output(toolbox), next_output(toolbox))
-    logger.info('group action a#{} for o#{} o#{}, expect event {} -> {}'.format(group_action_id, output_id, other_output_id, not output_status, output_status))
+    logger.debug('group action a#{} for o#{} o#{}, expect event {} -> {}'.format(group_action_id, output_id, other_output_id, not output_status, output_status))
 
     actions = ['162', str(output_id), '162', str(other_output_id)]  # toggle both outputs
     config = {'id': group_action_id, 'actions': ','.join(actions)}

@@ -10,6 +10,7 @@ from .toolbox import Toolbox
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+logging.getLogger('urllib3').propagate = False
 logger = logging.getLogger('openmotics')
 
 

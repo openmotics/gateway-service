@@ -53,7 +53,7 @@ def next_output(draw):
 @hypothesis.given(next_input(), next_output(), booleans())
 def test_actions(toolbox, next_input, next_output, output_status):
     input_id, output_id = (next_input(toolbox), next_output(toolbox))
-    logger.info('input action i#{} to o#{}, expect event {} -> {}'.format(input_id, output_id, not output_status, output_status))
+    logger.debug('input action i#{} to o#{}, expect event {} -> {}'.format(input_id, output_id, not output_status, output_status))
 
     input_config = {'id': input_id, 'action': output_id}
     input_config.update(DEFAULT_INPUT_CONFIG)
@@ -73,7 +73,7 @@ def test_actions(toolbox, next_input, next_output, output_status):
 def test_motion_sensor(toolbox, next_input, next_output, output_status):
     input_id, output_id = (next_input(toolbox), next_output(toolbox))
 
-    logger.info('motion sensor i#{} to o#{}, expect event {} -> {} after 2m30s'.format(input_id, output_id, output_status, not output_status))
+    logger.debug('motion sensor i#{} to o#{}, expect event {} -> {} after 2m30s'.format(input_id, output_id, output_status, not output_status))
     actions = ['195', str(output_id)]  # output timeout of 2m30s
     input_config = {'id': input_id, 'basic_actions': ','.join(actions), 'action': 240}
     input_config.update(DEFAULT_INPUT_CONFIG)
@@ -93,7 +93,7 @@ def test_motion_sensor(toolbox, next_input, next_output, output_status):
 @hypothesis.given(next_input(), next_output(), integers(min_value=0, max_value=159), booleans())
 def test_group_action_toggle(toolbox, next_input, next_output, group_action_id, output_status):
     (input_id, output_id, other_output_id) = (next_input(toolbox), next_output(toolbox), next_output(toolbox))
-    logger.info('group action a#{} for i#{} to o#{} o#{}, expect event {} -> {}'.format(group_action_id, input_id, output_id, other_output_id, not output_status, output_status))
+    logger.debug('group action a#{} for i#{} to o#{} o#{}, expect event {} -> {}'.format(group_action_id, input_id, output_id, other_output_id, not output_status, output_status))
 
     actions = ['2', str(group_action_id)]
     input_config = {'id': input_id, 'basic_actions': ','.join(actions), 'action': 240}

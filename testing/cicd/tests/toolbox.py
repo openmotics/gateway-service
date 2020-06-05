@@ -139,13 +139,13 @@ class TesterGateway(object):
         cooldown, deadline = between
         timeout = deadline - cooldown
         if cooldown > 0:
-            logger.info('waiting {:.2f}s before event'.format(cooldown))
+            logger.debug('waiting {:.2f}s before event'.format(cooldown))
             self.reset()
             time.sleep(cooldown)
         since = time.time()
         while since > time.time() - timeout:
             if output_id in self._outputs and output_status == self._outputs[output_id]:
-                logger.info('received event o#{} status={} after {:.2f}s'.format(output_id, self._outputs[output_id], time.time() - since))
+                logger.debug('received event o#{} status={} after {:.2f}s'.format(output_id, self._outputs[output_id], time.time() - since))
                 return True
             if self.update_events():
                 continue
@@ -203,6 +203,7 @@ class Toolbox(object):
 
     def initialize(self):
         # type: () -> None
+        logger.info('checking prerequisites')
         self.ensure_power_on()
         try:
             self.dut.login(success=False)
@@ -235,6 +236,7 @@ class Toolbox(object):
     def factory_reset(self, confirm=True):
         # type: (bool) -> Dict[str,Any]
         assert self.dut._auth
+        logger.debug('factory reset')
         params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm}
         return self.dut.get('/factory_reset', params=params, success=confirm)
 
@@ -247,7 +249,7 @@ class Toolbox(object):
 
     def start_authorized_mode(self):
         # type: () -> None
-        logger.info('start authorized mode')
+        logger.debug('start authorized mode')
         self.tester.get('/set_output', {'id': self.DEBIAN_AUTHORIZED_MODE, 'is_on': True})
         time.sleep(15)
         self.tester.get('/set_output', {'id': self.DEBIAN_AUTHORIZED_MODE, 'is_on': False})
@@ -273,6 +275,7 @@ class Toolbox(object):
 
     def start_module_discovery(self):
         # type: () -> None
+        logger.debug('start module discover')
         self.dut.get('/module_discover_start')
         for _ in range(10):
             data = self.dut.get('/module_discover_status')
@@ -290,7 +293,7 @@ class Toolbox(object):
 
     def power_off(self):
         # type: () -> None
-        logger.info('power off')
+        logger.debug('power off')
         self.tester.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': False})
         time.sleep(2)
 
@@ -324,7 +327,7 @@ class Toolbox(object):
         # type: (int, Dict[str,Any]) -> None
         config_data = {'id': output_id}
         config_data.update(**config)
-        logger.info('configure output o#{} with {}'.format(output_id, config))
+        logger.debug('configure output o#{} with {}'.format(output_id, config))
         self.dut.get('/set_output_configuration', {'config': json.dumps(config_data)})
 
     def ensure_output(self, output_id, status, config=None):
@@ -339,7 +342,7 @@ class Toolbox(object):
 
     def set_output(self, output_id, status):
         # type: (int, int) -> None
-        logger.info('set output o#{} -> {}'.format(output_id, status))
+        logger.debug('set output o#{} -> {}'.format(output_id, status))
         self.dut.get('/set_output', {'id': output_id, 'is_on': status})
 
     def press_input(self, input_id):
@@ -349,7 +352,7 @@ class Toolbox(object):
         self.tester.get('/set_output', {'id': input_id, 'is_on': True})
         time.sleep(0.2)
         self.tester.get('/set_output', {'id': input_id, 'is_on': False})
-        logger.info('toggled i#{} -> True -> False'.format(input_id))
+        logger.debug('toggled i#{} -> True -> False'.format(input_id))
 
     def assert_output_changed(self, output_id, status, between=(0, 30)):
         # type: (int, bool, Tuple[float,float]) -> None
@@ -364,7 +367,7 @@ class Toolbox(object):
             data = self.dut.get('/get_output_status')
             current_status = data['status'][output_id]['status']
             if bool(status) == bool(current_status):
-                logger.info('get output status o#{} status={}, after {:.2f}s'.format(output_id, status, time.time() - since))
+                logger.debug('get output status o#{} status={}, after {:.2f}s'.format(output_id, status, time.time() - since))
                 return
             time.sleep(2)
         state = ' '.join(self.tester.get_last_outputs())

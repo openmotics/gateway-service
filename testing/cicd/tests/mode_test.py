@@ -70,7 +70,6 @@ def test_power_cycle(toolbox, power_on):
 
 @pytest.mark.smoke
 def test_module_discover_noop(toolbox, discover_mode):
-    logger.info('start module discovery')
     toolbox.start_module_discovery()
 
     data = toolbox.dut.get('/module_discover_status')
@@ -96,7 +95,7 @@ def test_maintenance(toolbox, maintenance_mode):
     data = toolbox.dut.get('/get_status')
     expected_version = 'F{} H{}'.format(data['version'], data['hw_version'])
 
-    logger.info('start maintenance')
+    logger.debug('start maintenance')
     data = toolbox.dut.get('/open_maintenance')
     assert 'port' in data
 
@@ -159,7 +158,6 @@ def create_user(request, toolbox):
 
 @pytest.mark.slow
 def test_factory_reset(toolbox, create_user):
-    logger.info('factory reset')
     data = toolbox.factory_reset()
     assert data['factory_reset'] == 'pending'
     time.sleep(60)
@@ -167,7 +165,7 @@ def test_factory_reset(toolbox, create_user):
 
     toolbox.start_authorized_mode()
     data = toolbox.dut.get('/get_usernames', use_token=False)
-    logger.info('users after reset {}'.format(data['usernames']))
+    logger.debug('users after reset {}'.format(data['usernames']))
     toolbox.create_or_update_user()
     toolbox.dut.login()
 
@@ -177,7 +175,6 @@ def test_factory_reset(toolbox, create_user):
     assert 'outputs' in data
     assert data['outputs'] == []
 
-    logger.info('start module discover')
     toolbox.dut.get('/module_discover_start')
     time.sleep(2)
     toolbox.discover_input_module()
