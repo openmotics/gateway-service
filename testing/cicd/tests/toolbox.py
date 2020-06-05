@@ -248,6 +248,15 @@ class Toolbox(object):
         assert len(modules) >= min_modules, 'Not enough modules of type {} available'.format(module_type)
         return modules
 
+    def get_module(self, module_type):
+        # type: (str) -> List[int]
+        data = self.dut.get('/get_modules')
+        modules = list(enumerate(data['outputs'])) + list(enumerate(data['inputs']))
+        for i, v in modules:
+            if v == module_type:
+                return list(range(8 * i, (8 * i) + 7))
+        raise AssertionError('No modules of type \'{}\' available in {}'.format(module_type, data))
+
     def start_authorized_mode(self):
         # type: () -> None
         logger.debug('start authorized mode')

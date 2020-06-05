@@ -884,6 +884,28 @@ class WebInterface(object):
         """
         return self._gateway_api.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
 
+    @openmotics_api(auth=True)
+    def add_virtual_output(self):
+        # type: () -> Dict[str,Any]
+        """
+        Adds a new virtual output module.
+
+        :returns: dict with 'status'.
+        :rtype: dict
+        """
+        return {'status': self._gateway_api.add_virtual_output_module()}
+
+    @openmotics_api(auth=True)
+    def add_virtual_input(self):
+        # type: () -> Dict[str,Any]
+        """
+        Adds a new virtual input module.
+
+        :returns: dict with 'status'.
+        :rtype: dict
+        """
+        return {'status': self._gateway_api.add_virtual_input_module()}
+
     @openmotics_api(auth=True, check=types(action_type=int, action_number=int))
     def do_basic_action(self, action_type, action_number):
         """

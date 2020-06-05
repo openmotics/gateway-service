@@ -661,25 +661,28 @@ class MasterClassicController(MasterController):
     # Virtual modules
 
     def add_virtual_output_module(self):
-        """ Adds a virtual output module.
-        :returns: dict with 'status'.
-        """
+        # type: () -> str
         module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'o'})
-        return {'status': module.get('resp')}
+        self._eeprom_controller.invalidate_cache()
+        self._eeprom_controller.dirty = True
+        self._refresh_outputs()
+        return module.get('resp')
 
     def add_virtual_dim_module(self):
-        """ Adds a virtual dim module.
-        :returns: dict with 'status'.
-        """
+        # type: () -> str
         module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'd'})
-        return {'status': module.get('resp')}
+        self._eeprom_controller.invalidate_cache()
+        self._eeprom_controller.dirty = True
+        self._refresh_outputs()
+        return module.get('resp')
 
     def add_virtual_input_module(self):
-        """ Adds a virtual input module.
-        :returns: dict with 'status'.
-        """
+        # type: () -> str
         module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'i'})
-        return {'status': module.get('resp')}
+        self._eeprom_controller.invalidate_cache()
+        self._eeprom_controller.dirty = True
+        self._refresh_inputs()
+        return module.get('resp')
 
     # Generic
 
@@ -866,6 +869,10 @@ class MasterClassicController(MasterController):
         :returns: emtpy dict.
         """
         self._master_communicator.do_command(master_api.reset())
+        return dict()
+
+    def power_cycle_master(self):
+        self._master_communicator.do_command(master_api.cold_reset())
         return dict()
 
     def power_cycle_bus(self):
