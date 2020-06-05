@@ -112,7 +112,8 @@ class P1Controller(object):
 
                 for port_id, status in enumerate(statuses):
                     if status:
-                        values.append({'module_id': module_id,
+                        values.append({'device_id': '{}.{}'.format(module['address'], port_id),
+                                       'module_id': module_id,
                                        'port_id': port_id,
                                        'timestamp': timestamps[port_id],
                                        'gas': {'ean': eans2[port_id].strip(),

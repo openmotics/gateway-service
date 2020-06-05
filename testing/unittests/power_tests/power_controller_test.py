@@ -95,6 +95,7 @@ class PowerP1Test(unittest.TestCase):
                                  'tariff_normal': 1.0,
                                  'voltage': {'phase1': 1.0, 'phase2': 1.0, 'phase3': 1.0}},
                  'gas': {'consumption': 1.0, 'ean': '2222222222222222222222222222'},
+                 'device_id': '11.0',
                  'module_id': 10,
                  'port_id': 0,
                  'timestamp': 1.0},
@@ -105,6 +106,7 @@ class PowerP1Test(unittest.TestCase):
                                  'tariff_normal': 2.3,
                                  'voltage': {'phase1': 2.3, 'phase2': 2.3, 'phase3': 2.3}},
                  'gas': {'consumption': 2.3, 'ean': ''},
+                 'device_id': '11.1',
                  'module_id': 10,
                  'port_id': 1,
                  'timestamp': 2.0},
@@ -119,6 +121,7 @@ class PowerP1Test(unittest.TestCase):
                                              'phase2': 12.0,
                                              'phase3': 12.0}},
                  'gas': {'consumption': 12.0, 'ean': '4444444444444444444444444444'},
+                 'device_id': '11.3',
                  'module_id': 10,
                  'port_id': 3,
                  'timestamp': 190527083152.0}
