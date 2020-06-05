@@ -74,17 +74,14 @@ def test_module_discover_noop(toolbox, discover_mode):
 
     data = toolbox.dut.get('/module_discover_status')
     assert data['running']
-    toolbox.discover_input_module()
     toolbox.discover_output_module()
 
     for _ in range(10):
         data = toolbox.dut.get('/get_modules')
-        if data.get('inputs') and data.get('outputs'):
+        if data.get('outputs'):
             break
         time.sleep(0.2)
 
-    assert 'inputs' in data
-    assert 'I' in data['inputs']
     assert 'outputs' in data
     assert 'O' in data['outputs']
 
@@ -193,3 +190,7 @@ def test_factory_reset(toolbox, create_user):
     modules = list(data['modules']['master'].values())
     assert set(['I', 'O']) == set(x['type'] for x in modules)
     assert None not in [x['firmware'] for x in modules]
+
+    toolbox.dut.get('/add_virtual_output')
+    modules = list(data['modules']['master'].values())
+    assert set(['I', 'O', 'o']) == set(x['type'] for x in modules)

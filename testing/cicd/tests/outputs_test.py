@@ -20,7 +20,6 @@ import hypothesis
 import pytest
 import ujson as json
 from hypothesis.strategies import booleans, composite, integers, just, one_of
-from six.moves import map
 
 logger = logging.getLogger('openmotics')
 
@@ -28,22 +27,27 @@ DEFAULT_OUTPUT_CONFIG = {'type': 0, 'timer': 2**16 - 1}
 DEFAULT_LIGHT_CONFIG = {'type': 255, 'timer': 2**16 - 1}
 
 
+def output_types():
+    return one_of([just('O'), just('o')])
+
+
 @composite
 def next_output(draw):
     used_values = []
-    def f(toolbox):
-        value = draw(one_of(list(map(just, toolbox.dut_outputs))).filter(lambda x: x not in used_values))
+    def f(toolbox, module_type):
+        ids = toolbox.get_module(module_type)
+        value = draw(one_of([just(x) for x in ids]).filter(lambda x: x not in used_values))
         used_values.append(value)
-        hypothesis.note('module o#{}'.format(value))
+        hypothesis.note('module {}#{}'.format(module_type, value))
         return value
     return f
 
 
 @pytest.mark.smoke
-@hypothesis.given(next_output(), booleans())
-def test_events(toolbox, next_output, output_status):
-    output_id = next_output(toolbox)
-    logger.debug('output status o#{}, expect event {} -> {}'.format(output_id, not output_status, output_status))
+@hypothesis.given(next_output(), just('O'), booleans())
+def test_events(toolbox, next_output, output_type, output_status):
+    output_id = next_output(toolbox, output_type)
+    logger.debug('output status {}#{}, expect event {} -> {}'.format(output_type, output_id, not output_status, output_status))
     toolbox.ensure_output(output_id, not output_status, DEFAULT_OUTPUT_CONFIG)
 
     toolbox.set_output(output_id, output_status)
@@ -51,11 +55,10 @@ def test_events(toolbox, next_output, output_status):
 
 
 @pytest.mark.smoke
-@pytest.mark.skip(reason='fails consistently when running with the ci profile')
-@hypothesis.given(next_output(), booleans())
-def test_status(toolbox, next_output, output_status):
-    output_id = next_output(toolbox)
-    logger.debug('output status o#{}, expect status ? -> {}'.format(output_id, output_status))
+@hypothesis.given(next_output(), output_types(), booleans())
+def test_status(toolbox, next_output, output_type, output_status):
+    output_id = next_output(toolbox, output_type)
+    logger.debug('output status {}#{}, expect status ? -> {}'.format(output_type, output_id, output_status))
     toolbox.configure_output(output_id, DEFAULT_OUTPUT_CONFIG)
 
     toolbox.set_output(output_id, output_status)
@@ -63,10 +66,10 @@ def test_status(toolbox, next_output, output_status):
 
 
 @pytest.mark.smoke
-@hypothesis.given(next_output(), just(True))
-def test_timers(toolbox, next_output, output_status):
-    output_id = next_output(toolbox)
-    logger.debug('output timer o#{}, expect event {} -> {}'.format(output_id, output_status, not output_status))
+@hypothesis.given(next_output(), just('O'), just(True))
+def test_timers(toolbox, next_output, output_type, output_status):
+    output_id = next_output(toolbox, output_type)
+    logger.debug('output timer {}#{}, expect event {} -> {}'.format(output_type, output_id, output_status, not output_status))
     output_config = {'type': 0, 'timer': 5}  # FIXME: event reordering with timer of <2s
     toolbox.ensure_output(output_id, False, output_config)
 
@@ -76,10 +79,12 @@ def test_timers(toolbox, next_output, output_status):
 
 
 @pytest.mark.smoke
-@hypothesis.given(next_output(), integers(min_value=0, max_value=254), just(True))
-def test_floor_lights(toolbox, next_output, floor_id, output_status):
-    light_id, other_light_id, other_output_id = (next_output(toolbox), next_output(toolbox), next_output(toolbox))
-    logger.debug('light o#{} on floor {}, expect event {} -> {}'.format(light_id, floor_id, not output_status, output_status))
+@hypothesis.given(next_output(), integers(min_value=0, max_value=254), just('O'), just(True))
+def test_floor_lights(toolbox, next_output, floor_id, output_type, output_status):
+    light_id, other_light_id, other_output_id = (next_output(toolbox, output_type),
+                                                 next_output(toolbox, output_type),
+                                                 next_output(toolbox, output_type))
+    logger.debug('light {}#{} on floor {}, expect event {} -> {}'.format(output_type, light_id, floor_id, not output_status, output_status))
 
     output_config = {'floor': floor_id}
     output_config.update(DEFAULT_LIGHT_CONFIG)
@@ -106,11 +111,11 @@ def test_floor_lights(toolbox, next_output, floor_id, output_status):
 
 
 @pytest.mark.smoke
-@pytest.mark.skip(reason='fails consistently when running with the ci profile')
-@hypothesis.given(next_output(), integers(min_value=0, max_value=159), booleans())
-def test_group_action_toggle(toolbox, next_output, group_action_id, output_status):
-    (output_id, other_output_id) = (next_output(toolbox), next_output(toolbox))
-    logger.debug('group action a#{} for o#{} o#{}, expect event {} -> {}'.format(group_action_id, output_id, other_output_id, not output_status, output_status))
+@hypothesis.given(next_output(), integers(min_value=0, max_value=159), just('O'), booleans())
+def test_group_action_toggle(toolbox, next_output, group_action_id, output_type, output_status):
+    (output_id, other_output_id) = (next_output(toolbox, output_type),
+                                    next_output(toolbox, output_type))
+    logger.debug('group action BA#{} for {}#{} {}#{}, expect event {} -> {}'.format(group_action_id, output_type, output_id, output_type, other_output_id, not output_status, output_status))
 
     actions = ['162', str(output_id), '162', str(other_output_id)]  # toggle both outputs
     config = {'id': group_action_id, 'actions': ','.join(actions)}
