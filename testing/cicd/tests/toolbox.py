@@ -77,11 +77,12 @@ class Client(object):
         while since > time.time() - timeout:
             try:
                 response = requests.get(uri, params=params, headers=headers, **self._default_kwargs)
+                assert response.status_code != 404, 'not found {}'.format(path)
                 data = response.json()
                 if success and 'success' in data:
                     assert data['success'], 'content={}'.format(response.content)
                 return data
-            except (AssertionError, ConnectionError, RequestException) as exc:
+            except (ConnectionError, RequestException) as exc:
                 logger.debug('request {} failed {}, retrying...'.format(path, exc))
                 time.sleep(16)
                 pass
