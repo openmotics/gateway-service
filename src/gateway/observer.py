@@ -26,7 +26,7 @@ from bus.om_bus_events import OMBusEvents
 from bus.om_bus_client import MessageClient
 
 if False:  # MYPY
-    from typing import Any, Dict, List
+    from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("openmotics")
 
@@ -44,7 +44,7 @@ class Observer(object):
     @Inject
     def __init__(self, master_controller=INJECTED, message_client=INJECTED):
         self._master_controller = master_controller  # type: MasterController
-        self._message_client = message_client  # type: MessageClient
+        self._message_client = message_client  # type: Optional[MessageClient]
 
         self._event_subscriptions = []
         self._master_controller.subscribe_event(self._master_event)
@@ -68,7 +68,8 @@ class Observer(object):
                 callback(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE,
                                       data=master_event.data))
         if master_event.type == MasterEvent.Types.OUTPUT_CHANGE:
-            self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': master_event.data['id']})
+            if self._message_client is not None:
+                self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': master_event.data['id']})
             for callback in self._event_subscriptions:
                 callback(GatewayEvent(event_type=GatewayEvent.Types.OUTPUT_CHANGE,
                                       data=master_event.data))

@@ -298,7 +298,7 @@ class WebInterface(object):
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
-        self._message_client = message_client  # type: MessageClient
+        self._message_client = message_client  # type: Optional[MessageClient]
         self._plugin_controller = None  # type: Optional[PluginController]
         self._metrics_collector = None  # type: Optional[MetricsCollector]
         self._metrics_controller = None  # type: Optional[MetricsController]
@@ -2225,7 +2225,9 @@ class WebInterface(object):
         """ Requests the state of the various services and checks the returned value for the global state """
         health = {'openmotics': {'state': self._service_state}}
         try:
-            state = self._message_client.get_state('vpn_service', {})
+            state = {}
+            if self._message_client is not None:
+                state = self._message_client.get_state('vpn_service', {})
             health['vpn_service'] = {'state': state.get('last_cycle', 0) > time.time() - 300}
         except Exception as ex:
             logger.error('Error loading vpn_service health: %s', ex)

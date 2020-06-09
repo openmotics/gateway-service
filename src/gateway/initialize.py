@@ -45,21 +45,21 @@ from serial_utils import RS485
 
 
 if False:  # MYPY
-    from typing import Any
+    from typing import Any, Optional
     from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger('openmotics')
 
 
-def initialize():
-    # type: () -> None
+def initialize(message_client_name):
+    # type: (Optional[str]) -> None
     logger.info('Initializing')
     init_lock = constants.get_init_lockfile()
     logger.info('Waiting for lock')
     with lock_file(init_lock) as fd:
         content = fd.read()
         apply_migrations()
-        setup_platform()
+        setup_platform(message_client_name)
         if content == '':
             logger.info('Initializing, done')
         elif content == 'factory_reset':
@@ -127,13 +127,13 @@ def factory_reset(master_controller=INJECTED):
         os.remove(config_file)
 
 
-def setup_platform():
-    # type: () -> None
-    setup_target_platform(Platform.get_platform())
+def setup_platform(message_client_name):
+    # type: (Optional[str]) -> None
+    setup_target_platform(Platform.get_platform(), message_client_name)
 
 
-def setup_target_platform(target_platform):
-    # type: (str) -> None
+def setup_target_platform(target_platform, message_client_name):
+    # type: (str, Optional[str]) -> None
     config = ConfigParser()
     config.read(constants.get_config_file())
 
@@ -172,7 +172,10 @@ def setup_target_platform(target_platform):
         _ = thermostat_controller_master
 
     # IPC
-    Injectable.value(message_client=MessageClient('openmotics_service'))
+    message_client = None
+    if message_client_name is not None:
+        message_client = MessageClient(message_client_name)
+    Injectable.value(message_client=message_client)
 
     # Cloud API
     parsed_url = urlparse(config.get('OpenMotics', 'vpn_check_url'))

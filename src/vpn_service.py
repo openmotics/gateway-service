@@ -126,65 +126,72 @@ class VpnController(object):
 class Cloud(object):
     """ Connects to the cloud """
 
-    def __init__(self, url, message_client, config, sleep_time=DEFAULT_SLEEP_TIME):
-        self.__url = url
-        self.__message_client = message_client
-        self.__last_connect = time.time()
-        self.__sleep_time = sleep_time
-        self.__config = config
-        self.__intervals = {}
-        self.__configuration = {}
+    @Inject
+    def __init__(self, url, config, sleep_time=DEFAULT_SLEEP_TIME, message_client=INJECTED):
+        self._url = url
+        self._message_client = message_client
+        self._last_connect = time.time()
+        self._sleep_time = sleep_time
+        self._config = config
+        self._intervals = {}
+        self._configuration = {}
 
     def call_home(self, extra_data):
         """ Call home reporting our state, and optionally get new settings or other stuff """
         try:
-            request = requests.post(self.__url,
+            request = requests.post(self._url,
                                     data={'extra_data': json.dumps(extra_data)},
                                     timeout=10.0)
             data = json.loads(request.text)
 
             if 'sleep_time' in data:
-                self.__sleep_time = data['sleep_time']
+                self._sleep_time = data['sleep_time']
             else:
-                self.__sleep_time = DEFAULT_SLEEP_TIME
+                self._sleep_time = DEFAULT_SLEEP_TIME
 
             if 'configuration' in data:
-                configuration_changed = cmp(self.__configuration, data['configuration']) != 0
+                configuration_changed = cmp(self._configuration, data['configuration']) != 0
                 if configuration_changed:
                     for setting, value in data['configuration'].items():
-                        self.__config.set(setting, value)
+                        self._config.set(setting, value)
                     logger.info('configuration changed: {0}'.format(data['configuration']))
 
                 # update __configuration when storing config is successful
-                self.__configuration = data['configuration']
+                self._configuration = data['configuration']
 
             if 'intervals' in data:
                 # check if interval changes occurred and distribute interval changes
-                intervals_changed = cmp(self.__intervals, data['intervals']) != 0
-                if intervals_changed:
-                    self.__message_client.send_event(OMBusEvents.METRICS_INTERVAL_CHANGE, data['intervals'])
+                intervals_changed = cmp(self._intervals, data['intervals']) != 0
+                if intervals_changed and self._message_client is not None:
+                    self._message_client.send_event(OMBusEvents.METRICS_INTERVAL_CHANGE, data['intervals'])
                     logger.info('intervals changed: {0}'.format(data['intervals']))
 
                 # update __intervals when sending is successful
-                self.__intervals = data['intervals']
+                self._intervals = data['intervals']
 
-            self.__last_connect = time.time()
-            self.__message_client.send_event(OMBusEvents.CLOUD_REACHABLE, True)
+            self._last_connect = time.time()
+            if self._message_client is not None:
+                self._message_client.send_event(OMBusEvents.CLOUD_REACHABLE, True)
             return {'open_vpn': data['open_vpn'],
                     'success': True}
         except Exception as ex:
-            logger.info('Exception occured during check: {0}'.format(ex))
-            self.__message_client.send_event(OMBusEvents.CLOUD_REACHABLE, False)
+            message = str(ex)
+            if 'Connection refused' in message:
+                logger.warning('Cannot connect to the OpenMotics service')
+            else:
+                logger.info('Exception occured during check: {0}'.format(ex))
+            if self._message_client is not None:
+                self._message_client.send_event(OMBusEvents.CLOUD_REACHABLE, False)
             return {'open_vpn': True,
                     'success': False}
 
     def get_sleep_time(self):
         """ Get the time to sleep between two cloud checks. """
-        return self.__sleep_time
+        return self._sleep_time
 
     def get_last_connect(self):
         """ Get the timestamp of the last connection with the cloud. """
-        return self.__last_connect
+        return self._last_connect
 
 
 class Gateway(object):
@@ -200,7 +207,11 @@ class Gateway(object):
             request = requests.get("http://" + self.__host + "/" + uri, timeout=15.0)
             return json.loads(request.text)
         except Exception as ex:
-            logger.info('Exception during Gateway call: {0} {1}'.format(ex, uri))
+            message = str(ex)
+            if 'Connection refused' in message:
+                logger.warning('Cannot connect to the OpenMotics service')
+            else:
+                logger.error('Exception during Gateway call: {0} {1}'.format(message, uri))
             return
 
     def get_real_time_power(self):
@@ -331,14 +342,15 @@ class VPNService(object):
     """ The VPNService contains all logic to be able to send the heartbeat and check whether the VPN should be opened """
 
     @Inject
-    def __init__(self, configuration_controller=INJECTED):
-        # type: (ConfigurationController) -> None
+    def __init__(self, configuration_controller=INJECTED, message_client=INJECTED):
+        # type: (ConfigurationController, MessageClient) -> None
         config = ConfigParser()
         config.read(constants.get_config_file())
 
-        self._message_client = MessageClient('vpn_service')
-        self._message_client.add_event_handler(self._event_receiver)
-        self._message_client.set_state_handler(self._check_state)
+        self._message_client = message_client
+        if self._message_client is not None:
+            self._message_client.add_event_handler(self._event_receiver)
+            self._message_client.set_state_handler(self._check_state)
 
         self._iterations = 0
         self._last_cycle = 0.0
@@ -353,7 +365,6 @@ class VPNService(object):
         self._vpn_controller = VpnController()
         self._config_controller = configuration_controller  # type: ConfigurationController
         self._cloud = Cloud(config.get('OpenMotics', 'vpn_check_url') % config.get('OpenMotics', 'uuid'),
-                            self._message_client,
                             self._config_controller)
 
         self._collectors = {'thermostats': DataCollector(self._gateway.get_thermostats, 60),
@@ -492,7 +503,8 @@ class VPNService(object):
             VpnController.stop_vpn()
         is_running = VpnController.check_vpn()
         self._vpn_open = is_running and self._vpn_controller.vpn_connected
-        self._message_client.send_event(OMBusEvents.VPN_OPEN, self._vpn_open)
+        if self._message_client is not None:
+            self._message_client.send_event(OMBusEvents.VPN_OPEN, self._vpn_open)
 
     def start(self):
         self._check_vpn()
@@ -509,8 +521,9 @@ class VPNService(object):
                 if cloud_enabled is False:
                     self._sleep_time = None
                     self._set_vpn(False)
-                    self._message_client.send_event(OMBusEvents.VPN_OPEN, False)
-                    self._message_client.send_event(OMBusEvents.CLOUD_REACHABLE, False)
+                    if self._message_client is not None:
+                        self._message_client.send_event(OMBusEvents.VPN_OPEN, False)
+                        self._message_client.send_event(OMBusEvents.CLOUD_REACHABLE, False)
 
                     time.sleep(DEFAULT_SLEEP_TIME)
                     continue
@@ -572,7 +585,7 @@ class VPNService(object):
 
 if __name__ == '__main__':
     setup_logger()
-    initialize()
+    initialize(message_client_name='vpn_service')
 
     logger.info("Starting VPN service")
     vpn_service = VPNService()

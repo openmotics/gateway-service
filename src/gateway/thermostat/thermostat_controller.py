@@ -19,12 +19,12 @@ if False:
     from bus.om_bus_client import MessageClient
     from gateway.observer import Observer
     from gateway.events import GatewayEvent
-    from typing import Callable, List, Tuple
+    from typing import Callable, List, Tuple, Optional
 
 
 class ThermostatController(object):
 
-    def __init__(self, gateway_api, message_client, observer):  # type: (GatewayApi, MessageClient, Observer) -> None
+    def __init__(self, gateway_api, message_client, observer):  # type: (GatewayApi, Optional[MessageClient], Observer) -> None
         self._gateway_api = gateway_api
         self._message_client = message_client
         self._observer = observer
