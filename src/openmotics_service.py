@@ -86,7 +86,8 @@ class OpenmoticsService(object):
                 event_sender=INJECTED,  # type: EventSender
                 maintenance_controller=INJECTED,  # type: MaintenanceController
                 thermostat_controller=INJECTED,  # type: ThermostatController
-                shutter_controller=INJECTED  # type: ShutterController
+                shutter_controller=INJECTED,  # type: ShutterController
+                frontpanel_controller=INJECTED  # type: FrontpanelController
             ):
 
         # TODO: Fix circular dependencies
@@ -96,6 +97,7 @@ class OpenmoticsService(object):
         thermostat_controller.subscribe_events(event_sender.enqueue_event)
         thermostat_controller.subscribe_events(plugin_controller.process_observer_event)
         message_client.add_event_handler(metrics_controller.event_receiver)
+        message_client.add_event_handler(frontpanel_controller.event_receiver)
         web_interface.set_plugin_controller(plugin_controller)
         web_interface.set_metrics_collector(metrics_collector)
         web_interface.set_metrics_controller(metrics_controller)
@@ -216,7 +218,7 @@ class OpenmoticsService(object):
 
 if __name__ == "__main__":
     setup_logger()
-    initialize()
+    initialize(message_client_name='openmotics_service')
 
     logger.info("Starting OpenMotics service")
     # TODO: move message service to separate process

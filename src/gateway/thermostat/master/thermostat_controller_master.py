@@ -79,7 +79,8 @@ class ThermostatControllerMaster(ThermostatController):
 
     def _thermostat_changed(self, thermostat_id, status):
         """ Executed by the Thermostat Status tracker when an output changed state """
-        self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': thermostat_id})
+        if self._message_client is not None:
+            self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': thermostat_id})
         location = {'room_id': Toolbox.denonify(self._thermostats_config[thermostat_id].room, 255)}
         for callback in self._event_subscriptions:
             callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_CHANGE,
@@ -92,7 +93,8 @@ class ThermostatControllerMaster(ThermostatController):
                                         'location': location}))
 
     def _thermostat_group_changed(self, status):
-        self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
+        if self._message_client is not None:
+            self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
         for callback in self._event_subscriptions:
             callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
                                   data={'id': 0,

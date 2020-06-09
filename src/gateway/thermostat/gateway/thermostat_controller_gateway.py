@@ -520,7 +520,8 @@ class ThermostatControllerGateway(ThermostatController):
         :type room: int
         """
         logger.debug('v0_event_thermostat_changed: {}'.format(thermostat_number))
-        self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': thermostat_number})
+        if self._message_client is not None:
+            self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': thermostat_number})
         location = {'room_id': room}
         for callback in self._event_subscriptions:
             callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_CHANGE,
@@ -537,7 +538,8 @@ class ThermostatControllerGateway(ThermostatController):
         :type thermostat_group: models.ThermostatGroup
         """
         logger.debug('v0_event_thermostat_group_changed: {}'.format(thermostat_group))
-        self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
+        if self._message_client is not None:
+            self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
         for callback in self._event_subscriptions:
             callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
                                   data={'id': 0,

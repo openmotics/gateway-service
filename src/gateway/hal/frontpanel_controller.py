@@ -18,7 +18,7 @@ Module for the frontpanel
 from __future__ import absolute_import
 import logging
 import time
-from bus.om_bus_client import MessageClient, OMBusEvents
+from bus.om_bus_client import OMBusEvents
 from platform_utils import Hardware
 from gateway.daemon_thread import DaemonThread
 
@@ -88,13 +88,12 @@ class FrontpanelController(object):
         self._authorized_mode_timeout = 0
         self._indicate = False
         self._indicate_timeout = 0
-        self._message_client = None
 
     @property
     def authorized_mode(self):
         return self._authorized_mode
 
-    def _event_receiver(self, event, payload):
+    def event_receiver(self, event, payload):
         if event == OMBusEvents.CLOUD_REACHABLE:
             self._report_cloud_reachable(payload)
         elif event == OMBusEvents.VPN_OPEN:
@@ -105,9 +104,6 @@ class FrontpanelController(object):
                                                            target=self._do_frontpanel_tasks,
                                                            interval=0.5)
         self._check_network_activity_thread.start()
-        # Connect to IPC
-        self._message_client = MessageClient('led_service')
-        self._message_client.add_event_handler(self._event_receiver)
 
     def stop(self):
         if self._check_network_activity_thread is not None:
