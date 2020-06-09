@@ -18,7 +18,6 @@ import argparse
 import logging
 import os
 import sys
-
 import constants
 import gateway
 import gateway.initialize
@@ -28,7 +27,9 @@ logger = logging.getLogger('openmotics')
 
 
 def cmd_get_realtime_power(args):
-    gateway.initialize.setup_platform()
+    _ = args
+    gateway.initialize.setup_platform(message_client_name='openmotics_cli')
+
     @Inject
     def f(gateway_api=INJECTED):
         return gateway_api.get_realtime_power()
@@ -36,7 +37,9 @@ def cmd_get_realtime_power(args):
 
 
 def cmd_get_realtime_p1(args):
-    gateway.initialize.setup_platform()
+    _ = args
+    gateway.initialize.setup_platform(message_client_name='openmotics_cli')
+
     @Inject
     def f(gateway_api=INJECTED):
         return gateway_api.get_realtime_p1()
@@ -44,7 +47,9 @@ def cmd_get_realtime_p1(args):
 
 
 def cmd_get_total_energy(args):
-    gateway.initialize.setup_platform()
+    _ = args
+    gateway.initialize.setup_platform(message_client_name='openmotics_cli')
+
     @Inject
     def f(gateway_api=INJECTED):
         return gateway_api.get_total_energy()
