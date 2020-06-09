@@ -175,7 +175,11 @@ class Cloud(object):
             return {'open_vpn': data['open_vpn'],
                     'success': True}
         except Exception as ex:
-            logger.info('Exception occured during check: {0}'.format(ex))
+            message = str(ex)
+            if 'Connection refused' in message:
+                logger.warning('Cannot connect to the OpenMotics service')
+            else:
+                logger.info('Exception occured during check: {0}'.format(ex))
             if self._message_client is not None:
                 self._message_client.send_event(OMBusEvents.CLOUD_REACHABLE, False)
             return {'open_vpn': True,
