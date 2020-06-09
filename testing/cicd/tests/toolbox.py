@@ -159,7 +159,9 @@ class Toolbox(object):
     DEBIAN_AUTHORIZED_MODE = 13
     DEBIAN_DISCOVER_INPUT = 14
     DEBIAN_DISCOVER_OUTPUT = 15
+    DEBIAN_DISCOVER_ENERGY = 23
     DEBIAN_POWER_OUTPUT = 8
+    POWER_ENERGY_MODULE = 11
 
     def __init__(self):
         # type: () -> None
@@ -167,6 +169,7 @@ class Toolbox(object):
         self._dut = None  # type: Optional[Client]
         self._dut_inputs = None  # type: Optional[List[int]]
         self._dut_outputs = None  # type: Optional[List[int]]
+        self._dut_energy_cts = None  # type: Optional[List[Tuple[int, int]]]
 
     @property
     def tester(self):
@@ -201,6 +204,15 @@ class Toolbox(object):
             self._dut_outputs = list(range(0, len(output_modules) * 8 - 1))
         return self._dut_outputs
 
+    @property
+    def dut_energy_cts(self):
+        if self._dut_energy_cts is None:
+            self._dut_energy_cts = []
+            energy_modules = self.list_energy_modules(version=12)
+            for module in energy_modules:
+                self._dut_energy_cts += [(module['id'], input_id) for input_id in range(12)]
+        return self._dut_energy_cts
+
     def initialize(self):
         # type: () -> None
         self.ensure_power_on()
@@ -213,13 +225,15 @@ class Toolbox(object):
             self.dut.login()
         try:
             data = self.dut.get('/get_modules')
-            data['inputs'][0]
-            data['outputs'][0]
+            assert len(data['inputs'])
+            assert len(data['outputs'])
+            self.list_energy_modules(version=12)  # Asserts a minimum of 1 module
         except Exception:
             logger.info('initializing modules...')
             self.start_module_discovery()
             self.discover_input_module()
             self.discover_output_module()
+            self.discover_energy_modules()
             time.sleep(2)
             self.dut.get('/module_discover_stop')
 
@@ -243,6 +257,13 @@ class Toolbox(object):
         data = self.dut.get('/get_modules_information')
         modules = [x for x in data['modules']['master'].values() if x['type'] == module_type and x['firmware']]
         assert len(modules) >= min_modules, 'Not enough modules of type {} available'.format(module_type)
+        return modules
+
+    def list_energy_modules(self, version, min_modules=1):
+        # type: (int, int) -> List[Dict[str, Any]]
+        data = self.dut.get('/get_power_modules')
+        modules = [module for module in data['modules'] if module['version'] == version]
+        assert len(modules) >= min_modules, 'Not enough energy modules available'
         return modules
 
     def start_authorized_mode(self):
@@ -288,6 +309,10 @@ class Toolbox(object):
         # type: () -> None
         self.press_input(self.DEBIAN_DISCOVER_OUTPUT)
 
+    def discover_energy_modules(self):
+        # type: () -> None
+        self.press_input(self.DEBIAN_DISCOVER_ENERGY)
+
     def power_off(self):
         # type: () -> None
         logger.info('power off')
@@ -303,6 +328,11 @@ class Toolbox(object):
         logger.info('wait for gateway api to respond')
         self.health_check(timeout=300)
         logger.info('health check done')
+
+    def power_cycle_module(self, output_id):
+        # type: (int) -> None
+        self.tester.get('/set_output', {'id': output_id, 'is_on': False})
+        self.tester.get('/set_output', {'id': output_id, 'is_on': True})
 
     def health_check(self, timeout=30):
         # type: (float) -> List[str]
