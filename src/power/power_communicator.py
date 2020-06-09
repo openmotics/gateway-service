@@ -15,17 +15,24 @@
 """
 Module to communicate with the power modules.
 """
-
 from __future__ import absolute_import
+
 import logging
 import time
+from threading import RLock, Thread
+
 from six.moves.queue import Empty
-from ioc import Injectable, Inject, INJECTED, Singleton
-from threading import Thread, RLock
-from serial_utils import printable, CommunicationTimedOutException
+
+from ioc import INJECTED, Inject, Injectable, Singleton
 from power import power_api
 from power.power_command import crc7, crc8
 from power.time_keeper import TimeKeeper
+from serial_utils import CommunicationTimedOutException, printable
+
+if False:  # MYPY:
+    from typing import Dict, Optional
+    from serial_utils import RS485
+    from power.power_store import PowerStore
 
 logger = logging.getLogger("openmotics")
 
@@ -36,8 +43,9 @@ class PowerCommunicator(object):
     """ Uses a serial port to communicate with the power modules. """
 
     @Inject
-    def __init__(self, power_serial=INJECTED, power_controller=INJECTED, verbose=False, time_keeper_period=60,
+    def __init__(self, power_serial=INJECTED, power_store=INJECTED, verbose=False, time_keeper_period=60,
                  address_mode_timeout=300):
+        # type: (RS485, PowerStore, bool, int, int) -> None
         """ Default constructor.
 
         :param power_serial: Serial port to communicate with
@@ -53,12 +61,12 @@ class PowerCommunicator(object):
         self.__address_mode_stop = False
         self.__address_thread = None
         self.__address_mode_timeout = address_mode_timeout
-        self.__power_controller = power_controller
+        self.__power_store = power_store
 
         self.__last_success = 0
 
         if time_keeper_period != 0:
-            self.__time_keeper = TimeKeeper(self, power_controller, time_keeper_period)
+            self.__time_keeper = TimeKeeper(self, power_store, time_keeper_period)  # type: Optional[TimeKeeper]
         else:
             self.__time_keeper = None
 
@@ -67,7 +75,7 @@ class PowerCommunicator(object):
                                       'bytes_written': 0,
                                       'bytes_read': 0}
         self.__debug_buffer = {'read': {},
-                               'write': {}}
+                               'write': {}}  # type: Dict[str,Dict[float,str]]
         self.__debug_buffer_duration = 300
 
         self.__verbose = verbose
@@ -214,7 +222,7 @@ class PowerCommunicator(object):
 
     def __do_address_mode(self):
         """ This code is running in a thread when in address mode. """
-        if self.__power_controller is None:
+        if self.__power_store is None:
             self.__address_mode = False
             self.__address_thread = None
             return
@@ -259,12 +267,12 @@ class PowerCommunicator(object):
                 else:
                     (old_address, cid) = (ord(header[:2][1]), header[2:3])
                     # Ask power_controller for new address, and register it.
-                    new_address = self.__power_controller.get_free_address()
+                    new_address = self.__power_store.get_free_address()
 
-                    if self.__power_controller.module_exists(old_address):
-                        self.__power_controller.readdress_power_module(old_address, new_address)
+                    if self.__power_store.module_exists(old_address):
+                        self.__power_store.readdress_power_module(old_address, new_address)
                     else:
-                        self.__power_controller.register_power_module(new_address, version)
+                        self.__power_store.register_power_module(new_address, version)
 
                     # Send new address to module
                     if version == power_api.P1_CONCENTRATOR:

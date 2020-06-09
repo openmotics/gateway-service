@@ -17,7 +17,12 @@ Contains the definition of the power modules Api.
 """
 
 from __future__ import absolute_import
+
+from collections import namedtuple
+
 from power.power_command import PowerCommand
+
+RealtimePower = namedtuple('RealtimePower', ('voltage', 'frequency', 'current', 'power'))
 
 BROADCAST_ADDRESS = 255
 
@@ -91,6 +96,50 @@ def get_status_p1(version):
     """ Gets the status from a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'SP\x00', '', 'B', module_type='C')
+    else:
+        raise ValueError("Unknown power api version")
+
+
+def get_meter_p1(version, type=None):
+    """ Gets the meter id from a P1 concentrator """
+    if version == P1_CONCENTRATOR:
+        if type not in (1, 2):
+            raise ValueError('Unknown meter type')
+        return PowerCommand('G', 'M{0}\x00'.format(type), '', '224s', module_type='C')
+    else:
+        raise ValueError("Unknown power api version")
+
+
+def get_timestamp_p1(version):
+    """ Gets the timestamp from a P1 concentrator """
+    if version == P1_CONCENTRATOR:
+        return PowerCommand('G', 'TS\x00', '', '104s', module_type='C')
+    else:
+        raise ValueError("Unknown power api version")
+
+
+def get_gas_consumption_p1(version):
+    """ Gets the gas consumption from a P1 concentrator """
+    if version == P1_CONCENTRATOR:
+        return PowerCommand('G', 'cG\x00', '', '112s', module_type='C')
+    else:
+        raise ValueError("Unknown power api version")
+
+
+def get_injection_tariff_p1(version, type=None):
+    """ Gets the injection tariff from a P1 concentrator """
+    if version == P1_CONCENTRATOR:
+        if type not in (1, 2):
+            raise ValueError('Unknown tariff type')
+        return PowerCommand('G', 'i{0}\x00'.format(type), '', '112s', module_type='C')
+    else:
+        raise ValueError("Unknown power api version")
+
+
+def get_tariff_indicator_p1(version):
+    """ Gets the tariff indicator from a P1 concentrator """
+    if version == P1_CONCENTRATOR:
+        return PowerCommand('G', 'ti\x00', '', '32s', module_type='C')
     else:
         raise ValueError("Unknown power api version")
 

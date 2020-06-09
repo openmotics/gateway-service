@@ -150,7 +150,7 @@ def setup_target_platform(target_platform, message_client_name):
     # instances that are used in @Inject decorated functions below, and is also needed to specify
     # abstract implementations depending on e.g. the platform (classic vs core) or certain settings (classic
     # thermostats vs gateway thermostats)
-    from power import power_communicator, power_controller
+    from power import power_store, power_communicator, power_controller
     from plugins import base
     from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
                          maintenance_controller, comm_led_controller, users, pulse_counter_controller, config as config_controller,
@@ -159,7 +159,7 @@ def setup_target_platform(target_platform, message_client_name):
     from cloud import events
     _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
          maintenance_controller, base, events, power_communicator, comm_led_controller, users,
-         power_controller, pulse_counter_controller, config_controller, metrics_caching, watchdog, output_controller,
+         power_store, power_controller, pulse_counter_controller, config_controller, metrics_caching, watchdog, output_controller,
          room_controller, sensor_controller, group_action_controller)
 
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
@@ -206,6 +206,7 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(power_serial=None)
         Injectable.value(power_communicator=None)
         Injectable.value(power_controller=None)
+        Injectable.value(power_store=None)
 
     # Pulse Controller
     Injectable.value(pulse_db=constants.get_pulse_counter_database_file())

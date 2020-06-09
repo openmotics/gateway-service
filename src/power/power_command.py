@@ -18,6 +18,7 @@ class is used to create the power_api.
 """
 
 from __future__ import absolute_import
+
 import struct
 
 CRC_TABLE = [0, 49, 98, 83, 196, 245, 166, 151, 185, 136, 219, 234, 125, 76, 31, 46, 67, 114, 33,
@@ -99,9 +100,9 @@ class PowerCommand(object):
         :param data: data to send to the power module
         :rtype: string
         """
-        data = struct.pack(self.input_format, *data)
+        buffer = struct.pack(self.input_format, *data)
         header = self.module_type + chr(address) + chr(cid) + str(self.mode) + str(self.type)
-        payload = chr(len(data)) + str(data)
+        payload = chr(len(buffer)) + str(buffer)
         if self.module_type == 'E':
             crc = crc7(header + payload)
         else:
@@ -117,9 +118,9 @@ class PowerCommand(object):
         :param data: data to send to the power module
         :rtype: string
         """
-        data = struct.pack(self.output_format, *data)
+        buffer = struct.pack(self.output_format, *data)
         header = self.module_type + chr(address) + chr(cid) + str(self.mode) + str(self.type)
-        payload = chr(len(data)) + str(data)
+        payload = chr(len(buffer)) + str(buffer)
         if self.module_type == 'E':
             crc = crc7(header + payload)
         else:
@@ -151,3 +152,13 @@ class PowerCommand(object):
             return struct.unpack('%dB' % len(data), data)
         else:
             return struct.unpack(self.output_format, data)
+
+    def __eq__(self, other):
+        return self.mode == other.mode \
+            and self.type == other.type \
+            and self.input_format == other.input_format \
+            and self.output_format == other.output_format \
+            and self.module_type == other.module_type
+
+    def __repr__(self):
+        return '<PowerCommand {} {} {} {} {}>'.format(self.mode, self.type, self.input_format, self.output_format, self.module_type)
