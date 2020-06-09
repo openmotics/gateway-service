@@ -13,15 +13,42 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
+
 import argparse
 import logging
-import sys
 import os
+import sys
 
 import constants
 import gateway
+import gateway.initialize
+from ioc import INJECTED, Inject
 
 logger = logging.getLogger('openmotics')
+
+
+def cmd_get_realtime_power(args):
+    gateway.initialize.setup_platform()
+    @Inject
+    def f(gateway_api=INJECTED):
+        return gateway_api.get_realtime_power()
+    print(f())
+
+
+def cmd_get_realtime_p1(args):
+    gateway.initialize.setup_platform()
+    @Inject
+    def f(gateway_api=INJECTED):
+        return gateway_api.get_realtime_p1()
+    print(f())
+
+
+def cmd_get_total_energy(args):
+    gateway.initialize.setup_platform()
+    @Inject
+    def f(gateway_api=INJECTED):
+        return gateway_api.get_total_energy()
+    print(f())
 
 
 def cmd_factory_reset(args):
@@ -36,6 +63,16 @@ def cmd_factory_reset(args):
 parser = argparse.ArgumentParser()
 parser.add_argument('--version', action='version', version=gateway.__version__)
 subparsers = parser.add_subparsers()
+
+controller_parser = subparsers.add_parser('controller')
+controller_subparsers = controller_parser.add_subparsers()
+realtime_power_parser = controller_subparsers.add_parser('realtime-power')
+realtime_power_parser.set_defaults(func=cmd_get_realtime_power)
+realtime_p1_parser = controller_subparsers.add_parser('realtime-p1')
+realtime_p1_parser.set_defaults(func=cmd_get_realtime_p1)
+total_energy_parser = controller_subparsers.add_parser('total-energy')
+total_energy_parser.set_defaults(func=cmd_get_total_energy)
+
 operator_parser = subparsers.add_parser('operator')
 operator_subparsers = operator_parser.add_subparsers()
 factory_reset_parser = operator_subparsers.add_parser('factory-reset')
