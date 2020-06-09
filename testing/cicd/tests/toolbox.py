@@ -13,14 +13,18 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
+
 import logging
 import os
 import time
 from datetime import datetime
 
+import hypothesis
 import requests
 import ujson as json
 from requests.exceptions import ConnectionError, RequestException
+
+from .hardware import INPUT_MODULE_LAYOUT, Input, Output
 
 logger = logging.getLogger('openmotics')
 
@@ -109,6 +113,11 @@ class TesterGateway(object):
     def get(self, path, params=None, success=True, use_token=True):
         # type: (str, Dict[str,Any], bool, bool) -> Any
         return self._client.get(path, params=params, success=True, use_token=use_token)
+
+    def toggle_output(self, output_id):
+        self.get('/set_output', {'id': output_id, 'is_on': True})
+        time.sleep(0.2)
+        self.get('/set_output', {'id': output_id, 'is_on': False})
 
     def log_events(self):
         # type: () -> None
@@ -200,17 +209,17 @@ class Toolbox(object):
         try:
             self.list_modules('O')
             self.list_modules('I')
+            # TODO should contain firmware version
+            # self.list_modules('C')
         except Exception:
             logger.info('initializing modules...')
-            self.start_module_discovery()
             self.discover_modules()
-            time.sleep(2)
-            self.stop_module_discovery()
 
+        # FIXME: compare with hardware modules instead.
         self.list_modules('O')
         self.list_modules('I')
 
-        # TODO should contain firmware version
+        # self.list_modules('C')
         self.get_module('C')
 
         try:
@@ -296,13 +305,29 @@ class Toolbox(object):
 
     def discover_modules(self):
         # type: () -> None
-        self.press_input(self.DEBIAN_DISCOVER_INPUT)
-        self.press_input(self.DEBIAN_DISCOVER_OUTPUT)
-        self.press_input(self.DEBIAN_DISCOVER_UCAN)
+        self.start_module_discovery()
+        time.sleep(0.2)
+        self.tester.toggle_output(self.DEBIAN_DISCOVER_INPUT)
+        time.sleep(2)
+        self.stop_module_discovery()
 
-        # FIXME
-        for i in range(32, 37):
-            self.press_input(i)
+        self.start_module_discovery()
+        time.sleep(0.2)
+        self.tester.toggle_output(self.DEBIAN_DISCOVER_OUTPUT)
+        time.sleep(2)
+        self.stop_module_discovery()
+
+        # TODO cleanup CAN input discovery
+        self.start_module_discovery()
+        time.sleep(0.2)
+        self.tester.toggle_output(self.DEBIAN_DISCOVER_UCAN)
+        time.sleep(2)
+        for input in INPUT_MODULE_LAYOUT['C'].inputs:
+            self.tester.toggle_output(input.tester_output_id)
+            time.sleep(0.2)
+        self.tester.toggle_output(self.DEBIAN_DISCOVER_UCAN)
+        time.sleep(10)
+        self.stop_module_discovery()
 
     def power_off(self):
         # type: () -> None
@@ -316,7 +341,7 @@ class Toolbox(object):
             return
         logger.info('power on')
         self.tester.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': True})
-        logger.info('wait for gateway api to respond')
+        logger.info('waiting for gateway api to respond...')
         self.health_check(timeout=300)
         logger.info('health check done')
 
@@ -336,54 +361,56 @@ class Toolbox(object):
             time.sleep(10)
         return pending
 
-    def configure_output(self, output_id, config):
-        # type: (int, Dict[str,Any]) -> None
-        config_data = {'id': output_id}
+    def configure_output(self, output, config):
+        # type: (Output, Dict[str,Any]) -> None
+        config_data = {'id': output.output_id}
         config_data.update(**config)
-        logger.debug('configure output {} with {}'.format(output_id, config))
+        logger.debug('configure output {}#{} with {}'.format(output.type, output.output_id, config))
         self.dut.get('/set_output_configuration', {'config': json.dumps(config_data)})
 
-    def ensure_output(self, output_id, status, config=None):
-        # type: (int, int, Optional[Dict[str,Any]]) -> None
+    def ensure_output(self, output, status, config=None):
+        # type: (Output, int, Optional[Dict[str,Any]]) -> None
         if config:
-            self.configure_output(output_id, config)
+            self.configure_output(output, config)
         state = ' '.join(self.tester.get_last_outputs())
-        logger.info('ensure output {} is {}    outputs={}'.format(output_id, status, state))
+        hypothesis.note('ensure output {}#{} is {}'.format(output.type, output.output_id, status))
+        logger.debug('ensure output {}#{} is {}    outputs={}'.format(output.type, output.output_id, status, state))
         time.sleep(0.2)
-        self.set_output(output_id, status)
+        self.set_output(output, status)
         self.tester.reset()
 
-    def set_output(self, output_id, status):
-        # type: (int, int) -> None
-        logger.debug('set output {} -> {}'.format(output_id, status))
-        self.dut.get('/set_output', {'id': output_id, 'is_on': status})
+    def set_output(self, output, status):
+        # type: (Output, int) -> None
+        logger.debug('set output {}#{} -> {}'.format(output.type, output.output_id, status))
+        self.dut.get('/set_output', {'id': output.output_id, 'is_on': status})
 
-    def press_input(self, input_id):
-        # type: (int) -> None
-        self.tester.get('/set_output', {'id': input_id, 'is_on': False})  # ensure start status
+    def press_input(self, input):
+        # type: (Input) -> None
+        self.tester.get('/set_output', {'id': input.tester_output_id, 'is_on': False})  # ensure start status
         self.tester.reset()
-        self.tester.get('/set_output', {'id': input_id, 'is_on': True})
-        time.sleep(0.2)
-        self.tester.get('/set_output', {'id': input_id, 'is_on': False})
-        logger.debug('toggled {} -> True -> False'.format(input_id))
+        hypothesis.note('after input {}#{} pressed'.format(input.type, input.input_id))
+        self.tester.toggle_output(input.tester_output_id)
+        logger.debug('toggled {}#{} -> True -> False'.format(input.type, input.input_id))
 
-    def assert_output_changed(self, output_id, status, between=(0, 30)):
-        # type: (int, bool, Tuple[float,float]) -> None
-        if self.tester.receive_output_event(output_id, status, between=between):
+    def assert_output_changed(self, output, status, between=(0, 30)):
+        # type: (Output, bool, Tuple[float,float]) -> None
+        hypothesis.note('assert output {}#{} status changed {} -> {}'.format(output.type, output.output_id, not status, status))
+        if self.tester.receive_output_event(output.output_id, status, between=between):
             return
-        raise AssertionError('expected event {} status={}'.format(output_id, status))
+        raise AssertionError('expected event {}#{} status={}'.format(output.type, output.output_id, status))
 
-    def assert_output_status(self, output_id, status, timeout=30):
-        # type: (int, bool, float) -> None
+    def assert_output_status(self, output, status, timeout=30):
+        # type: (Output, bool, float) -> None
+        hypothesis.note('assert output {}#{} status is {}'.format(output.type, output.output_id, status))
         since = time.time()
         while since > time.time() - timeout:
             data = self.dut.get('/get_output_status')
-            current_status = data['status'][output_id]['status']
+            current_status = data['status'][output.output_id]['status']
             if bool(status) == bool(current_status):
-                logger.debug('get output status {} status={}, after {:.2f}s'.format(output_id, status, time.time() - since))
+                logger.debug('get output {}#{} status={}, after {:.2f}s'.format(output.type, output.output_id, status, time.time() - since))
                 return
             time.sleep(2)
         state = ' '.join(self.tester.get_last_outputs())
-        logger.error('get status {} status={} != expected {}, timeout after {:.2f}s    outputs={}'.format(output_id, bool(current_status), status, time.time() - since, state))
+        logger.error('get status {} status={} != expected {}, timeout after {:.2f}s    outputs={}'.format(output.output_id, bool(current_status), status, time.time() - since, state))
         self.tester.log_events()
-        raise AssertionError('get status {} status={} != expected {}, timeout after {:.2f}s'.format(output_id, bool(current_status), status, time.time() - since))
+        raise AssertionError('get status {} status={} != expected {}, timeout after {:.2f}s'.format(output.output_id, bool(current_status), status, time.time() - since))
