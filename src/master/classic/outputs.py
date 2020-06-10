@@ -59,7 +59,7 @@ class OutputStatus(object):
                 if output_id in self._outputs:
                     self._update_maybe_report_change(self._outputs[output_id], output)
                 else:
-                    self._report_change(output_id, status=output['status'], dimmer=output['dimmer'])
+                    self._report_change(output_id)
                 self._outputs[output_id] = output
             for output_id in obsolete_ids:
                 del self._outputs[output_id]
@@ -71,6 +71,14 @@ class OutputStatus(object):
     def get_output(self, output_id):
         """ Return the list of Outputs. """
         return self._outputs.get(output_id)
+
+    def set_locked(self, output_id, locked):  # type: (int, bool) -> None
+        """ Sets the locked status on an output """
+        output = self._outputs[output_id]
+        with self._merge_lock:
+            if output.get('locked') != locked:
+                output['locked'] = locked
+                self._report_change(output['id'])
 
     def _update_maybe_report_change(self, output, new_output):
         report = False
@@ -86,8 +94,11 @@ class OutputStatus(object):
                 output['status'] = 0
                 report = True
         if report:
-            self._report_change(output['id'], status=output['status'], dimmer=output['dimmer'])
+            self._report_change(output['id'])
 
-    def _report_change(self, output_id, status, dimmer):
+    def _report_change(self, output_id):
         if self._on_output_change is not None:
-            self._on_output_change(output_id, {'on': bool(status), 'value': dimmer})
+            output = self._outputs.get(output_id)
+            self._on_output_change(output_id, {'on': bool(output['status']),
+                                               'value': output['dimmer'],
+                                               'locked': bool(output['locked'])})

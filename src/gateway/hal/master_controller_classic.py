@@ -18,8 +18,9 @@ Module for communicating with the Master
 from __future__ import absolute_import
 import logging
 import time
+import six
 from datetime import datetime
-from threading import Timer
+from threading import Timer, Lock
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import (
@@ -50,6 +51,7 @@ from master.classic.master_communicator import BackgroundConsumer
 from master.classic.outputs import OutputStatus
 from master.classic.master_communicator import MasterCommunicator
 from master.classic.eeprom_controller import EepromController
+from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
@@ -75,6 +77,7 @@ class MasterClassicController(MasterController):
 
         self._input_status = InputStatus(on_input_change=self._input_changed)
         self._output_status = OutputStatus(on_output_change=self._output_changed)
+        self._validationbits = ValidationBitStatus(on_validationbit_change=self._validationbit_changed)
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
         self._synchronization_thread = DaemonThread(name='MasterClassicController synchronization',
@@ -92,15 +95,17 @@ class MasterClassicController(MasterController):
         self._shutters_last_updated = 0
         self._shutter_config = {}  # type: Dict[int, ShutterDTO]
 
+        # Validation bits
+        self._validationbits_interval = 1800
+        self._validationbits_last_updated = 0
+
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._module_log = []  # type: List[Tuple[str,str]]
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.output_list(), 0, self._on_master_output_change, True)
         )
-        self._master_communicator.register_consumer(
-            BackgroundConsumer(master_api.event_triggered(), 0, self._on_master_event, True)
-        )
+
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.module_initialize(), 0, self._update_modules)
         )
@@ -131,6 +136,10 @@ class MasterClassicController(MasterController):
             if self._shutters_last_updated + self._shutters_interval < time.time():
                 self._refresh_shutter_states()
                 self._set_master_state(True)
+            if self._validationbits_last_updated + self._validationbits_interval < time.time():
+                self._refresh_validationbits()
+                self._set_master_state(True)
+
         except CommunicationTimedOutException:
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
             self._set_master_state(False)
@@ -157,6 +166,11 @@ class MasterClassicController(MasterController):
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.shutter_status(self._master_version), 0,
                                self._on_master_shutter_change)
+        )
+
+        self._master_communicator.register_consumer(
+            BackgroundConsumer(master_api.event_triggered(self._master_version), 0,
+                               self._on_master_event, True)
         )
 
     def _check_master_time(self):
@@ -271,9 +285,15 @@ class MasterClassicController(MasterController):
     def _on_master_event(self, event_data):
         # type: (Dict[str,Any]) -> None
         """ Handle an event triggered by the master. """
-        code = event_data['code']
-        if self._plugin_controller is not None:
-            self._plugin_controller.process_event(code)
+        event_type = event_data.get('event_type')
+        if not event_type: # None or 0 are both event_type for 'code'
+            code = event_data.get('code', event_data.get('byte1'))
+            if self._plugin_controller is not None:
+                self._plugin_controller.process_event(code)
+        elif event_type == 1:
+            bit_nr = event_data.get('byte1')
+            value = event_data.get('byte2')
+            self._on_master_validationbit_change(bit_nr, value)
 
     #######################
     # Internal management #
@@ -491,13 +511,16 @@ class MasterClassicController(MasterController):
         number_of_outputs = self._master_communicator.do_command(master_api.number_of_io_modules())['out'] * 8
         outputs = []
         for i in range(number_of_outputs):
-            outputs.append(self._master_communicator.do_command(master_api.read_output(), {'id': i}))
+            output = self._master_communicator.do_command(master_api.read_output(), {'id': i})
+            # add output locked status via the validation bits
+            output['locked'] = self._is_output_locked(output['id'])
+            outputs.append(output)
         self._output_status.full_update(outputs)
         self._output_last_updated = time.time()
 
     def _output_changed(self, output_id, status):
         """ Executed by the Output Status tracker when an output changed state """
-        event_status = {'on': status['on']}
+        event_status = {'on': status['on'], 'locked': status['locked']}
         # 1. only add value to status when handling dimmers
         if self._output_config[output_id].module_type in ['d', 'D']:
             event_status['value'] = status['value']
@@ -1233,3 +1256,28 @@ class MasterClassicController(MasterController):
     def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
         out_dict = self._master_communicator.do_command(master_api.pulse_list())
         return {i: out_dict['pv{0}'.format(i)] for i in range(24)}
+
+    # Validation bits
+
+    def load_validationbits(self):
+        validationbits = {}
+        out_dict = self._master_communicator.do_command(master_api.validationbits(self._master_version))
+        for i in range(32):
+            byte_value = out_dict['validation_byte_{0}'.format(i)]
+            for n in range(8):
+                bit_nr = i*n
+                validationbits[bit_nr] = bool(byte_value & (1 << (7 - n)))
+        return validationbits
+
+    def _refresh_validationbits(self):
+        self._validationbits.full_update(self.load_validationbits())
+        self._validationbits_last_updated = time.time()
+
+    def _on_master_validationbit_change(self, bit_nr, value):  # type: (int, bool) -> None
+        self._validationbits.update(bit_nr, value)
+
+    def _validationbit_changed(self, bit_nr, value):
+        for output_id, output_dto in six.iteritems(self._output_config):
+            if output_dto.validationbit_nr == bit_nr:
+                locked = value
+                self._output_status.set_locked(output_dto.id, locked)

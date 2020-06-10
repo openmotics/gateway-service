@@ -218,6 +218,15 @@ def shutter_status(master_version):
                              [Field.byte("module_nr"), Field.padding(3), Field.byte("status"), Field.lit('\r\n')])
 
 
+def validationbits(master_version):
+    """ Read the status of a the validation bits. """
+    if master_version < (3, 143, 100):
+        raise NotImplementedError("validationbits() not supported on master version {}".format(master_version))
+    return MasterCommandSpec("RU",
+                             [Field.padding(13)],
+                             [Field.byte('status'), Field.padding(32), Field.lit('\r\n')])
+
+
 def temperature_list():
     """ Read the temperature thermostat sensor list for a series of 12 sensors """
     return MasterCommandSpec("TL",
@@ -554,11 +563,19 @@ def module_initialize():
                               Field.byte('io_type'), Field.padding(5), Field.lit('\r\n')])
 
 
-def event_triggered():
+def event_triggered(master_version):
     """ The message sent by the master to trigger an event. This event is triggered by basic action 60. """
-    return MasterCommandSpec("EV",
-                             [],
-                             [Field.byte('code'), Field.padding(12), Field.lit('\r\n')])
+    if master_version < (3, 143, 100):
+        return MasterCommandSpec("EV",
+                                 [],
+                                 [Field.byte('code'), Field.padding(12), Field.lit('\r\n')])
+    else:
+        return MasterCommandSpec("EV",
+                                 [],
+                                 [Field.byte('event_type'), Field.byte('byte1'), Field.byte('byte2'),
+                                  Field.byte('byte3'), Field.byte('byte4'), Field.byte('byte5'), Field.byte('byte6'),
+                                  Field.byte('byte7'), Field.byte('byte8'), Field.byte('byte9'), Field.byte('byte10'),
+                                  Field.byte('byte11'), Field.byte('byte12'), Field.byte('byte13'), Field.lit('\r\n')])
 
 
 # Below are the function to update the firmware of the modules (input/output/dimmer/thermostat)
