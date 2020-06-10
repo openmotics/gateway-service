@@ -1,14 +1,17 @@
 from __future__ import absolute_import
-import os
+
 import logging
+import os
+import sys
 
 from hypothesis import settings
 from pytest import fixture
 from requests.packages import urllib3
 
-from .toolbox import Toolbox
-
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+sys.path.insert(0, os.path.abspath(os.path.join(__file__, '../..')))
+
+from tests.toolbox import Toolbox
 
 logging.getLogger('urllib3').propagate = False
 logger = logging.getLogger('openmotics')

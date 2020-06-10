@@ -24,7 +24,7 @@ import requests
 import ujson as json
 from requests.exceptions import ConnectionError, RequestException
 
-from .hardware import INPUT_MODULE_LAYOUT, Input, Output
+from tests.hardware import INPUT_MODULE_LAYOUT, Input, Output
 
 logger = logging.getLogger('openmotics')
 

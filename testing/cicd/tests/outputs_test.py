@@ -22,7 +22,7 @@ import pytest
 import ujson as json
 from hypothesis.strategies import booleans, integers, just
 
-from .hardware import multiple_outputs, outputs
+from tests.hardware import multiple_outputs, outputs
 
 logger = logging.getLogger('openmotics')
 
