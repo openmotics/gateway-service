@@ -31,9 +31,9 @@ def next_ct(draw):
     used_values = []
 
     def f(toolbox):  # type: (Toolbox) -> Tuple[int, int]
-        value = draw(one_of(list(map(just, toolbox.dut_energy_cts))).
-                     filter(lambda x: (x[1] == 0 and  # TODO: Only the first CT can be used
-                                       x not in used_values)))
+        elements = [toolbox.dut_energy_cts[0]]  # For now, only the first CT is installed
+        value = draw(one_of(list(map(just, elements))).
+                     filter(lambda x: (x not in used_values)))
         used_values.append(value)
         hypothesis.note('module e#{}.{}'.format(*value))
         return value
@@ -42,26 +42,30 @@ def next_ct(draw):
 
 @pytest.mark.smoke
 @hypothesis.given(next_ct())
-def test_realtime_power(toolbox, next_ct):  # type: (Toolbox, Callable[[Toolbox], Tuple[int, int]]) -> None
-    module_id, input_id = next_ct(toolbox)
-    _assert_realtime(toolbox, module_id, input_id)
+def test_realtime_power(toolbox, next_ct):  # type: (Toolbox, Callable[[Toolbox], Tuple[str, int]]) -> None
+    address, input_id = next_ct(toolbox)
+    _assert_realtime(toolbox, address, input_id)
 
 
 @pytest.mark.slow
 @hypothesis.given(next_ct())
-def test_power_cycle(toolbox, next_ct):  # type: (Toolbox, Callable[[Toolbox], Tuple[int, int]]) -> None
-    module_id, input_id = next_ct(toolbox)
-    for _ in range(10):
+def test_power_cycle(toolbox, next_ct):  # type: (Toolbox, Callable[[Toolbox], Tuple[str, int]]) -> None
+    address, input_id = next_ct(toolbox)
+    cycles = 10
+    _assert_realtime(toolbox, address, input_id)
+    for cycle in range(cycles):
+        logger.info('power cycle energy module e#{} ({}/{})'.format(address, cycle + 1, cycles))
         toolbox.power_cycle_module(toolbox.POWER_ENERGY_MODULE)
-        _assert_realtime(toolbox, module_id, input_id)
+        _assert_realtime(toolbox, address, input_id)
 
 
-def _assert_realtime(toolbox, module_id, input_id):  # type: (Toolbox, int, int) -> None
+def _assert_realtime(toolbox, address, input_id):  # type: (Toolbox, str, int) -> None
+    logger.info('validating realtime data from energy module e#{}.{}'.format(address, input_id))
     data = toolbox.dut.get('/get_realtime_power')
-    assert str(module_id) in data
-    voltage, frequency, current, power = data[str(module_id)][input_id]
+    assert address in data
+    voltage, frequency, current, power = data[address][input_id]
     expected_power_min, expected_power_max = 5, 10
-    assert 220 <= voltage <= 304
+    assert 220 <= voltage <= 240
     assert 49 <= frequency <= 51
     assert expected_power_min <= power <= expected_power_max
     assert (expected_power_min / voltage) <= current <= (expected_power_max / voltage)

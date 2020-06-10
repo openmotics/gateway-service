@@ -208,9 +208,9 @@ class Toolbox(object):
     def dut_energy_cts(self):
         if self._dut_energy_cts is None:
             self._dut_energy_cts = []
-            energy_modules = self.list_energy_modules(version=12)
+            energy_modules = self.list_energy_modules(module_type='E')
             for module in energy_modules:
-                self._dut_energy_cts += [(module['id'], input_id) for input_id in range(12)]
+                self._dut_energy_cts += [(module['address'], input_id) for input_id in range(12)]
         return self._dut_energy_cts
 
     def initialize(self):
@@ -227,7 +227,7 @@ class Toolbox(object):
             data = self.dut.get('/get_modules')
             assert len(data['inputs'])
             assert len(data['outputs'])
-            self.list_energy_modules(version=12)  # Asserts a minimum of 1 module
+            self.list_energy_modules(module_type='E')  # Asserts a minimum of 1 module
         except Exception:
             logger.info('initializing modules...')
             self.start_module_discovery()
@@ -255,15 +255,25 @@ class Toolbox(object):
     def list_modules(self, module_type, min_modules=1):
         # type: (str, int) -> List[Dict[str,Any]]
         data = self.dut.get('/get_modules_information')
-        modules = [x for x in data['modules']['master'].values() if x['type'] == module_type and x['firmware']]
+        modules = []
+        for address, info in data['modules']['master'].items():
+            if info['type'] != module_type or not info['firmware']:
+                continue
+            info['address'] = address
+            modules.append(info)
         assert len(modules) >= min_modules, 'Not enough modules of type {} available'.format(module_type)
         return modules
 
-    def list_energy_modules(self, version, min_modules=1):
-        # type: (int, int) -> List[Dict[str, Any]]
-        data = self.dut.get('/get_power_modules')
-        modules = [module for module in data['modules'] if module['version'] == version]
-        assert len(modules) >= min_modules, 'Not enough energy modules available'
+    def list_energy_modules(self, module_type, min_modules=1):
+        # type: (str, int) -> List[Dict[str, Any]]
+        data = self.dut.get('/get_modules_information')
+        modules = []
+        for address, info in data['modules']['energy'].items():
+            if info['type'] != module_type or not info['firmware']:
+                continue
+            info['address'] = address
+            modules.append(info)
+        assert len(modules) >= min_modules, 'Not enough energy modules of type {} available'.format(module_type)
         return modules
 
     def start_authorized_mode(self):
@@ -329,9 +339,10 @@ class Toolbox(object):
         self.health_check(timeout=300)
         logger.info('health check done')
 
-    def power_cycle_module(self, output_id):
-        # type: (int) -> None
+    def power_cycle_module(self, output_id, delay=2.0):
+        # type: (int, float) -> None
         self.tester.get('/set_output', {'id': output_id, 'is_on': False})
+        time.sleep(delay)
         self.tester.get('/set_output', {'id': output_id, 'is_on': True})
 
     def health_check(self, timeout=30):
