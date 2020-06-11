@@ -42,13 +42,17 @@ class OutputStatus(object):
         Update the status of the outputs using a list of tuples containing the
         light id an the dimmer value of the lights that are on.
         """
-        on_dict = {}
-        for on_output in on_outputs:
-            on_dict[on_output[0]] = on_output[1]
+        on_dict = {on_output[0]: {'status': True,
+                                  'dimmer': on_output[1]} for on_output in on_outputs}
 
         for output_id, output in six.iteritems(self._outputs):
-            self._update(output_id, {'status': output_id in on_dict,
-                                     'dimmer': on_dict.get(output_id)})
+            if output_id in on_dict:
+                on_output = on_dict.get(output_id)
+                self._update(output_id, on_output)
+            else:
+                off_output = output
+                output['status'] = False
+                self._update(output_id, off_output)
 
     def full_update(self, outputs):
         """ Update the status of the outputs using a list of Outputs. """
@@ -81,19 +85,19 @@ class OutputStatus(object):
         if self._outputs.get(output_id):
             raise KeyError('Output {} already exists')
         with self._merge_lock:
-            self._outputs[output_id] = {'status': output['status'],
-                                        'dimmer': output['dimmer'],
-                                        'locked': output.get('locked', False)}
+            self._outputs[output_id] = {'status': bool(output['status']),
+                                        'dimmer': int(output['dimmer']),
+                                        'locked': bool(output.get('locked', False))}
 
     def _update(self, output_id, output):  # type: (int, dict) -> bool
         changed = False
         if not self._outputs.get(output_id):
             raise KeyError('Output {} does not exist'.format(output_id))
         else:
-            changed |= self._set_status(output_id, output['status'])
-            changed |= self._set_dimmer(output_id, output['dimmer'])
+            changed |= self._set_status(output_id, bool(output['status']))
+            changed |= self._set_dimmer(output_id, int(output['dimmer']))
             if output.get('locked'):
-                changed |= self._set_locked(output_id, output['locked'])
+                changed |= self._set_locked(output_id, bool(output['locked']))
         return changed
 
     def _delete(self, output_id):  # type: (int) -> None
