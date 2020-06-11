@@ -15,6 +15,7 @@
 from __future__ import absolute_import
 
 import logging
+import time
 
 import hypothesis
 import pytest
@@ -42,6 +43,7 @@ def test_actions(toolbox, input, output, to_status):
     input_config = {'id': input.input_id, 'action': output.output_id}
     input_config.update(DEFAULT_INPUT_CONFIG)
     toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
+    time.sleep(0.2)
 
     # NOTE ensure output status _after_ input configuration, changing
     # inputs can impact the output status for some reason.
@@ -85,7 +87,7 @@ def group_action_ids():
 def test_group_action_toggle(toolbox, input, outputs, group_action_id, to_status):
     output, other_output = outputs
     from_status = not to_status
-    logger.debug('group action BA#{} for {}#{} to {}#{} {}#{}, expect event {} -> {}'.format(
+    logger.debug('group action GA#{} for {}#{} to {}#{} {}#{}, expect event {} -> {}'.format(
         group_action_id,
         input.type, input.input_id,
         output.type, output.output_id,

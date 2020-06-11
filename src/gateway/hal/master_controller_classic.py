@@ -935,7 +935,7 @@ class MasterClassicController(MasterController):
     def _update_modules(self, api_data):
         # type: (Dict[str,Any]) -> None
         """ Create a log entry when the MI message is received. """
-        module_map = {'O': 'output', 'I': 'input', 'T': 'temperature', 'D': 'dimmer'}
+        module_map = {'O': 'output', 'I': 'input', 'T': 'temperature', 'D': 'dimmer', 'C': 'CAN control'}
         message_map = {'N': 'New %s module found.',
                        'E': 'Existing %s module found.',
                        'D': 'The %s module tried to register but the registration failed, '

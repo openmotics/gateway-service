@@ -84,7 +84,7 @@ class Client(object):
                 assert response.status_code != 404, 'not found {}'.format(path)
                 data = response.json()
                 if success and 'success' in data:
-                    assert data['success'], 'content={}'.format(response.content)
+                    assert data['success'], 'content={}'.format(response.content.decode())
                 return data
             except (ConnectionError, RequestException) as exc:
                 logger.debug('request {} failed {}, retrying...'.format(path, exc))
@@ -209,23 +209,19 @@ class Toolbox(object):
         try:
             self.list_modules('O')
             self.list_modules('I')
-            # TODO should contain firmware version
-            # self.list_modules('C')
         except Exception:
-            logger.info('initializing modules...')
-            self.discover_modules()
+            logger.info('discovering modules...')
+            self.discover_output_module()
+            self.discover_input_module()
 
-        # FIXME: compare with hardware modules instead.
+        # TODO compare with hardware modules instead.
         self.list_modules('O')
         self.list_modules('I')
-
-        # self.list_modules('C')
-        self.get_module('C')
 
         try:
             self.get_module('o')
         except Exception:
-            logger.info('addding virtual modules...')
+            logger.info('adding virtual modules...')
             self.dut.get('/add_virtual_output')
             time.sleep(2)
         self.get_module('o')
@@ -288,7 +284,7 @@ class Toolbox(object):
         user_data = {'username': self.dut._auth[0], 'password': self.dut._auth[1]}
         self.dut.get('/create_user', params=user_data, use_token=False, success=success)
 
-    def start_module_discovery(self):
+    def module_discover_start(self):
         # type: () -> None
         logger.debug('start module discover')
         self.dut.get('/module_discover_start')
@@ -298,36 +294,47 @@ class Toolbox(object):
                 return
             time.sleep(0.2)
 
-    def stop_module_discovery(self):
+    def module_discover_stop(self):
         # type: () -> None
         logger.debug('stop module discover')
         self.dut.get('/module_discover_stop')
 
-    def discover_modules(self):
+    def discover_output_module(self):
         # type: () -> None
-        self.start_module_discovery()
-        time.sleep(0.2)
-        self.tester.toggle_output(self.DEBIAN_DISCOVER_INPUT)
-        time.sleep(2)
-        self.stop_module_discovery()
-
-        self.start_module_discovery()
-        time.sleep(0.2)
+        logger.debug('discover output module')
+        self.module_discover_start()
         self.tester.toggle_output(self.DEBIAN_DISCOVER_OUTPUT)
-        time.sleep(2)
-        self.stop_module_discovery()
+        self.assert_modules(1)
+        self.module_discover_stop()
 
-        # TODO cleanup CAN input discovery
-        self.start_module_discovery()
-        time.sleep(0.2)
+    def discover_input_module(self):
+        # type: () -> None
+        logger.debug('discover input module')
+        self.module_discover_start()
+        self.tester.toggle_output(self.DEBIAN_DISCOVER_INPUT)
+        self.assert_modules(1)
+        self.module_discover_stop()
+
+    def discover_can_control(self):
+        # type: () -> None
+        logger.debug('discover CAN control')
+        # TODO: discover CAN inputs
+        self.module_discover_start()
         self.tester.toggle_output(self.DEBIAN_DISCOVER_UCAN)
-        time.sleep(2)
-        for input in INPUT_MODULE_LAYOUT['C'].inputs:
-            self.tester.toggle_output(input.tester_output_id)
-            time.sleep(0.2)
-        self.tester.toggle_output(self.DEBIAN_DISCOVER_UCAN)
-        time.sleep(10)
-        self.stop_module_discovery()
+        self.assert_modules(2, timeout=60)
+        self.module_discover_stop()
+
+    def assert_modules(self, count, timeout=30):
+        # type: (int, float) -> List[List[str]]
+        since = time.time()
+        modules = []
+        while since > time.time() - timeout:
+            modules += self.dut.get('/get_module_log')['log']
+            if len(modules) >= count:
+                logger.debug('discovered {} modules, done'.format(count))
+                return modules
+            time.sleep(2)
+        raise AssertionError('expected {} modules in {}'.format(count, modules))
 
     def power_off(self):
         # type: () -> None
@@ -387,6 +394,7 @@ class Toolbox(object):
     def press_input(self, input):
         # type: (Input) -> None
         self.tester.get('/set_output', {'id': input.tester_output_id, 'is_on': False})  # ensure start status
+        time.sleep(0.2)
         self.tester.reset()
         hypothesis.note('after input {}#{} pressed'.format(input.type, input.input_id))
         self.tester.toggle_output(input.tester_output_id)
