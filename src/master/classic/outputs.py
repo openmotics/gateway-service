@@ -46,10 +46,9 @@ class OutputStatus(object):
         for on_output in on_outputs:
             on_dict[on_output[0]] = on_output[1]
 
-        with self._merge_lock:
-            for output_id, output in six.iteritems(self._outputs):
-                self._update(output_id, {'status': output_id in on_dict,
-                                         'dimmer': on_dict.get(output_id)})
+        for output_id, output in six.iteritems(self._outputs):
+            self._update(output_id, {'status': output_id in on_dict,
+                                     'dimmer': on_dict.get(output_id)})
 
     def full_update(self, outputs):
         """ Update the status of the outputs using a list of Outputs. """
