@@ -508,6 +508,15 @@ class MasterClassicController(MasterController):
                           'location': {'room_id': Toolbox.denonify(input_configuration.room, 255)}}
             callback(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
 
+    def _is_output_locked(self, output_id):
+        output_dto = self._output_config.get(output_id)
+        if output_dto.validationbit_nr:
+            value = self._validationbits.get_validation_bit(output_dto.validationbit_nr)
+            locked = value
+        else:
+            locked = False
+        return locked
+
     def _refresh_outputs(self):
         self._output_config = {output_dto.id: output_dto for output_dto in self.load_outputs()}
         number_of_outputs = self._master_communicator.do_command(master_api.number_of_io_modules())['out'] * 8
@@ -1299,15 +1308,4 @@ class MasterClassicController(MasterController):
         for output_id, output_dto in six.iteritems(self._output_config):
             if output_dto.validationbit_nr and output_dto.validationbit_nr == bit_nr:
                 locked = value  # the bit is set, the output is locked
-                self._output_status.set_locked(output_dto.id, locked)
-
-    # helper function
-
-    def _is_output_locked(self, output_id):
-        output_dto = self._output_config.get(output_id)
-        if output_dto.validationbit_nr:
-            value = self._validationbits.get_validation_bit(output_dto.validationbit_nr)
-            locked = value
-        else:
-            locked = False
-        return locked
+                self._output_status.update_locked(output_dto.id, locked)
