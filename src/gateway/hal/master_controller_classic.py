@@ -127,6 +127,9 @@ class MasterClassicController(MasterController):
                 self._check_master_settings()
                 self._settings_last_updated = now
             # Refresh if required
+            if self._validationbits_last_updated + self._validationbits_interval < time.time():
+                self._refresh_validationbits()
+                self._set_master_state(True)
             if self._output_last_updated + self._output_interval < now:
                 self._refresh_outputs()
                 self._set_master_state(True)
@@ -135,9 +138,6 @@ class MasterClassicController(MasterController):
                 self._set_master_state(True)
             if self._shutters_last_updated + self._shutters_interval < time.time():
                 self._refresh_shutter_states()
-                self._set_master_state(True)
-            if self._validationbits_last_updated + self._validationbits_interval < time.time():
-                self._refresh_validationbits()
                 self._set_master_state(True)
 
         except CommunicationTimedOutException:
@@ -286,7 +286,7 @@ class MasterClassicController(MasterController):
         # type: (Dict[str,Any]) -> None
         """ Handle an event triggered by the master. """
         event_type = event_data.get('event_type')
-        if not event_type: # None or 0 are both event_type for 'code'
+        if not event_type:  # None or 0 are both event_type for 'code'
             code = event_data.get('code', event_data.get('byte1'))
             if self._plugin_controller is not None:
                 self._plugin_controller.process_event(code)
@@ -294,6 +294,8 @@ class MasterClassicController(MasterController):
             bit_nr = event_data.get('byte1')
             value = event_data.get('byte2')
             self._on_master_validationbit_change(bit_nr, value)
+        else:
+            logger.warning('received unknown master event type {}'.format(event_type))
 
     #######################
     # Internal management #
@@ -518,6 +520,11 @@ class MasterClassicController(MasterController):
         self._output_status.full_update(outputs)
         self._output_last_updated = time.time()
 
+    def _on_master_output_change(self, data):
+        """ Triggers when the master informs us of an Output state change """
+        # this master event only has updated status information for the outputs, so no need to set the locked status
+        self._output_status.partial_update(data['outputs'])
+
     def _output_changed(self, output_id, status):
         """ Executed by the Output Status tracker when an output changed state """
         event_status = {'on': status['on'], 'locked': status['locked']}
@@ -530,10 +537,6 @@ class MasterClassicController(MasterController):
                       'location': {'room_id': Toolbox.denonify(self._output_config[output_id].room, 255)}}
         for callback in self._event_callbacks:
             callback(MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE, data=event_data))
-
-    def _on_master_output_change(self, data):
-        """ Triggers when the master informs us of an Output state change """
-        self._output_status.partial_update(data['outputs'])
 
     # Shutters
 
@@ -1260,13 +1263,28 @@ class MasterClassicController(MasterController):
     # Validation bits
 
     def load_validationbits(self):
+        number_of_validation_bits = 256
+        validation_bits_per_master_command = 11
+
+        def load_validation_bits_batch(start_bit=0):
+            response = {}
+            user_information_type = 0
+            data = self._master_communicator.do_command(master_api.read_user_information(self._master_version),
+                                                        {'type': user_information_type, 'number': start_bit})
+            for j in range(validation_bits_per_master_command):
+                bit_nr = start_bit + j
+                bit_value = data['data{}'.format(j)]
+                response[bit_nr] = bit_value
+                # for n in range(8):
+                #     bit_nr = start_bit + j * n
+                #     response[bit_nr] = bool(byte_value & (1 << (7 - n)))
+            return response
+
+        number_reads, number_bits_in_last_read = divmod(number_of_validation_bits, validation_bits_per_master_command)
         validationbits = {}
-        out_dict = self._master_communicator.do_command(master_api.validationbits(self._master_version))
-        for i in range(32):
-            byte_value = out_dict['validation_byte_{0}'.format(i)]
-            for n in range(8):
-                bit_nr = i*n
-                validationbits[bit_nr] = bool(byte_value & (1 << (7 - n)))
+        for i in range(number_reads):
+            bit_pointer = i * validation_bits_per_master_command
+            validationbits.update(load_validation_bits_batch(bit_pointer))
         return validationbits
 
     def _refresh_validationbits(self):
@@ -1277,7 +1295,8 @@ class MasterClassicController(MasterController):
         self._validationbits.update(bit_nr, value)
 
     def _validationbit_changed(self, bit_nr, value):
+        # loop over all outputs and update the locked status if the bit_nr is associated with this output
         for output_id, output_dto in six.iteritems(self._output_config):
             if output_dto.validationbit_nr == bit_nr:
-                locked = value
+                locked = value  # the bit is set, the output is locked
                 self._output_status.set_locked(output_dto.id, locked)

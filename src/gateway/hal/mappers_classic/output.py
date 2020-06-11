@@ -59,7 +59,8 @@ class OutputMapper(object):
             if dto_field in fields:
                 data[data_field] = getattr(output_dto, dto_field)
         for dto_field, (data_field, default) in {'timer': ('timer', OutputMapper.WORD_MAX),
-                                                 'floor': ('floor', OutputMapper.BYTE_MAX)}.items():
+                                                 'floor': ('floor', OutputMapper.BYTE_MAX),
+                                                 'validationbit_nr': ('validationbit_nr', OutputMapper.BYTE_MAX)}.items():
             if dto_field in fields:
                 data[data_field] = Toolbox.denonify(getattr(output_dto, dto_field), default)
         for i in range(4):

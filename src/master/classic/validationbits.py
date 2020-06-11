@@ -37,6 +37,7 @@ class ValidationBitStatus(object):
     def full_update(self, validationbits):
         """ Update the status of the outputs using a list of Outputs. """
         for bit_nr, value in six.iteritems(validationbits):
+            # assuming we should not delete validation bits that are not present in the dict
             self.update(bit_nr, value)
 
     def update(self, bit_nr, value):  # type: (int, bool) -> None

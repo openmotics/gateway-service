@@ -54,7 +54,7 @@ class OutputDTO(BaseDTO):
                 self.floor == other.floor and
                 self.output_type == other.output_type and
                 self.room == other.room and
-                self.locked == other.locked and
+                self.validationbit_nr == other.validationbit_nr and
                 self.can_led_1 == other.can_led_1 and
                 self.can_led_2 == other.can_led_2 and
                 self.can_led_3 == other.can_led_3 and

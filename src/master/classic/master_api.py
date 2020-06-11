@@ -218,13 +218,16 @@ def shutter_status(master_version):
                              [Field.byte("module_nr"), Field.padding(3), Field.byte("status"), Field.lit('\r\n')])
 
 
-def validationbits(master_version):
+def read_user_information(master_version):
     """ Read the status of a the validation bits. """
     if master_version < (3, 143, 100):
         raise NotImplementedError("validationbits() not supported on master version {}".format(master_version))
     return MasterCommandSpec("RU",
-                             [Field.padding(13)],
-                             [Field.byte('status'), Field.padding(32), Field.lit('\r\n')])
+                             [Field.byte('type'), Field.byte('number'), Field.padding(11)],
+                             [Field.byte('type'), Field.byte('number'),
+                              Field.byte('data0'), Field.byte('data1'), Field.byte('data2'), Field.byte('data3'),
+                              Field.byte('data4'), Field.byte('data5'), Field.byte('data6'), Field.byte('data7'),
+                              Field.byte('data8'), Field.byte('data9'), Field.byte('data10'), Field.lit('\r\n')])
 
 
 def temperature_list():
