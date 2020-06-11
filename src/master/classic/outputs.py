@@ -22,6 +22,9 @@ from threading import Lock
 import six
 import logging
 
+if False:  # MYPY
+    from typing import Any, Dict, List, Tuple
+
 logger = logging.getLogger("openmotics")
 
 
@@ -37,17 +40,17 @@ class OutputStatus(object):
         self._on_output_change = on_output_change
         self._merge_lock = Lock()
 
-    def partial_update(self, on_outputs):  # type: (list) -> None
+    def partial_update(self, on_outputs):  # type: (List[Tuple[int, int]]) -> None
         """
         Update the status of the outputs using a list of tuples containing the
         light id an the dimmer value of the lights that are on.
         """
-        on_dict = {int(on_output[0]): {'status': True,
-                                       'dimmer': int(on_output[1])} for on_output in on_outputs}
+        on_dict = {on_output[0]: {'status': True,
+                                  'dimmer': on_output[1]} for on_output in on_outputs}
 
         for output_id, output in six.iteritems(self._outputs):
             if output_id in on_dict:
-                on_output = on_dict.get(output_id)
+                on_output = on_dict[output_id]
                 self._update(output_id, on_output)
             else:
                 off_output = output
@@ -81,7 +84,7 @@ class OutputStatus(object):
         if changed:
             self._report_change(output_id)
 
-    def _create(self, output_id, output):  # type: (int, dict) -> None
+    def _create(self, output_id, output):  # type: (int, Dict[str, Any]) -> None
         if self._outputs.get(output_id):
             raise KeyError('Output {} already exists')
         with self._merge_lock:
@@ -89,7 +92,7 @@ class OutputStatus(object):
                                         'dimmer': int(output['dimmer']),
                                         'locked': bool(output.get('locked', False))}
 
-    def _update(self, output_id, output):  # type: (int, dict) -> bool
+    def _update(self, output_id, output):  # type: (int, Dict[str, Any]) -> bool
         changed = False
         if not self._outputs.get(output_id):
             raise KeyError('Output {} does not exist'.format(output_id))
@@ -106,7 +109,7 @@ class OutputStatus(object):
         with self._merge_lock:
             del self._outputs[output_id]
 
-    def _create_or_update(self, output_id, output):  # type: (int, dict) -> bool
+    def _create_or_update(self, output_id, output):  # type: (int, Dict[str, Any]) -> bool
         changed = False
         if self._outputs.get(output_id):
             changed |= self._update(output_id, output)

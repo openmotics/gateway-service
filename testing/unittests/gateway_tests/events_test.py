@@ -41,7 +41,7 @@ class EventsTest(unittest.TestCase):
         self.assertFalse(event_sender._batch_send_events())
         event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, None))
         event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, None))
-        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_TRIGGER, None))
+        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, None))
         self.assertEqual(len(event_sender._queue), 2)
         self.assertTrue(event_sender._batch_send_events())
         self.assertEqual(len(event_sender._queue), 0)
