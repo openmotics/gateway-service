@@ -283,7 +283,7 @@ class MasterClassicController(MasterController):
         self.set_status_leds(True)
 
     def _on_master_event(self, event_data):
-        # type: (Dict[str,Any]) -> None
+        # type: (Dict[str,int]) -> None
         """ Handle an event triggered by the master. """
         event_type = event_data.get('event_type')
         if not event_type:  # None or 0 are both event_type for 'code'
