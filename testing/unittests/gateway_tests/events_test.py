@@ -16,36 +16,34 @@
 Tests for events.
 """
 from __future__ import absolute_import
-
 import unittest
-
+from mock import patch, Mock
 import xmlrunner
-
 from cloud.cloud_api_client import CloudAPIClient
 from cloud.events import EventSender
 from gateway.events import GatewayEvent
+from ioc import SetUpTestInjections, Scope
 
 
 class EventsTest(unittest.TestCase):
-    @unittest.skip('FIXME event tests where never included in the testruns')
+
+    def setUp(self):
+        cloud_api_client = Mock()
+        self.sent_events = {}
+        cloud_api_client.send_events = lambda events: self.sent_events.update({'events': events})
+        SetUpTestInjections(input_controller=Mock(), cloud_api_client=cloud_api_client)
+
     def test_events_sent_to_cloud(self):
-        container = {}
-
-        def _send_events(events):
-            container['events'] = events
-
-        cloud = CloudAPIClient('test.example.com')
-        cloud.send_events = _send_events
-        event_sender = EventSender(cloud)  # Don't start, trigger manually
+        event_sender = EventSender()  # Don't start, trigger manually
         self.assertEqual(len(event_sender._queue), 0)
         self.assertFalse(event_sender._batch_send_events())
-        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, None))
-        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, None))
-        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, None))
-        self.assertEqual(len(event_sender._queue), 2)
+        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, {'id': 1}))
+        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, {'id': 1}))
+        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 1}))
+        self.assertEqual(len(event_sender._queue), 3)
         self.assertTrue(event_sender._batch_send_events())
         self.assertEqual(len(event_sender._queue), 0)
-        self.assertEqual(len(container.get('events', [])), 2)
+        self.assertEqual(len(self.sent_events.get('events', [])), 3)
 
 
 if __name__ == "__main__":
