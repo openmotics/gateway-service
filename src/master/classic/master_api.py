@@ -572,13 +572,12 @@ def event_triggered(master_version):
         return MasterCommandSpec("EV",
                                  [],
                                  [Field.byte('code'), Field.padding(12), Field.lit('\r\n')])
-    else:
-        return MasterCommandSpec("EV",
-                                 [],
-                                 [Field.byte('event_type'), Field.byte('byte1'), Field.byte('byte2'),
-                                  Field.byte('byte3'), Field.byte('byte4'), Field.byte('byte5'), Field.byte('byte6'),
-                                  Field.byte('byte7'), Field.byte('byte8'), Field.byte('byte9'), Field.byte('byte10'),
-                                  Field.byte('byte11'), Field.byte('byte12'), Field.byte('byte13'), Field.lit('\r\n')])
+    return MasterCommandSpec("EV",
+                             [],
+                             [Field.byte('event_type'), Field.byte('byte1'), Field.byte('byte2'),
+                              Field.byte('byte3'), Field.byte('byte4'), Field.byte('byte5'), Field.byte('byte6'),
+                              Field.byte('byte7'), Field.byte('byte8'), Field.byte('byte9'), Field.byte('byte10'),
+                              Field.byte('byte11'), Field.byte('byte12'), Field.byte('byte13'), Field.lit('\r\n')])
 
 
 # Below are the function to update the firmware of the modules (input/output/dimmer/thermostat)

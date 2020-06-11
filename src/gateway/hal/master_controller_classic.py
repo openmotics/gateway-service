@@ -160,17 +160,16 @@ class MasterClassicController(MasterController):
 
     def _register_version_depending_background_consumers(self):
         self._master_communicator.register_consumer(
+            BackgroundConsumer(master_api.event_triggered(self._master_version), 0,
+                               self._on_master_event, True)
+        )
+        self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.input_list(self._master_version), 0,
                                self._on_master_input_change)
         )
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.shutter_status(self._master_version), 0,
                                self._on_master_shutter_change)
-        )
-
-        self._master_communicator.register_consumer(
-            BackgroundConsumer(master_api.event_triggered(self._master_version), 0,
-                               self._on_master_event, True)
         )
 
     def _check_master_time(self):
@@ -512,7 +511,7 @@ class MasterClassicController(MasterController):
             callback(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
 
     def _is_output_locked(self, output_id):
-        output_dto = self._output_config.get(output_id)
+        output_dto = self._output_config[output_id]
         if output_dto.validationbit_nr:
             value = self._validationbits.get_validation_bit(output_dto.validationbit_nr)
             locked = value
