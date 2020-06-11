@@ -22,7 +22,8 @@ from __future__ import absolute_import
 import struct
 
 if False:  # MYPY
-    from typing import Any, Optional, Tuple
+    from typing import Any, Optional, Tuple, Union
+    DataType = Union[float, int, str]
 
 CRC_TABLE = [0, 49, 98, 83, 196, 245, 166, 151, 185, 136, 219, 234, 125, 76, 31, 46, 67, 114, 33,
              16, 135, 182, 229, 212, 250, 203, 152, 169, 62, 15, 92, 109, 134, 183, 228, 213, 66,
@@ -95,7 +96,7 @@ class PowerCommand(object):
         self.module_type = module_type
 
     def create_input(self, address, cid, *data):
-        # type: (int, int, *Any) -> str
+        # type: (int, int, *DataType) -> str
         """
         Create an input string for the power module using this command and the provided fields.
         :param address: 1 byte, the address of the module
@@ -112,7 +113,7 @@ class PowerCommand(object):
         return 'STR{0}{1}{2}\r\n'.format(header, payload, chr(crc))
 
     def create_output(self, address, cid, *data):
-        # type: (int, int, *Any) -> str
+        # type: (int, int, *DataType) -> str
         """
         Create an output command from the power module using this command and the provided
         fields. --- Only used for testing !
