@@ -42,8 +42,8 @@ class OutputStatus(object):
         Update the status of the outputs using a list of tuples containing the
         light id an the dimmer value of the lights that are on.
         """
-        on_dict = {on_output[0]: {'status': True,
-                                  'dimmer': on_output[1]} for on_output in on_outputs}
+        on_dict = {int(on_output[0]): {'status': True,
+                                       'dimmer': int(on_output[1])} for on_output in on_outputs}
 
         for output_id, output in six.iteritems(self._outputs):
             if output_id in on_dict:
