@@ -291,8 +291,8 @@ class MasterClassicController(MasterController):
             if self._plugin_controller is not None:
                 self._plugin_controller.process_event(code)
         elif event_type == 1:
-            bit_nr = event_data.get('byte1')
-            value = event_data.get('byte2')
+            bit_nr = int(event_data.get('byte1'))
+            value = bool(event_data.get('byte2'))
             self._on_master_validationbit_change(bit_nr, value)
         else:
             logger.warning('received unknown master event type {}'.format(event_type))
