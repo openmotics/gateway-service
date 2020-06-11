@@ -21,6 +21,9 @@ from __future__ import absolute_import
 
 import struct
 
+if False:  # MYPY
+    from typing import Any, Optional, Tuple
+
 CRC_TABLE = [0, 49, 98, 83, 196, 245, 166, 151, 185, 136, 219, 234, 125, 76, 31, 46, 67, 114, 33,
              16, 135, 182, 229, 212, 250, 203, 152, 169, 62, 15, 92, 109, 134, 183, 228, 213, 66,
              115, 32, 17, 63, 14, 93, 108, 251, 202, 153, 168, 197, 244, 167, 150, 1, 48, 99, 82,
@@ -38,10 +41,9 @@ CRC_TABLE = [0, 49, 98, 83, 196, 245, 166, 151, 185, 136, 219, 234, 125, 76, 31,
 
 
 def crc7(to_send):
+    # type: (str) -> int
     """
     Calculate the crc7 checksum of a string.
-    :param to_send: input string
-    :rtype: integer
     """
     ret = 0
     for part in to_send:
@@ -50,10 +52,9 @@ def crc7(to_send):
 
 
 def crc8(to_send):
+    # type: (str) -> int
     """
     Calculate the crc8 checksum of a string.
-    :param to_send: input string
-    :rtype: integer
     """
     def _add_crc(crc, data):
         for bitnumber in range(0, 8):
@@ -77,6 +78,7 @@ class PowerCommand(object):
     """
 
     def __init__(self, mode, type, input_format, output_format, module_type='E'):
+        # type: (str, str, str, Optional[str], str) -> None
         """
         Create PowerCommand using the fixed fields of the input command and the format of the
         command returned by the power module.
@@ -93,12 +95,12 @@ class PowerCommand(object):
         self.module_type = module_type
 
     def create_input(self, address, cid, *data):
+        # type: (int, int, *Any) -> str
         """
         Create an input string for the power module using this command and the provided fields.
         :param address: 1 byte, the address of the module
         :param cid: 1 byte, communication id
         :param data: data to send to the power module
-        :rtype: string
         """
         buffer = struct.pack(self.input_format, *data)
         header = self.module_type + chr(address) + chr(cid) + str(self.mode) + str(self.type)
@@ -110,15 +112,16 @@ class PowerCommand(object):
         return 'STR{0}{1}{2}\r\n'.format(header, payload, chr(crc))
 
     def create_output(self, address, cid, *data):
+        # type: (int, int, *Any) -> str
         """
         Create an output command from the power module using this command and the provided
         fields. --- Only used for testing !
         :param address: 1 byte, the address of the module
         :param cid: 1 byte, communication id
         :param data: data to send to the power module
-        :rtype: string
         """
-        buffer = struct.pack(self.output_format, *data)
+        if self.output_format:
+            buffer = struct.pack(self.output_format, *data)
         header = self.module_type + chr(address) + chr(cid) + str(self.mode) + str(self.type)
         payload = chr(len(buffer)) + str(buffer)
         if self.module_type == 'E':
@@ -128,22 +131,26 @@ class PowerCommand(object):
         return 'RTR{0}{1}{2}\r\n'.format(header, payload, chr(crc))
 
     def check_header(self, header, address, cid):
+        # type: (str, int, int) -> bool
         """
         Check if the response header matches the command,
         when an address and cid are provided. """
         return header[:-1] == '{0}{1}{2}{3}{4}'.format(self.module_type, chr(address), chr(cid), self.mode, self.type)
 
     def is_nack(self, header, address, cid):
+        # type: (str, int, int) -> bool
         """
         Check if the response header is a nack to the command, when an address and cid are
         provided. """
         return header[:-1] == '{0}{1}{2}N{3}'.format(self.module_type, chr(address), chr(cid), self.type)
 
     def check_header_partial(self, header):
+        # type: (str) -> bool
         """ Check if the header matches the command, does not check address and cid. """
         return header[0] == self.module_type and header[3:-1] == '{0}{1}'.format(self.mode, self.type)
 
     def read_output(self, data):
+        # type: (Any) -> Tuple[Any, ...]
         """
         Parse the output using the output_format.
         :param data: string containing the data.

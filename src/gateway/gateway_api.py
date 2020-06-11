@@ -957,13 +957,13 @@ class GatewayApi(object):
             input_ids = [input_id]
         data = {}
         for input_id in input_ids:
-            voltage = list(self.__power_communicator.do_command(addr, power_api.get_voltage_sample_time(version), input_id, 0))
-            current = list(self.__power_communicator.do_command(addr, power_api.get_current_sample_time(version), input_id, 0))
-            for entry in self.__power_communicator.do_command(addr, power_api.get_voltage_sample_time(version), input_id, 1):
+            voltage = list(self.__power_communicator.do_command(addr, power_api.get_voltage_sample_time(version), input_id, "0"))
+            current = list(self.__power_communicator.do_command(addr, power_api.get_current_sample_time(version), input_id, "0"))
+            for entry in self.__power_communicator.do_command(addr, power_api.get_voltage_sample_time(version), input_id, "1"):
                 if entry == float('inf'):
                     break
                 voltage.append(entry)
-            for entry in self.__power_communicator.do_command(addr, power_api.get_current_sample_time(version), input_id, 1):
+            for entry in self.__power_communicator.do_command(addr, power_api.get_current_sample_time(version), input_id, "1"):
                 if entry == float('inf'):
                     break
                 current.append(entry)
@@ -992,8 +992,8 @@ class GatewayApi(object):
             input_ids = [input_id]
         data = {}
         for input_id in input_ids:
-            voltage = self.__power_communicator.do_command(addr, power_api.get_voltage_sample_frequency(version), input_id, 20)
-            current = self.__power_communicator.do_command(addr, power_api.get_current_sample_frequency(version), input_id, 20)
+            voltage = self.__power_communicator.do_command(addr, power_api.get_voltage_sample_frequency(version), input_id, "20")
+            current = self.__power_communicator.do_command(addr, power_api.get_current_sample_frequency(version), input_id, "20")
             # The received data has a length of 40; 20 harmonics entries, and 20 phase entries. For easier usage, the
             # API calls splits them into two parts so the customers doesn't have to do the splitting.
             data[str(input_id)] = {'voltage': [voltage[:20], voltage[20:]],
