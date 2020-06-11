@@ -283,7 +283,7 @@ class MasterClassicController(MasterController):
         self.set_status_leds(True)
 
     def _on_master_event(self, event_data):
-        # type: (Dict[str,int]) -> None
+        # type: (Dict[str, int]) -> None
         """ Handle an event triggered by the master. """
         event_type = event_data.get('event_type')
         if not event_type:  # None or 0 are both event_type for 'code'
@@ -291,9 +291,12 @@ class MasterClassicController(MasterController):
             if self._plugin_controller is not None:
                 self._plugin_controller.process_event(code)
         elif event_type == 1:
-            bit_nr = int(event_data.get('byte1'))
-            value = bool(event_data.get('byte2'))
-            self._on_master_validationbit_change(bit_nr, value)
+            try:
+                bit_nr = int(event_data['byte1'])
+                value = bool(event_data['byte2'])
+                self._on_master_validationbit_change(bit_nr, value)
+            except KeyError as e:
+                logger.error('Failed to parse master validationbit event: {}'.format(e))
         else:
             logger.warning('received unknown master event type {}'.format(event_type))
 
