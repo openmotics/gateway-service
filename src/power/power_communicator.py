@@ -411,14 +411,14 @@ class PowerCommunicator(object):
 
 
 class InAddressModeException(Exception):
-    # type: () -> None
     """ Raised when the power communication is in address mode. """
     def __init__(self, message=None):
+        # type: (Optional[str]) -> None
         Exception.__init__(self, message)
 
 
 class UnkownCommandException(Exception):
-    # type: () -> None
     """ Raised when the power module responds with a NACK indicating an unkown command. """
     def __init__(self, message=None):
+        # type: (Optional[str]) -> None
         Exception.__init__(self, message)
