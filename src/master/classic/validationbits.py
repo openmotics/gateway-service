@@ -51,3 +51,6 @@ class ValidationBitStatus(object):
     def _report_change(self, bit_nr):
         if self.on_validationbit_change is not None:
             self.on_validationbit_change(bit_nr, self._validationbits.get(bit_nr))
+
+    def get_validation_bit(self, bit_nr):
+        return self._validationbits.get(bit_nr, False)

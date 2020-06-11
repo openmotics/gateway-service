@@ -1297,6 +1297,17 @@ class MasterClassicController(MasterController):
     def _validationbit_changed(self, bit_nr, value):
         # loop over all outputs and update the locked status if the bit_nr is associated with this output
         for output_id, output_dto in six.iteritems(self._output_config):
-            if output_dto.validationbit_nr == bit_nr:
+            if output_dto.validationbit_nr and output_dto.validationbit_nr == bit_nr:
                 locked = value  # the bit is set, the output is locked
                 self._output_status.set_locked(output_dto.id, locked)
+
+    # helper function
+
+    def _is_output_locked(self, output_id):
+        output_dto = self._output_config.get(output_id)
+        if output_dto.validationbit_nr:
+            value = self._validationbits.get_validation_bit(output_dto.validationbit_nr)
+            locked = value
+        else:
+            locked = False
+        return locked
