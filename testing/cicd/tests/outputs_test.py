@@ -42,8 +42,7 @@ def test_events(toolbox, output, to_status):
     toolbox.assert_output_changed(output, to_status)
 
 
-@pytest.mark.smoke
-@pytest.mark.skip(reason='fails consistently when running with the ci profile')
+@pytest.mark.unstable
 @hypothesis.given(outputs(), booleans())
 def test_status(toolbox, output, status):
     logger.debug('output status {}#{}, expect status ? -> {}'.format(output.type, output.output_id, status))
@@ -108,8 +107,7 @@ def group_action_ids():
     return integers(min_value=0, max_value=159)
 
 
-@pytest.mark.smoke
-@pytest.mark.skip(reason='fails consistently when running with the ci profile')
+@pytest.mark.unstable
 @hypothesis.given(multiple_outputs(2), group_action_ids(), booleans())
 def test_group_action_toggle(toolbox, outputs, group_action_id, output_status):
     (output, other_output) = outputs
