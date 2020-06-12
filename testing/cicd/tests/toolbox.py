@@ -114,9 +114,9 @@ class TesterGateway(object):
         # type: (str, Dict[str,Any], bool, bool) -> Any
         return self._client.get(path, params=params, success=True, use_token=use_token)
 
-    def toggle_output(self, output_id):
+    def toggle_output(self, output_id, delay=0.2):
         self.get('/set_output', {'id': output_id, 'is_on': True})
-        time.sleep(0.2)
+        time.sleep(delay)
         self.get('/set_output', {'id': output_id, 'is_on': False})
 
     def log_events(self):
@@ -203,7 +203,7 @@ class Toolbox(object):
             self.dut.login(success=False)
         except Exception:
             logger.info('initializing gateway...')
-            self.start_authorized_mode()
+            self.authorized_mode_start()
             self.create_or_update_user()
             self.dut.login()
         try:
@@ -258,24 +258,14 @@ class Toolbox(object):
                 return list(range(8 * i, (8 * i) + 7))
         raise AssertionError('No modules of type \'{}\' available in {}'.format(module_type, data))
 
-    def start_authorized_mode(self):
+    def authorized_mode_start(self):
         # type: () -> None
         logger.debug('start authorized mode')
-        self.tester.get('/set_output', {'id': self.DEBIAN_AUTHORIZED_MODE, 'is_on': True})
-        time.sleep(15)
-        self.tester.get('/set_output', {'id': self.DEBIAN_AUTHORIZED_MODE, 'is_on': False})
+        self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE, delay=15)
 
-    def wait_authorized_mode(self, timeout=240):
+    def authorized_mode_stop(self, timeout=240):
         # type: (float) -> None
-        logger.debug('wait for authorized mode timeout')
-        since = time.time()
-        while since > time.time() - timeout:
-            data = self.dut.get('/get_usernames', success=False)
-            if not data['success'] and data.get('msg') == 'unauthorized':
-                return
-            logger.debug('authorized mode still active, waiting {}'.format(data))
-            time.sleep(10)
-        raise AssertionError('authorized mode still activate after {:.2f}s'.format(time.time() - since))
+        self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE)
 
     def create_or_update_user(self, success=True):
         # type: (bool) -> None

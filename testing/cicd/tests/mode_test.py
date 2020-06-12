@@ -32,15 +32,20 @@ def check_ip_range():
 
 @pytest.fixture
 def power_on(request, toolbox):
-    yield
-    toolbox.ensure_power_on()
-    toolbox.dut.login()
+    try:
+        yield
+    finally:
+        toolbox.ensure_power_on()
+        toolbox.dut.login()
+        time.sleep(15)
 
 
 @pytest.fixture
 def authorized_mode(request, toolbox):
-    yield
-    toolbox.wait_authorized_mode()
+    try:
+        yield
+    finally:
+        toolbox.authorized_mode_stop()
 
 
 @pytest.fixture
@@ -113,7 +118,7 @@ def test_authorized_mode(toolbox, authorized_mode):
     data = toolbox.dut.get('/get_usernames', success=False)
     assert not data['success'] and data['msg'] == 'unauthorized'
 
-    toolbox.start_authorized_mode()
+    toolbox.authorized_mode_start()
     data = toolbox.dut.get('/get_usernames')
     assert 'openmotics' in data['usernames']
 
@@ -123,20 +128,20 @@ def create_user(request, toolbox):
     try:
         toolbox.dut.login(success=False)
     except Exception:
-        toolbox.start_authorized_mode()
+        toolbox.authorized_mode_start()
         toolbox.create_or_update_user()
         toolbox.dut.login()
     yield
 
 
 @pytest.mark.slow
-def test_factory_reset(toolbox, create_user):
+def test_factory_reset(toolbox, create_user, authorized_mode):
     data = toolbox.factory_reset()
     assert data['factory_reset'] == 'pending'
     time.sleep(60)
     toolbox.health_check(timeout=300)
 
-    toolbox.start_authorized_mode()
+    toolbox.authorized_mode_start()
     data = toolbox.dut.get('/get_usernames', use_token=False)
     logger.debug('users after reset {}'.format(data['usernames']))
     toolbox.create_or_update_user()
