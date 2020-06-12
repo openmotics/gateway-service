@@ -16,6 +16,7 @@ from __future__ import absolute_import
 import logging
 import hypothesis
 import pytest
+import time
 from hypothesis.strategies import composite, just, one_of
 from six.moves import map
 
@@ -52,10 +53,14 @@ def test_realtime_power(toolbox, next_ct):  # type: (Toolbox, Callable[[Toolbox]
 def test_power_cycle(toolbox, next_ct):  # type: (Toolbox, Callable[[Toolbox], Tuple[str, int]]) -> None
     address, input_id = next_ct(toolbox)
     cycles = 10
+    post_boot_wait = 3  # Wait `post_boot_wait` seconds after powering up the module to start using it
+    toolbox.set_output(toolbox.POWER_ENERGY_MODULE, True)
+    time.sleep(post_boot_wait)
     _assert_realtime(toolbox, address, input_id)
     for cycle in range(cycles):
         logger.info('power cycle energy module e#{} ({}/{})'.format(address, cycle + 1, cycles))
         toolbox.power_cycle_module(toolbox.POWER_ENERGY_MODULE)
+        time.sleep(post_boot_wait)
         _assert_realtime(toolbox, address, input_id)
 
 

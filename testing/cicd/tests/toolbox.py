@@ -230,6 +230,8 @@ class Toolbox(object):
             self.list_energy_modules(module_type='E')  # Asserts a minimum of 1 module
         except Exception:
             logger.info('initializing modules...')
+            self.set_output(Toolbox.POWER_ENERGY_MODULE, True)
+            time.sleep(3)  # Wait for module to be booted  # TODO: Only do this if it was turned off
             self.start_module_discovery()
             self.discover_input_module()
             self.discover_output_module()
