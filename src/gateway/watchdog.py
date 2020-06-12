@@ -45,19 +45,21 @@ class Watchdog(object):
         self._master_controller = master_controller
         self._power_communicator = power_communicator
         self._config_controller = configuration_controller
-
-        self._watchdog_thread = DaemonThread(name='Watchdog watcher',
-                                             target=self._watch,
-                                             interval=60, delay=10)
+        self._watchdog_thread = None  # type: Optional[DaemonThread]
 
     def start(self):
         # type: () -> None
-        self._stopped = False
-        self._watchdog_thread.start()
+        if self._watchdog_thread is None:
+            self._watchdog_thread = DaemonThread(name='Watchdog watcher',
+                                                 target=self._watch,
+                                                 interval=60, delay=10)
+            self._watchdog_thread.start()
 
     def stop(self):
         # type: () -> None
-        self._watchdog_thread.stop()
+        if self._watchdog_thread is not None:
+            self._watchdog_thread.stop()
+            self._watchdog_thread = None
 
     def _watch(self):
         # type: () -> None

@@ -48,6 +48,7 @@ if False:  # MYPY:
     from bus.om_bus_client import MessageClient
     from gateway.observer import Observer
     from gateway.config import ConfigurationController
+    from gateway.watchdog import Watchdog
 
     T = TypeVar('T', bound=Union[int, float])
 
@@ -674,6 +675,13 @@ class GatewayApi(object):
     def get_configuration_dirty_flag(self):
         # type: () -> bool
         return self.__master_controller.get_configuration_dirty_flag()
+
+    @Inject
+    def set_self_recovery(self, active, watchdog=INJECTED):  # type: (bool, Watchdog) -> None
+        if active:
+            watchdog.start()
+        else:
+            watchdog.stop()
 
     # Power functions
 
