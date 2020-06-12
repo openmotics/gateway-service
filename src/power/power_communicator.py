@@ -253,11 +253,11 @@ class PowerCommunicator(object):
         # AGT start
         data = address_mode.create_input(power_api.BROADCAST_ADDRESS,
                                          self.__get_cid(),
-                                         chr(power_api.ADDRESS_MODE))
+                                         power_api.ADDRESS_MODE)
         self.__write_to_serial(data)
         data = address_mode_p1c.create_input(power_api.BROADCAST_ADDRESS,
                                              self.__get_cid(),
-                                             chr(power_api.ADDRESS_MODE))
+                                             power_api.ADDRESS_MODE)
         self.__write_to_serial(data)
 
         # Wait for WAA and answer.
@@ -304,11 +304,11 @@ class PowerCommunicator(object):
         # AGT stop
         data = address_mode.create_input(power_api.BROADCAST_ADDRESS,
                                          self.__get_cid(),
-                                         chr(power_api.NORMAL_MODE))
+                                         power_api.NORMAL_MODE)
         self.__write_to_serial(data)
         data = address_mode_p1c.create_input(power_api.BROADCAST_ADDRESS,
                                              self.__get_cid(),
-                                             chr(power_api.NORMAL_MODE))
+                                             power_api.NORMAL_MODE)
         self.__write_to_serial(data)
 
         self.__address_mode = False
