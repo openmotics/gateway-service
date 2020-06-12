@@ -379,6 +379,10 @@ class PowerCommunicator(object):
                 raise Exception('CRC{0} doesn\'t match'.format('7' if header[0] == 'E' else '8'))
         except Empty:
             raise CommunicationTimedOutException('Communication timed out')
+        except Exception:
+            if not self.__verbose:
+                PowerCommunicator.__log('reading from', command)
+            raise
         finally:
             if self.__verbose:
                 PowerCommunicator.__log('reading from', command)
