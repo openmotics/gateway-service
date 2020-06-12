@@ -232,7 +232,7 @@ class Toolbox(object):
         except Exception:
             logger.info('initializing modules...')
             self.set_output(Toolbox.POWER_ENERGY_MODULE, True)
-            time.sleep(3)  # Wait for module to be booted  # TODO: Only do this if it was turned off
+            time.sleep(5)  # Wait for module to be booted  # TODO: Only do this if it was turned off
             self.start_module_discovery()
             self.discover_input_module()
             self.discover_output_module()
