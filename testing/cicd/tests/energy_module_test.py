@@ -57,11 +57,12 @@ def test_power_cycle(toolbox, next_ct):  # type: (Toolbox, Callable[[Toolbox], T
     toolbox.set_output(toolbox.POWER_ENERGY_MODULE, True)
     time.sleep(post_boot_wait)
     _assert_realtime(toolbox, address, input_id)
-    for cycle in range(cycles):
-        logger.info('power cycle energy module e#{} ({}/{})'.format(address, cycle + 1, cycles))
-        toolbox.power_cycle_module(toolbox.POWER_ENERGY_MODULE)
-        time.sleep(post_boot_wait)
-        _assert_realtime(toolbox, address, input_id)
+    with toolbox.disabled_self_recovery():
+        for cycle in range(cycles):
+            logger.info('power cycle energy module e#{} ({}/{})'.format(address, cycle + 1, cycles))
+            toolbox.power_cycle_module(toolbox.POWER_ENERGY_MODULE)
+            time.sleep(post_boot_wait)
+            _assert_realtime(toolbox, address, input_id)
 
 
 def _assert_realtime(toolbox, address, input_id):  # type: (Toolbox, str, int) -> None

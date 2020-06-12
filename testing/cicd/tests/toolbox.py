@@ -16,6 +16,7 @@ from __future__ import absolute_import
 import logging
 import os
 import time
+from contextlib import contextmanager
 from datetime import datetime
 
 import requests
@@ -107,7 +108,7 @@ class TesterGateway(object):
 
     def get(self, path, params=None, success=True, use_token=True):
         # type: (str, Dict[str,Any], bool, bool) -> Any
-        return self._client.get(path, params=params, success=True, use_token=use_token)
+        return self._client.get(path, params=params, success=success, use_token=use_token)
 
     def log_events(self):
         # type: () -> None
@@ -333,7 +334,7 @@ class Toolbox(object):
 
     def ensure_power_on(self):
         # type: () -> None
-        if self.health_check(timeout=0.2) == []:
+        if not self.health_check(timeout=0.2):
             return
         logger.info('power on')
         self.tester.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': True})
@@ -347,6 +348,14 @@ class Toolbox(object):
         time.sleep(delay)
         self.tester.get('/set_output', {'id': output_id, 'is_on': True})
 
+    @contextmanager
+    def disabled_self_recovery(self):
+        try:
+            self.dut.get('/set_self_recovery', {'active': False})
+            yield self
+        finally:
+            self.dut.get('/set_self_recovery', {'active': True})
+
     def health_check(self, timeout=30):
         # type: (float) -> List[str]
         since = time.time()
@@ -355,7 +364,7 @@ class Toolbox(object):
             try:
                 data = self.dut.get('/health_check', use_token=False, timeout=timeout)
                 pending = [k for k, v in data['health'].items() if not v['state']]
-                if pending == []:
+                if not pending:
                     return pending
                 logger.debug('wait for health check, {}'.format(pending))
             except Exception:
@@ -403,14 +412,15 @@ class Toolbox(object):
     def assert_output_status(self, output_id, status, timeout=30):
         # type: (int, bool, float) -> None
         since = time.time()
+        current_status = None
         while since > time.time() - timeout:
             data = self.dut.get('/get_output_status')
             current_status = data['status'][output_id]['status']
-            if bool(status) == bool(current_status):
+            if status == bool(current_status):
                 logger.info('get output status o#{} status={}, after {:.2f}s'.format(output_id, status, time.time() - since))
                 return
             time.sleep(2)
         state = ' '.join(self.tester.get_last_outputs())
-        logger.error('get status o#{} status={} != expected {}, timeout after {:.2f}s    outputs={}'.format(output_id, bool(current_status), status, time.time() - since, state))
+        logger.error('get status o#{} status={} != expected {}, timeout after {:.2f}s    outputs={}'.format(output_id, current_status, status, time.time() - since, state))
         self.tester.log_events()
-        raise AssertionError('get status o#{} status={} != expected {}, timeout after {:.2f}s'.format(output_id, bool(current_status), status, time.time() - since))
+        raise AssertionError('get status o#{} status={} != expected {}, timeout after {:.2f}s'.format(output_id, current_status, status, time.time() - since))
