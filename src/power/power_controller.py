@@ -259,10 +259,7 @@ class P1Controller(object):
     def get_module_delivered_power(self, module):
         # type: (Dict[str,Any]) -> List[Optional[float]]
         cmd = power_api.get_delivered_power(module['version'])
-
-        result = self._power_communicator.do_command(module['address'], cmd)
-        if result:
-            payload = result[0]
+        payload = self._power_communicator.do_command(module['address'], cmd)[0]
 
         delivered = []  # type: List[Optional[float]]
         for port_id in range(NUM_PORTS[P1_CONCENTRATOR]):
@@ -275,10 +272,7 @@ class P1Controller(object):
     def get_module_received_power(self, module):
         # type: (Dict[str,Any]) -> List[Optional[float]]
         cmd = power_api.get_received_power(module['version'])
-
-        result = self._power_communicator.do_command(module['address'], cmd)
-        if result:
-            payload = result[0]
+        payload = self._power_communicator.do_command(module['address'], cmd)[0]
 
         received = []  # type: List[Optional[float]]
         for port_id in range(NUM_PORTS[P1_CONCENTRATOR]):
