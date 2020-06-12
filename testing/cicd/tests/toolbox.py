@@ -211,7 +211,7 @@ class Toolbox(object):
             self._dut_energy_cts = []
             energy_modules = self.list_energy_modules(module_type='E')
             for module in energy_modules:
-                self._dut_energy_cts += [(module['address'], input_id) for input_id in range(12)]
+                self._dut_energy_cts += [(module['id'], input_id) for input_id in range(12)]
         return self._dut_energy_cts
 
     def initialize(self):
@@ -274,7 +274,6 @@ class Toolbox(object):
         for address, info in data['modules']['energy'].items():
             if info['type'] != module_type or not info['firmware']:
                 continue
-            info['address'] = address
             modules.append(info)
         assert len(modules) >= min_modules, 'Not enough energy modules of type {} available'.format(module_type)
         return modules

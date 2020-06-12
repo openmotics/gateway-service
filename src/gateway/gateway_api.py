@@ -194,7 +194,8 @@ class GatewayApi(object):
                 firmware_version = '{0}.{1}.{2}'.format(version_info[1], version_info[2], version_info[3])
                 information[module_address] = {'type': get_energy_module_type(module['version']),
                                                'firmware': firmware_version,
-                                               'address': module_address}
+                                               'address': module_address,
+                                               'id': module['id']}
         return information
 
     def get_modules_information(self):
