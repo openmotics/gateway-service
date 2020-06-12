@@ -83,19 +83,19 @@ class TimeKeeper(object):
             self.__set_mode(version, module['address'], daynight)
 
     @staticmethod
-    def is_day_time(times, date):
+    def is_day_time(_times, date):
         # type: (Optional[str], datetime) -> bool
         """ Check if a date is in day time. """
-        if times is None:
-            times = str([0 for _ in range(14)])
+        if _times is None:
+            times = [0 for _ in range(14)]  # type: List[int]
         else:
-            times = str([int(t.replace(":", "")) for t in times.split(",")])
+            times = [int(t.replace(":", "")) for t in _times.split(",")]
 
         day_of_week = date.weekday()  # 0 = Monday, 6 = Sunday
         current_time = date.hour * 100 + date.minute
 
-        start = int(times[day_of_week * 2])
-        stop = int(times[day_of_week * 2 + 1])
+        start = times[day_of_week * 2]
+        stop = times[day_of_week * 2 + 1]
 
         return stop > current_time >= start
 
