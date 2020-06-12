@@ -92,7 +92,7 @@ class PowerCommand(object):
         self.mode = mode
         self.type = type
         self.input_format = input_format
-        self.output_format = output_format
+        self.output_format = output_format if output_format is not None else ""
         self.module_type = module_type
 
     def create_input(self, address, cid, *data):
@@ -121,8 +121,7 @@ class PowerCommand(object):
         :param cid: 1 byte, communication id
         :param data: data to send to the power module
         """
-        if self.output_format:
-            buffer = struct.pack(self.output_format, *data)
+        buffer = struct.pack(self.output_format, *data)
         header = self.module_type + chr(address) + chr(cid) + str(self.mode) + str(self.type)
         payload = chr(len(buffer)) + str(buffer)
         if self.module_type == 'E':
