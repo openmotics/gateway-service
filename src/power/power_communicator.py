@@ -142,7 +142,7 @@ class PowerCommunicator(object):
                 del self.__debug_buffer['write'][t]
 
     def do_command(self, address, cmd, *data):
-        # type: (int, PowerCommand, str) -> Optional[Tuple[Any, ...]]
+        # type: (int, PowerCommand, str) -> Tuple[Any, ...]
         """ Send a command over the serial port and block until an answer is received.
         If the power module does not respond within the timeout period, a
         CommunicationTimedOutException is raised.
@@ -159,7 +159,7 @@ class PowerCommunicator(object):
             raise InAddressModeException()
 
         def do_once(_address, _cmd, *_data):
-            # type: (int, PowerCommand, str) -> Optional[Tuple[Any, ...]]
+            # type: (int, PowerCommand, str) -> Tuple[Any, ...]
             """ Send the command once. """
             try:
                 cid = self.__get_cid()
@@ -169,7 +169,7 @@ class PowerCommunicator(object):
                 if _address == power_api.BROADCAST_ADDRESS:
                     self.__communication_stats_calls['calls_succeeded'].append(time.time())
                     self.__communication_stats_calls['calls_succeeded'] = self.__communication_stats_calls['calls_succeeded'][-50:]
-                    return None  # No reply on broadcast messages !
+                    return ()  # No reply on broadcast messages !
                 else:
                     tries = 0
                     while True:

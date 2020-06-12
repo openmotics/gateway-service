@@ -39,29 +39,29 @@ class PowerController(object):
         self._power_communicator = power_communicator
 
     def get_module_current(self, module, phase=None):
-        # type: (Dict[str,Any], Optional[int]) -> Optional[Tuple[Any, ...]]
+        # type: (Dict[str,Any], Optional[int]) -> Tuple[Any, ...]
         # TODO return type depends on module version/phase, translate here?
         cmd = power_api.get_current(module['version'], phase=phase)
         return self._power_communicator.do_command(module['address'], cmd)
 
     def get_module_frequency(self, module):
-        # type: (Dict[str,Any]) ->  Optional[Tuple[Any, ...]]
+        # type: (Dict[str,Any]) ->  Tuple[float, ...]
         cmd = power_api.get_frequency(module['version'])
         return self._power_communicator.do_command(module['address'], cmd)
 
     def get_module_power(self, module):
-        # type: (Dict[str,Any]) ->  Optional[Tuple[Any, ...]]
+        # type: (Dict[str,Any]) ->  Tuple[float, ...]
         cmd = power_api.get_power(module['version'])
         return self._power_communicator.do_command(module['address'], cmd)
 
     def get_module_voltage(self, module, phase=None):
-        # type: (Dict[str,Any], Optional[int]) -> Optional[Tuple[Any, ...]]
+        # type: (Dict[str,Any], Optional[int]) -> Tuple[Any, ...]
         # TODO return type depends on module version/phase, translate here?
         cmd = power_api.get_voltage(module['version'], phase=phase)
         return self._power_communicator.do_command(module['address'], cmd)
 
     def get_module_day_energy(self, module):
-        # type: (Dict[str,Any]) -> Optional[Tuple[Any, ...]]
+        # type: (Dict[str,Any]) -> Tuple[int, ...]
         if module['version'] == P1_CONCENTRATOR:
             raise ValueError("Unknown power api version")
         else:
@@ -69,7 +69,7 @@ class PowerController(object):
             return self._power_communicator.do_command(module['address'], cmd)
 
     def get_module_night_energy(self, module):
-        # type: (Dict[str,Any]) -> Optional[Tuple[Any, ...]]
+        # type: (Dict[str,Any]) -> Tuple[int, ...]
         if module['version'] == P1_CONCENTRATOR:
             raise ValueError("Unknown power api version")
         else:
@@ -130,10 +130,7 @@ class P1Controller(object):
     def get_module_status(self, module):
         # type: (Dict[str,Any]) -> List[bool]
         cmd = power_api.get_status_p1(module['version'])
-
-        result = self._power_communicator.do_command(module['address'], cmd)
-        if result:
-            payload = result[0]
+        payload = self._power_communicator.do_command(module['address'], cmd)[0]
 
         status = []
         for port_id in range(NUM_PORTS[P1_CONCENTRATOR]):
@@ -146,10 +143,7 @@ class P1Controller(object):
         Request meter id for all meters and parse repsonse.
         """
         cmd = power_api.get_meter_p1(module['version'], type=type)
-
-        result = self._power_communicator.do_command(module['address'], cmd)
-        if result:
-            payload = result[0]
+        payload = self._power_communicator.do_command(module['address'], cmd)[0]
 
         meters = []
         for port_id in range(NUM_PORTS[P1_CONCENTRATOR]):
@@ -162,10 +156,7 @@ class P1Controller(object):
         Request timestamps for all meters and parse repsonse.
         """
         cmd = power_api.get_timestamp_p1(module['version'])
-
-        result = self._power_communicator.do_command(module['address'], cmd)
-        if result:
-            payload = result[0]
+        payload = self._power_communicator.do_command(module['address'], cmd)[0]
 
         timestamps = []  # type: List[Optional[float]]
         for port_id in range(NUM_PORTS[P1_CONCENTRATOR]):
@@ -181,10 +172,7 @@ class P1Controller(object):
         Request gas consumptions for all meters and parse repsonse.
         """
         cmd = power_api.get_gas_consumption_p1(module['version'])
-
-        result = self._power_communicator.do_command(module['address'], cmd)
-        if result:
-            payload = result[0]
+        payload = self._power_communicator.do_command(module['address'], cmd)[0]
 
         consumptions = []  # type: List[Optional[float]]
         for port_id in range(NUM_PORTS[P1_CONCENTRATOR]):
@@ -200,10 +188,7 @@ class P1Controller(object):
         Request consumption tariff for all meters and parse repsonse.
         """
         cmd = power_api.get_injection_tariff_p1(module['version'], type=type)
-
-        result = self._power_communicator.do_command(module['address'], cmd)
-        if result:
-            payload = result[0]
+        payload = self._power_communicator.do_command(module['address'], cmd)[0]
 
         consumptions = []  # type: List[Optional[float]]
         for port_id in range(NUM_PORTS[P1_CONCENTRATOR]):
@@ -219,10 +204,7 @@ class P1Controller(object):
         Request tariff indicator for all meters and parse repsonse.
         """
         cmd = power_api.get_tariff_indicator_p1(module['version'])
-
-        result = self._power_communicator.do_command(module['address'], cmd)
-        if result:
-            payload = result[0]
+        payload = self._power_communicator.do_command(module['address'], cmd)[0]
 
         consumptions = []  # type: List[Optional[float]]
         for port_id in range(NUM_PORTS[P1_CONCENTRATOR]):
@@ -240,10 +222,7 @@ class P1Controller(object):
         payloads = {}
         for i in range(1, 4):
             cmd = power_api.get_current(module['version'], phase=i)
-
-            result = self._power_communicator.do_command(module['address'], cmd)
-            if result:
-                payloads['phase{}'.format(i)] = result[0]
+            payloads['phase{}'.format(i)] = self._power_communicator.do_command(module['address'], cmd)[0]
 
         currents = []
         for port_id in range(NUM_PORTS[P1_CONCENTRATOR]):
@@ -264,10 +243,7 @@ class P1Controller(object):
         payloads = {}
         for i in range(1, 4):
             cmd = power_api.get_voltage(module['version'], phase=i)
-
-            result = self._power_communicator.do_command(module['address'], cmd)
-            if result:
-                payloads['phase{}'.format(i)] = result[0]
+            payloads['phase{}'.format(i)] = self._power_communicator.do_command(module['address'], cmd)[0]
 
         voltages = []
         for port_id in range(NUM_PORTS[P1_CONCENTRATOR]):
@@ -315,10 +291,7 @@ class P1Controller(object):
     def get_module_day_energy(self, module):
         # type: (Dict[str,Any]) -> List[Optional[float]]
         cmd = power_api.get_day_energy(module['version'])
-
-        result = self._power_communicator.do_command(module['address'], cmd)
-        if result:
-            payload = result[0]
+        payload = self._power_communicator.do_command(module['address'], cmd)[0]
 
         energy = []  # type: List[Optional[float]]
         for port_id in range(NUM_PORTS[P1_CONCENTRATOR]):
@@ -331,10 +304,7 @@ class P1Controller(object):
     def get_module_night_energy(self, module):
         # type: (Dict[str,Any]) -> List[Optional[float]]
         cmd = power_api.get_night_energy(module['version'])
-
-        result = self._power_communicator.do_command(module['address'], cmd)
-        if result:
-            payload = result[0]
+        payload = self._power_communicator.do_command(module['address'], cmd)[0]
 
         energy = []  # type: List[Optional[float]]
         for port_id in range(NUM_PORTS[P1_CONCENTRATOR]):
