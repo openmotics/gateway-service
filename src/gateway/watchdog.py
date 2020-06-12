@@ -46,10 +46,12 @@ class Watchdog(object):
         self._power_communicator = power_communicator
         self._config_controller = configuration_controller
         self._watchdog_thread = None  # type: Optional[DaemonThread]
+        self.start_time = 0.0
 
     def start(self):
         # type: () -> None
         if self._watchdog_thread is None:
+            self.start_time = time.time()
             self._watchdog_thread = DaemonThread(name='Watchdog watcher',
                                                  target=self._watch,
                                                  interval=60, delay=10)
@@ -84,8 +86,10 @@ class Watchdog(object):
         recovery_data_key = 'communication_recovery_{0}'.format(name)
         recovery_data = self._config_controller.get(recovery_data_key, {})
 
-        calls_timedout = controller.get_communication_statistics()['calls_timedout']
-        calls_succeeded = controller.get_communication_statistics()['calls_succeeded']
+        calls_timedout = [call for call in controller.get_communication_statistics()['calls_timedout']
+                          if call > self.start_time]
+        calls_succeeded = [call for call in controller.get_communication_statistics()['calls_succeeded']
+                           if call > self.start_time]
         all_calls = sorted(calls_timedout + calls_succeeded)
 
         if len(calls_timedout) == 0:
