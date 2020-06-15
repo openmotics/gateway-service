@@ -225,6 +225,7 @@ class Toolbox(object):
             self.list_modules('O')
             self.list_modules('I')
             # self.list_energy_modules('E')  # TODO: Energy module discovery fails
+            self.list_modules('C', hardware=False)
         except Exception:
             logger.info('discovering modules...')
             self.discover_output_module()
@@ -236,6 +237,18 @@ class Toolbox(object):
         self.list_modules('O')
         self.list_modules('I')
         # self.list_energy_modules('E')  # TODO: Energy module discovery fails
+        self.list_modules('C', hardware=False)  # firmware version missing
+
+        # FIXME: workaround for slow discovery (race condition?)
+        # Toggle all inputs first to push their status.
+        for input in INPUT_MODULE_LAYOUT['I'].inputs:
+            self.tester.toggle_output(input.tester_output_id)
+        time.sleep(10)
+        self.ensure_input_exists(INPUT_MODULE_LAYOUT['I'].inputs[7], timeout=300)
+        for input in INPUT_MODULE_LAYOUT['C'].inputs:
+            self.tester.toggle_output(input.tester_output_id)
+        time.sleep(10)
+        self.ensure_input_exists(INPUT_MODULE_LAYOUT['C'].inputs[5], timeout=300)
 
         try:
             self.list_modules('o', hardware=False)
@@ -338,6 +351,8 @@ class Toolbox(object):
         self.module_discover_start()
         self.tester.toggle_output(self.DEBIAN_DISCOVER_UCAN)
         self.assert_modules(2, timeout=60)
+        # TODO: wait for inputs to be andvertized, no a way to poll?
+        time.sleep(120)
         self.module_discover_stop()
 
     def assert_modules(self, count, timeout=30):
@@ -467,3 +482,17 @@ class Toolbox(object):
         logger.error('get status {} status={} != expected {}, timeout after {:.2f}s    outputs={}'.format(output.output_id, bool(current_status), status, time.time() - since, state))
         self.tester.log_events()
         raise AssertionError('get status {} status={} != expected {}, timeout after {:.2f}s'.format(output.output_id, bool(current_status), status, time.time() - since))
+
+    def ensure_input_exists(self, input, timeout=30):
+        # type: (Input, float) -> None
+        since = time.time()
+        while since > time.time() - timeout:
+            data = self.dut.get('/get_input_status')
+            try:
+                next(x for x in data['status'] if x['id'] == input.input_id)
+                logger.debug('input {}#{} with status discovered, after {:.2f}s'.format(input.type, input.input_id, time.time() - since))
+                return
+            except StopIteration:
+                pass
+            time.sleep(2)
+        raise AssertionError('input {}#{} status missing, timeout after {:.2f}s'.format(input.type, input.input_id, time.time() - since))
