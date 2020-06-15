@@ -233,6 +233,7 @@ class Toolbox(object):
         # TODO compare with hardware modules instead.
         self.list_modules('O')
         self.list_modules('I')
+        self.list_energy_modules('E')
 
         try:
             self.get_module('o')
