@@ -28,8 +28,6 @@ if False:  # MYPY
     from power.power_communicator import PowerCommunicator
 
 
-@Injectable.named('power_controller')
-@Singleton
 class PowerController(object):
     """ The PowerController abstracts calls to the communicator. """
 
@@ -77,8 +75,6 @@ class PowerController(object):
             return self._power_communicator.do_command(module['address'], cmd)
 
 
-@Injectable.named('p1_controller')
-@Singleton
 class P1Controller(object):
     """ The PowerController keeps track of the registered power modules. """
 

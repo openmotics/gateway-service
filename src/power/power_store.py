@@ -30,8 +30,6 @@ if False:  # MYPY
     from typing import Any, Dict, List, Optional
 
 
-@Injectable.named('power_store')
-@Singleton
 class PowerStore(object):
     """ The PowerStore keeps track of the registered power modules. """
 

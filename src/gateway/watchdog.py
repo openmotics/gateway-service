@@ -70,12 +70,13 @@ class Watchdog(object):
                 self._master_controller.cold_reset()
             time.sleep(15)
             os._exit(1)
-        reset_requirement = self._controller_check('energy', self._power_communicator)
-        if reset_requirement is not None:
-            if reset_requirement == 'device':
-                self._master_controller.power_cycle_bus()
-            time.sleep(15)
-            os._exit(1)
+        if self._power_communicator:
+            reset_requirement = self._controller_check('energy', self._power_communicator)
+            if reset_requirement is not None:
+                if reset_requirement == 'device':
+                    self._master_controller.power_cycle_bus()
+                time.sleep(15)
+                os._exit(1)
 
     def _controller_check(self, name, controller):
         # type: (str, Any) -> Optional[str]
