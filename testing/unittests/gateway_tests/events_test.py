@@ -17,9 +17,8 @@ Tests for events.
 """
 from __future__ import absolute_import
 import unittest
-from mock import patch, Mock
+from mock import Mock
 import xmlrunner
-from cloud.cloud_api_client import CloudAPIClient
 from cloud.events import EventSender
 from gateway.events import GatewayEvent
 from ioc import SetUpTestInjections, Scope

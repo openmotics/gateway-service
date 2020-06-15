@@ -217,7 +217,8 @@ class GatewayApi(object):
         return [{'id': output['id'],
                  'status': output['status'],
                  'ctimer': output['ctimer'],
-                 'dimmer': output['dimmer']}
+                 'dimmer': output['dimmer'],
+                 'locked': output['locked']}
                 for output in outputs]
 
     def get_output_status(self, output_id):  # type: (int) -> Dict[str, Any]
@@ -233,7 +234,8 @@ class GatewayApi(object):
             return {'id': output['id'],
                     'status': output['status'],
                     'ctimer': output['ctimer'],
-                    'dimmer': output['dimmer']}
+                    'dimmer': output['dimmer'],
+                    'locked': output['locked']}
 
     def set_output_status(self, output_id, is_on, dimmer=None, timer=None):  # type: (int, bool, Optional[int], Optional[int]) -> None
         """
