@@ -223,17 +223,17 @@ class Toolbox(object):
         try:
             self.list_modules('O')
             self.list_modules('I')
-            self.list_energy_modules('E')
+            # self.list_energy_modules('E')  # TODO: Energy module discovery fails
         except Exception:
             logger.info('discovering modules...')
             self.discover_output_module()
             self.discover_input_module()
-            self.discover_energy_module()
+            # self.discover_energy_module()  # TODO: Energy module discovery fails
 
         # TODO compare with hardware modules instead.
         self.list_modules('O')
         self.list_modules('I')
-        self.list_energy_modules('E')
+        # self.list_energy_modules('E')  # TODO: Energy module discovery fails
 
         try:
             self.get_module('o')

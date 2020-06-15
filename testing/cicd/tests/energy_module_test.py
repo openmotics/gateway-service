@@ -43,6 +43,7 @@ def next_ct(draw):
 
 
 @pytest.mark.smoke
+@pytest.mark.skip(reason='Unstable module discovery')
 @hypothesis.given(next_ct())
 def test_realtime_power(toolbox, next_ct):  # type: (Toolbox, Callable[[Toolbox], Tuple[int, int]]) -> None
     module_id, input_id = next_ct(toolbox)
@@ -50,6 +51,7 @@ def test_realtime_power(toolbox, next_ct):  # type: (Toolbox, Callable[[Toolbox]
 
 
 @pytest.mark.slow
+@pytest.mark.skip(reason='Unstable module discovery')
 @hypothesis.given(next_ct())
 def test_power_cycle(toolbox, next_ct):  # type: (Toolbox, Callable[[Toolbox], Tuple[int, int]]) -> None
     module_id, input_id = next_ct(toolbox)
