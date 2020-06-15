@@ -223,10 +223,12 @@ class Toolbox(object):
         try:
             self.list_modules('O')
             self.list_modules('I')
+            self.list_energy_modules('E')
         except Exception:
             logger.info('discovering modules...')
             self.discover_output_module()
             self.discover_input_module()
+            self.discover_energy_module()
 
         # TODO compare with hardware modules instead.
         self.list_modules('O')
@@ -356,9 +358,25 @@ class Toolbox(object):
             time.sleep(2)
         raise AssertionError('expected {} modules in {}'.format(count, modules))
 
-    def discover_energy_modules(self):
+    def discover_energy_module(self):
         # type: () -> None
-        self.press_input(self.DEBIAN_DISCOVER_ENERGY)
+        logger.debug('discover Energy module')
+        self.module_discover_start()
+        self.tester.toggle_output(self.DEBIAN_DISCOVER_ENERGY)
+        self.assert_energy_modules(1, timeout=60)
+        self.module_discover_stop()
+
+    def assert_energy_modules(self, count, timeout=30):
+        # type: (int, float) -> List[List[str]]
+        since = time.time()
+        modules = []
+        while since > time.time() - timeout:
+            modules += self.dut.get('/get_power_modules')['modules']
+            if len(modules) >= count:
+                logger.debug('discovered {} modules, done'.format(count))
+                return modules
+            time.sleep(2)
+        raise AssertionError('expected {} modules in {}'.format(count, modules))
 
     def power_off(self):
         # type: () -> None

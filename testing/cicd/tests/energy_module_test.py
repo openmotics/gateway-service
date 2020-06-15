@@ -32,6 +32,7 @@ def next_ct(draw):
     used_values = []
 
     def f(toolbox):  # type: (Toolbox) -> Tuple[int, int]
+        assert len(toolbox.dut_energy_cts), 'no Energy modules available for this test'
         elements = [toolbox.dut_energy_cts[0]]  # For now, only the first CT is installed
         value = draw(one_of(list(map(just, elements))).
                      filter(lambda x: (x not in used_values)))
