@@ -517,6 +517,8 @@ class EepromModel(object):
                 raise TypeError('Length of max id address in EepromModel {0} is not 1'.format(cls.get_name()))
             eeprom_data = eeprom_file.read([address])
             amount_of_modules = ord(eeprom_data[address].bytes[0])
+            if amount_of_modules == 255:
+                amount_of_modules = 0
             return amount_of_modules * eeprom_id.get_multiplier() - 1
 
 
