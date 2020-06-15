@@ -884,6 +884,28 @@ class WebInterface(object):
         """
         return self._gateway_api.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
 
+    @openmotics_api(auth=True)
+    def add_virtual_output(self):
+        # type: () -> Dict[str,Any]
+        """
+        Adds a new virtual output module.
+
+        :returns: dict with 'status'.
+        :rtype: dict
+        """
+        return {'status': self._gateway_api.add_virtual_output_module()}
+
+    @openmotics_api(auth=True)
+    def add_virtual_input(self):
+        # type: () -> Dict[str,Any]
+        """
+        Adds a new virtual input module.
+
+        :returns: dict with 'status'.
+        :rtype: dict
+        """
+        return {'status': self._gateway_api.add_virtual_input_module()}
+
     @openmotics_api(auth=True, check=types(action_type=int, action_number=int))
     def do_basic_action(self, action_type, action_number):
         """
@@ -1824,7 +1846,7 @@ class WebInterface(object):
         :returns: module id as the keys: [voltage, frequency, current, power].
         :rtype: dict
         """
-        response = {}
+        response = {}  # type: Dict[str,List[List[float]]]
         for module_id, items in self._gateway_api.get_realtime_power().items():
             response[module_id] = []
             for realtime_power in items:
@@ -2055,7 +2077,8 @@ class WebInterface(object):
 
         if response.status_code != requests.codes.ok:
             raise RuntimeError("Got bad resonse code: %d" % response.status_code)
-        return {'headers': response.headers._store,
+        response_headers = response.headers  # type: Any
+        return {'headers': response_headers._store,
                 'data': response.text}
 
     @openmotics_api(auth=True, check=types(timestamp=int, action='json'), deprecated='add_schedule')
@@ -2205,7 +2228,7 @@ class WebInterface(object):
     def get_metric_definitions(self, source=None, metric_type=None):
         sources = self._metrics_controller.get_filter('source', source)
         metric_types = self._metrics_controller.get_filter('metric_type', metric_type)
-        definitions = {}
+        definitions = {}  # type: Dict[str,Dict[str,Any]]
         for _source, _metric_types in six.iteritems(self._metrics_controller.definitions):
             if _source in sources:
                 definitions[_source] = {}

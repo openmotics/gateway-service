@@ -101,7 +101,7 @@ def factory_reset(master_controller=INJECTED):
 
     logger.info('Rebooting master...')
     master_controller.cold_reset()
-    time.sleep(5)
+    time.sleep(6)
 
     logger.info('Wiping master eeprom...')
     master_controller.start()

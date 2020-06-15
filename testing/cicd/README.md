@@ -20,7 +20,19 @@ pytest testing/cicd/tests --disable-warnings --hypothesis-profile once -m smoke
 - full testrun
 
 ```
-pytest testing/cicd/tests --disable-warnings --log-cli-level=INFO -m 'smoke or slow'
+pytest testing/cicd/tests --disable-warnings --log-cli-level INFO --log-level DEBUG -m 'smoke or slow'
+```
+
+## Debugging
+
+For debugging it can be useful to use the Toolbox interactively.
+
+```
+ipython -i testing/cicd/tests/conftest.py
+In [1]: t = Toolbox()
+
+In [2]: t.dut.login()
+Out[2]: u'44b789c29aeb47eb8b93bff5f1c4113d'
 ```
 
 ## Target gateway deployment
