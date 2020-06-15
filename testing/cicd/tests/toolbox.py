@@ -115,10 +115,11 @@ class TesterGateway(object):
         # type: (str, Dict[str,Any], bool, bool) -> Any
         return self._client.get(path, params=params, success=success, use_token=use_token)
 
-    def toggle_output(self, output_id, delay=0.2):
-        self.get('/set_output', {'id': output_id, 'is_on': True})
+    def toggle_output(self, output_id, delay=0.2, inverted=False):
+        temporarily_state = not inverted
+        self.get('/set_output', {'id': output_id, 'is_on': temporarily_state})
         time.sleep(delay)
-        self.get('/set_output', {'id': output_id, 'is_on': False})
+        self.get('/set_output', {'id': output_id, 'is_on': not temporarily_state})
 
     def log_events(self):
         # type: () -> None
@@ -394,12 +395,6 @@ class Toolbox(object):
         logger.info('waiting for gateway api to respond...')
         self.health_check(timeout=300)
         logger.info('health check done')
-
-    def power_cycle_module(self, output_id, delay=2.0):
-        # type: (int, float) -> None
-        self.tester.get('/set_output', {'id': output_id, 'is_on': False})
-        time.sleep(delay)
-        self.tester.get('/set_output', {'id': output_id, 'is_on': True})
 
     @contextmanager
     def disabled_self_recovery(self):

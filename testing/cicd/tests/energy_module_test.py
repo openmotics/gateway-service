@@ -44,7 +44,7 @@ def test_power_cycle(toolbox, ct):  # type: (Toolbox, CT) -> None
     with toolbox.disabled_self_recovery():
         for cycle in range(cycles):
             logger.info('power cycle energy module e#{} ({}/{})'.format(ct.module_id, cycle + 1, cycles))
-            toolbox.power_cycle_module(toolbox.POWER_ENERGY_MODULE)
+            toolbox.tester.toggle_output(toolbox.POWER_ENERGY_MODULE, delay=2, inverted=True)
             time.sleep(post_boot_wait)
             _assert_realtime(toolbox, ct)
 
