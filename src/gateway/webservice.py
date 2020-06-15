@@ -2219,6 +2219,11 @@ class WebInterface(object):
         subprocess.Popen(constants.get_self_test_cmd(), close_fds=True)
         return {}
 
+    @openmotics_api(auth=True, check=types(active=bool), plugin_exposed=False)
+    def set_self_recovery(self, active):
+        self._gateway_api.set_self_recovery(active=active)
+        return {}
+
     @openmotics_api(auth=True)
     def get_metric_definitions(self, source=None, metric_type=None):
         sources = self._metrics_controller.get_filter('source', source)

@@ -17,6 +17,7 @@ from __future__ import absolute_import
 import logging
 import os
 import time
+from contextlib import contextmanager
 from datetime import datetime
 
 import hypothesis
@@ -112,12 +113,13 @@ class TesterGateway(object):
 
     def get(self, path, params=None, success=True, use_token=True):
         # type: (str, Dict[str,Any], bool, bool) -> Any
-        return self._client.get(path, params=params, success=True, use_token=use_token)
+        return self._client.get(path, params=params, success=success, use_token=use_token)
 
-    def toggle_output(self, output_id, delay=0.2):
-        self.get('/set_output', {'id': output_id, 'is_on': True})
+    def toggle_output(self, output_id, delay=0.2, inverted=False):
+        temporarily_state = not inverted
+        self.get('/set_output', {'id': output_id, 'is_on': temporarily_state})
         time.sleep(delay)
-        self.get('/set_output', {'id': output_id, 'is_on': False})
+        self.get('/set_output', {'id': output_id, 'is_on': not temporarily_state})
 
     def log_events(self):
         # type: () -> None
@@ -170,12 +172,15 @@ class Toolbox(object):
     DEBIAN_DISCOVER_INPUT = 14  # tester_output_1.output_6
     DEBIAN_DISCOVER_OUTPUT = 15  # tester_output_1.output_7
     DEBIAN_DISCOVER_UCAN = 22  # tester_output2.output_6
+    DEBIAN_DISCOVER_ENERGY = 23  # tester_output2.output_7
     DEBIAN_POWER_OUTPUT = 8  # tester_output_1.output_0
+    POWER_ENERGY_MODULE = 11  # tester_output_1.output_3
 
     def __init__(self):
         # type: () -> None
         self._tester = None  # type: Optional[TesterGateway]
         self._dut = None  # type: Optional[Client]
+        self._dut_energy_cts = None  # type: Optional[List[Tuple[int, int]]]
 
     @property
     def tester(self):
@@ -195,6 +200,16 @@ class Toolbox(object):
             self._dut = Client(dut_host, auth=dut_auth)
         return self._dut
 
+    @property
+    def dut_energy_cts(self):
+        if self._dut_energy_cts is None:
+            cts = []
+            energy_modules = self.list_energy_modules(module_type='E')
+            for module in energy_modules:
+                cts += [(module['id'], input_id) for input_id in range(12)]
+            self._dut_energy_cts = cts
+        return self._dut_energy_cts
+
     def initialize(self):
         # type: () -> None
         logger.info('checking prerequisites')
@@ -209,14 +224,17 @@ class Toolbox(object):
         try:
             self.list_modules('O')
             self.list_modules('I')
+            # self.list_energy_modules('E')  # TODO: Energy module discovery fails
         except Exception:
             logger.info('discovering modules...')
             self.discover_output_module()
             self.discover_input_module()
+            # self.discover_energy_module()  # TODO: Energy module discovery fails
 
         # TODO compare with hardware modules instead.
         self.list_modules('O')
         self.list_modules('I')
+        # self.list_energy_modules('E')  # TODO: Energy module discovery fails
 
         try:
             self.get_module('o')
@@ -245,8 +263,24 @@ class Toolbox(object):
     def list_modules(self, module_type, min_modules=1):
         # type: (str, int) -> List[Dict[str,Any]]
         data = self.dut.get('/get_modules_information')
-        modules = [x for x in data['modules']['master'].values() if x['type'] == module_type and x['firmware']]
+        modules = []
+        for address, info in data['modules']['master'].items():
+            if info['type'] != module_type or not info['firmware']:
+                continue
+            info['address'] = address
+            modules.append(info)
         assert len(modules) >= min_modules, 'Not enough modules of type \'{}\' available in {}'.format(module_type, data)
+        return modules
+
+    def list_energy_modules(self, module_type, min_modules=1):
+        # type: (str, int) -> List[Dict[str, Any]]
+        data = self.dut.get('/get_modules_information')
+        modules = []
+        for address, info in data['modules']['energy'].items():
+            if info['type'] != module_type or not info['firmware']:
+                continue
+            modules.append(info)
+        assert len(modules) >= min_modules, 'Not enough energy modules of type \'{}\' available in {}'.format(module_type, data)
         return modules
 
     def get_module(self, module_type):
@@ -326,6 +360,26 @@ class Toolbox(object):
             time.sleep(2)
         raise AssertionError('expected {} modules in {}'.format(count, modules))
 
+    def discover_energy_module(self):
+        # type: () -> None
+        logger.debug('discover Energy module')
+        self.module_discover_start()
+        self.tester.toggle_output(self.DEBIAN_DISCOVER_ENERGY)
+        self.assert_energy_modules(1, timeout=60)
+        self.module_discover_stop()
+
+    def assert_energy_modules(self, count, timeout=30):
+        # type: (int, float) -> List[List[str]]
+        since = time.time()
+        modules = []
+        while since > time.time() - timeout:
+            modules += self.dut.get('/get_power_modules')['modules']
+            if len(modules) >= count:
+                logger.debug('discovered {} modules, done'.format(count))
+                return modules
+            time.sleep(2)
+        raise AssertionError('expected {} modules in {}'.format(count, modules))
+
     def power_off(self):
         # type: () -> None
         logger.debug('power off')
@@ -334,13 +388,21 @@ class Toolbox(object):
 
     def ensure_power_on(self):
         # type: () -> None
-        if self.health_check(timeout=0.2) == []:
+        if not self.health_check(timeout=0.2):
             return
         logger.info('power on')
         self.tester.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': True})
         logger.info('waiting for gateway api to respond...')
         self.health_check(timeout=300)
         logger.info('health check done')
+
+    @contextmanager
+    def disabled_self_recovery(self):
+        try:
+            self.dut.get('/set_self_recovery', {'active': False})
+            yield self
+        finally:
+            self.dut.get('/set_self_recovery', {'active': True})
 
     def health_check(self, timeout=30):
         # type: (float) -> List[str]
@@ -350,7 +412,7 @@ class Toolbox(object):
             try:
                 data = self.dut.get('/health_check', use_token=False, timeout=timeout)
                 pending = [k for k, v in data['health'].items() if not v['state']]
-                if pending == []:
+                if not pending:
                     return pending
                 logger.debug('wait for health check, {}'.format(pending))
             except Exception:
@@ -401,10 +463,11 @@ class Toolbox(object):
         # type: (Output, bool, float) -> None
         hypothesis.note('assert output {}#{} status is {}'.format(output.type, output.output_id, status))
         since = time.time()
+        current_status = None
         while since > time.time() - timeout:
             data = self.dut.get('/get_output_status')
             current_status = data['status'][output.output_id]['status']
-            if bool(status) == bool(current_status):
+            if status == bool(current_status):
                 logger.debug('get output {}#{} status={}, after {:.2f}s'.format(output.type, output.output_id, status, time.time() - since))
                 return
             time.sleep(2)

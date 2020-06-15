@@ -3,9 +3,10 @@ import collections
 import hypothesis
 from hypothesis.strategies import composite, integers, just, lists, one_of
 
-Module = collections.namedtuple('Module', ['name', 'type', 'outputs', 'inputs'])
+Module = collections.namedtuple('Module', ['name', 'type', 'outputs', 'inputs', 'cts'])
 Output = collections.namedtuple('Output', ['type', 'output_id'])
 Input = collections.namedtuple('Input', ['type', 'input_id', 'tester_output_id'])
+CT = collections.namedtuple('CT', ['module_id', 'ct_id'])
 
 
 OUTPUT_MODULE_LAYOUT = {
@@ -18,7 +19,7 @@ OUTPUT_MODULE_LAYOUT = {
         Output(type='O', output_id=5),
         Output(type='O', output_id=6),
         Output(type='O', output_id=7),
-    ]),
+    ], cts=[]),
     # 'o': Module(name='virtual output', type='o', inputs=[], outputs=[
     #     Output(type='o', output_id=8),
     #     Output(type='o', output_id=9),
@@ -28,7 +29,7 @@ OUTPUT_MODULE_LAYOUT = {
     #     Output(type='o', output_id=13),
     #     Output(type='o', output_id=14),
     #     Output(type='o', output_id=15),
-    # ]),
+    # ], cts=[]),
 }
 
 INPUT_MODULE_LAYOUT = {
@@ -41,7 +42,7 @@ INPUT_MODULE_LAYOUT = {
         Input(type='I', input_id=5, tester_output_id=5),
         Input(type='I', input_id=6, tester_output_id=6),
         Input(type='I', input_id=7, tester_output_id=7),
-    ]),
+    ], cts=[]),
     # 'C': Module(name='CAN control', type='C', outputs=[], inputs=[
     #     # TODO: also test random order discovery?
     #     Input(type='C', input_id=16, tester_output_id=32),
@@ -50,7 +51,23 @@ INPUT_MODULE_LAYOUT = {
     #     Input(type='C', input_id=19, tester_output_id=35),
     #     Input(type='C', input_id=20, tester_output_id=36),
     #     Input(type='C', input_id=21, tester_output_id=37),
-    # ]),
+    # ], cts=[]),
+}
+
+ENERGY_MODULE_LAYOUT = {
+    'E': Module(name='energy_module', type='E', outputs=[], inputs=[],
+                cts=[CT(module_id=1, ct_id=0),
+                     CT(module_id=1, ct_id=1),
+                     CT(module_id=1, ct_id=2),
+                     CT(module_id=1, ct_id=3),
+                     CT(module_id=1, ct_id=4),
+                     CT(module_id=1, ct_id=5),
+                     CT(module_id=1, ct_id=6),
+                     CT(module_id=1, ct_id=7),
+                     CT(module_id=1, ct_id=8),
+                     CT(module_id=1, ct_id=9),
+                     CT(module_id=1, ct_id=10),
+                     CT(module_id=1, ct_id=11)])
 }
 
 
@@ -100,3 +117,28 @@ def inputs(draw, types=input_types()):
 
 def multiple_inputs(size, types=input_types()):
     return lists(inputs(types=types), min_size=size, max_size=size, unique_by=lambda x: x.input_id)
+
+
+def energy_module_types():
+    module_types = ENERGY_MODULE_LAYOUT.keys()
+    return one_of([just(x) for x in module_types])
+
+
+def ct_ids(max_value=12):
+    assert max_value < 12, 'energy modules only contain up to 12 inputs'
+    return integers(min_value=0, max_value=max_value)
+
+
+@composite
+def cts(draw, types=energy_module_types()):
+    module_type = draw(types)
+    assert module_type in ['E'], 'invalid energy module type {}'.format(module_type)
+    module = ENERGY_MODULE_LAYOUT[module_type]
+    # ct = module.cts[draw(ct_ids(len(module.cts) - 1))]
+    ct = module.cts[0]  # TODO: Use all CTs once they are all connected
+    hypothesis.note('Using {} {}#{}'.format(module.name, module.type, ct.ct_id))
+    return input
+
+
+def multiple_cts(size, types=energy_module_types()):
+    return lists(cts(types=types), min_size=size, max_size=size, unique_by=lambda x: x.ct_id)
