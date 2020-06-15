@@ -37,8 +37,6 @@ if False:  # MYPY:
 logger = logging.getLogger("openmotics")
 
 
-@Injectable.named('power_communicator')
-@Singleton
 class PowerCommunicator(object):
     """ Uses a serial port to communicate with the power modules. """
 
