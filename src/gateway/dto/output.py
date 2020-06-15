@@ -38,7 +38,7 @@ class OutputDTO(BaseDTO):
         self.floor = floor  # type: Optional[int]
         self.output_type = output_type  # type: int
         self.room = room  # type: Optional[int]
-        self.validationbit_nr = validationbit_nr  # type: Optional[bool]
+        self.validationbit_nr = validationbit_nr  # type: Optional[int]
         self.can_led_1 = can_led_1 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
         self.can_led_2 = can_led_2 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
         self.can_led_3 = can_led_3 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)

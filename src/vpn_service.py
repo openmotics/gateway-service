@@ -244,14 +244,16 @@ class Gateway(object):
         diff = current - previous
         return diff if diff >= 0 else 65536 - previous + current
 
-    def get_enabled_outputs(self):
-        """ Get the enabled outputs. """
+    def get_outputs_status(self):
         data = self.do_call("get_output_status?token=None")
         if data is not None and data['success']:
             ret = []
             for output in data['status']:
-                if output["status"] == 1:
-                    ret.append((output["id"], output["dimmer"]))
+                parsed_data = {}
+                for k in output.keys():
+                    if k in ['id', 'status', 'dimmer', 'locked']:
+                        parsed_data[k] = output[k]
+                ret.append(parsed_data)
             return ret
         return
 
@@ -369,7 +371,9 @@ class VPNService(object):
 
         self._collectors = {'thermostats': DataCollector(self._gateway.get_thermostats, 60),
                             'inputs': DataCollector(self._gateway.get_inputs_status),
-                            'outputs': DataCollector(self._gateway.get_enabled_outputs),
+                            # outputs was deprecated and replaced by outputs_status to get more detailed information
+                            # don't re-use 'outputs' key as it will cause backwards compatibility changes on the cloud
+                            'outputs_status': DataCollector(self._gateway.get_outputs_status()),
                             'shutters': DataCollector(self._gateway.get_shutters_status),
                             'pulses': DataCollector(self._gateway.get_pulse_counter_diff, 60),
                             'power': DataCollector(self._gateway.get_real_time_power),
