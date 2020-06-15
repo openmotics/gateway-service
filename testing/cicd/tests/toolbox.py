@@ -208,10 +208,11 @@ class Toolbox(object):
     @property
     def dut_energy_cts(self):
         if self._dut_energy_cts is None:
-            self._dut_energy_cts = []
+            cts = []
             energy_modules = self.list_energy_modules(module_type='E')
             for module in energy_modules:
-                self._dut_energy_cts += [(module['id'], input_id) for input_id in range(12)]
+                cts += [(module['id'], input_id) for input_id in range(12)]
+            self._dut_energy_cts = cts
         return self._dut_energy_cts
 
     def initialize(self):
