@@ -30,10 +30,11 @@ from power.time_keeper import TimeKeeper
 from serial_utils import CommunicationTimedOutException, printable
 
 if False:  # MYPY:
-    from typing import Any, Dict, List, Optional, Tuple
+    from typing import Any, Dict, List, Optional, Tuple, Union
     from serial_utils import RS485
     from power.power_command import PowerCommand
     from power.power_store import PowerStore
+    DataType = Union[float, int, str]
 
 logger = logging.getLogger("openmotics")
 
@@ -142,7 +143,7 @@ class PowerCommunicator(object):
                 del self.__debug_buffer['write'][t]
 
     def do_command(self, address, cmd, *data):
-        # type: (int, PowerCommand, str) -> Tuple[Any, ...]
+        # type: (int, PowerCommand, DataType) -> Tuple[Any, ...]
         """ Send a command over the serial port and block until an answer is received.
         If the power module does not respond within the timeout period, a
         CommunicationTimedOutException is raised.
@@ -159,7 +160,7 @@ class PowerCommunicator(object):
             raise InAddressModeException()
 
         def do_once(_address, _cmd, *_data):
-            # type: (int, PowerCommand, str) -> Tuple[Any, ...]
+            # type: (int, PowerCommand, DataType) -> Tuple[Any, ...]
             """ Send the command once. """
             try:
                 cid = self.__get_cid()
