@@ -10,7 +10,7 @@ CT = collections.namedtuple('CT', ['module_id', 'ct_id'])
 
 
 OUTPUT_MODULE_LAYOUT = {
-    'O': Module(name='output module', type='O', inputs=[], outputs=[
+    'O': Module(name='output module', type='O', inputs=[], cts=[], outputs=[
         Output(type='O', output_id=0),
         Output(type='O', output_id=1),
         Output(type='O', output_id=2),
@@ -19,17 +19,17 @@ OUTPUT_MODULE_LAYOUT = {
         Output(type='O', output_id=5),
         Output(type='O', output_id=6),
         Output(type='O', output_id=7),
-    ], cts=[]),
-    # 'o': Module(name='virtual output', type='o', inputs=[], outputs=[
-    #     Output(type='o', output_id=8),
-    #     Output(type='o', output_id=9),
-    #     Output(type='o', output_id=10),
-    #     Output(type='o', output_id=11),
-    #     Output(type='o', output_id=12),
-    #     Output(type='o', output_id=13),
-    #     Output(type='o', output_id=14),
-    #     Output(type='o', output_id=15),
-    # ], cts=[]),
+    ]),
+    'o': Module(name='virtual output', type='o', inputs=[], cts=[], outputs=[
+        Output(type='o', output_id=8),
+        Output(type='o', output_id=9),
+        Output(type='o', output_id=10),
+        Output(type='o', output_id=11),
+        Output(type='o', output_id=12),
+        Output(type='o', output_id=13),
+        Output(type='o', output_id=14),
+        Output(type='o', output_id=15),
+    ]),
 }
 
 INPUT_MODULE_LAYOUT = {
@@ -82,8 +82,8 @@ def output_ids(max_value=8):
 
 
 @composite
-def outputs(draw, types=output_types()):
-    module_type = draw(types)
+def outputs(draw, types=output_types(), virtual=False):
+    module_type = draw(types.filter(lambda x: x != 'o' or virtual))
     assert module_type in ['O', 'o'], 'invalid output type {}'.format(module_type)
     module = OUTPUT_MODULE_LAYOUT[module_type]
     output = module.outputs[draw(output_ids(len(module.outputs) - 1))]
