@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-The valiationbits module contains classes to track the current state of the validationbits on
+The valiationbits module contains classes to track the current state of the validation bits on
 the master.
 """
 
@@ -21,30 +21,27 @@ from __future__ import absolute_import
 from threading import Lock
 import six
 
+if False:  # MYPY
+    from typing import Dict
+
 
 class ValidationBitStatus(object):
-    """ Contains a cached version of the current validationbit of the controller. """
+    """ Contains a cached version of the current validation bits of the master. """
 
     def __init__(self, on_validationbit_change=None):
-        """
-        Create a status object using a list of outputs (can be None),
-        and a refresh period: the refresh has to be invoked explicitly.
-        """
         self._validationbits = {}
         self.on_validationbit_change = on_validationbit_change
         self._merge_lock = Lock()
 
-    def full_update(self, validationbits):
-        """ Update the status of the outputs using a list of Outputs. """
+    def full_update(self, validationbits):  # type: (Dict[int, bool]) -> None
+        """ Update the status of the bits using a dict. """
         for bit_nr, value in six.iteritems(validationbits):
-            # assuming we should not delete validation bits that are not present in the dict
             self.update(bit_nr, value)
 
     def update(self, bit_nr, value):  # type: (int, bool) -> None
         """ Sets the validation bit value """
-        current_value = self._validationbits.get(bit_nr)
         with self._merge_lock:
-            if current_value != value:
+            if value != self._validationbits.get(bit_nr):
                 self._validationbits[bit_nr] = value
                 self._report_change(bit_nr)
 

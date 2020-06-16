@@ -20,7 +20,7 @@ import logging
 import time
 import six
 from datetime import datetime
-from threading import Timer, Lock
+from threading import Timer
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import (
@@ -94,8 +94,6 @@ class MasterClassicController(MasterController):
         self._shutters_interval = 600
         self._shutters_last_updated = 0
         self._shutter_config = {}  # type: Dict[int, ShutterDTO]
-
-        # Validation bits
         self._validationbits_interval = 1800
         self._validationbits_last_updated = 0
 
@@ -105,7 +103,6 @@ class MasterClassicController(MasterController):
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.output_list(), 0, self._on_master_output_change, True)
         )
-
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.module_initialize(), 0, self._update_modules)
         )
@@ -127,7 +124,7 @@ class MasterClassicController(MasterController):
                 self._check_master_settings()
                 self._settings_last_updated = now
             # Refresh if required
-            if self._validationbits_last_updated + self._validationbits_interval < time.time():
+            if self._validationbits_last_updated + self._validationbits_interval < now:
                 self._refresh_validationbits()
                 self._set_master_state(True)
             if self._output_last_updated + self._output_interval < now:
@@ -136,10 +133,9 @@ class MasterClassicController(MasterController):
             if self._input_last_updated + self._input_interval < now:
                 self._refresh_inputs()
                 self._set_master_state(True)
-            if self._shutters_last_updated + self._shutters_interval < time.time():
+            if self._shutters_last_updated + self._shutters_interval < now:
                 self._refresh_shutter_states()
                 self._set_master_state(True)
-
         except CommunicationTimedOutException:
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
             self._set_master_state(False)
@@ -281,23 +277,19 @@ class MasterClassicController(MasterController):
             self._master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0})
         self.set_status_leds(True)
 
-    def _on_master_event(self, event_data):
-        # type: (Dict[str, int]) -> None
+    def _on_master_event(self, event_data):  # type: (Dict[str, Any]) -> None
         """ Handle an event triggered by the master. """
-        event_type = event_data.get('event_type')
-        if not event_type:  # None or 0 are both event_type for 'code'
-            code = event_data.get('code', event_data.get('byte1'))
+        event_type = event_data.get('event_type', 0)
+        if event_type == 0:  # None or 0 are both event_type for 'code'
+            code = event_data['bytes'][0]
             if self._plugin_controller is not None:
                 self._plugin_controller.process_event(code)
         elif event_type == 1:
-            try:
-                bit_nr = int(event_data['byte1'])
-                value = bool(event_data['byte2'])
-                self._on_master_validationbit_change(bit_nr, value)
-            except KeyError as e:
-                logger.error('Failed to parse master validationbit event: {}'.format(e))
+            bit_nr = int(event_data['bytes'][0])
+            value = bool(event_data['bytes'][1])
+            self._on_master_validationbit_change(bit_nr, value)
         else:
-            logger.warning('received unknown master event type {}'.format(event_type))
+            logger.warning('Received unknown master event: {0}'.format(event_data))
 
     #######################
     # Internal management #
@@ -909,7 +901,7 @@ class MasterClassicController(MasterController):
         return dict()
 
     def power_cycle_master(self):
-        self._master_communicator.do_command(master_api.cold_reset())
+        self.cold_reset()
         return dict()
 
     def power_cycle_bus(self):
@@ -1280,33 +1272,39 @@ class MasterClassicController(MasterController):
 
     # Validation bits
 
-    def load_validationbits(self):
-        number_of_validation_bits = 256
-        validation_bits_per_master_command = 11
+    def load_validationbits(self):  # type: () -> Optional[Dict[int, bool]]
+        if self._master_version is None or self._master_version < (3, 143, 100):
+            return None
 
-        def load_validation_bits_batch(start_bit=0):
-            response = {}
-            user_information_type = 0
-            data = self._master_communicator.do_command(master_api.read_user_information(self._master_version),
-                                                        {'type': user_information_type, 'number': start_bit})
-            for j in range(validation_bits_per_master_command):
-                bit_nr = start_bit + j
-                bit_value = data['data{}'.format(j)]
-                response[bit_nr] = bit_value
-                # for n in range(8):
-                #     bit_nr = start_bit + j * n
-                #     response[bit_nr] = bool(byte_value & (1 << (7 - n)))
-            return response
+        number_of_bits = 256
+        bytes_per_call = 11
 
-        number_reads, number_bits_in_last_read = divmod(number_of_validation_bits, validation_bits_per_master_command)
+        def load_bits_batch(start_bit):  # type: (int) -> Dict[int, bool]
+            batch = {}
+            response = self._master_communicator.do_command(master_api.read_user_information(self._master_version),
+                                                            {'information_type': 0, 'number': start_bit})
+            for byte_index in range(bytes_per_call):
+                for bit_index in range(8):
+                    bit_nr = start_bit + (byte_index * 8) + bit_index
+                    if bit_nr == number_of_bits:
+                        return batch  #
+                    bit_value = bool(response['data'][byte_index] & (1 << bit_index))
+                    batch[bit_nr] = bit_value
+            return batch
+
         validationbits = {}
-        for i in range(number_reads):
-            bit_pointer = i * validation_bits_per_master_command
-            validationbits.update(load_validation_bits_batch(bit_pointer))
+        bit_pointer = 0
+        while True:
+            validationbits.update(load_bits_batch(bit_pointer))
+            bit_pointer = max(*validationbits.keys()) + 1
+            if bit_pointer == 256:
+                break
         return validationbits
 
     def _refresh_validationbits(self):
-        self._validationbits.full_update(self.load_validationbits())
+        current_bit_states = self.load_validationbits()
+        if current_bit_states is not None:
+            self._validationbits.full_update(current_bit_states)
         self._validationbits_last_updated = time.time()
 
     def _on_master_validationbit_change(self, bit_nr, value):  # type: (int, bool) -> None
