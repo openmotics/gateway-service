@@ -162,7 +162,8 @@ class OpenmoticsService(object):
 
         # Start rest of the stack
         maintenance_controller.start()
-        power_communicator.start()
+        if power_communicator:
+            power_communicator.start()
         metrics_controller.start()
         if passthrough_service:
             passthrough_service.start()
@@ -197,7 +198,8 @@ class OpenmoticsService(object):
             shutter_controller.stop()
             group_action_controller.stop()
             web_service.stop()
-            power_communicator.stop()
+            if power_communicator:
+                power_communicator.stop()
             master_controller.stop()
             maintenance_controller.stop()
             metrics_collector.stop()

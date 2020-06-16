@@ -45,19 +45,23 @@ class Watchdog(object):
         self._master_controller = master_controller
         self._power_communicator = power_communicator
         self._config_controller = configuration_controller
-
-        self._watchdog_thread = DaemonThread(name='Watchdog watcher',
-                                             target=self._watch,
-                                             interval=60, delay=10)
+        self._watchdog_thread = None  # type: Optional[DaemonThread]
+        self.start_time = 0.0
 
     def start(self):
         # type: () -> None
-        self._stopped = False
-        self._watchdog_thread.start()
+        if self._watchdog_thread is None:
+            self.start_time = time.time()
+            self._watchdog_thread = DaemonThread(name='Watchdog watcher',
+                                                 target=self._watch,
+                                                 interval=60, delay=10)
+            self._watchdog_thread.start()
 
     def stop(self):
         # type: () -> None
-        self._watchdog_thread.stop()
+        if self._watchdog_thread is not None:
+            self._watchdog_thread.stop()
+            self._watchdog_thread = None
 
     def _watch(self):
         # type: () -> None
@@ -70,20 +74,23 @@ class Watchdog(object):
                 self._master_controller.cold_reset()
             time.sleep(15)
             os._exit(1)
-        reset_requirement = self._controller_check('energy', self._power_communicator)
-        if reset_requirement is not None:
-            if reset_requirement == 'device':
-                self._master_controller.power_cycle_bus()
-            time.sleep(15)
-            os._exit(1)
+        if self._power_communicator:
+            reset_requirement = self._controller_check('energy', self._power_communicator)
+            if reset_requirement is not None:
+                if reset_requirement == 'device':
+                    self._master_controller.power_cycle_bus()
+                time.sleep(15)
+                os._exit(1)
 
     def _controller_check(self, name, controller):
         # type: (str, Any) -> Optional[str]
         recovery_data_key = 'communication_recovery_{0}'.format(name)
         recovery_data = self._config_controller.get(recovery_data_key, {})
 
-        calls_timedout = controller.get_communication_statistics()['calls_timedout']
-        calls_succeeded = controller.get_communication_statistics()['calls_succeeded']
+        calls_timedout = [call for call in controller.get_communication_statistics()['calls_timedout']
+                          if call > self.start_time]
+        calls_succeeded = [call for call in controller.get_communication_statistics()['calls_succeeded']
+                           if call > self.start_time]
         all_calls = sorted(calls_timedout + calls_succeeded)
 
         if len(calls_timedout) == 0:

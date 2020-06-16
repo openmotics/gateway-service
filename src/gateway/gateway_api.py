@@ -48,6 +48,7 @@ if False:  # MYPY:
     from bus.om_bus_client import MessageClient
     from gateway.observer import Observer
     from gateway.config import ConfigurationController
+    from gateway.watchdog import Watchdog
 
     T = TypeVar('T', bound=Union[int, float])
 
@@ -193,7 +194,8 @@ class GatewayApi(object):
                 firmware_version = '{0}.{1}.{2}'.format(version_info[1], version_info[2], version_info[3])
                 information[module_address] = {'type': get_energy_module_type(module['version']),
                                                'firmware': firmware_version,
-                                               'address': module_address}
+                                               'address': module_address,
+                                               'id': module['id']}
         return information
 
     def get_modules_information(self):
@@ -320,23 +322,26 @@ class GatewayApi(object):
             values += [None] * (32 - len(values))
         return values
 
+    def add_virtual_output_module(self):
+        # type: () -> str
+        # TODO: work with output controller
+        return self.__master_controller.add_virtual_output_module()
+
+    def add_virtual_dim_module(self):
+        # type: () -> str
+        # TODO: work with output controller
+        return self.__master_controller.add_virtual_dim_module()
+
+    def add_virtual_input_module(self):
+        # type: () -> str
+        # TODO: work with input controller
+        return self.__master_controller.add_virtual_input_module()
+
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         # TODO: work with sensor controller
         # TODO: add other sensors too (e.g. from database <-- plugins)
         """ Set the temperature, humidity and brightness value of a virtual sensor. """
         return self.__master_controller.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
-
-    def add_virtual_output_module(self):
-        # TODO: work with output controller
-        return self.__master_controller.add_virtual_output_module()
-
-    def add_virtual_dim_module(self):
-        # TODO: work with output controller
-        return self.__master_controller.add_virtual_dim_module()
-
-    def add_virtual_input_module(self):
-        # TODO: work with input controller
-        return self.__master_controller.add_virtual_input_module()
 
     # Basic and group actions
 
@@ -676,6 +681,13 @@ class GatewayApi(object):
     def get_configuration_dirty_flag(self):
         # type: () -> bool
         return self.__master_controller.get_configuration_dirty_flag()
+
+    @Inject
+    def set_self_recovery(self, active, watchdog=INJECTED):  # type: (bool, Watchdog) -> None
+        if active:
+            watchdog.start()
+        else:
+            watchdog.stop()
 
     # Power functions
 

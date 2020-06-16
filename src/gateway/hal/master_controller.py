@@ -232,12 +232,15 @@ class MasterController(object):
     # Virtual modules
 
     def add_virtual_output_module(self):
+        # type: () -> str
         raise NotImplementedError()
 
     def add_virtual_dim_module(self):
+        # type: () -> str
         raise NotImplementedError()
 
     def add_virtual_input_module(self):
+        # type: () -> str
         raise NotImplementedError()
 
     # Generic

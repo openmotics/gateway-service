@@ -37,8 +37,6 @@ if False:  # MYPY:
 logger = logging.getLogger("openmotics")
 
 
-@Injectable.named('power_communicator')
-@Singleton
 class PowerCommunicator(object):
     """ Uses a serial port to communicate with the power modules. """
 
@@ -379,6 +377,10 @@ class PowerCommunicator(object):
                 raise Exception('CRC{0} doesn\'t match'.format('7' if header[0] == 'E' else '8'))
         except Empty:
             raise CommunicationTimedOutException('Communication timed out')
+        except Exception:
+            if not self.__verbose:
+                PowerCommunicator.__log('reading from', command)
+            raise
         finally:
             if self.__verbose:
                 PowerCommunicator.__log('reading from', command)

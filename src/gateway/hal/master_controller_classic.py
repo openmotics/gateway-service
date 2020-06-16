@@ -698,25 +698,28 @@ class MasterClassicController(MasterController):
     # Virtual modules
 
     def add_virtual_output_module(self):
-        """ Adds a virtual output module.
-        :returns: dict with 'status'.
-        """
+        # type: () -> str
         module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'o'})
-        return {'status': module.get('resp')}
+        self._eeprom_controller.invalidate_cache()
+        self._eeprom_controller.dirty = True
+        self._refresh_outputs()
+        return module.get('resp')
 
     def add_virtual_dim_module(self):
-        """ Adds a virtual dim module.
-        :returns: dict with 'status'.
-        """
+        # type: () -> str
         module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'd'})
-        return {'status': module.get('resp')}
+        self._eeprom_controller.invalidate_cache()
+        self._eeprom_controller.dirty = True
+        self._refresh_outputs()
+        return module.get('resp')
 
     def add_virtual_input_module(self):
-        """ Adds a virtual input module.
-        :returns: dict with 'status'.
-        """
+        # type: () -> str
         module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'i'})
-        return {'status': module.get('resp')}
+        self._eeprom_controller.invalidate_cache()
+        self._eeprom_controller.dirty = True
+        self._refresh_inputs()
+        return module.get('resp')
 
     # Generic
 
@@ -905,6 +908,10 @@ class MasterClassicController(MasterController):
         self._master_communicator.do_command(master_api.reset())
         return dict()
 
+    def power_cycle_master(self):
+        self._master_communicator.do_command(master_api.cold_reset())
+        return dict()
+
     def power_cycle_bus(self):
         """ Turns the power of both bussed off for 5 seconds """
         self._master_communicator.do_basic_action(master_api.BA_POWER_CYCLE_BUS, 0)
@@ -965,7 +972,7 @@ class MasterClassicController(MasterController):
     def _update_modules(self, api_data):
         # type: (Dict[str,Any]) -> None
         """ Create a log entry when the MI message is received. """
-        module_map = {'O': 'output', 'I': 'input', 'T': 'temperature', 'D': 'dimmer'}
+        module_map = {'O': 'output', 'I': 'input', 'T': 'temperature', 'D': 'dimmer', 'C': 'CAN control'}
         message_map = {'N': 'New %s module found.',
                        'E': 'Existing %s module found.',
                        'D': 'The %s module tried to register but the registration failed, '
