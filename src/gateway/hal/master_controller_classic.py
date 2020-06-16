@@ -86,10 +86,10 @@ class MasterClassicController(MasterController):
         self._input_last_updated = 0.0
         self._input_config = {}  # type: Dict[int, InputDTO]
         self._output_interval = 600
-        self._output_last_updated = 0
+        self._output_last_updated = 0.0
         self._output_config = {}  # type: Dict[int, OutputDTO]
         self._shutters_interval = 600
-        self._shutters_last_updated = 0
+        self._shutters_last_updated = 0.0
         self._shutter_config = {}  # type: Dict[int, ShutterDTO]
 
         self._discover_mode_timer = None  # type: Optional[Timer]
@@ -305,9 +305,9 @@ class MasterClassicController(MasterController):
         # type: () -> None
         self._eeprom_controller.invalidate_cache()  # Eeprom can be changed in maintenance mode.
         self._eeprom_controller.dirty = True
-        self._input_last_updated = 0
-        self._output_last_updated = 0
-        self._shutters_last_updated = 0
+        self._input_last_updated = 0.0
+        self._output_last_updated = 0.0
+        self._shutters_last_updated = 0.0
 
     def get_firmware_version(self):
         out_dict = self._master_communicator.do_command(master_api.status())
@@ -967,9 +967,10 @@ class MasterClassicController(MasterController):
             self._discover_mode_timer.cancel()
             self._discover_mode_timer = None
 
-        self._eeprom_controller.invalidate_cache()
-        self._eeprom_controller.dirty = True
+        self.invalidate_caches()
         self._master_communicator.do_command(master_api.module_discover_stop())
+
+        self._synchronization_thread.request_single_run()
 
         for callback in self._event_callbacks:
             callback(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
