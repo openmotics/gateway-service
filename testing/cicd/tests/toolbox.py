@@ -230,6 +230,7 @@ class Toolbox(object):
             self.discover_output_module()
             self.discover_input_module()
             # self.discover_energy_module()  # TODO: Energy module discovery fails
+            self.discover_can_control()
 
         # TODO compare with hardware modules instead.
         self.list_modules('O')
@@ -237,12 +238,12 @@ class Toolbox(object):
         # self.list_energy_modules('E')  # TODO: Energy module discovery fails
 
         try:
-            self.get_module('o')
+            self.list_modules('o', hardware=False)
         except Exception:
             logger.info('adding virtual modules...')
             self.dut.get('/add_virtual_output')
             time.sleep(2)
-        self.get_module('o')
+        self.list_modules('o', hardware=False)
 
     def print_logs(self):
         # type: () -> None
@@ -260,12 +261,12 @@ class Toolbox(object):
         params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm}
         return self.dut.get('/factory_reset', params=params, success=confirm)
 
-    def list_modules(self, module_type, min_modules=1):
-        # type: (str, int) -> List[Dict[str,Any]]
+    def list_modules(self, module_type, min_modules=1, hardware=True):
+        # type: (str, int, bool) -> List[Dict[str,Any]]
         data = self.dut.get('/get_modules_information')
         modules = []
         for address, info in data['modules']['master'].items():
-            if info['type'] != module_type or not info['firmware']:
+            if info['type'] != module_type or (not info['firmware'] and hardware):
                 continue
             info['address'] = address
             modules.append(info)
@@ -282,15 +283,6 @@ class Toolbox(object):
             modules.append(info)
         assert len(modules) >= min_modules, 'Not enough energy modules of type \'{}\' available in {}'.format(module_type, data)
         return modules
-
-    def get_module(self, module_type):
-        # type: (str) -> List[int]
-        data = self.dut.get('/get_modules')
-        modules = list(enumerate(data['outputs'])) + list(enumerate(data['inputs'])) + list(enumerate(data['can_inputs']))
-        for i, v in modules:
-            if v == module_type:
-                return list(range(8 * i, (8 * i) + 7))
-        raise AssertionError('No modules of type \'{}\' available in {}'.format(module_type, data))
 
     def authorized_mode_start(self):
         # type: () -> None
