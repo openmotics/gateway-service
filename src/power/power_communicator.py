@@ -30,9 +30,11 @@ from power.time_keeper import TimeKeeper
 from serial_utils import CommunicationTimedOutException, printable
 
 if False:  # MYPY:
-    from typing import Dict, Optional
+    from typing import Any, Dict, List, Optional, Tuple, Union
     from serial_utils import RS485
+    from power.power_command import PowerCommand
     from power.power_store import PowerStore
+    DataType = Union[float, int, str]
 
 logger = logging.getLogger("openmotics")
 
@@ -49,7 +51,6 @@ class PowerCommunicator(object):
         :param power_serial: Serial port to communicate with
         :type power_serial: Instance of :class`RS485`
         :param verbose: Print all serial communication to stdout.
-        :type verbose: bool
         """
         self.__serial = power_serial
         self.__serial_lock = RLock()
@@ -57,21 +58,23 @@ class PowerCommunicator(object):
 
         self.__address_mode = False
         self.__address_mode_stop = False
-        self.__address_thread = None
+        self.__address_thread = None  # type: Optional[Thread]
         self.__address_mode_timeout = address_mode_timeout
         self.__power_store = power_store
 
-        self.__last_success = 0
+        self.__last_success = 0  # type: float
 
         if time_keeper_period != 0:
             self.__time_keeper = TimeKeeper(self, power_store, time_keeper_period)  # type: Optional[TimeKeeper]
         else:
             self.__time_keeper = None
 
-        self.__communication_stats = {'calls_succeeded': [],
-                                      'calls_timedout': [],
-                                      'bytes_written': 0,
-                                      'bytes_read': 0}
+        self.__communication_stats_calls = {'calls_succeeded': [],
+                                      'calls_timedout': []}  # type: Dict[str, List]
+
+        self.__communication_stats_bytes = {'bytes_written': 0,
+                                      'bytes_read': 0}  # Dict[str, int]
+
         self.__debug_buffer = {'read': {},
                                'write': {}}  # type: Dict[str,Dict[float,str]]
         self.__debug_buffer_duration = 300
@@ -90,12 +93,19 @@ class PowerCommunicator(object):
             self.__time_keeper.stop()
 
     def get_communication_statistics(self):
-        return self.__communication_stats
+        # type: () -> Dict[str, Any]
+        ret = {}  # type: Dict[str, Any]
+        ret.update(self.__communication_stats_calls)
+        ret.update(self.__communication_stats_bytes)
+        return ret
+
 
     def get_debug_buffer(self):
+        # type: () -> Dict[str, Dict[Any, Any]]
         return self.__debug_buffer
 
     def get_seconds_since_last_success(self):
+        # type: () -> float
         """ Get the number of seconds since the last successful communication. """
         if self.__last_success == 0:
             return 0  # No communication - return 0 sec since last success
@@ -103,25 +113,27 @@ class PowerCommunicator(object):
             return time.time() - self.__last_success
 
     def __get_cid(self):
+        # type: () -> int
         """ Get a communication id """
         (ret, self.__cid) = (self.__cid, (self.__cid % 255) + 1)
         return ret
 
     @staticmethod
     def __log(action, data):
+        # type: (Optional[str]) -> None
         if data is not None:
             logger.info("%.3f %s power: %s" % (time.time(), action, printable(data)))
 
     def __write_to_serial(self, data):
+        # type: (str) -> None
         """ Write data to the serial port.
 
         :param data: the data to write
-        :type data: string
         """
         if self.__verbose:
             PowerCommunicator.__log('writing to', data)
         self.__serial.write(data)
-        self.__communication_stats['bytes_written'] += len(data)
+        self.__communication_stats_bytes['bytes_written'] += len(data)
         threshold = time.time() - self.__debug_buffer_duration
         self.__debug_buffer['write'][time.time()] = printable(data)
         for t in self.__debug_buffer['write'].keys():
@@ -129,6 +141,7 @@ class PowerCommunicator(object):
                 del self.__debug_buffer['write'][t]
 
     def do_command(self, address, cmd, *data):
+        # type: (int, PowerCommand, DataType) -> Tuple[Any, ...]
         """ Send a command over the serial port and block until an answer is received.
         If the power module does not respond within the timeout period, a
         CommunicationTimedOutException is raised.
@@ -136,7 +149,6 @@ class PowerCommunicator(object):
         :param address: Address of the power module
         :type address: 2 bytes string
         :param cmd: the command to execute
-        :type cmd: :class`PowerCommand`
         :param data: data for the command
         :raises: :class`CommunicationTimedOutException` if power module did not respond in time
         :raises: :class`InAddressModeException` if communicator is in address mode
@@ -146,6 +158,7 @@ class PowerCommunicator(object):
             raise InAddressModeException()
 
         def do_once(_address, _cmd, *_data):
+            # type: (int, PowerCommand, DataType) -> Tuple[Any, ...]
             """ Send the command once. """
             try:
                 cid = self.__get_cid()
@@ -153,9 +166,9 @@ class PowerCommunicator(object):
                 self.__write_to_serial(send_data)
 
                 if _address == power_api.BROADCAST_ADDRESS:
-                    self.__communication_stats['calls_succeeded'].append(time.time())
-                    self.__communication_stats['calls_succeeded'] = self.__communication_stats['calls_succeeded'][-50:]
-                    return None  # No reply on broadcast messages !
+                    self.__communication_stats_calls['calls_succeeded'].append(time.time())
+                    self.__communication_stats_calls['calls_succeeded'] = self.__communication_stats_calls['calls_succeeded'][-50:]
+                    return ()  # No reply on broadcast messages !
                 else:
                     tries = 0
                     while True:
@@ -176,12 +189,12 @@ class PowerCommunicator(object):
 
                     self.__last_success = time.time()
                     return_data = _cmd.read_output(response_data)
-                    self.__communication_stats['calls_succeeded'].append(time.time())
-                    self.__communication_stats['calls_succeeded'] = self.__communication_stats['calls_succeeded'][-50:]
+                    self.__communication_stats_calls['calls_succeeded'].append(time.time())
+                    self.__communication_stats_calls['calls_succeeded'] = self.__communication_stats_calls['calls_succeeded'][-50:]
                     return return_data
             except CommunicationTimedOutException:
-                self.__communication_stats['calls_timedout'].append(time.time())
-                self.__communication_stats['calls_timedout'] = self.__communication_stats['calls_timedout'][-50:]
+                self.__communication_stats_calls['calls_timedout'].append(time.time())
+                self.__communication_stats_calls['calls_timedout'] = self.__communication_stats_calls['calls_timedout'][-50:]
                 raise
 
         with self.__serial_lock:
@@ -202,6 +215,7 @@ class PowerCommunicator(object):
                 return do_once(address, cmd, *data)
 
     def start_address_mode(self):
+        # type: () -> None
         """ Start address mode.
 
         :raises: :class`InAddressModeException` if communicator is in maintenance mode.
@@ -219,6 +233,7 @@ class PowerCommunicator(object):
             self.__address_thread.start()
 
     def __do_address_mode(self):
+        # type: () -> None
         """ This code is running in a thread when in address mode. """
         if self.__power_store is None:
             self.__address_mode = False
@@ -298,19 +313,23 @@ class PowerCommunicator(object):
         self.__address_mode = False
 
     def stop_address_mode(self):
+        # type: () -> None
         """ Stop address mode. """
         if not self.__address_mode:
             raise Exception("Not in address mode !")
 
         self.__address_mode_stop = True
-        self.__address_thread.join()
+        if self.__address_thread:
+            self.__address_thread.join()
         self.__address_thread = None
 
     def in_address_mode(self):
+        # type: () -> bool
         """ Returns whether the PowerCommunicator is in address mode. """
         return self.__address_mode
 
     def __read_from_serial(self):
+        # type: () -> Tuple[str, str]
         """ Read a PowerCommand from the serial port. """
         phase = 0
         index = 0
@@ -326,7 +345,7 @@ class PowerCommunicator(object):
             while phase < 8:
                 byte = self.__serial.read_queue.get(True, 0.25)
                 command += byte
-                self.__communication_stats['bytes_read'] += 1
+                self.__communication_stats_bytes['bytes_read'] += 1
 
                 if phase == 0:  # Skip non 'R' bytes
                     if byte == 'R':
@@ -397,10 +416,12 @@ class PowerCommunicator(object):
 class InAddressModeException(Exception):
     """ Raised when the power communication is in address mode. """
     def __init__(self, message=None):
+        # type: (Optional[str]) -> None
         Exception.__init__(self, message)
 
 
 class UnkownCommandException(Exception):
     """ Raised when the power module responds with a NACK indicating an unkown command. """
     def __init__(self, message=None):
+        # type: (Optional[str]) -> None
         Exception.__init__(self, message)

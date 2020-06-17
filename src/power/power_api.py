@@ -24,6 +24,9 @@ from power.power_command import PowerCommand
 
 RealtimePower = namedtuple('RealtimePower', ('voltage', 'frequency', 'current', 'power'))
 
+if False:  # MYPY
+    from typing import Optional
+
 BROADCAST_ADDRESS = 255
 
 NIGHT = 0
@@ -45,6 +48,7 @@ LARGEST_MODULE_TYPE = [module_type for module_type in NUM_PORTS.keys()
 
 
 def get_general_status(version):
+    # type: (int) -> PowerCommand
     """
     Get the general status of a power module.
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -58,6 +62,7 @@ def get_general_status(version):
 
 
 def get_time_on(version):
+    # type: (int) -> PowerCommand
     """
     Get the time the power module is on (in s)
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -69,6 +74,7 @@ def get_time_on(version):
 
 
 def get_feed_status(version):
+    # type: (int) -> PowerCommand
     """
     Get the feed status of the power module (12x 0=low or 1=high)
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -82,6 +88,7 @@ def get_feed_status(version):
 
 
 def get_feed_counter(version):
+    # type: (int) -> PowerCommand
     """
     Get the feed counter of the power module
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -93,6 +100,7 @@ def get_feed_counter(version):
 
 
 def get_status_p1(version):
+    # type: (int) -> PowerCommand
     """ Gets the status from a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'SP\x00', '', 'B', module_type='C')
@@ -101,6 +109,7 @@ def get_status_p1(version):
 
 
 def get_meter_p1(version, type=None):
+    # type: (int, Optional[int]) -> PowerCommand
     """ Gets the meter id from a P1 concentrator """
     if version == P1_CONCENTRATOR:
         if type not in (1, 2):
@@ -111,6 +120,7 @@ def get_meter_p1(version, type=None):
 
 
 def get_timestamp_p1(version):
+    # type: (int) -> PowerCommand
     """ Gets the timestamp from a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'TS\x00', '', '104s', module_type='C')
@@ -119,6 +129,7 @@ def get_timestamp_p1(version):
 
 
 def get_gas_consumption_p1(version):
+    # type: (int) -> PowerCommand
     """ Gets the gas consumption from a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'cG\x00', '', '112s', module_type='C')
@@ -127,6 +138,7 @@ def get_gas_consumption_p1(version):
 
 
 def get_injection_tariff_p1(version, type=None):
+    # type: (int, Optional[int]) -> PowerCommand
     """ Gets the injection tariff from a P1 concentrator """
     if version == P1_CONCENTRATOR:
         if type not in (1, 2):
@@ -137,6 +149,7 @@ def get_injection_tariff_p1(version, type=None):
 
 
 def get_tariff_indicator_p1(version):
+    # type: (int) -> PowerCommand
     """ Gets the tariff indicator from a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'ti\x00', '', '32s', module_type='C')
@@ -145,6 +158,7 @@ def get_tariff_indicator_p1(version):
 
 
 def get_voltage(version, phase=None):
+    # type: (int, Optional[int]) -> PowerCommand
     """
     Get the voltage of a power module (in V)
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -166,6 +180,7 @@ def get_voltage(version, phase=None):
 
 
 def get_frequency(version):
+    # type: (int) -> PowerCommand
     """
     Get the frequency of a power module (in Hz)
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -179,6 +194,7 @@ def get_frequency(version):
 
 
 def get_current(version, phase=None):
+    # type: (int, Optional[int]) -> PowerCommand
     """
     Get the current of a power module (12x in A)
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -200,6 +216,7 @@ def get_current(version, phase=None):
 
 
 def get_power(version):
+    # type: (int) -> PowerCommand
     """
     Get the power of a power module (12x in W)
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -213,6 +230,7 @@ def get_power(version):
 
 
 def get_delivered_power(version):
+    # type: (int) -> PowerCommand
     """ Gets the delivered power of a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'PD\x00', '', '72s', module_type='C')
@@ -221,6 +239,7 @@ def get_delivered_power(version):
 
 
 def get_received_power(version):
+    # type: (int) -> PowerCommand
     """ Gets the reveived power of a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'PR\x00', '', '72s', module_type='C')
@@ -229,6 +248,7 @@ def get_received_power(version):
 
 
 def get_normal_energy(version):
+    # type: (int) -> PowerCommand
     """
     Get the total energy measured by the power module (12x in Wh)
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -240,6 +260,7 @@ def get_normal_energy(version):
 
 
 def get_day_energy(version):
+    # type: (int) -> PowerCommand
     """
     Get the energy measured during the day by the power module (12x in Wh)
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -255,6 +276,7 @@ def get_day_energy(version):
 
 
 def get_night_energy(version):
+    # type: (int) -> PowerCommand
     """
     Get the energy measured during the night by the power module (12x in Wh)
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -283,6 +305,7 @@ def set_day_night(version):
 
 
 def get_sensor_types(version):
+    # type: (int) -> PowerCommand
     """
     Get the sensor types used on the power modules (8x sensor type).
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -296,6 +319,7 @@ def get_sensor_types(version):
 
 
 def set_sensor_types(version):
+    # type: (int) -> PowerCommand
     """
     Set the sensor types used on the power modules (8x sensor type).
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -309,6 +333,7 @@ def set_sensor_types(version):
 
 
 def set_current_clamp_factor(version):
+    # type: (int) -> PowerCommand
     """
     Sets the current clamp factor.
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -322,6 +347,7 @@ def set_current_clamp_factor(version):
 
 
 def set_current_inverse(version):
+    # type: (int) -> PowerCommand
     """
     Sets the current inverse.
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -337,6 +363,7 @@ def set_current_inverse(version):
 # Below are the more advanced function (12p module only)
 
 def get_voltage_sample_time(version):
+    # type: (int) -> PowerCommand
     """
     Gets a voltage sample (time - oscilloscope view)
     :param version: power api version
@@ -350,6 +377,7 @@ def get_voltage_sample_time(version):
 
 
 def get_current_sample_time(version):
+    # type: (int) -> PowerCommand
     """
     Gets a current sample (time - oscilloscope view)
     :param version: power api version
@@ -363,6 +391,7 @@ def get_current_sample_time(version):
 
 
 def get_voltage_sample_frequency(version):
+    # type: (int) -> PowerCommand
     """
     Gets a voltage sample (frequency)
     :param version: power api version
@@ -376,6 +405,7 @@ def get_voltage_sample_frequency(version):
 
 
 def get_current_sample_frequency(version):
+    # type: (int) -> PowerCommand
     """
     Gets a current sample (frequency)
     :param version: power api version
@@ -389,6 +419,7 @@ def get_current_sample_frequency(version):
 
 
 def read_eeprom(version, length):
+    # type: (int, int) -> PowerCommand
     """
     Reads data from the eeprom
     :param version: power api version
@@ -403,6 +434,7 @@ def read_eeprom(version, length):
 
 
 def write_eeprom(version, length):
+    # type: (int, int) -> PowerCommand
     """
     Write data to the eeprom
     :param version: power api version
@@ -419,6 +451,7 @@ def write_eeprom(version, length):
 # Below are the address mode functions.
 
 def set_addressmode(version):
+    # type: (int) -> PowerCommand
     """ Set the address mode of the power module, 1 = address mode, 0 = normal mode """
     if version == P1_CONCENTRATOR:
         return PowerCommand('S', 'AGT', 'b', '', module_type='C')
@@ -426,6 +459,7 @@ def set_addressmode(version):
 
 
 def want_an_address(version):
+    # type: (int) -> PowerCommand
     """ The Want An Address command, send by the power modules in address mode. """
     if version == POWER_MODULE:
         return PowerCommand('S', 'WAA', '', '')
@@ -438,6 +472,7 @@ def want_an_address(version):
 
 
 def set_address(version):
+    # type: (int) -> PowerCommand
     """ Reply on want_an_address, setting a new address for the power module. """
     if version == P1_CONCENTRATOR:
         return PowerCommand('S', 'SAD', 'b', '', module_type='C')
@@ -445,11 +480,13 @@ def set_address(version):
 
 
 def set_voltage():
+    # type: () -> PowerCommand
     """ Calibrate the voltage of the power module. """
     return PowerCommand('S', 'SVO', 'f', '')
 
 
 def set_current():
+    # type: () -> PowerCommand
     """ Calibrate the voltage of the power module. """
     return PowerCommand('S', 'SCU', 'f', '')
 
@@ -457,6 +494,7 @@ def set_current():
 # Below are the function to reset the kwh counters
 
 def reset_normal_energy(version):
+    # type: (int) -> PowerCommand
     """
     Reset the total energy measured by the power module.
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -470,6 +508,7 @@ def reset_normal_energy(version):
 
 
 def reset_day_energy(version):
+    # type: (int) -> PowerCommand
     """
     Reset the energy measured during the day by the power module.
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -483,6 +522,7 @@ def reset_day_energy(version):
 
 
 def reset_night_energy(version):
+    # type: (int) -> PowerCommand
     """
     Reset the energy measured during the night by the power module.
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -498,6 +538,7 @@ def reset_night_energy(version):
 # Below are the bootloader functions
 
 def bootloader_goto(version):
+    # type: (int) -> PowerCommand
     """ Go to bootloader and wait for a number of seconds (b parameter) """
     if version == P1_CONCENTRATOR:
         return PowerCommand('S', 'RES', 'B', '', module_type='C')
@@ -505,11 +546,13 @@ def bootloader_goto(version):
 
 
 def bootloader_read_id():
+    # type: () -> PowerCommand
     """ Get the device id """
     return PowerCommand('G', 'BRI', '', '8B')
 
 
 def bootloader_write_code(version):
+    # type: (int) -> PowerCommand
     """
     Write code
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
@@ -523,21 +566,25 @@ def bootloader_write_code(version):
 
 
 def bootloader_erase_code():
+    # type: () -> PowerCommand
     """ Erase the code on a given page. """
     return PowerCommand('S', 'BEC', 'H', '')
 
 
 def bootloader_write_configuration():
+    # type: () -> PowerCommand
     """ Write configuration """
     return PowerCommand('S', 'BWF', '24B', '')
 
 
 def bootloader_jump_application():
+    # type: () -> PowerCommand
     """ Go from bootloader to applications """
     return PowerCommand('S', 'BJA', '', '')
 
 
 def get_version(version):
+    # type: (int) -> PowerCommand
     """ Get the current version of the power module firmware """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'FVE', '', '4B', module_type='C')
@@ -547,5 +594,6 @@ def get_version(version):
 # Below are the debug functions
 
 def raw_command(mode, command, num_bytes):
+    # type: (str, str, int) -> PowerCommand
     """ Create a PowerCommand for debugging purposes. """
     return PowerCommand(mode, command, '%dB' % num_bytes, None)

@@ -23,6 +23,9 @@ from datetime import datetime
 from gateway.daemon_thread import DaemonThread
 import power.power_api as power_api
 
+if False:  # MYPY
+    from typing import Any, Dict, List, Optional
+
 logger = logging.getLogger("openmotics")
 
 
@@ -30,13 +33,14 @@ class TimeKeeper(object):
     """ The TimeKeeper keeps track of time and sets the day or night mode on the power modules. """
 
     def __init__(self, power_communicator, power_controller, period):
+        # type: (Any, Any, int) -> None
         self.__power_communicator = power_communicator
         self.__power_controller = power_controller
         self.__period = period
 
-        self.__mode = {}
+        self.__mode = {}  # type: Dict[str, List[int]]
 
-        self.__thread = None
+        self.__thread = None  # type: Optional[DaemonThread]
         self.__stop = False
 
     def start(self):
@@ -79,12 +83,13 @@ class TimeKeeper(object):
             self.__set_mode(version, module['address'], daynight)
 
     @staticmethod
-    def is_day_time(times, date):
+    def is_day_time(_times, date):
+        # type: (Optional[str], datetime) -> bool
         """ Check if a date is in day time. """
-        if times is None:
-            times = [0 for _ in range(14)]
+        if _times is None:
+            times = [0 for _ in range(14)]  # type: List[int]
         else:
-            times = [int(t.replace(":", "")) for t in times.split(",")]
+            times = [int(t.replace(":", "")) for t in _times.split(",")]
 
         day_of_week = date.weekday()  # 0 = Monday, 6 = Sunday
         current_time = date.hour * 100 + date.minute
@@ -95,6 +100,7 @@ class TimeKeeper(object):
         return stop > current_time >= start
 
     def __set_mode(self, version, address, bytes):
+        # type: (int, str, List[int]) -> None
         """ Set the power modules mode. """
         if address not in self.__mode or self.__mode[address] != bytes:
             logger.info("Setting day/night mode to " + str(bytes))
