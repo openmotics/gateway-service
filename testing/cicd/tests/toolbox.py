@@ -239,15 +239,8 @@ class Toolbox(object):
         # self.list_energy_modules('E')  # TODO: Energy module discovery fails
         self.list_modules('C', hardware=False)  # firmware version missing
 
-        # FIXME: workaround for slow discovery (race condition?)
-        # Toggle all inputs first to push their status.
-        for input in INPUT_MODULE_LAYOUT['I'].inputs:
-            self.tester.toggle_output(input.tester_output_id)
-        time.sleep(10)
+        # TODO ensure discovery synchonization finished.
         self.ensure_input_exists(INPUT_MODULE_LAYOUT['I'].inputs[7], timeout=300)
-        for input in INPUT_MODULE_LAYOUT['C'].inputs:
-            self.tester.toggle_output(input.tester_output_id)
-        time.sleep(10)
         self.ensure_input_exists(INPUT_MODULE_LAYOUT['C'].inputs[5], timeout=300)
 
         try:
