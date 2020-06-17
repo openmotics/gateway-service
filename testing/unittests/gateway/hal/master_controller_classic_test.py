@@ -138,8 +138,7 @@ class MasterClassicControllerTest(unittest.TestCase):
         subscriber = mock.Mock()
         subscriber.callback.return_value = None
 
-        with mock.patch.object(MasterClassicController, 'invalidate_caches') as invalidate, \
-             mock.patch.object(MasterClassicController, '_synchronize') as synchronize:
+        with mock.patch.object(MasterClassicController, '_synchronize') as synchronize:
             controller = get_classic_controller_dummy([])
             try:
                 controller.start()
@@ -148,10 +147,8 @@ class MasterClassicControllerTest(unittest.TestCase):
                 assert len(synchronize.call_args_list) == 1
 
                 controller.subscribe_event(subscriber.callback)
-                invalidate.assert_not_called()
                 controller.module_discover_stop()
                 time.sleep(0.2)
-                assert len(invalidate.call_args_list) == 1
                 assert len(synchronize.call_args_list) == 2
 
                 assert len(subscriber.callback.call_args_list) == 1
@@ -172,6 +169,7 @@ class MasterClassicControllerTest(unittest.TestCase):
 def get_classic_controller_dummy(inputs=None):
     communicator_mock = mock.Mock()
     eeprom_mock = mock.Mock(EepromController)
+    eeprom_mock.invalidate_cache.return_value = None
     eeprom_mock.read.return_value = inputs[0] if inputs else []
     eeprom_mock.read_all.return_value = inputs
     SetUpTestInjections(configuration_controller=mock.Mock(),
