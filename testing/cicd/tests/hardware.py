@@ -137,7 +137,7 @@ def cts(draw, types=energy_module_types()):
     # ct = module.cts[draw(ct_ids(len(module.cts) - 1))]
     ct = module.cts[0]  # TODO: Use all CTs once they are all connected
     hypothesis.note('Using {} {}#{}'.format(module.name, module.type, ct.ct_id))
-    return input
+    return ct
 
 
 def multiple_cts(size, types=energy_module_types()):
