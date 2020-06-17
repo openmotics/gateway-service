@@ -19,26 +19,32 @@ import pytest
 import time
 from tests.hardware import cts, CT
 
-if False:
+if False:  # MYPY
+    from typing import Any
     from .toolbox import Toolbox
 
 logger = logging.getLogger('openmotics')
 
 
+@pytest.fixture
+def energy_module(toolbox):
+    toolbox.discover_energy_module()
+
+
 @pytest.mark.smoke
-@pytest.mark.skip(reason='Unstable module discovery')
+@pytest.mark.unstable
 @hypothesis.given(cts())
-def test_realtime_power(toolbox, ct):  # type: (Toolbox, CT) -> None
+def test_realtime_power(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT) -> None
     _assert_realtime(toolbox, ct)
 
 
 @pytest.mark.slow
-@pytest.mark.skip(reason='Unstable module discovery')
+@pytest.mark.unstable
 @hypothesis.given(cts())
-def test_power_cycle(toolbox, ct):  # type: (Toolbox, CT) -> None
+def test_power_cycle(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT) -> None
     cycles = 10
     post_boot_wait = 5  # Wait `post_boot_wait` seconds after powering up the module to start using it
-    toolbox.set_output(toolbox.POWER_ENERGY_MODULE, True)
+    toolbox.tester.get('/set_output', {'id': toolbox.POWER_ENERGY_MODULE, 'is_on': True})
     time.sleep(post_boot_wait)
     _assert_realtime(toolbox, ct)
     with toolbox.disabled_self_recovery():
