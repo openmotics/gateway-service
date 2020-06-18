@@ -69,6 +69,7 @@ class PowerCommunicatorTest(unittest.TestCase):
         serial_mock = RS485(SerialMock(
                         [sin(action.create_input(1, 1)),
                          sout(action.create_output(1, 1, 49.5))]))
+        serial_mock.start()
 
         comm = PowerCommunicatorTest._get_communicator(serial_mock)
         comm.start()
@@ -87,6 +88,7 @@ class PowerCommunicatorTest(unittest.TestCase):
         serial_mock = RS485(SerialMock([sin(action.create_input(1, 1)), sout(''),
                                         sin(action.create_input(1, 2)),
                                         sout(action.create_output(1, 2, 49.5))]))
+        serial_mock.start()
 
         comm = PowerCommunicatorTest._get_communicator(serial_mock)
         comm.start()
@@ -101,6 +103,7 @@ class PowerCommunicatorTest(unittest.TestCase):
         serial_mock = RS485(SerialMock([sin(action.create_input(1, 1)), sout(''),
                                         sin(action.create_input(1, 2)),
                                         sout('')]))
+        serial_mock.start()
 
         comm = PowerCommunicatorTest._get_communicator(serial_mock)
         comm.start()
@@ -116,6 +119,7 @@ class PowerCommunicatorTest(unittest.TestCase):
         serial_mock = RS485(SerialMock(
                         [sin(action.create_input(1, 1)),
                          sout(out[:5]), sout(out[5:])]))
+        serial_mock.start()
 
         comm = PowerCommunicatorTest._get_communicator(serial_mock)
         comm.start()
@@ -131,6 +135,7 @@ class PowerCommunicatorTest(unittest.TestCase):
 
         serial_mock = RS485(SerialMock([sin(action_1.create_input(1, 1)),
                                         sout(action_2.create_output(3, 2, 49.5))]))
+        serial_mock.start()
 
         comm = PowerCommunicatorTest._get_communicator(serial_mock)
         comm.start()
@@ -158,6 +163,7 @@ class PowerCommunicatorTest(unittest.TestCase):
              sin(sad_p1c.create_input(power_api.BROADCAST_ADDRESS, 4, power_api.NORMAL_MODE))],
             1
         ))
+        serial_mock.start()
         SetUpTestInjections(power_db=PowerCommunicatorTest.FILE)
 
         store = PowerStore()
@@ -191,6 +197,7 @@ class PowerCommunicatorTest(unittest.TestCase):
              sout(action.create_output(1, 5, 49.5))],
             1
         ))
+        serial_mock.start()
 
         comm = PowerCommunicatorTest._get_communicator(serial_mock)
         comm.start()
@@ -221,6 +228,7 @@ class PowerCommunicatorTest(unittest.TestCase):
              sout(action.create_output(1, 5, 49.5))],
             1
         ))
+        serial_mock.start()
 
         comm = PowerCommunicatorTest._get_communicator(serial_mock, address_mode_timeout=1)
         comm.start()
@@ -248,6 +256,7 @@ class PowerCommunicatorTest(unittest.TestCase):
              sout(action.create_output(1, 2, 243))],
             1
         ))
+        serial_mock.start()
 
         comm = PowerCommunicatorTest._get_communicator(serial_mock, 1, power_store=store)
         comm.start()
