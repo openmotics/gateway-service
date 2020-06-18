@@ -373,7 +373,7 @@ class VPNService(object):
                             'inputs': DataCollector(self._gateway.get_inputs_status),
                             # outputs was deprecated and replaced by outputs_status to get more detailed information
                             # don't re-use 'outputs' key as it will cause backwards compatibility changes on the cloud
-                            'outputs_status': DataCollector(self._gateway.get_outputs_status()),
+                            'outputs_status': DataCollector(self._gateway.get_outputs_status),
                             'shutters': DataCollector(self._gateway.get_shutters_status),
                             'pulses': DataCollector(self._gateway.get_pulse_counter_diff, 60),
                             'power': DataCollector(self._gateway.get_real_time_power),
