@@ -31,7 +31,6 @@ def energy_module(toolbox):
     toolbox.discover_energy_module()
 
 
-@pytest.mark.smoke
 @pytest.mark.unstable
 @hypothesis.given(cts())
 def test_realtime_power(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT) -> None
