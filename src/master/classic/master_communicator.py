@@ -405,7 +405,6 @@ class MasterCommunicator(object):
             # TODO: use a non blocking serial instead?
             readers, _, _ = select.select([self.__serial], [], [], 2)
             if not readers:
-                logger.debug('MasterCommunicator read waiting...')
                 continue
 
             num_bytes = self.__serial.inWaiting()

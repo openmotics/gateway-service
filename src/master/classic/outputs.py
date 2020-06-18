@@ -100,11 +100,11 @@ class OutputStatus(object):
                     status = bool(new_output_data['status'])
                     changed |= output.get('status') != status
                     output['status'] = status
-                if 'dimmer' in output:
+                if 'dimmer' in new_output_data:
                     dimmer = int(new_output_data['dimmer'])
                     changed |= output.get('dimmer') != dimmer
                     output['dimmer'] = dimmer
-                if 'locked' in output:
+                if 'locked' in new_output_data:
                     locked = bool(new_output_data['locked'])
                     changed |= output.get('locked') != locked
                     output['locked'] = locked
