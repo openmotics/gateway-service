@@ -77,7 +77,7 @@ class MasterClassicController(MasterController):
 
         self._input_status = InputStatus(on_input_change=self._input_changed)
         self._output_status = OutputStatus(on_output_change=self._output_changed)
-        self._validationbits = ValidationBitStatus(on_validationbit_change=self._validationbit_changed)
+        self._validation_bits = ValidationBitStatus(on_validation_bit_change=self._validation_bit_changed)
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
         self._synchronization_thread = DaemonThread(name='MasterClassicController synchronization',
@@ -94,8 +94,8 @@ class MasterClassicController(MasterController):
         self._shutters_interval = 600
         self._shutters_last_updated = 0
         self._shutter_config = {}  # type: Dict[int, ShutterDTO]
-        self._validationbits_interval = 1800
-        self._validationbits_last_updated = 0
+        self._validation_bits_interval = 1800
+        self._validation_bits_last_updated = 0
 
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._module_log = []  # type: List[Tuple[str,str]]
@@ -124,8 +124,8 @@ class MasterClassicController(MasterController):
                 self._check_master_settings()
                 self._settings_last_updated = now
             # Refresh if required
-            if self._validationbits_last_updated + self._validationbits_interval < now:
-                self._refresh_validationbits()
+            if self._validation_bits_last_updated + self._validation_bits_interval < now:
+                self._refresh_validation_bits()
                 self._set_master_state(True)
             if self._output_last_updated + self._output_interval < now:
                 self._refresh_outputs()
@@ -287,7 +287,7 @@ class MasterClassicController(MasterController):
         elif event_type == 1:
             bit_nr = int(event_data['bytes'][0])
             value = bool(event_data['bytes'][1])
-            self._on_master_validationbit_change(bit_nr, value)
+            self._on_master_validation_bit_change(bit_nr, value)
         else:
             logger.warning('Received unknown master event: {0}'.format(event_data))
 
@@ -504,8 +504,8 @@ class MasterClassicController(MasterController):
 
     def _is_output_locked(self, output_id):
         output_dto = self._output_config[output_id]
-        if output_dto.validationbit_nr is not None:
-            value = self._validationbits.get_validation_bit(output_dto.validationbit_nr)
+        if output_dto.lock_bit_id is not None:
+            value = self._validation_bits.get_validation_bit(output_dto.lock_bit_id)
             locked = value
         else:
             locked = False
@@ -1272,7 +1272,7 @@ class MasterClassicController(MasterController):
 
     # Validation bits
 
-    def load_validationbits(self):  # type: () -> Optional[Dict[int, bool]]
+    def load_validation_bits(self):  # type: () -> Optional[Dict[int, bool]]
         if self._master_version is None or self._master_version < (3, 143, 100):
             return None
 
@@ -1292,27 +1292,27 @@ class MasterClassicController(MasterController):
                     batch[bit_nr] = bit_value
             return batch
 
-        validationbits = {}
+        bits = {}
         bit_pointer = 0
         while True:
-            validationbits.update(load_bits_batch(bit_pointer))
-            bit_pointer = max(*validationbits.keys()) + 1
+            bits.update(load_bits_batch(bit_pointer))
+            bit_pointer = max(*bits.keys()) + 1
             if bit_pointer == 256:
                 break
-        return validationbits
+        return bits
 
-    def _refresh_validationbits(self):
-        current_bit_states = self.load_validationbits()
+    def _refresh_validation_bits(self):
+        current_bit_states = self.load_validation_bits()
         if current_bit_states is not None:
-            self._validationbits.full_update(current_bit_states)
-        self._validationbits_last_updated = time.time()
+            self._validation_bits.full_update(current_bit_states)
+        self._validation_bits_last_updated = time.time()
 
-    def _on_master_validationbit_change(self, bit_nr, value):  # type: (int, bool) -> None
-        self._validationbits.update(bit_nr, value)
+    def _on_master_validation_bit_change(self, bit_nr, value):  # type: (int, bool) -> None
+        self._validation_bits.update(bit_nr, value)
 
-    def _validationbit_changed(self, bit_nr, value):
+    def _validation_bit_changed(self, bit_nr, value):
         # loop over all outputs and update the locked status if the bit_nr is associated with this output
         for output_id, output_dto in six.iteritems(self._output_config):
-            if output_dto.validationbit_nr == bit_nr:
+            if output_dto.lock_bit_id == bit_nr:
                 locked = value  # the bit is set, the output is locked
                 self._output_status.update_locked(output_dto.id, locked)

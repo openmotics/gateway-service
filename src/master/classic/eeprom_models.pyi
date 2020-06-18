@@ -27,6 +27,7 @@ class OutputConfiguration(EepromModel):
     timer: int
     floor: int
     type: int
+    lock_bit_id: int
     can_led_1_id: int
     can_led_1_function: str
     can_led_2_id: int

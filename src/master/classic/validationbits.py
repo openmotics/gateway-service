@@ -28,26 +28,26 @@ if False:  # MYPY
 class ValidationBitStatus(object):
     """ Contains a cached version of the current validation bits of the master. """
 
-    def __init__(self, on_validationbit_change=None):
-        self._validationbits = {}
-        self.on_validationbit_change = on_validationbit_change
+    def __init__(self, on_validation_bit_change=None):
+        self._validation_bits = {}
+        self.on_validation_bit_change = on_validation_bit_change
         self._merge_lock = Lock()
 
-    def full_update(self, validationbits):  # type: (Dict[int, bool]) -> None
+    def full_update(self, validation_bits):  # type: (Dict[int, bool]) -> None
         """ Update the status of the bits using a dict. """
-        for bit_nr, value in six.iteritems(validationbits):
+        for bit_nr, value in six.iteritems(validation_bits):
             self.update(bit_nr, value)
 
     def update(self, bit_nr, value):  # type: (int, bool) -> None
         """ Sets the validation bit value """
         with self._merge_lock:
-            if value != self._validationbits.get(bit_nr):
-                self._validationbits[bit_nr] = value
+            if value != self._validation_bits.get(bit_nr):
+                self._validation_bits[bit_nr] = value
                 self._report_change(bit_nr)
 
     def _report_change(self, bit_nr):
-        if self.on_validationbit_change is not None:
-            self.on_validationbit_change(bit_nr, self._validationbits.get(bit_nr))
+        if self.on_validation_bit_change is not None:
+            self.on_validation_bit_change(bit_nr, self._validation_bits.get(bit_nr))
 
     def get_validation_bit(self, bit_nr):
-        return self._validationbits.get(bit_nr, False)
+        return self._validation_bits.get(bit_nr, False)
