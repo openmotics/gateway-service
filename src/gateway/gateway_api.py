@@ -794,17 +794,17 @@ class GatewayApi(object):
                         volt = [raw_volt[0]] * num_ports
                         freq = [raw_freq[0]] * num_ports
                     else:
-                        volt = self.__power_controller.get_module_voltage(modules[module_id])
-                        freq = self.__power_controller.get_module_frequency(modules[module_id])
+                        volt = list(self.__power_controller.get_module_voltage(modules[module_id]))
+                        freq = list(self.__power_controller.get_module_frequency(modules[module_id]))
 
-                    current = self.__power_controller.get_module_current(modules[module_id])
-                    power = self.__power_controller.get_module_power(modules[module_id])
+                    current = list(self.__power_controller.get_module_current(modules[module_id]))
+                    power = list(self.__power_controller.get_module_power(modules[module_id]))
                 elif version == power_api.P1_CONCENTRATOR:
-                    statuses = self.__p1_controller.get_module_status(modules[module_id])
-                    voltages = self.__p1_controller.get_module_voltage(modules[module_id])
-                    currents = self.__p1_controller.get_module_current(modules[module_id])
-                    delivered_power = self.__p1_controller.get_module_delivered_power(modules[module_id])
-                    received_power = self.__p1_controller.get_module_received_power(modules[module_id])
+                    statuses = list(self.__p1_controller.get_module_status(modules[module_id]))
+                    voltages = list(self.__p1_controller.get_module_voltage(modules[module_id]))
+                    currents = list(self.__p1_controller.get_module_current(modules[module_id]))
+                    delivered_power = list(self.__p1_controller.get_module_delivered_power(modules[module_id]))
+                    received_power = list(self.__p1_controller.get_module_received_power(modules[module_id]))
                     for port, status in enumerate(statuses):
                         try:
                             if status:

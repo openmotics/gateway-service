@@ -225,24 +225,31 @@ class Toolbox(object):
             self.list_modules('O')
             self.list_modules('I')
             # self.list_energy_modules('E')  # TODO: Energy module discovery fails
+            self.list_modules('C', hardware=False)
         except Exception:
             logger.info('discovering modules...')
             self.discover_output_module()
             self.discover_input_module()
             # self.discover_energy_module()  # TODO: Energy module discovery fails
+            self.discover_can_control()
 
         # TODO compare with hardware modules instead.
         self.list_modules('O')
         self.list_modules('I')
         # self.list_energy_modules('E')  # TODO: Energy module discovery fails
+        self.list_modules('C', hardware=False)  # firmware version missing
+
+        # TODO ensure discovery synchonization finished.
+        self.ensure_input_exists(INPUT_MODULE_LAYOUT['I'].inputs[7], timeout=300)
+        self.ensure_input_exists(INPUT_MODULE_LAYOUT['C'].inputs[5], timeout=300)
 
         try:
-            self.get_module('o')
+            self.list_modules('o', hardware=False)
         except Exception:
             logger.info('adding virtual modules...')
             self.dut.get('/add_virtual_output')
             time.sleep(2)
-        self.get_module('o')
+        self.list_modules('o', hardware=False)
 
     def print_logs(self):
         # type: () -> None
@@ -260,12 +267,12 @@ class Toolbox(object):
         params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm}
         return self.dut.get('/factory_reset', params=params, success=confirm)
 
-    def list_modules(self, module_type, min_modules=1):
-        # type: (str, int) -> List[Dict[str,Any]]
+    def list_modules(self, module_type, min_modules=1, hardware=True):
+        # type: (str, int, bool) -> List[Dict[str,Any]]
         data = self.dut.get('/get_modules_information')
         modules = []
         for address, info in data['modules']['master'].items():
-            if info['type'] != module_type or not info['firmware']:
+            if info['type'] != module_type or (not info['firmware'] and hardware):
                 continue
             info['address'] = address
             modules.append(info)
@@ -282,15 +289,6 @@ class Toolbox(object):
             modules.append(info)
         assert len(modules) >= min_modules, 'Not enough energy modules of type \'{}\' available in {}'.format(module_type, data)
         return modules
-
-    def get_module(self, module_type):
-        # type: (str) -> List[int]
-        data = self.dut.get('/get_modules')
-        modules = list(enumerate(data['outputs'])) + list(enumerate(data['inputs'])) + list(enumerate(data['can_inputs']))
-        for i, v in modules:
-            if v == module_type:
-                return list(range(8 * i, (8 * i) + 7))
-        raise AssertionError('No modules of type \'{}\' available in {}'.format(module_type, data))
 
     def authorized_mode_start(self):
         # type: () -> None
@@ -346,6 +344,8 @@ class Toolbox(object):
         self.module_discover_start()
         self.tester.toggle_output(self.DEBIAN_DISCOVER_UCAN)
         self.assert_modules(2, timeout=60)
+        # TODO: wait for inputs to be andvertized, no a way to poll?
+        time.sleep(120)
         self.module_discover_stop()
 
     def assert_modules(self, count, timeout=30):
@@ -475,3 +475,17 @@ class Toolbox(object):
         logger.error('get status {} status={} != expected {}, timeout after {:.2f}s    outputs={}'.format(output.output_id, bool(current_status), status, time.time() - since, state))
         self.tester.log_events()
         raise AssertionError('get status {} status={} != expected {}, timeout after {:.2f}s'.format(output.output_id, bool(current_status), status, time.time() - since))
+
+    def ensure_input_exists(self, input, timeout=30):
+        # type: (Input, float) -> None
+        since = time.time()
+        while since > time.time() - timeout:
+            data = self.dut.get('/get_input_status')
+            try:
+                next(x for x in data['status'] if x['id'] == input.input_id)
+                logger.debug('input {}#{} with status discovered, after {:.2f}s'.format(input.type, input.input_id, time.time() - since))
+                return
+            except StopIteration:
+                pass
+            time.sleep(2)
+        raise AssertionError('input {}#{} status missing, timeout after {:.2f}s'.format(input.type, input.input_id, time.time() - since))

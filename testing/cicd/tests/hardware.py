@@ -10,7 +10,7 @@ CT = collections.namedtuple('CT', ['module_id', 'ct_id'])
 
 
 OUTPUT_MODULE_LAYOUT = {
-    'O': Module(name='output module', type='O', inputs=[], outputs=[
+    'O': Module(name='output module', type='O', inputs=[], cts=[], outputs=[
         Output(type='O', output_id=0),
         Output(type='O', output_id=1),
         Output(type='O', output_id=2),
@@ -19,21 +19,21 @@ OUTPUT_MODULE_LAYOUT = {
         Output(type='O', output_id=5),
         Output(type='O', output_id=6),
         Output(type='O', output_id=7),
-    ], cts=[]),
-    # 'o': Module(name='virtual output', type='o', inputs=[], outputs=[
-    #     Output(type='o', output_id=8),
-    #     Output(type='o', output_id=9),
-    #     Output(type='o', output_id=10),
-    #     Output(type='o', output_id=11),
-    #     Output(type='o', output_id=12),
-    #     Output(type='o', output_id=13),
-    #     Output(type='o', output_id=14),
-    #     Output(type='o', output_id=15),
-    # ], cts=[]),
+    ]),
+    'o': Module(name='virtual output', type='o', inputs=[], cts=[], outputs=[
+        Output(type='o', output_id=8),
+        Output(type='o', output_id=9),
+        Output(type='o', output_id=10),
+        Output(type='o', output_id=11),
+        Output(type='o', output_id=12),
+        Output(type='o', output_id=13),
+        Output(type='o', output_id=14),
+        Output(type='o', output_id=15),
+    ]),
 }
 
 INPUT_MODULE_LAYOUT = {
-    'I': Module(name='input module', type='I', outputs=[], inputs=[
+    'I': Module(name='input module', type='I', outputs=[], cts=[], inputs=[
         Input(type='I', input_id=0, tester_output_id=0),
         Input(type='I', input_id=1, tester_output_id=1),
         Input(type='I', input_id=2, tester_output_id=2),
@@ -42,16 +42,16 @@ INPUT_MODULE_LAYOUT = {
         Input(type='I', input_id=5, tester_output_id=5),
         Input(type='I', input_id=6, tester_output_id=6),
         Input(type='I', input_id=7, tester_output_id=7),
-    ], cts=[]),
-    # 'C': Module(name='CAN control', type='C', outputs=[], inputs=[
-    #     # TODO: also test random order discovery?
-    #     Input(type='C', input_id=16, tester_output_id=32),
-    #     Input(type='C', input_id=17, tester_output_id=33),
-    #     Input(type='C', input_id=18, tester_output_id=34),
-    #     Input(type='C', input_id=19, tester_output_id=35),
-    #     Input(type='C', input_id=20, tester_output_id=36),
-    #     Input(type='C', input_id=21, tester_output_id=37),
-    # ], cts=[]),
+    ]),
+    'C': Module(name='CAN control', type='C', outputs=[], cts=[], inputs=[
+        # TODO: also test random order discovery?
+        Input(type='C', input_id=16, tester_output_id=32),
+        Input(type='C', input_id=17, tester_output_id=33),
+        Input(type='C', input_id=18, tester_output_id=34),
+        Input(type='C', input_id=19, tester_output_id=35),
+        Input(type='C', input_id=20, tester_output_id=36),
+        Input(type='C', input_id=21, tester_output_id=37),
+    ]),
 }
 
 ENERGY_MODULE_LAYOUT = {
@@ -82,8 +82,8 @@ def output_ids(max_value=8):
 
 
 @composite
-def outputs(draw, types=output_types()):
-    module_type = draw(types)
+def outputs(draw, types=output_types(), virtual=False):
+    module_type = draw(types.filter(lambda x: x != 'o' or virtual))
     assert module_type in ['O', 'o'], 'invalid output type {}'.format(module_type)
     module = OUTPUT_MODULE_LAYOUT[module_type]
     output = module.outputs[draw(output_ids(len(module.outputs) - 1))]
@@ -137,7 +137,7 @@ def cts(draw, types=energy_module_types()):
     # ct = module.cts[draw(ct_ids(len(module.cts) - 1))]
     ct = module.cts[0]  # TODO: Use all CTs once they are all connected
     hypothesis.note('Using {} {}#{}'.format(module.name, module.type, ct.ct_id))
-    return input
+    return ct
 
 
 def multiple_cts(size, types=energy_module_types()):

@@ -42,8 +42,7 @@ def test_events(toolbox, output, to_status):
     toolbox.assert_output_changed(output, to_status)
 
 
-@pytest.mark.unstable
-@hypothesis.given(outputs(), booleans())
+@hypothesis.given(outputs(virtual=True), booleans())
 def test_status(toolbox, output, status):
     logger.debug('output status {}#{}, expect status ? -> {}'.format(output.type, output.output_id, status))
     toolbox.configure_output(output, DEFAULT_OUTPUT_CONFIG)
@@ -107,7 +106,6 @@ def group_action_ids():
     return integers(min_value=0, max_value=159)
 
 
-@pytest.mark.unstable
 @hypothesis.given(multiple_outputs(2), group_action_ids(), booleans())
 def test_group_action_toggle(toolbox, outputs, group_action_id, output_status):
     (output, other_output) = outputs
