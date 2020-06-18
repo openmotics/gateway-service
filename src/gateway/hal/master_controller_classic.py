@@ -517,16 +517,11 @@ class MasterClassicController(MasterController):
         outputs = []
         for i in range(number_of_outputs):
             output = self._master_communicator.do_command(master_api.read_output(), {'id': i})
-            # add output locked status via the validation bits
+            # Add output locked status via the validation bits
             output['locked'] = self._is_output_locked(output['id'])
             outputs.append(output)
         self._output_status.full_update(outputs)
         self._output_last_updated = time.time()
-
-    def _on_master_output_change(self, data):
-        """ Triggers when the master informs us of an Output state change """
-        # this master event only has updated status information for the outputs, so no need to set the locked status
-        self._output_status.partial_update(data['outputs'])
 
     def _output_changed(self, output_id, status):
         """ Executed by the Output Status tracker when an output changed state """
@@ -540,6 +535,10 @@ class MasterClassicController(MasterController):
                       'location': {'room_id': Toolbox.denonify(self._output_config[output_id].room, 255)}}
         for callback in self._event_callbacks:
             callback(MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE, data=event_data))
+
+    def _on_master_output_change(self, data):
+        """ Triggers when the master informs us of an Output state change """
+        self._output_status.partial_update(data['outputs'])
 
     # Shutters
 
