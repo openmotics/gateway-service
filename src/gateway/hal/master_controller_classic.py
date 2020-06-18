@@ -1273,7 +1273,7 @@ class MasterClassicController(MasterController):
     # Validation bits
 
     def load_validation_bits(self):  # type: () -> Optional[Dict[int, bool]]
-        if self._master_version is None or self._master_version < (3, 143, 100):
+        if self._master_version is None or self._master_version < (3, 143, 102):
             return None
 
         number_of_bits = 256

@@ -23,11 +23,13 @@ import master.classic.master_communicator
 import mock
 import xmlrunner
 from ioc import Scope, SetTestMode, SetUpTestInjections
-from gateway.dto import InputDTO
+from gateway.dto import InputDTO, OutputDTO
 from master.classic.eeprom_controller import EepromController
 from master.classic.eeprom_models import InputConfiguration
 from master.classic.inputs import InputStatus
 from master.classic.master_communicator import BackgroundConsumer
+from master.classic.validationbits import ValidationBitStatus
+from master.classic.outputs import OutputStatus
 
 
 class MasterClassicControllerTest(unittest.TestCase):
@@ -130,6 +132,52 @@ class MasterClassicControllerTest(unittest.TestCase):
             classic.get_recent_inputs()
             self.assertIn(mock.call(), get.call_args_list)
 
+    def test_validation_bits_passthrough(self):
+        # Imporatnt note: bits are ordened per byte, so the sequence is like:
+        # [[7, 6, 5, 4, 3, 2, 1, 0], [15, 14, 13, 12, 11, 10, 9, 8], [23, 22, ...], ...]
+        bit_data = [0b00000010, 0b00000000, 0b00000000, 0b00000000,
+                    0b00000000, 0b00000000, 0b00000000, 0b00000000,
+                    0b00000000, 0b00000000, 0b00000000, 0b00000000,
+                    0b00000000, 0b00000000, 0b00000000, 0b00000000,
+                    0b00000000, 0b00000000, 0b00000000, 0b00000000,
+                    0b00000000, 0b00000000, 0b00000000, 0b00000000,
+                    0b00000000, 0b00000000, 0b00000000, 0b00000000,
+                    0b00000000, 0b00000000, 0b00000000, 0b01000000]
+
+        def _do_command(cmd, fields):
+            start = fields['number'] / 8
+            return {'data': bit_data[start:start + 11]}
+
+        classic = get_classic_controller_dummy()
+        classic._master_communicator.do_command = _do_command
+
+        bits = classic.load_validation_bits()
+        self.assertIsNone(bits)
+
+        classic._master_version = (3, 143, 102)
+
+        bits = classic.load_validation_bits()
+        expected_bits = {i: False for i in range(256)}
+        expected_bits[1] = True
+        expected_bits[254] = True
+        self.assertEqual(expected_bits, bits)
+
+        events = []
+
+        def _on_change(output_id, state):
+            events.append((output_id, state))
+
+        classic._validation_bits = ValidationBitStatus(on_validation_bit_change=classic._validation_bit_changed)
+        classic._output_status = OutputStatus(on_output_change=_on_change)
+        classic._output_config = {0: OutputDTO(0, lock_bit_id=5)}
+
+        classic._refresh_validation_bits()
+        classic._on_master_validation_bit_change(5, True)
+        classic._on_master_validation_bit_change(6, True)
+        classic._on_master_validation_bit_change(5, False)
+        self.assertEqual([(0, {'on': False, 'locked': False, 'value': 0}),
+                          (0, {'on': False, 'locked': True, 'value': 0}),
+                          (0, {'on': False, 'locked': False, 'value': 0})], events)
 
 @Scope
 def get_classic_controller_dummy(inputs=None):
