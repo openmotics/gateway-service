@@ -213,29 +213,18 @@ class GatewayApi(object):
         """
         Get a list containing the status of the Outputs.
         """
-        # TODO: work with output controller
-        # TODO: implement output controller and let her handle routing to either master or e.g. plugin based outputs
-        outputs = self.__observer.get_outputs()
-        return [{'id': output['id'],
-                 'status': output['status'],
-                 'ctimer': output['ctimer'],
-                 'dimmer': output['dimmer']}
-                for output in outputs]
+        # TODO: Use the OutputController
+        return self.__observer.get_outputs()
 
     def get_output_status(self, output_id):  # type: (int) -> Dict[str, Any]
         """
-        Get a list containing the status of the Outputs.
+        Get the status of a given Output.
         """
-        # TODO: work with output controller
-        # TODO: implement output controller and let her handle routing to either master or e.g. plugin based outputs
+        # TODO: Use the OutputController
         output = self.__observer.get_output(output_id)
         if output is None:
             raise ValueError('Output with id {} does not exist'.format(output_id))
-        else:
-            return {'id': output['id'],
-                    'status': output['status'],
-                    'ctimer': output['ctimer'],
-                    'dimmer': output['dimmer']}
+        return output
 
     def set_output_status(self, output_id, is_on, dimmer=None, timer=None):  # type: (int, bool, Optional[int], Optional[int]) -> None
         """

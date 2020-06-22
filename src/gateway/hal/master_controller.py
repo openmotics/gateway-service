@@ -392,3 +392,8 @@ class MasterController(object):
 
     def set_all_lights_floor_on(self, floor):
         raise NotImplementedError()
+
+    # Validation bits
+
+    def load_validation_bits(self):
+        raise NotImplementedError()

@@ -139,7 +139,7 @@ class MasterCoreController(MasterController):
 
     def _process_new_output_state(self, output_id, status, timer, dimmer):
         new_state = {'id': output_id,
-                     'status': 1 if status else 0,
+                     'status': status,
                      'ctimer': timer,
                      'dimmer': dimmer}
         current_state = self._output_states.get(output_id)
@@ -485,8 +485,8 @@ class MasterCoreController(MasterController):
         shutter = ShutterConfiguration(shutter_id)
         if shutter.outputs.output_0 == 255 * 2:
             return
-        output_0_on = self._output_states.get(shutter.outputs.output_0, {}).get('status') == 1
-        output_1_on = self._output_states.get(shutter.outputs.output_1, {}).get('status') == 1
+        output_0_on = self._output_states.get(shutter.outputs.output_0, {}).get('status')
+        output_1_on = self._output_states.get(shutter.outputs.output_1, {}).get('status')
         output_module = OutputConfiguration(shutter.outputs.output_0).module
         if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
             up, down = output_0_on, output_1_on

@@ -29,7 +29,8 @@ class OutputDTO(BaseDTO):
                  can_led_2=None,  # type: Optional[FeedbackLedDTO]
                  can_led_3=None,  # type: Optional[FeedbackLedDTO]
                  can_led_4=None,  # type: Optional[FeedbackLedDTO]
-                 room=None):
+                 room=None,
+                 lock_bit_id=None):
         self.id = id  # type: int
         self.name = name  # type: str
         self.module_type = module_type  # type: str
@@ -37,6 +38,7 @@ class OutputDTO(BaseDTO):
         self.floor = floor  # type: Optional[int]
         self.output_type = output_type  # type: int
         self.room = room  # type: Optional[int]
+        self.lock_bit_id = lock_bit_id  # type: Optional[int]
         self.can_led_1 = can_led_1 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
         self.can_led_2 = can_led_2 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
         self.can_led_3 = can_led_3 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
@@ -52,6 +54,7 @@ class OutputDTO(BaseDTO):
                 self.floor == other.floor and
                 self.output_type == other.output_type and
                 self.room == other.room and
+                self.lock_bit_id == other.lock_bit_id and
                 self.can_led_1 == other.can_led_1 and
                 self.can_led_2 == other.can_led_2 and
                 self.can_led_3 == other.can_led_3 and

@@ -54,6 +54,7 @@ if False:  # MYPY
     from power.power_communicator import PowerCommunicator
     from master.classic.passthrough import PassthroughService
     from cloud.events import EventSender
+    from serial_utils import RS485
 
 logger = logging.getLogger("openmotics")
 
@@ -125,6 +126,7 @@ class OpenmoticsService(object):
                 master_controller=INJECTED,  # type: MasterController
                 maintenance_controller=INJECTED,  # type: MaintenanceController
                 power_communicator=INJECTED,  # type: PowerCommunicator
+                power_serial=INJECTED,  # type: RS485
                 metrics_controller=INJECTED,  # type: MetricsController
                 passthrough_service=INJECTED,  # type: PassthroughService
                 scheduling_controller=INJECTED,  # type: SchedulingController
@@ -163,6 +165,7 @@ class OpenmoticsService(object):
         # Start rest of the stack
         maintenance_controller.start()
         if power_communicator:
+            power_serial.start()
             power_communicator.start()
         metrics_controller.start()
         if passthrough_service:
