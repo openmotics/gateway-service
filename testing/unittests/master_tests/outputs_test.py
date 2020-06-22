@@ -28,51 +28,80 @@ class OutputStatusTest(unittest.TestCase):
 
     def test_update(self):
         """ Test for partial_update and full_update"""
-        outputs = [{'id': 1, 'name': 'light1', 'floor_level': 1, 'light': 1,
-                    'type': 'D', 'controller_out': 1, 'timer': 200, 'ctimer': 200,
-                    'max_power': 1, 'status': 1, 'dimmer': 10},
-                   {'id': 2, 'name': 'light2', 'floor_level': 2, 'light': 1,
-                    'type': 'D', 'controller_out': 1, 'timer': 200, 'ctimer': 200,
-                    'max_power': 1, 'status': 0, 'dimmer': 20},
-                   {'id': 3, 'name': 'light1', 'floor_level': 1, 'light': 0,
-                    'type': 'O', 'controller_out': 1, 'timer': 200, 'ctimer': 200,
-                    'max_power': 1, 'status': 0, 'dimmer': 0}]
-        status = OutputStatus()
-        status.full_update(outputs)
+        events = []
+        status = OutputStatus(on_output_change=lambda output_id, state: events.append((output_id, state)))
 
+        events = []
+        status.full_update([{'id': 1, 'ctimer': 200, 'status': 1, 'dimmer': 10},
+                            {'id': 2, 'ctimer': 200, 'status': 0, 'dimmer': 20},
+                            {'id': 3, 'ctimer': 200, 'status': 0, 'dimmer': 0}])
+        current_state = status.get_outputs()
+        self.assertEqual([{'id': 1, 'ctimer': 200, 'status': True, 'dimmer': 10, 'locked': False},
+                          {'id': 2, 'ctimer': 200, 'status': False, 'dimmer': 20, 'locked': False},
+                          {'id': 3, 'ctimer': 200, 'status': False, 'dimmer': 0, 'locked': False}], sorted(current_state, key=lambda i: i['id']))
+        self.assertEqual([(1, {'on': True, 'value': 10, 'locked': False}),
+                          (2, {'on': False, 'value': 20, 'locked': False}),
+                          (3, {'on': False, 'value': 0, 'locked': False})], sorted(events, key=lambda i: i[0]))
+
+        events = []
         status.partial_update([])  # Everything is off
-        self.assertEqual(0, status.get_outputs()[0]['status'])
-        self.assertEqual(10, status.get_outputs()[0]['dimmer'])
-        self.assertEqual(0, status.get_outputs()[1]['status'])
-        self.assertEqual(20, status.get_outputs()[1]['dimmer'])
-        self.assertEqual(0, status.get_outputs()[2]['status'])
-        self.assertEqual(0, status.get_outputs()[2]['dimmer'])
+        current_state = status.get_outputs()
+        self.assertEqual([{'id': 1, 'ctimer': 200, 'status': False, 'dimmer': 10, 'locked': False},
+                          {'id': 2, 'ctimer': 200, 'status': False, 'dimmer': 20, 'locked': False},
+                          {'id': 3, 'ctimer': 200, 'status': False, 'dimmer': 0, 'locked': False}],
+                         sorted(current_state, key=lambda i: i['id']))
+        self.assertEqual([(1, {'on': False, 'value': 10, 'locked': False})], sorted(events, key=lambda i: i[0]))
 
-        status.partial_update([(3, 0), (2, 1)])
-        self.assertEqual(0, status.get_outputs()[0]['status'])
-        self.assertEqual(10, status.get_outputs()[0]['dimmer'])
-        self.assertEqual(1, status.get_outputs()[1]['status'])
-        self.assertEqual(1, status.get_outputs()[1]['dimmer'])
-        self.assertEqual(1, status.get_outputs()[2]['status'])
-        self.assertEqual(0, status.get_outputs()[2]['dimmer'])
+        events = []
+        status.partial_update([(3, 0), (2, 10)])  # Turn two outputs on
+        current_state = status.get_outputs()
+        self.assertEqual([{'id': 1, 'ctimer': 200, 'status': False, 'dimmer': 10, 'locked': False},
+                          {'id': 2, 'ctimer': 200, 'status': True, 'dimmer': 10, 'locked': False},
+                          {'id': 3, 'ctimer': 200, 'status': True, 'dimmer': 0, 'locked': False}],
+                         sorted(current_state, key=lambda i: i['id']))
+        self.assertEqual([(2, {'on': True, 'value': 10, 'locked': False}),
+                          (3, {'on': True, 'value': 0, 'locked': False})], sorted(events, key=lambda i: i[0]))
 
-        update = [{'id': 1, 'name': 'light1', 'floor_level': 1, 'light': 1,
-                   'type': 'D', 'controller_out': 1, 'timer': 200, 'ctimer': 200,
-                   'max_power': 1, 'status': 0, 'dimmer': 50},
-                  {'id': 2, 'name': 'light2', 'floor_level': 2, 'light': 1,
-                   'type': 'D', 'controller_out': 1, 'timer': 200, 'ctimer': 200,
-                   'max_power': 1, 'status': 0, 'dimmer': 80},
-                  {'id': 3, 'name': 'light1', 'floor_level': 1, 'light': 0,
-                   'type': 'O', 'controller_out': 1, 'timer': 200, 'ctimer': 200,
-                   'max_power': 1, 'status': 1, 'dimmer': 0}]
+        events = []
+        status.partial_update([(3, 0)])  # Turn one output off again
+        current_state = status.get_outputs()
+        self.assertEqual([{'id': 1, 'ctimer': 200, 'status': False, 'dimmer': 10, 'locked': False},
+                          {'id': 2, 'ctimer': 200, 'status': False, 'dimmer': 10, 'locked': False},
+                          {'id': 3, 'ctimer': 200, 'status': True, 'dimmer': 0, 'locked': False}],
+                         sorted(current_state, key=lambda i: i['id']))
+        self.assertEqual([(2, {'on': False, 'value': 10, 'locked': False})], sorted(events, key=lambda i: i[0]))
 
-        status.full_update(update)
-        self.assertEqual(0, status.get_outputs()[0]['status'])
-        self.assertEqual(50, status.get_outputs()[0]['dimmer'])
-        self.assertEqual(0, status.get_outputs()[1]['status'])
-        self.assertEqual(80, status.get_outputs()[1]['dimmer'])
-        self.assertEqual(1, status.get_outputs()[2]['status'])
-        self.assertEqual(0, status.get_outputs()[2]['dimmer'])
+        events = []
+        status.update_locked(1, True)
+        current_state = status.get_outputs()
+        self.assertEqual([{'id': 1, 'ctimer': 200, 'status': False, 'dimmer': 10, 'locked': True},
+                          {'id': 2, 'ctimer': 200, 'status': False, 'dimmer': 10, 'locked': False},
+                          {'id': 3, 'ctimer': 200, 'status': True, 'dimmer': 0, 'locked': False}],
+                         sorted(current_state, key=lambda i: i['id']))
+        self.assertEqual([(1, {'on': False, 'value': 10, 'locked': True})], sorted(events, key=lambda i: i[0]))
+
+        events = []
+        status.partial_update([(2, 50)])  # Turn one off and another one on
+        current_state = status.get_outputs()
+        self.assertEqual([{'id': 1, 'ctimer': 200, 'status': False, 'dimmer': 10, 'locked': True},
+                          {'id': 2, 'ctimer': 200, 'status': True, 'dimmer': 50, 'locked': False},
+                          {'id': 3, 'ctimer': 200, 'status': False, 'dimmer': 0, 'locked': False}],
+                         sorted(current_state, key=lambda i: i['id']))
+        self.assertEqual([(2, {'on': True, 'value': 50, 'locked': False}),
+                          (3, {'on': False, 'value': 0, 'locked': False})], sorted(events, key=lambda i: i[0]))
+
+        events = []
+        status.full_update([{'id': 1, 'ctimer': 200, 'status': 1, 'dimmer': 10},
+                            {'id': 2, 'ctimer': 200, 'status': 0, 'dimmer': 20},
+                            {'id': 4, 'ctimer': 200, 'status': 1, 'dimmer': 40}])
+        current_state = status.get_outputs()
+        self.assertEqual([{'id': 1, 'ctimer': 200, 'status': True, 'dimmer': 10, 'locked': True},
+                          {'id': 2, 'ctimer': 200, 'status': False, 'dimmer': 20, 'locked': False},
+                          {'id': 4, 'ctimer': 200, 'status': True, 'dimmer': 40, 'locked': False}],
+                         sorted(current_state, key=lambda i: i['id']))
+        self.assertEqual([(1, {'on': True, 'value': 10, 'locked': True}),
+                          (2, {'on': False, 'value': 20, 'locked': False}),
+                          (4, {'on': True, 'value': 40, 'locked': False})], sorted(events, key=lambda i: i[0]))
 
 
 if __name__ == "__main__":

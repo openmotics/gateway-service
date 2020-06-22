@@ -78,12 +78,27 @@ class Observer(object):
 
     def get_outputs(self):
         """ Returns a list of Outputs with their status """
-        # TODO: also include other outputs (e.g. from plugins)
-        return self._master_controller.get_output_statuses()
+        # TODO: Move to the OutputController
+        # TODO: Should return a DTO and the (de)serializers should e.g. convert a bool to an int
+        outputs = self._master_controller.get_output_statuses()
+        return [{'id': output['id'],
+                 'status': 1 if output['status'] else 0,
+                 'ctimer': output['ctimer'],
+                 'dimmer': output['dimmer'],
+                 'locked': output['locked']}
+                for output in outputs]
 
     def get_output(self, output_id):
-        # TODO: also address other outputs (e.g. from plugins)
-        return self._master_controller.get_output_status(output_id)
+        # TODO: Move to the OutputController
+        # TODO: Should return a DTO and the (de)serializers should e.g. convert a bool to an int
+        output = self._master_controller.get_output_status(output_id)
+        if output is None:
+            return None
+        return {'id': output['id'],
+                'status': 1 if output['status'] else 0,
+                'ctimer': output['ctimer'],
+                'dimmer': output['dimmer'],
+                'locked': output['locked']}
 
     # Inputs
 

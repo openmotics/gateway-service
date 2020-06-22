@@ -117,11 +117,6 @@ def get_timezone_file():
     return "/opt/openmotics/etc/timezone"
 
 
-def get_self_test_cmd():
-    """ Get the path of the bash script that executes the self test. """
-    return "/opt/openmotics/bin/self_test.sh"
-
-
 def get_plugin_dir():
     """ Get the directory where plugin data is stored. """
     return "/opt/openmotics/python/plugins/"
