@@ -18,12 +18,15 @@ the master.
 """
 
 from __future__ import absolute_import
-from threading import Lock
-import six
+
 import logging
+from threading import Lock
+
+from gateway.api.serializers import OutputStateSerializer
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Tuple
+    from typing import Any, Callable, Dict, List, Optional, Tuple
+    from gateway.dto import OutputStateDTO
 
 logger = logging.getLogger("openmotics")
 
@@ -32,11 +35,12 @@ class OutputStatus(object):
     """ Contains a cached version of the current output of the controller. """
 
     def __init__(self, on_output_change=None):
+        # type: (Callable[[int,Dict[str,Any]],None]) -> None
         """
         Create a status object using a list of outputs (can be None),
         and a refresh period: the refresh has to be invoked explicitly.
         """
-        self._outputs = {}
+        self._outputs = {}  # type: Dict[int,OutputStateDTO]
         self._on_output_change = on_output_change
         self._merge_lock = Lock()
 
@@ -70,49 +74,52 @@ class OutputStatus(object):
             self._outputs.pop(output_id, None)
 
     def get_outputs(self):
+        # type: () -> List[OutputStateDTO]
         """ Return the list of Outputs. """
         return list(self._outputs.values())
 
     def get_output(self, output_id):
+        # type: (int) -> Optional[OutputStateDTO]
         """ Return the list of Outputs. """
         return self._outputs.get(output_id)
 
-    def update_locked(self, output_id, locked):  # type: (int, bool) -> None
+    def update_locked(self, output_id, locked):
+        # type: (int, bool) -> None
         """ Updated the locked atttribute of the Output. """
         if self._update(output_id, {'locked': locked}):
             self._report_change(output_id)
 
-    def _update(self, output_id, new_output_data):  # type: (int, Dict[str, Any]) -> bool
+    def _update(self, output_id, new_output_data):
+        # type: (int, Dict[str, Any]) -> bool
         changed = False
         with self._merge_lock:
             if output_id not in self._outputs:
-                self._outputs[output_id] = {'id': output_id,
-                                            'ctimer': int(new_output_data.get('ctimer', 0)),
-                                            'status': bool(new_output_data.get('status', False)),
-                                            'dimmer': int(new_output_data.get('dimmer', 0)),
-                                            'locked': bool(new_output_data.get('locked', False))}
+                data = {'id': output_id}
+                data.update(new_output_data)
+                output_dto, _fields = OutputStateSerializer.deserialize(data)
+                self._outputs[output_id] = output_dto
                 changed = True
             else:
                 output = self._outputs[output_id]
-                if 'ctimer' in new_output_data:
-                    output['ctimer'] = int(new_output_data['ctimer'])
                 if 'status' in new_output_data:
                     status = bool(new_output_data['status'])
-                    changed |= output.get('status') != status
-                    output['status'] = status
+                    changed |= output.status != status
+                    output.status = status
+                if 'ctimer' in new_output_data:
+                    output.ctimer = int(new_output_data['ctimer'])
                 if 'dimmer' in new_output_data:
                     dimmer = int(new_output_data['dimmer'])
-                    changed |= output.get('dimmer') != dimmer
-                    output['dimmer'] = dimmer
+                    changed |= output.dimmer != dimmer
+                    output.dimmer = dimmer
                 if 'locked' in new_output_data:
                     locked = bool(new_output_data['locked'])
-                    changed |= output.get('locked') != locked
-                    output['locked'] = locked
+                    changed |= output.locked != locked
+                    output.locked = locked
         return changed
 
     def _report_change(self, output_id):
         if self._on_output_change is not None:
             output = self._outputs[output_id]
-            self._on_output_change(output_id, {'on': output['status'],
-                                               'value': output['dimmer'],
-                                               'locked': output['locked']})
+            self._on_output_change(output_id, {'on': output.status,
+                                               'value': output.dimmer,
+                                               'locked': output.locked})

@@ -58,6 +58,7 @@ from toolbox import Toolbox
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Tuple
     from gateway.config import ConfigurationController
+    from gateway.dto import OutputStateDTO
 
 logger = logging.getLogger("openmotics")
 
@@ -485,9 +486,11 @@ class MasterClassicController(MasterController):
         self._output_last_updated = 0
 
     def get_output_statuses(self):
+        # type: () -> List[OutputStateDTO]
         return self._output_status.get_outputs()
 
     def get_output_status(self, output_id):
+        # type: (int) -> Optional[OutputStateDTO]
         return self._output_status.get_output(output_id)
 
     def _input_changed(self, input_id, status):

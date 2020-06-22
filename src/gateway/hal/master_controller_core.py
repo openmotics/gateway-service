@@ -16,44 +16,41 @@
 Module for communicating with the Master
 """
 from __future__ import absolute_import
+
 import logging
 import time
-from threading import Thread, Timer
-from peewee import DoesNotExist
 from datetime import datetime
+from threading import Thread, Timer
 
+from peewee import DoesNotExist
+
+from gateway.api.serializers import OutputStateSerializer
+from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
+    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO
 from gateway.enums import ShutterEnums
-from gateway.dto import (
-    OutputDTO, InputDTO,
-    ShutterDTO, ShutterGroupDTO,
-    ThermostatDTO, SensorDTO,
-    PulseCounterDTO, GroupActionDTO
-)
-from gateway.hal.mappers_core import (
-    OutputMapper, ShutterMapper, InputMapper,
-    SensorMapper, GroupActionMapper
-)
+from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
+    OutputMapper, SensorMapper, ShutterMapper
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
-from master.core.ucan_communicator import UCANCommunicator
-from master.core.slave_communicator import SlaveCommunicator
 from master.core.errors import Error
 from master.core.events import Event as MasterCoreEvent
-from master.core.memory_file import MemoryTypes, MemoryFile
-from master.core.memory_models import (
-    GlobalConfiguration, InputConfiguration, OutputConfiguration,
-    SensorConfiguration, ShutterConfiguration, OutputModuleConfiguration,
-    InputModuleConfiguration, SensorModuleConfiguration
-)
 from master.core.group_action import GroupActionController
+from master.core.memory_file import MemoryFile, MemoryTypes
+from master.core.memory_models import GlobalConfiguration, \
+    InputConfiguration, InputModuleConfiguration, OutputConfiguration, \
+    OutputModuleConfiguration, SensorConfiguration, \
+    SensorModuleConfiguration, ShutterConfiguration
+from master.core.slave_communicator import SlaveCommunicator
+from master.core.ucan_communicator import UCANCommunicator
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
     from typing import Any, Dict, List, Tuple, Optional
+    from gateway.dto import OutputStateDTO
 
 logger = logging.getLogger("openmotics")
 
@@ -62,6 +59,7 @@ class MasterCoreController(MasterController):
 
     @Inject
     def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, slave_communicator=INJECTED, memory_files=INJECTED):
+        # type: (CoreCommunicator, UCANCommunicator, SlaveCommunicator, Dict[str,MemoryFile]) -> None
         super(MasterCoreController, self).__init__(master_communicator)
         self._master_communicator = master_communicator  # type: CoreCommunicator
         self._ucan_communicator = ucan_communicator  # type: UCANCommunicator
@@ -72,14 +70,14 @@ class MasterCoreController(MasterController):
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._input_state = MasterInputState()
         self._output_interval = 600
-        self._output_last_updated = 0
-        self._output_states = {}
+        self._output_last_updated = 0.0
+        self._output_states = {}  # type: Dict[int,OutputStateDTO]
         self._sensor_interval = 300
-        self._sensor_last_updated = 0
-        self._sensor_states = {}
+        self._sensor_last_updated = 0.0
+        self._sensor_states = {}  # type: Dict[int,Dict[str,None]]
         self._shutters_interval = 600
-        self._shutters_last_updated = 0
-        self._time_last_updated = 0
+        self._shutters_last_updated = 0.0
+        self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
 
         self._memory_files[MemoryTypes.EEPROM].subscribe_eeprom_change(self._handle_eeprom_change)
@@ -100,10 +98,10 @@ class MasterCoreController(MasterController):
 
     def _handle_eeprom_change(self):
         self._output_shutter_map = {}
-        self._shutters_last_updated = 0
-        self._sensor_last_updated = 0
-        self._input_last_updated = 0
-        self._output_last_updated = 0
+        self._shutters_last_updated = 0.0
+        self._sensor_last_updated = 0.0
+        self._input_last_updated = 0.0
+        self._output_last_updated = 0.0
         event = MasterEvent(event_type=MasterEvent.Types.EEPROM_CHANGE,
                             data=None)
         for callback in self._event_callbacks:
@@ -138,13 +136,12 @@ class MasterCoreController(MasterController):
             self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
 
     def _process_new_output_state(self, output_id, status, timer, dimmer):
-        new_state = {'id': output_id,
-                     'status': status,
-                     'ctimer': timer,
-                     'dimmer': dimmer}
+        # type: (int, bool, int, int) -> None
+        data = {'id': output_id, 'status': status, 'ctimer': timer, 'dimmer': dimmer}
+        new_state = OutputStateSerializer.deserialize(data)[0]
         current_state = self._output_states.get(output_id)
         if current_state is not None:
-            if current_state['status'] == new_state['status'] and current_state['dimmer'] == new_state['dimmer']:
+            if current_state.status == new_state.status and current_state.dimmer == new_state.dimmer:
                 return
         self._output_states[output_id] = new_state
         # Generate generic event
@@ -395,9 +392,11 @@ class MasterCoreController(MasterController):
             output.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
 
     def get_output_status(self, output_id):
+        # type: (int) -> Optional[OutputStateDTO]
         return self._output_states.get(output_id)
 
     def get_output_statuses(self):
+        # type: () -> List[OutputStateDTO]
         return list(self._output_states.values())
 
     def _refresh_output_states(self):
@@ -485,8 +484,8 @@ class MasterCoreController(MasterController):
         shutter = ShutterConfiguration(shutter_id)
         if shutter.outputs.output_0 == 255 * 2:
             return
-        output_0_on = self._output_states.get(shutter.outputs.output_0, {}).get('status')
-        output_1_on = self._output_states.get(shutter.outputs.output_1, {}).get('status')
+        output_0_on = self._output_states[shutter.outputs.output_0].status
+        output_1_on = self._output_states[shutter.outputs.output_1].status
         output_module = OutputConfiguration(shutter.outputs.output_0).module
         if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
             up, down = output_0_on, output_1_on
@@ -578,7 +577,7 @@ class MasterCoreController(MasterController):
     def get_sensor_brightness(self, sensor_id):
         # TODO: This is a lux value and must somehow be converted to legacy percentage
         brightness = self._sensor_states.get(sensor_id, {}).get('BRIGHTNESS')
-        if brightness in [None, 65535]:
+        if brightness is None or brightness in [65535]:
             return None
         return int(float(brightness) / 65535.0 * 100)
 

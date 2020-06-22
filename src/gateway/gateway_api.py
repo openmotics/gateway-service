@@ -46,8 +46,9 @@ if False:  # MYPY:
     from power.power_store import PowerStore
     from power.power_controller import PowerController, P1Controller
     from bus.om_bus_client import MessageClient
-    from gateway.observer import Observer
     from gateway.config import ConfigurationController
+    from gateway.dto import OutputStateDTO
+    from gateway.observer import Observer
     from gateway.watchdog import Watchdog
 
     T = TypeVar('T', bound=Union[int, float])
@@ -209,22 +210,24 @@ class GatewayApi(object):
 
     # Output functions
 
-    def get_outputs_status(self):  # type: () -> List[Dict[str, Any]]
+    def get_outputs_status(self):
+        # type: () -> List[OutputStateDTO]
         """
         Get a list containing the status of the Outputs.
         """
         # TODO: Use the OutputController
-        return self.__observer.get_outputs()
+        return self.__master_controller.get_output_statuses()
 
-    def get_output_status(self, output_id):  # type: (int) -> Dict[str, Any]
+    def get_output_status(self, output_id):
+        # type: (int) -> OutputStateDTO
         """
         Get the status of a given Output.
         """
         # TODO: Use the OutputController
-        output = self.__observer.get_output(output_id)
-        if output is None:
+        output_dto = self.__master_controller.get_output_status(output_id)
+        if output_dto is None:
             raise ValueError('Output with id {} does not exist'.format(output_id))
-        return output
+        return output_dto
 
     def set_output_status(self, output_id, is_on, dimmer=None, timer=None):  # type: (int, bool, Optional[int], Optional[int]) -> None
         """

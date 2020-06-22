@@ -16,16 +16,14 @@
 Module for communicating with the Master
 """
 from __future__ import absolute_import
-from gateway.dto import (
-    OutputDTO, InputDTO,
-    ShutterDTO, ShutterGroupDTO,
-    ThermostatDTO, SensorDTO,
-    PulseCounterDTO, GroupActionDTO
-)
+
+from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
+    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO
 from gateway.hal.master_event import MasterEvent
 
 if False:  # MYPY
-    from typing import Any, Callable, Dict, List, Tuple
+    from typing import Any, Callable, Dict, List, Optional, Tuple
+    from gateway.dto import OutputStateDTO
 
 
 class MasterController(object):
@@ -120,9 +118,11 @@ class MasterController(object):
         raise NotImplementedError()
 
     def get_output_status(self, output_id):
+        # type: (int) -> Optional[OutputStateDTO]
         raise NotImplementedError()
 
     def get_output_statuses(self):
+        # type: () -> List[OutputStateDTO]
         raise NotImplementedError()
 
     # Shutters

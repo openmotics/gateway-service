@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from gateway.api.serializers.output import OutputSerializer
+from gateway.api.serializers.output import OutputSerializer, OutputStateSerializer
 from gateway.api.serializers.shutter import ShutterSerializer
 from gateway.api.serializers.shutter_group import ShutterGroupSerializer
 from gateway.api.serializers.thermostat import ThermostatSerializer
