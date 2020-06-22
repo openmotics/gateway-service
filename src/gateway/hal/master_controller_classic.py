@@ -95,7 +95,7 @@ class MasterClassicController(MasterController):
         self._shutters_last_updated = 0.0
         self._shutter_config = {}  # type: Dict[int, ShutterDTO]
         self._validation_bits_interval = 1800
-        self._validation_bits_last_updated = 0
+        self._validation_bits_last_updated = 0.0
 
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._module_log = []  # type: List[Tuple[str,str]]

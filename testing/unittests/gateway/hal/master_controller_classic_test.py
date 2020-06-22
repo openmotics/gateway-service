@@ -136,7 +136,7 @@ class MasterClassicControllerTest(unittest.TestCase):
             self.assertIn(mock.call(), get.call_args_list)
 
     def test_validation_bits_passthrough(self):
-        # Imporatnt note: bits are ordened per byte, so the sequence is like:
+        # Important note: bits are ordened per byte, so the sequence is like:
         # [[7, 6, 5, 4, 3, 2, 1, 0], [15, 14, 13, 12, 11, 10, 9, 8], [23, 22, ...], ...]
         bit_data = [0b00000010, 0b00000000, 0b00000000, 0b00000000,
                     0b00000000, 0b00000000, 0b00000000, 0b00000000,
