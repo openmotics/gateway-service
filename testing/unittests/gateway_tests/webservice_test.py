@@ -64,6 +64,6 @@ class WebInterfaceTest(unittest.TestCase):
         self.web_interface = WebInterface()
 
     def test_output_status(self):
-        self.gateway_api.get_outputs_status.return_value = [OutputStateDTO(id=0, status=True)]
+        self.gateway_api.get_output_statuses.return_value = [OutputStateDTO(id=0, status=True)]
         response = self.web_interface.get_output_status()
         assert [{'id': 0, 'status': 1, 'ctimer': 0, 'dimmer': 0, 'locked': False}] == json.loads(response)['status']

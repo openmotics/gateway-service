@@ -210,7 +210,7 @@ class GatewayApi(object):
 
     # Output functions
 
-    def get_outputs_status(self):
+    def get_output_statuses(self):
         # type: () -> List[OutputStateDTO]
         """
         Get a list containing the status of the Outputs.

@@ -24,6 +24,7 @@ from gateway.models import Output, Room
 
 if False:  # MYPY
     from typing import List, Tuple
+    from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger("openmotics")
 
@@ -36,6 +37,7 @@ class OutputController(BaseController):
 
     @Inject
     def __init__(self, master_controller=INJECTED):
+        # type: (MasterController) -> None
         super(OutputController, self).__init__(master_controller)
 
     def load_output(self, output_id):  # type: (int) -> OutputDTO
