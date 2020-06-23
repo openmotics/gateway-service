@@ -29,7 +29,6 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional
-    from gateway.dto import OutputStateDTO
 
 logger = logging.getLogger("openmotics")
 
@@ -76,19 +75,6 @@ class Observer(object):
             for callback in self._event_subscriptions:
                 callback(GatewayEvent(event_type=GatewayEvent.Types.OUTPUT_CHANGE,
                                       data=master_event.data))
-
-    # Outputs
-
-    def get_outputs(self):
-        # type: () -> List[OutputStateDTO]
-        """ Returns a list of Outputs with their status """
-        # TODO: Move to the OutputController
-        return self._master_controller.get_output_statuses()
-
-    def get_output(self, output_id):
-        # type: (int) -> Optional[OutputStateDTO]
-        # TODO: Move to the OutputController
-        return self._master_controller.get_output_status(output_id)
 
     # Inputs
 

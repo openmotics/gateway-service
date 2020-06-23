@@ -50,6 +50,7 @@ if False:  # MYPY:
     from gateway.dto import OutputStateDTO
     from gateway.observer import Observer
     from gateway.watchdog import Watchdog
+    from gateway.output_controller import OutputController
 
     T = TypeVar('T', bound=Union[int, float])
 
@@ -78,8 +79,8 @@ class GatewayApi(object):
     def __init__(self,
                  master_controller=INJECTED, power_store=INJECTED, power_communicator=INJECTED,
                  power_controller=INJECTED, p1_controller=INJECTED, message_client=INJECTED,
-                 observer=INJECTED, configuration_controller=INJECTED):
-        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer, ConfigurationController) -> None
+                 observer=INJECTED, output_controller=INJECTED, configuration_controller=INJECTED):
+        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer, OutputController, ConfigurationController) -> None
         self.__master_controller = master_controller  # type: MasterController
         self.__config_controller = configuration_controller
         self.__power_store = power_store
@@ -88,6 +89,7 @@ class GatewayApi(object):
         self.__power_controller = power_controller
         self.__message_client = message_client
         self.__observer = observer
+        self.__output_controller = output_controller
 
     def set_plugin_controller(self, plugin_controller):
         """ Set the plugin controller. """
@@ -215,16 +217,14 @@ class GatewayApi(object):
         """
         Get a list containing the status of the Outputs.
         """
-        # TODO: Use the OutputController
-        return self.__master_controller.get_output_statuses()
+        return self.__output_controller.get_output_statuses()
 
     def get_output_status(self, output_id):
         # type: (int) -> OutputStateDTO
         """
         Get the status of a given Output.
         """
-        # TODO: Use the OutputController
-        output_dto = self.__master_controller.get_output_status(output_id)
+        output_dto = self.__output_controller.get_output_status(output_id)
         if output_dto is None:
             raise ValueError('Output with id {} does not exist'.format(output_id))
         return output_dto

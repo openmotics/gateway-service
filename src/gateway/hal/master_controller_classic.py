@@ -103,7 +103,7 @@ class MasterClassicController(MasterController):
         self._module_log = []  # type: List[Tuple[str,str]]
 
         self._master_communicator.register_consumer(
-            BackgroundConsumer(master_api.output_list(), 0, self._on_master_output_change, True)
+            BackgroundConsumer(master_api.output_list(), 0, self._on_master_output_event, True)
         )
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.module_initialize(), 0, self._update_modules)
@@ -112,6 +112,10 @@ class MasterClassicController(MasterController):
     #################
     # Private stuff #
     #################
+
+    def _on_master_output_event(self, data):
+        """ Triggers when the master informs us of an Output state change """
+        self._output_status.partial_update(data['outputs'])
 
     def _synchronize(self):
         # type: () -> None
@@ -541,10 +545,6 @@ class MasterClassicController(MasterController):
                       'location': {'room_id': Toolbox.denonify(self._output_config[output_id].room, 255)}}
         for callback in self._event_callbacks:
             callback(MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE, data=event_data))
-
-    def _on_master_output_change(self, data):
-        """ Triggers when the master informs us of an Output state change """
-        self._output_status.partial_update(data['outputs'])
 
     # Shutters
 

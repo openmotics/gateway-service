@@ -19,14 +19,14 @@ from __future__ import absolute_import
 import logging
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.base_controller import BaseController, SyncStructure
-from gateway.dto import OutputDTO
+from gateway.dto import OutputDTO, OutputStateDTO
 from gateway.models import Output, Room
 
 if False:  # MYPY
-    from typing import List, Tuple
+    from typing import List, Optional, Tuple
     from gateway.hal.master_controller import MasterController
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('openmotics')
 
 
 @Injectable.named('output_controller')
@@ -39,6 +39,16 @@ class OutputController(BaseController):
     def __init__(self, master_controller=INJECTED):
         # type: (MasterController) -> None
         super(OutputController, self).__init__(master_controller)
+
+    def get_output_status(self, output_id):
+        # type: (int) -> Optional[OutputStateDTO]
+        # TODO also support plugins
+        return self._master_controller.get_output_status(output_id)
+
+    def get_output_statuses(self):
+        # type: () -> List[OutputStateDTO]
+        # TODO also support plugins
+        return self._master_controller.get_output_statuses()
 
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         output = Output.get(number=output_id)  # type: Output
