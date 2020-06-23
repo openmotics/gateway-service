@@ -31,6 +31,11 @@ from toolbox import Empty, Queue
 
 logger = logging.getLogger("openmotics")
 
+if False:  # MYPY
+    from typing import Any, Dict, List, Optional, TypeVar, Union
+    from master.classic.master_command import MasterCommandSpec
+    T_co = TypeVar('T_co', bound=None, covariant=True)
+
 
 class MasterCommunicator(object):
     """
@@ -165,7 +170,8 @@ class MasterCommunicator(object):
         """
         self.__consumers.append(consumer)
 
-    def do_basic_action(self, action_type, action_number):
+    def do_basic_action(self, action_type, action_number, timeout=2):
+        # type: (int, int, Union[T_co, int]) -> Union[T_co, Dict[str,Any]]
         """
         Sends a basic action to the master with the given action type and action number
         :param action_type: The action type to execute
@@ -184,6 +190,7 @@ class MasterCommunicator(object):
         )
 
     def do_command(self, cmd, fields=None, timeout=2, extended_crc=False):
+        # type: (MasterCommandSpec, Optional[Dict[str,Any]], Union[T_co, int], bool) -> Union[T_co, Dict[str, Any]]
         """ Send a command over the serial port and block until an answer is received.
         If the master does not respond within the timeout period, a CommunicationTimedOutException
         is raised

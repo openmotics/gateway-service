@@ -71,6 +71,7 @@ class MasterClassicController(MasterController):
                  eeprom_controller=INJECTED):
         # type: (MasterCommunicator, ConfigurationController, EepromController) -> None
         super(MasterClassicController, self).__init__(master_communicator)
+        self._master_communicator = master_communicator  # type: MasterCommunicator
         self._config_controller = configuration_controller
         self._eeprom_controller = eeprom_controller
         self._plugin_controller = None  # type: Optional[Any]
@@ -694,19 +695,19 @@ class MasterClassicController(MasterController):
         # type: () -> str
         module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'o'})
         self._broadcast_module_discovery()
-        return module.get('resp')
+        return module['resp']
 
     def add_virtual_dim_module(self):
         # type: () -> str
         module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'd'})
         self._broadcast_module_discovery()
-        return module.get('resp')
+        return module['resp']
 
     def add_virtual_input_module(self):
         # type: () -> str
         module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'i'})
         self._broadcast_module_discovery()
-        return module.get('resp')
+        return module['resp']
 
     # Generic
 

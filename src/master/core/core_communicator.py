@@ -29,7 +29,8 @@ from master.core.core_command import CoreCommandSpec
 from serial_utils import CommunicationTimedOutException, printable
 
 if False:  # MYPY
-    from typing import Optional, Dict, Any
+    from typing import Dict, Any, Optional, TypeVar, Union
+    T_co = TypeVar('T_co', bound=None, covariant=True)
 
 logger = logging.getLogger('openmotics')
 
@@ -186,7 +187,8 @@ class CoreCommunicator(object):
             timeout=timeout
         )
 
-    def do_command(self, command, fields, timeout=2):  # type: (CoreCommandSpec, Dict[str, Any], Optional[int]) -> Optional[Dict[str, Any]]
+    def do_command(self, command, fields, timeout=2):
+        # type: (CoreCommandSpec, Dict[str, Any], Union[T_co, int]) -> Union[T_co, Dict[str, Any]]
         """
         Send a command over the serial port and block until an answer is received.
         If the Core does not respond within the timeout period, a CommunicationTimedOutException is raised
@@ -207,7 +209,7 @@ class CoreCommunicator(object):
             raise
 
         try:
-            result = None
+            result = None  # type: Any
             if isinstance(consumer, Consumer) and timeout is not None:
                 result = consumer.get(timeout)
             self._last_success = time.time()
