@@ -541,6 +541,7 @@ class WebInterface(object):
             'factory_reset',  # The gateway can be complete reset to factory standard
             'isolated_plugins',  # Plugins run in a separate process, so allow fine-graded control
             'websocket_maintenance',  # Maintenance over websockets
+            'shutter_positions',  # Shutter positions
         ]
 
         master_version = self._gateway_api.get_master_version()
