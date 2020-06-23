@@ -712,6 +712,15 @@ class WebInterface(object):
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int))
+    def shutter_report_lost_position(self, id):  # type: (int) -> Dict[str, str]
+        """
+        Reports a shutter has lost it's position
+        :param id: The id of the shutter.
+        """
+        self._shutter_controller.report_shutter_lost_position(id)
+        return {'status': 'OK'}
+
+    @openmotics_api(auth=True, check=types(id=int))
     def do_shutter_group_down(self, id):  # type: (int) -> Dict[str, str]
         """
         Make a shutter group go down. The shutters stop automatically when the down position is

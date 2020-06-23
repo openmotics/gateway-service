@@ -29,7 +29,8 @@ from gateway.dto import ShutterDTO, ShutterGroupDTO
 from gateway.models import ShutterGroup, Shutter, Room
 
 if False:  # MYPY
-    from typing import List, Dict, Optional, Tuple
+    from typing import List, Dict, Optional, Tuple, Callable, Any
+    from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger('openmotics')
 
@@ -61,21 +62,21 @@ class ShutterController(BaseController):
                            ShutterEnums.State.STOPPED: ShutterEnums.Direction.STOP}
 
     @Inject
-    def __init__(self, master_controller=INJECTED, verbose=False):
+    def __init__(self, master_controller=INJECTED, verbose=False):  # type: (MasterController, bool) -> None
         super(ShutterController, self).__init__(master_controller)
 
         self._shutters = {}  # type: Dict[int, ShutterDTO]
-        self._actual_positions = {}
-        self._desired_positions = {}
-        self._directions = {}
-        self._states = {}
+        self._actual_positions = {}  # type: Dict[int, Optional[int]]
+        self._desired_positions = {}  # type: Dict[int, Optional[int]]
+        self._directions = {}  # type: Dict[int, str]
+        self._states = {}  # type: Dict[int, Tuple[float, str]]
 
-        self._event_subscriptions = []
+        self._event_subscriptions = []  # type: List[Callable[[GatewayEvent], None]]
 
         self._verbose = verbose
         self._config_lock = Lock()
 
-    def _log(self, message):
+    def _log(self, message):  # type: (str) -> None
         if self._verbose:
             logger.info('ShutterController: {0}'.format(message))
 
@@ -96,7 +97,7 @@ class ShutterController(BaseController):
                 shutter_ids.append(shutter_id)
                 if shutter_dto != self._shutters.get(shutter_id):
                     self._shutters[shutter_id] = shutter_dto
-                    self._states[shutter_id] = [0, ShutterEnums.State.STOPPED]
+                    self._states[shutter_id] = (0.0, ShutterEnums.State.STOPPED)
                     self._actual_positions[shutter_id] = None
                     self._desired_positions[shutter_id] = None
                     self._directions[shutter_id] = ShutterEnums.Direction.STOP
@@ -109,12 +110,13 @@ class ShutterController(BaseController):
                     del self._desired_positions[shutter_id]
                     del self._directions[shutter_id]
 
-    def subscribe_events(self, callback):
+    def subscribe_events(self, callback):  # type: (Callable[[GatewayEvent], None]) -> None
         self._event_subscriptions.append(callback)
 
     # Allow shutter positions to be reported
 
     def report_shutter_position(self, shutter_id, position, direction=None):
+        # type: (int, int, Optional[str]) -> None
         self._log('Shutter {0} reports position {1}'.format(shutter_id, position))
         # Fetch and validate information
         shutter = self._get_shutter(shutter_id)
@@ -138,6 +140,13 @@ class ShutterController(BaseController):
         if ShutterController._is_position_reached(direction, desired_position, position, stopped=True):
             self._log('Shutter {0} reported position is desired position: Stopping'.format(shutter_id))
             self.shutter_stop(shutter_id)
+
+    def report_shutter_lost_position(self, shutter_id):  # type: (int) -> None
+        self._log('Shutter {0} reports lost position')
+
+        # Clear position & force report
+        self._actual_positions[shutter_id] = None
+        self._report_shutter_state(shutter_id, ShutterEnums.State.STOPPED, force_report=True)
 
     # Configure shutters
 
@@ -202,22 +211,22 @@ class ShutterController(BaseController):
 
     # Control shutters
 
-    def shutter_group_down(self, group_id):
+    def shutter_group_down(self, group_id):  # type: (int) -> None
         self._master_controller.shutter_group_down(group_id)
 
-    def shutter_group_up(self, group_id):
+    def shutter_group_up(self, group_id):  # type: (int) -> None
         self._master_controller.shutter_group_up(group_id)
 
-    def shutter_group_stop(self, group_id):
+    def shutter_group_stop(self, group_id):  # type: (int) -> None
         self._master_controller.shutter_group_stop(group_id)
 
-    def shutter_up(self, shutter_id, desired_position=None):
+    def shutter_up(self, shutter_id, desired_position=None):  # type: (int, Optional[int]) -> None
         return self._shutter_goto_direction(shutter_id, ShutterEnums.Direction.UP, desired_position)
 
-    def shutter_down(self, shutter_id, desired_position=None):
+    def shutter_down(self, shutter_id, desired_position=None):  # type: (int, Optional[int]) -> None
         return self._shutter_goto_direction(shutter_id, ShutterEnums.Direction.DOWN, desired_position)
 
-    def shutter_goto(self, shutter_id, desired_position):
+    def shutter_goto(self, shutter_id, desired_position):  # type: (int, int) -> None
         # Fetch and validate data
         shutter = self._get_shutter(shutter_id)
         steps = ShutterController._get_steps(shutter)
@@ -237,7 +246,7 @@ class ShutterController(BaseController):
         self._directions[shutter_id] = direction
         self._execute_shutter(shutter_id, direction)
 
-    def shutter_stop(self, shutter_id):
+    def shutter_stop(self, shutter_id):  # type: (int) -> None
         # Validate data
         self._get_shutter(shutter_id)
 
@@ -250,6 +259,7 @@ class ShutterController(BaseController):
     # Control operations
 
     def _shutter_goto_direction(self, shutter_id, direction, desired_position=None):
+        # type: (int, str, Optional[int]) -> None
         # Fetch and validate data
         shutter = self._get_shutter(shutter_id)
         steps = ShutterController._get_steps(shutter)
@@ -268,7 +278,7 @@ class ShutterController(BaseController):
         self._directions[shutter_id] = direction
         self._execute_shutter(shutter_id, direction)
 
-    def _execute_shutter(self, shutter_id, direction):
+    def _execute_shutter(self, shutter_id, direction):  # type: (int, str) -> None
         if direction == ShutterEnums.Direction.UP:
             self._master_controller.shutter_up(shutter_id)
         elif direction == ShutterEnums.Direction.DOWN:
@@ -278,7 +288,7 @@ class ShutterController(BaseController):
 
     # Internal checks and validators
 
-    def _get_shutter(self, shutter_id, return_none=False):
+    def _get_shutter(self, shutter_id, return_none=False):  # type: (int, bool) -> Optional[ShutterDTO]
         shutter = self._shutters.get(shutter_id)
         if shutter is None:
             self.update_config(self.load_shutters())
@@ -289,6 +299,7 @@ class ShutterController(BaseController):
 
     @staticmethod
     def _is_position_reached(direction, desired_position, actual_position, stopped=True):
+        # type: (str, int, int, bool) -> bool
         if desired_position == actual_position:
             return True  # Obviously reached
         if direction == ShutterEnums.Direction.STOP:
@@ -299,7 +310,7 @@ class ShutterController(BaseController):
         return actual_position > desired_position
 
     @staticmethod
-    def _get_limit(direction, steps):
+    def _get_limit(direction, steps):  # type: (str, Optional[int]) -> Optional[int]
         if steps is None:
             return None
         if direction == ShutterEnums.Direction.UP:
@@ -307,7 +318,7 @@ class ShutterController(BaseController):
         return steps - 1
 
     @staticmethod
-    def _get_direction(actual_position, desired_position):
+    def _get_direction(actual_position, desired_position):  # type: (int, int) -> str
         if actual_position == desired_position:
             return ShutterEnums.Direction.STOP
         if actual_position < desired_position:
@@ -323,7 +334,7 @@ class ShutterController(BaseController):
         return steps
 
     @staticmethod
-    def _validate_position(shutter_id, position, steps):
+    def _validate_position(shutter_id, position, steps):  # type: (int, int, Optional[int]) -> None
         if steps is None:
             raise RuntimeError('Shutter {0} does not support positioning'.format(shutter_id))
         if not (0 <= position < steps):
@@ -331,7 +342,8 @@ class ShutterController(BaseController):
 
     # Reporting
 
-    def _report_shutter_state(self, shutter_id, new_state):
+    def _report_shutter_state(self, shutter_id, new_state, force_report=False):
+        # type: (int, str, bool) -> None
         shutter = self._get_shutter(shutter_id, return_none=True)
         if shutter is None:
             logger.warning('Shutter {0} unknown'.format(shutter_id))
@@ -343,12 +355,17 @@ class ShutterController(BaseController):
 
         current_state_timestamp, current_state = self._states[shutter_id]
         if new_state == current_state or (new_state == ShutterEnums.State.STOPPED and current_state in [ShutterEnums.State.DOWN, ShutterEnums.State.UP]):
-            self._log('Shutter {0} new state {1} ignored since it equals {2}'.format(shutter_id, new_state, current_state))
+            if force_report:
+                self._log('Shutter {0} force reported new state {1}'.format(shutter_id, new_state))
+                self._states[shutter_id] = (time.time(), new_state)
+                self._send_event(shutter_id, shutter, self._states[shutter_id])
+            else:
+                self._log('Shutter {0} new state {1} ignored since it equals {2}'.format(shutter_id, new_state, current_state))
             return  # State didn't change, nothing to do
 
         if new_state != ShutterEnums.State.STOPPED:
             # Shutter started moving
-            self._states[shutter_id] = [time.time(), new_state]
+            self._states[shutter_id] = (time.time(), new_state)
             self._log('Shutter {0} started moving'.format(shutter_id))
         else:
             direction = ShutterController.STATE_DIRECTION_MAP[current_state]
@@ -377,23 +394,25 @@ class ShutterController(BaseController):
                     self._log('Shutter {0} going {1} did not reach limit. New state {2}'.format(shutter_id, direction, ShutterEnums.State.STOPPED))
                     new_state = ShutterEnums.State.STOPPED
 
-            self._states[shutter_id] = [time.time(), new_state]
+            self._states[shutter_id] = (time.time(), new_state)
 
         self._send_event(shutter_id, shutter, self._states[shutter_id])
 
-    def get_states(self):
+    def get_states(self):  # type: () -> Dict[str, Any]
         all_states = []
         for i in sorted(self._states.keys()):
             all_states.append(self._states[i][1])
         return {'status': all_states,
                 'detail': {shutter_id: {'state': self._states[shutter_id][1],
                                         'actual_position': self._actual_positions[shutter_id],
-                                        'desired_position': self._desired_positions[shutter_id]}
+                                        'desired_position': self._desired_positions[shutter_id],
+                                        'last_change': self._states[shutter_id][0]}
                            for shutter_id in self._shutters}}
 
-    def _send_event(self, shutter_id, shutter_data, shutter_state):
+    def _send_event(self, shutter_id, shutter_data, shutter_state):  # type: (int, ShutterDTO, Tuple[float, str]) -> None
         for callback in self._event_subscriptions:
             callback(GatewayEvent(event_type=GatewayEvent.Types.SHUTTER_CHANGE,
                                   data={'id': shutter_id,
-                                        'status': {'state': shutter_state[1].upper()},
+                                        'status': {'state': shutter_state[1].upper(),
+                                                   'last_change': shutter_state[0]},
                                         'location': {'room_id': Toolbox.nonify(shutter_data.room, 255)}}))

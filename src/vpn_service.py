@@ -154,7 +154,7 @@ class Cloud(object):
                 if configuration_changed:
                     for setting, value in data['configuration'].items():
                         self._config.set(setting, value)
-                    logger.info('configuration changed: {0}'.format(data['configuration']))
+                    logger.info('Configuration changed: {0}'.format(data['configuration']))
 
                 # update __configuration when storing config is successful
                 self._configuration = data['configuration']
@@ -268,7 +268,15 @@ class Gateway(object):
         """ Get the shutters status. """
         data = self.do_call("get_shutter_status?token=None")
         if data is not None and data['success']:
-            return [(int(shutter_id), details["state"].upper()) for shutter_id, details in six.iteritems(data['detail'])]
+            return_data = []
+            for shutter_id, details in six.iteritems(data['detail']):
+                last_change = details['last_change']
+                if last_change == 0.0:
+                    entry = (int(shutter_id), details['state'].upper())
+                else:
+                    entry = (int(shutter_id), details['state'].upper(), last_change)
+                return_data.append(entry)
+            return return_data
         return
 
     def get_thermostats(self):
