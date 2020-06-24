@@ -26,7 +26,7 @@ import requests
 import ujson as json
 
 from bus.om_bus_events import OMBusEvents
-from gateway.daemon_thread import DaemonThread
+from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from ioc import INJECTED, Inject, Injectable, Singleton
 import six
 
@@ -112,11 +112,11 @@ class MetricsController(object):
         self._collector_openmotics.start()
         self._distributor_plugins = DaemonThread(name='MetricsController plugin distributor',
                                                  target=self._distribute_plugins,
-                                                 interval=0.1)
+                                                 interval=0, delay=0.1)
         self._distributor_plugins.start()
         self._distributor_openmotics = DaemonThread(name='MetricsController openmotics distributor',
                                                     target=self._distribute_openmotics,
-                                                    interval=0.1)
+                                                    interval=0, delay=0.1)
         self._distributor_openmotics.start()
 
     def stop(self):
@@ -520,6 +520,10 @@ class MetricsController(object):
                     if key not in self.outbound_rates:
                         self.outbound_rates[key] = 0
                     self.outbound_rates[key] += rate
+            else:
+                raise DaemonThreadWait()
+        except DaemonThreadWait:
+            raise
         except Exception as ex:
             raise MetricsDistributeFailed('Error distributing metrics to plugins: {0}'.format(ex))
 
@@ -539,7 +543,7 @@ class MetricsController(object):
                 self.outbound_rates[rate_key] += 1
                 self.outbound_rates['total'] += 1
         except IndexError:
-            pass
+            raise DaemonThreadWait()
 
     def event_receiver(self, event, payload):
         if event == OMBusEvents.METRICS_INTERVAL_CHANGE:
