@@ -10,7 +10,7 @@ sys.path.insert(0, '/opt/openmotics/python')
 from platform_utils import System
 System.import_libs()
 
-from toolbox import PluginIPCStream
+from toolbox import PluginIPCStream, Toolbox
 from gateway.events import GatewayEvent
 from plugin_runtime import base
 from plugin_runtime.utils import get_plugin_class, check_plugin, get_special_methods
@@ -251,6 +251,15 @@ class PluginRuntime:
 
     def _handle_request(self, method, args, kwargs):
         func = getattr(self._plugin, method)
+        requested_parameters = set(Toolbox.get_parameter_names(func)) - {'self'}
+        difference = set(kwargs.keys()) - requested_parameters
+        if difference:
+            # Analog error message as the default CherryPy behavior
+            return {'success': False, 'exception': 'Unexpected query string parameters: {0}'.format(', '.join(difference))}
+        difference = requested_parameters - set(kwargs.keys())
+        if difference:
+            # Analog error message as the default CherryPy behavior
+            return {'success': False, 'exception': 'Missing parameters: {0}'.format(', '.join(difference))}
         try:
             return {'success': True, 'response': func(*args, **kwargs)}
         except Exception as exception:
