@@ -205,7 +205,7 @@ def authentication_handler(pass_token=False):
         if pass_token is True:
             request.params['token'] = token
     except Exception:
-        cherrypy.response.headers['Content-Typ1e'] = 'application/json'
+        cherrypy.response.headers['Content-Type'] = 'application/json'
         cherrypy.response.status = 401  # Unauthorized
         cherrypy.response.body = '"invalid_token"'
         request.handler = None
