@@ -2306,10 +2306,11 @@ class WebService(object):
 
     @Inject
     def __init__(self, web_interface=INJECTED, configuration_controller=INJECTED, verbose=False):
+        # type: (WebInterface, ConfigurationController, bool) -> None
         self._webinterface = web_interface
         self._config_controller = configuration_controller
-        self._https_server = None
-        self._http_server = None
+        self._https_server = None  # type: Optional[cherrypy._cpserver.Server]
+        self._http_server = None  # type: Optional[cherrypy._cpserver.Server]
         if not verbose:
             logging.getLogger("cherrypy").propagate = False
 
@@ -2363,7 +2364,12 @@ class WebService(object):
 
             self._http_server = cherrypy._cpserver.Server()
             self._http_server.socket_port = 80
-            self._http_server._socket_host = '127.0.0.1'
+            if self._config_controller.get('enable_http', False):
+                # This is added for development purposes.
+                # Do NOT enable unless you know what you're doing and understand the risks.
+                self._http_server._socket_host = '0.0.0.0'
+            else:
+                self._http_server._socket_host = '127.0.0.1'
             self._http_server.socket_timeout = 60
             self._http_server.subscribe()
 
