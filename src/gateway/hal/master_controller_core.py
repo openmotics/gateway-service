@@ -102,10 +102,7 @@ class MasterCoreController(MasterController):
         self._sensor_last_updated = 0.0
         self._input_last_updated = 0.0
         self._output_last_updated = 0.0
-        event = MasterEvent(event_type=MasterEvent.Types.EEPROM_CHANGE,
-                            data=None)
-        for callback in self._event_callbacks:
-            callback(event)
+        self._publish_event(MasterEvent(event_type=MasterEvent.Types.EEPROM_CHANGE, data=None))
 
     def _handle_event(self, data):
         # type: (Dict[str,Any]) -> None
@@ -127,8 +124,7 @@ class MasterCoreController(MasterController):
                                            dimmer=core_event.data['dimmer_value'])
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             event = self._input_state.handle_event(core_event)
-            for callback in self._event_callbacks:
-                callback(event)
+            self._publish_event(event)
         elif core_event.type == MasterCoreEvent.Types.SENSOR:
             sensor_id = core_event.data['sensor']
             if sensor_id not in self._sensor_states:
@@ -145,13 +141,11 @@ class MasterCoreController(MasterController):
                 return
         self._output_states[output_id] = new_state
         # Generate generic event
-        event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE,
-                            data={'id': output_id,
-                                  'status': {'on': status,
-                                             'value': dimmer},
-                                  'location': {'room_id': 255}})  # TODO: Missing room
-        for callback in self._event_callbacks:
-            callback(event)
+        self._publish_event(MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE,
+                                        data={'id': output_id,
+                                              'status': {'on': status,
+                                                         'value': dimmer},
+                                              'location': {'room_id': 255}}))  # TODO: Missing room
         # Handle shutter events, if needed
         shutter_id = self._output_shutter_map.get(output_id)
         if shutter_id is not None:
@@ -344,8 +338,7 @@ class MasterCoreController(MasterController):
             data = self._master_communicator.do_command(cmd, {})
             if data is not None:
                 for event in self._input_state.refresh(data['information']):
-                    for callback in self._event_callbacks:
-                        callback(event)
+                    self._publish_event(event)
         return refresh
 
     # Outputs
@@ -499,11 +492,10 @@ class MasterCoreController(MasterController):
         else:  # Both are off or - unlikely - both are on
             state = ShutterEnums.State.STOPPED
 
-        for callback in self._event_callbacks:
-            event_data = {'id': shutter_id,
-                          'status': state,
-                          'location': {'room_id': 255}}  # TODO: rooms
-            callback(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
+        event_data = {'id': shutter_id,
+                      'status': state,
+                      'location': {'room_id': 255}}  # TODO: rooms
+        self._publish_event(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
 
     def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
         raise NotImplementedError()  # TODO: Implement once supported by Core(+)
@@ -696,8 +688,7 @@ class MasterCoreController(MasterController):
                                                   action=0,
                                                   extra_parameter=255)
 
-        for callback in self._event_callbacks:
-            callback(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
+        self._publish_event(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
 
     def module_discover_status(self):  # type: () -> bool
         return self._discover_mode_timer is not None

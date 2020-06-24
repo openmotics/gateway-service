@@ -52,6 +52,10 @@ class MasterController(object):
     def subscribe_event(self, callback):  # type: (Callable[[MasterEvent], None]) -> None
         self._event_callbacks.append(callback)
 
+    def _publish_event(self, master_event):  # type: (MasterEvent) -> None
+        for callback in self._event_callbacks:
+            callback(master_event)
+
     ##############
     # Public API #
     ##############

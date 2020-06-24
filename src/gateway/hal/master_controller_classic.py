@@ -113,11 +113,6 @@ class MasterClassicController(MasterController):
     # Private stuff #
     #################
 
-    def _on_master_output_event(self, data):
-        # type: (Dict[str,Any]) -> None
-        """ Triggers when the master informs us of an Output state change """
-        self._output_status.partial_update(data['outputs'])
-
     def _synchronize(self):
         # type: () -> None
         try:
@@ -297,6 +292,11 @@ class MasterClassicController(MasterController):
             self._on_master_validation_bit_change(bit_nr, value)
         else:
             logger.warning('Received unknown master event: {0}'.format(event_data))
+
+    def _on_master_output_event(self, data):
+        # type: (Dict[str,Any]) -> None
+        """ Triggers when the master informs us of an Output state change """
+        self._output_status.partial_update(data['outputs'])
 
     #######################
     # Internal management #
@@ -507,11 +507,10 @@ class MasterClassicController(MasterController):
             # configuraion should not be loaded inside an event handler, the event is discarded.
             # TODO: Detach input even processing from event handler so it can load the configuration if needed
             return
-        for callback in self._event_callbacks:
-            event_data = {'id': input_id,
-                          'status': status,
-                          'location': {'room_id': Toolbox.denonify(input_configuration.room, 255)}}
-            callback(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
+        event_data = {'id': input_id,
+                      'status': status,
+                      'location': {'room_id': Toolbox.denonify(input_configuration.room, 255)}}
+        self._publish_event(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
 
     def _is_output_locked(self, output_id):
         output_dto = self._output_config[output_id]
@@ -544,8 +543,7 @@ class MasterClassicController(MasterController):
         event_data = {'id': output_id,
                       'status': event_status,
                       'location': {'room_id': Toolbox.denonify(self._output_config[output_id].room, 255)}}
-        for callback in self._event_callbacks:
-            callback(MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE, data=event_data))
+        self._publish_event(MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE, data=event_data))
 
     # Shutters
 
@@ -596,11 +594,10 @@ class MasterClassicController(MasterController):
             return  # Failsafe for master event handler
         for i in range(4):
             shutter_id = module_id * 4 + i
-            for callback in self._event_callbacks:
-                event_data = {'id': shutter_id,
-                              'status': new_state[i],
-                              'location': {'room_id': self._shutter_config[shutter_id].room}}
-                callback(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
+            event_data = {'id': shutter_id,
+                          'status': new_state[i],
+                          'location': {'room_id': self._shutter_config[shutter_id].room}}
+            self._publish_event(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
 
     def _interprete_output_states(self, module_id, output_states):
         states = []
@@ -1011,8 +1008,7 @@ class MasterClassicController(MasterController):
     def _broadcast_module_discovery(self):
         # type: () -> None
         self.invalidate_caches()
-        for callback in self._event_callbacks:
-            callback(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
+        self._publish_event(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
 
     # Error functions
 
