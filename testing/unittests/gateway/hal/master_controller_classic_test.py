@@ -135,6 +135,30 @@ class MasterClassicControllerTest(unittest.TestCase):
             controller.get_recent_inputs()
             self.assertIn(mock.call(), get.call_args_list)
 
+    def test_output_changed(self):
+        events = []
+
+        def _on_changed(master_event):
+            events.append(master_event)
+
+        classic = get_classic_controller_dummy()
+        classic.subscribe_event(_on_changed)
+        classic._output_config = {0: OutputDTO(id=0),
+                                  1: OutputDTO(id=1),
+                                  2: OutputDTO(id=2, room=3)}
+        classic._output_status.full_update([{'id': 0, 'status': True},
+                                            {'id': 1, 'status': False},
+                                            {'id': 2, 'status': True}])
+
+        events = []
+        classic._on_master_output_event({'outputs': [(0, 0), (2, 0)]})
+        assert [] == events
+
+        events = []
+        classic._on_master_output_event({'outputs': [(0, 0), (1, 0)]})
+        assert [MasterEvent('OUTPUT_CHANGE', {'status': {'on': True, 'locked': False}, 'id': 1, 'location': {'room_id': 255}}),
+                MasterEvent('OUTPUT_CHANGE', {'status': {'on': False, 'locked': False}, 'id': 2, 'location': {'room_id': 3}})] == events
+
     def test_validation_bits_passthrough(self):
         # Important note: bits are ordened per byte, so the sequence is like:
         # [[7, 6, 5, 4, 3, 2, 1, 0], [15, 14, 13, 12, 11, 10, 9, 8], [23, 22, ...], ...]

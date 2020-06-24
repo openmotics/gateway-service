@@ -114,6 +114,7 @@ class MasterClassicController(MasterController):
     #################
 
     def _on_master_output_event(self, data):
+        # type: (Dict[str,Any]) -> None
         """ Triggers when the master informs us of an Output state change """
         self._output_status.partial_update(data['outputs'])
 
