@@ -16,14 +16,26 @@
 Output BLL
 """
 from __future__ import absolute_import
+
+import copy
 import logging
-from ioc import Injectable, Inject, INJECTED, Singleton
+from threading import Lock
+
+from bus.om_bus_client import MessageClient
+from bus.om_bus_events import OMBusEvents
 from gateway.base_controller import BaseController, SyncStructure
+from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import OutputDTO, OutputStateDTO
+from gateway.events import GatewayEvent
+from gateway.hal.master_event import MasterEvent
+from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.models import Output, Room
+from ioc import INJECTED, Inject, Injectable, Singleton
+from serial_utils import CommunicationTimedOutException
+from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import List, Optional, Tuple
+    from typing import Any, Callable, Dict, List, Optional, Tuple
     from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger('openmotics')
@@ -36,19 +48,86 @@ class OutputController(BaseController):
     SYNC_STRUCTURES = [SyncStructure(Output, 'output')]
 
     @Inject
-    def __init__(self, master_controller=INJECTED):
-        # type: (MasterController) -> None
+    def __init__(self, master_controller=INJECTED, message_client=INJECTED):
+        # type: (MasterController, MessageClient) -> None
         super(OutputController, self).__init__(master_controller)
+        self._message_client = message_client
+        self._cache = OutputStateCache()
+        self._event_subscriptions = []  # type: List[Callable[[GatewayEvent],None]]
+        self._sync_state_thread = None  # type: Optional[DaemonThread]
+
+    def start(self):
+        # type: () -> None
+        super(OutputController, self).start()
+        self._sync_state_thread = DaemonThread('OutputController sync state',
+                                               target=self._sync_state,
+                                               interval=600, delay=10)
+        self._sync_state_thread.start()
+
+    def stop(self):
+        # type: () -> None
+        super(OutputController, self).stop()
+        if self._sync_state_thread:
+            self._sync_state_thread.stop()
+            self._sync_state_thread = None
+
+    def subscribe_events(self, callback):
+        # type: (Callable[[GatewayEvent],None]) -> None
+        self._event_subscriptions.append(callback)
+
+    def _handle_master_event(self, master_event):
+        # type: (MasterEvent) -> None
+        super(OutputController, self)._handle_master_event(master_event)
+        if master_event.type == MasterEvent.Types.MODULE_DISCOVERY:
+            if self._sync_state_thread:
+                self._sync_state_thread.request_single_run()
+        if master_event.type == MasterEvent.Types.OUTPUT_STATUS:
+            self._handle_output_status(master_event.data)
+
+    def _handle_output_status(self, change_data):
+        # type: (Dict[str,Any]) -> None
+        changed = self._cache.handle_change(change_data['id'], change_data)
+        if changed:
+            self._publish_output_change(changed)
+
+    def _sync_state(self):
+        try:
+            self.load_outputs()
+            for state_data in self._master_controller.load_output_status():
+                if 'id' in state_data:
+                    changed = self._cache.handle_change(state_data['id'], state_data)
+                    if changed:
+                        self._publish_output_change(changed)
+        except CommunicationTimedOutException:
+            logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
+            self._set_master_state(False)
+            raise DaemonThreadWait
+        except InMaintenanceModeException:
+            # This is an expected situation
+            raise DaemonThreadWait
+
+    def _publish_output_change(self, output_dto):
+        # type: (OutputDTO) -> None
+        event_status = {'on': output_dto.state.status, 'locked': output_dto.state.locked}
+        if output_dto.module_type in ['d', 'D']:
+            event_status['value'] = output_dto.state.dimmer
+        event_data = {'id': output_dto.id,
+                      'status': event_status,
+                      'location': {'room_id': Toolbox.denonify(output_dto.room, 255)}}
+        if self._message_client is not None:
+            self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': output_dto.id})
+        for callback in self._event_subscriptions:
+            callback(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, event_data))
 
     def get_output_status(self, output_id):
         # type: (int) -> Optional[OutputStateDTO]
         # TODO also support plugins
-        return self._master_controller.get_output_status(output_id)
+        return self._cache.get_state().get(output_id)
 
     def get_output_statuses(self):
         # type: () -> List[OutputStateDTO]
         # TODO also support plugins
-        return self._master_controller.get_output_statuses()
+        return list(self._cache.get_state().values())
 
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         output = Output.get(number=output_id)  # type: Output
@@ -57,12 +136,13 @@ class OutputController(BaseController):
         return output_dto
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
-        outputs_dtos = []
+        output_dtos = []
         for output in Output.select():
             output_dto = self._master_controller.load_output(output_id=output.number)
             output_dto.room = output.room.number if output.room is not None else None
-            outputs_dtos.append(output_dto)
-        return outputs_dtos
+            output_dtos.append(output_dto)
+        self._cache.update_outputs(output_dtos)
+        return output_dtos
 
     def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
         outputs_to_save = []
@@ -78,3 +158,58 @@ class OutputController(BaseController):
                 output.save()
             outputs_to_save.append((output_dto, fields))
         self._master_controller.save_outputs(outputs_to_save)
+
+
+class OutputStateCache(object):
+    def __init__(self):
+        self._cache = {}  # type: Dict[int,OutputDTO]
+        self._lock = Lock()
+
+    def get_state(self):
+        # type: () -> Dict[int,OutputStateDTO]
+        return {x.id: x.state for x in self._cache.values()}
+
+    def update_outputs(self, output_dtos):
+        # type: (List[OutputDTO]) -> None
+        with self._lock:
+            new_state = {}
+            for output_dto in output_dtos:
+                output_dto = copy.copy(output_dto)
+                if output_dto.id in self._cache:
+                    output_dto.state = self._cache[output_dto.id].state
+                else:
+                    output_dto.state = OutputStateDTO(output_dto.id)
+                new_state[output_dto.id] = output_dto
+            self._cache = new_state
+
+    def handle_change(self, output_id, change_data):
+        # type: (int, Dict[str,Any]) -> Optional[OutputDTO]
+        """
+        Cache output state and detect changes.
+        The classic master will send multiple status events when an output changes,
+        this deduplicates actual changes based on the cached state.
+        """
+        with self._lock:
+            if output_id not in self._cache:
+                logger.error('received change for unknown output {} {}'.format(output_id, change_data))
+                return None
+            changed = False
+            state = self._cache[output_id].state
+            if 'status' in change_data:
+                status = bool(change_data['status'])
+                changed |= state.status != status
+                state.status = status
+            if 'ctimer' in change_data:
+                state.ctimer = int(change_data['ctimer'])
+            if 'dimmer' in change_data:
+                dimmer = int(change_data['dimmer'])
+                changed |= state.dimmer != dimmer
+                state.dimmer = dimmer
+            if 'locked' in change_data:
+                locked = bool(change_data['locked'])
+                changed |= state.locked != locked
+                state.locked = locked
+            if changed:
+                return self._cache[output_id]
+            else:
+                return None

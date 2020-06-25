@@ -1,23 +1,25 @@
 from __future__ import absolute_import
+
 import time
 import unittest
+
+import mock
+import xmlrunner
+from six.moves import map
 from six.moves.queue import Queue
 
 import gateway.hal.master_controller_core
-import mock
-import xmlrunner
+from gateway.dto import InputDTO
 from gateway.hal.master_event import MasterEvent
 from ioc import Scope, SetTestMode, SetUpTestInjections
-from gateway.dto import InputDTO
 from master.classic import eeprom_models
 from master.classic.eeprom_controller import EepromController
 from master.core.core_api import CoreAPI
-from master.core.memory_file import MemoryTypes, MemoryFile
 from master.core.core_communicator import BackgroundConsumer
+from master.core.memory_file import MemoryFile, MemoryTypes
 from master.core.memory_models import InputConfiguration
-from master.core.ucan_communicator import UCANCommunicator
 from master.core.slave_communicator import SlaveCommunicator
-from six.moves import map
+from master.core.ucan_communicator import UCANCommunicator
 
 
 class MasterCoreControllerTest(unittest.TestCase):

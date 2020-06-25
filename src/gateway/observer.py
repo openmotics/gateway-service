@@ -69,12 +69,6 @@ class Observer(object):
             for callback in self._event_subscriptions:
                 callback(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE,
                                       data=master_event.data))
-        if master_event.type == MasterEvent.Types.OUTPUT_CHANGE:
-            if self._message_client is not None:
-                self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': master_event.data['id']})
-            for callback in self._event_subscriptions:
-                callback(GatewayEvent(event_type=GatewayEvent.Types.OUTPUT_CHANGE,
-                                      data=master_event.data))
 
     # Inputs
 

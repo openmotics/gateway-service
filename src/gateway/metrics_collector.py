@@ -447,17 +447,17 @@ class MetricsCollector(object):
             self._pause(start, metric_type)
 
     def _run_outputs(self, metric_type):
+        # type: (str) -> None
         while not self._stopped:
             start = time.time()
             try:
-                result = self._gateway_api.get_outputs_status()
-                for output in result:
-                    output_id = output['id']
-                    if output_id not in self._environment_outputs:
+                result = self._gateway_api.get_output_statuses()
+                for output_state_dto in result:
+                    if output_state_dto.id not in self._environment_outputs:
                         continue
-                    output_dto, output_status = self._environment_outputs[output_id]
-                    output_status.update({'status': output['status'],
-                                          'dimmer': output['dimmer']})
+                    output_dto, output_status = self._environment_outputs[output_state_dto.id]
+                    output_status.update({'status': output_state_dto.status,
+                                          'dimmer': output_state_dto.dimmer})
             except CommunicationTimedOutException:
                 logger.error('Error getting output status: CommunicationTimedOutException')
             except InMaintenanceModeException:

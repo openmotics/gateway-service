@@ -36,21 +36,18 @@ class PluginController(object):
 
     @Inject
     def __init__(self,
-                 web_interface=INJECTED, configuration_controller=INJECTED, observer=INJECTED,
+                 web_interface=INJECTED, configuration_controller=INJECTED, output_controller=INJECTED,
                  shutter_controller=INJECTED,
                  runtime_path='/opt/openmotics/python/plugin_runtime',
                  plugins_path='/opt/openmotics/python/plugins',
                  plugin_config_path='/opt/openmotics/etc'):
-        """
-        :type observer: gateway.observer.Observer
-        """
         self.__webinterface = web_interface
         self.__config_controller = configuration_controller
         self.__shuttercontroller = shutter_controller  # type: ShutterController
         self.__runtime_path = runtime_path
         self.__plugins_path = plugins_path
         self.__plugin_config_path = plugin_config_path
-        self.__observer = observer
+        self.__output_controller = output_controller
 
         self.__stopped = True
         self.__logs = {}
@@ -336,8 +333,8 @@ class PluginController(object):
         if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             # TODO: Implement versioning so a plugin can also receive "normal" events on version 2
             # Should be called when the output status changes, notifies all plugins.
-            states = [(output['id'], output['dimmer']) for output in self.__observer.get_outputs()
-                      if output['status'] == 1]
+            states = [(state.id, state.dimmer) for state in self.__output_controller.get_output_statuses()
+                      if state.status]
             for runner in self.__iter_running_runners():
                 runner.process_output_status(states)
         if event.type == GatewayEvent.Types.SHUTTER_CHANGE:

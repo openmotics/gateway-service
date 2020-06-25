@@ -33,7 +33,6 @@ from master.classic.eeprom_models import InputConfiguration
 from master.classic.inputs import InputStatus
 from master.classic.master_communicator import BackgroundConsumer
 from master.classic.validationbits import ValidationBitStatus
-from master.classic.outputs import OutputStatus
 
 
 class MasterClassicControllerTest(unittest.TestCase):
@@ -135,29 +134,23 @@ class MasterClassicControllerTest(unittest.TestCase):
             controller.get_recent_inputs()
             self.assertIn(mock.call(), get.call_args_list)
 
-    def test_output_changed(self):
+    def test_master_output_event(self):
         events = []
 
-        def _on_changed(master_event):
+        def _on_event(master_event):
             events.append(master_event)
 
         classic = get_classic_controller_dummy()
-        classic.subscribe_event(_on_changed)
+        classic.subscribe_event(_on_event)
         classic._output_config = {0: OutputDTO(id=0),
                                   1: OutputDTO(id=1),
                                   2: OutputDTO(id=2, room=3)}
-        classic._output_status.full_update([{'id': 0, 'status': True},
-                                            {'id': 1, 'status': False},
-                                            {'id': 2, 'status': True}])
 
         events = []
         classic._on_master_output_event({'outputs': [(0, 0), (2, 0)]})
-        assert [] == events
-
-        events = []
-        classic._on_master_output_event({'outputs': [(0, 0), (1, 0)]})
-        assert [MasterEvent('OUTPUT_CHANGE', {'status': {'on': True, 'locked': False}, 'id': 1, 'location': {'room_id': 255}}),
-                MasterEvent('OUTPUT_CHANGE', {'status': {'on': False, 'locked': False}, 'id': 2, 'location': {'room_id': 3}})] == events
+        assert [MasterEvent('OUTPUT_STATUS', {'id': 0, 'status': True, 'dimmer': 0}),
+                MasterEvent('OUTPUT_STATUS', {'id': 1, 'status': False, 'dimmer': 0}),
+                MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': True, 'dimmer': 0})] == events
 
     def test_validation_bits_passthrough(self):
         # Important note: bits are ordened per byte, so the sequence is like:
@@ -191,20 +184,21 @@ class MasterClassicControllerTest(unittest.TestCase):
 
         events = []
 
-        def _on_change(output_id, state):
-            events.append((output_id, state))
+        def _on_event(master_event):
+            if master_event.type == MasterEvent.Types.OUTPUT_STATUS:
+                events.append(master_event.data)
 
+        classic.subscribe_event(_on_event)
         classic._validation_bits = ValidationBitStatus(on_validation_bit_change=classic._validation_bit_changed)
-        classic._output_status = OutputStatus(on_output_change=_on_change)
         classic._output_config = {0: OutputDTO(0, lock_bit_id=5)}
 
         classic._refresh_validation_bits()
         classic._on_master_validation_bit_change(5, True)
         classic._on_master_validation_bit_change(6, True)
         classic._on_master_validation_bit_change(5, False)
-        self.assertEqual([(0, {'on': False, 'locked': False, 'value': 0}),
-                          (0, {'on': False, 'locked': True, 'value': 0}),
-                          (0, {'on': False, 'locked': False, 'value': 0})], events)
+        self.assertEqual([{'id': 0, 'locked': False},
+                          {'id': 0, 'locked': True},
+                          {'id': 0, 'locked': False}], events)
 
     def test_module_discover(self):
         subscriber = mock.Mock()

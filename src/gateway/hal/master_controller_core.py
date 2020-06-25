@@ -69,8 +69,6 @@ class MasterCoreController(MasterController):
         self._master_online = False
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._input_state = MasterInputState()
-        self._output_interval = 600
-        self._output_last_updated = 0.0
         self._output_states = {}  # type: Dict[int,OutputStateDTO]
         self._sensor_interval = 300
         self._sensor_last_updated = 0.0
@@ -118,10 +116,13 @@ class MasterCoreController(MasterController):
             timer_value = core_event.data['timer_value']
             if timer_value is not None:
                 timer_value *= core_event.data['timer_factor']
-            self._process_new_output_state(output_id=output_id,
-                                           status=core_event.data['status'],
-                                           timer=timer_value,
-                                           dimmer=core_event.data['dimmer_value'])
+            event_data = {'id': output_id,
+                          'status': core_event.data['status'],
+                          'dimmer': core_event.data['dimmer_value'],
+                          'ctimer': timer_value}
+            self._publish_event(MasterEvent(MasterEvent.Types.OUTPUT_STATUS, event_data))
+            # FIXME: remove _output_states
+            self._process_new_output_state(event_data)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             event = self._input_state.handle_event(core_event)
             self._publish_event(event)
@@ -131,23 +132,17 @@ class MasterCoreController(MasterController):
                 return
             self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
 
-    def _process_new_output_state(self, output_id, status, timer, dimmer):
-        # type: (int, bool, int, int) -> None
-        data = {'id': output_id, 'status': status, 'ctimer': timer, 'dimmer': dimmer}
+    def _process_new_output_state(self, data):
+        # type: (Dict[str,Any]) -> None
         new_state = OutputStateSerializer.deserialize(data)[0]
-        current_state = self._output_states.get(output_id)
+        current_state = self._output_states.get(new_state.id)
         if current_state is not None:
             if current_state.status == new_state.status and current_state.dimmer == new_state.dimmer:
                 return
-        self._output_states[output_id] = new_state
-        # Generate generic event
-        self._publish_event(MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE,
-                                        data={'id': output_id,
-                                              'status': {'on': status,
-                                                         'value': dimmer},
-                                              'location': {'room_id': 255}}))  # TODO: Missing room
-        # Handle shutter events, if needed
-        shutter_id = self._output_shutter_map.get(output_id)
+        # FIXME: remove _output_states
+        self._output_states[new_state.id] = new_state
+        # FIXME: how to handle this?
+        shutter_id = self._output_shutter_map.get(new_state.id)
         if shutter_id is not None:
             self._refresh_shutter_state(shutter_id)
 
@@ -159,9 +154,6 @@ class MasterCoreController(MasterController):
                 if self._time_last_updated + 300 < time.time():
                     self._check_master_time()
                 if self._refresh_input_states():
-                    self._set_master_state(True)
-                if self._output_last_updated + self._output_interval < time.time():
-                    self._refresh_output_states()
                     self._set_master_state(True)
                 if self._sensor_last_updated + self._sensor_interval < time.time():
                     self._refresh_sensor_states()
@@ -277,7 +269,6 @@ class MasterCoreController(MasterController):
     def invalidate_caches(self):
         # type: () -> None
         self._input_last_updated = 0
-        self._output_last_updated = 0
 
     def get_firmware_version(self):
         version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
@@ -384,19 +375,13 @@ class MasterCoreController(MasterController):
                 continue
             output.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
 
-    def get_output_status(self, output_id):
-        # type: (int) -> Optional[OutputStateDTO]
-        return self._output_states.get(output_id)
-
-    def get_output_statuses(self):
-        # type: () -> List[OutputStateDTO]
-        return list(self._output_states.values())
-
-    def _refresh_output_states(self):
+    def load_output_status(self):
+        # type: () -> List[Dict[str,Any]]
+        output_status = []
         for i in self._enumerate_io_modules('output'):
-            state = self._master_communicator.do_command(CoreAPI.output_detail(), {'device_nr': i})
-            self._process_new_output_state(i, state['status'], state['timer'], state['dimmer'])
-        self._output_last_updated = time.time()
+            state_data = self._master_communicator.do_command(CoreAPI.output_detail(), {'device_nr': i})
+            output_status.append(state_data)
+        return output_status
 
     # Shutters
 
@@ -477,6 +462,7 @@ class MasterCoreController(MasterController):
         shutter = ShutterConfiguration(shutter_id)
         if shutter.outputs.output_0 == 255 * 2:
             return
+        # FIXME: remove _output_states
         output_0_on = self._output_states[shutter.outputs.output_0].status
         output_1_on = self._output_states[shutter.outputs.output_1].status
         output_module = OutputConfiguration(shutter.outputs.output_0).module

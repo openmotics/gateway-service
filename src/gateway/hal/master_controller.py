@@ -121,12 +121,8 @@ class MasterController(object):
     def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
         raise NotImplementedError()
 
-    def get_output_status(self, output_id):
-        # type: (int) -> Optional[OutputStateDTO]
-        raise NotImplementedError()
-
-    def get_output_statuses(self):
-        # type: () -> List[OutputStateDTO]
+    def load_output_status(self):
+        # type: () -> List[Dict[str,Any]]
         raise NotImplementedError()
 
     # Shutters

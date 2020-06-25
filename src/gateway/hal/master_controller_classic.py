@@ -48,7 +48,6 @@ from master.classic.eeprom_models import (
 from master.classic.eeprom_controller import EepromAddress
 from master.classic.inputs import InputStatus
 from master.classic.master_communicator import BackgroundConsumer
-from master.classic.outputs import OutputStatus
 from master.classic.master_communicator import MasterCommunicator
 from master.classic.eeprom_controller import EepromController
 from master.classic.validationbits import ValidationBitStatus
@@ -58,7 +57,6 @@ from toolbox import Toolbox
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Tuple
     from gateway.config import ConfigurationController
-    from gateway.dto import OutputStateDTO
 
 logger = logging.getLogger("openmotics")
 
@@ -78,7 +76,6 @@ class MasterClassicController(MasterController):
         self._plugin_controller = None  # type: Optional[Any]
 
         self._input_status = InputStatus(on_input_change=self._input_changed)
-        self._output_status = OutputStatus(on_output_change=self._output_changed)
         self._validation_bits = ValidationBitStatus(on_validation_bit_change=self._validation_bit_changed)
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
@@ -90,8 +87,6 @@ class MasterClassicController(MasterController):
         self._input_interval = 300
         self._input_last_updated = 0.0
         self._input_config = {}  # type: Dict[int, InputDTO]
-        self._output_interval = 600
-        self._output_last_updated = 0.0
         self._output_config = {}  # type: Dict[int, OutputDTO]
         self._shutters_interval = 600
         self._shutters_last_updated = 0.0
@@ -128,9 +123,6 @@ class MasterClassicController(MasterController):
             # Refresh if required
             if self._validation_bits_last_updated + self._validation_bits_interval < now:
                 self._refresh_validation_bits()
-                self._set_master_state(True)
-            if self._output_last_updated + self._output_interval < now:
-                self._refresh_outputs()
                 self._set_master_state(True)
             if self._input_last_updated + self._input_interval < now:
                 self._refresh_inputs()
@@ -296,7 +288,15 @@ class MasterClassicController(MasterController):
     def _on_master_output_event(self, data):
         # type: (Dict[str,Any]) -> None
         """ Triggers when the master informs us of an Output state change """
-        self._output_status.partial_update(data['outputs'])
+        # Publish status of all outputs. Since the event from the master contains
+        # all outputs that are currently on, the output(s) that changed can't be
+        # determined here.
+        state = {k: (False, 0) for k, v in self._output_config.items()}
+        for output_id, dimmer in data['outputs']:
+            state[output_id] = (True, dimmer)
+        for output_id, (status, dimmer) in state.items():
+            event_data = {'id': output_id, 'status': status, 'dimmer': dimmer}
+            self._publish_event(MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data))
 
     #######################
     # Internal management #
@@ -329,9 +329,7 @@ class MasterClassicController(MasterController):
         self._eeprom_controller.invalidate_cache()  # Eeprom can be changed in maintenance mode.
         self._eeprom_controller.dirty = True
         self._input_last_updated = 0.0
-        self._output_last_updated = 0.0
         self._shutters_last_updated = 0.0
-
         self._synchronization_thread.request_single_run()
 
     def get_firmware_version(self):
@@ -471,11 +469,15 @@ class MasterClassicController(MasterController):
 
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         classic_object = self._eeprom_controller.read(eeprom_models.OutputConfiguration, output_id)
-        return OutputMapper.orm_to_dto(classic_object)
+        output_dto = OutputMapper.orm_to_dto(classic_object)
+        self._output_config[output_id] = output_dto
+        return output_dto
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
-        return [OutputMapper.orm_to_dto(o)
-                for o in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration)]
+        output_dtos = [OutputMapper.orm_to_dto(o)
+                       for o in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration)]
+        self._output_config = {output_dto.id: output_dto for output_dto in output_dtos}
+        return output_dtos
 
     def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
         batch = []
@@ -488,15 +490,17 @@ class MasterClassicController(MasterController):
                     master_api.write_timer(),
                     {'id': output.id, 'timer': output.timer}
                 )
-        self._output_last_updated = 0
 
-    def get_output_statuses(self):
-        # type: () -> List[OutputStateDTO]
-        return self._output_status.get_outputs()
-
-    def get_output_status(self, output_id):
-        # type: (int) -> Optional[OutputStateDTO]
-        return self._output_status.get_output(output_id)
+    def load_output_status(self):
+        # type: () -> List[Dict[str,Any]]
+        number_of_outputs = self._master_communicator.do_command(master_api.number_of_io_modules())['out'] * 8
+        output_status = []
+        for i in range(number_of_outputs):
+            state_data = self._master_communicator.do_command(master_api.read_output(), {'id': i})
+            # Add output locked status via the validation bits
+            state_data['locked'] = self._is_output_locked(state_data['id'])
+            output_status.append(state_data)
+        return output_status
 
     def _input_changed(self, input_id, status):
         # type: (int, str) -> None
@@ -520,30 +524,6 @@ class MasterClassicController(MasterController):
         else:
             locked = False
         return locked
-
-    def _refresh_outputs(self):
-        self._output_config = {output_dto.id: output_dto for output_dto in self.load_outputs()}
-        number_of_outputs = self._master_communicator.do_command(master_api.number_of_io_modules())['out'] * 8
-        outputs = []
-        for i in range(number_of_outputs):
-            output = self._master_communicator.do_command(master_api.read_output(), {'id': i})
-            # Add output locked status via the validation bits
-            output['locked'] = self._is_output_locked(output['id'])
-            outputs.append(output)
-        self._output_status.full_update(outputs)
-        self._output_last_updated = time.time()
-
-    def _output_changed(self, output_id, status):
-        """ Executed by the Output Status tracker when an output changed state """
-        event_status = {'on': status['on'], 'locked': status['locked']}
-        # 1. only add value to status when handling dimmers
-        if self._output_config[output_id].module_type in ['d', 'D']:
-            event_status['value'] = status['value']
-        # 2. format response data
-        event_data = {'id': output_id,
-                      'status': event_status,
-                      'location': {'room_id': Toolbox.denonify(self._output_config[output_id].room, 255)}}
-        self._publish_event(MasterEvent(event_type=MasterEvent.Types.OUTPUT_CHANGE, data=event_data))
 
     # Shutters
 
@@ -1313,4 +1293,5 @@ class MasterClassicController(MasterController):
         for output_id, output_dto in six.iteritems(self._output_config):
             if output_dto.lock_bit_id == bit_nr:
                 locked = value  # the bit is set, the output is locked
-                self._output_status.update_locked(output_dto.id, locked)
+                event_data = {'id': output_id, 'locked': locked}
+                self._publish_event(MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data))

@@ -50,9 +50,9 @@ logger = logging.getLogger("openmotics")
 class ThermostatControllerMaster(ThermostatController):
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, message_client=INJECTED, observer=INJECTED,
+    def __init__(self, gateway_api=INJECTED, message_client=INJECTED, output_controller=INJECTED,
                  master_communicator=INJECTED, eeprom_controller=INJECTED, master_controller=INJECTED):
-        super(ThermostatControllerMaster, self).__init__(gateway_api, message_client, observer)
+        super(ThermostatControllerMaster, self).__init__(gateway_api, message_client, output_controller)
         self._eeprom_controller = eeprom_controller
         self._master_communicator = master_communicator
         self._master_controller = master_controller  # type: MasterClassicController
@@ -541,7 +541,7 @@ class ThermostatControllerMaster(ThermostatController):
         except InMaintenanceModeException:
             return
 
-        outputs = self._observer.get_outputs()
+        status = self._output_controller.get_output_statuses()
 
         mode = thermostat_info['mode']
         thermostats_on = bool(mode & 1 << 7)
@@ -575,9 +575,10 @@ class ThermostatControllerMaster(ThermostatController):
                               'sensor_nr': thermostat_dto.sensor,
                               'airco': aircos['ASB{0}'.format(thermostat_id)]}
                 for output in [0, 1]:
-                    output_nr = getattr(thermostat_dto, 'output{0}'.format(output))
-                    if output_nr is not None and output_nr < len(outputs) and outputs[output_nr]['status']:
-                        thermostat['output{0}'.format(output)] = outputs[output_nr]['dimmer']
+                    output_id = getattr(thermostat_dto, 'output{0}'.format(output))
+                    output_state_dto = self._output_controller.get_output_status(output_id)
+                    if output_id is not None and output_state_dto and output_state_dto.status:
+                        thermostat['output{0}'.format(output)] = output_state_dto.dimmer
                     else:
                         thermostat['output{0}'.format(output)] = 0
                 thermostats.append(thermostat)
