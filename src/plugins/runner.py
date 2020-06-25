@@ -104,14 +104,16 @@ class PluginRunner:
                 self._user_controller = webinterface._user_controller
 
             def _cp_dispatch(self, vpath):
+                request = cherrypy.request
+                response = cherrypy.response
                 method = vpath.pop()
                 for exposed in self.runner._exposes:
                     if exposed['name'] == method:
-                        cherrypy.request.params['method'] = method
-                        cherrypy.response.headers['Content-Type'] = exposed['content_type']
+                        request.params['method'] = method
+                        response.headers['Content-Type'] = exposed['content_type']
                         if exposed['auth'] is True:
-                            cherrypy.request.hooks.attach('before_handler',
-                                                          cherrypy.tools.authenticated.callable)
+                            request.hooks.attach('before_handler', cherrypy.tools.authenticated.callable)
+                        request.hooks.attach('before_handler', cherrypy.tools.params.callable)
                         return self
 
                 return None
@@ -210,8 +212,9 @@ class PluginRunner:
                                            'kwargs': kwargs})
         if ret['success']:
             return ret['response']
-        else:
+        elif 'stacktrace' in ret:
             raise Exception('{0}: {1}'.format(ret['exception'], ret['stacktrace']))
+        raise Exception(ret['exception'])
 
     def remove_callback(self):
         self._do_command('remove_callback')

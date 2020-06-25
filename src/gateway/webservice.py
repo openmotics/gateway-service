@@ -143,22 +143,29 @@ def params_parser(params, param_types):
 
 
 def params_handler(**kwargs):
-    """ Convert specified request params. """
+    """ Converts/parses/loads specified request params. """
     request = cherrypy.request
+    response = cherrypy.response
+    try:
+        if request.method in request.methods_with_bodies:
+            body = request.body.read()
+            if body:
+                request.params['request_body'] = body
+    except Exception:
+        response.headers['Content-Type'] = 'application/json'
+        response.status = 406  # No Acceptable
+        response.body = json.dumps({'success': False,
+                                    'msg': 'invalid_body'})
+        request.handler = None
+        return
     try:
         params_parser(request.params, kwargs)
     except ValueError:
-        cherrypy.response.headers['Content-Type'] = 'application/json'
-        cherrypy.response.status = 406  # No Acceptable
-        cherrypy.response.body = json.dumps({'success': False,
-                                             'msg': 'invalid_parameters'})
+        response.headers['Content-Type'] = 'application/json'
+        response.status = 406  # No Acceptable
+        response.body = json.dumps({'success': False,
+                                    'msg': 'invalid_parameters'})
         request.handler = None
-
-
-def timestamp_handler():
-    request = cherrypy.request
-    if 'fe_time' in request.params:
-        del request.params["fe_time"]
 
 
 def cors_handler():
@@ -204,7 +211,6 @@ def authentication_handler(pass_token=False):
         request.handler = None
 
 
-cherrypy.tools.timestamp_filter = cherrypy.Tool('before_handler', timestamp_handler)
 cherrypy.tools.cors = cherrypy.Tool('before_handler', cors_handler, priority=10)
 cherrypy.tools.authenticated = cherrypy.Tool('before_handler', authentication_handler)
 cherrypy.tools.params = cherrypy.Tool('before_handler', params_handler)
@@ -255,8 +261,7 @@ def openmotics_api(auth=False, check=None, pass_token=False, plugin_exposed=True
         func = _openmotics_api(func)
         if auth is True:
             func = cherrypy.tools.authenticated(pass_token=pass_token)(func)
-        if check is not None:
-            func = cherrypy.tools.params(**check)(func)
+        func = cherrypy.tools.params(**(check or {}))(func)
         func.exposed = True
         func.plugin_exposed = plugin_exposed
         func.check = check
@@ -2306,10 +2311,11 @@ class WebService(object):
 
     @Inject
     def __init__(self, web_interface=INJECTED, configuration_controller=INJECTED, verbose=False):
+        # type: (WebInterface, ConfigurationController, bool) -> None
         self._webinterface = web_interface
         self._config_controller = configuration_controller
-        self._https_server = None
-        self._http_server = None
+        self._https_server = None  # type: Optional[cherrypy._cpserver.Server]
+        self._http_server = None  # type: Optional[cherrypy._cpserver.Server]
         if not verbose:
             logging.getLogger("cherrypy").propagate = False
 
@@ -2342,8 +2348,7 @@ class WebService(object):
                                      'tools.websocket.handler_cls': EventsSocket},
                       '/ws_maintenance': {'tools.websocket.on': True,
                                           'tools.websocket.handler_cls': MaintenanceSocket},
-                      '/': {'tools.timestamp_filter.on': True,
-                            'tools.cors.on': self._config_controller.get('cors_enabled', False),
+                      '/': {'tools.cors.on': self._config_controller.get('cors_enabled', False),
                             'tools.sessions.on': False}}
 
             cherrypy.tree.mount(root=self._webinterface,
@@ -2363,7 +2368,12 @@ class WebService(object):
 
             self._http_server = cherrypy._cpserver.Server()
             self._http_server.socket_port = 80
-            self._http_server._socket_host = '127.0.0.1'
+            if self._config_controller.get('enable_http', False):
+                # This is added for development purposes.
+                # Do NOT enable unless you know what you're doing and understand the risks.
+                self._http_server._socket_host = '0.0.0.0'
+            else:
+                self._http_server._socket_host = '127.0.0.1'
             self._http_server.socket_timeout = 60
             self._http_server.subscribe()
 
