@@ -4,18 +4,21 @@ import time
 import unittest
 
 import mock
-import xmlrunner
 from six.moves import map
 from six.moves.queue import Queue
 
 import gateway.hal.master_controller_core
-from gateway.dto import InputDTO
+from gateway.config import ConfigurationController
+from gateway.dto import InputDTO, OutputStateDTO
+from gateway.hal.master_controller_classic import MasterClassicController
+from gateway.hal.master_controller_core import MasterCoreController
 from gateway.hal.master_event import MasterEvent
 from ioc import Scope, SetTestMode, SetUpTestInjections
 from master.classic import eeprom_models
 from master.classic.eeprom_controller import EepromController
+from master.classic.master_communicator import MasterCommunicator
 from master.core.core_api import CoreAPI
-from master.core.core_communicator import BackgroundConsumer
+from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.memory_file import MemoryFile, MemoryTypes
 from master.core.memory_models import InputConfiguration
 from master.core.slave_communicator import SlaveCommunicator
@@ -29,58 +32,85 @@ class MasterCoreControllerTest(unittest.TestCase):
     def setUpClass(cls):
         SetTestMode()
 
+    def setUp(self):
+        self.memory = {}
+
+        def _do_command(command, fields, timeout=None):
+            _ = timeout
+            if command.instruction == 'MR':
+                page = fields['page']
+                start = fields['start']
+                length = fields['length']
+                return {'data': self.memory.get(page, [255] * 256)[start:start + length]}
+            elif command.instruction == 'MW':
+                page = fields['page']
+                start = fields['start']
+                page_data = self.memory.setdefault(page, [255] * 256)
+                for index, data_byte in enumerate(fields['data']):
+                    page_data[start + index] = data_byte
+            else:
+                raise AssertionError('unexpected instruction "{}"'.format(command.instruction))
+
+        self.communicator = mock.Mock(CoreCommunicator)
+        self.communicator.do_command = _do_command
+        SetUpTestInjections(master_communicator=self.communicator)
+
+        eeprom_file = MemoryFile(MemoryTypes.EEPROM)
+        eeprom_file._cache = self.memory
+        SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
+                            memory_files={MemoryTypes.EEPROM: eeprom_file,
+                                          MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)},
+                            ucan_communicator=UCANCommunicator(),
+                            slave_communicator=SlaveCommunicator())
+        self.controller = MasterCoreController()
+
     def test_input_module_type(self):
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                return_value=get_core_input_dummy(1)):
-            controller = get_core_controller_dummy()
-            data = controller.get_input_module_type(1)
+            data = self.controller.get_input_module_type(1)
             self.assertEqual('I', data)
 
     def test_load_input(self):
-        controller = get_core_controller_dummy()
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
                                return_value=get_core_input_dummy(1)):
-            data = controller.load_input(1)
+            data = self.controller.load_input(1)
             self.assertEqual(data.id, 1)
 
     def test_load_inputs(self):
         input_modules = list(map(get_core_input_dummy, range(1, 17)))
-        controller = get_core_controller_dummy({'output': 0, 'input': 2})
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               side_effect=input_modules):
-            inputs = controller.load_inputs()
+                               side_effect=input_modules), \
+             mock.patch.object(self.communicator, 'do_command', return_value={'output': 0, 'input': 2}):
+            inputs = self.controller.load_inputs()
             self.assertEqual([x.id for x in inputs], list(range(1, 17)))
 
     def test_save_inputs(self):
-        controller = get_core_controller_dummy()
         data = [(InputDTO(id=1, name='foo', module_type='I'), ['id', 'name', 'module_type']),
                 (InputDTO(id=2, name='bar', module_type='I'), ['id', 'name', 'module_type'])]
         input_mock = mock.Mock(InputConfiguration)
         with mock.patch.object(InputConfiguration, 'deserialize', return_value=input_mock) as deserialize, \
                 mock.patch.object(input_mock, 'save', return_value=None) as save:
-            controller.save_inputs(data)
+            self.controller.save_inputs(data)
             self.assertIn(mock.call({'id': 1, 'name': 'foo'}), deserialize.call_args_list)
             self.assertIn(mock.call({'id': 2, 'name': 'bar'}), deserialize.call_args_list)
             save.assert_called_with()
 
     def test_inputs_with_status(self):
-        controller = get_core_controller_dummy()
         from gateway.hal.master_controller_core import MasterInputState
         with mock.patch.object(MasterInputState, 'get_inputs', return_value=[]) as get:
-            controller.get_inputs_with_status()
+            self.controller.get_inputs_with_status()
             get.assert_called_with()
 
     def test_recent_inputs(self):
-        controller = get_core_controller_dummy()
         from gateway.hal.master_controller_core import MasterInputState
         with mock.patch.object(MasterInputState, 'get_recent', return_value=[]) as get:
-            controller.get_recent_inputs()
+            self.controller.get_recent_inputs()
             get.assert_called_with()
 
     def test_event_consumer(self):
         with mock.patch.object(gateway.hal.master_controller_core, 'BackgroundConsumer',
                                return_value=None) as new_consumer:
-            get_core_controller_dummy()
+            controller = MasterCoreController()
             expected_call = mock.call(CoreAPI.event_information(), 0, mock.ANY)
             self.assertIn(expected_call, new_consumer.call_args_list)
 
@@ -95,7 +125,7 @@ class MasterCoreControllerTest(unittest.TestCase):
         subscriber = mock.Mock()
         with mock.patch.object(gateway.hal.master_controller_core, 'BackgroundConsumer',
                                side_effect=new_consumer) as new_consumer:
-            controller = get_core_controller_dummy()
+            controller = MasterCoreController()
         controller.subscribe_event(subscriber.callback)
         new_consumer.assert_called()
         event_data = {'type': 1, 'action': 1, 'device_nr': 2,
@@ -109,25 +139,6 @@ class MasterCoreControllerTest(unittest.TestCase):
         subscriber.callback.assert_called_with(expected_event)
 
     def test_get_modules(self):
-        memory = {}
-
-        def _do_command(command, fields, timeout=None):
-            _ = timeout
-            if command.instruction == 'MR':
-                page = fields['page']
-                start = fields['start']
-                length = fields['length']
-                return {'data': memory.get(page, [255] * 256)[start:start + length]}
-            if command.instruction == 'MW':
-                page = fields['page']
-                start = fields['start']
-                page_data = memory.setdefault(page, [255] * 256)
-                for index, data_byte in enumerate(fields['data']):
-                    page_data[start + index] = data_byte
-
-        controller = get_core_controller_dummy()
-        controller._master_communicator.do_command = _do_command
-
         from master.core.memory_models import (
             InputModuleConfiguration, OutputModuleConfiguration, SensorModuleConfiguration,
             GlobalConfiguration
@@ -157,7 +168,7 @@ class MasterCoreControllerTest(unittest.TestCase):
         self.assertEqual({'can_inputs': ['I', 'T', 'C', 'E'],
                           'inputs': ['I', 'i', 'J', 'T'],
                           'outputs': ['P', 'P', 'P', 'o', 'O'],
-                          'shutters': []}, controller.get_modules())
+                          'shutters': []}, self.controller.get_modules())
 
 
 class MasterCoreControllerCompatibilityTest(unittest.TestCase):
@@ -165,13 +176,31 @@ class MasterCoreControllerCompatibilityTest(unittest.TestCase):
     def setUpClass(cls):
         SetTestMode()
 
+    def setUp(self):
+        self.eeprom_controller = mock.Mock(EepromController)
+        self.core_controller = self.create_master_core_controller()
+        self.classic_controller = self.create_master_classic_controller()
+
+    @Scope
+    def create_master_core_controller(self):
+        SetUpTestInjections(master_communicator=mock.Mock(CoreCommunicator))
+        SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
+                            memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
+                                          MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)},
+                            ucan_communicator=UCANCommunicator(),
+                            slave_communicator=SlaveCommunicator())
+        return MasterCoreController()
+
+    @Scope
+    def create_master_classic_controller(self):
+        SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
+                            eeprom_controller=self.eeprom_controller,
+                            master_communicator=mock.Mock(MasterCommunicator))
+        return MasterClassicController()
+
     def test_load_input(self):
         SetUpTestInjections(memory_files={MemoryTypes.EEPROM: mock.Mock()})
-        core = get_core_controller_dummy()
         core_input_orm = get_core_input_dummy(1)
-        with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=core_input_orm):
-            core_data = core.load_input(1)
         classic_input_orm = eeprom_models.InputConfiguration.deserialize({'id': 1,
                                                                           'name': 'foo',
                                                                           'module_type': 'I',
@@ -180,9 +209,15 @@ class MasterCoreControllerCompatibilityTest(unittest.TestCase):
                                                                           'invert': 255,
                                                                           'can': ' ',
                                                                           'event_enabled': False})
-        classic = get_classic_controller_dummy([classic_input_orm])
-        classic_data = classic.load_input(1)
-        self.assertEqual(classic_data, core_data)
+        inputs = [classic_input_orm]
+
+        with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
+                               return_value=core_input_orm), \
+             mock.patch.object(self.eeprom_controller, 'read', return_value=inputs[0]), \
+             mock.patch.object(self.eeprom_controller, 'read_all', return_value=inputs):
+            core_data = self.core_controller.load_input(1)
+            classic_data = self.classic_controller.load_input(1)
+            self.assertEqual(classic_data, core_data)
 
 
 class MasterInputState(unittest.TestCase):
@@ -256,30 +291,15 @@ class MasterInputState(unittest.TestCase):
             self.assertNotIn(2, devices)
 
 
-@Scope
-def get_core_controller_dummy(command_data=None):
-    from gateway.hal.master_controller_core import MasterCoreController
-    from master.core.core_communicator import CoreCommunicator
-    communicator_mock = mock.Mock(CoreCommunicator)
-    communicator_mock.do_command.return_value = command_data or {}
-    SetUpTestInjections(configuration_controller=mock.Mock(),
-                        master_communicator=communicator_mock)
-    SetUpTestInjections(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM)},
-                        ucan_communicator=UCANCommunicator(),
-                        slave_communicator=SlaveCommunicator())
-    return MasterCoreController()
-
-
-@Scope
-def get_classic_controller_dummy(inputs):
-    from gateway.hal.master_controller_classic import MasterClassicController
-    eeprom_mock = mock.Mock(EepromController)
-    eeprom_mock.read.return_value = inputs[0]
-    eeprom_mock.read_all.return_value = inputs
-    SetUpTestInjections(configuration_controller=mock.Mock(),
-                        master_communicator=mock.Mock(),
-                        eeprom_controller=eeprom_mock)
-    return MasterClassicController()
+def get_core_output_dummy(i):
+    return OutputConfiguration.deserialize({
+        'id': i,
+        'name': 'foo',
+        'module': {'id': 20 + i,
+                   'device_type': 'O',
+                   'address': '0.0.0.0',
+                   'firmware_version': '0.0.1'}
+    })
 
 
 def get_core_input_dummy(i):
@@ -291,7 +311,3 @@ def get_core_input_dummy(i):
                    'address': '0.0.0.0',
                    'firmware_version': '0.0.1'}
     })
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))
