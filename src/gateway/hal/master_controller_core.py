@@ -75,6 +75,7 @@ class MasterCoreController(MasterController):
         self._sensor_states = {}  # type: Dict[int,Dict[str,None]]
         self._shutters_interval = 600
         self._shutters_last_updated = 0.0
+        self._shutter_status = {}  # type: Dict[int, Tuple[bool, bool]]
         self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
 
@@ -120,9 +121,7 @@ class MasterCoreController(MasterController):
                           'status': core_event.data['status'],
                           'dimmer': core_event.data['dimmer_value'],
                           'ctimer': timer_value}
-            self._publish_event(MasterEvent(MasterEvent.Types.OUTPUT_STATUS, event_data))
-            # FIXME: remove _output_states
-            self._process_new_output_state(event_data)
+            self._handle_output(output_id, event_data)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             event = self._input_state.handle_event(core_event)
             self._publish_event(event)
@@ -132,19 +131,49 @@ class MasterCoreController(MasterController):
                 return
             self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
 
-    def _process_new_output_state(self, data):
-        # type: (Dict[str,Any]) -> None
-        new_state = OutputStateSerializer.deserialize(data)[0]
-        current_state = self._output_states.get(new_state.id)
-        if current_state is not None:
-            if current_state.status == new_state.status and current_state.dimmer == new_state.dimmer:
-                return
-        # FIXME: remove _output_states
-        self._output_states[new_state.id] = new_state
-        # FIXME: how to handle this?
-        shutter_id = self._output_shutter_map.get(new_state.id)
-        if shutter_id is not None:
-            self._refresh_shutter_state(shutter_id)
+    def _handle_output(self, output_id, event_data):
+        # type: (int ,Dict[str,Any]) -> None
+        self._publish_event(MasterEvent(MasterEvent.Types.OUTPUT_STATUS, event_data))
+        shutter_id = self._output_shutter_map.get(output_id)
+        if shutter_id:
+            shutter = ShutterConfiguration(shutter_id)
+            output_0_on, output_1_on = (None, None)
+            if output_id == shutter.outputs.output_0:
+                output_0_on = event_data['status']
+            if output_id == shutter.outputs.output_1:
+                output_1_on = event_data['status']
+            self._handle_shutter(shutter, output_0_on, output_1_on)
+
+    def _handle_shutter(self, shutter, output_0_on, output_1_on):
+        # type: (ShutterConfiguration, Optional[bool], Optional[bool]) -> None
+        if shutter.outputs.output_0 == 255 * 2:
+            return
+        if output_0_on is None:
+            output_0_on = self._shutter_status[shutter.id][0]
+        if output_1_on is None:
+            output_1_on = self._shutter_status[shutter.id][1]
+        if (output_0_on, output_1_on) == self._shutter_status.get(shutter.id, (None, None)):
+            logger.error('shutter status did not change')
+            return
+
+        output_module = OutputConfiguration(shutter.outputs.output_0).module
+        if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
+            up, down = output_0_on, output_1_on
+        else:
+            up, down = output_1_on, output_0_on
+
+        if up == 1 and down == 0:
+            state = ShutterEnums.State.GOING_UP
+        elif down == 1 and up == 0:
+            state = ShutterEnums.State.GOING_DOWN
+        else:  # Both are off or - unlikely - both are on
+            state = ShutterEnums.State.STOPPED
+
+        event_data = {'id': shutter.id,
+                      'status': state,
+                      'location': {'room_id': 255}}  # TODO: rooms
+        self._publish_event(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
+        self._shutter_status[shutter.id] = (output_0_on, output_1_on)
 
     def _synchronize(self):
         # type: () -> None
@@ -447,41 +476,20 @@ class MasterCoreController(MasterController):
             output_module.save()
 
     def _refresh_shutter_states(self):
-        for shutter_id in self._enumerate_io_modules('output', amount_per_module=4):
+        status_data = {x['id']: x for x in self.load_output_status()}
+        for shutter_id in range(len(status_data) // 2):
             shutter = ShutterConfiguration(shutter_id)
-            if shutter.outputs.output_0 != 255 * 2:
+            output_0 = status_data.get(shutter.outputs.output_0)
+            output_1 = status_data.get(shutter.outputs.output_1)
+            if output_0 and output_1:
                 self._output_shutter_map[shutter.outputs.output_0] = shutter.id
                 self._output_shutter_map[shutter.outputs.output_1] = shutter.id
+                self._handle_shutter(shutter, output_0['status'], output_1['status'])
             else:
+                self._shutter_status.pop(shutter.id, None)
                 self._output_shutter_map.pop(shutter.outputs.output_0, None)
                 self._output_shutter_map.pop(shutter.outputs.output_1, None)
-            self._refresh_shutter_state(shutter_id)
         self._shutters_last_updated = time.time()
-
-    def _refresh_shutter_state(self, shutter_id):
-        shutter = ShutterConfiguration(shutter_id)
-        if shutter.outputs.output_0 == 255 * 2:
-            return
-        # FIXME: remove _output_states
-        output_0_on = self._output_states[shutter.outputs.output_0].status
-        output_1_on = self._output_states[shutter.outputs.output_1].status
-        output_module = OutputConfiguration(shutter.outputs.output_0).module
-        if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
-            up, down = output_0_on, output_1_on
-        else:
-            up, down = output_1_on, output_0_on
-
-        if up == 1 and down == 0:
-            state = ShutterEnums.State.GOING_UP
-        elif down == 1 and up == 0:
-            state = ShutterEnums.State.GOING_DOWN
-        else:  # Both are off or - unlikely - both are on
-            state = ShutterEnums.State.STOPPED
-
-        event_data = {'id': shutter_id,
-                      'status': state,
-                      'location': {'room_id': 255}}  # TODO: rooms
-        self._publish_event(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
 
     def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
         raise NotImplementedError()  # TODO: Implement once supported by Core(+)
