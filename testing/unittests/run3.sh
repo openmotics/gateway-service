@@ -11,9 +11,6 @@ pytest master_tests/master_command_test.py --log-level=DEBUG --durations=2 --jun
 #echo "Running master communicator tests"
 #pytest master_tests/master_communicator_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterCommunicatorTest.xml
 
-echo "Running outputs tests"
-pytest master_tests/outputs_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterOutputsTest.xml
-
 echo "Running inputs tests"
 pytest master_tests/inputs_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterInputsTest.xml
 
@@ -54,19 +51,19 @@ pytest plugins_tests/interfaces_test.py --log-level=DEBUG --durations=2 --junit-
 #python3 gateway_tests/pulses_test.py
 
 #echo "Running classic controller tests"
-#python3 gateway/hal/master_controller_classic_test.py
+#python3 gateway_tests/hal/master_controller_classic_test.py
 
 #echo "Running core controller tests"
-#python3 gateway/hal/master_controller_core_test.py
+#python3 gateway_tests/hal/master_controller_core_test.py
 
 echo "Running frontpanel classic controller tests"
-python3 gateway/hal/frontpanel_controller_classic_test.py
+python3 gateway_tests/hal/frontpanel_controller_classic_test.py
 
 echo "Running frontpanel core controller tests"
-python3 gateway/hal/frontpanel_controller_core_test.py
+python3 gateway_tests/hal/frontpanel_controller_core_test.py
 
-#echo "Running observer tests"
-#python3 gateway/observer_test.py
+echo "Running output controller tests"
+pytest gateway_tests/output_controller_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/OutputControllerTest.xml
 
 #echo "Running Core uCAN tests"
 #python3 master_core_tests/ucan_communicator_test.py
@@ -88,6 +85,7 @@ pytest master_core_tests/group_action_test.py --log-level=DEBUG --durations=2 --
 
 #echo "Running metrics tests"
 #python3 gateway_tests/metrics_test.py
+
 
 echo "Running thermostat tests"
 pytest thermostat_tests/gateway_mapping_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/GatewayThermostatMappingTest.xml

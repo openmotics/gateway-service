@@ -31,7 +31,9 @@ from mock import Mock
 from pytest import mark
 
 import plugin_runtime
+from gateway.dto import OutputStateDTO
 from gateway.events import GatewayEvent
+from gateway.output_controller import OutputController
 from ioc import SetTestMode, SetUpTestInjections
 from plugin_runtime.base import PluginConfigChecker, PluginException
 
@@ -81,11 +83,11 @@ class PluginControllerTest(unittest.TestCase):
             shutil.rmtree(path)
 
     @staticmethod
-    def _get_controller(observer=None):
+    def _get_controller(output_controller=None):
         SetUpTestInjections(shutter_controller=Mock(),
                             web_interface=None,
                             configuration_controller=None,
-                            observer=observer)
+                            output_controller=output_controller)
         from plugins.base import PluginController
         controller = PluginController(runtime_path=PluginControllerTest.RUNTIME_PATH,
                                       plugins_path=PluginControllerTest.PLUGINS_PATH,
@@ -229,11 +231,9 @@ class P1(OMPluginBase):
             time.sleep(1)
 """)
 
-            observer = type('Observer', (), {})()
-            observer.get_outputs = lambda: [{'id': 1,
-                                             'dimmer': 5,
-                                             'status': 1}]
-            controller = PluginControllerTest._get_controller(observer=observer)
+            output_controller = Mock(OutputController)
+            output_controller.get_output_statuses = lambda: [OutputStateDTO(id=1, status=True, dimmer=5)]
+            controller = PluginControllerTest._get_controller(output_controller=output_controller)
             controller.start()
 
             response = controller._request('P1', 'html_index')

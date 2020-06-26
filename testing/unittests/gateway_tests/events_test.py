@@ -16,21 +16,30 @@
 Tests for events.
 """
 from __future__ import absolute_import
+
 import unittest
-from mock import Mock
+
 import xmlrunner
-from cloud.events import EventSender
+from mock import Mock
+
 from gateway.events import GatewayEvent
-from ioc import SetUpTestInjections, Scope
+from ioc import SetTestMode, SetUpTestInjections
+
+from cloud.events import EventSender
 
 
 class EventsTest(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        SetTestMode()
 
     def setUp(self):
         cloud_api_client = Mock()
         self.sent_events = {}
         cloud_api_client.send_events = lambda events: self.sent_events.update({'events': events})
-        SetUpTestInjections(input_controller=Mock(), cloud_api_client=cloud_api_client)
+        SetUpTestInjections(cloud_api_client=cloud_api_client,
+                            input_controller=Mock())
 
     def test_events_sent_to_cloud(self):
         event_sender = EventSender()  # Don't start, trigger manually
@@ -43,7 +52,3 @@ class EventsTest(unittest.TestCase):
         self.assertTrue(event_sender._batch_send_events())
         self.assertEqual(len(event_sender._queue), 0)
         self.assertEqual(len(self.sent_events.get('events', [])), 3)
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))
