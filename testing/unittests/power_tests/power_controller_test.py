@@ -119,6 +119,8 @@ class P1ControllerTest(unittest.TestCase):
                                return_value=[1.0, 2.0, 0.0, 190527083152.0]), \
              mock.patch.object(self.controller, 'get_module_gas_consumption',
                                return_value=[1.0, 2.3, 0.0, 12.0]), \
+             mock.patch.object(self.controller, 'get_module_consumption_tariff',
+                               return_value=[1.0, 2.3, 0.0, 12.0]), \
              mock.patch.object(self.controller, 'get_module_injection_tariff',
                                return_value=[1.0, 2.3, 0.0, 12.0]), \
              mock.patch.object(self.controller, 'get_module_tariff_indicator',
@@ -148,8 +150,10 @@ class P1ControllerTest(unittest.TestCase):
                 {'electricity': {'current': {'phase1': 1.0, 'phase2': 1.0, 'phase3': 1.0},
                                  'ean': '1111111111111111111111111111',
                                  'tariff_indicator': 1.0,
-                                 'tariff_low': 1.0,
-                                 'tariff_normal': 1.0,
+                                 'consumption_low': 1.0,
+                                 'consumption_normal': 1.0,
+                                 'injection_low': 1.0,
+                                 'injection_normal': 1.0,
                                  'voltage': {'phase1': 1.0, 'phase2': 1.0, 'phase3': 1.0}},
                  'gas': {'consumption': 1.0, 'ean': '2222222222222222222222222222'},
                  'device_id': '11.0',
@@ -159,8 +163,10 @@ class P1ControllerTest(unittest.TestCase):
                 {'electricity': {'current': {'phase1': 2.0, 'phase2': 2.0, 'phase3': 2.0},
                                  'ean': '3333333333333333333333333333',
                                  'tariff_indicator': 2.0,
-                                 'tariff_low': 2.3,
-                                 'tariff_normal': 2.3,
+                                 'consumption_low': 2.3,
+                                 'consumption_normal': 2.3,
+                                 'injection_low': 2.3,
+                                 'injection_normal': 2.3,
                                  'voltage': {'phase1': 2.3, 'phase2': 2.3, 'phase3': 2.3}},
                  'gas': {'consumption': 2.3, 'ean': ''},
                  'device_id': '11.1',
@@ -172,8 +178,10 @@ class P1ControllerTest(unittest.TestCase):
                                              'phase3': 12.0},
                                  'ean': '',
                                  'tariff_indicator': 12.0,
-                                 'tariff_low': 12.0,
-                                 'tariff_normal': 12.0,
+                                 'consumption_low': 12.0,
+                                 'consumption_normal': 12.0,
+                                 'injection_low': 12.0,
+                                 'injection_normal': 12.0,
                                  'voltage': {'phase1': 12.0,
                                              'phase2': 12.0,
                                              'phase3': 12.0}},
@@ -239,8 +247,19 @@ class P1ControllerTest(unittest.TestCase):
                 mock.call('11.0', PowerCommand('G', 'cG\x00', '', '112s', module_type='C'))
             ]
 
+    def test_get_module_consumption_tariff(self):
+        payload = '0000000001*kWh000002.300*kWh              000012.000*kWh'
+        with mock.patch.object(self.power_communicator, 'do_command',
+                               return_value=[payload]) as cmd:
+            meters = self.controller.get_module_consumption_tariff({'version': P1_CONCENTRATOR,
+                                                                    'address': '11.0'},
+                                                                 type=1)
+            assert meters == [1.0, 2.3, None, 12.0, None, None, None, None]
+            assert cmd.call_args_list == [
+                mock.call('11.0', PowerCommand('G', 'c1\x00', '', '112s', module_type='C'))
+            ]
+
     def test_get_module_injection_tariff(self):
-        # TODO confirm this is correct
         payload = '0000000001*kWh000002.300*kWh              000012.000*kWh'
         with mock.patch.object(self.power_communicator, 'do_command',
                                return_value=[payload]) as cmd:

@@ -101,8 +101,10 @@ class P1Controller(object):
                 eans2 = self.get_module_meter(modules[module_id], type=2)
                 currents = self.get_module_current(modules[module_id])
                 voltages = self.get_module_voltage(modules[module_id])
-                tariffs1 = self.get_module_injection_tariff(modules[module_id], type=1)
-                tariffs2 = self.get_module_injection_tariff(modules[module_id], type=2)
+                consumptions1 = self.get_module_consumption_tariff(modules[module_id], type=1)
+                consumptions2 = self.get_module_consumption_tariff(modules[module_id], type=2)
+                injections1 = self.get_module_injection_tariff(modules[module_id], type=1)
+                injections2 = self.get_module_injection_tariff(modules[module_id], type=2)
                 tariff_indicators = self.get_module_tariff_indicator(modules[module_id])
                 gas_consumptions = self.get_module_gas_consumption(modules[module_id])
 
@@ -117,8 +119,10 @@ class P1Controller(object):
                                        'electricity': {'ean': eans1[port_id].strip(),
                                                        'current': currents[port_id],
                                                        'voltage': voltages[port_id],
-                                                       'tariff_low': tariffs1[port_id],
-                                                       'tariff_normal': tariffs2[port_id],
+                                                       'consumption_low': consumptions1[port_id],
+                                                       'consumption_normal': consumptions2[port_id],
+                                                       'injection_low': injections1[port_id],
+                                                       'injection_normal': injections2[port_id],
                                                        'tariff_indicator': tariff_indicators[port_id]}})
 
         return values
@@ -178,12 +182,12 @@ class P1Controller(object):
                 consumptions.append(None)
         return consumptions
 
-    def get_module_injection_tariff(self, module, type=None):
+    def get_module_consumption_tariff(self, module, type=None):
         # type: (Dict[str,Any], int) -> List[Optional[float]]
         """
         Request consumption tariff for all meters and parse repsonse.
         """
-        cmd = power_api.get_injection_tariff_p1(module['version'], type=type)
+        cmd = power_api.get_consumption_tariff_p1(module['version'], type=type)
         payload = self._power_communicator.do_command(module['address'], cmd)[0]
 
         consumptions = []  # type: List[Optional[float]]
@@ -193,6 +197,22 @@ class P1Controller(object):
             except ValueError:
                 consumptions.append(None)
         return consumptions
+
+    def get_module_injection_tariff(self, module, type=None):
+        # type: (Dict[str,Any], int) -> List[Optional[float]]
+        """
+        Request injection tariff for all meters and parse repsonse.
+        """
+        cmd = power_api.get_injection_tariff_p1(module['version'], type=type)
+        payload = self._power_communicator.do_command(module['address'], cmd)[0]
+
+        injections = []  # type: List[Optional[float]]
+        for port_id in range(NUM_PORTS[P1_CONCENTRATOR]):
+            try:
+                injections.append(float(payload[port_id * 14:(port_id + 1) * 14][:10]))
+            except ValueError:
+                injections.append(None)
+        return injections
 
     def get_module_tariff_indicator(self, module):
         # type: (Dict[str,Any]) -> List[Optional[float]]
