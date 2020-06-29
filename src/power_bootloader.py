@@ -25,13 +25,10 @@ import sys
 import argparse
 import logging
 import time
-from ioc import Injectable
-from six.moves.configparser import ConfigParser
-from serial import Serial
-from serial_utils import RS485, CommunicationTimedOutException
-from power.power_communicator import PowerCommunicator
-from power.power_controller import PowerController
+from ioc import INJECTED, Inject
+from serial_utils import CommunicationTimedOutException
 from power import power_api
+from gateway.initialize import setup_platform
 
 logger = logging.getLogger("openmotics")
 
@@ -278,18 +275,14 @@ def main():
         parser.print_help()
         return
 
-    config = ConfigParser()
-    config.read(constants.get_config_file())
+    setup_platform(message_client_name=None)  # No MessageClient needed
 
-    port = config.get('OpenMotics', 'power_serial')
-    power_serial = RS485(Serial(port, 115200))
+    @Inject
+    def _get_from_ioc(power_store=INJECTED, power_communicator=INJECTED):
+        return power_store, power_communicator
 
-    Injectable.value(power_serial=power_serial)
-    Injectable.value(power_db=constants.get_power_database_file())
-
-    power_controller = PowerController()
-    power_communicator = PowerCommunicator(time_keeper_period=0, verbose=args.verbose)
-    power_communicator.start()
+    store, communicator = _get_from_ioc()
+    communicator.start()
 
     if args.scan:
         logger.info('Scanning addresses 0-255...')
@@ -298,7 +291,7 @@ def main():
                                          'C': power_api.P1_CONCENTRATOR}.items():
                 try:
                     logger.info('{0}{1} - Version: {2}'.format(
-                        module_type, address, get_module_firmware_version(address, version, power_communicator)
+                        module_type, address, get_module_firmware_version(address, version, communicator)
                     ))
                 except Exception:
                     pass
@@ -314,18 +307,18 @@ def main():
     def _bootload(_module, _module_address, filename):
         try:
             if version == _module['version'] == power_api.POWER_MODULE:
-                bootload_power_module(_module_address, filename, power_communicator)
+                bootload_power_module(_module_address, filename, communicator)
             elif version == _module['version'] == power_api.ENERGY_MODULE:
-                bootload_energy_module(_module_address, filename, power_communicator)
+                bootload_energy_module(_module_address, filename, communicator)
             elif version == _module['version'] == power_api.P1_CONCENTRATOR:
-                bootload_p1_concentrator(_module_address, filename, power_communicator)
+                bootload_p1_concentrator(_module_address, filename, communicator)
         except CommunicationTimedOutException:
             logger.warning('E{0} - Module unavailable. Skipping...'.format(address))
         except Exception:
             logger.exception('E{0} - Unexpected exception during bootload. Skipping...'.format(address))
 
     if args.address or args.all:
-        power_modules = power_controller.get_power_modules()
+        power_modules = store.get_power_modules()
         if args.all:
             for module_id in power_modules:
                 module = power_modules[module_id]

@@ -21,7 +21,7 @@ import time
 logger = logging.getLogger("openmotics")
 
 if False:  # MYPY
-    from typing import Any, Callable
+    from typing import Any, Callable, Optional
 
 
 class DaemonThreadWait(Exception):
@@ -30,9 +30,11 @@ class DaemonThreadWait(Exception):
 
 class DaemonThread(object):
     def __init__(self, name, target, interval=10, delay=None):
-        # type: (str, Callable[[],Any], float, float) -> None
+        # type: (str, Callable[[],Any], float, Optional[float]) -> None
         self._interval = interval
-        self._delay = delay or self._interval * 2
+        self._delay = self._interval * 2
+        if delay is not None:
+            self._delay = delay
         self._name = name
         self._target = target
         self._tick = threading.Event()
@@ -77,10 +79,12 @@ class DaemonThread(object):
                 return
             try:
                 self._target()
-                self.sleep(max(0.1, self._interval - (time.time() - start)))
+                if self._interval > 0:
+                    min_wait_time = 0.1 if self._interval >= 0.5 else 0.05
+                    self.sleep(max(min_wait_time, self._interval - (time.time() - start)))
                 backoff = 0
-            except DaemonThreadWait as ex:
-                logger.debug('{}, waiting {} seconds'.format(ex, self._delay))
+            except DaemonThreadWait:
+                logger.debug('Waiting {} seconds'.format(self._delay))
                 self.sleep(self._delay)
             except Exception as ex:
                 logger.exception('Unexpected error in daemon {}: {}'.format(self._name, ex))

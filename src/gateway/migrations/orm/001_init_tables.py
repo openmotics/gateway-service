@@ -15,7 +15,7 @@
 
 from peewee import (
     Model, Database, SqliteDatabase,
-    PrimaryKeyField, CharField, BooleanField, IntegerField, ForeignKeyField, FloatField, TextField,
+    AutoField, CharField, BooleanField, IntegerField, ForeignKeyField, FloatField, TextField,
     CompositeKey
 )
 from peewee_migrate import Migrator
@@ -34,16 +34,16 @@ def migrate(migrator, database, fake=False, **kwargs):
                                       pragmas={'foreign_keys': 1})
 
     class Feature(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         name = CharField(unique=True)
         enabled = BooleanField()
 
     class Output(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
 
     class ThermostatGroup(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
         name = CharField()
         on = BooleanField(default=True)
@@ -62,13 +62,13 @@ def migrate(migrator, database, fake=False, **kwargs):
         value = IntegerField()
 
     class Pump(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
         name = CharField()
         output = ForeignKeyField(Output, backref='valve', on_delete='SET NULL', unique=True)
 
     class Valve(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
         name = CharField()
         delay = IntegerField(default=60)
@@ -82,7 +82,7 @@ def migrate(migrator, database, fake=False, **kwargs):
         valve = ForeignKeyField(Valve, on_delete='CASCADE')
 
     class Thermostat(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
         name = CharField(default='Thermostat')
         sensor = IntegerField()
@@ -112,7 +112,7 @@ def migrate(migrator, database, fake=False, **kwargs):
         priority = IntegerField(default=0)
 
     class Preset(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         name = CharField()
         heating_setpoint = FloatField(default=14.0)
         cooling_setpoint = FloatField(default=30.0)
@@ -120,7 +120,7 @@ def migrate(migrator, database, fake=False, **kwargs):
         thermostat = ForeignKeyField(Thermostat, on_delete='CASCADE')
 
     class DaySchedule(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         index = IntegerField()
         content = TextField()
         mode = CharField(default='heating')

@@ -26,7 +26,7 @@ from bus.om_bus_events import OMBusEvents
 from bus.om_bus_client import MessageClient
 
 if False:  # MYPY
-    from typing import Any, Dict, List
+    from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("openmotics")
 
@@ -44,7 +44,7 @@ class Observer(object):
     @Inject
     def __init__(self, master_controller=INJECTED, message_client=INJECTED):
         self._master_controller = master_controller  # type: MasterController
-        self._message_client = message_client  # type: MessageClient
+        self._message_client = message_client  # type: Optional[MessageClient]
 
         self._event_subscriptions = []
         self._master_controller.subscribe_event(self._master_event)
@@ -68,7 +68,8 @@ class Observer(object):
                 callback(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE,
                                       data=master_event.data))
         if master_event.type == MasterEvent.Types.OUTPUT_CHANGE:
-            self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': master_event.data['id']})
+            if self._message_client is not None:
+                self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': master_event.data['id']})
             for callback in self._event_subscriptions:
                 callback(GatewayEvent(event_type=GatewayEvent.Types.OUTPUT_CHANGE,
                                       data=master_event.data))
@@ -77,12 +78,27 @@ class Observer(object):
 
     def get_outputs(self):
         """ Returns a list of Outputs with their status """
-        # TODO: also include other outputs (e.g. from plugins)
-        return self._master_controller.get_output_statuses()
+        # TODO: Move to the OutputController
+        # TODO: Should return a DTO and the (de)serializers should e.g. convert a bool to an int
+        outputs = self._master_controller.get_output_statuses()
+        return [{'id': output['id'],
+                 'status': 1 if output['status'] else 0,
+                 'ctimer': output['ctimer'],
+                 'dimmer': output['dimmer'],
+                 'locked': output['locked']}
+                for output in outputs]
 
     def get_output(self, output_id):
-        # TODO: also address other outputs (e.g. from plugins)
-        return self._master_controller.get_output_status(output_id)
+        # TODO: Move to the OutputController
+        # TODO: Should return a DTO and the (de)serializers should e.g. convert a bool to an int
+        output = self._master_controller.get_output_status(output_id)
+        if output is None:
+            return None
+        return {'id': output['id'],
+                'status': 1 if output['status'] else 0,
+                'ctimer': output['ctimer'],
+                'dimmer': output['dimmer'],
+                'locked': output['locked']}
 
     # Inputs
 

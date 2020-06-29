@@ -13,14 +13,16 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
+
 import logging
 import time
 
 import hypothesis
 import pytest
 import ujson as json
-from hypothesis.strategies import booleans, composite, integers, just, one_of
-from six.moves import map
+from hypothesis.strategies import booleans, integers, just
+
+from tests.hardware import multiple_outputs, outputs
 
 logger = logging.getLogger('openmotics')
 
@@ -28,98 +30,98 @@ DEFAULT_OUTPUT_CONFIG = {'type': 0, 'timer': 2**16 - 1}
 DEFAULT_LIGHT_CONFIG = {'type': 255, 'timer': 2**16 - 1}
 
 
-@composite
-def next_output(draw):
-    used_values = []
-    def f(toolbox):
-        value = draw(one_of(list(map(just, toolbox.dut_outputs))).filter(lambda x: x not in used_values))
-        used_values.append(value)
-        hypothesis.note('module o#{}'.format(value))
-        return value
-    return f
+@pytest.mark.smoke
+@hypothesis.given(outputs(), booleans())
+def test_events(toolbox, output, to_status):
+    from_status = not to_status
+    logger.debug('output status {}#{}, expect event {} -> {}'.format(output.type, output.output_id, from_status, to_status))
+    toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
+
+    hypothesis.note('after output {}#{} set to {}'.format(output.type, output.output_id, to_status))
+    toolbox.set_output(output, to_status)
+    toolbox.assert_output_changed(output, to_status)
+
+
+@hypothesis.given(outputs(virtual=True), booleans())
+def test_status(toolbox, output, status):
+    logger.debug('output status {}#{}, expect status ? -> {}'.format(output.type, output.output_id, status))
+    toolbox.configure_output(output, DEFAULT_OUTPUT_CONFIG)
+
+    hypothesis.note('after output {}#{} set to {}'.format(output.type, output.output_id, status))
+    toolbox.set_output(output, status)
+    time.sleep(0.2)
+    toolbox.assert_output_status(output, status)
 
 
 @pytest.mark.smoke
-@hypothesis.given(next_output(), booleans())
-def test_events(toolbox, next_output, output_status):
-    output_id = next_output(toolbox)
-    logger.info('output status o#{}, expect event {} -> {}'.format(output_id, not output_status, output_status))
-    toolbox.ensure_output(output_id, not output_status, DEFAULT_OUTPUT_CONFIG)
+@hypothesis.given(outputs(), just(True))
+def test_timers(toolbox, output, to_status):
+    from_status = not to_status
+    logger.debug('output timer {}#{}, expect event {} -> {} -> {}'.format(output.type, output.output_id, from_status, to_status, from_status))
 
-    toolbox.set_output(output_id, output_status)
-    toolbox.assert_output_changed(output_id, output_status)
+    output_config = {'type': 0, 'timer': 3}  # FIXME: event reordering with timer of <2s
+    hypothesis.note('with output {}#{} configured as a timer'.format(output.type, output.output_id))
+    toolbox.ensure_output(output, from_status, output_config)
 
-
-@pytest.mark.smoke
-@pytest.mark.skip(reason='fails consistently when running with the ci profile')
-@hypothesis.given(next_output(), booleans())
-def test_status(toolbox, next_output, output_status):
-    output_id = next_output(toolbox)
-    logger.info('output status o#{}, expect status ? -> {}'.format(output_id, output_status))
-    toolbox.configure_output(output_id, DEFAULT_OUTPUT_CONFIG)
-
-    toolbox.set_output(output_id, output_status)
-    toolbox.assert_output_status(output_id, output_status)
+    hypothesis.note('after output {}#{} set to {}'.format(output.type, output.output_id, to_status))
+    toolbox.set_output(output, to_status)
+    toolbox.assert_output_changed(output, to_status)
+    toolbox.assert_output_changed(output, from_status, between=(3, 7))
 
 
 @pytest.mark.smoke
-@hypothesis.given(next_output(), just(True))
-def test_timers(toolbox, next_output, output_status):
-    output_id = next_output(toolbox)
-    logger.info('output timer o#{}, expect event {} -> {}'.format(output_id, output_status, not output_status))
-    output_config = {'type': 0, 'timer': 5}  # FIXME: event reordering with timer of <2s
-    toolbox.ensure_output(output_id, False, output_config)
-
-    toolbox.set_output(output_id, output_status)
-    toolbox.assert_output_changed(output_id, output_status)
-    toolbox.assert_output_changed(output_id, not output_status, between=(3, 7))
-
-
-@pytest.mark.smoke
-@hypothesis.given(next_output(), integers(min_value=0, max_value=254), just(True))
-def test_floor_lights(toolbox, next_output, floor_id, output_status):
-    light_id, other_light_id, other_output_id = (next_output(toolbox), next_output(toolbox), next_output(toolbox))
-    logger.info('light o#{} on floor {}, expect event {} -> {}'.format(light_id, floor_id, not output_status, output_status))
+@hypothesis.given(multiple_outputs(3), integers(min_value=0, max_value=254), just(True))
+def test_floor_lights(toolbox, outputs, floor_id, output_status):
+    light, other_light, other_output = outputs
+    logger.debug('light {}#{} on floor {}, expect event {} -> {}'.format(light.type, light.output_id, floor_id, not output_status, output_status))
 
     output_config = {'floor': floor_id}
     output_config.update(DEFAULT_LIGHT_CONFIG)
-    toolbox.ensure_output(light_id, not output_status, output_config)
+    hypothesis.note('with light {}#{} on floor {}'.format(light.type, light.output_id, floor_id))
+    toolbox.ensure_output(light, not output_status, output_config)
     output_config = {'floor': 255}  # no floor
     output_config.update(DEFAULT_LIGHT_CONFIG)
-    toolbox.ensure_output(other_light_id, not output_status, output_config)
+    hypothesis.note('with light {}#{} not on floor'.format(other_light.type, other_light.output_id))
+    toolbox.ensure_output(other_light, not output_status, output_config)
     output_config = {'floor': floor_id}
     output_config.update(DEFAULT_OUTPUT_CONFIG)  # not a light
-    toolbox.ensure_output(other_output_id, not output_status, output_config)
+    hypothesis.note('with output {}#{} on floor {}'.format(other_output.type, other_output.output_id, floor_id))
+    toolbox.ensure_output(other_output, not output_status, output_config)
     time.sleep(2)
 
-    logger.info('enable all lights on floor {}'.format(floor_id))
+    hypothesis.note('after "all lights on" for floor#{}'.format(floor_id))
     toolbox.dut.get('/set_all_lights_floor_on', params={'floor': floor_id})
-    toolbox.assert_output_changed(light_id, output_status)
-    toolbox.assert_output_status(other_light_id, not output_status)
-    toolbox.assert_output_status(other_output_id, not output_status)
+    toolbox.assert_output_changed(light, output_status)
+    toolbox.assert_output_status(other_light, not output_status)
+    toolbox.assert_output_status(other_output, not output_status)
 
-    logger.info('disable all lights on floor {}'.format(floor_id))
+    hypothesis.note('after "all lights off" for floor#{}'.format(floor_id))
     toolbox.dut.get('/set_all_lights_floor_off', params={'floor': floor_id})
-    toolbox.assert_output_changed(light_id, not output_status)
-    toolbox.assert_output_status(other_light_id, not output_status)
-    toolbox.assert_output_status(other_output_id, not output_status)
+    toolbox.assert_output_changed(light, not output_status)
+    toolbox.assert_output_status(other_light, not output_status)
+    toolbox.assert_output_status(other_output, not output_status)
 
 
-@pytest.mark.smoke
-@pytest.mark.skip(reason='fails consistently when running with the ci profile')
-@hypothesis.given(next_output(), integers(min_value=0, max_value=159), booleans())
-def test_group_action_toggle(toolbox, next_output, group_action_id, output_status):
-    (output_id, other_output_id) = (next_output(toolbox), next_output(toolbox))
-    logger.info('group action a#{} for o#{} o#{}, expect event {} -> {}'.format(group_action_id, output_id, other_output_id, not output_status, output_status))
+def group_action_ids():
+    return integers(min_value=0, max_value=159)
 
-    actions = ['162', str(output_id), '162', str(other_output_id)]  # toggle both outputs
+
+@hypothesis.given(multiple_outputs(2), group_action_ids(), booleans())
+def test_group_action_toggle(toolbox, outputs, group_action_id, output_status):
+    (output, other_output) = outputs
+    logger.debug('group action BA#{} for {}#{} {}#{}, expect event {} -> {}'.format(
+        group_action_id, output.type, output.output_id, other_output.type, other_output.output_id,
+        not output_status, output_status))
+
+    actions = ['162', str(output.output_id), '162', str(other_output.output_id)]  # toggle both outputs
     config = {'id': group_action_id, 'actions': ','.join(actions)}
     toolbox.dut.get('/set_group_action_configuration', params={'config': json.dumps(config)})
     time.sleep(2)
 
-    toolbox.ensure_output(output_id, not output_status, DEFAULT_OUTPUT_CONFIG)
-    toolbox.ensure_output(other_output_id, not output_status, DEFAULT_OUTPUT_CONFIG)
+    toolbox.ensure_output(output, not output_status, DEFAULT_OUTPUT_CONFIG)
+    toolbox.ensure_output(other_output, not output_status, DEFAULT_OUTPUT_CONFIG)
 
+    hypothesis.note('after running "toggle both outputs" group action {}'.format(group_action_id))
     toolbox.dut.get('/do_group_action', {'group_action_id': group_action_id})
-    toolbox.assert_output_changed(output_id, output_status)
-    toolbox.assert_output_changed(other_output_id, output_status)
+    toolbox.assert_output_changed(output, output_status)
+    toolbox.assert_output_changed(other_output, output_status)

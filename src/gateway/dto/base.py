@@ -23,4 +23,4 @@ class BaseDTO(object):
         return str(self.__dict__)
 
     def __repr__(self):
-        return str(self.__dict__)
+        return '<{} {}>'.format(self.__class__.__name__, self.__dict__)

@@ -15,7 +15,7 @@
 
 from peewee import (
     Model, Database, SqliteDatabase,
-    PrimaryKeyField, CharField, BooleanField, IntegerField, ForeignKeyField
+    AutoField, CharField, BooleanField, IntegerField, ForeignKeyField
 )
 from peewee_migrate import Migrator
 import constants
@@ -33,38 +33,38 @@ def migrate(migrator, database, fake=False, **kwargs):
                                       pragmas={'foreign_keys': 1})
 
     class Floor(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
         name = CharField(null=True)
 
     class Room(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
         name = CharField(null=True)
         floor = ForeignKeyField(Floor, null=True, on_delete='SET NULL', backref='rooms')
 
     class Input(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
         room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='inputs')
 
     class Shutter(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
         room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='shutters')
 
     class ShutterGroup(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
         room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='shutter_groups')
 
     class Sensor(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
         room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='sensors')
 
     class PulseCounter(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
         name = CharField()
         source = CharField()  # Options: 'master' or 'gateway'
@@ -80,7 +80,7 @@ def migrate(migrator, database, fake=False, **kwargs):
     migrator.create_model(PulseCounter)
 
     class Output(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
 
     migrator.add_columns(Output,

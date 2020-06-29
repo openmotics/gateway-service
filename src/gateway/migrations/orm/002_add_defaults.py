@@ -15,7 +15,7 @@
 
 from peewee import (
     Model, Database, SqliteDatabase,
-    PrimaryKeyField, CharField, BooleanField, IntegerField
+    AutoField, CharField, BooleanField, IntegerField
 )
 from peewee_migrate import Migrator
 import constants
@@ -33,12 +33,12 @@ def migrate(migrator, database, fake=False, **kwargs):
                                       pragmas={'foreign_keys': 1})
 
     class Feature(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         name = CharField(unique=True)
         enabled = BooleanField()
 
     class ThermostatGroup(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
         name = CharField()
         on = BooleanField(default=True)

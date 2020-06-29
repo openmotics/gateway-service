@@ -61,7 +61,7 @@ def main():
     filename = args.file
     version = args.version
 
-    setup_platform()
+    setup_platform(message_client_name=None)  # No MessageClient needed
 
     if Platform.get_platform() == Platform.Type.CORE_PLUS:
         from master.core.slave_updater import SlaveUpdater

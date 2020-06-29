@@ -24,7 +24,7 @@ import time
 import constants
 from peewee import (
     BooleanField, CharField, CompositeKey, DoesNotExist,
-    FloatField, ForeignKeyField, IntegerField, PrimaryKeyField,
+    FloatField, ForeignKeyField, IntegerField, AutoField,
     SqliteDatabase, TextField
 )
 from playhouse.signals import Model, post_save
@@ -74,56 +74,56 @@ class BaseModel(Model):
 
 
 class Floor(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     number = IntegerField(unique=True)
     name = CharField(null=True)
 
 
 class Room(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     number = IntegerField(unique=True)
     name = CharField(null=True)
     floor = ForeignKeyField(Floor, null=True, on_delete='SET NULL', backref='rooms')
 
 
 class Feature(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     name = CharField(unique=True)
     enabled = BooleanField()
 
 
 class Output(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     number = IntegerField(unique=True)
     room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='outputs')
 
 
 class Input(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     number = IntegerField(unique=True)
     room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='inputs')
 
 
 class Shutter(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     number = IntegerField(unique=True)
     room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='shutters')
 
 
 class ShutterGroup(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     number = IntegerField(unique=True)
     room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='shutter_groups')
 
 
 class Sensor(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     number = IntegerField(unique=True)
     room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='sensors')
 
 
 class PulseCounter(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     number = IntegerField(unique=True)
     name = CharField()
     source = CharField()  # Options: 'master' or 'gateway'
@@ -132,12 +132,12 @@ class PulseCounter(BaseModel):
 
 
 class GroupAction(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     number = IntegerField(unique=True)
 
 
 class ThermostatGroup(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     number = IntegerField(unique=True)
     name = CharField()
     on = BooleanField(default=True)
@@ -178,7 +178,7 @@ class OutputToThermostatGroup(BaseModel):
 
 
 class Pump(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     number = IntegerField(unique=True)
     name = CharField()
     output = ForeignKeyField(Output, backref='valve', on_delete='SET NULL', unique=True)
@@ -207,7 +207,7 @@ class Pump(BaseModel):
 
 
 class Valve(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     number = IntegerField(unique=True)
     name = CharField()
     delay = IntegerField(default=60)
@@ -231,7 +231,7 @@ class PumpToValve(BaseModel):
 
 
 class Thermostat(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     number = IntegerField(unique=True)
     name = CharField(default='Thermostat')
     sensor = IntegerField()
@@ -365,7 +365,7 @@ class ValveToThermostat(BaseModel):
 
 
 class Preset(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     name = CharField()
     heating_setpoint = FloatField(default=14.0)
     cooling_setpoint = FloatField(default=30.0)
@@ -396,7 +396,7 @@ class Preset(BaseModel):
 
 
 class DaySchedule(BaseModel):
-    id = PrimaryKeyField()
+    id = AutoField()
     index = IntegerField()
     content = TextField()
     mode = CharField(default='heating')

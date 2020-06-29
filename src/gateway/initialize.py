@@ -41,25 +41,28 @@ from master.classic.master_communicator import MasterCommunicator
 from master.core.core_communicator import CoreCommunicator
 from master.core.maintenance import MaintenanceCoreCommunicator
 from master.core.memory_file import MemoryFile, MemoryTypes
+from power.power_communicator import PowerCommunicator
+from power.power_controller import P1Controller, PowerController
+from power.power_store import PowerStore
 from serial_utils import RS485
 
 
 if False:  # MYPY
-    from typing import Any
+    from typing import Any, Optional
     from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger('openmotics')
 
 
-def initialize():
-    # type: () -> None
+def initialize(message_client_name):
+    # type: (Optional[str]) -> None
     logger.info('Initializing')
     init_lock = constants.get_init_lockfile()
     logger.info('Waiting for lock')
     with lock_file(init_lock) as fd:
         content = fd.read()
         apply_migrations()
-        setup_platform()
+        setup_platform(message_client_name)
         if content == '':
             logger.info('Initializing, done')
         elif content == 'factory_reset':
@@ -101,7 +104,7 @@ def factory_reset(master_controller=INJECTED):
 
     logger.info('Rebooting master...')
     master_controller.cold_reset()
-    time.sleep(5)
+    time.sleep(6)
 
     logger.info('Wiping master eeprom...')
     master_controller.start()
@@ -127,13 +130,13 @@ def factory_reset(master_controller=INJECTED):
         os.remove(config_file)
 
 
-def setup_platform():
-    # type: () -> None
-    setup_target_platform(Platform.get_platform())
+def setup_platform(message_client_name):
+    # type: (Optional[str]) -> None
+    setup_target_platform(Platform.get_platform(), message_client_name)
 
 
-def setup_target_platform(target_platform):
-    # type: (str) -> None
+def setup_target_platform(target_platform, message_client_name):
+    # type: (str, Optional[str]) -> None
     config = ConfigParser()
     config.read(constants.get_config_file())
 
@@ -150,7 +153,6 @@ def setup_target_platform(target_platform):
     # instances that are used in @Inject decorated functions below, and is also needed to specify
     # abstract implementations depending on e.g. the platform (classic vs core) or certain settings (classic
     # thermostats vs gateway thermostats)
-    from power import power_communicator, power_controller
     from plugins import base
     from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
                          maintenance_controller, comm_led_controller, users, pulse_counter_controller, config as config_controller,
@@ -158,8 +160,8 @@ def setup_target_platform(target_platform):
                          group_action_controller)
     from cloud import events
     _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
-         maintenance_controller, base, events, power_communicator, comm_led_controller, users,
-         power_controller, pulse_counter_controller, config_controller, metrics_caching, watchdog, output_controller,
+         maintenance_controller, base, events, comm_led_controller, users,
+         pulse_counter_controller, config_controller, metrics_caching, watchdog, output_controller,
          room_controller, sensor_controller, group_action_controller)
 
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
@@ -172,7 +174,10 @@ def setup_target_platform(target_platform):
         _ = thermostat_controller_master
 
     # IPC
-    Injectable.value(message_client=MessageClient('openmotics_service'))
+    message_client = None
+    if message_client_name is not None:
+        message_client = MessageClient(message_client_name)
+    Injectable.value(message_client=message_client)
 
     # Cloud API
     parsed_url = urlparse(config.get('OpenMotics', 'vpn_check_url'))
@@ -195,14 +200,19 @@ def setup_target_platform(target_platform):
 
     # Energy Controller
     power_serial_port = config.get('OpenMotics', 'power_serial')
-    Injectable.value(power_db=constants.get_power_database_file())
     if power_serial_port:
+        Injectable.value(power_db=constants.get_power_database_file())
+        Injectable.value(power_store=PowerStore())
         # TODO: make non blocking?
         Injectable.value(power_serial=RS485(Serial(power_serial_port, 115200, timeout=None)))
+        Injectable.value(power_communicator=PowerCommunicator())
+        Injectable.value(power_controller=PowerController())
+        Injectable.value(p1_controller=P1Controller())
     else:
-        Injectable.value(power_serial=None)
-        Injectable.value(power_communicator=None)
+        Injectable.value(power_store=None)
+        Injectable.value(power_communicator=None)  # TODO: remove from gateway_api
         Injectable.value(power_controller=None)
+        Injectable.value(p1_controller=None)
 
     # Pulse Controller
     Injectable.value(pulse_db=constants.get_pulse_counter_database_file())

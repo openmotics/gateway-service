@@ -54,6 +54,7 @@ if False:  # MYPY
     from power.power_communicator import PowerCommunicator
     from master.classic.passthrough import PassthroughService
     from cloud.events import EventSender
+    from serial_utils import RS485
 
 logger = logging.getLogger("openmotics")
 
@@ -86,7 +87,8 @@ class OpenmoticsService(object):
                 event_sender=INJECTED,  # type: EventSender
                 maintenance_controller=INJECTED,  # type: MaintenanceController
                 thermostat_controller=INJECTED,  # type: ThermostatController
-                shutter_controller=INJECTED  # type: ShutterController
+                shutter_controller=INJECTED,  # type: ShutterController
+                frontpanel_controller=INJECTED  # type: FrontpanelController
             ):
 
         # TODO: Fix circular dependencies
@@ -96,6 +98,7 @@ class OpenmoticsService(object):
         thermostat_controller.subscribe_events(event_sender.enqueue_event)
         thermostat_controller.subscribe_events(plugin_controller.process_observer_event)
         message_client.add_event_handler(metrics_controller.event_receiver)
+        message_client.add_event_handler(frontpanel_controller.event_receiver)
         web_interface.set_plugin_controller(plugin_controller)
         web_interface.set_metrics_collector(metrics_collector)
         web_interface.set_metrics_controller(metrics_controller)
@@ -123,6 +126,7 @@ class OpenmoticsService(object):
                 master_controller=INJECTED,  # type: MasterController
                 maintenance_controller=INJECTED,  # type: MaintenanceController
                 power_communicator=INJECTED,  # type: PowerCommunicator
+                power_serial=INJECTED,  # type: RS485
                 metrics_controller=INJECTED,  # type: MetricsController
                 passthrough_service=INJECTED,  # type: PassthroughService
                 scheduling_controller=INJECTED,  # type: SchedulingController
@@ -160,7 +164,9 @@ class OpenmoticsService(object):
 
         # Start rest of the stack
         maintenance_controller.start()
-        power_communicator.start()
+        if power_communicator:
+            power_serial.start()
+            power_communicator.start()
         metrics_controller.start()
         if passthrough_service:
             passthrough_service.start()
@@ -195,7 +201,8 @@ class OpenmoticsService(object):
             shutter_controller.stop()
             group_action_controller.stop()
             web_service.stop()
-            power_communicator.stop()
+            if power_communicator:
+                power_communicator.stop()
             master_controller.stop()
             maintenance_controller.stop()
             metrics_collector.stop()
@@ -216,7 +223,7 @@ class OpenmoticsService(object):
 
 if __name__ == "__main__":
     setup_logger()
-    initialize()
+    initialize(message_client_name='openmotics_service')
 
     logger.info("Starting OpenMotics service")
     # TODO: move message service to separate process

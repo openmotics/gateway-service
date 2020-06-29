@@ -143,22 +143,29 @@ def params_parser(params, param_types):
 
 
 def params_handler(**kwargs):
-    """ Convert specified request params. """
+    """ Converts/parses/loads specified request params. """
     request = cherrypy.request
+    response = cherrypy.response
+    try:
+        if request.method in request.methods_with_bodies:
+            body = request.body.read()
+            if body:
+                request.params['request_body'] = body
+    except Exception:
+        response.headers['Content-Type'] = 'application/json'
+        response.status = 406  # No Acceptable
+        response.body = json.dumps({'success': False,
+                                    'msg': 'invalid_body'})
+        request.handler = None
+        return
     try:
         params_parser(request.params, kwargs)
     except ValueError:
-        cherrypy.response.headers['Content-Type'] = 'application/json'
-        cherrypy.response.status = 406  # No Acceptable
-        cherrypy.response.body = json.dumps({'success': False,
-                                             'msg': 'invalid_parameters'})
+        response.headers['Content-Type'] = 'application/json'
+        response.status = 406  # No Acceptable
+        response.body = json.dumps({'success': False,
+                                    'msg': 'invalid_parameters'})
         request.handler = None
-
-
-def timestamp_handler():
-    request = cherrypy.request
-    if 'fe_time' in request.params:
-        del request.params["fe_time"]
 
 
 def cors_handler():
@@ -204,7 +211,6 @@ def authentication_handler(pass_token=False):
         request.handler = None
 
 
-cherrypy.tools.timestamp_filter = cherrypy.Tool('before_handler', timestamp_handler)
 cherrypy.tools.cors = cherrypy.Tool('before_handler', cors_handler, priority=10)
 cherrypy.tools.authenticated = cherrypy.Tool('before_handler', authentication_handler)
 cherrypy.tools.params = cherrypy.Tool('before_handler', params_handler)
@@ -255,8 +261,7 @@ def openmotics_api(auth=False, check=None, pass_token=False, plugin_exposed=True
         func = _openmotics_api(func)
         if auth is True:
             func = cherrypy.tools.authenticated(pass_token=pass_token)(func)
-        if check is not None:
-            func = cherrypy.tools.params(**check)(func)
+        func = cherrypy.tools.params(**(check or {}))(func)
         func.exposed = True
         func.plugin_exposed = plugin_exposed
         func.check = check
@@ -298,7 +303,7 @@ class WebInterface(object):
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
-        self._message_client = message_client  # type: MessageClient
+        self._message_client = message_client  # type: Optional[MessageClient]
         self._plugin_controller = None  # type: Optional[PluginController]
         self._metrics_collector = None  # type: Optional[MetricsCollector]
         self._metrics_controller = None  # type: Optional[MetricsController]
@@ -541,6 +546,7 @@ class WebInterface(object):
             'factory_reset',  # The gateway can be complete reset to factory standard
             'isolated_plugins',  # Plugins run in a separate process, so allow fine-graded control
             'websocket_maintenance',  # Maintenance over websockets
+            'shutter_positions',  # Shutter positions
         ]
 
         master_version = self._gateway_api.get_master_version()
@@ -709,6 +715,15 @@ class WebInterface(object):
         :param direction: The direction
         """
         self._shutter_controller.report_shutter_position(id, position, direction)
+        return {'status': 'OK'}
+
+    @openmotics_api(auth=True, check=types(id=int))
+    def shutter_report_lost_position(self, id):  # type: (int) -> Dict[str, str]
+        """
+        Reports a shutter has lost it's position
+        :param id: The id of the shutter.
+        """
+        self._shutter_controller.report_shutter_lost_position(id)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(id=int))
@@ -883,6 +898,28 @@ class WebInterface(object):
         :rtype: dict
         """
         return self._gateway_api.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
+
+    @openmotics_api(auth=True)
+    def add_virtual_output(self):
+        # type: () -> Dict[str,Any]
+        """
+        Adds a new virtual output module.
+
+        :returns: dict with 'status'.
+        :rtype: dict
+        """
+        return {'status': self._gateway_api.add_virtual_output_module()}
+
+    @openmotics_api(auth=True)
+    def add_virtual_input(self):
+        # type: () -> Dict[str,Any]
+        """
+        Adds a new virtual input module.
+
+        :returns: dict with 'status'.
+        :rtype: dict
+        """
+        return {'status': self._gateway_api.add_virtual_input_module()}
 
     @openmotics_api(auth=True, check=types(action_type=int, action_number=int))
     def do_basic_action(self, action_type, action_number):
@@ -1824,7 +1861,15 @@ class WebInterface(object):
         :returns: module id as the keys: [voltage, frequency, current, power].
         :rtype: dict
         """
-        return self._gateway_api.get_realtime_power()
+        response = {}  # type: Dict[str,List[List[float]]]
+        for module_id, items in self._gateway_api.get_realtime_power().items():
+            response[module_id] = []
+            for realtime_power in items:
+                response[module_id].append([realtime_power.voltage,
+                                            realtime_power.frequency,
+                                            realtime_power.current,
+                                            realtime_power.power])
+        return response
 
     @openmotics_api(auth=True)
     def get_total_energy(self):
@@ -2047,7 +2092,8 @@ class WebInterface(object):
 
         if response.status_code != requests.codes.ok:
             raise RuntimeError("Got bad resonse code: %d" % response.status_code)
-        return {'headers': response.headers._store,
+        response_headers = response.headers  # type: Any
+        return {'headers': response_headers._store,
                 'data': response.text}
 
     @openmotics_api(auth=True, check=types(timestamp=int, action='json'), deprecated='add_schedule')
@@ -2178,21 +2224,16 @@ class WebInterface(object):
         self._config_controller.set(setting, value)
         return {}
 
-    @openmotics_api(auth=True)
-    def self_test(self):
-        """
-        Perform a Gateway self-test.
-        """
-        if not self.in_authorized_mode():
-            raise cherrypy.HTTPError(401, "unauthorized")
-        subprocess.Popen(constants.get_self_test_cmd(), close_fds=True)
+    @openmotics_api(auth=True, check=types(active=bool), plugin_exposed=False)
+    def set_self_recovery(self, active):
+        self._gateway_api.set_self_recovery(active=active)
         return {}
 
     @openmotics_api(auth=True)
     def get_metric_definitions(self, source=None, metric_type=None):
         sources = self._metrics_controller.get_filter('source', source)
         metric_types = self._metrics_controller.get_filter('metric_type', metric_type)
-        definitions = {}
+        definitions = {}  # type: Dict[str,Dict[str,Any]]
         for _source, _metric_types in six.iteritems(self._metrics_controller.definitions):
             if _source in sources:
                 definitions[_source] = {}
@@ -2217,7 +2258,9 @@ class WebInterface(object):
         """ Requests the state of the various services and checks the returned value for the global state """
         health = {'openmotics': {'state': self._service_state}}
         try:
-            state = self._message_client.get_state('vpn_service', {})
+            state = {}
+            if self._message_client is not None:
+                state = self._message_client.get_state('vpn_service', {})
             health['vpn_service'] = {'state': state.get('last_cycle', 0) > time.time() - 300}
         except Exception as ex:
             logger.error('Error loading vpn_service health: %s', ex)
@@ -2268,10 +2311,11 @@ class WebService(object):
 
     @Inject
     def __init__(self, web_interface=INJECTED, configuration_controller=INJECTED, verbose=False):
+        # type: (WebInterface, ConfigurationController, bool) -> None
         self._webinterface = web_interface
         self._config_controller = configuration_controller
-        self._https_server = None
-        self._http_server = None
+        self._https_server = None  # type: Optional[cherrypy._cpserver.Server]
+        self._http_server = None  # type: Optional[cherrypy._cpserver.Server]
         if not verbose:
             logging.getLogger("cherrypy").propagate = False
 
@@ -2304,8 +2348,7 @@ class WebService(object):
                                      'tools.websocket.handler_cls': EventsSocket},
                       '/ws_maintenance': {'tools.websocket.on': True,
                                           'tools.websocket.handler_cls': MaintenanceSocket},
-                      '/': {'tools.timestamp_filter.on': True,
-                            'tools.cors.on': self._config_controller.get('cors_enabled', False),
+                      '/': {'tools.cors.on': self._config_controller.get('cors_enabled', False),
                             'tools.sessions.on': False}}
 
             cherrypy.tree.mount(root=self._webinterface,
@@ -2325,7 +2368,12 @@ class WebService(object):
 
             self._http_server = cherrypy._cpserver.Server()
             self._http_server.socket_port = 80
-            self._http_server._socket_host = '127.0.0.1'
+            if self._config_controller.get('enable_http', False):
+                # This is added for development purposes.
+                # Do NOT enable unless you know what you're doing and understand the risks.
+                self._http_server._socket_host = '0.0.0.0'
+            else:
+                self._http_server._socket_host = '127.0.0.1'
             self._http_server.socket_timeout = 60
             self._http_server.subscribe()
 

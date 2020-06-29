@@ -232,12 +232,15 @@ class MasterController(object):
     # Virtual modules
 
     def add_virtual_output_module(self):
+        # type: () -> str
         raise NotImplementedError()
 
     def add_virtual_dim_module(self):
+        # type: () -> str
         raise NotImplementedError()
 
     def add_virtual_input_module(self):
+        # type: () -> str
         raise NotImplementedError()
 
     # Generic
@@ -388,4 +391,9 @@ class MasterController(object):
         raise NotImplementedError()
 
     def set_all_lights_floor_on(self, floor):
+        raise NotImplementedError()
+
+    # Validation bits
+
+    def load_validation_bits(self):
         raise NotImplementedError()

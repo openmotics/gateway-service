@@ -15,7 +15,7 @@
 
 from peewee import (
     Model, Database, SqliteDatabase,
-    PrimaryKeyField, IntegerField
+    AutoField, IntegerField
 )
 from peewee_migrate import Migrator
 import constants
@@ -33,7 +33,7 @@ def migrate(migrator, database, fake=False, **kwargs):
                                       pragmas={'foreign_keys': 1})
 
     class GroupAction(BaseModel):
-        id = PrimaryKeyField()
+        id = AutoField()
         number = IntegerField(unique=True)
 
     migrator.create_model(GroupAction)

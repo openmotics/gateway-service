@@ -19,6 +19,8 @@ A few helper classes
 from __future__ import absolute_import
 import time
 import msgpack
+import inspect
+import six
 from select import select
 from collections import deque
 from threading import Thread
@@ -168,3 +170,9 @@ class Toolbox(object):
     @staticmethod
     def denonify(value, default_value):
         return default_value if value is None else value
+
+    @staticmethod
+    def get_parameter_names(func):
+        if six.PY2:
+            return inspect.getargspec(func).args
+        return list(inspect.signature(func).parameters.keys())
