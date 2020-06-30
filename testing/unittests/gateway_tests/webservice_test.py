@@ -45,6 +45,7 @@ class WebInterfaceTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
+        self.output_controller = mock.Mock(OutputController)
         self.gateway_api = mock.Mock(GatewayApi)
         SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
                             frontpanel_controller=mock.Mock(FrontpanelController),
@@ -53,7 +54,7 @@ class WebInterfaceTest(unittest.TestCase):
                             input_controller=mock.Mock(InputController),
                             maintenance_controller=mock.Mock(MaintenanceController),
                             message_client=mock.Mock(MessageClient),
-                            output_controller=mock.Mock(OutputController),
+                            output_controller=self.output_controller,
                             pulse_counter_controller=mock.Mock(PulseCounterController),
                             room_controller =mock.Mock(RoomController),
                             scheduling_controller=mock.Mock(SchedulingController),
@@ -64,7 +65,7 @@ class WebInterfaceTest(unittest.TestCase):
         self.web = WebInterface()
 
     def test_output_status(self):
-        with mock.patch.object(self.gateway_api, 'get_output_statuses',
+        with mock.patch.object(self.output_controller, 'get_output_statuses',
                                return_value=[OutputStateDTO(id=0, status=True)]):
             response = self.web.get_output_status()
             assert [{'id': 0, 'status': 1, 'ctimer': 0, 'dimmer': 0, 'locked': False}] == json.loads(response)['status']

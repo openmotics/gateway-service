@@ -54,19 +54,6 @@ class GatewayApiTest(unittest.TestCase):
                             power_store=self.power_store)
         self.api = GatewayApi()
 
-    def test_get_output_statuses(self):
-        with mock.patch.object(self.output_controller, 'get_output_statuses',
-                               return_value=[OutputStateDTO(id=42)]):
-            status = self.api.get_output_statuses()
-            assert len(status) == 1
-            assert OutputStateDTO(id=42) in status
-
-    def test_get_output_status(self):
-        with mock.patch.object(self.output_controller, 'get_output_status',
-                               return_value=OutputStateDTO(id=42)):
-            status = self.api.get_output_status(42)
-            assert OutputStateDTO(id=42) == status
-
     def test_get_power_modules(self):
         self.power_store.get_power_modules.return_value = {
             10: {'address': 11, 'name': 'Power', 'version': POWER_MODULE},

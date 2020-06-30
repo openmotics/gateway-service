@@ -47,10 +47,8 @@ if False:  # MYPY:
     from power.power_controller import PowerController, P1Controller
     from bus.om_bus_client import MessageClient
     from gateway.config import ConfigurationController
-    from gateway.dto import OutputStateDTO
     from gateway.observer import Observer
     from gateway.watchdog import Watchdog
-    from gateway.output_controller import OutputController
 
     T = TypeVar('T', bound=Union[int, float])
 
@@ -79,8 +77,8 @@ class GatewayApi(object):
     def __init__(self,
                  master_controller=INJECTED, power_store=INJECTED, power_communicator=INJECTED,
                  power_controller=INJECTED, p1_controller=INJECTED, message_client=INJECTED,
-                 observer=INJECTED, output_controller=INJECTED, configuration_controller=INJECTED):
-        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer, OutputController, ConfigurationController) -> None
+                 observer=INJECTED, configuration_controller=INJECTED):
+        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer, ConfigurationController) -> None
         self.__master_controller = master_controller  # type: MasterController
         self.__config_controller = configuration_controller
         self.__power_store = power_store
@@ -89,7 +87,6 @@ class GatewayApi(object):
         self.__power_controller = power_controller
         self.__message_client = message_client
         self.__observer = observer
-        self.__output_controller = output_controller
 
     def set_plugin_controller(self, plugin_controller):
         """ Set the plugin controller. """
@@ -211,23 +208,6 @@ class GatewayApi(object):
         return self.__master_controller.flash_leds(led_type, led_id)
 
     # Output functions
-
-    def get_output_statuses(self):
-        # type: () -> List[OutputStateDTO]
-        """
-        Get a list containing the status of the Outputs.
-        """
-        return self.__output_controller.get_output_statuses()
-
-    def get_output_status(self, output_id):
-        # type: (int) -> OutputStateDTO
-        """
-        Get the status of a given Output.
-        """
-        output_dto = self.__output_controller.get_output_status(output_id)
-        if output_dto is None:
-            raise ValueError('Output with id {} does not exist'.format(output_id))
-        return output_dto
 
     def set_output_status(self, output_id, is_on, dimmer=None, timer=None):  # type: (int, bool, Optional[int], Optional[int]) -> None
         """

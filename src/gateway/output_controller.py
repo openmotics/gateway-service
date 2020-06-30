@@ -120,9 +120,12 @@ class OutputController(BaseController):
             callback(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, event_data))
 
     def get_output_status(self, output_id):
-        # type: (int) -> Optional[OutputStateDTO]
+        # type: (int) -> OutputStateDTO
         # TODO also support plugins
-        return self._cache.get_state().get(output_id)
+        output_state_dto = self._cache.get_state().get(output_id)
+        if output_state_dto is None:
+            raise ValueError('Output with id {} does not exist'.format(output_id))
+        return output_state_dto
 
     def get_output_statuses(self):
         # type: () -> List[OutputStateDTO]

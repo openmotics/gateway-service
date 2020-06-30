@@ -600,7 +600,7 @@ class WebInterface(object):
         :returns: 'status': list of dictionaries with the following keys: id, status, dimmer and ctimer.
         """
         return {'status': [OutputStateSerializer.serialize(output, None)
-                           for output in self._gateway_api.get_output_statuses()]}
+                           for output in self._output_controller.get_output_statuses()]}
 
     @openmotics_api(auth=True, check=types(id=int, is_on=bool, dimmer=int, timer=int))
     def set_output(self, id, is_on, dimmer=None, timer=None):  # type: (int, bool, Optional[int], Optional[int]) -> Dict
