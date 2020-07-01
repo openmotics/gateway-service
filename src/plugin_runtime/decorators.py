@@ -75,7 +75,7 @@ def input_status(method=None, version=1):
     return wrapper
 
 
-def output_status(method):
+def output_status(method, version=1):
     """
     Decorator to indicate that the method should receive output status messages.
     The receiving method should accept one parameter, a list of tuples (output, dimmer value).

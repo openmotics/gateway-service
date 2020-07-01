@@ -86,6 +86,7 @@ class OpenmoticsService(object):
                 web_service=INJECTED,  # type: WebService
                 event_sender=INJECTED,  # type: EventSender
                 maintenance_controller=INJECTED,  # type: MaintenanceController
+                output_controller=INJECTED,  # type: OutputController
                 thermostat_controller=INJECTED,  # type: ThermostatController
                 shutter_controller=INJECTED,  # type: ShutterController
                 frontpanel_controller=INJECTED  # type: FrontpanelController
@@ -111,6 +112,11 @@ class OpenmoticsService(object):
         plugin_controller.set_metrics_controller(metrics_controller)
         plugin_controller.set_metrics_collector(metrics_collector)
         maintenance_controller.subscribe_maintenance_stopped(gateway_api.maintenance_mode_stopped)
+        output_controller.subscribe_events(metrics_collector.process_observer_event)
+        output_controller.subscribe_events(plugin_controller.process_observer_event)
+        output_controller.subscribe_events(web_interface.send_event_websocket)
+        output_controller.subscribe_events(event_sender.enqueue_event)
+        # TODO: remove observer inputs
         observer.subscribe_events(metrics_collector.process_observer_event)
         observer.subscribe_events(plugin_controller.process_observer_event)
         observer.subscribe_events(web_interface.send_event_websocket)

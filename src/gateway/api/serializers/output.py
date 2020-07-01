@@ -17,9 +17,10 @@
 Output (de)serializer
 """
 from __future__ import absolute_import
-from toolbox import Toolbox
+
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto import OutputDTO, FeedbackLedDTO
+from gateway.dto import FeedbackLedDTO, OutputDTO, OutputStateDTO
+from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Dict, Optional, List, Tuple
@@ -73,3 +74,30 @@ class OutputSerializer(object):
                 setattr(output_dto, base_field, FeedbackLedDTO(id=api_data[id_field],
                                                                function=api_data[function_field]))
         return output_dto, loaded_fields
+
+
+class OutputStateSerializer(object):
+    @staticmethod
+    def serialize(output_state_dto, fields):
+    # type: (OutputStateDTO, Optional[List[str]]) -> Dict
+        data = {'id': output_state_dto.id,
+                'status': 1 if output_state_dto.status else 0,
+                'ctimer': output_state_dto.ctimer,
+                'dimmer': output_state_dto.dimmer,
+                'locked': output_state_dto.locked}
+        return SerializerToolbox.filter_fields(data, fields)
+
+    @staticmethod
+    def deserialize(api_data):
+        # type: (Dict) -> Tuple[OutputStateDTO, List[str]]
+        loaded_fields = ['id']
+        output_state_dto = OutputStateDTO(api_data['id'])
+        loaded_fields += SerializerToolbox.deserialize(
+            dto=output_state_dto,  # Referenced
+            api_data=api_data,
+            mapping={'status': ('status', bool),
+                     'ctimer': ('ctimer', lambda x: x or 0),
+                     'dimmer': ('dimmer', lambda x: x or 0),
+                     'locked': ('locked', lambda x: x or False)}
+        )
+        return output_state_dto, loaded_fields

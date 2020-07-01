@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from gateway.dto.feedback_led import FeedbackLedDTO
-from gateway.dto.output import OutputDTO
+from gateway.dto.output import OutputDTO, OutputStateDTO
 from gateway.dto.shutter import ShutterDTO
 from gateway.dto.shutter_group import ShutterGroupDTO
 from gateway.dto.thermostat import ThermostatDTO

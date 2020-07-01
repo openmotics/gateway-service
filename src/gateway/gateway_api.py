@@ -46,8 +46,8 @@ if False:  # MYPY:
     from power.power_store import PowerStore
     from power.power_controller import PowerController, P1Controller
     from bus.om_bus_client import MessageClient
-    from gateway.observer import Observer
     from gateway.config import ConfigurationController
+    from gateway.observer import Observer
     from gateway.watchdog import Watchdog
 
     T = TypeVar('T', bound=Union[int, float])
@@ -208,23 +208,6 @@ class GatewayApi(object):
         return self.__master_controller.flash_leds(led_type, led_id)
 
     # Output functions
-
-    def get_outputs_status(self):  # type: () -> List[Dict[str, Any]]
-        """
-        Get a list containing the status of the Outputs.
-        """
-        # TODO: Use the OutputController
-        return self.__observer.get_outputs()
-
-    def get_output_status(self, output_id):  # type: (int) -> Dict[str, Any]
-        """
-        Get the status of a given Output.
-        """
-        # TODO: Use the OutputController
-        output = self.__observer.get_output(output_id)
-        if output is None:
-            raise ValueError('Output with id {} does not exist'.format(output_id))
-        return output
 
     def set_output_status(self, output_id, is_on, dimmer=None, timer=None):  # type: (int, bool, Optional[int], Optional[int]) -> None
         """

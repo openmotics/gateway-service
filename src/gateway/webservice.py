@@ -16,6 +16,7 @@
 
 
 from __future__ import absolute_import
+
 import base64
 import logging
 import os
@@ -27,6 +28,7 @@ import uuid
 import cherrypy
 import msgpack
 import requests
+import six
 import ujson as json
 from cherrypy.lib.static import serve_file
 from decorator import decorator
@@ -34,22 +36,20 @@ from peewee import DoesNotExist
 
 import constants
 import gateway
-from gateway.api.serializers import (
-    OutputSerializer, InputSerializer,
-    ShutterSerializer, ShutterGroupSerializer,
-    ThermostatSerializer, RoomSerializer, SensorSerializer,
-    PulseCounterSerializer, GroupActionSerializer
-)
+from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
+    OutputSerializer, OutputStateSerializer, PulseCounterSerializer, \
+    RoomSerializer, SensorSerializer, ShutterGroupSerializer, \
+    ShutterSerializer, ThermostatSerializer
 from gateway.dto import RoomDTO
 from gateway.enums import ShutterEnums
 from gateway.maintenance_communicator import InMaintenanceModeException
-from gateway.websockets import EventsSocket, MaintenanceSocket, MetricsSocket, OMPlugin, OMSocketTool
-from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.models import Feature
-from platform_utils import System, Hardware, Platform
+from gateway.websockets import EventsSocket, MaintenanceSocket, \
+    MetricsSocket, OMPlugin, OMSocketTool
+from ioc import INJECTED, Inject, Injectable, Singleton
+from platform_utils import Hardware, Platform, System
 from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
-import six
 
 if False:
     from typing import Dict, Optional, Any, List, Tuple
@@ -604,7 +604,8 @@ class WebInterface(object):
 
         :returns: 'status': list of dictionaries with the following keys: id, status, dimmer and ctimer.
         """
-        return {'status': self._gateway_api.get_outputs_status()}
+        return {'status': [OutputStateSerializer.serialize(output, None)
+                           for output in self._output_controller.get_output_statuses()]}
 
     @openmotics_api(auth=True, check=types(id=int, is_on=bool, dimmer=int, timer=int))
     def set_output(self, id, is_on, dimmer=None, timer=None):  # type: (int, bool, Optional[int], Optional[int]) -> Dict

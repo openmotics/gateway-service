@@ -18,9 +18,19 @@ import unittest
 
 import mock
 
+from bus.om_bus_client import MessageClient
+from gateway.config import ConfigurationController
+from gateway.dto import OutputStateDTO
 from gateway.gateway_api import GatewayApi
+from gateway.hal.master_controller import MasterController
+from gateway.observer import Observer
+from gateway.output_controller import OutputController
 from ioc import SetTestMode, SetUpTestInjections
-from power.power_api import ENERGY_MODULE, P1_CONCENTRATOR, POWER_MODULE, RealtimePower
+from power.power_api import ENERGY_MODULE, P1_CONCENTRATOR, POWER_MODULE, \
+    RealtimePower
+from power.power_communicator import PowerCommunicator
+from power.power_controller import P1Controller, PowerController
+from power.power_store import PowerStore
 
 
 class GatewayApiTest(unittest.TestCase):
@@ -29,17 +39,19 @@ class GatewayApiTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
-        self.power_store = mock.Mock()
-        self.power_controller = mock.Mock()
-        self.p1_controller = mock.Mock()
-        SetUpTestInjections(master_controller=mock.Mock(),
-                            power_store=self.power_store,
-                            power_communicator=mock.Mock(),
-                            power_controller=self.power_controller,
+        self.output_controller = mock.Mock(OutputController)
+        self.power_store = mock.Mock(PowerStore)
+        self.power_controller = mock.Mock(PowerController)
+        self.p1_controller = mock.Mock(P1Controller)
+        SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
+                            master_controller=mock.Mock(MasterController),
+                            message_client=mock.Mock(MessageClient),
+                            observer=mock.Mock(Observer),
+                            output_controller=self.output_controller,
                             p1_controller=self.p1_controller,
-                            message_client=mock.Mock(),
-                            observer=mock.Mock(),
-                            configuration_controller=mock.Mock())
+                            power_communicator=mock.Mock(PowerCommunicator),
+                            power_controller=self.power_controller,
+                            power_store=self.power_store)
         self.api = GatewayApi()
 
     def test_get_power_modules(self):
