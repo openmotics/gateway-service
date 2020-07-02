@@ -44,6 +44,7 @@ from master.core.memory_models import GlobalConfiguration, \
     InputConfiguration, InputModuleConfiguration, OutputConfiguration, \
     OutputModuleConfiguration, SensorConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
+from master.core.core_updater import CoreUpdater
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.ucan_communicator import UCANCommunicator
 from serial_utils import CommunicationTimedOutException
@@ -786,6 +787,10 @@ class MasterCoreController(MasterController):
         power(True)
 
         return {'status': 'OK'}
+
+    def update(self, hex_filename):
+        # type: (str) -> None
+        CoreUpdater.update(hex_filename=hex_filename)
 
     def get_backup(self):
         data = []
