@@ -39,6 +39,7 @@ from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
+from master.core.core_updater import CoreUpdater
 from master.core.ucan_communicator import UCANCommunicator
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.errors import Error
@@ -802,6 +803,10 @@ class MasterCoreController(MasterController):
         power(True)
 
         return {'status': 'OK'}
+
+    def update(self, hex_filename):
+        # type: (str) -> None
+        CoreUpdater.update(hex_filename=hex_filename)
 
     def get_backup(self):
         data = []
