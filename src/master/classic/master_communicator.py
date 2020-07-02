@@ -116,7 +116,8 @@ class MasterCommunicator(object):
             self.__read_thread.start()
 
     def stop(self):
-        pass  # Not supported/used
+        self.__running = False
+        self.__read_thread.join()
 
     def enable_passthrough(self):
         self.__passthrough_enabled = True
@@ -148,8 +149,6 @@ class MasterCommunicator(object):
         with self.__serial_write_lock:
             if self.__verbose:
                 logger.info('Writing to Master serial:   {0}'.format(printable(data)))
-            else:
-                logger.debug('Writing to Master serial:   {0}'.format(printable(data)))
 
             threshold = time.time() - self.__debug_buffer_duration
             self.__debug_buffer['write'][time.time()] = printable(data)
@@ -429,8 +428,6 @@ class MasterCommunicator(object):
 
                 if self.__verbose:
                     logger.info('Reading from Master serial: {0}'.format(printable(data)))
-                else:
-                    logger.debug('Reading from Master serial: {0}'.format(printable(data)))
 
                 if read_state.should_resume():
                     data = read_state.consume(data)
