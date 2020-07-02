@@ -119,10 +119,10 @@ class P1Controller(object):
                                        'electricity': {'ean': eans1[port_id].strip(),
                                                        'current': currents[port_id],
                                                        'voltage': voltages[port_id],
-                                                       'consumption_low': consumptions1[port_id],
-                                                       'consumption_normal': consumptions2[port_id],
-                                                       'injection_low': injections1[port_id],
-                                                       'injection_normal': injections2[port_id],
+                                                       'consumption_tariff1': consumptions1[port_id],
+                                                       'consumption_tariff2': consumptions2[port_id],
+                                                       'injection_tariff1': injections1[port_id],
+                                                       'injection_tariff2': injections2[port_id],
                                                        'tariff_indicator': tariff_indicators[port_id]}})
 
         return values
