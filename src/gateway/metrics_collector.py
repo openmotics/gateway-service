@@ -34,7 +34,7 @@ from power import power_api
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Dict, Any, List, Tuple
+    from typing import Dict, Any, List, Optional, Tuple
     from gateway.input_controller import InputController
     from gateway.output_controller import OutputController
     from gateway.sensor_controller import SensorController
@@ -666,8 +666,10 @@ class MetricsCollector(object):
             for realtime_p1 in self._gateway_api.get_realtime_p1():
                 electricity_p1 = realtime_p1.get('electricity', {})
                 if electricity_p1.get('ean'):
-                    values = {'electricity_tariff_low': electricity_p1['tariff_low'],
-                              'electricity_tariff_normal': electricity_p1['tariff_normal'],
+                    values = {'electricity_consumption_tariff1': convert_kwh(electricity_p1['consumption_tariff1']),
+                              'electricity_consumption_tariff2': convert_kwh(electricity_p1['consumption_tariff2']),
+                              'electricity_injection_tariff1': convert_kwh(electricity_p1['injection_tariff1']),
+                              'electricity_injection_tariff2': convert_kwh(electricity_p1['injection_tariff2']),
                               'electricity_tariff_indicator': electricity_p1['tariff_indicator'],
                               'electricity_voltage_phase1': electricity_p1['voltage']['phase1'],
                               'electricity_voltage_phase2': electricity_p1['voltage']['phase2'],
@@ -1175,14 +1177,22 @@ class MetricsCollector(object):
                           'description': 'Current gas consumption',
                           'type': 'gauge',
                           'unit': 'm3'},
-                         {'name': 'electricity_tariff_low',
+                         {'name': 'electricity_consumption_tariff1',
+                          'description': 'Current consumption tariff1',
+                          'type': 'gauge',
+                          'unit': 'Wh'},
+                         {'name': 'electricity_consumption_tariff2',
+                          'description': 'Current consumption tariff2',
+                          'type': 'gauge',
+                          'unit': 'Wh'},
+                         {'name': 'electricity_injection_tariff1',
                           'description': 'Current injection tariff1',
                           'type': 'gauge',
-                          'unit': 'kWh'},
-                         {'name': 'electricity_tariff_normal',
+                          'unit': 'Wh'},
+                         {'name': 'electricity_injection_tariff2',
                           'description': 'Current injection tariff2',
                           'type': 'gauge',
-                          'unit': 'kWh'},
+                          'unit': 'Wh'},
                          {'name': 'electricity_tariff_indicator',
                           'description': 'Current tariff indicator',
                           'type': 'gauge',
@@ -1239,3 +1249,8 @@ class MetricsCollector(object):
                           'type': 'gauge',
                           'unit': ''}]}
         ]
+
+
+def convert_kwh(value):
+    # type: (Optional[float]) -> Optional[float]
+    return None if value is None else value * 1000

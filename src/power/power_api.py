@@ -137,6 +137,17 @@ def get_gas_consumption_p1(version):
         raise ValueError("Unknown power api version")
 
 
+def get_consumption_tariff_p1(version, type=None):
+    # type: (int, Optional[int]) -> PowerCommand
+    """ Gets the electricity consumption tariff from a P1 concentrator """
+    if version == P1_CONCENTRATOR:
+        if type not in (1, 2):
+            raise ValueError('Unknown tariff type')
+        return PowerCommand('G', 'c{0}\x00'.format(type), '', '112s', module_type='C')
+    else:
+        raise ValueError("Unknown power api version")
+
+
 def get_injection_tariff_p1(version, type=None):
     # type: (int, Optional[int]) -> PowerCommand
     """ Gets the injection tariff from a P1 concentrator """
