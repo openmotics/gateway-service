@@ -19,6 +19,7 @@ from __future__ import absolute_import
 import logging
 import time
 import six
+import subprocess
 from datetime import datetime
 from threading import Timer
 
@@ -57,6 +58,7 @@ from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Tuple
+    from serial import Serial
     from gateway.config import ConfigurationController
 
 logger = logging.getLogger("openmotics")
@@ -866,27 +868,82 @@ class MasterClassicController(MasterController):
         self.restore(data)
 
     def cold_reset(self):
-        """ Perform a cold reset on the master. Turns the power off, waits 5 seconds and
-        turns the power back on.
-
-        :returns: 'status': 'OK'.
+        """
+        Perform a cold reset on the master. Turns the power off, waits 5 seconds and turns the power back on.
         """
         _ = self  # Must be an instance method
-        gpio_direction = open('/sys/class/gpio/gpio44/direction', 'w')
-        gpio_direction.write('out')
-        gpio_direction.close()
-
-        def power(master_on):
-            """ Set the power on the master. """
-            gpio_file = open('/sys/class/gpio/gpio44/value', 'w')
-            gpio_file.write('1' if master_on else '0')
-            gpio_file.close()
-
-        power(False)
+        MasterClassicController._set_master_power(False)
         time.sleep(5)
-        power(True)
+        MasterClassicController._set_master_power(True)
 
-        return {'status': 'OK'}
+    @Inject
+    def update(self, hex_filename, controller_serial=INJECTED):
+        # type: (str, Serial) -> None
+        port = controller_serial.port  # type: ignore
+        baudrate = str(controller_serial.baudrate)  # type: ignore
+
+        logger.info('Enter bootloader...')
+        # Entering the bootloader requires some correct timing. The AN1310 tool is used to enter bootloader for which the
+        # tool only tries for 5 seconds. To in these 5 seconds, the master needs to be booted up so it can enter (and
+        # stay) into bootloader.
+        MasterClassicController._set_master_power(False)
+        time.sleep(3)
+        subprocess.Popen(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-a'],
+                         stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE)
+        MasterClassicController._set_master_power(True)
+
+        logger.info('Verify bootloader...')
+        tries = 10
+        found = False
+        response = None
+        while tries > 0:
+            # It might take a few seconds before the bootloader is active
+            try:
+                response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-s'])
+                if 'PIC18F67J11' in str(response):
+                    found = True
+                    break
+            except subprocess.CalledProcessError as ex:
+                if ex.returncode != 254:
+                    raise
+            time.sleep(1)
+            tries -= 1
+        if not found:
+            error_message = 'Could not enter bootloader: {0}'.format(str(response))
+            logger.error(error_message)
+            raise RuntimeError(error_message)
+
+        logger.info('Flashing...')
+        try:
+            response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-p ', '-c', hex_filename])
+            logger.debug(response)
+        except subprocess.CalledProcessError as ex:
+            logger.info(ex.output)
+            raise
+
+        logger.info('Verifying...')
+        try:
+            response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-v', hex_filename])
+            logger.debug(response)
+        except subprocess.CalledProcessError as ex:
+            logger.info(ex.output)
+            raise
+
+        logger.info('Entering application...')
+        try:
+            response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-r'])
+            logger.debug(response)
+        except subprocess.CalledProcessError as ex:
+            logger.info(ex.output)
+            raise
+
+    @staticmethod
+    def _set_master_power(on):
+        with open('/sys/class/gpio/gpio44/direction', 'w') as gpio:
+            gpio.write('out')
+        with open('/sys/class/gpio/gpio44/value', 'w') as gpio:
+            gpio.write('1' if on else '0')
 
     def reset(self):
         """ Reset the master.

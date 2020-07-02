@@ -271,3 +271,45 @@ def setup_target_platform(target_platform, message_client_name):
     # Webserver / Presentation layer
     Injectable.value(ssl_private_key=constants.get_ssl_private_key_file())
     Injectable.value(ssl_certificate=constants.get_ssl_certificate_file())
+
+
+def setup_minimal_master_platform(port):
+    # type: (str) -> None
+    platform = Platform.get_platform()
+    Injectable.value(controller_serial=Serial(port, 115200))
+
+    if platform == Platform.Type.CORE_PLUS:
+        from master.core import ucan_communicator
+        _ = ucan_communicator
+        Injectable.value(master_communicator=CoreCommunicator())
+        Injectable.value(maintenance_communicator=None)
+        Injectable.value(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
+                                       MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
+        Injectable.value(master_controller=MasterCoreController())
+    else:
+        Injectable.value(configuration_controller=None)
+        Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
+        from master.classic import eeprom_extension
+        _ = eeprom_extension
+        Injectable.value(master_communicator=MasterCommunicator())
+        Injectable.value(maintenance_communicator=None)
+        Injectable.value(master_controller=MasterClassicController())
+
+
+def setup_minimal_power_platform():
+    # type: () -> None
+    config = ConfigParser()
+    config.read(constants.get_config_file())
+    power_serial_port = config.get('OpenMotics', 'power_serial')
+    if power_serial_port:
+        Injectable.value(power_db=constants.get_power_database_file())
+        Injectable.value(power_store=PowerStore())
+        Injectable.value(power_serial=RS485(Serial(power_serial_port, 115200, timeout=None)))
+        Injectable.value(power_communicator=PowerCommunicator())
+        Injectable.value(power_controller=PowerController())
+        Injectable.value(p1_controller=P1Controller())
+    else:
+        Injectable.value(power_store=None)
+        Injectable.value(power_communicator=None)
+        Injectable.value(power_controller=None)
+        Injectable.value(p1_controller=None)

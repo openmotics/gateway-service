@@ -20,12 +20,15 @@ from platform_utils import System, Platform
 System.import_libs()
 
 import argparse
+import constants
 import time
 import os
 import sys
 import logging
+from logging import handlers
+from six.moves.configparser import ConfigParser
 from ioc import INJECTED, Inject
-from gateway.initialize import setup_platform
+from gateway.initialize import setup_minimal_master_platform
 
 logger = logging.getLogger("openmotics")
 
@@ -33,13 +36,23 @@ logger = logging.getLogger("openmotics")
 def setup_logger():
     """ Setup the OpenMotics logger. """
 
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     logger.propagate = False
 
     handler = logging.StreamHandler()
     handler.setLevel(logging.INFO)
     handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
     logger.addHandler(handler)
+
+    handler = handlers.RotatingFileHandler(constants.get_update_log_location(), maxBytes=3 * 1024 ** 2, backupCount=2)
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    logger.addHandler(handler)
+
+
+@Inject
+def get_communicator(master_communicator=INJECTED):
+    return master_communicator
 
 
 def main():
@@ -61,38 +74,37 @@ def main():
     filename = args.file
     version = args.version
 
-    setup_platform(message_client_name=None)  # No MessageClient needed
+    config = ConfigParser()
+    config.read(constants.get_config_file())
+    port = config.get('OpenMotics', 'controller_serial')
 
-    if Platform.get_platform() == Platform.Type.CORE_PLUS:
-        from master.core.slave_updater import SlaveUpdater
+    setup_minimal_master_platform(port)
 
-        @Inject
-        def get_communicator(master_communicator=INJECTED):
-            return master_communicator
+    communicator = get_communicator()
+    communicator.start()
+    try:
+        if Platform.get_platform() == Platform.Type.CORE_PLUS:
+            from master.core.slave_updater import SlaveUpdater
 
-        core_communicator = get_communicator()
-        core_communicator.start()
-        try:
             update_success = SlaveUpdater.update_all(module_type=module_type,
                                                      hex_filename=filename,
                                                      version=version)
-        finally:
-            core_communicator.stop()
-            time.sleep(5)
-    else:
-        from master.classic.slave_updater import bootload_modules
+        else:
+            from master.classic.slave_updater import bootload_modules
 
-        try:
-            if os.path.getsize(args.file) <= 0:
-                print('Could not read hex or file is empty: {0}'.format(args.file))
+            try:
+                if os.path.getsize(args.file) <= 0:
+                    print('Could not read hex or file is empty: {0}'.format(args.file))
+                    return False
+            except OSError as ex:
+                print('Could not open hex: {0}'.format(ex))
                 return False
-        except OSError as ex:
-            print('Could not open hex: {0}'.format(ex))
-            return False
 
-        update_success = bootload_modules(module_type=module_type,
-                                          filename=filename,
-                                          logger=logger.info)
+            update_success = bootload_modules(module_type=module_type,
+                                              filename=filename)
+    finally:
+        communicator.stop()
+        time.sleep(3)
 
     return update_success
 

@@ -25,17 +25,18 @@ import sys
 import argparse
 import logging
 import time
+from logging import handlers
 from ioc import INJECTED, Inject
 from serial_utils import CommunicationTimedOutException
 from power import power_api
-from gateway.initialize import setup_platform
+from gateway.initialize import setup_minimal_power_platform
 
 logger = logging.getLogger("openmotics")
 
 
 def setup_logger():
     """ Setup the OpenMotics logger. """
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     logger.propagate = False
 
     handler = logging.StreamHandler()
@@ -43,8 +44,8 @@ def setup_logger():
     handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
     logger.addHandler(handler)
 
-    handler = logging.FileHandler(constants.get_update_log_location(), mode='w')
-    handler.setLevel(logging.INFO)
+    handler = handlers.RotatingFileHandler(constants.get_update_log_location(), maxBytes=3 * 1024 ** 2, backupCount=2)
+    handler.setLevel(logging.DEBUG)
     handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
     logger.addHandler(handler)
 
@@ -275,14 +276,14 @@ def main():
         parser.print_help()
         return
 
-    setup_platform(message_client_name=None)  # No MessageClient needed
+    setup_minimal_power_platform()
 
     @Inject
-    def _get_from_ioc(power_store=INJECTED, power_communicator=INJECTED):
-        return power_store, power_communicator
+    def _get_from_ioc(power_store=INJECTED, power_communicator=INJECTED, power_serial=INJECTED):
+        return power_store, power_communicator, power_serial
 
-    store, communicator = _get_from_ioc()
-    communicator.start()
+    store, communicator, serial = _get_from_ioc()
+    serial.start()
 
     if args.scan:
         logger.info('Scanning addresses 0-255...')
