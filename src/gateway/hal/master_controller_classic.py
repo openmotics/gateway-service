@@ -869,10 +869,11 @@ class MasterClassicController(MasterController):
         # stay) into bootloader.
         MasterClassicController._set_master_power(False)
         time.sleep(3)
-        subprocess.Popen(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-a'],
-                         stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE)
+        process = subprocess.Popen(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-a'],
+                                   stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE)
         MasterClassicController._set_master_power(True)
+        process.wait()
 
         logger.info('Verify bootloader...')
         tries = 10
@@ -886,6 +887,7 @@ class MasterClassicController(MasterController):
                     found = True
                     break
             except subprocess.CalledProcessError as ex:
+                response = ex.output  # For debugging purposes down below
                 if ex.returncode != 254:
                     raise
             time.sleep(1)
