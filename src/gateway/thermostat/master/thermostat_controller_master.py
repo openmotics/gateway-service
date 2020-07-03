@@ -41,6 +41,7 @@ from master.classic.master_communicator import CommunicationTimedOutException
 
 if False:  # MYPY
     from typing import List, Tuple, Dict
+    from gateway.dto import OutputStateDTO
 
 logger = logging.getLogger("openmotics")
 
@@ -541,7 +542,7 @@ class ThermostatControllerMaster(ThermostatController):
         except InMaintenanceModeException:
             return
 
-        status = self._output_controller.get_output_statuses()
+        status = {state.id: state for state in self._output_controller.get_output_statuses()}  # type: Dict[int,OutputStateDTO]
 
         mode = thermostat_info['mode']
         thermostats_on = bool(mode & 1 << 7)
@@ -576,8 +577,8 @@ class ThermostatControllerMaster(ThermostatController):
                               'airco': aircos['ASB{0}'.format(thermostat_id)]}
                 for output in [0, 1]:
                     output_id = getattr(thermostat_dto, 'output{0}'.format(output))
-                    output_state_dto = self._output_controller.get_output_status(output_id)
-                    if output_id is not None and output_state_dto and output_state_dto.status:
+                    output_state_dto = status.get(output_id)
+                    if output_id is not None and output_state_dto is not None and output_state_dto.status:
                         thermostat['output{0}'.format(output)] = output_state_dto.dimmer
                     else:
                         thermostat['output{0}'.format(output)] = 0
