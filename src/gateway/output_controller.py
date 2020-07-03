@@ -194,7 +194,7 @@ class OutputStateCache(object):
         """
         with self._lock:
             if output_id not in self._cache:
-                logger.error('received change for unknown output {} {}'.format(output_id, change_data))
+                logger.warning('Received change for unknown output {} {}'.format(output_id, change_data))
                 return None
             changed = False
             state = self._cache[output_id].state
