@@ -28,11 +28,11 @@ class MasterEvent(object):
 
     Data formats:
     * EEPROM_CHANGE                   # No payload
-    * OUTPUT CHANGE
+    * MODULE_DISCOVERY                # No payload
+    * OUTPUT_STATUS
       {'id': int,                     # Output ID
-       'status': {'on': bool,         # On/off
-                  'value': int},      # Optional, dimmer value
-       'location': {'room_id': int}}  # Room ID
+       'status': bool,                # On/off
+       'dimmer': int}                 # Optional, dimmer value
     * INPUT_CHANGE
       {'id': int,                     # Input ID
        'status': bool,                # Pressed or not
@@ -43,6 +43,7 @@ class MasterEvent(object):
         EEPROM_CHANGE = 'EEPROM_CHANGE'
         INPUT_CHANGE = 'INPUT_CHANGE'
         OUTPUT_CHANGE = 'OUTPUT_CHANGE'
+        OUTPUT_STATUS = 'OUTPUT_STATUS'
         SHUTTER_CHANGE = 'SHUTTER_CHANGE'
         MODULE_DISCOVERY = 'MODULE_DISCOVERY'
 

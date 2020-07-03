@@ -75,7 +75,7 @@ class MasterCommunicator(object):
         self.__passthrough_queue = Queue()
         self.__passthrough_done = Event()
 
-        self.__last_success = 0
+        self.__last_success = 0.0
 
         self.__running = False
 
@@ -85,9 +85,9 @@ class MasterCommunicator(object):
         self.__communication_stats = {'calls_succeeded': [],
                                       'calls_timedout': [],
                                       'bytes_written': 0,
-                                      'bytes_read': 0}
+                                      'bytes_read': 0}  # type: Dict[str,Any]
         self.__debug_buffer = {'read': {},
-                               'write': {}}
+                               'write': {}}  # type: Dict[str,Dict[float,str]]
         self.__debug_buffer_duration = 300
 
     def start(self):
@@ -344,7 +344,7 @@ class MasterCommunicator(object):
 
     def __get_start_bytes(self):
         """ Create a dict that maps the start byte to a list of consumers. """
-        start_bytes = {}
+        start_bytes = {}  # type: Dict[int,List[Consumer]]
         for consumer in self.__consumers:
             start_byte = consumer.get_prefix()[0]
             if start_byte in start_bytes:
@@ -387,6 +387,7 @@ class MasterCommunicator(object):
             def consume(self, _data):
                 """ Consume the bytes in data using the current_consumer, and return the bytes
                 that were not used. """
+                assert read_state.current_consumer
                 try:
                     bytes_consumed, result, done = read_state.current_consumer.consume(_data, read_state.partial_result)
                 except ValueError as value_error:
@@ -394,6 +395,7 @@ class MasterCommunicator(object):
                     return ''
 
                 if done:
+                    assert self.current_consumer
                     consumer_done(self.current_consumer)
                     self.current_consumer.deliver(result)
 

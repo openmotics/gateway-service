@@ -17,13 +17,15 @@ The observer module contains logic to observe various states of the system. It k
 """
 
 from __future__ import absolute_import
+
 import logging
-from ioc import Injectable, Inject, INJECTED, Singleton
+
+from bus.om_bus_client import MessageClient
+from bus.om_bus_events import OMBusEvents
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
-from bus.om_bus_events import OMBusEvents
-from bus.om_bus_client import MessageClient
+from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional
@@ -67,38 +69,6 @@ class Observer(object):
             for callback in self._event_subscriptions:
                 callback(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE,
                                       data=master_event.data))
-        if master_event.type == MasterEvent.Types.OUTPUT_CHANGE:
-            if self._message_client is not None:
-                self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': master_event.data['id']})
-            for callback in self._event_subscriptions:
-                callback(GatewayEvent(event_type=GatewayEvent.Types.OUTPUT_CHANGE,
-                                      data=master_event.data))
-
-    # Outputs
-
-    def get_outputs(self):
-        """ Returns a list of Outputs with their status """
-        # TODO: Move to the OutputController
-        # TODO: Should return a DTO and the (de)serializers should e.g. convert a bool to an int
-        outputs = self._master_controller.get_output_statuses()
-        return [{'id': output['id'],
-                 'status': 1 if output['status'] else 0,
-                 'ctimer': output['ctimer'],
-                 'dimmer': output['dimmer'],
-                 'locked': output['locked']}
-                for output in outputs]
-
-    def get_output(self, output_id):
-        # TODO: Move to the OutputController
-        # TODO: Should return a DTO and the (de)serializers should e.g. convert a bool to an int
-        output = self._master_controller.get_output_status(output_id)
-        if output is None:
-            return None
-        return {'id': output['id'],
-                'status': 1 if output['status'] else 0,
-                'ctimer': output['ctimer'],
-                'dimmer': output['dimmer'],
-                'locked': output['locked']}
 
     # Inputs
 

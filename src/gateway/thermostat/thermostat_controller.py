@@ -14,20 +14,20 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 if False:
-    from gateway.dto import ThermostatDTO
-    from gateway.gateway_api import GatewayApi
     from bus.om_bus_client import MessageClient
-    from gateway.observer import Observer
+    from gateway.dto import ThermostatDTO
     from gateway.events import GatewayEvent
+    from gateway.gateway_api import GatewayApi
+    from gateway.output_controller import OutputController
     from typing import Callable, List, Tuple, Optional
 
 
 class ThermostatController(object):
 
-    def __init__(self, gateway_api, message_client, observer):  # type: (GatewayApi, Optional[MessageClient], Observer) -> None
+    def __init__(self, gateway_api, message_client, output_controller):  # type: (GatewayApi, Optional[MessageClient], OutputController) -> None
         self._gateway_api = gateway_api
         self._message_client = message_client
-        self._observer = observer
+        self._output_controller = output_controller
 
         self._event_subscriptions = []  # type: List[Callable[[GatewayEvent], None]]
 

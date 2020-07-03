@@ -19,10 +19,20 @@ The events module contains various event classes
 from __future__ import absolute_import
 import ujson as json
 
+if False:  # MYPY
+    from typing import Any
+
 
 class GatewayEvent(object):
     """
     GatewayEvent object
+
+    Data formats:
+    * OUTPUT_CHANGE
+      {'id': int,                     # Output ID
+       'status': {'on': bool,         # On/off
+                  'value': int},      # Optional, dimmer value
+       'location': {'room_id': int}}  # Room ID
     """
 
     class Types(object):
@@ -43,6 +53,15 @@ class GatewayEvent(object):
         return {'type': self.type,
                 'data': self.data,
                 '_version': 1.0}  # Add version so that event processing code can handle multiple formats
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        return self.type == other.type \
+            and self.data == other.data
+
+    def __repr__(self):
+        # type: () -> str
+        return '<GatewayEvent {} {}>'.format(self.type, self.data)
 
     def __str__(self):
         return json.dumps(self.serialize())

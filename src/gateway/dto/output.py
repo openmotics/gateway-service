@@ -20,7 +20,7 @@ from gateway.dto.base import BaseDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
 
 if False:  # MYPY
-    from typing import Optional
+    from typing import Any, Optional
 
 
 class OutputDTO(BaseDTO):
@@ -30,7 +30,8 @@ class OutputDTO(BaseDTO):
                  can_led_3=None,  # type: Optional[FeedbackLedDTO]
                  can_led_4=None,  # type: Optional[FeedbackLedDTO]
                  room=None,
-                 lock_bit_id=None):
+                 lock_bit_id=None,
+                 state=None):
         self.id = id  # type: int
         self.name = name  # type: str
         self.module_type = module_type  # type: str
@@ -39,6 +40,9 @@ class OutputDTO(BaseDTO):
         self.output_type = output_type  # type: int
         self.room = room  # type: Optional[int]
         self.lock_bit_id = lock_bit_id  # type: Optional[int]
+        self.state = state
+        if self.state:
+            self.state.id = self.id
         self.can_led_1 = can_led_1 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
         self.can_led_2 = can_led_2 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
         self.can_led_3 = can_led_3 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
@@ -59,3 +63,23 @@ class OutputDTO(BaseDTO):
                 self.can_led_2 == other.can_led_2 and
                 self.can_led_3 == other.can_led_3 and
                 self.can_led_4 == other.can_led_4)
+
+
+class OutputStateDTO(BaseDTO):
+    def __init__(self, id, status=False, ctimer=0, dimmer=0, locked=False):
+        # type: (int, bool, int, int, bool) -> None
+        self.id = id  # type: int
+        self.status = status
+        self.ctimer = ctimer
+        self.dimmer = dimmer
+        self.locked = locked
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        if not isinstance(other, OutputStateDTO):
+            return False
+        return (self.id == other.id and
+                self.status == other.status and
+                self.ctimer == other.ctimer and
+                self.dimmer == other.dimmer and
+                self.locked == other.locked)

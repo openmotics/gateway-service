@@ -46,24 +46,24 @@ class BaseController(object):
     def __init__(self, master_controller, maintenance_controller=INJECTED):
         self._master_controller = master_controller  # type: MasterController
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
-        self._sync_thread = None  # type: Optional[DaemonThread]
+        self._sync_orm_thread = None  # type: Optional[DaemonThread]
         self._master_controller.subscribe_event(self._handle_master_event)
         self._maintenance_controller.subscribe_maintenance_stopped(self.sync_orm)
 
     def _handle_master_event(self, master_event):  # type: (MasterEvent) -> None
         if master_event.type in [MasterEvent.Types.EEPROM_CHANGE, MasterEvent.Types.MODULE_DISCOVERY]:
-            if self._sync_thread is not None:
-                self._sync_thread.request_single_run()
+            if self._sync_orm_thread is not None:
+                self._sync_orm_thread.request_single_run()
 
     def start(self):
-        self._sync_thread = DaemonThread(name='ORM syncer for {0}'.format(self.__class__.__name__),
-                                         target=self.sync_orm,
-                                         interval=900, delay=300)
-        self._sync_thread.start()
+        self._sync_orm_thread = DaemonThread(name='ORM syncer for {0}'.format(self.__class__.__name__),
+                                             target=self.sync_orm,
+                                             interval=900, delay=300)
+        self._sync_orm_thread.start()
 
     def stop(self):
-        if self._sync_thread is not None:
-            self._sync_thread.stop()
+        if self._sync_orm_thread is not None:
+            self._sync_orm_thread.stop()
 
     def sync_orm(self):
         if self.SYNC_STRUCTURES is None:
