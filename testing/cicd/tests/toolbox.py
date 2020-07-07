@@ -222,10 +222,10 @@ class Toolbox(object):
             self.create_or_update_user()
             self.dut.login()
         try:
-            self.list_modules('O')
-            self.list_modules('I')
-            # self.list_energy_modules('E')  # TODO: Energy module discovery fails
-            self.list_modules('C', hardware=False)
+            data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
+            assert 'O' in data['outputs']
+            assert 'I' in data['inputs']
+            assert 'C' in data['can_inputs']
         except Exception:
             logger.info('discovering modules...')
             self.discover_output_module()
@@ -234,22 +234,25 @@ class Toolbox(object):
             self.discover_can_control()
 
         # TODO compare with hardware modules instead.
-        self.list_modules('O')
-        self.list_modules('I')
-        # self.list_energy_modules('E')  # TODO: Energy module discovery fails
-        self.list_modules('C', hardware=False)  # firmware version missing
+        data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
+        assert 'O' in data['outputs']
+        assert 'I' in data['inputs']
+        assert 'C' in data['can_inputs']
 
         # TODO ensure discovery synchonization finished.
         self.ensure_input_exists(INPUT_MODULE_LAYOUT['I'].inputs[7], timeout=300)
         self.ensure_input_exists(INPUT_MODULE_LAYOUT['C'].inputs[5], timeout=300)
 
         try:
-            self.list_modules('o', hardware=False)
+            data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
+            assert 'o' in data['outputs']
         except Exception:
             logger.info('adding virtual modules...')
             self.dut.get('/add_virtual_output')
             time.sleep(2)
-        self.list_modules('o', hardware=False)
+
+        data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
+        assert 'o' in data['outputs']
 
     def print_logs(self):
         # type: () -> None
