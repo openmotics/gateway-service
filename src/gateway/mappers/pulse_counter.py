@@ -43,4 +43,6 @@ class PulseCounterMapper(object):
                                          persistent=False)
         if 'name' in fields:
             pulse_counter.name = pulse_counter_dto.name
+        if 'persistent' in fields:
+            pulse_counter.persistent = pulse_counter_dto.persistent
         return pulse_counter
