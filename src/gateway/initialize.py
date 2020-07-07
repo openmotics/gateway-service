@@ -209,6 +209,7 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(power_controller=PowerController())
         Injectable.value(p1_controller=P1Controller())
     else:
+        Injectable.value(power_serial=None)
         Injectable.value(power_store=None)
         Injectable.value(power_communicator=None)  # TODO: remove from gateway_api
         Injectable.value(power_controller=None)
