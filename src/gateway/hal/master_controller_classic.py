@@ -16,41 +16,37 @@
 Module for communicating with the Master
 """
 from __future__ import absolute_import
+
 import logging
-import time
-import six
 import subprocess
+import time
 from datetime import datetime
 from threading import Timer
 
+import six
+
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import (
-    OutputDTO, InputDTO,
-    ShutterDTO, ShutterGroupDTO,
-    ThermostatDTO, SensorDTO,
-    PulseCounterDTO, GroupActionDTO
-)
+from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
+    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO
 from gateway.enums import ShutterEnums
-from gateway.hal.mappers_classic import (
-    OutputMapper, InputMapper,
-    ShutterGroupMapper, ShutterMapper,
-    ThermostatMapper, SensorMapper,
-    PulseCounterMapper, GroupActionMapper
-)
+from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
+    OutputMapper, PulseCounterMapper, SensorMapper, ShutterGroupMapper, \
+    ShutterMapper, ThermostatMapper
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import eeprom_models, master_api
-from master.classic.eeprom_models import (
-    CanLedConfiguration, DimmerConfiguration,
-    ScheduledActionConfiguration, StartupActionConfiguration
-)
-from master.classic.eeprom_controller import EepromAddress
+from master.classic.eeprom_controller import EepromAddress, EepromController
+from master.classic.eeprom_models import CanLedConfiguration, \
+    CoolingPumpGroupConfiguration, DimmerConfiguration, \
+    GlobalRTD10Configuration, GlobalThermostatConfiguration, \
+    PumpGroupConfiguration, RTD10CoolingConfiguration, \
+    RTD10HeatingConfiguration, ScheduledActionConfiguration, \
+    StartupActionConfiguration
 from master.classic.inputs import InputStatus
-from master.classic.master_communicator import BackgroundConsumer
-from master.classic.master_communicator import MasterCommunicator
-from master.classic.eeprom_controller import EepromController
+from master.classic.master_communicator import BackgroundConsumer, \
+    MasterCommunicator
 from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
@@ -671,6 +667,89 @@ class MasterClassicController(MasterController):
         for thermostat, fields in thermostats:
             batch.append(ThermostatMapper.dto_to_orm(thermostat, fields))
         self._eeprom_controller.write_batch(batch)
+
+    def get_cooling_pump_group_configuration(self, pump_group_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
+        return self._eeprom_controller.read(CoolingPumpGroupConfiguration, pump_group_id, fields).serialize()
+
+    def get_cooling_pump_group_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
+        return [o.serialize() for o in self._eeprom_controller.read_all(CoolingPumpGroupConfiguration, fields)]
+
+    def set_cooling_pump_group_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
+        self._eeprom_controller.write(CoolingPumpGroupConfiguration.deserialize(config))
+
+    def set_cooling_pump_group_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
+        self._eeprom_controller.write_batch([CoolingPumpGroupConfiguration.deserialize(o) for o in config])
+
+    def get_global_rtd10_configuration(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str,Any]
+        return self._eeprom_controller.read(GlobalRTD10Configuration, fields=fields).serialize()
+
+    def set_global_rtd10_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
+        self._eeprom_controller.write(GlobalRTD10Configuration.deserialize(config))
+
+    def get_rtd10_heating_configuration(self, heating_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
+        return self._eeprom_controller.read(RTD10HeatingConfiguration, heating_id, fields).serialize()
+
+    def get_rtd10_heating_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
+        return [o.serialize() for o in self._eeprom_controller.read_all(RTD10HeatingConfiguration, fields)]
+
+    def set_rtd10_heating_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
+        self._eeprom_controller.write(RTD10HeatingConfiguration.deserialize(config))
+
+    def set_rtd10_heating_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
+        self._eeprom_controller.write_batch([RTD10HeatingConfiguration.deserialize(o) for o in config])
+
+    def get_rtd10_cooling_configuration(self, cooling_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
+        return self._eeprom_controller.read(RTD10CoolingConfiguration, cooling_id, fields).serialize()
+
+    def get_rtd10_cooling_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
+        return [o.serialize() for o in self._eeprom_controller.read_all(RTD10CoolingConfiguration, fields)]
+
+    def set_rtd10_cooling_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
+        self._eeprom_controller.write(RTD10CoolingConfiguration.deserialize(config))
+
+    def set_rtd10_cooling_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
+        self._eeprom_controller.write_batch([RTD10CoolingConfiguration.deserialize(o) for o in config])
+
+    def get_global_thermostat_configuration(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str,Any]
+        return self._eeprom_controller.read(GlobalThermostatConfiguration, fields=fields).serialize()
+
+    def set_global_thermostat_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
+        if 'outside_sensor' in config:
+            if config['outside_sensor'] == 255:
+                config['threshold_temp'] = 50  # Works around a master issue where the thermostat would be turned off in case there is no outside sensor.
+        self._eeprom_controller.write(GlobalThermostatConfiguration.deserialize(config))
+
+    def get_pump_group_configuration(self, pump_group_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
+        return self._eeprom_controller.read(PumpGroupConfiguration, pump_group_id, fields).serialize()
+
+    def get_pump_group_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
+        return [o.serialize() for o in self._eeprom_controller.read_all(PumpGroupConfiguration, fields)]
+
+    def set_pump_group_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
+        self._eeprom_controller.write(PumpGroupConfiguration.deserialize(config))
+
+    def set_pump_group_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
+        self._eeprom_controller.write_batch([PumpGroupConfiguration.deserialize(o) for o in config])
 
     # Virtual modules
 

@@ -23,7 +23,6 @@ from gateway.hal.master_event import MasterEvent
 
 if False:  # MYPY
     from typing import Any, Callable, Dict, List, Optional, Tuple
-    from gateway.dto import OutputStateDTO
 
 
 class MasterController(object):
@@ -181,6 +180,86 @@ class MasterController(object):
         raise NotImplementedError()
 
     def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+        raise NotImplementedError()
+
+    def get_cooling_pump_group_configuration(self, pump_group_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
+        raise NotImplementedError()
+
+    def get_cooling_pump_group_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
+        raise NotImplementedError()
+
+    def set_cooling_pump_group_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
+        raise NotImplementedError()
+
+    def set_cooling_pump_group_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
+        raise NotImplementedError()
+
+    def get_global_rtd10_configuration(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str,Any]
+        raise NotImplementedError()
+
+    def set_global_rtd10_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
+        raise NotImplementedError()
+
+    def get_rtd10_heating_configuration(self, heating_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
+        raise NotImplementedError()
+
+    def get_rtd10_heating_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
+        raise NotImplementedError()
+
+    def set_rtd10_heating_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
+        raise NotImplementedError()
+
+    def set_rtd10_heating_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
+        raise NotImplementedError()
+
+    def get_rtd10_cooling_configuration(self, cooling_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
+        raise NotImplementedError()
+
+    def get_rtd10_cooling_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
+        raise NotImplementedError()
+
+    def set_rtd10_cooling_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
+        raise NotImplementedError()
+
+    def set_rtd10_cooling_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
+        raise NotImplementedError()
+
+    def get_global_thermostat_configuration(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str,Any]
+        raise NotImplementedError()
+
+    def set_global_thermostat_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
+        raise NotImplementedError()
+
+    def get_pump_group_configuration(self, pump_group_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
+        raise NotImplementedError()
+
+    def get_pump_group_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
+        raise NotImplementedError()
+
+    def set_pump_group_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
+        raise NotImplementedError()
+
+    def set_pump_group_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         raise NotImplementedError()
 
     # Sensors
