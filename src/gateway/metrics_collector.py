@@ -26,12 +26,11 @@ from threading import Event, Thread
 import six
 
 from gateway.events import GatewayEvent
-from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.hal.master_controller import CommunicationFailure
 from gateway.models import Database
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Hardware
 from power import power_api
-from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
     from typing import Dict, Any, List, Optional, Tuple
@@ -458,10 +457,8 @@ class MetricsCollector(object):
                     output_dto, output_status = self._environment_outputs[output_state_dto.id]
                     output_status.update({'status': output_state_dto.status,
                                           'dimmer': output_state_dto.dimmer})
-            except CommunicationTimedOutException:
-                logger.error('Error getting output status: CommunicationTimedOutException')
-            except InMaintenanceModeException:
-                logger.info('Error getting output status: InMaintenanceModeException')
+            except CommunicationFailure as ex:
+                logger.info('Error getting output status: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error getting output status: {0}'.format(ex))
             self._process_outputs(list(self._environment_outputs.keys()), metric_type)
@@ -497,10 +494,8 @@ class MetricsCollector(object):
                                           values=values,
                                           tags=tags,
                                           timestamp=now)
-            except CommunicationTimedOutException:
-                logger.error('Error getting sensor status: CommunicationTimedOutException')
-            except InMaintenanceModeException:
-                logger.info('Error getting sensor status: InMaintenanceModeException')
+            except CommunicationFailure as ex:
+                logger.info('Error getting sensor status: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error getting sensor status: {0}'.format(ex))
             if self._stopped:
@@ -537,10 +532,8 @@ class MetricsCollector(object):
                                                                        thermostat['id']),
                                                 'name': thermostat['name']},
                                           timestamp=now)
-            except CommunicationTimedOutException:
-                logger.error('Error getting thermostat status: CommunicationTimedOutException')
-            except InMaintenanceModeException:
-                logger.info('Error getting thermostat status: InMaintenanceModeException')
+            except CommunicationFailure as ex:
+                logger.error('Error getting thermostat status: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error getting thermostat status: {0}'.format(ex))
             if self._stopped:
@@ -573,10 +566,8 @@ class MetricsCollector(object):
                                                 'id': om_module,
                                                 'name': '{0} {1}'.format(types[om_module[0]], om_module)},
                                           timestamp=now)
-            except CommunicationTimedOutException:
-                logger.error('Error getting module errors: CommunicationTimedOutException')
-            except InMaintenanceModeException:
-                logger.info('Error getting module errors: InMaintenanceModeException')
+            except CommunicationFailure as ex:
+                logger.error('Error getting module errors: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error getting module errors: {0}'.format(ex))
             if self._stopped:
@@ -605,10 +596,8 @@ class MetricsCollector(object):
                                                     'input': counter['input'],
                                                     'id': 'P{0}'.format(counter_id)},
                                               timestamp=now)
-            except CommunicationTimedOutException:
-                logger.error('Error getting pulse counter status: CommunicationTimedOutException')
-            except InMaintenanceModeException:
-                logger.info('Error getting pulse counter status: InMaintenanceModeException')
+            except CommunicationFailure as ex:
+                logger.error('Error getting pulse counter status: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error getting pulse counter status: {0}'.format(ex))
             if self._stopped:
@@ -639,10 +628,8 @@ class MetricsCollector(object):
                 mapping[str(power_module['id'])] = device_id
                 for i in range(power_api.NUM_PORTS[power_module['version']]):
                     power_data[device_id.format(i)] = {'name': power_module['input{0}'.format(i)]}
-        except CommunicationTimedOutException:
-            logger.error('Error getting power modules: CommunicationTimedOutException')
-        except InMaintenanceModeException:
-            logger.info('Error getting power modules: InMaintenanceModeException')
+        except CommunicationFailure as ex:
+            logger.error('Error getting power modules: {}'.format(ex))
         except Exception as ex:
             logger.exception('Error getting power modules: {0}'.format(ex))
         try:
@@ -656,10 +643,8 @@ class MetricsCollector(object):
                             _add_if_not_none(usage, 'frequency', realtime_power.frequency)
                             _add_if_not_none(usage, 'current', realtime_power.current)
                             _add_if_not_none(usage, 'power', realtime_power.power)
-        except CommunicationTimedOutException:
-            logger.error('Error getting realtime power: CommunicationTimedOutException')
-        except InMaintenanceModeException:
-            logger.info('Error getting realtime power: InMaintenanceModeException')
+        except CommunicationFailure as ex:
+            logger.error('Error getting realtime power: {}'.format(ex))
         except Exception as ex:
             logger.exception('Error getting realtime power: {0}'.format(ex))
         try:
@@ -696,10 +681,8 @@ class MetricsCollector(object):
                                                     'id': realtime_p1['device_id'],
                                                     'ean': gas_p1['ean']},
                                               timestamp=now)
-        except CommunicationTimedOutException:
-            logger.error('Error getting realtime power: CommunicationTimedOutException')
-        except InMaintenanceModeException:
-            logger.info('Error getting realtime power: InMaintenanceModeException')
+        except CommunicationFailure as ex:
+            logger.error('Error getting realtime power: {}'.format(ex))
         except Exception as ex:
             logger.exception('Error getting realtime power: {0}'.format(ex))
         try:
@@ -716,10 +699,8 @@ class MetricsCollector(object):
                             _add_if_not_none(usage, 'counter', total)
                             _add_if_not_none(usage, 'counter_day', day)
                             _add_if_not_none(usage, 'counter_night', night)
-        except CommunicationTimedOutException:
-            logger.error('Error getting total energy: CommunicationTimedOutException')
-        except InMaintenanceModeException:
-            logger.info('Error getting total energy: InMaintenanceModeException')
+        except CommunicationFailure as ex:
+            logger.error('Error getting total energy: {}'.format(ex))
         except Exception as ex:
             logger.exception('Error getting total energy: {0}'.format(ex))
         for device_id in power_data:
@@ -786,10 +767,8 @@ class MetricsCollector(object):
                                                         'type': 'frequency'},
                                                   timestamp=timestamp)
                             timestamp += 0.250  # Stretch actual data by 1000 for visualtisation purposes
-            except CommunicationTimedOutException:
-                logger.error('Error getting power analytics: CommunicationTimedOutException')
-            except InMaintenanceModeException:
-                logger.info('Error getting power analytics: InMaintenanceModeException')
+            except CommunicationFailure as ex:
+                logger.error('Error getting power analytics: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error getting power analytics: {0}'.format(ex))
             if self._stopped:
@@ -810,10 +789,8 @@ class MetricsCollector(object):
                 for input_id in self._environment_inputs.keys():
                     if input_id not in ids:
                         del self._environment_inputs[input_id]
-            except CommunicationTimedOutException:
-                logger.error('Error while loading input configurations: CommunicationTimedOutException')
-            except InMaintenanceModeException:
-                logger.info('Error while loading input configurations: InMaintenanceModeException')
+            except CommunicationFailure as ex:
+                logger.error('Error while loading input configurations: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error while loading input configurations: {0}'.format(ex))
             # Outputs
@@ -830,10 +807,8 @@ class MetricsCollector(object):
                 for output_id in self._environment_outputs.keys():
                     if output_id not in ids:
                         del self._environment_outputs[output_id]
-            except CommunicationTimedOutException:
-                logger.error('Error while loading output configurations: CommunicationTimedOutException')
-            except InMaintenanceModeException:
-                logger.info('Error while loading output configurations: InMaintenanceModeException')
+            except CommunicationFailure as ex:
+                logger.error('Error while loading output configurations: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error while loading output configurations: {0}'.format(ex))
             # Sensors
@@ -847,10 +822,8 @@ class MetricsCollector(object):
                 for sensor_id in self._environment_sensors.keys():
                     if sensor_id not in ids:
                         del self._environment_sensors[sensor_id]
-            except CommunicationTimedOutException:
-                logger.error('Error while loading sensor configurations: CommunicationTimedOutException')
-            except InMaintenanceModeException:
-                logger.info('Error while loading sensor configurations: InMaintenanceModeException')
+            except CommunicationFailure as ex:
+                logger.error('Error while loading sensor configurations: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error while loading sensor configurations: {0}'.format(ex))
             # Pulse counters
@@ -864,10 +837,8 @@ class MetricsCollector(object):
                 for pulse_counter_id in self._environment_pulse_counters.keys():
                     if pulse_counter_id not in ids:
                         del self._environment_pulse_counters[pulse_counter_id]
-            except CommunicationTimedOutException:
-                logger.error('Error while loading pulse counter configurations: CommunicationTimedOutException')
-            except InMaintenanceModeException:
-                logger.info('Error while loading pulse counter configurations: InMaintenanceModeException')
+            except CommunicationFailure as ex:
+                logger.error('Error while loading pulse counter configurations: {}'.format(ex))
             except Exception as ex:
                 logger.exception('Error while loading pulse counter configurations: {0}'.format(ex))
             if self._stopped:

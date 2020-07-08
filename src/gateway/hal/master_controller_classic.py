@@ -32,9 +32,8 @@ from gateway.enums import ShutterEnums
 from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
     OutputMapper, PulseCounterMapper, SensorMapper, ShutterGroupMapper, \
     ShutterMapper, ThermostatMapper
-from gateway.hal.master_controller import MasterController
+from gateway.hal.master_controller import CommunicationFailure, MasterController
 from gateway.hal.master_event import MasterEvent
-from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import eeprom_models, master_api
 from master.classic.eeprom_controller import EepromAddress, EepromController
@@ -133,7 +132,7 @@ class MasterClassicController(MasterController):
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
             self._set_master_state(False)
             raise DaemonThreadWait
-        except InMaintenanceModeException:
+        except CommunicationFailure:
             # This is an expected situation
             raise DaemonThreadWait
 

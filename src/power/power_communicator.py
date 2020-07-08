@@ -23,7 +23,8 @@ from threading import RLock, Thread
 
 from six.moves.queue import Empty
 
-from ioc import INJECTED, Inject, Injectable, Singleton
+from gateway.hal.master_controller import CommunicationFailure
+from ioc import INJECTED, Inject
 from power import power_api
 from power.power_command import crc7, crc8
 from power.time_keeper import TimeKeeper
@@ -413,15 +414,11 @@ class PowerCommunicator(object):
         return header, data
 
 
-class InAddressModeException(Exception):
+class InAddressModeException(CommunicationFailure):
     """ Raised when the power communication is in address mode. """
-    def __init__(self, message=None):
-        # type: (Optional[str]) -> None
-        Exception.__init__(self, message)
+    pass
 
 
-class UnkownCommandException(Exception):
+class UnkownCommandException(CommunicationFailure):
     """ Raised when the power module responds with a NACK indicating an unkown command. """
-    def __init__(self, message=None):
-        # type: (Optional[str]) -> None
-        Exception.__init__(self, message)
+    pass

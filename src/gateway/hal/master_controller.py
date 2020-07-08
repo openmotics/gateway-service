@@ -25,6 +25,10 @@ if False:  # MYPY
     from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
+class CommunicationFailure(Exception):
+    pass
+
+
 class MasterController(object):
 
     def __init__(self, master_communicator):

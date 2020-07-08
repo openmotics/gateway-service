@@ -42,6 +42,7 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     ShutterSerializer, ThermostatSerializer
 from gateway.dto import RoomDTO
 from gateway.enums import ShutterEnums
+from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.models import Feature
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
@@ -234,6 +235,10 @@ def _openmotics_api(f, *args, **kwargs):
         logger.error('Communication timeout during API call %s', f.__name__)
         status = 200  # OK
         data = {'success': False, 'msg': 'Internal communication timeout'}
+    except CommunicationFailure:
+        logger.error('Communication failure during API call %s', f.__name__)
+        status = 503  # Service Unavailable
+        data = {'success': False, 'msg': 'Internal communication failure'}
     except DoesNotExist:
         logger.error('Could not find the requested object')
         status = 200  # OK

@@ -20,7 +20,7 @@ from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import ThermostatDTO
 from gateway.events import GatewayEvent
-from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.hal.master_controller import CommunicationFailure
 from gateway.observer import Observer
 from gateway.thermostat.master.thermostat_status_master import \
     ThermostatStatusMaster
@@ -530,7 +530,7 @@ class ThermostatControllerMaster(ThermostatController):
             thermostat_info = self._master_controller.get_thermostats()
             thermostat_mode = self._master_controller.get_thermostat_modes()
             aircos = self._master_controller.read_airco_status_bits()
-        except InMaintenanceModeException:
+        except CommunicationFailure:
             return
 
         status = {state.id: state for state in self._output_controller.get_output_statuses()}  # type: Dict[int,OutputStateDTO]
@@ -547,7 +547,7 @@ class ThermostatControllerMaster(ThermostatController):
             else:
                 self._thermostats_config = {thermostat.id: thermostat
                                             for thermostat in self.load_heating_thermostats()}
-        except InMaintenanceModeException:
+        except CommunicationFailure:
             return
 
         thermostats = []

@@ -24,18 +24,18 @@ from threading import Thread, Timer
 
 from peewee import DoesNotExist
 
-from gateway.api.serializers import OutputStateSerializer
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO
 from gateway.enums import ShutterEnums
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
-from gateway.hal.master_controller import MasterController
+from gateway.hal.master_controller import CommunicationFailure, \
+    MasterController
 from gateway.hal.master_event import MasterEvent
-from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
+from master.core.core_updater import CoreUpdater
 from master.core.errors import Error
 from master.core.events import Event as MasterCoreEvent
 from master.core.group_action import GroupActionController
@@ -44,7 +44,6 @@ from master.core.memory_models import GlobalConfiguration, \
     InputConfiguration, InputModuleConfiguration, OutputConfiguration, \
     OutputModuleConfiguration, SensorConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
-from master.core.core_updater import CoreUpdater
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.ucan_communicator import UCANCommunicator
 from serial_utils import CommunicationTimedOutException
@@ -196,7 +195,7 @@ class MasterCoreController(MasterController):
                 logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
                 self._set_master_state(False)
                 time.sleep(10)
-            except InMaintenanceModeException:
+            except CommunicationFailure:
                 # This is an expected situation
                 time.sleep(10)
             except Exception as ex:

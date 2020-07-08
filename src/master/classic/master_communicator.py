@@ -17,12 +17,13 @@ Module to communicate with the master.
 """
 
 from __future__ import absolute_import
+
 import logging
 import select
 import time
 from threading import Event, Lock, Thread
 
-from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.maintenance_controller import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import master_api
 from master.classic.master_command import Field, printable
