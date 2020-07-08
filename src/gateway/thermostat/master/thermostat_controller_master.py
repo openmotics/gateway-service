@@ -16,32 +16,32 @@
 import logging
 import time
 
-from toolbox import Toolbox
 from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
+from gateway.dto import ThermostatDTO
 from gateway.events import GatewayEvent
-from gateway.hal.master_controller_classic import MasterClassicController
-from gateway.observer import Observer
-from gateway.dto import (
-    ThermostatDTO
-)
-from gateway.thermostat.master.thermostat_status_master import (
-    ThermostatStatusMaster
-)
-from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.observer import Observer
+from gateway.thermostat.master.thermostat_status_master import \
+    ThermostatStatusMaster
+from gateway.thermostat.thermostat_controller import ThermostatController
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master.classic import master_api
-from master.classic.eeprom_models import (
-    GlobalThermostatConfiguration,
-    PumpGroupConfiguration, CoolingPumpGroupConfiguration,
-    GlobalRTD10Configuration, RTD10CoolingConfiguration, RTD10HeatingConfiguration
-)
+from master.classic.eeprom_models import CoolingPumpGroupConfiguration, \
+    GlobalRTD10Configuration, GlobalThermostatConfiguration, \
+    PumpGroupConfiguration, RTD10CoolingConfiguration, \
+    RTD10HeatingConfiguration
 from master.classic.master_communicator import CommunicationTimedOutException
+from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import List, Tuple, Dict
+    from typing import Any, List, Dict, Optional, Tuple
+    from bus.om_bus_client import MessageClient
     from gateway.dto import OutputStateDTO
+    from gateway.hal.master_controller import MasterController
+    from gateway.output_controller import OutputController
+    from master.classic.eeprom_controller import EepromController
+    from master.classic.master_communicator import MasterCommunicator
 
 logger = logging.getLogger("openmotics")
 
@@ -49,14 +49,15 @@ logger = logging.getLogger("openmotics")
 @Injectable.named('thermostat_controller')
 @Singleton
 class ThermostatControllerMaster(ThermostatController):
-
     @Inject
-    def __init__(self, gateway_api=INJECTED, message_client=INJECTED, output_controller=INJECTED,
-                 master_communicator=INJECTED, eeprom_controller=INJECTED, master_controller=INJECTED):
-        super(ThermostatControllerMaster, self).__init__(gateway_api, message_client, output_controller)
-        self._eeprom_controller = eeprom_controller
+    def __init__(self, message_client=INJECTED, output_controller=INJECTED,
+                 master_communicator=INJECTED, eeprom_controller=INJECTED,
+                 master_controller=INJECTED):
+        # type: (Optional[MessageClient], OutputController, MasterCommunicator, EepromController, MasterController) -> None
+        super(ThermostatControllerMaster, self).__init__(message_client, output_controller)
         self._master_communicator = master_communicator
-        self._master_controller = master_controller  # type: MasterClassicController
+        self._eeprom_controller = eeprom_controller
+        self._master_controller = master_controller
 
         self._monitor_thread = DaemonThread(name='ThermostatControllerMaster monitor',
                                             target=self._monitor,
@@ -161,6 +162,7 @@ class ThermostatControllerMaster(ThermostatController):
         self.invalidate_cache(Observer.Types.THERMOSTATS)
 
     def v0_get_cooling_pump_group_configuration(self, pump_group_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
         """
         Get a specific cooling_pump_group_configuration defined by its id.
 
@@ -173,6 +175,7 @@ class ThermostatControllerMaster(ThermostatController):
         return self._eeprom_controller.read(CoolingPumpGroupConfiguration, pump_group_id, fields).serialize()
 
     def v0_get_cooling_pump_group_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
         """
         Get all cooling_pump_group_configurations.
 
@@ -183,6 +186,7 @@ class ThermostatControllerMaster(ThermostatController):
         return [o.serialize() for o in self._eeprom_controller.read_all(CoolingPumpGroupConfiguration, fields)]
 
     def v0_set_cooling_pump_group_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one cooling_pump_group_configuration.
 
@@ -192,6 +196,7 @@ class ThermostatControllerMaster(ThermostatController):
         self._eeprom_controller.write(CoolingPumpGroupConfiguration.deserialize(config))
 
     def v0_set_cooling_pump_group_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple cooling_pump_group_configurations.
 
@@ -201,6 +206,7 @@ class ThermostatControllerMaster(ThermostatController):
         self._eeprom_controller.write_batch([CoolingPumpGroupConfiguration.deserialize(o) for o in config])
 
     def v0_get_global_rtd10_configuration(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str,Any]
         """
         Get the global_rtd10_configuration.
 
@@ -208,9 +214,10 @@ class ThermostatControllerMaster(ThermostatController):
         :type fields: List of strings
         :returns: global_rtd10_configuration dict: contains 'output_value_cooling_16' (Byte), 'output_value_cooling_16_5' (Byte), 'output_value_cooling_17' (Byte), 'output_value_cooling_17_5' (Byte), 'output_value_cooling_18' (Byte), 'output_value_cooling_18_5' (Byte), 'output_value_cooling_19' (Byte), 'output_value_cooling_19_5' (Byte), 'output_value_cooling_20' (Byte), 'output_value_cooling_20_5' (Byte), 'output_value_cooling_21' (Byte), 'output_value_cooling_21_5' (Byte), 'output_value_cooling_22' (Byte), 'output_value_cooling_22_5' (Byte), 'output_value_cooling_23' (Byte), 'output_value_cooling_23_5' (Byte), 'output_value_cooling_24' (Byte), 'output_value_heating_16' (Byte), 'output_value_heating_16_5' (Byte), 'output_value_heating_17' (Byte), 'output_value_heating_17_5' (Byte), 'output_value_heating_18' (Byte), 'output_value_heating_18_5' (Byte), 'output_value_heating_19' (Byte), 'output_value_heating_19_5' (Byte), 'output_value_heating_20' (Byte), 'output_value_heating_20_5' (Byte), 'output_value_heating_21' (Byte), 'output_value_heating_21_5' (Byte), 'output_value_heating_22' (Byte), 'output_value_heating_22_5' (Byte), 'output_value_heating_23' (Byte), 'output_value_heating_23_5' (Byte), 'output_value_heating_24' (Byte)
         """
-        return self._eeprom_controller.read(GlobalRTD10Configuration, fields).serialize()
+        return self._eeprom_controller.read(GlobalRTD10Configuration, fields=fields).serialize()
 
     def v0_set_global_rtd10_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set the global_rtd10_configuration.
 
@@ -220,6 +227,7 @@ class ThermostatControllerMaster(ThermostatController):
         self._eeprom_controller.write(GlobalRTD10Configuration.deserialize(config))
 
     def v0_get_rtd10_heating_configuration(self, heating_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
         """
         Get a specific rtd10_heating_configuration defined by its id.
 
@@ -232,6 +240,7 @@ class ThermostatControllerMaster(ThermostatController):
         return self._eeprom_controller.read(RTD10HeatingConfiguration, heating_id, fields).serialize()
 
     def v0_get_rtd10_heating_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
         """
         Get all rtd10_heating_configurations.
 
@@ -242,6 +251,7 @@ class ThermostatControllerMaster(ThermostatController):
         return [o.serialize() for o in self._eeprom_controller.read_all(RTD10HeatingConfiguration, fields)]
 
     def v0_set_rtd10_heating_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one rtd10_heating_configuration.
 
@@ -251,6 +261,7 @@ class ThermostatControllerMaster(ThermostatController):
         self._eeprom_controller.write(RTD10HeatingConfiguration.deserialize(config))
 
     def v0_set_rtd10_heating_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple rtd10_heating_configurations.
 
@@ -260,6 +271,7 @@ class ThermostatControllerMaster(ThermostatController):
         self._eeprom_controller.write_batch([RTD10HeatingConfiguration.deserialize(o) for o in config])
 
     def v0_get_rtd10_cooling_configuration(self, cooling_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
         """
         Get a specific rtd10_cooling_configuration defined by its id.
 
@@ -272,6 +284,7 @@ class ThermostatControllerMaster(ThermostatController):
         return self._eeprom_controller.read(RTD10CoolingConfiguration, cooling_id, fields).serialize()
 
     def v0_get_rtd10_cooling_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
         """
         Get all rtd10_cooling_configurations.
 
@@ -282,6 +295,7 @@ class ThermostatControllerMaster(ThermostatController):
         return [o.serialize() for o in self._eeprom_controller.read_all(RTD10CoolingConfiguration, fields)]
 
     def v0_set_rtd10_cooling_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one rtd10_cooling_configuration.
 
@@ -291,6 +305,7 @@ class ThermostatControllerMaster(ThermostatController):
         self._eeprom_controller.write(RTD10CoolingConfiguration.deserialize(config))
 
     def v0_set_rtd10_cooling_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple rtd10_cooling_configurations.
 
@@ -300,6 +315,7 @@ class ThermostatControllerMaster(ThermostatController):
         self._eeprom_controller.write_batch([RTD10CoolingConfiguration.deserialize(o) for o in config])
 
     def v0_get_global_thermostat_configuration(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str,Any]
         """
         Get the global_thermostat_configuration.
 
@@ -307,9 +323,10 @@ class ThermostatControllerMaster(ThermostatController):
         :type fields: List of strings
         :returns: global_thermostat_configuration dict: contains 'outside_sensor' (Byte), 'pump_delay' (Byte), 'switch_to_cooling_output_0' (Byte), 'switch_to_cooling_output_1' (Byte), 'switch_to_cooling_output_2' (Byte), 'switch_to_cooling_output_3' (Byte), 'switch_to_cooling_value_0' (Byte), 'switch_to_cooling_value_1' (Byte), 'switch_to_cooling_value_2' (Byte), 'switch_to_cooling_value_3' (Byte), 'switch_to_heating_output_0' (Byte), 'switch_to_heating_output_1' (Byte), 'switch_to_heating_output_2' (Byte), 'switch_to_heating_output_3' (Byte), 'switch_to_heating_value_0' (Byte), 'switch_to_heating_value_1' (Byte), 'switch_to_heating_value_2' (Byte), 'switch_to_heating_value_3' (Byte), 'threshold_temp' (Temp)
         """
-        return self._eeprom_controller.read(GlobalThermostatConfiguration, fields).serialize()
+        return self._eeprom_controller.read(GlobalThermostatConfiguration, fields=fields).serialize()
 
     def v0_set_global_thermostat_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set the global_thermostat_configuration.
 
@@ -323,6 +340,7 @@ class ThermostatControllerMaster(ThermostatController):
         self.invalidate_cache(Observer.Types.THERMOSTATS)
 
     def v0_get_pump_group_configuration(self, pump_group_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
         """
         Get a specific pump_group_configuration defined by its id.
 
@@ -335,6 +353,7 @@ class ThermostatControllerMaster(ThermostatController):
         return self._eeprom_controller.read(PumpGroupConfiguration, pump_group_id, fields).serialize()
 
     def v0_get_pump_group_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
         """
         Get all pump_group_configurations.
 
@@ -345,6 +364,7 @@ class ThermostatControllerMaster(ThermostatController):
         return [o.serialize() for o in self._eeprom_controller.read_all(PumpGroupConfiguration, fields)]
 
     def v0_set_pump_group_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one pump_group_configuration.
 
@@ -354,6 +374,7 @@ class ThermostatControllerMaster(ThermostatController):
         self._eeprom_controller.write(PumpGroupConfiguration.deserialize(config))
 
     def v0_set_pump_group_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple pump_group_configurations.
 
@@ -363,6 +384,7 @@ class ThermostatControllerMaster(ThermostatController):
         self._eeprom_controller.write_batch([PumpGroupConfiguration.deserialize(o) for o in config])
 
     def v0_set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
+        # type: (bool, bool, bool, Optional[bool], Optional[int]) -> Dict[str,Any]
         """ Set the mode of the thermostats.
         :param thermostat_on: Whether the thermostats are on
         :type thermostat_on: boolean
@@ -386,7 +408,9 @@ class ThermostatControllerMaster(ThermostatController):
             # Heating means threshold based
             global_config = self.v0_get_global_thermostat_configuration()
             outside_sensor = global_config['outside_sensor']
-            current_temperatures = self._gateway_api.get_sensors_temperature_status()
+            current_temperatures = self._master_controller.get_sensors_temperature()[:32]
+            if len(current_temperatures) < 32:
+                current_temperatures += [None] * (32 - len(current_temperatures))
             if len(current_temperatures) > outside_sensor:
                 current_temperature = current_temperatures[outside_sensor]
                 set_on = global_config['threshold_temp'] > current_temperature
@@ -432,6 +456,7 @@ class ThermostatControllerMaster(ThermostatController):
         return {'status': 'OK'}
 
     def v0_set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
+        # type: (int, bool, int) -> Dict[str,Any]
         """ Set the setpoint/mode for a certain thermostat.
         :param thermostat_id: The id of the thermostat.
         :type thermostat_id: Integer [0, 31]
@@ -465,6 +490,7 @@ class ThermostatControllerMaster(ThermostatController):
         return {'status': 'OK'}
 
     def v0_set_airco_status(self, thermostat_id, airco_on):
+        # type: (int, bool) -> Dict[str,Any]
         """ Set the mode of the airco attached to a given thermostat.
         :param thermostat_id: The thermostat id.
         :type thermostat_id: Integer [0, 31]
@@ -484,6 +510,7 @@ class ThermostatControllerMaster(ThermostatController):
         return {'status': 'OK'}
 
     def v0_get_airco_status(self):
+        # type: () -> Dict[str,Any]
         """ Get the mode of the airco attached to a all thermostats.
         :returns: dict with ASB0-ASB31.
         """
@@ -496,6 +523,7 @@ class ThermostatControllerMaster(ThermostatController):
             raise ValueError('Thermostat not in [0,32]: %d' % thermostat)
 
     def v0_set_current_setpoint(self, thermostat, temperature):
+        # type: (int, float) -> Dict[str,Any]
         """ Set the current setpoint of a thermostat.
         :param thermostat: The id of the thermostat to set
         :type thermostat: Integer [0, 32]
@@ -592,6 +620,7 @@ class ThermostatControllerMaster(ThermostatController):
         self._thermostats_last_updated = time.time()
 
     def v0_get_thermostat_status(self):
+        # type: () -> Dict[str,Any]
         """ Returns thermostat information """
         self._refresh_thermostats()  # Always return the latest information
         return self._thermostat_status.get_thermostats()
