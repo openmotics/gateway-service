@@ -47,7 +47,8 @@ class ThermostatControllerGateway(ThermostatController):
 
     @Inject
     def __init__(self, gateway_api=INJECTED, message_client=INJECTED, observer=INJECTED):
-        super(ThermostatControllerGateway, self).__init__(gateway_api, message_client, observer)
+        super(ThermostatControllerGateway, self).__init__(message_client, observer)
+        self._gateway_api = gateway_api
         self._running = False
         self._pid_loop_thread = None
         self._update_pumps_thread = None
