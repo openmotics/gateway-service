@@ -164,6 +164,54 @@ class MasterController(object):
 
     # Thermostats
 
+    def set_thermostat_mode(self, mode):
+        # type: (int) -> None
+        raise NotImplementedError()
+
+    def set_thermostat_cooling_heating(self, mode):
+        # type: (int) -> None
+        raise NotImplementedError()
+
+    def set_thermostat_automatic(self, action_number):
+        # type: (int) -> None
+        raise NotImplementedError()
+
+    def set_thermostat_all_setpoints(self, setpoint):
+        # type: (int) -> None
+        raise NotImplementedError()
+
+    def write_thermostat_setpoint(self, thermostat_id, temperature):
+        # type: (int, float) -> None
+        raise NotImplementedError()
+
+    def set_thermostat_setpoint(self, thermostat_id, setpoint):
+        # type: (int, int) -> None
+        raise NotImplementedError()
+
+    def set_thermostat_tenant_auto(self, thermostat_id):
+        # type: (int) -> None
+        raise NotImplementedError()
+
+    def get_thermostats(self):
+        # type: () -> Dict[str,Any]
+        raise NotImplementedError()
+
+    def get_thermostat_modes(self):
+        # type: () -> Dict[str,Any]
+        raise NotImplementedError()
+
+    def read_airco_status_bits(self):
+        # type: () -> Dict[str,Any]
+        raise NotImplementedError()
+
+    def set_airco_status_bits(self, status_bits):
+        # type: (int) -> None
+        raise NotImplementedError()
+
+    def set_thermostat_tenant_manual(self, thermostat_id):
+        # type: (int) -> None
+        raise NotImplementedError()
+
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         raise NotImplementedError()
 

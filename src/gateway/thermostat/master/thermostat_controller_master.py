@@ -35,7 +35,6 @@ if False:  # MYPY
     from gateway.dto import OutputStateDTO
     from gateway.hal.master_controller_classic import MasterClassicController
     from gateway.output_controller import OutputController
-    from master.classic.master_communicator import MasterCommunicator
 
 logger = logging.getLogger("openmotics")
 
@@ -44,11 +43,9 @@ logger = logging.getLogger("openmotics")
 @Singleton
 class ThermostatControllerMaster(ThermostatController):
     @Inject
-    def __init__(self, message_client=INJECTED, output_controller=INJECTED,
-                 master_communicator=INJECTED, master_controller=INJECTED):
-        # type: (Optional[MessageClient], OutputController, MasterCommunicator, MasterClassicController) -> None
+    def __init__(self, message_client=INJECTED, output_controller=INJECTED, master_controller=INJECTED):
+        # type: (Optional[MessageClient], OutputController, MasterClassicController) -> None
         super(ThermostatControllerMaster, self).__init__(message_client, output_controller)
-        self._master_communicator = master_communicator
         self._master_controller = master_controller  # classic only
 
         self._monitor_thread = DaemonThread(name='ThermostatControllerMaster monitor',
@@ -59,7 +56,7 @@ class ThermostatControllerMaster(ThermostatController):
                                                          on_thermostat_group_change=self._thermostat_group_changed)
         self._thermostats_original_interval = 30
         self._thermostats_interval = self._thermostats_original_interval
-        self._thermostats_last_updated = 0
+        self._thermostats_last_updated = 0.0
         self._thermostats_restore = 0
         self._thermostats_config = {}  # type: Dict[int, ThermostatDTO]
 
@@ -413,32 +410,22 @@ class ThermostatControllerMaster(ThermostatController):
         mode |= (1 if cooling_mode else 0) << 4
         if automatic is not None:
             mode |= (1 if automatic else 0) << 3
-
-        self.check_basic_action(self._master_communicator.do_basic_action(
-            master_api.BA_THERMOSTAT_MODE, mode
-        ))
+        self._master_controller.set_thermostat_mode(mode)
 
         # Caclulate and set the cooling/heating mode
         cooling_heating_mode = 0
         if cooling_mode is True:
             cooling_heating_mode = 1 if cooling_on is False else 2
-
-        self.check_basic_action(self._master_communicator.do_basic_action(
-            master_api.BA_THERMOSTAT_COOLING_HEATING, cooling_heating_mode
-        ))
+        self._master_controller.set_thermostat_cooling_heating(cooling_heating_mode)
 
         # Then, set manual/auto
         if automatic is not None:
             action_number = 1 if automatic is True else 0
-            self.check_basic_action(self._master_communicator.do_basic_action(
-                master_api.BA_THERMOSTAT_AUTOMATIC, action_number
-            ))
+            self._master_controller.set_thermostat_automatic(action_number)
 
         # If manual, set the setpoint if appropriate
         if automatic is False and setpoint is not None and 3 <= setpoint <= 5:
-            self.check_basic_action(self._master_communicator.do_basic_action(
-                getattr(master_api, 'BA_ALL_SETPOINT_{0}'.format(setpoint)), 0
-            ))
+            self._master_controller.set_thermostat_all_setpoints(setpoint)
 
         self.invalidate_cache(Observer.Types.THERMOSTATS)
         self.increase_interval(Observer.Types.THERMOSTATS, interval=2, window=10)
@@ -462,17 +449,10 @@ class ThermostatControllerMaster(ThermostatController):
             raise ValueError('Setpoint not in [0, 5]: %d' % setpoint)
 
         if automatic:
-            self.check_basic_action(self._master_communicator.do_basic_action(
-                master_api.BA_THERMOSTAT_TENANT_AUTO, thermostat_id
-            ))
+            self._master_controller.set_thermostat_tenant_auto(thermostat_id)
         else:
-            self.check_basic_action(self._master_communicator.do_basic_action(
-                master_api.BA_THERMOSTAT_TENANT_MANUAL, thermostat_id
-            ))
-
-            self.check_basic_action(self._master_communicator.do_basic_action(
-                getattr(master_api, 'BA_ONE_SETPOINT_{0}'.format(setpoint)), thermostat_id
-            ))
+            self._master_controller.set_thermostat_tenant_manual(thermostat_id)
+            self._master_controller.set_thermostat_setpoint(thermostat_id, setpoint)
 
         self.invalidate_cache(Observer.Types.THERMOSTATS)
         self.increase_interval(Observer.Types.THERMOSTATS, interval=2, window=10)
@@ -489,13 +469,8 @@ class ThermostatControllerMaster(ThermostatController):
         """
         if thermostat_id < 0 or thermostat_id > 31:
             raise ValueError('thermostat_id not in [0, 31]: %d' % thermostat_id)
-
         modifier = 0 if airco_on else 100
-
-        self.check_basic_action(self._master_communicator.do_basic_action(
-            master_api.BA_THERMOSTAT_AIRCO_STATUS, modifier + thermostat_id
-        ))
-
+        self._master_controller.set_airco_status_bits(modifier + thermostat_id)
         return {'status': 'OK'}
 
     def v0_get_airco_status(self):
@@ -503,7 +478,7 @@ class ThermostatControllerMaster(ThermostatController):
         """ Get the mode of the airco attached to a all thermostats.
         :returns: dict with ASB0-ASB31.
         """
-        return self._master_communicator.do_command(master_api.read_airco_status_bits())
+        return self._master_controller.read_airco_status_bits()
 
     @staticmethod
     def __check_thermostat(thermostat):
@@ -521,9 +496,7 @@ class ThermostatControllerMaster(ThermostatController):
         :returns: dict with 'thermostat', 'config' and 'temp'
         """
         self.__check_thermostat(thermostat)
-        self._master_communicator.do_command(master_api.write_setpoint(), {'thermostat': thermostat,
-                                                                           'config': 0,
-                                                                           'temp': master_api.Svt.temp(temperature)})
+        self._master_controller.write_thermostat_setpoint(thermostat, temperature)
 
         self.invalidate_cache(Observer.Types.THERMOSTATS)
         self.increase_interval(Observer.Types.THERMOSTATS, interval=2, window=10)
@@ -544,6 +517,7 @@ class ThermostatControllerMaster(ThermostatController):
             raise DaemonThreadWait
 
     def _refresh_thermostats(self):
+        # type: () -> None
         """
         Get basic information about all thermostats and pushes it in to the Thermostat Status tracker
         """
@@ -553,9 +527,9 @@ class ThermostatControllerMaster(ThermostatController):
             return _automatic, 0 if _automatic else (_mode & 0b00000111)
 
         try:
-            thermostat_info = self._master_communicator.do_command(master_api.thermostat_list())
-            thermostat_mode = self._master_communicator.do_command(master_api.thermostat_mode_list())
-            aircos = self._master_communicator.do_command(master_api.read_airco_status_bits())
+            thermostat_info = self._master_controller.get_thermostats()
+            thermostat_mode = self._master_controller.get_thermostat_modes()
+            aircos = self._master_controller.read_airco_status_bits()
         except InMaintenanceModeException:
             return
 

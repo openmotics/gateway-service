@@ -640,6 +640,65 @@ class MasterClassicController(MasterController):
 
     # Thermostats
 
+    def set_thermostat_mode(self, mode):
+        # type: (int) -> None
+        self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_MODE, mode)
+
+    def set_thermostat_cooling_heating(self, mode):
+        # type: (int) -> None
+        self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_COOLING_HEATING, mode)
+
+    def set_thermostat_automatic(self, action_number):
+        # type: (int) -> None
+        self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_AUTOMATIC, action_number)
+
+    def set_thermostat_all_setpoints(self, setpoint):
+        # type: (int) -> None
+        self._master_communicator.do_basic_action(
+            getattr(master_api, 'BA_ALL_SETPOINT_{0}'.format(setpoint)), 0
+        )
+
+    def set_thermostat_setpoint(self, thermostat_id, setpoint):
+        # type: (int, int) -> None
+        self._master_communicator.do_basic_action(
+            getattr(master_api, 'BA_ONE_SETPOINT_{0}'.format(setpoint)), thermostat_id
+        )
+
+    def write_thermostat_setpoint(self, thermostat_id, temperature):
+        # type: (int, float) -> None
+        self._master_communicator.do_command(
+            master_api.write_setpoint(),
+            {'thermostat': thermostat_id,
+             'config': 0,
+             'temp': master_api.Svt.temp(temperature)}
+        )
+
+    def set_thermostat_tenant_auto(self, thermostat_id):
+        # type: (int) -> None
+        self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_TENANT_AUTO, thermostat_id)
+
+    def set_thermostat_tenant_manual(self, thermostat_id):
+        # type: (int) -> None
+        self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_TENANT_MANUAL, thermostat_id)
+
+    def get_thermostats(self):
+        # type: () -> Dict[str,Any]
+        return self._master_communicator.do_command(master_api.thermostat_list())
+
+    def get_thermostat_modes(self):
+        # type: () -> Dict[str,Any]
+        return self._master_communicator.do_command(master_api.thermostat_mode_list())
+
+    def read_airco_status_bits(self):
+        # type: () -> Dict[str,Any]
+        return self._master_communicator.do_command(master_api.read_airco_status_bits())
+
+    def set_airco_status_bits(self, status_bits):
+        # type: (int) -> None
+        self._master_communicator.do_basic_action(
+            master_api.BA_THERMOSTAT_AIRCO_STATUS, status_bits
+        )
+
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         classic_object = self._eeprom_controller.read(eeprom_models.ThermostatConfiguration, thermostat_id)
         return ThermostatMapper.orm_to_dto(classic_object)
