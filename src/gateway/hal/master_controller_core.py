@@ -688,7 +688,7 @@ class MasterCoreController(MasterController):
     def module_discover_status(self):  # type: () -> bool
         return self._discover_mode_timer is not None
 
-    def get_module_log(self):  # type: () -> List[Tuple[str, str]]
+    def get_module_log(self):  # type: () -> List[Dict[str, Any]]
         raise NotImplementedError()  # No need to implement. Not used and rather obsolete code anyway
 
     def get_modules(self):

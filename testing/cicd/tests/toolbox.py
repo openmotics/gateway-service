@@ -168,10 +168,19 @@ class TesterGateway(object):
 
 
 class Toolbox(object):
+    UCAN_0_INPUT_0 = 32  # tester_output_3.output_0
+    UCAN_1_INPUT_0 = 33  # tester_output_3.output_1
+    UCAN_2_INPUT_0 = 34  # tester_output_3.output_2
+    UCAN_3_INPUT_0 = 35  # tester_output_3.output_3
+    UCAN_4_INPUT_0 = 36  # tester_output_3.output_4
+    UCAN_5_INPUT_0 = 37  # tester_output_3.output_5
+
+    DEBIAN_DISCOVER_UCANS = [UCAN_0_INPUT_0, UCAN_1_INPUT_0, UCAN_2_INPUT_0,
+                             UCAN_3_INPUT_0, UCAN_4_INPUT_0, UCAN_5_INPUT_0]
     DEBIAN_AUTHORIZED_MODE = 13  # tester_output_1.output_5
     DEBIAN_DISCOVER_INPUT = 14  # tester_output_1.output_6
     DEBIAN_DISCOVER_OUTPUT = 15  # tester_output_1.output_7
-    DEBIAN_DISCOVER_UCAN = 22  # tester_output2.output_6
+    DEBIAN_DISCOVER_CAN_CONTROL = 22  # tester_output2.output_6
     DEBIAN_DISCOVER_ENERGY = 23  # tester_output2.output_7
     DEBIAN_POWER_OUTPUT = 8  # tester_output_1.output_0
     POWER_ENERGY_MODULE = 11  # tester_output_1.output_3
@@ -228,10 +237,10 @@ class Toolbox(object):
             assert 'C' in data['can_inputs']
         except Exception:
             logger.info('discovering modules...')
-            self.discover_output_module()
-            self.discover_input_module()
-            # self.discover_energy_module()  # TODO: Energy module discovery fails
-            self.discover_can_control()
+            self.discover_modules(output_modules=True,
+                                  input_modules=True,
+                                  can_controls=True,
+                                  ucans=True)
 
         # TODO compare with hardware modules instead.
         data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
@@ -324,44 +333,62 @@ class Toolbox(object):
         logger.debug('stop module discover')
         self.dut.get('/module_discover_stop')
 
-    def discover_output_module(self):
-        # type: () -> None
-        logger.debug('discover output module')
+    def discover_modules(self, output_modules=False, input_modules=False, can_controls=False, ucans=False):
+        logger.debug('Discovering modules')
+        if ucans:
+            for ucan_output_id in self.DEBIAN_DISCOVER_UCANS:
+                self.tester.toggle_output(ucan_output_id, delay=0.5)
+            time.sleep(0.5)  # Give a brief moment for the CC to settle
         self.module_discover_start()
-        self.tester.toggle_output(self.DEBIAN_DISCOVER_OUTPUT)
-        self.assert_modules(1)
-        self.module_discover_stop()
+        try:
+            addresses = []
+            if output_modules:
+                self.tester.toggle_output(self.DEBIAN_DISCOVER_OUTPUT, delay=0.5)
+                self.assert_modules(1, module_types=['O'], addresses=addresses)
+            if input_modules:
+                self.tester.toggle_output(self.DEBIAN_DISCOVER_INPUT, delay=0.5)
+                self.assert_modules(1, module_types=['I'], addresses=addresses)
+            if can_controls:
+                self.tester.toggle_output(self.DEBIAN_DISCOVER_INPUT, delay=0.5)
+                self.assert_modules(1, module_types=['I'], addresses=addresses)
+                self.assert_modules(1, module_types=['T'], addresses=addresses)
+                self.assert_modules(1, module_types=['C'], addresses=addresses)
+        finally:
+            self.module_discover_stop()
 
-    def discover_input_module(self):
-        # type: () -> None
-        logger.debug('discover input module')
-        self.module_discover_start()
-        self.tester.toggle_output(self.DEBIAN_DISCOVER_INPUT)
-        self.assert_modules(1)
-        self.module_discover_stop()
+    def assert_modules(self, count, module_types, timeout=10, addresses=None):
+        # type: (int, List[str], float, Optional[List[str]]) -> List[Dict[str, Any]]
 
-    def discover_can_control(self):
-        # type: () -> None
-        logger.debug('discover CAN control')
-        # TODO: discover CAN inputs
-        self.module_discover_start()
-        self.tester.toggle_output(self.DEBIAN_DISCOVER_UCAN)
-        self.assert_modules(2, timeout=60)
-        # TODO: wait for inputs to be andvertized, no a way to poll?
-        time.sleep(120)
-        self.module_discover_stop()
-
-    def assert_modules(self, count, timeout=30):
-        # type: (int, float) -> List[List[str]]
         since = time.time()
-        modules = []
+        log_output = []
+        if addresses is None:
+            addresses = []
+        new_addresses = []
         while since > time.time() - timeout:
-            modules += self.dut.get('/get_module_log')['log']
-            if len(modules) >= count:
-                logger.debug('discovered {} modules, done'.format(count))
-                return modules
+            log = self.dut.get('/get_module_log')['log']
+            # Log format: {'code': '<NEW|EXISTING|DUPLCATE|UNKNOWN>',
+            #              'module_nr': <module number in its category>,
+            #              'category': '<SHUTTER|INTPUT|OUTPUT>',
+            #              'module_type': '<I|O|T|D|i|o|t|d|C>,
+            #              'address': '<module address>'}
+            log_output += log
+            for entry in log:
+                if entry['code'] in ['DUPLICATE', 'UNKNOWN']:
+                    continue
+                if entry['module_type'] not in module_types:
+                    continue
+                address = entry['address']
+                if address not in addresses:
+                    addresses.append(address)
+                    new_addresses.append(address)
+                logger.debug('Discovered {} module: {} ({})'.format(entry['code'],
+                                                                    entry['module_type'],
+                                                                    entry['address']))
+            if len(new_addresses) >= count:
+                logger.debug('Discovered {} modules of types {}. Done'.format(len(new_addresses), module_types))
+                return log_output
             time.sleep(2)
-        raise AssertionError('expected {} modules in {}'.format(count, modules))
+        raise AssertionError('Expected {} modules of types {}. Raw log: {}'.format(count, module_types, log_output))
 
     def discover_energy_module(self):
         # type: () -> None

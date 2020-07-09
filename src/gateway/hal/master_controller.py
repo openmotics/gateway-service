@@ -297,7 +297,7 @@ class MasterController(object):
     def module_discover_status(self):  # type: () -> bool
         raise NotImplementedError()
 
-    def get_module_log(self):  # type: () -> List[Tuple[str, str]]
+    def get_module_log(self):  # type: () -> List[Dict[str, Any]]
         raise NotImplementedError()
 
     # Error functions

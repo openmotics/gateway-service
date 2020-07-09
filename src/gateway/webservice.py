@@ -506,7 +506,7 @@ class WebInterface(object):
         return {'running': self._gateway_api.module_discover_status()}
 
     @openmotics_api(auth=True)
-    def get_module_log(self):  # type: () -> Dict[str, List[Tuple[str, str]]]
+    def get_module_log(self):  # type: () -> Dict[str, List[Dict[str, Any]]]
         """
         Get the log messages from the module discovery mode. This returns the current log
         messages and clear the log messages.
