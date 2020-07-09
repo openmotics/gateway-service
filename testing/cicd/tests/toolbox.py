@@ -350,9 +350,10 @@ class Toolbox(object):
                 self.assert_modules(1, module_types=['I'], addresses=addresses)
             if can_controls:
                 self.tester.toggle_output(self.DEBIAN_DISCOVER_INPUT, delay=0.5)
-                self.assert_modules(1, module_types=['I'], addresses=addresses)
-                self.assert_modules(1, module_types=['T'], addresses=addresses)
                 self.assert_modules(1, module_types=['C'], addresses=addresses)
+                if ucans:
+                    self.assert_modules(1, module_types=['I'], addresses=addresses)
+                    self.assert_modules(1, module_types=['T'], addresses=addresses)
         finally:
             self.module_discover_stop()
 
