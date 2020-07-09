@@ -23,6 +23,7 @@ import select
 import time
 from threading import Event, Lock, Thread
 
+from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_controller import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import master_api
@@ -36,6 +37,10 @@ if False:  # MYPY
     from typing import Any, Dict, List, Optional, TypeVar, Union
     from master.classic.master_command import MasterCommandSpec
     T_co = TypeVar('T_co', bound=None, covariant=True)
+
+
+class MasterUnavailable(CommunicationFailure):
+    pass
 
 
 class MasterCommunicator(object):
@@ -68,6 +73,8 @@ class MasterCommunicator(object):
         self.__maintenance_mode = False
         self.__maintenance_queue = Queue()
 
+        self.__update_mode = False
+
         self.__consumers = []
 
         self.__passthrough_enabled = False
@@ -92,33 +99,49 @@ class MasterCommunicator(object):
         self.__debug_buffer_duration = 300
 
     def start(self):
+        # type: () -> None
         """ Start the MasterComunicator, this starts the background read thread. """
         if self.__init_master:
-
-            def flush_serial_input():
-                """ Try to read from the serial input and discard the bytes read. """
-                i = 0
-                data = self.__serial.read(1)
-                while len(data) > 0 and i < 100:
-                    data = self.__serial.read(1)
-                    i += 1
-
-            self.__serial.timeout = 1
-            self.__serial.write(" "*18 + "\r\n")
-            flush_serial_input()
-            self.__serial.write("exit\r\n")
-            flush_serial_input()
-            self.__serial.write(" "*10)
-            flush_serial_input()
-            self.__serial.timeout = None  # TODO: make non blocking
+            self._flush_serial_input()
 
         if not self.__running:
             self.__running = True
             self.__read_thread.start()
 
     def stop(self):
+        # type: () -> None
         self.__running = False
         self.__read_thread.join()
+
+    def update_mode_start(self):
+        # type: () -> None
+        if self.__maintenance_mode:
+            raise InMaintenanceModeException()
+        self.__update_mode = True
+
+    def update_mode_stop(self):
+        # type: () -> None
+        self.__update_mode = False
+        self._flush_serial_input()
+
+    def _flush_serial_input(self):
+         # type: () -> None
+         def _flush():
+             """ Try to read from the serial input and discard the bytes read. """
+             i = 0
+             data = self.__serial.read(1)
+             while len(data) > 0 and i < 100:
+                 data = self.__serial.read(1)
+                 i += 1
+
+         self.__serial.timeout = 1
+         self.__serial.write(" "*18 + "\r\n")
+         _flush()
+         self.__serial.write("exit\r\n")
+         _flush()
+         self.__serial.write(" "*10)
+         _flush()
+         self.__serial.timeout = None  # TODO: make non blocking
 
     def enable_passthrough(self):
         self.__passthrough_enabled = True
@@ -147,6 +170,10 @@ class MasterCommunicator(object):
         :param data: the data to write
         :type data: string
         """
+        # Don't touch the serial during updates.
+        if self.__update_mode:
+            raise MasterUnavailable()
+
         with self.__serial_write_lock:
             if self.__verbose:
                 logger.info('Writing to Master serial:   {0}'.format(printable(data)))
@@ -414,6 +441,12 @@ class MasterCommunicator(object):
         data = ""
 
         while self.__running:
+
+            # Don't touch the serial during updates.
+            if self.__update_mode:
+                time.sleep(2)
+                continue
+
             # TODO: use a non blocking serial instead?
             readers, _, _ = select.select([self.__serial], [], [], 2)
             if not readers:
