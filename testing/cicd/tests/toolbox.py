@@ -168,15 +168,6 @@ class TesterGateway(object):
 
 
 class Toolbox(object):
-    UCAN_0_INPUT_0 = 32  # tester_output_3.output_0
-    UCAN_1_INPUT_0 = 33  # tester_output_3.output_1
-    UCAN_2_INPUT_0 = 34  # tester_output_3.output_2
-    UCAN_3_INPUT_0 = 35  # tester_output_3.output_3
-    UCAN_4_INPUT_0 = 36  # tester_output_3.output_4
-    UCAN_5_INPUT_0 = 37  # tester_output_3.output_5
-
-    DEBIAN_DISCOVER_UCANS = [UCAN_0_INPUT_0, UCAN_1_INPUT_0, UCAN_2_INPUT_0,
-                             UCAN_3_INPUT_0, UCAN_4_INPUT_0, UCAN_5_INPUT_0]
     DEBIAN_AUTHORIZED_MODE = 13  # tester_output_1.output_5
     DEBIAN_DISCOVER_INPUT = 14  # tester_output_1.output_6
     DEBIAN_DISCOVER_OUTPUT = 15  # tester_output_1.output_7
@@ -336,8 +327,8 @@ class Toolbox(object):
     def discover_modules(self, output_modules=False, input_modules=False, can_controls=False, ucans=False):
         logger.debug('Discovering modules')
         if ucans:
-            for ucan_output_id in self.DEBIAN_DISCOVER_UCANS:
-                self.tester.toggle_output(ucan_output_id, delay=0.5)
+            for ucan_input in INPUT_MODULE_LAYOUT['C'].inputs:
+                self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
             time.sleep(0.5)  # Give a brief moment for the CC to settle
         self.module_discover_start()
         try:
