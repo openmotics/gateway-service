@@ -160,10 +160,11 @@ def test_factory_reset(toolbox, create_user, authorized_mode):
     assert 'outputs' in data
     assert ['O'] == data['outputs']
 
+    data = toolbox.dut.get('/get_modules_information')
+    modules = list(data['modules']['master'].values())
+    assert {'I', 'O'} == set(x['type'] for x in modules)
+
     # TODO: Enable as soon as FV instruction works reliable
-    # data = toolbox.dut.get('/get_modules_information')
-    # modules = list(data['modules']['master'].values())
-    # assert {'I', 'O'} == set(x['type'] for x in modules)
     # assert None not in [x['firmware'] for x in modules]
 
     toolbox.dut.get('/add_virtual_output')
