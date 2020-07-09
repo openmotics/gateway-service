@@ -388,7 +388,12 @@ class MasterController(object):
     def cold_reset(self):
         raise NotImplementedError()
 
-    def update(self, hex_filename):
+    def update_master(self, hex_filename):
+        # type: (str) -> None
+        raise NotImplementedError()
+
+    def update_slave_modules(self, module_type, hex_filename):
+        # type: (str, str) -> None
         raise NotImplementedError()
 
     def get_modules(self):

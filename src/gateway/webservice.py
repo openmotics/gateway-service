@@ -18,6 +18,7 @@
 from __future__ import absolute_import
 
 import base64
+import hashlib
 import logging
 import os
 import subprocess
@@ -492,6 +493,45 @@ class WebInterface(object):
         :rtype: dict
         """
         return self._gateway_api.reset_master()
+
+    @openmotics_api(auth=True, plugin_exposed=False)
+    def update_master_firmware(self, md5, firmware_data):
+        """
+        Perform a master firmware update.
+        """
+        firmware_data = firmware_data.file.read()
+        hasher = hashlib.md5()
+        hasher.update(firmware_data)
+        calculated_md5 = hasher.hexdigest()
+        if md5 != calculated_md5:
+            raise ValueError('firmware md5:%s does not match' % calculated_md5)
+
+        temp_file = '/tmp/{}.hex'.format(md5)
+        with open(temp_file, 'wb') as firmware_file:
+            firmware_file.write(firmware_data)
+        self._gateway_api.update_master_firmware(temp_file)
+        return {}
+
+    @openmotics_api(auth=True, plugin_exposed=False)
+    def update_slave_firmware(self, type, md5, firmware_data):
+        """
+        Perform a slave firmware update.
+        """
+        if type not in ('C', 'O', 'I', 'D', 'E', 'T'):
+            raise ValueError('invalid slave module type %s' % type)
+
+        firmware_data = firmware_data.file.read()
+        hasher = hashlib.md5()
+        hasher.update(firmware_data)
+        calculated_md5 = hasher.hexdigest()
+        if md5 != calculated_md5:
+            raise ValueError('firmware md5:%s does not match' % calculated_md5)
+
+        temp_file = '/tmp/{}.hex'.format(md5)
+        with open(temp_file, 'wb') as firmware_file:
+            firmware_file.write(firmware_data)
+        self._gateway_api.update_slave_firmware(type, temp_file)
+        return {}
 
     @openmotics_api(auth=True)
     def module_discover_start(self):  # type: () -> Dict[str, str]

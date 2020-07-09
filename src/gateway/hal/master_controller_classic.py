@@ -47,7 +47,8 @@ from master.classic.eeprom_models import CanLedConfiguration, \
     StartupActionConfiguration
 from master.classic.inputs import InputStatus
 from master.classic.master_communicator import BackgroundConsumer, \
-    MasterCommunicator
+    MasterCommunicator, MasterUnavailable
+from master.classic.slave_updater import bootload_modules
 from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
@@ -58,10 +59,6 @@ if False:  # MYPY
     from gateway.config import ConfigurationController
 
 logger = logging.getLogger("openmotics")
-
-
-class MasterUnavailable(CommunicationFailure):
-    pass
 
 
 def communication_enabled(f):
@@ -1116,10 +1113,12 @@ class MasterClassicController(MasterController):
         MasterClassicController._set_master_power(True)
 
     @Inject
-    def update(self, hex_filename, controller_serial=INJECTED):
+    def update_master(self, hex_filename, controller_serial=INJECTED):
         # type: (str, Serial) -> None
-        self._communication_enabled = False
         try:
+            self._communication_enabled = False
+            self._master_communicator.update_mode_start()
+
             port = controller_serial.port  # type: ignore
             baudrate = str(controller_serial.baudrate)  # type: ignore
 
@@ -1180,6 +1179,16 @@ class MasterClassicController(MasterController):
             except subprocess.CalledProcessError as ex:
                 logger.info(ex.output)
                 raise
+        finally:
+            self._master_communicator.update_mode_stop()
+            self._communication_enabled = True
+
+    @Inject
+    def update_slave_modules(self, module_type, hex_filename, controller_serial=INJECTED):
+        # type: (str, str, Serial) -> None
+        self._communication_enabled = False
+        try:
+            bootload_modules(module_type, hex_filename)
         finally:
             self._communication_enabled = True
 
