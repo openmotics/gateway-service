@@ -390,7 +390,7 @@ class MasterController(object):
     def get_modules(self):
         raise NotImplementedError()
 
-    def get_modules_information(self):
+    def get_modules_information(self, address=None):
         raise NotImplementedError()
 
     def flash_leds(self, led_type, led_id):

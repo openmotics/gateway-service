@@ -527,12 +527,12 @@ class WebInterface(object):
         return self._gateway_api.get_modules()
 
     @openmotics_api(auth=True)
-    def get_modules_information(self):
+    def get_modules_information(self, address=None):
         """
         Gets an overview of all modules and information
         :return: Dict containing information per address
         """
-        return {'modules': self._gateway_api.get_modules_information()}
+        return {'modules': self._gateway_api.get_modules_information(address)}
 
     @openmotics_api(auth=True)
     def get_features(self):
