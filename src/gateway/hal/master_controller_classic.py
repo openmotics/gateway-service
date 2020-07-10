@@ -21,7 +21,7 @@ import logging
 import subprocess
 import time
 from datetime import datetime
-from threading import Timer
+from threading import Timer, Lock
 
 import six
 
@@ -93,14 +93,15 @@ class MasterClassicController(MasterController):
         self._validation_bits_last_updated = 0.0
 
         self._discover_mode_timer = None  # type: Optional[Timer]
-        self._module_log = []  # type: List[Tuple[str,str]]
+        self._module_log = []  # type: List[Dict[str, Any]]
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.output_list(), 0, self._on_master_output_event, True)
         )
         self._master_communicator.register_consumer(
-            BackgroundConsumer(master_api.module_initialize(), 0, self._update_modules)
+            BackgroundConsumer(master_api.module_initialize(), 0, self._process_module_initialize_message)
         )
+        self._module_log_lock = Lock()
 
     #################
     # Private stuff #
@@ -890,15 +891,19 @@ class MasterClassicController(MasterController):
 
         return {'outputs': outputs, 'inputs': inputs, 'shutters': shutters, 'can_inputs': can_inputs}
 
+    @staticmethod
+    def _format_address(address_bytes):
+        return '{0:03}.{1:03}.{2:03}.{3:03}'.format(ord(address_bytes[0]),
+                                                    ord(address_bytes[1]),
+                                                    ord(address_bytes[2]),
+                                                    ord(address_bytes[3]))
+
     def get_modules_information(self):
         """ Gets module information """
 
         def get_master_version(eeprom_address, _is_can=False):
             _module_address = self._eeprom_controller.read_address(eeprom_address)
-            formatted_address = '{0:03}.{1:03}.{2:03}.{3:03}'.format(ord(_module_address.bytes[0]),
-                                                                     ord(_module_address.bytes[1]),
-                                                                     ord(_module_address.bytes[2]),
-                                                                     ord(_module_address.bytes[3]))
+            formatted_address = MasterClassicController._format_address(_module_address.bytes)
             try:
                 if _is_can or _module_address.bytes[0].lower() == _module_address.bytes[0]:
                     return formatted_address, None, None
@@ -1135,23 +1140,33 @@ class MasterClassicController(MasterController):
 
     # Module functions
 
-    def _update_modules(self, api_data):
-        # type: (Dict[str,Any]) -> None
-        """ Create a log entry when the MI message is received. """
-        module_map = {'O': 'output', 'I': 'input', 'T': 'temperature', 'D': 'dimmer', 'C': 'CAN control'}
-        message_map = {'N': 'New %s module found.',
-                       'E': 'Existing %s module found.',
-                       'D': 'The %s module tried to register but the registration failed, '
-                            'please presse the init button again.'}
-        default_message = 'Unknown module type %s discovered.'
-        log_level_map = {'N': 'INFO', 'E': 'WARN', 'D': 'ERROR'}
-        default_level = log_level_map['D']
-
-        module_type = module_map.get(api_data['id'][0])
-        message = message_map.get(api_data['instr'], default_message) % module_type
-        log_level = log_level_map.get(api_data['instr'], default_level)
-
-        self._module_log.append((log_level, message))
+    def _process_module_initialize_message(self, api_data):
+        # type: (Dict[str, Any]) -> None
+        """
+        Create a log entry when the MI message is received.
+        > {'instr': 'E', 'module_nr': 0, 'io_type': 2, 'padding': '', 'literal': '', 'data': 1, 'id': 'I@7%'}
+        """
+        try:
+            code_map = {'N': 'New',
+                        'E': 'Existing',
+                        'D': 'Duplicate'}
+            category_map = {0: 'SHUTTER',
+                            1: 'OUTPUT',
+                            2: 'INPUT'}
+            address = MasterClassicController._format_address(api_data['id'])
+            with self._module_log_lock:
+                self._module_log.append({'code': code_map.get(api_data['instr'], 'UNKNOWN').upper(),
+                                         'module_nr': api_data['module_nr'],
+                                         'category': category_map[api_data['io_type']],
+                                         'module_type': api_data['id'][0],
+                                         'address': address})
+            logger.info('Initialize/discovery - {0} module found: {1} ({2})'.format(
+                code_map.get(api_data['instr'], 'Unknown'),
+                api_data['id'][0],
+                address
+            ))
+        except Exception:
+            logger.exception('Could not process initialization message')
 
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
@@ -1163,7 +1178,8 @@ class MasterClassicController(MasterController):
         self._discover_mode_timer = Timer(timeout, _stop)
         self._discover_mode_timer.start()
 
-        self._module_log = []
+        with self._module_log_lock:
+            self._module_log = []
 
     def module_discover_stop(self):  # type: () -> None
         if self._discover_mode_timer is not None:
@@ -1173,13 +1189,15 @@ class MasterClassicController(MasterController):
         self._master_communicator.do_command(master_api.module_discover_stop())
         self._broadcast_module_discovery()
 
-        self._module_log = []
+        with self._module_log_lock:
+            self._module_log = []
 
     def module_discover_status(self):  # type: () -> bool
         return self._discover_mode_timer is not None
 
-    def get_module_log(self):  # type: () -> List[Tuple[str, str]]
-        (log, self._module_log) = (self._module_log, [])
+    def get_module_log(self):  # type: () -> List[Dict[str, Any]]
+        with self._module_log_lock:
+            (log, self._module_log) = (self._module_log, [])
         return log
 
     def _broadcast_module_discovery(self):

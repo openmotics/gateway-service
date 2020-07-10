@@ -157,9 +157,9 @@ class GatewayApi(object):
         """ Gets the status of the module discover mode on the master. """
         return self.__master_controller.module_discover_status()
 
-    def get_module_log(self):  # type: () -> List[Tuple[str, str]]
+    def get_module_log(self):  # type: () -> List[Dict[str, Any]]
         """
-        Get the log messages from the module discovery mode. This returns the current log
+        Get the log statements from the module discovery mode. This returns the current log
         messages and clear the log messages.
         """
         return self.__master_controller.get_module_log()
