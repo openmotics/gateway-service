@@ -21,6 +21,7 @@ import base64
 import hashlib
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -510,6 +511,7 @@ class WebInterface(object):
         with open(temp_file, 'wb') as firmware_file:
             firmware_file.write(firmware_data)
         self._gateway_api.update_master_firmware(temp_file)
+        shutil.move(temp_file, '/opt/openmotics/firmware.hex')
         return {}
 
     @openmotics_api(auth=True, plugin_exposed=False)
@@ -531,6 +533,7 @@ class WebInterface(object):
         with open(temp_file, 'wb') as firmware_file:
             firmware_file.write(firmware_data)
         self._gateway_api.update_slave_firmware(type, temp_file)
+        shutil.move(temp_file, '/opt/openmotics/{}_firmware.hex'.format(type))
         return {}
 
     @openmotics_api(auth=True)

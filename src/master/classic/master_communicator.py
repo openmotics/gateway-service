@@ -121,8 +121,8 @@ class MasterCommunicator(object):
 
     def update_mode_stop(self):
         # type: () -> None
-        self.__update_mode = False
         self._flush_serial_input()
+        self.__update_mode = False
 
     def _flush_serial_input(self):
          # type: () -> None
