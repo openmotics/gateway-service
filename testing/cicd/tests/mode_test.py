@@ -153,7 +153,11 @@ def test_factory_reset(toolbox, create_user, authorized_mode):
     assert 'outputs' in data
     assert data['outputs'] == []
 
-    toolbox.discover_modules(input_modules=True, output_modules=True)
+    toolbox.discover_modules(input_modules=True,
+                             output_modules=True)
+    # TODO: Once `can_controls` and `ucans` are also included, the below `firmeware` check
+    #       also needs to be adapted, as emulated modules don't have a firwmare version
+
     data = toolbox.dut.get('/get_modules')
     assert 'inputs' in data
     assert ['I'] == data['inputs']
@@ -163,9 +167,7 @@ def test_factory_reset(toolbox, create_user, authorized_mode):
     data = toolbox.dut.get('/get_modules_information')
     modules = list(data['modules']['master'].values())
     assert {'I', 'O'} == set(x['type'] for x in modules)
-
-    # TODO: Enable as soon as FV instruction works reliable
-    # assert None not in [x['firmware'] for x in modules]
+    assert None not in [x['firmware'] for x in modules]
 
     toolbox.dut.get('/add_virtual_output')
     time.sleep(2)
