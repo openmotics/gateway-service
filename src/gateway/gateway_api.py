@@ -141,6 +141,12 @@ class GatewayApi(object):
     def reset_master(self):
         return self.__master_controller.cold_reset()
 
+    def update_master_firmware(self, hex_filename):
+        self.__master_controller.update_master(hex_filename)
+
+    def update_slave_firmware(self, module_type, hex_filename):
+        self.__master_controller.update_slave_modules(module_type, hex_filename)
+
     # Master module functions
 
     def module_discover_start(self, timeout=900):  # type: (int) -> None

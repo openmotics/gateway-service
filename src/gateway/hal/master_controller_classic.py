@@ -17,6 +17,7 @@ Module for communicating with the Master
 """
 from __future__ import absolute_import
 
+import functools
 import logging
 import subprocess
 import time
@@ -32,9 +33,9 @@ from gateway.enums import ShutterEnums
 from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
     OutputMapper, PulseCounterMapper, SensorMapper, ShutterGroupMapper, \
     ShutterMapper, ThermostatMapper
-from gateway.hal.master_controller import MasterController
+from gateway.hal.master_controller import CommunicationFailure, \
+    MasterController
 from gateway.hal.master_event import MasterEvent
-from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import eeprom_models, master_api
 from master.classic.eeprom_controller import EepromAddress, EepromController
@@ -46,7 +47,8 @@ from master.classic.eeprom_models import CanLedConfiguration, \
     StartupActionConfiguration
 from master.classic.inputs import InputStatus
 from master.classic.master_communicator import BackgroundConsumer, \
-    MasterCommunicator
+    MasterCommunicator, MasterUnavailable
+from master.classic.slave_updater import bootload_modules
 from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
@@ -57,6 +59,15 @@ if False:  # MYPY
     from gateway.config import ConfigurationController
 
 logger = logging.getLogger("openmotics")
+
+
+def communication_enabled(f):
+    @functools.wraps(f)
+    def wrapper(instance, *args, **kwargs):
+        if not instance._communication_enabled:
+            raise MasterUnavailable()
+        return f(instance, *args, **kwargs)
+    return wrapper
 
 
 class MasterClassicController(MasterController):
@@ -82,6 +93,7 @@ class MasterClassicController(MasterController):
                                                     interval=30, delay=10)
         self._master_version = None
         self._master_online = False
+        self._communication_enabled = True
         self._input_interval = 300
         self._input_last_updated = 0.0
         self._input_config = {}  # type: Dict[int, InputDTO]
@@ -133,7 +145,7 @@ class MasterClassicController(MasterController):
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
             self._set_master_state(False)
             raise DaemonThreadWait
-        except InMaintenanceModeException:
+        except CommunicationFailure:
             # This is an expected situation
             raise DaemonThreadWait
 
@@ -161,6 +173,7 @@ class MasterClassicController(MasterController):
                                self._on_master_shutter_change)
         )
 
+    @communication_enabled
     def _check_master_time(self):
         # type: () -> None
         """
@@ -188,6 +201,7 @@ class MasterClassicController(MasterController):
             else:
                 self.sync_time()
 
+    @communication_enabled
     def _check_master_settings(self):
         # type: () -> None
         """
@@ -331,12 +345,14 @@ class MasterClassicController(MasterController):
         self._shutters_last_updated = 0.0
         self._synchronization_thread.request_single_run()
 
+    @communication_enabled
     def get_firmware_version(self):
         out_dict = self._master_communicator.do_command(master_api.status())
         return int(out_dict['f1']), int(out_dict['f2']), int(out_dict['f3'])
 
     # Memory (eeprom/fram)
 
+    @communication_enabled
     def eeprom_read_page(self, page):
         # TODO: Use eeprom controller
         return self._master_communicator.do_command(master_api.eeprom_list(), {'bank': page})['data']
@@ -346,6 +362,7 @@ class MasterClassicController(MasterController):
 
     # Input
 
+    @communication_enabled
     def get_input_module_type(self, input_module_id):
         o = self._eeprom_controller.read(eeprom_models.InputConfiguration, input_module_id * 8, ['module_type'])
         return o.module_type
@@ -358,23 +375,27 @@ class MasterClassicController(MasterController):
         # type: () -> List[int]
         return self._input_status.get_recent()
 
+    @communication_enabled
     def load_input(self, input_id):  # type: (int) -> InputDTO
         classic_object = self._eeprom_controller.read(eeprom_models.InputConfiguration, input_id)
         if classic_object.module_type not in ['i', 'I']:  # Only return 'real' inputs
             raise TypeError('The given id {0} is not an input, but {1}'.format(input_id, classic_object.module_type))
         return InputMapper.orm_to_dto(classic_object)
 
+    @communication_enabled
     def load_inputs(self):  # type: () -> List[InputDTO]
         return [InputMapper.orm_to_dto(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.InputConfiguration)
                 if o.module_type in ['i', 'I']]  # Only return 'real' inputs
 
+    @communication_enabled
     def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
         batch = []
         for input_, fields in inputs:
             batch.append(InputMapper.dto_to_orm(input_, fields))
         self._eeprom_controller.write_batch(batch)
 
+    @communication_enabled
     def _refresh_inputs(self):  # type: () -> None
         # 1. refresh input configuration
         self._input_config = {input_configuration.id: input_configuration
@@ -409,6 +430,7 @@ class MasterClassicController(MasterController):
 
     # Outputs
 
+    @communication_enabled
     def set_output(self, output_id, state, dimmer=None, timer=None):
         if output_id is None or output_id < 0 or output_id > 240:
             raise ValueError('Output ID {0} not in range 0 <= id <= 240'.format(output_id))
@@ -457,6 +479,7 @@ class MasterClassicController(MasterController):
                 {'action_type': timer_action, 'action_number': output_id}
             )
 
+    @communication_enabled
     def toggle_output(self, output_id):
         if output_id is None or output_id < 0 or output_id > 240:
             raise ValueError('Output ID {0} not in range 0 <= id <= 240'.format(output_id))
@@ -466,18 +489,21 @@ class MasterClassicController(MasterController):
             {'action_type': master_api.BA_LIGHT_TOGGLE, 'action_number': output_id}
         )
 
+    @communication_enabled
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         classic_object = self._eeprom_controller.read(eeprom_models.OutputConfiguration, output_id)
         output_dto = OutputMapper.orm_to_dto(classic_object)
         self._output_config[output_id] = output_dto
         return output_dto
 
+    @communication_enabled
     def load_outputs(self):  # type: () -> List[OutputDTO]
         output_dtos = [OutputMapper.orm_to_dto(o)
                        for o in self._eeprom_controller.read_all(eeprom_models.OutputConfiguration)]
         self._output_config = {output_dto.id: output_dto for output_dto in output_dtos}
         return output_dtos
 
+    @communication_enabled
     def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
         batch = []
         for output, fields in outputs:
@@ -490,6 +516,7 @@ class MasterClassicController(MasterController):
                     {'id': output.id, 'timer': output.timer}
                 )
 
+    @communication_enabled
     def load_output_status(self):
         # type: () -> List[Dict[str,Any]]
         number_of_outputs = self._master_communicator.do_command(master_api.number_of_io_modules())['out'] * 8
@@ -526,29 +553,36 @@ class MasterClassicController(MasterController):
 
     # Shutters
 
+    @communication_enabled
     def shutter_up(self, shutter_id):  # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_SHUTTER_UP, shutter_id)
 
+    @communication_enabled
     def shutter_down(self, shutter_id):  # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_SHUTTER_DOWN, shutter_id)
 
+    @communication_enabled
     def shutter_stop(self, shutter_id):  # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_SHUTTER_STOP, shutter_id)
 
+    @communication_enabled
     def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
         classic_object = self._eeprom_controller.read(eeprom_models.ShutterConfiguration, shutter_id)
         return ShutterMapper.orm_to_dto(classic_object)
 
+    @communication_enabled
     def load_shutters(self):  # type: () -> List[ShutterDTO]
         return [ShutterMapper.orm_to_dto(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.ShutterConfiguration)]
 
+    @communication_enabled
     def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
         batch = []
         for shutter, fields in shutters:
             batch.append(ShutterMapper.dto_to_orm(shutter, fields))
         self._eeprom_controller.write_batch(batch)
 
+    @communication_enabled
     def _refresh_shutter_states(self):
         self._shutter_config = {shutter.id: shutter for shutter in self.load_shutters()}
         number_of_shutter_modules = self._master_communicator.do_command(master_api.number_of_io_modules())['shutter']
@@ -601,6 +635,7 @@ class MasterClassicController(MasterController):
 
         return states
 
+    @communication_enabled
     def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
         if not (0 <= shutter_group_id <= 30):
             raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
@@ -609,6 +644,7 @@ class MasterClassicController(MasterController):
             {'action_type': master_api.BA_SHUTTER_GROUP_UP, 'action_number': shutter_group_id}
         )
 
+    @communication_enabled
     def shutter_group_down(self, shutter_group_id):  # type: (int) -> None
         if not (0 <= shutter_group_id <= 30):
             raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
@@ -617,6 +653,7 @@ class MasterClassicController(MasterController):
             {'action_type': master_api.BA_SHUTTER_GROUP_DOWN, 'action_number': shutter_group_id}
         )
 
+    @communication_enabled
     def shutter_group_stop(self, shutter_group_id):  # type: (int) -> None
         if not (0 <= shutter_group_id <= 30):
             raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
@@ -625,14 +662,17 @@ class MasterClassicController(MasterController):
             {'action_type': master_api.BA_SHUTTER_GROUP_STOP, 'action_number': shutter_group_id}
         )
 
+    @communication_enabled
     def load_shutter_group(self, shutter_group_id):  # type: (int) -> ShutterGroupDTO
         classic_object = self._eeprom_controller.read(eeprom_models.ShutterGroupConfiguration, shutter_group_id)
         return ShutterGroupMapper.orm_to_dto(classic_object)
 
+    @communication_enabled
     def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
         return [ShutterGroupMapper.orm_to_dto(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.ShutterGroupConfiguration)]
 
+    @communication_enabled
     def save_shutter_groups(self, shutter_groups):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
         batch = []
         for shutter_group, fields in shutter_groups:
@@ -641,30 +681,36 @@ class MasterClassicController(MasterController):
 
     # Thermostats
 
+    @communication_enabled
     def set_thermostat_mode(self, mode):
         # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_MODE, mode)
 
+    @communication_enabled
     def set_thermostat_cooling_heating(self, mode):
         # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_COOLING_HEATING, mode)
 
+    @communication_enabled
     def set_thermostat_automatic(self, action_number):
         # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_AUTOMATIC, action_number)
 
+    @communication_enabled
     def set_thermostat_all_setpoints(self, setpoint):
         # type: (int) -> None
         self._master_communicator.do_basic_action(
             getattr(master_api, 'BA_ALL_SETPOINT_{0}'.format(setpoint)), 0
         )
 
+    @communication_enabled
     def set_thermostat_setpoint(self, thermostat_id, setpoint):
         # type: (int, int) -> None
         self._master_communicator.do_basic_action(
             getattr(master_api, 'BA_ONE_SETPOINT_{0}'.format(setpoint)), thermostat_id
         )
 
+    @communication_enabled
     def write_thermostat_setpoint(self, thermostat_id, temperature):
         # type: (int, float) -> None
         self._master_communicator.do_command(
@@ -674,120 +720,148 @@ class MasterClassicController(MasterController):
              'temp': master_api.Svt.temp(temperature)}
         )
 
+    @communication_enabled
     def set_thermostat_tenant_auto(self, thermostat_id):
         # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_TENANT_AUTO, thermostat_id)
 
+    @communication_enabled
     def set_thermostat_tenant_manual(self, thermostat_id):
         # type: (int) -> None
         self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_TENANT_MANUAL, thermostat_id)
 
+    @communication_enabled
     def get_thermostats(self):
         # type: () -> Dict[str,Any]
         return self._master_communicator.do_command(master_api.thermostat_list())
 
+    @communication_enabled
     def get_thermostat_modes(self):
         # type: () -> Dict[str,Any]
         return self._master_communicator.do_command(master_api.thermostat_mode_list())
 
+    @communication_enabled
     def read_airco_status_bits(self):
         # type: () -> Dict[str,Any]
         return self._master_communicator.do_command(master_api.read_airco_status_bits())
 
+    @communication_enabled
     def set_airco_status_bits(self, status_bits):
         # type: (int) -> None
         self._master_communicator.do_basic_action(
             master_api.BA_THERMOSTAT_AIRCO_STATUS, status_bits
         )
 
+    @communication_enabled
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         classic_object = self._eeprom_controller.read(eeprom_models.ThermostatConfiguration, thermostat_id)
         return ThermostatMapper.orm_to_dto(classic_object)
 
+    @communication_enabled
     def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
         return [ThermostatMapper.orm_to_dto(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.ThermostatConfiguration)]
 
+    @communication_enabled
     def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
         batch = []
         for thermostat, fields in thermostats:
             batch.append(ThermostatMapper.dto_to_orm(thermostat, fields))
         self._eeprom_controller.write_batch(batch)
 
+    @communication_enabled
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         classic_object = self._eeprom_controller.read(eeprom_models.CoolingConfiguration, thermostat_id)
         return ThermostatMapper.orm_to_dto(classic_object)
 
+    @communication_enabled
     def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
         return [ThermostatMapper.orm_to_dto(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.CoolingConfiguration)]
 
+    @communication_enabled
     def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
         batch = []
         for thermostat, fields in thermostats:
             batch.append(ThermostatMapper.dto_to_orm(thermostat, fields))
         self._eeprom_controller.write_batch(batch)
 
+    @communication_enabled
     def get_cooling_pump_group_configuration(self, pump_group_id, fields=None):
         # type: (int, Optional[List[str]]) -> Dict[str,Any]
         return self._eeprom_controller.read(CoolingPumpGroupConfiguration, pump_group_id, fields).serialize()
 
+    @communication_enabled
     def get_cooling_pump_group_configurations(self, fields=None):
         # type: (Optional[List[str]]) -> List[Dict[str,Any]]
         return [o.serialize() for o in self._eeprom_controller.read_all(CoolingPumpGroupConfiguration, fields)]
 
+    @communication_enabled
     def set_cooling_pump_group_configuration(self, config):
         # type: (Dict[str,Any]) -> None
         self._eeprom_controller.write(CoolingPumpGroupConfiguration.deserialize(config))
 
+    @communication_enabled
     def set_cooling_pump_group_configurations(self, config):
         # type: (List[Dict[str,Any]]) -> None
         self._eeprom_controller.write_batch([CoolingPumpGroupConfiguration.deserialize(o) for o in config])
 
+    @communication_enabled
     def get_global_rtd10_configuration(self, fields=None):
         # type: (Optional[List[str]]) -> Dict[str,Any]
         return self._eeprom_controller.read(GlobalRTD10Configuration, fields=fields).serialize()
 
+    @communication_enabled
     def set_global_rtd10_configuration(self, config):
         # type: (Dict[str,Any]) -> None
         self._eeprom_controller.write(GlobalRTD10Configuration.deserialize(config))
 
+    @communication_enabled
     def get_rtd10_heating_configuration(self, heating_id, fields=None):
         # type: (int, Optional[List[str]]) -> Dict[str,Any]
         return self._eeprom_controller.read(RTD10HeatingConfiguration, heating_id, fields).serialize()
 
+    @communication_enabled
     def get_rtd10_heating_configurations(self, fields=None):
         # type: (Optional[List[str]]) -> List[Dict[str,Any]]
         return [o.serialize() for o in self._eeprom_controller.read_all(RTD10HeatingConfiguration, fields)]
 
+    @communication_enabled
     def set_rtd10_heating_configuration(self, config):
         # type: (Dict[str,Any]) -> None
         self._eeprom_controller.write(RTD10HeatingConfiguration.deserialize(config))
 
+    @communication_enabled
     def set_rtd10_heating_configurations(self, config):
         # type: (List[Dict[str,Any]]) -> None
         self._eeprom_controller.write_batch([RTD10HeatingConfiguration.deserialize(o) for o in config])
 
+    @communication_enabled
     def get_rtd10_cooling_configuration(self, cooling_id, fields=None):
         # type: (int, Optional[List[str]]) -> Dict[str,Any]
         return self._eeprom_controller.read(RTD10CoolingConfiguration, cooling_id, fields).serialize()
 
+    @communication_enabled
     def get_rtd10_cooling_configurations(self, fields=None):
         # type: (Optional[List[str]]) -> List[Dict[str,Any]]
         return [o.serialize() for o in self._eeprom_controller.read_all(RTD10CoolingConfiguration, fields)]
 
+    @communication_enabled
     def set_rtd10_cooling_configuration(self, config):
         # type: (Dict[str,Any]) -> None
         self._eeprom_controller.write(RTD10CoolingConfiguration.deserialize(config))
 
+    @communication_enabled
     def set_rtd10_cooling_configurations(self, config):
         # type: (List[Dict[str,Any]]) -> None
         self._eeprom_controller.write_batch([RTD10CoolingConfiguration.deserialize(o) for o in config])
 
+    @communication_enabled
     def get_global_thermostat_configuration(self, fields=None):
         # type: (Optional[List[str]]) -> Dict[str,Any]
         return self._eeprom_controller.read(GlobalThermostatConfiguration, fields=fields).serialize()
 
+    @communication_enabled
     def set_global_thermostat_configuration(self, config):
         # type: (Dict[str,Any]) -> None
         if 'outside_sensor' in config:
@@ -795,36 +869,43 @@ class MasterClassicController(MasterController):
                 config['threshold_temp'] = 50  # Works around a master issue where the thermostat would be turned off in case there is no outside sensor.
         self._eeprom_controller.write(GlobalThermostatConfiguration.deserialize(config))
 
+    @communication_enabled
     def get_pump_group_configuration(self, pump_group_id, fields=None):
         # type: (int, Optional[List[str]]) -> Dict[str,Any]
         return self._eeprom_controller.read(PumpGroupConfiguration, pump_group_id, fields).serialize()
 
+    @communication_enabled
     def get_pump_group_configurations(self, fields=None):
         # type: (Optional[List[str]]) -> List[Dict[str,Any]]
         return [o.serialize() for o in self._eeprom_controller.read_all(PumpGroupConfiguration, fields)]
 
+    @communication_enabled
     def set_pump_group_configuration(self, config):
         # type: (Dict[str,Any]) -> None
         self._eeprom_controller.write(PumpGroupConfiguration.deserialize(config))
 
+    @communication_enabled
     def set_pump_group_configurations(self, config):
         # type: (List[Dict[str,Any]]) -> None
         self._eeprom_controller.write_batch([PumpGroupConfiguration.deserialize(o) for o in config])
 
     # Virtual modules
 
+    @communication_enabled
     def add_virtual_output_module(self):
         # type: () -> str
         module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'o'})
         self._broadcast_module_discovery()
         return module['resp']
 
+    @communication_enabled
     def add_virtual_dim_module(self):
         # type: () -> str
         module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'd'})
         self._broadcast_module_discovery()
         return module['resp']
 
+    @communication_enabled
     def add_virtual_input_module(self):
         # type: () -> str
         module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'i'})
@@ -833,6 +914,7 @@ class MasterClassicController(MasterController):
 
     # Generic
 
+    @communication_enabled
     def get_status(self):
         """ Get the status of the Master.
 
@@ -846,6 +928,7 @@ class MasterClassicController(MasterController):
                 'version': '%d.%d.%d' % (out_dict['f1'], out_dict['f2'], out_dict['f3']),
                 'hw_version': out_dict['h']}
 
+    @communication_enabled
     def get_modules(self):
         """ Get a list of all modules attached and registered with the master.
 
@@ -898,6 +981,7 @@ class MasterClassicController(MasterController):
                                                     ord(address_bytes[2]),
                                                     ord(address_bytes[3]))
 
+    @communication_enabled
     def get_modules_information(self, address=None):
         """ Gets module information """
 
@@ -975,6 +1059,7 @@ class MasterClassicController(MasterController):
 
         return information
 
+    @communication_enabled
     def flash_leds(self, led_type, led_id):
         """ Flash the leds on the module for an output/input/sensor.
 
@@ -988,6 +1073,7 @@ class MasterClassicController(MasterController):
                                                    {'type': led_type, 'id': led_id})
         return {'status': ret['resp']}
 
+    @communication_enabled
     def get_backup(self):
         """
         Get a backup of the eeprom of the master.
@@ -1027,68 +1113,84 @@ class MasterClassicController(MasterController):
         MasterClassicController._set_master_power(True)
 
     @Inject
-    def update(self, hex_filename, controller_serial=INJECTED):
+    def update_master(self, hex_filename, controller_serial=INJECTED):
         # type: (str, Serial) -> None
-        port = controller_serial.port  # type: ignore
-        baudrate = str(controller_serial.baudrate)  # type: ignore
+        try:
+            self._communication_enabled = False
+            self._master_communicator.update_mode_start()
 
-        logger.info('Enter bootloader...')
-        # Entering the bootloader requires some correct timing. The AN1310 tool is used to enter bootloader for which the
-        # tool only tries for 5 seconds. To in these 5 seconds, the master needs to be booted up so it can enter (and
-        # stay) into bootloader.
-        MasterClassicController._set_master_power(False)
-        time.sleep(3)
-        process = subprocess.Popen(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-a'],
-                                   stdin=subprocess.PIPE,
-                                   stdout=subprocess.PIPE)
-        MasterClassicController._set_master_power(True)
-        process.wait()
+            port = controller_serial.port  # type: ignore
+            baudrate = str(controller_serial.baudrate)  # type: ignore
 
-        logger.info('Verify bootloader...')
-        tries = 10
-        found = False
-        response = None
-        while tries > 0:
-            # It might take a few seconds before the bootloader is active
+            logger.info('Enter bootloader...')
+            # Entering the bootloader requires some correct timing. The AN1310 tool is used to enter bootloader for which the
+            # tool only tries for 5 seconds. To in these 5 seconds, the master needs to be booted up so it can enter (and
+            # stay) into bootloader.
+            MasterClassicController._set_master_power(False)
+            time.sleep(3)
+            process = subprocess.Popen(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-a'],
+                                       stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE)
+            MasterClassicController._set_master_power(True)
+            process.wait()
+
+            logger.info('Verify bootloader...')
+            tries = 10
+            found = False
+            response = None
+            while tries > 0:
+                # It might take a few seconds before the bootloader is active
+                try:
+                    response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-s'])
+                    if 'PIC18F67J11' in str(response):
+                        found = True
+                        break
+                except subprocess.CalledProcessError as ex:
+                    response = ex.output  # For debugging purposes down below
+                    if ex.returncode != 254:
+                        raise
+                time.sleep(1)
+                tries -= 1
+            if not found:
+                error_message = 'Could not enter bootloader: {0}'.format(str(response))
+                logger.error(error_message)
+                raise RuntimeError(error_message)
+
+            logger.info('Flashing...')
             try:
-                response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-s'])
-                if 'PIC18F67J11' in str(response):
-                    found = True
-                    break
+                response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-p ', '-c', hex_filename])
+                logger.debug(response)
             except subprocess.CalledProcessError as ex:
-                response = ex.output  # For debugging purposes down below
-                if ex.returncode != 254:
-                    raise
-            time.sleep(1)
-            tries -= 1
-        if not found:
-            error_message = 'Could not enter bootloader: {0}'.format(str(response))
-            logger.error(error_message)
-            raise RuntimeError(error_message)
+                logger.info(ex.output)
+                raise
 
-        logger.info('Flashing...')
-        try:
-            response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-p ', '-c', hex_filename])
-            logger.debug(response)
-        except subprocess.CalledProcessError as ex:
-            logger.info(ex.output)
-            raise
+            logger.info('Verifying...')
+            try:
+                response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-v', hex_filename])
+                logger.debug(response)
+            except subprocess.CalledProcessError as ex:
+                logger.info(ex.output)
+                raise
 
-        logger.info('Verifying...')
-        try:
-            response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-v', hex_filename])
-            logger.debug(response)
-        except subprocess.CalledProcessError as ex:
-            logger.info(ex.output)
-            raise
+            logger.info('Entering application...')
+            try:
+                response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-r'])
+                logger.debug(response)
+            except subprocess.CalledProcessError as ex:
+                logger.info(ex.output)
+                raise
+        finally:
+            self._master_communicator.update_mode_stop()
+            self._communication_enabled = True
 
-        logger.info('Entering application...')
+    @Inject
+    def update_slave_modules(self, module_type, hex_filename, controller_serial=INJECTED):
+        # type: (str, str, Serial) -> None
+        self._communication_enabled = False
         try:
-            response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-r'])
-            logger.debug(response)
-        except subprocess.CalledProcessError as ex:
-            logger.info(ex.output)
-            raise
+            bootload_modules(module_type, hex_filename)
+        finally:
+            self._communication_enabled = True
 
     @staticmethod
     def _set_master_power(on):
@@ -1097,6 +1199,7 @@ class MasterClassicController(MasterController):
         with open('/sys/class/gpio/gpio44/value', 'w') as gpio:
             gpio.write('1' if on else '0')
 
+    @communication_enabled
     def reset(self):
         """ Reset the master.
 
@@ -1109,10 +1212,12 @@ class MasterClassicController(MasterController):
         self.cold_reset()
         return dict()
 
+    @communication_enabled
     def power_cycle_bus(self):
         """ Turns the power of both bussed off for 5 seconds """
         self._master_communicator.do_basic_action(master_api.BA_POWER_CYCLE_BUS, 0)
 
+    @communication_enabled
     def restore(self, data):
         """
         Restore a backup of the eeprom of the master.
@@ -1144,6 +1249,7 @@ class MasterClassicController(MasterController):
 
         return {'output': ret}
 
+    @communication_enabled
     def sync_time(self):
         # type: () -> None
         logger.info('Setting the time on the master.')
@@ -1194,6 +1300,7 @@ class MasterClassicController(MasterController):
         except Exception:
             logger.exception('Could not process initialization message')
 
+    @communication_enabled
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
 
@@ -1207,6 +1314,7 @@ class MasterClassicController(MasterController):
         with self._module_log_lock:
             self._module_log = []
 
+    @communication_enabled
     def module_discover_stop(self):  # type: () -> None
         if self._discover_mode_timer is not None:
             self._discover_mode_timer.cancel()
@@ -1233,6 +1341,7 @@ class MasterClassicController(MasterController):
 
     # Error functions
 
+    @communication_enabled
     def error_list(self):
         """ Get the error list per module (input and output modules). The modules are identified by
         O1, O2, I1, I2, ...
@@ -1242,11 +1351,13 @@ class MasterClassicController(MasterController):
         error_list = self._master_communicator.do_command(master_api.error_list())
         return error_list['errors']
 
+    @communication_enabled
     def last_success(self):
         """ Get the number of seconds since the last successful communication with the master.
         """
         return self._master_communicator.get_seconds_since_last_success()
 
+    @communication_enabled
     def clear_error_list(self):
         """ Clear the number of errors.
 
@@ -1255,6 +1366,7 @@ class MasterClassicController(MasterController):
         self._master_communicator.do_command(master_api.clear_error_list())
         return dict()
 
+    @communication_enabled
     def set_status_leds(self, status):
         """ Set the status of the leds on the master.
 
@@ -1271,6 +1383,7 @@ class MasterClassicController(MasterController):
 
     # (Group)Actions
 
+    @communication_enabled
     def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
         """
         Execute a basic action.
@@ -1290,6 +1403,7 @@ class MasterClassicController(MasterController):
              'action_number': action_number}
         )
 
+    @communication_enabled
     def do_group_action(self, group_action_id):  # type: (int) -> None
         if group_action_id < 0 or group_action_id > 159:
             raise ValueError('group_action_id not in [0, 160]: %d' % group_action_id)
@@ -1300,14 +1414,17 @@ class MasterClassicController(MasterController):
              'action_number': group_action_id}
         )
 
+    @communication_enabled
     def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
         classic_object = self._eeprom_controller.read(eeprom_models.GroupActionConfiguration, group_action_id)
         return GroupActionMapper.orm_to_dto(classic_object)
 
+    @communication_enabled
     def load_group_actions(self):  # type: () -> List[GroupActionDTO]
         return [GroupActionMapper.orm_to_dto(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.GroupActionConfiguration)]
 
+    @communication_enabled
     def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
         batch = []
         for group_action, fields in group_actions:
@@ -1316,60 +1433,73 @@ class MasterClassicController(MasterController):
 
     # Schedules
 
+    @communication_enabled
     def load_scheduled_action_configuration(self, scheduled_action_id, fields=None):
         # type: (int, Any) -> Dict[str,Any]
         return self._eeprom_controller.read(ScheduledActionConfiguration, scheduled_action_id, fields).serialize()
 
+    @communication_enabled
     def load_scheduled_action_configurations(self, fields=None):
         # type: (Any) -> List[Dict[str,Any]]
         return [o.serialize() for o in self._eeprom_controller.read_all(ScheduledActionConfiguration, fields)]
 
+    @communication_enabled
     def save_scheduled_action_configuration(self, config):
         # type: (Dict[str,Any]) -> None
         self._eeprom_controller.write(ScheduledActionConfiguration.deserialize(config))
 
+    @communication_enabled
     def save_scheduled_action_configurations(self, config):
         # type: (List[Dict[str,Any]]) -> None
         self._eeprom_controller.write_batch([ScheduledActionConfiguration.deserialize(o) for o in config])
 
+    @communication_enabled
     def load_startup_action_configuration(self, fields=None):
         # type: (Any) -> Dict[str,Any]
         return self._eeprom_controller.read(StartupActionConfiguration, fields).serialize()
 
+    @communication_enabled
     def save_startup_action_configuration(self, config):
         # type: (Dict[str,Any]) -> None
         self._eeprom_controller.write(StartupActionConfiguration.deserialize(config))
 
     # Dimmer functions
 
+    @communication_enabled
     def load_dimmer_configuration(self, fields=None):
         # type: (Any) -> Dict[str,Any]
         return self._eeprom_controller.read(DimmerConfiguration, fields).serialize()
 
+    @communication_enabled
     def save_dimmer_configuration(self, config):
         # type: (Dict[str,Any]) -> None
         self._eeprom_controller.write(DimmerConfiguration.deserialize(config))
 
     # Can Led functions
 
+    @communication_enabled
     def load_can_led_configuration(self, can_led_id, fields=None):
         # type: (int, Any) -> Dict[str,Any]
         return self._eeprom_controller.read(CanLedConfiguration, can_led_id, fields).serialize()
 
+    @communication_enabled
     def load_can_led_configurations(self, fields=None):
         # type: (Any) -> List[Dict[str,Any]]
         return [o.serialize() for o in self._eeprom_controller.read_all(CanLedConfiguration, fields)]
 
+    @communication_enabled
     def save_can_led_configuration(self, config):
         # type: (Dict[str,Any]) -> None
         self._eeprom_controller.write(CanLedConfiguration.deserialize(config))
 
+    @communication_enabled
     def save_can_led_configurations(self, config):
         # type: (List[Dict[str,Any]]) -> None
         self._eeprom_controller.write_batch([CanLedConfiguration.deserialize(o) for o in config])
 
     # All lights off functions
 
+    @communication_enabled
     def set_all_lights_off(self):
         """ Turn all lights off.
 
@@ -1381,6 +1511,7 @@ class MasterClassicController(MasterController):
         )
         return dict()
 
+    @communication_enabled
     def set_all_lights_floor_off(self, floor):
         """ Turn all lights on a given floor off.
 
@@ -1393,6 +1524,7 @@ class MasterClassicController(MasterController):
         )
         return dict()
 
+    @communication_enabled
     def set_all_lights_floor_on(self, floor):
         """ Turn all lights on a given floor on.
 
@@ -1411,6 +1543,7 @@ class MasterClassicController(MasterController):
             raise ValueError('Sensor ID {0} not in range 0 <= id <= 31'.format(sensor_id))
         return self.get_sensors_temperature()[sensor_id]
 
+    @communication_enabled
     def get_sensors_temperature(self):
         temperatures = []
         sensor_list = self._master_communicator.do_command(master_api.sensor_temperature_list())
@@ -1418,11 +1551,13 @@ class MasterClassicController(MasterController):
             temperatures.append(sensor_list['tmp{0}'.format(i)].get_temperature())
         return temperatures
 
+    @communication_enabled
     def get_sensor_humidity(self, sensor_id):
         if sensor_id is None or sensor_id < 0 or sensor_id > 31:
             raise ValueError('Sensor ID {0} not in range 0 <= id <= 31'.format(sensor_id))
         return self.get_sensors_humidity()[sensor_id]
 
+    @communication_enabled
     def get_sensors_humidity(self):
         humidities = []
         sensor_list = self._master_communicator.do_command(master_api.sensor_humidity_list())
@@ -1435,6 +1570,7 @@ class MasterClassicController(MasterController):
             raise ValueError('Sensor ID {0} not in range 0 <= id <= 31'.format(sensor_id))
         return self.get_sensors_brightness()[sensor_id]
 
+    @communication_enabled
     def get_sensors_brightness(self):
         brightnesses = []
         sensor_list = self._master_communicator.do_command(master_api.sensor_brightness_list())
@@ -1442,6 +1578,7 @@ class MasterClassicController(MasterController):
             brightnesses.append(sensor_list['bri{0}'.format(i)].get_brightness())
         return brightnesses
 
+    @communication_enabled
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         if sensor_id is None or sensor_id < 0 or sensor_id > 31:
             raise ValueError('Sensor ID {0} not in range 0 <= id <= 31'.format(sensor_id))
@@ -1455,14 +1592,17 @@ class MasterClassicController(MasterController):
         )
         return dict()
 
+    @communication_enabled
     def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
         classic_object = self._eeprom_controller.read(eeprom_models.SensorConfiguration, sensor_id)
         return SensorMapper.orm_to_dto(classic_object)
 
+    @communication_enabled
     def load_sensors(self):  # type: () -> List[SensorDTO]
         return [SensorMapper.orm_to_dto(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.SensorConfiguration)]
 
+    @communication_enabled
     def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
         batch = []
         for sensor, fields in sensors:
@@ -1471,26 +1611,31 @@ class MasterClassicController(MasterController):
 
     # PulseCounters
 
+    @communication_enabled
     def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
         classic_object = self._eeprom_controller.read(eeprom_models.PulseCounterConfiguration, pulse_counter_id)
         return PulseCounterMapper.orm_to_dto(classic_object)
 
+    @communication_enabled
     def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
         return [PulseCounterMapper.orm_to_dto(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.PulseCounterConfiguration)]
 
+    @communication_enabled
     def save_pulse_counters(self, pulse_counters):  # type: (List[Tuple[PulseCounterDTO, List[str]]]) -> None
         batch = []
         for pulse_counter, fields in pulse_counters:
             batch.append(PulseCounterMapper.dto_to_orm(pulse_counter, fields))
         self._eeprom_controller.write_batch(batch)
 
+    @communication_enabled
     def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
         out_dict = self._master_communicator.do_command(master_api.pulse_list())
         return {i: out_dict['pv{0}'.format(i)] for i in range(24)}
 
     # Validation bits
 
+    @communication_enabled
     def load_validation_bits(self):  # type: () -> Optional[Dict[int, bool]]
         if self._master_version is None or self._master_version < (3, 143, 102):
             return None

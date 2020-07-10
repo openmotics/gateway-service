@@ -27,8 +27,8 @@ from gateway.base_controller import BaseController, SyncStructure
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import OutputDTO, OutputStateDTO
 from gateway.events import GatewayEvent
+from gateway.hal.master_controller import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
-from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.models import Output, Room
 from ioc import INJECTED, Inject, Injectable, Singleton
 from serial_utils import CommunicationTimedOutException
@@ -102,7 +102,7 @@ class OutputController(BaseController):
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
             self._set_master_state(False)
             raise DaemonThreadWait
-        except InMaintenanceModeException:
+        except CommunicationFailure:
             # This is an expected situation
             raise DaemonThreadWait
 
