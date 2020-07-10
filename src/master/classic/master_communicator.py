@@ -227,8 +227,11 @@ class MasterCommunicator(object):
                     self.__communication_stats['calls_succeeded'] = self.__communication_stats['calls_succeeded'][-50:]
                     return result
             except CommunicationTimedOutException:
-                self.__communication_stats['calls_timedout'].append(time.time())
-                self.__communication_stats['calls_timedout'] = self.__communication_stats['calls_timedout'][-50:]
+                if cmd.action != 'FV':
+                    # The FV instruction is a direct call to the Slave module. Older versions did not implement this
+                    # call, so this call can timeout while it's expected. We don't take those into account.
+                    self.__communication_stats['calls_timedout'].append(time.time())
+                    self.__communication_stats['calls_timedout'] = self.__communication_stats['calls_timedout'][-50:]
                 raise
 
     @staticmethod

@@ -898,54 +898,80 @@ class MasterClassicController(MasterController):
                                                     ord(address_bytes[2]),
                                                     ord(address_bytes[3]))
 
-    def get_modules_information(self):
+    def get_modules_information(self, address=None):
         """ Gets module information """
 
-        def get_master_version(eeprom_address, _is_can=False):
-            _module_address = self._eeprom_controller.read_address(eeprom_address)
-            formatted_address = MasterClassicController._format_address(_module_address.bytes)
+        def get_address(eeprom_address):
+            return self._eeprom_controller.read_address(eeprom_address)
+
+        def get_master_version(_module_address):
             try:
-                if _is_can or _module_address.bytes[0].lower() == _module_address.bytes[0]:
-                    return formatted_address, None, None
                 _module_version = self._master_communicator.do_command(master_api.get_module_version(),
                                                                        {'addr': _module_address.bytes},
                                                                        extended_crc=True,
-                                                                       timeout=1)
+                                                                       timeout=5)
                 _firmware_version = '{0}.{1}.{2}'.format(_module_version['f1'], _module_version['f2'], _module_version['f3'])
-                return formatted_address, _module_version['hw_version'], _firmware_version
+                return _module_version['hw_version'], _firmware_version
             except CommunicationTimedOutException:
-                return formatted_address, None, None
+                return None, None
 
         information = {}
+        if address is not None:
+            address = str(address)  # Make sure it's the same type
 
         # Master slave modules
         no_modules = self._master_communicator.do_command(master_api.number_of_io_modules())
         for i in range(no_modules['in']):
             is_can = self._eeprom_controller.read_address(EepromAddress(2 + i, 252, 1)).bytes == 'C'
-            version_info = get_master_version(EepromAddress(2 + i, 0, 4), is_can)
-            module_address, hardware_version, firmware_version = version_info
-            module_type = self._eeprom_controller.read_address(EepromAddress(2 + i, 0, 1)).bytes
-            information[module_address] = {'type': module_type,
-                                           'hardware': hardware_version,
-                                           'firmware': firmware_version,
-                                           'address': module_address,
-                                           'is_can': is_can}
+            module_address = get_address(EepromAddress(2 + i, 0, 4))
+            is_virtual = module_address.bytes[0].islower()
+            formatted_address = MasterClassicController._format_address(module_address.bytes)
+            if address is not None and formatted_address != address:
+                continue
+            data = {'type': module_address.bytes[0],
+                    'address': formatted_address,
+                    'is_can': is_can,
+                    'is_virtual': is_virtual,
+                    'module_nr': i,
+                    'category': 'INPUT'}
+            if not is_virtual and (module_address.bytes[0] == 'C' or not is_can):
+                hardware_version, firmware_version = get_master_version(module_address)
+                data.update({'hardware': hardware_version,
+                             'firmware': firmware_version})
+            information[formatted_address] = data
+
         for i in range(no_modules['out']):
-            version_info = get_master_version(EepromAddress(33 + i, 0, 4))
-            module_address, hardware_version, firmware_version = version_info
-            module_type = self._eeprom_controller.read_address(EepromAddress(33 + i, 0, 1)).bytes
-            information[module_address] = {'type': module_type,
-                                           'hardware': hardware_version,
-                                           'firmware': firmware_version,
-                                           'address': module_address}
+            module_address = get_address(EepromAddress(33 + i, 0, 4))
+            is_virtual = module_address.bytes[0].islower()
+            formatted_address = MasterClassicController._format_address(module_address.bytes)
+            if address is not None and formatted_address != address:
+                continue
+            data = {'type': module_address.bytes[0],
+                    'address': formatted_address,
+                    'is_virtual': is_virtual,
+                    'module_nr': i,
+                    'category': 'OUTPUT'}
+            if not is_virtual:
+                hardware_version, firmware_version = get_master_version(module_address)
+                data.update({'hardware': hardware_version,
+                             'firmware': firmware_version})
+            information[formatted_address] = data
         for i in range(no_modules['shutter']):
-            version_info = get_master_version(EepromAddress(33 + i, 173, 4))
-            module_address, hardware_version, firmware_version = version_info
-            module_type = self._eeprom_controller.read_address(EepromAddress(33 + i, 173, 1)).bytes
-            information[module_address] = {'type': module_type,
-                                           'hardware': hardware_version,
-                                           'firmware': firmware_version,
-                                           'address': module_address}
+            module_address = get_address(EepromAddress(33 + i, 173, 4))
+            is_virtual = module_address.bytes[0].islower()
+            formatted_address = MasterClassicController._format_address(module_address.bytes)
+            if address is not None and formatted_address != address:
+                continue
+            data = {'type': module_address.bytes[0],
+                    'address': formatted_address,
+                    'is_virtual': is_virtual,
+                    'module_nr': i,
+                    'category': 'SHUTTER'}
+            if not is_virtual:
+                hardware_version, firmware_version = get_master_version(module_address)
+                data.update({'hardware': hardware_version,
+                             'firmware': firmware_version})
+            information[formatted_address] = data
 
         return information
 

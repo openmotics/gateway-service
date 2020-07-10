@@ -742,7 +742,7 @@ class MasterCoreController(MasterController):
         # C/E = Physical/internal CAN Control
         return {'outputs': outputs, 'inputs': inputs, 'shutters': [], 'can_inputs': can_inputs}
 
-    def get_modules_information(self):
+    def get_modules_information(self, address=None):
         raise NotImplementedError()
 
     def flash_leds(self, led_type, led_id):
