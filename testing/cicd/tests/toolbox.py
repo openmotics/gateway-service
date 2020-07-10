@@ -277,7 +277,6 @@ class Toolbox(object):
         for address, info in data['modules']['master'].items():
             if info['type'] != module_type or (not info['firmware'] and hardware):
                 continue
-            info['address'] = address
             modules.append(info)
         assert len(modules) >= min_modules, 'Not enough modules of type \'{}\' available in {}'.format(module_type, data)
         return modules
@@ -332,30 +331,35 @@ class Toolbox(object):
             time.sleep(0.5)  # Give a brief moment for the CC to settle
         self.module_discover_start()
         try:
+            log_output = []
             addresses = []
             if output_modules:
                 self.tester.toggle_output(self.DEBIAN_DISCOVER_OUTPUT, delay=0.5)
-                self.assert_modules(1, module_types=['O'], addresses=addresses)
+                log_output += self.assert_modules(module_amounts={'O': 1}, addresses=addresses)
             if input_modules:
                 self.tester.toggle_output(self.DEBIAN_DISCOVER_INPUT, delay=0.5)
-                self.assert_modules(1, module_types=['I'], addresses=addresses)
+                log_output += self.assert_modules(module_amounts={'I': 1}, addresses=addresses)
             if can_controls:
-                self.tester.toggle_output(self.DEBIAN_DISCOVER_INPUT, delay=0.5)
-                self.assert_modules(1, module_types=['C'], addresses=addresses)
+                self.tester.toggle_output(self.DEBIAN_DISCOVER_CAN_CONTROL, delay=0.5)
+                module_amounts = {'C': 1}
                 if ucans:
-                    self.assert_modules(1, module_types=['I'], addresses=addresses)
-                    self.assert_modules(1, module_types=['T'], addresses=addresses)
+                    module_amounts.update({'I': 1, 'T': 1})
+                log_output += self.assert_modules(module_amounts=module_amounts, addresses=addresses)
+            return log_output
         finally:
             self.module_discover_stop()
 
-    def assert_modules(self, count, module_types, timeout=10, addresses=None):
-        # type: (int, List[str], float, Optional[List[str]]) -> List[Dict[str, Any]]
+    def assert_modules(self, module_amounts, timeout=10, addresses=None):
+        # type: (Dict[str, int], float, Optional[List[str]]) -> List[Dict[str, Any]]
+
+        def format_module_amounts(amounts):
+            return ', '.join('{}={}'.format(mtype, amount) for mtype, amount in amounts.items())
 
         since = time.time()
         log_output = []
+        found_module_amounts = {}
         if addresses is None:
             addresses = []
-        new_addresses = []
         while since > time.time() - timeout:
             log = self.dut.get('/get_module_log')['log']
             # Log format: {'code': '<NEW|EXISTING|DUPLCATE|UNKNOWN>',
@@ -367,20 +371,25 @@ class Toolbox(object):
             for entry in log:
                 if entry['code'] in ['DUPLICATE', 'UNKNOWN']:
                     continue
-                if entry['module_type'] not in module_types:
+                module_type = entry['module_type']
+                if module_type not in module_amounts:
                     continue
                 address = entry['address']
                 if address not in addresses:
                     addresses.append(address)
-                    new_addresses.append(address)
-                logger.debug('Discovered {} module: {} ({})'.format(entry['code'],
-                                                                    entry['module_type'],
-                                                                    entry['address']))
-            if len(new_addresses) >= count:
-                logger.debug('Discovered {} modules of types {}. Done'.format(len(new_addresses), module_types))
+                    if module_type not in found_module_amounts:
+                        found_module_amounts[module_type] = 0
+                    found_module_amounts[module_type] += 1
+                    logger.debug('Discovered {} module: {} ({})'.format(entry['code'],
+                                                                        entry['module_type'],
+                                                                        entry['address']))
+            if found_module_amounts == module_amounts:
+                logger.debug('Discovered required modules: {}'.format(format_module_amounts(found_module_amounts)))
                 return log_output
             time.sleep(2)
-        raise AssertionError('Expected {} modules of types {}. Raw log: {}'.format(count, module_types, log_output))
+        raise AssertionError('Did not discover required modules: {}. Raw log: {}'.format(
+            format_module_amounts(module_amounts), log_output
+        ))
 
     def discover_energy_module(self):
         # type: () -> None
