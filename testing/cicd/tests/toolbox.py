@@ -221,6 +221,7 @@ class Toolbox(object):
             self.authorized_mode_start()
             self.create_or_update_user()
             self.dut.login()
+
         try:
             data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
             assert 'O' in data['outputs']
@@ -253,6 +254,24 @@ class Toolbox(object):
 
         data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
         assert 'o' in data['outputs']
+
+        versions = self.get_firmware_versions()
+        firmware = {}
+        master_firmware = os.environ.get('OPENMOTICS_MASTER_FIRMWARE')
+        if master_firmware and master_firmware != versions['M']:
+            logger.debug('master firmware {} -> {}...'.format(versions['M'], master_firmware))
+            firmware['master'] = master_firmware
+        can_firmware = os.environ.get('OPENMOTICS_CAN_FIRMWARE')
+        if can_firmware and can_firmware != versions['C']:
+            logger.debug('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
+            firmware['can'] = can_firmware
+        if firmware:
+            logger.info('updating firmware...')
+            self.dut.get('/update_firmware', firmware)
+            time.sleep(30)
+            self.health_check()
+            versions = self.get_firmware_versions()
+        logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in versions.items())))
 
     def print_logs(self):
         # type: () -> None
@@ -307,6 +326,15 @@ class Toolbox(object):
         assert self.dut._auth
         user_data = {'username': self.dut._auth[0], 'password': self.dut._auth[1]}
         self.dut.get('/create_user', params=user_data, use_token=False, success=success)
+
+    def get_firmware_versions(self):
+        # type: () -> Dict[str,str]
+        modules = self.dut.get('/get_modules_information')['modules']['master']
+        versions = {'M': self.dut.get('/get_status')['version']}
+        for data in (x for x in modules.values() if 'firmware' in x):
+            module = 'C' if data.get('is_can', False) else data['type']
+            versions[module] = data['firmware']
+        return versions
 
     def module_discover_start(self):
         # type: () -> None
