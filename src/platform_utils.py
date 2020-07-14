@@ -22,8 +22,6 @@ import os
 import subprocess
 import sys
 
-from six.moves.configparser import ConfigParser
-
 import constants
 
 logger = logging.getLogger('openmotics')
@@ -241,6 +239,7 @@ class Platform(object):
     @staticmethod
     def get_platform():
         # type: () -> str
+        from six.moves.configparser import ConfigParser
         config = ConfigParser()
         config.read(constants.get_config_file())
 
