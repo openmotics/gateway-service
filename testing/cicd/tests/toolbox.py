@@ -267,9 +267,14 @@ class Toolbox(object):
             firmware['can'] = can_firmware
         if firmware:
             logger.info('updating firmware...')
-            self.dut.get('/update_firmware', firmware)
-            time.sleep(30)
-            self.health_check()
+            for _ in range(8):
+                try:
+                    self.dut.get('/update_firmware', firmware)
+                    self.health_check(timeout=120)
+                    break
+                except Exception:
+                    logger.error('update failed, retrying')
+                    time.sleep(30)
             versions = self.get_firmware_versions()
         logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in versions.items())))
 
