@@ -122,6 +122,10 @@ class MasterClassicController(MasterController):
     def _synchronize(self):
         # type: () -> None
         try:
+            if not self._communication_enabled:
+                logger.info('synchronization, skipped')
+                return
+
             now = time.time()
             self._get_master_version()
             # Validate communicator checks
