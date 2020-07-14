@@ -128,6 +128,10 @@ class GatewayApi(object):
         # TODO: implement gateway status too (e.g. plugin status)
         return self.__master_controller.get_status()
 
+    def get_master_online(self):
+        # type: () -> bool
+        return self.__master_controller.get_master_online()
+
     def get_master_version(self):
         return self.__master_controller.get_firmware_version()
 
@@ -139,7 +143,9 @@ class GatewayApi(object):
         return str(config.get('OpenMotics', 'version'))
 
     def reset_master(self):
-        return self.__master_controller.cold_reset()
+        # type: () -> Dict[str,Any]
+        self.__master_controller.cold_reset()
+        return {}
 
     def update_master_firmware(self, hex_filename):
         self.__master_controller.update_master(hex_filename)

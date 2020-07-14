@@ -74,6 +74,10 @@ class MasterController(object):
     def invalidate_caches(self):
         raise NotImplementedError()
 
+    def get_master_online(self):
+        # type: () -> bool
+        raise NotImplementedError()
+
     def get_firmware_version(self):
         raise NotImplementedError()
 

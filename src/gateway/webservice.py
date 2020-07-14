@@ -2346,7 +2346,8 @@ class WebInterface(object):
     @openmotics_api(auth=False)
     def health_check(self):
         """ Requests the state of the various services and checks the returned value for the global state """
-        health = {'openmotics': {'state': self._service_state}}
+        health = {'openmotics': {'state': self._service_state},
+                  'master': {'state': self._gateway_api.get_master_online()}}
         try:
             state = {}
             if self._message_client is not None:
