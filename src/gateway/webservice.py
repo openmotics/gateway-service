@@ -37,6 +37,7 @@ from cherrypy.lib.static import serve_file
 from decorator import decorator
 from peewee import DoesNotExist
 from six.moves.configparser import ConfigParser
+from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
 import gateway
@@ -2054,26 +2055,28 @@ class WebInterface(object):
 
     @openmotics_api(auth=True, plugin_exposed=False)
     def update_firmware(self, master=None, can=None):
-        config = ConfigParser()
-        config.read(constants.get_config_file())
-        cloud_url = config.get('OpenMotics', 'cloud_url')
-        gateway_uuid = config.get('OpenMotics', 'uuid')
-
-        url_template = cloud_url + '/portal/firmware_metadata/{}/{}/?uuid=' + gateway_uuid
         if master:
-            temp_file = self._download_firmware(url_template.format('master_classic', master))
+            temp_file = self._download_firmware('master_classic', master)
             self._gateway_api.update_master_firmware(temp_file)
             shutil.move(temp_file, '/opt/openmotics/firmware.hex')
         if can:
-            temp_file = self._download_firmware(url_template.format('can', can))
+            temp_file = self._download_firmware('can', can)
             self._gateway_api.update_slave_firmware('C', temp_file)
             shutil.move(temp_file, '/opt/openmotics/c_firmware.hex')
 
         return {}
 
-    def _download_firmware(self, url):
-        # type: (str) -> str
-        response = requests.get(url)
+    @Inject
+    def _get_firmware_url(self, firmware, version, cloud_url=INJECTED, gateway_uuid=INJECTED):
+        # type: (str, str, str, str) -> str
+        uri = urlparse(cloud_url)
+        path = '/portal/firmware_metadata/{0}/{1}/'.format(firmware, version)
+        query = 'uuid={0}'.format(gateway_uuid)
+        return urlunparse((uri.scheme, uri.netloc, path, '', query, ''))
+
+    def _download_firmware(self, firmware, version):
+        # type: (str, str) -> str
+        response = requests.get(self._get_firmware_url(firmware, version))
         if response.status_code != 200:
             raise ValueError('failed to retrieve firmware')
         data = response.json()

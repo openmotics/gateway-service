@@ -27,7 +27,6 @@ pytest testing/cicd/tests --disable-warnings --log-cli-level INFO --log-level DE
 
 The tests can also target specific firmware versions, in which case the gateway
 will retrieve firmware from the cloud and flash it before running the tests.
-This uses the `/update_firmware` api which requires a cloud_url to be configured.
 
 ```
 OPENMOTICS_MASTER_FIRMWARE=3.143.93 pytest testing/cicd/tests --disable-warnings -m smoke

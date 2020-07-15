@@ -28,7 +28,7 @@ from threading import Lock
 from peewee_migrate import Router
 from serial import Serial
 from six.moves.configparser import ConfigParser
-from six.moves.urllib.parse import urlparse
+from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
 from bus.om_bus_client import MessageClient
@@ -186,6 +186,9 @@ def setup_target_platform(target_platform, message_client_name):
     Injectable.value(cloud_port=parsed_url.port)
     Injectable.value(cloud_ssl=parsed_url.scheme == 'https')
     Injectable.value(cloud_api_version=0)
+
+    cloud_url = urlunparse((parsed_url.scheme, parsed_url.netloc, '', '', '', ''))
+    Injectable.value(cloud_url=cloud_url)
 
     # User Controller
     Injectable.value(user_db=config_database_file)
