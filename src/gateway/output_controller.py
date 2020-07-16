@@ -100,7 +100,6 @@ class OutputController(BaseController):
                         self._publish_output_change(changed)
         except CommunicationTimedOutException:
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
-            self._set_master_state(False)
             raise DaemonThreadWait
         except CommunicationFailure:
             # This is an expected situation

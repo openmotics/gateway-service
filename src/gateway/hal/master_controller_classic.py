@@ -122,6 +122,10 @@ class MasterClassicController(MasterController):
     def _synchronize(self):
         # type: () -> None
         try:
+            if not self._communication_enabled:
+                logger.info('synchronization, skipped')
+                return
+
             now = time.time()
             self._get_master_version()
             # Validate communicator checks
@@ -134,30 +138,26 @@ class MasterClassicController(MasterController):
             # Refresh if required
             if self._validation_bits_last_updated + self._validation_bits_interval < now:
                 self._refresh_validation_bits()
-                self._set_master_state(True)
             if self._input_last_updated + self._input_interval < now:
                 self._refresh_inputs()
-                self._set_master_state(True)
             if self._shutters_last_updated + self._shutters_interval < now:
                 self._refresh_shutter_states()
-                self._set_master_state(True)
         except CommunicationTimedOutException:
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
-            self._set_master_state(False)
+            self._master_online = False
             raise DaemonThreadWait
         except CommunicationFailure:
             # This is an expected situation
+            self._master_online = False
             raise DaemonThreadWait
 
     def _get_master_version(self):
-        if self._master_version is None:
-            self._master_version = self.get_firmware_version()
-            self._set_master_state(True)
+        # type: () -> None
+        initialize = self._master_version is None
+        self._master_version = self.get_firmware_version()
+        self._master_online = True
+        if initialize:
             self._register_version_depending_background_consumers()
-
-    def _set_master_state(self, online):
-        if online != self._master_online:
-            self._master_online = online
 
     def _register_version_depending_background_consumers(self):
         self._master_communicator.register_consumer(
@@ -344,6 +344,10 @@ class MasterClassicController(MasterController):
         self._input_last_updated = 0.0
         self._shutters_last_updated = 0.0
         self._synchronization_thread.request_single_run()
+
+    def get_master_online(self):
+        # type: () -> bool
+        return self._master_online
 
     @communication_enabled
     def get_firmware_version(self):
@@ -1099,15 +1103,17 @@ class MasterClassicController(MasterController):
         return output
 
     def factory_reset(self):
+        # type: () -> None
         # Wipe master EEPROM
         data = chr(255) * (256 * 256)
         self.restore(data)
 
     def cold_reset(self):
+        # type: () -> None
         """
         Perform a cold reset on the master. Turns the power off, waits 5 seconds and turns the power back on.
         """
-        _ = self  # Must be an instance method
+        self._master_online = False
         MasterClassicController._set_master_power(False)
         time.sleep(5)
         MasterClassicController._set_master_power(True)
@@ -1117,6 +1123,7 @@ class MasterClassicController(MasterController):
         # type: (str, Serial) -> None
         try:
             self._communication_enabled = False
+            self._master_online = False
             self._master_communicator.update_mode_start()
 
             port = controller_serial.port  # type: ignore

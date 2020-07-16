@@ -24,6 +24,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 
@@ -35,6 +36,8 @@ import ujson as json
 from cherrypy.lib.static import serve_file
 from decorator import decorator
 from peewee import DoesNotExist
+from six.moves.configparser import ConfigParser
+from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
 import gateway
@@ -494,47 +497,6 @@ class WebInterface(object):
         :rtype: dict
         """
         return self._gateway_api.reset_master()
-
-    @openmotics_api(auth=True, plugin_exposed=False)
-    def update_master_firmware(self, md5, firmware_data):
-        """
-        Perform a master firmware update.
-        """
-        firmware_data = firmware_data.file.read()
-        hasher = hashlib.md5()
-        hasher.update(firmware_data)
-        calculated_md5 = hasher.hexdigest()
-        if md5 != calculated_md5:
-            raise ValueError('firmware md5:%s does not match' % calculated_md5)
-
-        temp_file = '/tmp/{}.hex'.format(md5)
-        with open(temp_file, 'wb') as firmware_file:
-            firmware_file.write(firmware_data)
-        self._gateway_api.update_master_firmware(temp_file)
-        shutil.move(temp_file, '/opt/openmotics/firmware.hex')
-        return {}
-
-    @openmotics_api(auth=True, plugin_exposed=False)
-    def update_slave_firmware(self, type, md5, firmware_data):
-        """
-        Perform a slave firmware update.
-        """
-        if type not in ('C', 'O', 'I', 'D', 'E', 'T'):
-            raise ValueError('invalid slave module type %s' % type)
-
-        firmware_data = firmware_data.file.read()
-        hasher = hashlib.md5()
-        hasher.update(firmware_data)
-        calculated_md5 = hasher.hexdigest()
-        if md5 != calculated_md5:
-            raise ValueError('firmware md5:%s does not match' % calculated_md5)
-
-        temp_file = '/tmp/{}.hex'.format(md5)
-        with open(temp_file, 'wb') as firmware_file:
-            firmware_file.write(firmware_data)
-        self._gateway_api.update_slave_firmware(type, temp_file)
-        shutil.move(temp_file, '/opt/openmotics/{}_firmware.hex'.format(type))
-        return {}
 
     @openmotics_api(auth=True)
     def module_discover_start(self):  # type: () -> Dict[str, str]
@@ -2091,6 +2053,88 @@ class WebInterface(object):
         return {'output': output,
                 'version': version}
 
+    @openmotics_api(auth=True, plugin_exposed=False)
+    def update_firmware(self, master=None, can=None):
+        if master:
+            temp_file = self._download_firmware('master_classic', master)
+            self._gateway_api.update_master_firmware(temp_file)
+            shutil.move(temp_file, '/opt/openmotics/firmware.hex')
+        if can:
+            temp_file = self._download_firmware('can', can)
+            self._gateway_api.update_slave_firmware('C', temp_file)
+            shutil.move(temp_file, '/opt/openmotics/c_firmware.hex')
+
+        return {}
+
+    @Inject
+    def _get_firmware_url(self, firmware, version, cloud_url=INJECTED, gateway_uuid=INJECTED):
+        # type: (str, str, str, str) -> str
+        uri = urlparse(cloud_url)
+        path = '/portal/firmware_metadata/{0}/{1}/'.format(firmware, version)
+        query = 'uuid={0}'.format(gateway_uuid)
+        return urlunparse((uri.scheme, uri.netloc, path, '', query, ''))
+
+    def _download_firmware(self, firmware, version):
+        # type: (str, str) -> str
+        response = requests.get(self._get_firmware_url(firmware, version))
+        if response.status_code != 200:
+            raise ValueError('failed to retrieve firmware')
+        data = response.json()
+        temp_file = tempfile.mktemp('-firmware.hex')
+        logger.info('downloading {}...'.format(data['url']))
+        response = requests.get(data['url'], stream=True)
+        with open(temp_file, 'wb') as f:
+            shutil.copyfileobj(response.raw, f)
+
+        hasher = hashlib.sha256()
+        with open(temp_file, 'rb') as f:
+            hasher.update(f.read())
+        calculated_hash = hasher.hexdigest()
+        if calculated_hash != data['sha256']:
+            raise ValueError('firmware sha256:%s does not match' % calculated_hash)
+        return temp_file
+
+    @openmotics_api(auth=True, plugin_exposed=False)
+    def update_master_firmware(self, md5, firmware_data):
+        """
+        Perform a master firmware update.
+        """
+        firmware_data = firmware_data.file.read()
+        hasher = hashlib.md5()
+        hasher.update(firmware_data)
+        calculated_md5 = hasher.hexdigest()
+        if md5 != calculated_md5:
+            raise ValueError('firmware md5:%s does not match' % calculated_md5)
+
+        temp_file = '/tmp/{}.hex'.format(md5)
+        with open(temp_file, 'wb') as firmware_file:
+            firmware_file.write(firmware_data)
+        self._gateway_api.update_master_firmware(temp_file)
+        shutil.move(temp_file, '/opt/openmotics/firmware.hex')
+        return {}
+
+    @openmotics_api(auth=True, plugin_exposed=False)
+    def update_slave_firmware(self, type, md5, firmware_data):
+        """
+        Perform a slave firmware update.
+        """
+        if type not in ('C', 'O', 'I', 'D', 'E', 'T'):
+            raise ValueError('invalid slave module type %s' % type)
+
+        firmware_data = firmware_data.file.read()
+        hasher = hashlib.md5()
+        hasher.update(firmware_data)
+        calculated_md5 = hasher.hexdigest()
+        if md5 != calculated_md5:
+            raise ValueError('firmware md5:%s does not match' % calculated_md5)
+
+        temp_file = '/tmp/{}.hex'.format(md5)
+        with open(temp_file, 'wb') as firmware_file:
+            firmware_file.write(firmware_data)
+        self._gateway_api.update_slave_firmware(type, temp_file)
+        shutil.move(temp_file, '/opt/openmotics/{}_firmware.hex'.format(type))
+        return {}
+
     @openmotics_api(auth=True)
     def set_timezone(self, timezone):
         """
@@ -2305,7 +2349,8 @@ class WebInterface(object):
     @openmotics_api(auth=False)
     def health_check(self):
         """ Requests the state of the various services and checks the returned value for the global state """
-        health = {'openmotics': {'state': self._service_state}}
+        health = {'openmotics': {'state': self._service_state},
+                  'master': {'state': self._gateway_api.get_master_online()}}
         try:
             state = {}
             if self._message_client is not None:
