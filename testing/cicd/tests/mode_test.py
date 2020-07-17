@@ -124,18 +124,15 @@ def test_authorized_mode(toolbox, authorized_mode):
 
 
 @pytest.fixture
-def create_user(request, toolbox):
+def factory_reset(request, toolbox):
     try:
-        toolbox.dut.login(success=False)
-    except Exception:
-        toolbox.authorized_mode_start()
-        toolbox.create_or_update_user()
-        toolbox.dut.login()
-    yield
+        yield
+    finally:
+        toolbox.initialize()
 
 
 @pytest.mark.slow
-def test_factory_reset(toolbox, create_user, authorized_mode):
+def test_factory_reset(toolbox, authorized_mode, factory_reset):
     data = toolbox.factory_reset()
     assert data['factory_reset'] == 'pending'
     time.sleep(60)
