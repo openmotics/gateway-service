@@ -99,7 +99,14 @@ class ModuleController(BaseController):
             raise RuntimeError('The modules should be of the same type')
         if old_module.hardware_type != new_module.hardware_type or old_module.hardware_type != ModuleDTO.HardwareType.PHYSICAL:
             raise RuntimeError('Both modules should be physical modules')
-        last_module_order = max(module.order for module in six.itervalues(all_modules))
+        module_types = [[ModuleDTO.ModuleType.INPUT, ModuleDTO.ModuleType.SENSOR, ModuleDTO.ModuleType.CAN_CONTROL],
+                        [ModuleDTO.ModuleType.OUTPUT, ModuleDTO.ModuleType.DIM_CONTROL],
+                        [ModuleDTO.ModuleType.SHUTTER]]
+        module_types_map = {mtype: mtypes
+                            for mtypes in module_types
+                            for mtype in mtypes}
+        last_module_order = max(module.order for module in six.itervalues(all_modules)
+                                if module.module_type in module_types_map[old_module.module_type])
         if new_module.order != last_module_order:
             raise RuntimeError('Only the last added module in its category can be used as replacement')
         self._master_controller.replace_module(old_address, new_address)
