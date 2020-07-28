@@ -28,7 +28,7 @@ import six
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
-    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO
+    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO
 from gateway.enums import ShutterEnums
 from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
     OutputMapper, PulseCounterMapper, SensorMapper, ShutterGroupMapper, \
@@ -986,7 +986,7 @@ class MasterClassicController(MasterController):
                                                     ord(address_bytes[3]))
 
     @communication_enabled
-    def get_modules_information(self, address=None):
+    def get_modules_information(self):  # type: () -> List[ModuleDTO]
         """ Gets module information """
 
         def get_address(eeprom_address):
@@ -999,67 +999,68 @@ class MasterClassicController(MasterController):
                                                                        extended_crc=True,
                                                                        timeout=5)
                 _firmware_version = '{0}.{1}.{2}'.format(_module_version['f1'], _module_version['f2'], _module_version['f3'])
-                return _module_version['hw_version'], _firmware_version
+                return True, _module_version['hw_version'], _firmware_version
             except CommunicationTimedOutException:
-                return None, None
+                return False, None, None
 
-        information = {}
-        if address is not None:
-            address = str(address)  # Make sure it's the same type
+        information = []
+        module_type_lookup = {'c': ModuleDTO.ModuleType.CAN_CONTROL,
+                              't': ModuleDTO.ModuleType.SENSOR,
+                              'i': ModuleDTO.ModuleType.INPUT,
+                              'o': ModuleDTO.ModuleType.OUTPUT,
+                              'r': ModuleDTO.ModuleType.SHUTTER,
+                              'd': ModuleDTO.ModuleType.DIM_CONTROL}
 
-        # Master slave modules
         no_modules = self._master_communicator.do_command(master_api.number_of_io_modules())
         for i in range(no_modules['in']):
             is_can = self._eeprom_controller.read_address(EepromAddress(2 + i, 252, 1)).bytes == 'C'
             module_address = get_address(EepromAddress(2 + i, 0, 4))
+            module_type_letter = module_address.bytes[0].lower()
             is_virtual = module_address.bytes[0].islower()
             formatted_address = MasterClassicController._format_address(module_address.bytes)
-            if address is not None and formatted_address != address:
-                continue
-            data = {'type': module_address.bytes[0],
-                    'address': formatted_address,
-                    'is_can': is_can,
-                    'is_virtual': is_virtual,
-                    'module_nr': i,
-                    'category': 'INPUT'}
-            if not is_virtual and (module_address.bytes[0] == 'C' or not is_can):
-                hardware_version, firmware_version = get_master_version(module_address)
-                data.update({'hardware': hardware_version,
-                             'firmware': firmware_version})
-            information[formatted_address] = data
+            hardware_type = ModuleDTO.HardwareType.PHYSICAL
+            if is_virtual:
+                hardware_type = ModuleDTO.HardwareType.VIRTUAL
+            elif is_can and module_type_letter != 'c':
+                hardware_type = ModuleDTO.HardwareType.EMULATED
+            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+                            address=formatted_address,
+                            module_type=module_type_lookup.get(module_type_letter, ModuleDTO.ModuleType.UNKNOWN),
+                            hardware_type=hardware_type,
+                            order=i)
+            if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
+                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(module_address)
+            information.append(dto)
 
         for i in range(no_modules['out']):
             module_address = get_address(EepromAddress(33 + i, 0, 4))
+            module_type_letter = module_address.bytes[0].lower()
             is_virtual = module_address.bytes[0].islower()
             formatted_address = MasterClassicController._format_address(module_address.bytes)
-            if address is not None and formatted_address != address:
-                continue
-            data = {'type': module_address.bytes[0],
-                    'address': formatted_address,
-                    'is_virtual': is_virtual,
-                    'module_nr': i,
-                    'category': 'OUTPUT'}
+            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+                            address=formatted_address,
+                            module_type=module_type_lookup.get(module_type_letter, ModuleDTO.ModuleType.UNKNOWN),
+                            hardware_type=(ModuleDTO.HardwareType.VIRTUAL if is_virtual else
+                                           ModuleDTO.HardwareType.PHYSICAL),
+                            order=i)
             if not is_virtual:
-                hardware_version, firmware_version = get_master_version(module_address)
-                data.update({'hardware': hardware_version,
-                             'firmware': firmware_version})
-            information[formatted_address] = data
+                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(module_address)
+            information.append(dto)
+
         for i in range(no_modules['shutter']):
             module_address = get_address(EepromAddress(33 + i, 173, 4))
+            module_type_letter = module_address.bytes[0].lower()
             is_virtual = module_address.bytes[0].islower()
             formatted_address = MasterClassicController._format_address(module_address.bytes)
-            if address is not None and formatted_address != address:
-                continue
-            data = {'type': module_address.bytes[0],
-                    'address': formatted_address,
-                    'is_virtual': is_virtual,
-                    'module_nr': i,
-                    'category': 'SHUTTER'}
+            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+                            address=formatted_address,
+                            module_type=module_type_lookup.get(module_type_letter, ModuleDTO.ModuleType.UNKNOWN),
+                            hardware_type=(ModuleDTO.HardwareType.VIRTUAL if is_virtual else
+                                           ModuleDTO.HardwareType.PHYSICAL),
+                            order=i)
             if not is_virtual:
-                hardware_version, firmware_version = get_master_version(module_address)
-                data.update({'hardware': hardware_version,
-                             'firmware': firmware_version})
-            information[formatted_address] = data
+                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(module_address)
+            information.append(dto)
 
         return information
 
