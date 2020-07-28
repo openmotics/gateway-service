@@ -21,7 +21,7 @@ from gateway.api.serializers.base import SerializerToolbox
 from gateway.dto import ModuleDTO
 
 if False:  # MYPY
-    from typing import Dict, Optional, List, Tuple
+    from typing import Dict, Optional, List, Tuple, Any
 
 
 class ModuleSerializer(object):
@@ -29,27 +29,29 @@ class ModuleSerializer(object):
 
     @staticmethod
     def serialize(module_dto, fields):  # type: (ModuleDTO, Optional[List[str]]) -> Dict
-        data = {'address': module_dto.address}
+        data = {'address': module_dto.address}  # type: Dict[str, Any]
         if module_dto.source == ModuleDTO.Source.MASTER:
             category_map = {ModuleDTO.ModuleType.CAN_CONTROL: 'INPUT',
                             ModuleDTO.ModuleType.SENSOR: 'INPUT',
                             ModuleDTO.ModuleType.INPUT: 'INPUT',
                             ModuleDTO.ModuleType.SHUTTER: 'SHUTTER',
                             ModuleDTO.ModuleType.OUTPUT: 'OUTPUT',
-                            ModuleDTO.ModuleType.DIM_CONTROL: 'OUTPUT'}
+                            ModuleDTO.ModuleType.DIM_CONTROL: 'OUTPUT',
+                            None: 'UNKNOWN'}
             data.update({'type': chr(int(module_dto.address.split('.')[0])),
                          'module_nr': module_dto.order,
                          'is_can': (module_dto.hardware_type == ModuleDTO.HardwareType.EMULATED or
                                     module_dto.module_type == ModuleDTO.ModuleType.CAN_CONTROL),
                          'is_virtual': module_dto.hardware_type == ModuleDTO.HardwareType.VIRTUAL,
-                         'category': category_map[module_dto.module_type]})
+                         'category': category_map.get(module_dto.module_type, 'UNKNOWN')})
             if module_dto.hardware_type == ModuleDTO.HardwareType.PHYSICAL:
                 data.update({'firmware_version': module_dto.firmware_version,
                              'hardware_versoin': module_dto.hardware_version})
         else:
             module_type_map = {ModuleDTO.ModuleType.ENERGY: 'E',
                                ModuleDTO.ModuleType.POWER: 'P',
-                               ModuleDTO.ModuleType.P1_CONCENTRATOR: 'C'}
+                               ModuleDTO.ModuleType.P1_CONCENTRATOR: 'C',
+                               None: 'U'}
             data.update({'type': module_type_map.get(module_dto.module_type, 'U'),
                          'firmware': module_dto.firmware_version,
                          'address': module_dto.address,

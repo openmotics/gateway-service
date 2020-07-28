@@ -1022,7 +1022,7 @@ class MasterClassicController(MasterController):
                 hardware_type = ModuleDTO.HardwareType.EMULATED
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=formatted_address,
-                            module_type=module_type_lookup.get(module_type_letter, ModuleDTO.ModuleType.UNKNOWN),
+                            module_type=module_type_lookup.get(module_type_letter),
                             hardware_type=hardware_type,
                             order=i)
             if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
@@ -1036,7 +1036,7 @@ class MasterClassicController(MasterController):
             formatted_address = MasterClassicController._format_address(module_address.bytes)
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=formatted_address,
-                            module_type=module_type_lookup.get(module_type_letter, ModuleDTO.ModuleType.UNKNOWN),
+                            module_type=module_type_lookup.get(module_type_letter),
                             hardware_type=(ModuleDTO.HardwareType.VIRTUAL if is_virtual else
                                            ModuleDTO.HardwareType.PHYSICAL),
                             order=i)
@@ -1051,7 +1051,7 @@ class MasterClassicController(MasterController):
             formatted_address = MasterClassicController._format_address(module_address.bytes)
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=formatted_address,
-                            module_type=module_type_lookup.get(module_type_letter, ModuleDTO.ModuleType.UNKNOWN),
+                            module_type=module_type_lookup.get(module_type_letter),
                             hardware_type=(ModuleDTO.HardwareType.VIRTUAL if is_virtual else
                                            ModuleDTO.HardwareType.PHYSICAL),
                             order=i)

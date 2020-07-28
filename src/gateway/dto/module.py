@@ -43,7 +43,6 @@ class ModuleDTO(BaseDTO):
         ENERGY = 'energy'
         POWER = 'power'
         P1_CONCENTRATOR = 'p1_concentrator'
-        UNKNOWN = 'unknown'
 
     def __init__(self, source, address, module_type, hardware_type, firmware_version=None, hardware_version=None, order=None, online=None):
         self.source = source  # type: str
