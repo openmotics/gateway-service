@@ -406,6 +406,9 @@ class MasterController(object):
     def get_modules_information(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
         raise NotImplementedError()
 
+    def replace_module(self, old_address, new_address):  # type: (str, str) -> None
+        raise NotImplementedError()
+
     def flash_leds(self, led_type, led_id):
         raise NotImplementedError()
 

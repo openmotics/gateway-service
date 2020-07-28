@@ -17,15 +17,16 @@ Module BLL
 """
 from __future__ import absolute_import
 import logging
+import six
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.dto import ModuleDTO
 from gateway.base_controller import BaseController
 from gateway.models import Module
+from gateway.mappers.module import ModuleMapper
 
 if False:  # MYPY
-    from typing import Optional, List
+    from typing import Optional, List, Dict
     from power.power_controller import PowerController
-    from power.power_store import PowerStore
 
 logger = logging.getLogger("openmotics")
 
@@ -75,9 +76,34 @@ class ModuleController(BaseController):
         ))
 
     def load_master_modules(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
-        return [module for module in Module.select().where(Module.source == ModuleDTO.Source.MASTER)
+        return [ModuleMapper.orm_to_dto(module)
+                for module in Module.select().where(Module.source == ModuleDTO.Source.MASTER)
                 if address is None or module.address == address]
 
     def load_energy_modules(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
-        return [module for module in Module.select().where(Module.source == ModuleDTO.Source.GATEWAY)
+        return [ModuleMapper.orm_to_dto(module)
+                for module in Module.select().where(Module.source == ModuleDTO.Source.GATEWAY)
                 if address is None or module.address == address]
+
+    def replace_module(self, old_address, new_address):
+        if old_address == new_address:
+            raise RuntimeError('Old and new address cannot be identical')
+        all_modules = {module.address: module for module in Module.select().where(Module.source == ModuleDTO.Source.MASTER)}  # type: Dict[str, Module]
+        old_module = all_modules.get(old_address)
+        new_module = all_modules.get(new_address)
+        if old_module is None or new_module is None:
+            raise RuntimeError('The specified modules could not be found')
+        if old_module.source != new_module.source or old_module.source != ModuleDTO.Source.MASTER:
+            raise RuntimeError('Only `master` modules can be replaced')
+        if old_module.module_type != new_module.module_type:
+            raise RuntimeError('The modules should be of the same type')
+        if old_module.hardware_type != new_module.hardware_type or old_module.hardware_type != ModuleDTO.HardwareType.PHYSICAL:
+            raise RuntimeError('Both modules should be physical modules')
+        last_module_order = max(module.order for module in six.itervalues(all_modules))
+        if new_module.order != last_module_order:
+            raise RuntimeError('Only the last added module in its category can be used as replacement')
+        self._master_controller.replace_module(old_address, new_address)
+        self.sync_orm()
+        new_module = Module.select().where(Module.source == new_module.source).where(Module.address == new_module.address)[0]
+        return (ModuleMapper.orm_to_dto(old_module),
+                ModuleMapper.orm_to_dto(new_module))

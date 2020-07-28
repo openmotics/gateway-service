@@ -549,6 +549,12 @@ class WebInterface(object):
                             'energy': {module_dto.address: ModuleSerializer.serialize(module_dto=module_dto, fields=fields)
                                        for module_dto in self._module_controller.load_energy_modules(address)}}}
 
+    @openmotics_api(auth=True, check=types(old_address=str, new_address=str))
+    def replace_module(self, old_address, new_address):  # type: (str, str) -> Dict[str, Any]
+        old_module, new_module = self._module_controller.replace_module(old_address, new_address)
+        return {'old_module': ModuleSerializer.serialize(old_module, fields=None),
+                'new_module': ModuleSerializer.serialize(new_module, fields=None)}
+
     @openmotics_api(auth=True)
     def get_features(self):
         """

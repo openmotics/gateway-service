@@ -745,6 +745,9 @@ class MasterCoreController(MasterController):
         logger.warn('Core `get_modules_information` not yet implemented')  # TODO
         return []
 
+    def replace_module(self, old_address, new_address):  # type: (str, str) -> None
+        raise NotImplementedError('Module replacement not supported')
+
     def flash_leds(self, led_type, led_id):
         raise NotImplementedError()
 

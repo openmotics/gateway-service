@@ -989,9 +989,6 @@ class MasterClassicController(MasterController):
     def get_modules_information(self):  # type: () -> List[ModuleDTO]
         """ Gets module information """
 
-        def get_address(eeprom_address):
-            return self._eeprom_controller.read_address(eeprom_address)
-
         def get_master_version(_module_address):
             try:
                 _module_version = self._master_communicator.do_command(master_api.get_module_version(),
@@ -1014,7 +1011,7 @@ class MasterClassicController(MasterController):
         no_modules = self._master_communicator.do_command(master_api.number_of_io_modules())
         for i in range(no_modules['in']):
             is_can = self._eeprom_controller.read_address(EepromAddress(2 + i, 252, 1)).bytes == 'C'
-            module_address = get_address(EepromAddress(2 + i, 0, 4))
+            module_address = self._eeprom_controller.read_address(EepromAddress(2 + i, 0, 4))
             module_type_letter = module_address.bytes[0].lower()
             is_virtual = module_address.bytes[0].islower()
             formatted_address = MasterClassicController._format_address(module_address.bytes)
@@ -1033,7 +1030,7 @@ class MasterClassicController(MasterController):
             information.append(dto)
 
         for i in range(no_modules['out']):
-            module_address = get_address(EepromAddress(33 + i, 0, 4))
+            module_address = self._eeprom_controller.read_address(EepromAddress(33 + i, 0, 4))
             module_type_letter = module_address.bytes[0].lower()
             is_virtual = module_address.bytes[0].islower()
             formatted_address = MasterClassicController._format_address(module_address.bytes)
@@ -1048,7 +1045,7 @@ class MasterClassicController(MasterController):
             information.append(dto)
 
         for i in range(no_modules['shutter']):
-            module_address = get_address(EepromAddress(33 + i, 173, 4))
+            module_address = self._eeprom_controller.read_address(EepromAddress(33 + i, 173, 4))
             module_type_letter = module_address.bytes[0].lower()
             is_virtual = module_address.bytes[0].islower()
             formatted_address = MasterClassicController._format_address(module_address.bytes)
@@ -1063,6 +1060,52 @@ class MasterClassicController(MasterController):
             information.append(dto)
 
         return information
+
+    def replace_module(self, old_address, new_address):  # type: (str, str) -> None
+        old_address_bytes = ''.join(chr(int(part)) for part in old_address.split('.'))
+        new_address_bytes = ''.join(chr(int(part)) for part in new_address.split('.'))
+        no_modules = self._master_communicator.do_command(master_api.number_of_io_modules())
+
+        amount_of_inputs = no_modules['in']
+        for i in range(amount_of_inputs):
+            eeprom_address = EepromAddress(2 + i, 0, 4)
+            module_address = self._eeprom_controller.read_address(eeprom_address).bytes
+            if module_address == old_address_bytes:
+                new_module_address = self._eeprom_controller.read_address(EepromAddress(2 + amount_of_inputs - 1, 0, 4)).bytes
+                if new_module_address == new_address_bytes:
+                    self._eeprom_controller.write_address(eeprom_address, new_address_bytes)
+                    self._eeprom_controller.write_address(EepromAddress(0, 1, 1), chr(amount_of_inputs - 1))
+                    self._eeprom_controller.activate()
+                    logger.warn('Replaced {0} by {1}'.format(old_address, new_address))
+                    return
+
+        amount_of_outputs = no_modules['out']
+        for i in range(amount_of_outputs):
+            eeprom_address = EepromAddress(33 + i, 0, 4)
+            module_address = self._eeprom_controller.read_address(eeprom_address).bytes
+            if module_address == old_address_bytes:
+                new_module_address = self._eeprom_controller.read_address(EepromAddress(33 + amount_of_outputs - 1, 0, 4)).bytes
+                if new_module_address == new_address_bytes:
+                    self._eeprom_controller.write_address(eeprom_address, new_address_bytes)
+                    self._eeprom_controller.write_address(EepromAddress(0, 2, 1), chr(amount_of_outputs - 1))
+                    self._eeprom_controller.activate()
+                    logger.warn('Replaced {0} by {1}'.format(old_address, new_address))
+                    return
+
+        amount_of_shutters = no_modules['shutter']
+        for i in range(amount_of_shutters):
+            eeprom_address = EepromAddress(33 + i, 173, 4)
+            module_address = self._eeprom_controller.read_address(eeprom_address).bytes
+            if module_address == old_address_bytes:
+                new_module_address = self._eeprom_controller.read_address(EepromAddress(33 + amount_of_shutters - 1, 173, 4)).bytes
+                if new_module_address == new_address_bytes:
+                    self._eeprom_controller.write_address(eeprom_address, new_address_bytes)
+                    self._eeprom_controller.write_address(EepromAddress(0, 3, 1), chr(amount_of_shutters - 1))
+                    self._eeprom_controller.activate()
+                    logger.warn('Replaced {0} by {1}'.format(old_address, new_address))
+                    return
+
+        raise RuntimeError('Could not correctly match modules {0} and {1}'.format(old_address, new_address))
 
     @communication_enabled
     def flash_leds(self, led_type, led_id):
