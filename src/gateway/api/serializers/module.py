@@ -45,8 +45,8 @@ class ModuleSerializer(object):
                          'is_virtual': module_dto.hardware_type == ModuleDTO.HardwareType.VIRTUAL,
                          'category': category_map.get(module_dto.module_type, 'UNKNOWN')})
             if module_dto.hardware_type == ModuleDTO.HardwareType.PHYSICAL:
-                data.update({'firmware_version': module_dto.firmware_version,
-                             'hardware_versoin': module_dto.hardware_version})
+                data.update({'firmware': module_dto.firmware_version,
+                             'hardware': module_dto.hardware_version})
         else:
             module_type_map = {ModuleDTO.ModuleType.ENERGY: 'E',
                                ModuleDTO.ModuleType.POWER: 'P',
