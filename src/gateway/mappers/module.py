@@ -33,7 +33,8 @@ class ModuleMapper(object):
                          module_type=orm_object.module_type,
                          hardware_type=orm_object.hardware_type,
                          firmware_version=orm_object.firmware_version,
-                         hardware_version=orm_object.hardware_version)
+                         hardware_version=orm_object.hardware_version,
+                         order=orm_object.order)
 
     @staticmethod
     def dto_to_orm(module_dto, fields):  # type: (ModuleDTO, List[str]) -> Module
