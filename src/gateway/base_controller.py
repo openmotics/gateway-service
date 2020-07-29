@@ -43,12 +43,13 @@ class BaseController(object):
     SYNC_STRUCTURES = None  # type: Optional[List[SyncStructure]]
 
     @Inject
-    def __init__(self, master_controller, maintenance_controller=INJECTED):
+    def __init__(self, master_controller, maintenance_controller=INJECTED, sync_interval=900):
         self._master_controller = master_controller  # type: MasterController
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
         self._sync_orm_thread = None  # type: Optional[DaemonThread]
         self._master_controller.subscribe_event(self._handle_master_event)
         self._maintenance_controller.subscribe_maintenance_stopped(self.sync_orm)
+        self._sync_orm_interval = sync_interval
 
     def _handle_master_event(self, master_event):  # type: (MasterEvent) -> None
         if master_event.type in [MasterEvent.Types.EEPROM_CHANGE, MasterEvent.Types.MODULE_DISCOVERY]:
@@ -58,7 +59,8 @@ class BaseController(object):
     def start(self):
         self._sync_orm_thread = DaemonThread(name='ORM syncer for {0}'.format(self.__class__.__name__),
                                              target=self.sync_orm,
-                                             interval=900, delay=300)
+                                             interval=self._sync_orm_interval,
+                                             delay=300)
         self._sync_orm_thread.start()
 
     def stop(self):
