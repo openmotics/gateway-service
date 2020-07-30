@@ -39,15 +39,14 @@ class ModuleController(BaseController):
     def __init__(self, master_controller=INJECTED, power_controller=INJECTED):
         super(ModuleController, self).__init__(master_controller, sync_interval=24 * 60 * 60)
         self._power_controller = power_controller  # type: PowerController
-        self._sync_running = False
 
-    def sync_orm(self):
+    def _sync_orm(self):
         if self._sync_running:
-            logger.info('ORM sync (Modules): already running')
-            return
+            logger.info('ORM sync (Modules): Already running')
+            return False
+        self._sync_running = True
 
         logger.info('ORM sync (Modules)')
-        self._sync_running = True
 
         amounts = {None: 0, True: 0, False: 0}
         try:
@@ -74,6 +73,7 @@ class ModuleController(BaseController):
         logger.info('ORM sync (Modules): completed ({0} online, {1} offline, {2} emulated/virtual)'.format(
             amounts[True], amounts[False], amounts[None]
         ))
+        return True
 
     def load_master_modules(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
         return [ModuleMapper.orm_to_dto(module)
@@ -110,7 +110,9 @@ class ModuleController(BaseController):
         if new_module.order != last_module_order:
             raise RuntimeError('Only the last added module in its category can be used as replacement')
         self._master_controller.replace_module(old_address, new_address)
-        self.sync_orm()
+        if not self.run_sync_orm():
+            # The sync might already be running, so we'll make sure it does a full run (again)
+            self.request_sync_orm()
         new_module = Module.select().where(Module.source == new_module.source).where(Module.address == new_module.address)[0]
         return (ModuleMapper.orm_to_dto(old_module),
                 ModuleMapper.orm_to_dto(new_module))
