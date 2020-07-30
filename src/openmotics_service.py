@@ -161,11 +161,11 @@ class OpenmoticsService(object):
         master_controller.start()
 
         # Sync ORM with sources of thruth
-        output_controller.sync_orm()
-        input_controller.sync_orm()
-        pulse_counter_controller.sync_orm()
-        sensor_controller.sync_orm()
-        shutter_controller.sync_orm()
+        output_controller.run_sync_orm()
+        input_controller.run_sync_orm()
+        pulse_counter_controller.run_sync_orm()
+        sensor_controller.run_sync_orm()
+        shutter_controller.run_sync_orm()
 
         # Execute master migration(s)
         RoomsMigrator.migrate()
