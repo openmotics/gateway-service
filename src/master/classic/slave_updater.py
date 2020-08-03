@@ -100,16 +100,16 @@ def get_module_addresses(module_type):
     no_modules = eeprom_file.read([base_address])
     modules = []
 
-    no_input_modules = ord(no_modules[base_address].bytes[0])
+    no_input_modules = no_modules[base_address].bytes[0]
     for i in range(no_input_modules):
         address = EepromAddress(2 + i, 252, 1)
-        is_can = eeprom_file.read([address])[address].bytes == 'C'
+        is_can = chr(eeprom_file.read([address])[address].bytes[0]) == 'C'
         address = EepromAddress(2 + i, 0, 4)
         module = eeprom_file.read([address])[address].bytes
-        if not is_can or module[0] == 'C':
+        if not is_can or chr(module[0]) == 'C':
             modules.append(module)
 
-    no_output_modules = ord(no_modules[base_address].bytes[1])
+    no_output_modules = no_modules[base_address].bytes[1]
     for i in range(no_output_modules):
         address = EepromAddress(33 + i, 0, 4)
         modules.append(eeprom_file.read([address])[address].bytes)
@@ -119,13 +119,8 @@ def get_module_addresses(module_type):
 
 def pretty_address(address):
     # type: (str) -> str
-    """
-    Create a pretty printed version of an address.
-
-    :param address: address string
-    :returns: string with format 'M.x.y.z' where M is in [O, R, D, I, T, C, o, r, d, i, t, c] and x, y and z are integers.
-    """
-    return '{0}.{1}.{2}.{3}'.format(address[0], ord(address[1]), ord(address[2]), ord(address[3]))
+    """ Create a pretty printed version of an address. """
+    return '{0}.{1}.{2}.{3}'.format(address[0], address[1], address[2], address[3])
 
 
 def calc_crc(ihex, blocks):
@@ -199,7 +194,7 @@ def do_command(cmd, fields, retry=True, success_code=0, master_communicator=INJE
 
 @Inject
 def bootload(address, ihex, crc, blocks, master_communicator=INJECTED):
-    # type: (str, intelhex.IntelHex, Tuple[int, int, int, int], int, MasterCommunicator) -> None
+    # type: (bytearray, intelhex.IntelHex, Tuple[int, int, int, int], int, MasterCommunicator) -> None
     """
     Bootload 1 module.
 
@@ -241,13 +236,13 @@ def bootload(address, ihex, crc, blocks, master_communicator=INJECTED):
 
         logger.info('Writing firmware data')
         for i in range(blocks):
-            bytes_to_send = ''
+            bytes_to_send = bytearray()
             for j in range(64):
                 if i == blocks - 1 and j >= 56:
                     # The first 8 bytes (the jump) is placed at the end of the code.
-                    bytes_to_send += chr(ihex[j - 56])
+                    bytes_to_send.append(ihex[j - 56])
                 else:
-                    bytes_to_send += chr(ihex[i*64 + j])
+                    bytes_to_send.append(ihex[i*64 + j])
 
             logger.debug('* Block {0}'.format(i))
             do_command(cmd=master_api.modules_update_firmware_block(),

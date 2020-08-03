@@ -529,8 +529,8 @@ def write_timer():
 def get_module_version():
     """ Get the version of the module. """
     return MasterCommandSpec('FV',
-                             [Field.string('addr', 4), Field.crc(), Field.padding(6)],
-                             [Field.string('addr', 4), Field.byte('error_code'), Field.byte('hw_version'),
+                             [Field.bytes('addr', 4), Field.crc(), Field.padding(6)],
+                             [Field.bytes('addr', 4), Field.byte('error_code'), Field.byte('hw_version'),
                               Field.byte('f1'), Field.byte('f2'), Field.byte('f3'), Field.byte('status'),
                               Field.crc(), Field.lit('\r\n')])
 
@@ -559,7 +559,7 @@ def module_initialize():
     """ The message sent by the master whenever a module is initialized in module discovery mode. """
     return MasterCommandSpec('MI',
                              [],
-                             [Field.string('id', 4), Field.string('instr', 1), Field.byte('module_nr'), Field.byte('data'),
+                             [Field.bytes('id', 4), Field.string('instr', 1), Field.byte('module_nr'), Field.byte('data'),
                               Field.byte('io_type'), Field.padding(5), Field.lit('\r\n')])
 
 
@@ -584,28 +584,28 @@ def event_triggered(master_version):
 def modules_goto_bootloader():
     """ Reset the module to go to the bootloader. """
     return MasterCommandSpec('FR',
-                             [Field.string('addr', 4), Field.byte('sec'), Field.lit('C'), Field.byte('crc0'),
+                             [Field.bytes('addr', 4), Field.byte('sec'), Field.lit('C'), Field.byte('crc0'),
                               Field.byte('crc1'), Field.padding(5)],
-                             [Field.string('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
+                             [Field.bytes('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
                               Field.byte('crc1'), Field.padding(5), Field.lit('\r\n')])
 
 
 def modules_new_firmware_version():
     """ Preprare the slave module for a new version. """
     return MasterCommandSpec('FN',
-                             [Field.string('addr', 4), Field.byte('f1n'), Field.byte('f2n'), Field.byte('f3n'),
+                             [Field.bytes('addr', 4), Field.byte('f1n'), Field.byte('f2n'), Field.byte('f3n'),
                               Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'), Field.padding(3)],
-                             [Field.string('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
+                             [Field.bytes('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
                               Field.byte('crc1'), Field.padding(5), Field.lit('\r\n')])
 
 
 def modules_new_crc():
     """ Write the new crc code to the bootloaded module. """
     return MasterCommandSpec('FC',
-                             [Field.string('addr', 4), Field.byte('ccrc0'), Field.byte('ccrc1'), Field.byte('ccrc2'),
+                             [Field.bytes('addr', 4), Field.byte('ccrc0'), Field.byte('ccrc1'), Field.byte('ccrc2'),
                               Field.byte('ccrc3'), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
                               Field.padding(2)],
-                             [Field.string('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
+                             [Field.bytes('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
                               Field.byte('crc1'), Field.padding(5), Field.lit('\r\n')])
 
 
@@ -626,18 +626,18 @@ def change_communication_mode_to_short():
 def modules_update_firmware_block():
     """ Upload 1 block of 64 bytes to the module. """
     return MasterCommandSpec('FD',
-                             [Field.string('addr', 4), Field.integer('block'), Field.string('bytes', 64),
+                             [Field.bytes('addr', 4), Field.integer('block'), Field.bytes('bytes', 64),
                               Field.lit('C'), Field.byte('crc0'), Field.byte('crc1')],
-                             [Field.string('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
+                             [Field.bytes('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
                               Field.byte('crc1'), Field.lit('\r\n')])
 
 
 def modules_get_version():
     """ Get the version of the module. """
     return MasterCommandSpec('FV',
-                             [Field.string('addr', 4), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
+                             [Field.bytes('addr', 4), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
                               Field.padding(6)],
-                             [Field.string('addr', 4), Field.byte('error_code'), Field.byte('hw_version'),
+                             [Field.bytes('addr', 4), Field.byte('error_code'), Field.byte('hw_version'),
                               Field.byte('f1'), Field.byte('f2'), Field.byte('f3'), Field.byte('status'),
                               Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'), Field.lit('\r\n')])
 
@@ -645,18 +645,18 @@ def modules_get_version():
 def modules_integrity_check():
     """ Check the integrity of the new code. """
     return MasterCommandSpec('FE',
-                             [Field.string('addr', 4), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
+                             [Field.bytes('addr', 4), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
                               Field.padding(6)],
-                             [Field.string('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
+                             [Field.bytes('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
                               Field.byte('crc1'), Field.padding(5), Field.lit('\r\n')])
 
 
 def modules_goto_application():
     """ Let the module go to application. """
     return MasterCommandSpec('FG',
-                             [Field.string('addr', 4), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
+                             [Field.bytes('addr', 4), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
                               Field.padding(6)],
-                             [Field.string('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
+                             [Field.bytes('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
                               Field.byte('crc1'), Field.padding(5), Field.lit('\r\n')])
 
 

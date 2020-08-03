@@ -973,10 +973,10 @@ class MasterClassicController(MasterController):
 
     @staticmethod
     def _format_address(address_bytes):
-        return '{0:03}.{1:03}.{2:03}.{3:03}'.format(ord(address_bytes[0]),
-                                                    ord(address_bytes[1]),
-                                                    ord(address_bytes[2]),
-                                                    ord(address_bytes[3]))
+        return '{0:03}.{1:03}.{2:03}.{3:03}'.format(address_bytes[0],
+                                                    address_bytes[1],
+                                                    address_bytes[2],
+                                                    address_bytes[3])
 
     @communication_enabled
     def get_modules_information(self):  # type: () -> List[ModuleDTO]
