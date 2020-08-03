@@ -101,7 +101,6 @@ class EepromController(object):
         for eeprom_model in eeprom_models:
             eeprom_data += eeprom_model.get_eeprom_data()
         if len(eeprom_data) > 0:
-            print(eeprom_data)
             if self._eeprom_file.write(eeprom_data):
                 self._eeprom_file.activate()
                 self.dirty = True
