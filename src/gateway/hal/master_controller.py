@@ -81,14 +81,6 @@ class MasterController(object):
     def get_firmware_version(self):
         raise NotImplementedError()
 
-    # Memory (eeprom/fram)
-
-    def eeprom_read_page(self, page):
-        raise NotImplementedError()
-
-    def fram_read_page(self, page):
-        raise NotImplementedError()
-
     # Input
 
     def get_input_module_type(self, input_module_id):

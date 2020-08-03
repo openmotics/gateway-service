@@ -49,17 +49,17 @@ def add_crc(command, command_input):
     """
     crc = 0
 
-    crc += ord(command.action[0])
-    crc += ord(command.action[1])
+    crc += command.action[0]
+    crc += command.action[1]
 
     for field in command.input_fields:
         if field.name == 'literal' and field.encode(None) == 'C':
             break
 
         for byte in field.encode(command_input[field.name]):
-            crc += ord(byte)
+            crc += byte
 
-    command_input['crc0'] = crc / 256
+    command_input['crc0'] = crc // 256
     command_input['crc1'] = crc % 256
 
 
@@ -74,17 +74,17 @@ def check_bl_crc(command, command_output):
     """
     crc = 0
 
-    crc += ord(command.action[0])
-    crc += ord(command.action[1])
+    crc += command.action[0]
+    crc += command.action[1]
 
     for field in command.output_fields:
         if field.name == 'literal' and field.encode(None) == 'C':
             break
 
         for byte in field.encode(command_output[field.name]):
-            crc += ord(byte)
+            crc += byte
 
-    return command_output['crc0'] == (crc / 256) and command_output['crc1'] == (crc % 256)
+    return command_output['crc0'] == (crc // 256) and command_output['crc1'] == (crc % 256)
 
 
 def get_module_addresses(module_type):

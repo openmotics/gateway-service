@@ -215,68 +215,68 @@ class MasterClassicController(MasterController):
                                                            {'bank': 0})['data']
         write = False
 
-        if eeprom_data[11] != chr(255):
+        if eeprom_data[11] != 255:
             logger.info('Disabling async RO messages.')
             self._master_communicator.do_command(
                 master_api.write_eeprom(),
-                {'bank': 0, 'address': 11, 'data': chr(255)}
+                {'bank': 0, 'address': 11, 'data': bytearray([255])}
             )
             write = True
 
-        if eeprom_data[18] != chr(0):
+        if eeprom_data[18] != 0:
             logger.info('Enabling async OL messages.')
             self._master_communicator.do_command(
                 master_api.write_eeprom(),
-                {'bank': 0, 'address': 18, 'data': chr(0)}
+                {'bank': 0, 'address': 18, 'data': bytearray([0])}
             )
             write = True
 
-        if eeprom_data[20] != chr(0):
+        if eeprom_data[20] != 0:
             logger.info('Enabling async IL messages.')
             self._master_communicator.do_command(
                 master_api.write_eeprom(),
-                {'bank': 0, 'address': 20, 'data': chr(0)}
+                {'bank': 0, 'address': 20, 'data': bytearray([0])}
             )
             write = True
 
-        if eeprom_data[28] != chr(0):
+        if eeprom_data[28] != 0:
             logger.info('Enabling async SO messages.')
             self._master_communicator.do_command(
                 master_api.write_eeprom(),
-                {'bank': 0, 'address': 28, 'data': chr(0)}
+                {'bank': 0, 'address': 28, 'data': bytearray([0])}
             )
             write = True
 
-        thermostat_mode = ord(eeprom_data[14])
+        thermostat_mode = eeprom_data[14]
         if thermostat_mode & 64 == 0:
             logger.info('Enabling multi-tenant thermostats.')
             self._master_communicator.do_command(
                 master_api.write_eeprom(),
-                {'bank': 0, 'address': 14, 'data': chr(thermostat_mode | 64)}
+                {'bank': 0, 'address': 14, 'data': bytearray([thermostat_mode | 64])}
             )
             write = True
 
-        if eeprom_data[59] != chr(32):
+        if eeprom_data[59] != 32:
             logger.info('Enabling 32 thermostats.')
             self._master_communicator.do_command(
                 master_api.write_eeprom(),
-                {'bank': 0, 'address': 59, 'data': chr(32)}
+                {'bank': 0, 'address': 59, 'data': bytearray([32])}
             )
             write = True
 
-        if eeprom_data[24] != chr(0):
+        if eeprom_data[24] != 0:
             logger.info('Disable auto-reset thermostat setpoint')
             self._master_communicator.do_command(
                 master_api.write_eeprom(),
-                {'bank': 0, 'address': 24, 'data': chr(0)}
+                {'bank': 0, 'address': 24, 'data': bytearray([0])}
             )
             write = True
 
-        if eeprom_data[13] != chr(0):
+        if eeprom_data[13] != 0:
             logger.info('Configure master startup mode to: API')
             self._master_communicator.do_command(
                 master_api.write_eeprom(),
-                {'bank': 0, 'address': 13, 'data': chr(0)}
+                {'bank': 0, 'address': 13, 'data': bytearray([0])}
             )
             write = True
 
@@ -288,11 +288,11 @@ class MasterClassicController(MasterController):
         """ Handle an event triggered by the master. """
         event_type = event_data.get('event_type', 0)
         if event_type == 0:  # None or 0 are both event_type for 'code'
-            code = event_data['bytes'][0]
+            code = str(event_data['bytes'][0])
             if self._plugin_controller is not None:
                 self._plugin_controller.process_event(code)
         elif event_type == 1:
-            bit_nr = int(event_data['bytes'][0])
+            bit_nr = event_data['bytes'][0]
             value = bool(event_data['bytes'][1])
             self._on_master_validation_bit_change(bit_nr, value)
         else:
@@ -353,16 +353,6 @@ class MasterClassicController(MasterController):
     def get_firmware_version(self):
         out_dict = self._master_communicator.do_command(master_api.status())
         return int(out_dict['f1']), int(out_dict['f2']), int(out_dict['f3'])
-
-    # Memory (eeprom/fram)
-
-    @communication_enabled
-    def eeprom_read_page(self, page):
-        # TODO: Use eeprom controller
-        return self._master_communicator.do_command(master_api.eeprom_list(), {'bank': page})['data']
-
-    def fram_read_page(self, page):
-        raise NotImplementedError('A classic master does not support FRAM')
 
     # Input
 
@@ -953,22 +943,25 @@ class MasterClassicController(MasterController):
                 master_api.read_eeprom(),
                 {'bank': 2 + i, 'addr': 252, 'num': 1}
             )
-            is_can = ret['data'][0] == 'C'
+            module_type = chr(ret['data'][0])
+            is_can = module_type == 'C'
             ret = self._master_communicator.do_command(
                 master_api.read_eeprom(),
                 {'bank': 2 + i, 'addr': 0, 'num': 1}
             )
+            module_type = chr(ret['data'][0])
             if is_can:
-                can_inputs.append(ret['data'][0])
+                can_inputs.append(module_type)
             else:
-                inputs.append(ret['data'][0])
+                inputs.append(module_type)
 
         for i in range(mods['out']):
             ret = self._master_communicator.do_command(
                 master_api.read_eeprom(),
                 {'bank': 33 + i, 'addr': 0, 'num': 1}
             )
-            outputs.append(ret['data'][0])
+            module_type = chr(ret['data'][0])
+            outputs.append(module_type)
 
         for shutter in range(mods['shutter']):
             shutters.append('S')
@@ -1012,8 +1005,8 @@ class MasterClassicController(MasterController):
         for i in range(no_modules['in']):
             is_can = self._eeprom_controller.read_address(EepromAddress(2 + i, 252, 1)).bytes == 'C'
             module_address = self._eeprom_controller.read_address(EepromAddress(2 + i, 0, 4))
-            module_type_letter = module_address.bytes[0].lower()
-            is_virtual = module_address.bytes[0].islower()
+            module_type_letter = chr(module_address.bytes[0]).lower()
+            is_virtual = chr(module_address.bytes[0]).islower()
             formatted_address = MasterClassicController._format_address(module_address.bytes)
             hardware_type = ModuleDTO.HardwareType.PHYSICAL
             if is_virtual:
@@ -1031,8 +1024,8 @@ class MasterClassicController(MasterController):
 
         for i in range(no_modules['out']):
             module_address = self._eeprom_controller.read_address(EepromAddress(33 + i, 0, 4))
-            module_type_letter = module_address.bytes[0].lower()
-            is_virtual = module_address.bytes[0].islower()
+            module_type_letter = chr(module_address.bytes[0]).lower()
+            is_virtual = chr(module_address.bytes[0]).islower()
             formatted_address = MasterClassicController._format_address(module_address.bytes)
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=formatted_address,
@@ -1046,8 +1039,8 @@ class MasterClassicController(MasterController):
 
         for i in range(no_modules['shutter']):
             module_address = self._eeprom_controller.read_address(EepromAddress(33 + i, 173, 4))
-            module_type_letter = module_address.bytes[0].lower()
-            is_virtual = module_address.bytes[0].islower()
+            module_type_letter = chr(module_address.bytes[0]).lower()
+            is_virtual = chr(module_address.bytes[0]).islower()
             formatted_address = MasterClassicController._format_address(module_address.bytes)
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=formatted_address,
@@ -1062,8 +1055,8 @@ class MasterClassicController(MasterController):
         return information
 
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
-        old_address_bytes = ''.join(chr(int(part)) for part in old_address.split('.'))
-        new_address_bytes = ''.join(chr(int(part)) for part in new_address.split('.'))
+        old_address_bytes = bytearray([int(part) for part in old_address.split('.')])
+        new_address_bytes = bytearray([int(part) for part in new_address.split('.')])
         no_modules = self._master_communicator.do_command(master_api.number_of_io_modules())
 
         amount_of_inputs = no_modules['in']
@@ -1074,7 +1067,7 @@ class MasterClassicController(MasterController):
                 new_module_address = self._eeprom_controller.read_address(EepromAddress(2 + amount_of_inputs - 1, 0, 4)).bytes
                 if new_module_address == new_address_bytes:
                     self._eeprom_controller.write_address(eeprom_address, new_address_bytes)
-                    self._eeprom_controller.write_address(EepromAddress(0, 1, 1), chr(amount_of_inputs - 1))
+                    self._eeprom_controller.write_address(EepromAddress(0, 1, 1), bytearray([amount_of_inputs - 1]))
                     self._eeprom_controller.activate()
                     logger.warn('Replaced {0} by {1}'.format(old_address, new_address))
                     return
@@ -1087,7 +1080,7 @@ class MasterClassicController(MasterController):
                 new_module_address = self._eeprom_controller.read_address(EepromAddress(33 + amount_of_outputs - 1, 0, 4)).bytes
                 if new_module_address == new_address_bytes:
                     self._eeprom_controller.write_address(eeprom_address, new_address_bytes)
-                    self._eeprom_controller.write_address(EepromAddress(0, 2, 1), chr(amount_of_outputs - 1))
+                    self._eeprom_controller.write_address(EepromAddress(0, 2, 1), bytearray([amount_of_outputs - 1]))
                     self._eeprom_controller.activate()
                     logger.warn('Replaced {0} by {1}'.format(old_address, new_address))
                     return
@@ -1100,7 +1093,7 @@ class MasterClassicController(MasterController):
                 new_module_address = self._eeprom_controller.read_address(EepromAddress(33 + amount_of_shutters - 1, 173, 4)).bytes
                 if new_module_address == new_address_bytes:
                     self._eeprom_controller.write_address(eeprom_address, new_address_bytes)
-                    self._eeprom_controller.write_address(EepromAddress(0, 3, 1), chr(amount_of_shutters - 1))
+                    self._eeprom_controller.write_address(EepromAddress(0, 3, 1), bytearray([amount_of_shutters - 1]))
                     self._eeprom_controller.activate()
                     logger.warn('Replaced {0} by {1}'.format(old_address, new_address))
                     return
@@ -1129,7 +1122,7 @@ class MasterClassicController(MasterController):
         :returns: String of bytes (size = 64kb).
         """
         retry = None
-        output = ""
+        output = bytearray()
         bank = 0
         while bank < 256:
             try:
@@ -1144,7 +1137,7 @@ class MasterClassicController(MasterController):
                 retry = bank
                 logger.warning('Got timeout reading bank {0}. Retrying...'.format(bank))
                 time.sleep(2)  # Doing heavy reads on eeprom can exhaust the master. Give it a bit room to breathe.
-        return output
+        return ''.join(chr(c) for c in output)
 
     def factory_reset(self):
         # type: () -> None
@@ -1279,14 +1272,15 @@ class MasterClassicController(MasterController):
         """
         ret = []
         (num_banks, bank_size, write_size) = (256, 256, 10)
+        backup_data = bytearray(ord(c) for c in data)
 
         for bank in range(0, num_banks):
-            read = self._master_communicator.do_command(master_api.eeprom_list(),
-                                                        {'bank': bank})['data']
+            current_data = self._master_communicator.do_command(master_api.eeprom_list(),
+                                                                {'bank': bank})['data']
             for addr in range(0, bank_size, write_size):
-                orig = read[addr:addr + write_size]
-                new = data[bank * bank_size + addr: bank * bank_size + addr + len(orig)]
-                if new != orig:
+                current = current_data[addr:addr + write_size]
+                new = backup_data[bank * bank_size + addr: bank * bank_size + addr + len(current)]
+                if new != current:
                     ret.append('B' + str(bank) + 'A' + str(addr))
 
                     self._master_communicator.do_command(

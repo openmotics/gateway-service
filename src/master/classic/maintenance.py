@@ -117,7 +117,7 @@ class MaintenanceClassicCommunicator(MaintenanceCommunicator):
 
     def write(self, message):
         self._last_maintenance_send_time = time.time()
-        self._master_communicator.send_maintenance_data('{0}\r\n'.format(message.strip()))
+        self._master_communicator.send_maintenance_data(bytearray(b'{0}\r\n'.format(message.strip())))
 
     def _read_data(self):
         """ Reads from the serial port and writes to the socket. """
@@ -127,7 +127,7 @@ class MaintenanceClassicCommunicator(MaintenanceCommunicator):
                 data = self._master_communicator.get_maintenance_data()
                 if data is None:
                     continue
-                buffer += data
+                buffer += data.decode()
                 while '\n' in buffer:
                     message, buffer = buffer.split('\n', 1)
                     if self._receiver_callback is not None:

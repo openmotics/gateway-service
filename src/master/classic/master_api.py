@@ -110,21 +110,21 @@ BA_LIGHT_ON_TIMER_3120_NO_OVERRULE = 206
 
 def basic_action():
     """ Basic actions. """
-    return MasterCommandSpec("BA",
-                             [Field.byte("action_type"), Field.byte("action_number"), Field.padding(11)],
-                             [Field.str("resp", 2), Field.padding(11), Field.lit("\r\n")])
+    return MasterCommandSpec('BA',
+                             [Field.byte('action_type'), Field.byte('action_number'), Field.padding(11)],
+                             [Field.string('resp', 2), Field.padding(11), Field.lit('\r\n')])
 
 
 def reset():
     """ Reset the gateway, used for firmware updates. """
-    return MasterCommandSpec("re",
+    return MasterCommandSpec('re',
                              [Field.padding(13)],
-                             [Field.str("resp", 2), Field.padding(11), Field.lit("\r\n")])
+                             [Field.string('resp', 2), Field.padding(11), Field.lit('\r\n')])
 
 
 def status():
     """ Get the status of the master. """
-    return MasterCommandSpec("ST",
+    return MasterCommandSpec('ST',
                              [Field.padding(13)],
                              [Field.byte('seconds'), Field.byte('minutes'), Field.byte('hours'), Field.byte('weekday'),
                               Field.byte('day'), Field.byte('month'), Field.byte('year'), Field.lit('\x00'),
@@ -134,75 +134,75 @@ def status():
 
 def set_time():
     """ Set the time on the master. """
-    return MasterCommandSpec("st",
+    return MasterCommandSpec('st',
                              [Field.byte('sec'), Field.byte('min'), Field.byte('hours'), Field.byte('weekday'),
                               Field.byte('day'), Field.byte('month'), Field.byte('year'), Field.padding(6)],
                              [Field.byte('sec'), Field.byte('min'), Field.byte('hours'), Field.byte('weekday'),
                               Field.byte('day'), Field.byte('month'), Field.byte('year'), Field.padding(6),
-                              Field.lit("\r\n")])
+                              Field.lit('\r\n')])
 
 
 def eeprom_list():
     """ List all bytes from a certain eeprom bank """
-    return MasterCommandSpec("EL",
-                             [Field.byte("bank"), Field.padding(12)],
-                             [Field.byte("bank"), Field.str("data", 256), Field.lit("\r\n")])
+    return MasterCommandSpec('EL',
+                             [Field.byte('bank'), Field.padding(12)],
+                             [Field.byte('bank'), Field.bytes('data', 256), Field.lit('\r\n')])
 
 
 def read_eeprom():
     """ Read a number (1-10) of bytes from a certain eeprom bank and address. """
-    return MasterCommandSpec("RE",
+    return MasterCommandSpec('RE',
                              [Field.byte('bank'), Field.byte('addr'), Field.byte('num'), Field.padding(10)],
-                             [Field.byte('bank'), Field.byte('addr'), Field.varstr('data', 10), Field.lit('\r\n')])
+                             [Field.byte('bank'), Field.byte('addr'), Field.varbytes('data', 10), Field.lit('\r\n')])
 
 
 def write_eeprom():
     """ Write data bytes to the addr in the specified eeprom bank """
-    return MasterCommandSpec("WE",
-                             [Field.byte("bank"), Field.byte("address"), Field.varstr("data", 10)],
-                             [Field.byte("bank"), Field.byte("address"), Field.varstr("data", 10), Field.lit('\r\n')])
+    return MasterCommandSpec('WE',
+                             [Field.byte('bank'), Field.byte('address'), Field.varbytes('data', 10)],
+                             [Field.byte('bank'), Field.byte('address'), Field.varbytes('data', 10), Field.lit('\r\n')])
 
 
 def activate_eeprom():
     """ Activate eeprom after write """
-    return MasterCommandSpec("AE",
-                             [Field.byte("eep"), Field.padding(12)],
-                             [Field.byte("eep"), Field.str("resp", 2), Field.padding(10), Field.lit('\r\n')])
+    return MasterCommandSpec('AE',
+                             [Field.byte('eep'), Field.padding(12)],
+                             [Field.byte('eep'), Field.string('resp', 2), Field.padding(10), Field.lit('\r\n')])
 
 
 def number_of_io_modules():
     """ Read the number of input and output modules """
-    return MasterCommandSpec("rn",
+    return MasterCommandSpec('rn',
                              [Field.padding(13)],
-                             [Field.byte("in"), Field.byte("out"), Field.byte("shutter"), Field.padding(10),
+                             [Field.byte('in'), Field.byte('out'), Field.byte('shutter'), Field.padding(10),
                               Field.lit('\r\n')])
 
 
 def read_output():
     """ Read the information about an output """
-    return MasterCommandSpec("ro",
-                             [Field.byte("id"), Field.padding(12)],
-                             [Field.byte('id'), Field.str('type', 1), Field.byte('light'), Field.int('timer'),
-                              Field.int('ctimer'), Field.byte('status'), Field.dimmer('dimmer'),
+    return MasterCommandSpec('ro',
+                             [Field.byte('id'), Field.padding(12)],
+                             [Field.byte('id'), Field.string('type', 1), Field.byte('light'), Field.integer('timer'),
+                              Field.integer('ctimer'), Field.byte('status'), Field.dimmer('dimmer'),
                               Field.byte('controller_out'), Field.byte('max_power'), Field.byte('floor_level'),
-                              Field.bytes('menu_position', 3), Field.str('name', 16), Field.crc(),
+                              Field.bytes('menu_position', 3), Field.string('name', 16), Field.crc(),
                               Field.lit('\r\n')])
 
 
 def read_input():
     """ Read the information about an input """
-    return MasterCommandSpec("ri",
-                             [Field.byte("input_nr"), Field.padding(12)],
+    return MasterCommandSpec('ri',
+                             [Field.byte('input_nr'), Field.padding(12)],
                              [Field.byte('input_nr'), Field.byte('output_action'), Field.bytes('output_list', 30),
-                              Field.str('input_name', 8), Field.crc(), Field.lit('\r\n')])
+                              Field.string('input_name', 8), Field.crc(), Field.lit('\r\n')])
 
 
 def read_input_module(master_version):
     """ Read the status about all inputs of an input module """
     if master_version < (3, 143, 88):
-        raise NotImplementedError("read_input_module() not supported on master version {}".format(master_version))
-    return MasterCommandSpec("RI",
-                             [Field.byte("input_module_nr"), Field.padding(12)],
+        raise NotImplementedError('read_input_module() not supported on master version {}'.format(master_version))
+    return MasterCommandSpec('RI',
+                             [Field.byte('input_module_nr'), Field.padding(12)],
                              [Field.byte('input_module_nr'), Field.byte('input_status'), Field.padding(8),
                               Field.crc(), Field.lit('\r\n')])
 
@@ -210,28 +210,28 @@ def read_input_module(master_version):
 def shutter_status(master_version):
     """ Read the status of a shutter module. """
     if master_version >= (3, 143, 78):
-        return MasterCommandSpec("SO",
-                                 [Field.byte("module_nr"), Field.padding(12)],
-                                 [Field.byte("module_nr"), Field.padding(3), Field.byte("status"), Field.byte("shutter_lock"), Field.lit('\r\n')])
-    return MasterCommandSpec("SO",
-                             [Field.byte("module_nr"), Field.padding(12)],
-                             [Field.byte("module_nr"), Field.padding(3), Field.byte("status"), Field.lit('\r\n')])
+        return MasterCommandSpec('SO',
+                                 [Field.byte('module_nr'), Field.padding(12)],
+                                 [Field.byte('module_nr'), Field.padding(3), Field.byte('status'), Field.byte('shutter_lock'), Field.lit('\r\n')])
+    return MasterCommandSpec('SO',
+                             [Field.byte('module_nr'), Field.padding(12)],
+                             [Field.byte('module_nr'), Field.padding(3), Field.byte('status'), Field.lit('\r\n')])
 
 
 def read_user_information(master_version):
     """ Read the status of a the validation bits. """
     if master_version < (3, 143, 102):
-        raise NotImplementedError("Reading user information is not supported on Master version {0}".format(master_version))
-    return MasterCommandSpec("RU",
+        raise NotImplementedError('Reading user information is not supported on Master version {0}'.format(master_version))
+    return MasterCommandSpec('RU',
                              [Field.byte('information_type'), Field.byte('number'), Field.padding(11)],
                              [Field.byte('information_type'), Field.byte('number'), Field.bytes('data', 11), Field.lit('\r\n')])
 
 
 def temperature_list():
     """ Read the temperature thermostat sensor list for a series of 12 sensors """
-    return MasterCommandSpec("TL",
-                             [Field.byte("series"), Field.padding(12)],
-                             [Field.byte("series"), Field.svt('tmp0'), Field.svt('tmp1'), Field.svt('tmp2'),
+    return MasterCommandSpec('TL',
+                             [Field.byte('series'), Field.padding(12)],
+                             [Field.byte('series'), Field.svt('tmp0'), Field.svt('tmp1'), Field.svt('tmp2'),
                               Field.svt('tmp3'), Field.svt('tmp4'), Field.svt('tmp5'), Field.svt('tmp6'),
                               Field.svt('tmp7'), Field.svt('tmp8'), Field.svt('tmp9'), Field.svt('tmp10'),
                               Field.svt('tmp11'), Field.lit('\r\n')])
@@ -239,9 +239,9 @@ def temperature_list():
 
 def setpoint_list():
     """ Read the current setpoint of the thermostats in series of 12 """
-    return MasterCommandSpec("SL",
-                             [Field.byte("series"), Field.padding(12)],
-                             [Field.byte("series"), Field.svt('tmp0'), Field.svt('tmp1'), Field.svt('tmp2'),
+    return MasterCommandSpec('SL',
+                             [Field.byte('series'), Field.padding(12)],
+                             [Field.byte('series'), Field.svt('tmp0'), Field.svt('tmp1'), Field.svt('tmp2'),
                               Field.svt('tmp3'), Field.svt('tmp4'), Field.svt('tmp5'), Field.svt('tmp6'),
                               Field.svt('tmp7'), Field.svt('tmp8'), Field.svt('tmp9'), Field.svt('tmp10'),
                               Field.svt('tmp11'), Field.lit('\r\n')])
@@ -249,20 +249,20 @@ def setpoint_list():
 
 def thermostat_mode():
     """ Read the current thermostat mode """
-    return MasterCommandSpec("TM",
+    return MasterCommandSpec('TM',
                              [Field.padding(13)],
                              [Field.byte('mode'), Field.padding(12), Field.lit('\r\n')])
 
 
 def read_setpoint():
     """ Read the programmed setpoint of a thermostat """
-    return MasterCommandSpec("rs",
+    return MasterCommandSpec('rs',
                              [Field.byte('thermostat'), Field.padding(12)],
                              [Field.byte('thermostat'), Field.svt('act'), Field.svt('csetp'), Field.svt('psetp0'),
                               Field.svt('psetp1'), Field.svt('psetp2'), Field.svt('psetp3'), Field.svt('psetp4'),
                               Field.svt('psetp5'), Field.byte('sensor_nr'), Field.byte('output0_nr'),
                               Field.byte('output1_nr'), Field.byte('output0'), Field.byte('output1'),
-                              Field.svt('outside'), Field.byte('mode'), Field.str('name', 16), Field.byte('pid_p'),
+                              Field.svt('outside'), Field.byte('mode'), Field.string('name', 16), Field.byte('pid_p'),
                               Field.byte('pid_i'), Field.byte('pid_d'), Field.byte('pid_ithresh'),
                               Field.svt('threshold_temp'), Field.byte('days'), Field.byte('hours'),
                               Field.byte('minutes'), Field.svt('mon_start_d1'), Field.svt('mon_stop_d1'),
@@ -287,15 +287,15 @@ def read_setpoint():
 
 def write_setpoint():
     """ Write a setpoints of a thermostats """
-    return MasterCommandSpec("ws",
-                             [Field.byte("thermostat"), Field.byte("config"), Field.svt("temp"), Field.padding(10)],
-                             [Field.byte("thermostat"), Field.byte("config"), Field.svt("temp"), Field.padding(10),
+    return MasterCommandSpec('ws',
+                             [Field.byte('thermostat'), Field.byte('config'), Field.svt('temp'), Field.padding(10)],
+                             [Field.byte('thermostat'), Field.byte('config'), Field.svt('temp'), Field.padding(10),
                               Field.lit('\r\n')])
 
 
 def permanent_manual_thermostat_list():
     """ Read the permanent manual bytes, 1 per thermostat. """
-    return MasterCommandSpec("pL",
+    return MasterCommandSpec('pL',
                              [Field.padding(13)],
                              [Field.byte('tm'),
                               Field.byte('pmt0'), Field.byte('pmt1'), Field.byte('pmt2'), Field.byte('pmt3'),
@@ -313,7 +313,7 @@ def thermostat_list():
     """ Read the thermostat mode, the outside temperature, the temperature of each thermostat,
     as well as the setpoint.
     """
-    return MasterCommandSpec("tl",
+    return MasterCommandSpec('tl',
                              [Field.padding(13)],
                              [Field.byte('mode'), Field.svt('outside'),
                               Field.svt('tmp0'), Field.svt('tmp1'), Field.svt('tmp2'), Field.svt('tmp3'),
@@ -337,7 +337,7 @@ def thermostat_list():
 
 def thermostat_mode_list():
     """ Read the thermostat mode for each thermostat. """
-    return MasterCommandSpec("ml",
+    return MasterCommandSpec('ml',
                              [Field.padding(13)],
                              [Field.byte('mode0'), Field.byte('mode1'), Field.byte('mode2'), Field.byte('mode3'),
                               Field.byte('mode4'), Field.byte('mode5'), Field.byte('mode6'), Field.byte('mode7'),
@@ -352,7 +352,7 @@ def thermostat_mode_list():
 
 def sensor_humidity_list():
     """ Reads the list humidity values of the 32 (0-31) sensors. """
-    return MasterCommandSpec("hl",
+    return MasterCommandSpec('hl',
                              [Field.padding(13)],
                              [Field.svt('hum0'), Field.svt('hum1'), Field.svt('hum2'), Field.svt('hum3'),
                               Field.svt('hum4'), Field.svt('hum5'), Field.svt('hum6'), Field.svt('hum7'),
@@ -367,7 +367,7 @@ def sensor_humidity_list():
 
 def sensor_temperature_list():
     """ Reads the list temperature values of the 32 (0-31) sensors. """
-    return MasterCommandSpec("cl",
+    return MasterCommandSpec('cl',
                              [Field.padding(13)],
                              [Field.svt('tmp0'), Field.svt('tmp1'), Field.svt('tmp2'), Field.svt('tmp3'),
                               Field.svt('tmp4'), Field.svt('tmp5'), Field.svt('tmp6'), Field.svt('tmp7'),
@@ -382,7 +382,7 @@ def sensor_temperature_list():
 
 def sensor_brightness_list():
     """ Reads the list brightness values of the 32 (0-31) sensors. """
-    return MasterCommandSpec("bl",
+    return MasterCommandSpec('bl',
                              [Field.padding(13)],
                              [Field.svt('bri0'), Field.svt('bri1'), Field.svt('bri2'), Field.svt('bri3'),
                               Field.svt('bri4'), Field.svt('bri5'), Field.svt('bri6'), Field.svt('bri7'),
@@ -397,7 +397,7 @@ def sensor_brightness_list():
 
 def virtual_sensor_list():
     """ Read the list with virtual settings of the 32 (0-31) sensors. """
-    return MasterCommandSpec("VL",
+    return MasterCommandSpec('VL',
                              [Field.padding(13)],
                              [Field.byte('vir0'), Field.byte('vir1'), Field.byte('vir2'), Field.byte('vir3'),
                               Field.byte('vir4'), Field.byte('vir5'), Field.byte('vir6'), Field.byte('vir7'),
@@ -412,7 +412,7 @@ def virtual_sensor_list():
 
 def set_virtual_sensor():
     """ Set the values (temperature, humidity, brightness) of a virtual sensor. """
-    return MasterCommandSpec("VS",
+    return MasterCommandSpec('VS',
                              [Field.byte('sensor'), Field.svt('tmp'), Field.svt('hum'), Field.svt('bri'),
                               Field.padding(9)],
                              [Field.byte('sensor'), Field.svt('tmp'), Field.svt('hum'), Field.svt('bri'),
@@ -421,145 +421,145 @@ def set_virtual_sensor():
 
 def add_virtual_module():
     """ Adds a virtual module """
-    return MasterCommandSpec("AV",
-                             [Field.str('vmt', 1), Field.padding(12)],
-                             [Field.str("resp", 2), Field.padding(11), Field.lit('\r\n')])
+    return MasterCommandSpec('AV',
+                             [Field.string('vmt', 1), Field.padding(12)],
+                             [Field.string('resp', 2), Field.padding(11), Field.lit('\r\n')])
 
 
 def pulse_list():
     """ List the pulse counter values. """
-    return MasterCommandSpec("PL",
+    return MasterCommandSpec('PL',
                              [Field.padding(13)],
-                             [Field.int('pv0'), Field.int('pv1'), Field.int('pv2'), Field.int('pv3'),
-                              Field.int('pv4'), Field.int('pv5'), Field.int('pv6'), Field.int('pv7'),
-                              Field.int('pv8'), Field.int('pv9'), Field.int('pv10'), Field.int('pv11'),
-                              Field.int('pv12'), Field.int('pv13'), Field.int('pv14'), Field.int('pv15'),
-                              Field.int('pv16'), Field.int('pv17'), Field.int('pv18'), Field.int('pv19'),
-                              Field.int('pv20'), Field.int('pv21'), Field.int('pv22'), Field.int('pv23'),
+                             [Field.integer('pv0'), Field.integer('pv1'), Field.integer('pv2'), Field.integer('pv3'),
+                              Field.integer('pv4'), Field.integer('pv5'), Field.integer('pv6'), Field.integer('pv7'),
+                              Field.integer('pv8'), Field.integer('pv9'), Field.integer('pv10'), Field.integer('pv11'),
+                              Field.integer('pv12'), Field.integer('pv13'), Field.integer('pv14'), Field.integer('pv15'),
+                              Field.integer('pv16'), Field.integer('pv17'), Field.integer('pv18'), Field.integer('pv19'),
+                              Field.integer('pv20'), Field.integer('pv21'), Field.integer('pv22'), Field.integer('pv23'),
                               Field.crc(), Field.lit('\r\n')])
 
 
 def error_list():
     """ Get the number of errors for each input and output module. """
-    return MasterCommandSpec("el",
+    return MasterCommandSpec('el',
                              [Field.padding(13)],
-                             [Field("errors", ErrorListFieldType()), Field.crc(), Field.lit("\r\n")])
+                             [Field('errors', ErrorListFieldType()), Field.crc(), Field.lit('\r\n')])
 
 
 def clear_error_list():
     """ Clear the number of errors. """
-    return MasterCommandSpec("ec",
+    return MasterCommandSpec('ec',
                              [Field.padding(13)],
-                             [Field.str("resp", 2), Field.padding(11), Field.lit("\r\n")])
+                             [Field.string('resp', 2), Field.padding(11), Field.lit('\r\n')])
 
 
 def write_dimmer():
     """ Writes a dimmer value directly """
-    return MasterCommandSpec("wd",
-                             [Field.byte("output_nr"), Field.byte("dimmer_value"), Field.padding(11)],
-                             [Field.byte("output_nr"), Field.byte("dimmer_value"), Field.padding(11), Field.lit('\r\n')])
+    return MasterCommandSpec('wd',
+                             [Field.byte('output_nr'), Field.byte('dimmer_value'), Field.padding(11)],
+                             [Field.byte('output_nr'), Field.byte('dimmer_value'), Field.padding(11), Field.lit('\r\n')])
 
 
 def write_airco_status_bit():
     """ Write the airco status bit. """
-    return MasterCommandSpec("AW",
-                             [Field.byte("thermostat"), Field.byte("ASB"), Field.padding(11)],
-                             [Field.byte("ASB0"), Field.byte("ASB1"), Field.byte("ASB2"), Field.byte("ASB3"),
-                              Field.byte("ASB4"), Field.byte("ASB5"), Field.byte("ASB6"), Field.byte("ASB7"),
-                              Field.byte("ASB8"), Field.byte("ASB9"), Field.byte("ASB10"), Field.byte("ASB11"),
-                              Field.byte("ASB12"), Field.byte("ASB13"), Field.byte("ASB14"), Field.byte("ASB15"),
-                              Field.byte("ASB16"), Field.byte("ASB17"), Field.byte("ASB18"), Field.byte("ASB19"),
-                              Field.byte("ASB20"), Field.byte("ASB21"), Field.byte("ASB22"), Field.byte("ASB23"),
-                              Field.byte("ASB24"), Field.byte("ASB25"), Field.byte("ASB26"), Field.byte("ASB27"),
-                              Field.byte("ASB28"), Field.byte("ASB29"), Field.byte("ASB30"), Field.byte("ASB31"),
-                              Field.lit("\r\n")])
+    return MasterCommandSpec('AW',
+                             [Field.byte('thermostat'), Field.byte('ASB'), Field.padding(11)],
+                             [Field.byte('ASB0'), Field.byte('ASB1'), Field.byte('ASB2'), Field.byte('ASB3'),
+                              Field.byte('ASB4'), Field.byte('ASB5'), Field.byte('ASB6'), Field.byte('ASB7'),
+                              Field.byte('ASB8'), Field.byte('ASB9'), Field.byte('ASB10'), Field.byte('ASB11'),
+                              Field.byte('ASB12'), Field.byte('ASB13'), Field.byte('ASB14'), Field.byte('ASB15'),
+                              Field.byte('ASB16'), Field.byte('ASB17'), Field.byte('ASB18'), Field.byte('ASB19'),
+                              Field.byte('ASB20'), Field.byte('ASB21'), Field.byte('ASB22'), Field.byte('ASB23'),
+                              Field.byte('ASB24'), Field.byte('ASB25'), Field.byte('ASB26'), Field.byte('ASB27'),
+                              Field.byte('ASB28'), Field.byte('ASB29'), Field.byte('ASB30'), Field.byte('ASB31'),
+                              Field.lit('\r\n')])
 
 
 def read_airco_status_bits():
     """ Read the airco status bits. """
-    return MasterCommandSpec("AR",
+    return MasterCommandSpec('AR',
                              [Field.padding(13)],
-                             [Field.byte("ASB0"), Field.byte("ASB1"), Field.byte("ASB2"), Field.byte("ASB3"),
-                              Field.byte("ASB4"), Field.byte("ASB5"), Field.byte("ASB6"), Field.byte("ASB7"),
-                              Field.byte("ASB8"), Field.byte("ASB9"), Field.byte("ASB10"), Field.byte("ASB11"),
-                              Field.byte("ASB12"), Field.byte("ASB13"), Field.byte("ASB14"), Field.byte("ASB15"),
-                              Field.byte("ASB16"), Field.byte("ASB17"), Field.byte("ASB18"), Field.byte("ASB19"),
-                              Field.byte("ASB20"), Field.byte("ASB21"), Field.byte("ASB22"), Field.byte("ASB23"),
-                              Field.byte("ASB24"), Field.byte("ASB25"), Field.byte("ASB26"), Field.byte("ASB27"),
-                              Field.byte("ASB28"), Field.byte("ASB29"), Field.byte("ASB30"), Field.byte("ASB31"),
-                              Field.lit("\r\n")])
+                             [Field.byte('ASB0'), Field.byte('ASB1'), Field.byte('ASB2'), Field.byte('ASB3'),
+                              Field.byte('ASB4'), Field.byte('ASB5'), Field.byte('ASB6'), Field.byte('ASB7'),
+                              Field.byte('ASB8'), Field.byte('ASB9'), Field.byte('ASB10'), Field.byte('ASB11'),
+                              Field.byte('ASB12'), Field.byte('ASB13'), Field.byte('ASB14'), Field.byte('ASB15'),
+                              Field.byte('ASB16'), Field.byte('ASB17'), Field.byte('ASB18'), Field.byte('ASB19'),
+                              Field.byte('ASB20'), Field.byte('ASB21'), Field.byte('ASB22'), Field.byte('ASB23'),
+                              Field.byte('ASB24'), Field.byte('ASB25'), Field.byte('ASB26'), Field.byte('ASB27'),
+                              Field.byte('ASB28'), Field.byte('ASB29'), Field.byte('ASB30'), Field.byte('ASB31'),
+                              Field.lit('\r\n')])
 
 
 def to_cli_mode():
     """ Go to CLI mode """
-    return MasterCommandSpec("CM",
+    return MasterCommandSpec('CM',
                              [Field.padding(13)],
                              None)
 
 
 def module_discover_start():
     """ Put the master in module discovery mode. """
-    return MasterCommandSpec("DA",
+    return MasterCommandSpec('DA',
                              [Field.padding(13)],
-                             [Field.str("resp", 2), Field.padding(11), Field.lit("\r\n")])
+                             [Field.string('resp', 2), Field.padding(11), Field.lit('\r\n')])
 
 
 def module_discover_stop():
     """ Put the master into the normal working state. """
-    return MasterCommandSpec("DO",
+    return MasterCommandSpec('DO',
                              [Field.padding(13)],
-                             [Field.str("resp", 2), Field.padding(11), Field.lit("\r\n")])
+                             [Field.string('resp', 2), Field.padding(11), Field.lit('\r\n')])
 
 
 def indicate():
     """ Flash the led for a given output/input/sensor. """
-    return MasterCommandSpec("IN",
+    return MasterCommandSpec('IN',
                              [Field.byte('type'), Field.byte('id'), Field.padding(11)],
-                             [Field.str("resp", 2), Field.padding(11), Field.lit("\r\n")])
+                             [Field.string('resp', 2), Field.padding(11), Field.lit('\r\n')])
 
 
 def write_timer():
     """ Writes a timer setting to an Output, and immediately activates the timer value (even when an Output is already on). """
-    return MasterCommandSpec("WT",
-                             [Field.byte("id"), Field.int("timer"), Field.padding(10)],
-                             [Field.byte("id"), Field.int("timer"), Field.padding(10), Field.lit("\r\n")],
-                             "RT")
+    return MasterCommandSpec('WT',
+                             [Field.byte('id'), Field.integer('timer'), Field.padding(10)],
+                             [Field.byte('id'), Field.integer('timer'), Field.padding(10), Field.lit('\r\n')],
+                             'RT')
 
 
 def get_module_version():
     """ Get the version of the module. """
-    return MasterCommandSpec("FV",
-                             [Field.str('addr', 4), Field.crc(), Field.padding(6)],
-                             [Field.str('addr', 4), Field.byte("error_code"), Field.byte("hw_version"),
-                              Field.byte("f1"), Field.byte("f2"), Field.byte("f3"), Field.byte("status"),
-                              Field.crc(), Field.lit("\r\n")])
+    return MasterCommandSpec('FV',
+                             [Field.string('addr', 4), Field.crc(), Field.padding(6)],
+                             [Field.string('addr', 4), Field.byte('error_code'), Field.byte('hw_version'),
+                              Field.byte('f1'), Field.byte('f2'), Field.byte('f3'), Field.byte('status'),
+                              Field.crc(), Field.lit('\r\n')])
 
 
 # Below are the asynchronous messages, sent by the master to the gateway
 
 def output_list():
     """ The message sent by the master whenever the outputs change. """
-    return MasterCommandSpec("OL",
+    return MasterCommandSpec('OL',
                              [],
-                             [Field("outputs", OutputFieldType()), Field.lit("\r\n")])
+                             [Field('outputs', OutputFieldType()), Field.lit('\r\n')])
 
 
 def input_list(master_version):
     """ The message sent by the master whenever an input changes. """
     if master_version < (3, 143, 88):
-        return MasterCommandSpec("IL",
+        return MasterCommandSpec('IL',
                                  [],
-                                 [Field.byte('input'), Field.byte('output'), Field.lit("\r\n")])
-    return MasterCommandSpec("IL",
+                                 [Field.byte('input'), Field.byte('output'), Field.lit('\r\n')])
+    return MasterCommandSpec('IL',
                              [],
-                             [Field.byte('input'), Field.byte('output'), Field.byte('status'), Field.lit("\r\n")])
+                             [Field.byte('input'), Field.byte('output'), Field.byte('status'), Field.lit('\r\n')])
 
 
 def module_initialize():
     """ The message sent by the master whenever a module is initialized in module discovery mode. """
-    return MasterCommandSpec("MI",
+    return MasterCommandSpec('MI',
                              [],
-                             [Field.str('id', 4), Field.str('instr', 1), Field.byte('module_nr'), Field.byte('data'),
+                             [Field.string('id', 4), Field.string('instr', 1), Field.byte('module_nr'), Field.byte('data'),
                               Field.byte('io_type'), Field.padding(5), Field.lit('\r\n')])
 
 
@@ -571,10 +571,10 @@ def event_triggered(master_version):
     * Event type 1: Validation bit change (bytes[0] contains the bit number, bytes[1] contains the bit value)
     """
     if master_version < (3, 143, 102):
-        return MasterCommandSpec("EV",
+        return MasterCommandSpec('EV',
                                  [],
                                  [Field.bytes('bytes', 12), Field.padding(1), Field.lit('\r\n')])
-    return MasterCommandSpec("EV",
+    return MasterCommandSpec('EV',
                              [],
                              [Field.byte('event_type'), Field.bytes('bytes', 12), Field.lit('\r\n')])
 
@@ -583,81 +583,81 @@ def event_triggered(master_version):
 
 def modules_goto_bootloader():
     """ Reset the module to go to the bootloader. """
-    return MasterCommandSpec("FR",
-                             [Field.str('addr', 4), Field.byte('sec'), Field.lit('C'), Field.byte('crc0'),
+    return MasterCommandSpec('FR',
+                             [Field.string('addr', 4), Field.byte('sec'), Field.lit('C'), Field.byte('crc0'),
                               Field.byte('crc1'), Field.padding(5)],
-                             [Field.str('addr', 4), Field.byte("error_code"), Field.lit('C'), Field.byte('crc0'),
-                              Field.byte('crc1'), Field.padding(5), Field.lit("\r\n")])
+                             [Field.string('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
+                              Field.byte('crc1'), Field.padding(5), Field.lit('\r\n')])
 
 
 def modules_new_firmware_version():
     """ Preprare the slave module for a new version. """
-    return MasterCommandSpec("FN",
-                             [Field.str('addr', 4), Field.byte("f1n"), Field.byte("f2n"), Field.byte("f3n"),
+    return MasterCommandSpec('FN',
+                             [Field.string('addr', 4), Field.byte('f1n'), Field.byte('f2n'), Field.byte('f3n'),
                               Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'), Field.padding(3)],
-                             [Field.str('addr', 4), Field.byte("error_code"), Field.lit('C'), Field.byte('crc0'),
-                              Field.byte('crc1'), Field.padding(5), Field.lit("\r\n")])
+                             [Field.string('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
+                              Field.byte('crc1'), Field.padding(5), Field.lit('\r\n')])
 
 
 def modules_new_crc():
     """ Write the new crc code to the bootloaded module. """
-    return MasterCommandSpec("FC",
-                             [Field.str('addr', 4), Field.byte("ccrc0"), Field.byte("ccrc1"), Field.byte("ccrc2"),
-                              Field.byte("ccrc3"), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
+    return MasterCommandSpec('FC',
+                             [Field.string('addr', 4), Field.byte('ccrc0'), Field.byte('ccrc1'), Field.byte('ccrc2'),
+                              Field.byte('ccrc3'), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
                               Field.padding(2)],
-                             [Field.str('addr', 4), Field.byte("error_code"), Field.lit('C'), Field.byte('crc0'),
-                              Field.byte('crc1'), Field.padding(5), Field.lit("\r\n")])
+                             [Field.string('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
+                              Field.byte('crc1'), Field.padding(5), Field.lit('\r\n')])
 
 
 def change_communication_mode_to_long():
     """ Change the number of bytes used to communicate with the master to 75. """
-    return MasterCommandSpec("cm",
+    return MasterCommandSpec('cm',
                              [Field.lit('\x4d'), Field.lit('\x01'), Field.padding(11)],
-                             [Field.lit('\x4d'), Field.lit('\x01'), Field.padding(11), Field.lit("\r\n")])
+                             [Field.lit('\x4d'), Field.lit('\x01'), Field.padding(11), Field.lit('\r\n')])
 
 
 def change_communication_mode_to_short():
     """ Change the number of bytes used to communicate with the master to 18. """
-    return MasterCommandSpec("cm",
+    return MasterCommandSpec('cm',
                              [Field.lit('\x12'), Field.lit('\x01'), Field.padding(71)],
-                             [Field.lit('\x12'), Field.lit('\x01'), Field.padding(11), Field.lit("\r\n")])
+                             [Field.lit('\x12'), Field.lit('\x01'), Field.padding(11), Field.lit('\r\n')])
 
 
 def modules_update_firmware_block():
     """ Upload 1 block of 64 bytes to the module. """
-    return MasterCommandSpec("FD",
-                             [Field.str('addr', 4), Field.int("block"), Field.str("bytes", 64),
+    return MasterCommandSpec('FD',
+                             [Field.string('addr', 4), Field.integer('block'), Field.string('bytes', 64),
                               Field.lit('C'), Field.byte('crc0'), Field.byte('crc1')],
-                             [Field.str('addr', 4), Field.byte("error_code"), Field.lit('C'), Field.byte('crc0'),
-                              Field.byte('crc1'), Field.lit("\r\n")])
+                             [Field.string('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
+                              Field.byte('crc1'), Field.lit('\r\n')])
 
 
 def modules_get_version():
     """ Get the version of the module. """
-    return MasterCommandSpec("FV",
-                             [Field.str('addr', 4), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
+    return MasterCommandSpec('FV',
+                             [Field.string('addr', 4), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
                               Field.padding(6)],
-                             [Field.str('addr', 4), Field.byte("error_code"), Field.byte("hw_version"),
-                              Field.byte("f1"), Field.byte("f2"), Field.byte("f3"), Field.byte("status"),
-                              Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'), Field.lit("\r\n")])
+                             [Field.string('addr', 4), Field.byte('error_code'), Field.byte('hw_version'),
+                              Field.byte('f1'), Field.byte('f2'), Field.byte('f3'), Field.byte('status'),
+                              Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'), Field.lit('\r\n')])
 
 
 def modules_integrity_check():
     """ Check the integrity of the new code. """
-    return MasterCommandSpec("FE",
-                             [Field.str('addr', 4), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
+    return MasterCommandSpec('FE',
+                             [Field.string('addr', 4), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
                               Field.padding(6)],
-                             [Field.str('addr', 4), Field.byte("error_code"), Field.lit('C'), Field.byte('crc0'),
-                              Field.byte('crc1'), Field.padding(5), Field.lit("\r\n")])
+                             [Field.string('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
+                              Field.byte('crc1'), Field.padding(5), Field.lit('\r\n')])
 
 
 def modules_goto_application():
     """ Let the module go to application. """
-    return MasterCommandSpec("FG",
-                             [Field.str('addr', 4), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
+    return MasterCommandSpec('FG',
+                             [Field.string('addr', 4), Field.lit('C'), Field.byte('crc0'), Field.byte('crc1'),
                               Field.padding(6)],
-                             [Field.str('addr', 4), Field.byte("error_code"), Field.lit('C'), Field.byte('crc0'),
-                              Field.byte('crc1'), Field.padding(5), Field.lit("\r\n")])
+                             [Field.string('addr', 4), Field.byte('error_code'), Field.lit('C'), Field.byte('crc0'),
+                              Field.byte('crc1'), Field.padding(5), Field.lit('\r\n')])
 
 
 # Below are helpers for the Svt (System value type).
@@ -676,10 +676,10 @@ class Svt(object):
         :param value: The human-friendly value
         """
         if svt_type == Svt.TIME:
-            split = [int(x) for x in value.split(":")]
+            split = [int(x) for x in value.split(':')]
             if len(split) != 2:
-                raise ValueError("Time is not in HH:MM format: %s" % value)
-            self.__value = (split[0] * 6) + int(split[1] / 10)
+                raise ValueError('Time is not in HH:MM format: %s' % value)
+            self.__value = (split[0] * 6) + int(split[1] // 10)
         elif svt_type in [Svt.TEMPERATURE, Svt.HUMIDITY, Svt.BRIGHTNESS]:
             if value is None:
                 self.__value = 255
@@ -692,16 +692,16 @@ class Svt(object):
         elif svt_type == Svt.RAW:
             self.__value = value
         else:
-            raise ValueError("Unknown type for Svt: " + str(svt_type))
+            raise ValueError('Unknown type for Svt: ' + str(svt_type))
         self.__value = min(max(self.__value, 0), 255)
 
     def get_time(self):
         """ Convert an Svt to time.
         :returns: String with form HH:MM
         """
-        hours = (self.__value / 6)
+        hours = (self.__value // 6)
         minutes = (self.__value % 6) * 10
-        return "%02d:%02d" % (hours, minutes)
+        return '%02d:%02d' % (hours, minutes)
 
     def get_temperature(self):
         """ Convert an Svt to temperature.
@@ -709,7 +709,7 @@ class Svt(object):
         """
         if self.__value == 255:
             return None
-        return (float(self.__value) / 2) - 32
+        return (float(self.__value) // 2) - 32
 
     def get_humidity(self):
         """ Convert an Svt to humidity.
@@ -728,17 +728,20 @@ class Svt(object):
         return round((254 - self.__value) / 2.54, 2)
 
     def get_byte(self):
-        """ Get the Svt value as a byte.
+        # type: () -> bytearray
+        """
+        Get the Svt value as a byte.
         :returns: one byte
         """
-        return chr(self.__value)
+        return bytearray([self.__value])
 
     @staticmethod
     def from_byte(byte_value):
+        # type: (bytearray) -> Svt
         """ Create an Svt instance from a byte.
         :returns: instance of the Svt class.
         """
-        return Svt(Svt.RAW, ord(byte_value))
+        return Svt(Svt.RAW, byte_value[0])
 
     @staticmethod
     def temp(temperature):
@@ -765,12 +768,3 @@ class Svt(object):
         :param time_value: String in format HH:MM
         """
         return Svt(Svt.TIME, time_value)
-
-
-def dimmer_to_percentage(dimmer_value):
-    """ Convert a dimmer value to an integer in [0, 100].
-
-    :param dimmer_value: integer in [0, 63].
-    :returns: dimmer percentage in [0, 100].
-    """
-    return DimmerFieldType().decode(chr(dimmer_value))
