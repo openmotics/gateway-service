@@ -129,9 +129,9 @@ class MasterCommunicatorTest(unittest.TestCase):
         comm.enable_passthrough()
         comm.start()
 
-        pty.master_reply('got it!')
-        comm.send_passthrough_data('data from passthrough')
-        self.assertEqual('got it!', comm.get_passthrough_data())
+        pty.master_reply(bytearray(b'got it!'))
+        comm.send_passthrough_data(bytearray(b'data from passthrough'))
+        self.assertEqual(bytearray(b'got it!'), comm.get_passthrough_data())
 
     def test_passthrough_with_commands(self):
         action = master_api.basic_action()
@@ -146,37 +146,37 @@ class MasterCommunicatorTest(unittest.TestCase):
         comm.enable_passthrough()
         comm.start()
 
-        pty.master_reply('hello' + action.create_output(1, {'resp': 'OK'}))
+        pty.master_reply(bytearray(b'hello') + action.create_output(1, {'resp': 'OK'}))
         self.assertEqual('OK', comm.do_command(action, fields)['resp'])
-        self.assertEqual('hello', comm.get_passthrough_data())
+        self.assertEqual(bytearray(b'hello'), comm.get_passthrough_data())
 
-        pty.master_reply(action.create_output(2, {'resp': 'OK'}) + 'world')
+        pty.master_reply(action.create_output(2, {'resp': 'OK'}) + bytearray(b'world'))
         self.assertEqual('OK', comm.do_command(action, fields)['resp'])
-        self.assertEqual('world', comm.get_passthrough_data())
+        self.assertEqual(bytearray(b'world'), comm.get_passthrough_data())
 
-        pty.master_reply('hello' + action.create_output(3, {'resp': 'OK'}) + ' world')
+        pty.master_reply(bytearray(b'hello') + action.create_output(3, {'resp': 'OK'}) + bytearray(b' world'))
         self.assertEqual('OK', comm.do_command(action, fields)['resp'])
-        self.assertEqual('hello world', comm.get_passthrough_data())
+        self.assertEqual(bytearray(b'hello world'), comm.get_passthrough_data())
 
     def test_maintenance_mode(self):
         action = master_api.basic_action()
         fields = {'action_type': 1, 'action_number': 2}
 
         pty = DummyPty([master_api.to_cli_mode().create_input(0),
-                        'error list\r\n', 'exit\r\n'])
+                        bytearray(b'error list\r\n'), bytearray(b'exit\r\n')])
         SetUpTestInjections(controller_serial=pty)
 
         comm = MasterCommunicator(init_master=False)
         comm.start()
 
         comm.start_maintenance_mode()
-        pty.fd.write('OK')
+        pty.fd.write(bytearray(b'OK'))
         self.assertRaises(InMaintenanceModeException, comm.do_command, action, fields)
-        self.assertEqual('OK', comm.get_maintenance_data())
+        self.assertEqual(bytearray(b'OK'), comm.get_maintenance_data())
 
-        comm.send_maintenance_data("error list\r\n")
-        pty.fd.write('the list\n')
-        self.assertEqual('the list\n', comm.get_maintenance_data())
+        comm.send_maintenance_data(bytearray(b'error list\r\n'))
+        pty.fd.write(bytearray(b'the list\n'))
+        self.assertEqual(bytearray(b'the list\n'), comm.get_maintenance_data())
 
         comm.stop_maintenance_mode()
 
@@ -185,7 +185,7 @@ class MasterCommunicatorTest(unittest.TestCase):
         fields = {'action_type': 1, 'action_number': 2}
 
         pty = DummyPty([master_api.to_cli_mode().create_input(0),
-                        'error list\r\n', 'exit\r\n'])
+                        bytearray(b'error list\r\n'), bytearray(b'exit\r\n')])
         SetUpTestInjections(controller_serial=pty)
 
         comm = MasterCommunicator(init_master=False)
@@ -203,22 +203,22 @@ class MasterCommunicatorTest(unittest.TestCase):
         thread = threading.Thread(target=get_passthrough)
         thread.start()
 
-        pty.fd.write('Before maintenance')
+        pty.fd.write(bytearray(b'Before maintenance'))
         ready.wait(2)
         comm.start_maintenance_mode()
 
-        pty.fd.write('OK')
+        pty.fd.write(bytearray(b'OK'))
         time.sleep(0.2)
         self.assertRaises(InMaintenanceModeException, comm.do_command, action, fields)
-        self.assertEqual('OK', comm.get_maintenance_data())
+        self.assertEqual(bytearray(b'OK'), comm.get_maintenance_data())
 
-        comm.send_maintenance_data("error list\r\n")
-        pty.fd.write('the list\n')
+        comm.send_maintenance_data(bytearray(b'error list\r\n'))
+        pty.fd.write(bytearray(b'the list\n'))
         time.sleep(0.2)
-        self.assertEqual('the list\n', comm.get_maintenance_data())
+        self.assertEqual(bytearray(b'the list\n'), comm.get_maintenance_data())
 
         comm.stop_maintenance_mode()
-        pty.fd.write('After maintenance')
+        pty.fd.write(bytearray(b'After maintenance'))
 
         thread.join(2)
         assert not thread.is_alive()
@@ -239,7 +239,7 @@ class MasterCommunicatorTest(unittest.TestCase):
                 got_output['phase'] = 2
             elif got_output['phase'] == 2:
                 self.assertEqual([(3, int(12 * 10.0 / 6.0)), (5, int(6 * 10.0 / 6.0))],
-                                  output['outputs'])
+                                 output['outputs'])
                 got_output['phase'] = 3
 
         comm = MasterCommunicator(init_master=False)
@@ -247,15 +247,15 @@ class MasterCommunicatorTest(unittest.TestCase):
         comm.register_consumer(BackgroundConsumer(master_api.output_list(), 0, callback))
         comm.start()
 
-        pty.fd.write('OL\x00\x01\x03\x0c\r\n')
-        pty.fd.write('junkOL\x00\x02\x03\x0c\x05\x06\r\n here')
+        pty.fd.write(bytearray(b'OL\x00\x01\x03\x0c\r\n'))
+        pty.fd.write(bytearray(b'junkOL\x00\x02\x03\x0c\x05\x06\r\n here'))
 
         pty.master_reply(action.create_output(1, {'resp': 'OK'}))
         output = comm.do_command(action, fields)
         self.assertEqual('OK', output['resp'])
 
         self.assertEqual(3, got_output['phase'])
-        self.assertEqual('junk here', comm.get_passthrough_data())
+        self.assertEqual(bytearray(b'junk here'), comm.get_passthrough_data())
 
     def test_background_consumer_passthrough(self):
         action = master_api.basic_action()
@@ -266,9 +266,9 @@ class MasterCommunicatorTest(unittest.TestCase):
 
         got_output = {'passed': False}
 
-        def callback(output):
+        def callback(output_):
             """ Callback that check if the correct result was returned for OL. """
-            self.assertEqual([(3, int(12 * 10.0 / 6.0))], output['outputs'])
+            self.assertEqual([(3, int(12 * 10.0 / 6.0))], output_['outputs'])
             got_output['passed'] = True
 
         comm = MasterCommunicator(init_master=False)
@@ -276,15 +276,15 @@ class MasterCommunicatorTest(unittest.TestCase):
         comm.register_consumer(BackgroundConsumer(master_api.output_list(), 0, callback, True))
         comm.start()
 
-        pty.fd.write('OL\x00\x01')
-        pty.fd.write('\x03\x0c\r\n')
+        pty.fd.write(bytearray(b'OL\x00\x01'))
+        pty.fd.write(bytearray(b'\x03\x0c\r\n'))
 
         pty.master_reply(action.create_output(1, {'resp': 'OK'}))
         output = comm.do_command(action, fields)
         self.assertEqual('OK', output['resp'])
 
         self.assertEqual(True, got_output['passed'])
-        self.assertEqual('OL\x00\x01\x03\x0c\r\n', comm.get_passthrough_data())
+        self.assertEqual(bytearray(b'OL\x00\x01\x03\x0c\r\n'), comm.get_passthrough_data())
 
     def test_bytes_counter(self):
         action = master_api.basic_action()
@@ -297,10 +297,10 @@ class MasterCommunicatorTest(unittest.TestCase):
         comm.enable_passthrough()
         comm.start()
 
-        pty.fd.write('hello')
+        pty.fd.write(bytearray(b'hello'))
         pty.master_reply(action.create_output(1, {'resp': 'OK'}))
         comm.do_command(action, fields)
-        self.assertEqual('hello', comm.get_passthrough_data())
+        self.assertEqual(bytearray(b'hello'), comm.get_passthrough_data())
 
         self.assertEqual(21, comm.get_communication_statistics()['bytes_written'])
         self.assertEqual(5 + 18, comm.get_communication_statistics()['bytes_read'])
@@ -311,12 +311,12 @@ class MasterCommunicatorTest(unittest.TestCase):
         fields1 = {}
         for i in range(0, 32):
             fields1['hum%d' % i] = master_api.Svt(master_api.Svt.RAW, i)
-        fields1['crc'] = [ord('C'), 1, 240]
+        fields1['crc'] = bytearray([ord('C'), 1, 240])
 
         fields2 = {}
         for i in range(0, 32):
             fields2['hum%d' % i] = master_api.Svt(master_api.Svt.RAW, 2 * i)
-        fields2['crc'] = [ord('C'), 0, 0]
+        fields2['crc'] = bytearray([ord('C'), 0, 0])
 
         pty = DummyPty([action.create_input(1),
                         action.create_input(2)])
@@ -327,11 +327,12 @@ class MasterCommunicatorTest(unittest.TestCase):
 
         pty.master_reply(action.create_output(1, fields1))
         output = comm.do_command(action)
-        self.assertEqual('\x00', output['hum0'].get_byte())
-        self.assertEqual('\x01', output['hum1'].get_byte())
+        self.assertEqual(bytearray(b'\x00'), output['hum0'].get_byte())
+        self.assertEqual(bytearray(b'\x01'), output['hum1'].get_byte())
 
         pty.master_reply(action.create_output(2, fields2))
-        self.assertRaises(CrcCheckFailedException, comm.do_command, action)
+        with self.assertRaises(CrcCheckFailedException):
+            comm.do_command(action)
 
 
 if __name__ == '__main__':

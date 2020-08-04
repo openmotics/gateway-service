@@ -87,6 +87,8 @@ class RoomsMigrator(object):
                     for classic_orm in master_controller._eeprom_controller.read_all(eeprom_model):
                         try:
                             object_id = classic_orm.id
+                            if object_id is None:
+                                continue
                             if not filter_(classic_orm):
                                 RoomsMigrator._delete_eext_fields(eext_controller, eeprom_model.__name__, object_id, ['room'])
                                 continue

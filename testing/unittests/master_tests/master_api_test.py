@@ -31,7 +31,7 @@ class SvtTest(unittest.TestCase):
         for temperature in range(-32, 95):
             self.assertEqual(temperature, int(Svt.temp(temperature).get_temperature()))
 
-        self.assertEqual(chr(104), Svt.temp(20).get_byte())
+        self.assertEqual(bytearray([104]), Svt.temp(20).get_byte())
 
     def test_time(self):
         """ Test the time type. """
@@ -42,12 +42,12 @@ class SvtTest(unittest.TestCase):
 
         self.assertEqual("16:30", Svt.time("16:33").get_time())
 
-        self.assertEqual(chr(99), Svt.time("16:30").get_byte())
+        self.assertEqual(bytearray([99]), Svt.time("16:30").get_byte())
 
     def test_raw(self):
         """ Test the raw type. """
         for value in range(0, 255):
-            byte_value = chr(value)
+            byte_value = bytearray([value])
             self.assertEqual(byte_value, Svt.from_byte(byte_value).get_byte())
 
 

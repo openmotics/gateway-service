@@ -313,14 +313,6 @@ class MasterCoreController(MasterController):
              'weekday': now.isoweekday(), 'day': now.day, 'month': now.month, 'year': now.year % 100}
         )
 
-    # Memory (eeprom/fram)
-
-    def eeprom_read_page(self, page):
-        return self._memory_files[MemoryTypes.EEPROM].read_page(page)
-
-    def fram_read_page(self, page):
-        return self._memory_files[MemoryTypes.FRAM].read_page(page)
-
     # Input
 
     def get_input_module_type(self, input_module_id):

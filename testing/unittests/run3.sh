@@ -8,14 +8,14 @@ pytest master_tests/master_api_test.py --log-level=DEBUG --durations=2 --junit-x
 echo "Running master command tests"
 pytest master_tests/master_command_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterCommandTest.xml
 
-#echo "Running master communicator tests"
-#pytest master_tests/master_communicator_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterCommunicatorTest.xml
+echo "Running master communicator tests"
+pytest master_tests/master_communicator_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterCommunicatorTest.xml
 
 echo "Running inputs tests"
 pytest master_tests/inputs_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterInputsTest.xml
 
-#echo "Running passthrough tests"
-#pytest master_tests/passthrough_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterPassthroughTest.xml
+echo "Running passthrough tests"
+pytest master_tests/passthrough_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterPassthroughTest.xml
 
 echo "Running eeprom controller tests"
 pytest master_tests/eeprom_controller_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterEEPROMControllerTest.xml
@@ -35,7 +35,7 @@ pytest master_tests/eeprom_extension_test.py --log-level=DEBUG --durations=2 --j
 echo "Running power controller tests"
 pytest power_tests/power_controller_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/PowerControllerTest.xml
 
-echo "Running power communicator tests"
+#echo "Running power communicator tests"
 #pytest power_tests/power_communicator_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/PowerCommunicatorTest.xml
 
 echo "Running time keeper tests"
@@ -85,7 +85,6 @@ pytest master_core_tests/group_action_test.py --log-level=DEBUG --durations=2 --
 
 #echo "Running metrics tests"
 #python3 gateway_tests/metrics_test.py
-
 
 echo "Running thermostat tests"
 pytest thermostat_tests/gateway_mapping_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/GatewayThermostatMappingTest.xml
