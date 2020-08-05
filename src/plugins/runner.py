@@ -166,8 +166,9 @@ class PluginRunner:
         event_json = input_event.serialize()
         self._do_async('input_status', {'event': event_json}, should_filter=True)
 
-    def process_output_status(self, status):
-        self._do_async('output_status', {'status': status}, should_filter=True)
+    def process_output_status(self, output_event):
+        event_json = output_event.serialize()
+        self._do_async('output_status', {'event': event_json}, should_filter=True)
 
     def process_shutter_status(self, status):
         self._do_async('shutter_status', status, should_filter=True)

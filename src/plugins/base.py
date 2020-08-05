@@ -331,12 +331,8 @@ class PluginController(object):
             for runner in self.__iter_running_runners():
                 runner.process_input_status(event)
         if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
-            # TODO: Implement versioning so a plugin can also receive "normal" events on version 2
-            # Should be called when the output status changes, notifies all plugins.
-            states = [(state.id, state.dimmer) for state in self.__output_controller.get_output_statuses()
-                      if state.status]
             for runner in self.__iter_running_runners():
-                runner.process_output_status(states)
+                runner.process_output_status(event)
         if event.type == GatewayEvent.Types.SHUTTER_CHANGE:
             # TODO: Implement versioning so a plugin can receive per-shutter events
             states = self.__shuttercontroller.get_states()

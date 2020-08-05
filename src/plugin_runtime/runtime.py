@@ -217,9 +217,25 @@ class PluginRuntime:
                 error = NotImplementedError('Version {} is not supported for input status decorators'.format(version))
                 IO._log_exception('input status', error)
 
-    def _handle_output_status(self, status):
+    def _handle_output_status(self, event_json):
+        event = GatewayEvent.deserialize(event_json)
         for receiver in self._output_status_receivers:
-            IO._with_catch('output status', receiver, [status])
+            version = receiver.input_status.get('version', 1)
+            if version ==1:
+                states = [(state.id, state.dimmer) for state in self.__output_controller.get_output_statuses()
+                          if state.status]
+                IO._with_catch('output status', receiver, [states])
+            elif version == 2:
+                output_id = event['id']
+                status = event['status']['on']
+                dimmer = event['status']['value']
+                locked = event['status'].get('locked', False)
+                # Version 2 will send output status changes per output and in a dict format
+                data = {'output_id': output_id, 'status': status, 'dimmer': dimmer, 'locked': locked}
+                IO._with_catch('input status', receiver, [data])
+            else:
+                error = NotImplementedError('Version {} is not supported for output status decorators'.format(version))
+                IO._log_exception('output status', error)
 
     def _handle_shutter_status(self, status):
         for receiver in self._shutter_status_receivers:
