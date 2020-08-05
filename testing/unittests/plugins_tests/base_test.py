@@ -223,7 +223,7 @@ class P1(OMPluginBase):
         self._output_data = output_status_inst
         
     @output_status(version=2)
-    def output(self, output_status_inst):
+    def output_version_2(self, output_status_inst):
         self._output_data_version_2 = output_status_inst
         
     @receive_events
