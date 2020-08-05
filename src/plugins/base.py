@@ -36,8 +36,7 @@ class PluginController(object):
 
     @Inject
     def __init__(self,
-                 web_interface=INJECTED, configuration_controller=INJECTED, output_controller=INJECTED,
-                 shutter_controller=INJECTED,
+                 web_interface=INJECTED, configuration_controller=INJECTED, shutter_controller=INJECTED,
                  runtime_path='/opt/openmotics/python/plugin_runtime',
                  plugins_path='/opt/openmotics/python/plugins',
                  plugin_config_path='/opt/openmotics/etc'):
@@ -47,7 +46,6 @@ class PluginController(object):
         self.__runtime_path = runtime_path
         self.__plugins_path = plugins_path
         self.__plugin_config_path = plugin_config_path
-        self.__output_controller = output_controller
 
         self.__stopped = True
         self.__logs = {}
