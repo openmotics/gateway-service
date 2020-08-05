@@ -271,7 +271,7 @@ class P1(OMPluginBase):
             self.assertEqual(response, {'bg_running': True,
                                         'input_data': [1, None],  # only rising edges should be triggered
                                         'input_data_version_2': {'input_id': 2, 'status': False},
-                                        'output_data': [(1, 5)],
+                                        'output_data': [[1, 5]],
                                         'output_data_version_2': output_event,
                                         'event_data': 1})
 
