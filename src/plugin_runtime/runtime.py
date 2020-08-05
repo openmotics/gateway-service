@@ -20,7 +20,7 @@ from plugin_runtime.web import WebInterfaceDispatcher
 
 class PluginRuntime:
 
-    def __init__(self, path, output_controller=INJECTED):
+    def __init__(self, path):
         self._stopped = False
         self._path = path.rstrip('/')
 
@@ -42,9 +42,6 @@ class PluginRuntime:
         self._stream = PluginIPCStream(sys.stdin, IO._log_exception)
 
         self._webinterface = WebInterfaceDispatcher(IO._log)
-
-        # this is needed to support older (version 1) output_status decorators
-        self.__output_controller = output_controller
 
     def _init_plugin(self):
         plugin_root = os.path.dirname(self._path)
