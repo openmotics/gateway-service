@@ -203,7 +203,7 @@ class P1(OMPluginBase):
                 'input_data': self._input_data,
                 'input_data_version_2': self._input_data_version_2,
                 'output_data': self._output_data,
-                'output_data_version_2': self._output_data_version_2
+                'output_data_version_2': self._output_data_version_2,
                 'event_data': self._event_data}
 
     @input_status
