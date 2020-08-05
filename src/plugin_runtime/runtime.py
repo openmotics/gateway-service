@@ -240,7 +240,7 @@ class PluginRuntime:
                     continue
                 if action_version == decorator_version == 2:  # v2
                     event = GatewayEvent.deserialize(data)
-                    IO._with_catch('output status', receiver, [event])
+                    IO._with_catch('output status', receiver, [event.data])
                     continue
             else:
                 error = NotImplementedError('Version {} is not supported for output event decorators'.format(decorator_version))
