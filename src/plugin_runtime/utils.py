@@ -62,15 +62,15 @@ def check_plugin(plugin_class):
     check_interfaces(plugin_class)
 
 
-def get_special_methods(plugin_object, decorator):
+def get_special_methods(plugin_object, decorator_name):
     """ Get all methods of a plugin object that have the given attribute. """
     def __check(member):
         """ Check if a member is a method and has the given attribute. """
-        return inspect.ismethod(member) and hasattr(member, decorator)
+        return inspect.ismethod(member) and hasattr(member, decorator_name)
 
     result = []
     for m in inspect.getmembers(plugin_object, predicate=__check):
-        target_method = m[1]
-        decorator_version = getattr(target_method, decorator).get('version', 1)
-        result.append((target_method, decorator_version))
+        decorated_method = m[1]
+        decorator_version = getattr(decorated_method, decorator_name).get('version', 1)
+        result.append((decorated_method, decorator_version))
     return result

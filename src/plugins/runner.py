@@ -166,16 +166,16 @@ class PluginRunner:
         event_json = input_event.serialize()
         self._do_async('input_status', {'event': event_json}, should_filter=True)
 
-    def process_output_status(self, data, payload_version=1):
-        if payload_version in [1, 2]:
-            if payload_version == 1:
+    def process_output_status(self, data, action_version=1):
+        if action_version in [1, 2]:
+            if action_version == 1:
                 payload = {'status': data}
             else:
                 event_json = data.serialize()
                 payload = {'event': event_json}
-            self._do_async('output_status', payload, should_filter=True, payload_version=payload_version)
+            self._do_async('output_status', payload, should_filter=True, action_version=action_version)
         else:
-            self.logger('Output status version {} not supported.'.format(payload_version))
+            self.logger('Output status version {} not supported.'.format(action_version))
 
     def process_shutter_status(self, status):
         self._do_async('shutter_status', status, should_filter=True)
@@ -249,15 +249,15 @@ class PluginRunner:
         else:
             self.logger('[Runner] Unkown async message: {0}'.format(response))
 
-    def _do_async(self, action, payload, should_filter=False, payload_version=1):
+    def _do_async(self, action, payload, should_filter=False, action_version=1):
         has_receiver = False
         for receiver in self._receivers:
-            # the payload version is linked to a specific decorator version
-            has_receiver |= (action == receiver['decorator'] and payload_version == receiver['decorator_version'])
+            # the action version is linked to a specific decorator version
+            has_receiver |= (action == receiver['decorator_name'] and action_version == receiver['decorator_version'])
         if not self._process_running or (should_filter and not has_receiver):
             return
         try:
-            self._async_command_queue.put({'action': action, 'payload': payload, 'payload_version': payload_version}, block=False)
+            self._async_command_queue.put({'action': action, 'payload': payload, 'action_version': action_version}, block=False)
         except Full:
             self.logger('Async action cannot be queued, queue is full')
 
@@ -266,13 +266,13 @@ class PluginRunner:
             try:
                 # Give it a timeout in order to check whether the plugin is not stopped.
                 command = self._async_command_queue.get(block=True, timeout=10)
-                self._do_command(command['action'], payload=command['payload'], payload_version=command['payload_version'])
+                self._do_command(command['action'], payload=command['payload'], action_version=command['action_version'])
             except Empty:
                 self._do_async('ping', {})
             except Exception as exception:
                 self.logger('[Runner] Failed to perform async command: {0}'.format(exception))
 
-    def _do_command(self, action, payload=None, timeout=None, payload_version=1):
+    def _do_command(self, action, payload=None, timeout=None, action_version=1):
         if payload is None:
             payload = {}
         self._commands_executed += 1
@@ -284,7 +284,7 @@ class PluginRunner:
 
         with self._command_lock:
             try:
-                command = self._create_command(action, payload, payload_version)
+                command = self._create_command(action, payload, action_version)
                 self._proc.stdin.write(PluginIPCStream.write(command))
                 self._proc.stdin.flush()
             except Exception:
@@ -307,13 +307,13 @@ class PluginRunner:
                 self._commands_failed += 1
                 raise Exception('Plugin did not respond')
 
-    def _create_command(self, action, payload=None, payload_version=1):
+    def _create_command(self, action, payload=None, action_version=1):
         if payload is None:
             payload = {}
         self._cid += 1
         command = {'cid': self._cid,
                    'action': action,
-                   'payload_version': payload_version}
+                   'action_version': action_version}
         command.update(payload)
         return command
 

@@ -129,7 +129,7 @@ class PluginController(object):
                 runner.stop()
             except Exception:
                 pass  # Try as best as possible to stop the plugin
-            self.log(runner.name, '[Runner] Could not start plugin', exception)
+            self.log(runner.name, '[Runner] Could not start plugin', exception, traceback.format_exc())
 
     def start_plugin(self, plugin_name):
         """ Request to start a runner """
@@ -334,9 +334,9 @@ class PluginController(object):
             for runner in self.__iter_running_runners():
                 # send states as payload version 1
                 states = [(state.id, state.dimmer) for state in self.__output_controller.get_output_statuses() if state.status]
-                runner.process_output_status(data=states, payload_version=1)
+                runner.process_output_status(data=states, action_version=1)
                 # send event as payload version 2
-                runner.process_output_status(data=event, payload_version=2)
+                runner.process_output_status(data=event, action_version=2)
         if event.type == GatewayEvent.Types.SHUTTER_CHANGE:
             # TODO: Implement versioning so a plugin can receive per-shutter events
             states = self.__shuttercontroller.get_states()

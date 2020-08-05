@@ -5,6 +5,8 @@ import traceback
 import time
 from threading import Thread
 
+import six
+
 sys.path.insert(0, '/opt/openmotics/python')
 
 from platform_utils import System
@@ -24,9 +26,9 @@ class PluginRuntime:
         self._stopped = False
         self._path = path.rstrip('/')
 
-        self._input_status_receivers = {}
-        self._output_status_receivers = {}
-        self._shutter_status_receivers = {}
+        self._input_status_receivers = []
+        self._output_status_receivers = []
+        self._shutter_status_receivers = []
         self._event_receivers = []
 
         self._name = None
@@ -76,21 +78,21 @@ class PluginRuntime:
                             'receive_events': self._event_receivers}
 
         # this creates a dict {version: [target_methods]} for all methods with decorators on them
-        for decorator, target_receivers in receiver_mapping.items():
-            for method, decorator_version in get_special_methods(self._plugin, decorator):
-                decorator_targets = target_receivers.setdefault(decorator_version, [])
-                decorator_targets.append(method)
+        receivers = set()
+        for decorator_name, target_receivers in six.iteritems(receiver_mapping):
+            for decorated_method, decorator_version in get_special_methods(self._plugin, decorator_name):
+                target_receivers.append(decorated_method)
+                # this set is used for checking which decorators and its versions are used in the plugin
+                registered_receiver = (decorator_name, decorator_version)  # sets can't take dicts
+                receivers.add(registered_receiver)
 
-            # this list is used for checking which decorators and versions are used in the plugin
-            for decorator_version, decorator_targets in target_receivers:
-                if len(decorator_targets) > 0:
-                    self._receivers.append({'decorator': decorator, 'decorator_version': decorator_version})
+        self._receivers = [{'decorator_name': decorator_name, 'decorator_version': decorator_version} for (decorator_name, decorator_version) in receivers]
 
         # Set the exposed methods
-        for method, decorator_version in get_special_methods(self._plugin, 'om_expose'):
-            self._exposes.append({'name': method.__name__,
-                                  'auth': method.om_expose['auth'],
-                                  'content_type': method.om_expose['content_type']})
+        for decorated_method, decorator_version in get_special_methods(self._plugin, 'om_expose'):
+            self._exposes.append({'name': decorated_method.__name__,
+                                  'auth': decorated_method.om_expose['auth'],
+                                  'content_type': decorated_method.om_expose['content_type']})
 
         # Set the metric definitions
         if has_interface(plugin_class, 'metrics', '1.0'):
@@ -98,22 +100,22 @@ class PluginRuntime:
                 self._metric_definitions = plugin_class.metric_definitions
 
         # Set the metric collectors
-        for method, decorator_version in get_special_methods(self._plugin, 'om_metric_data'):
-            self._metric_collectors.append({'name': method.__name__,
-                                            'interval': method.om_metric_data['interval']})
+        for decorated_method, decorator_version in get_special_methods(self._plugin, 'om_metric_data'):
+            self._metric_collectors.append({'name': decorated_method.__name__,
+                                            'interval': decorated_method.om_metric_data['interval']})
 
         # Set the metric receivers
-        for method, decorator_version in get_special_methods(self._plugin, 'om_metric_receive'):
-            self._metric_receivers.append({'name': method.__name__,
-                                           'source': method.om_metric_receive['source'],
-                                           'metric_type': method.om_metric_receive['metric_type'],
-                                           'interval': method.om_metric_receive['interval']})
+        for decorated_method, decorator_version in get_special_methods(self._plugin, 'om_metric_receive'):
+            self._metric_receivers.append({'name': decorated_method.__name__,
+                                           'source': decorated_method.om_metric_receive['source'],
+                                           'metric_type': decorated_method.om_metric_receive['metric_type'],
+                                           'interval': decorated_method.om_metric_receive['interval']})
 
     def _start_background_tasks(self):
         """ Start all background tasks. """
-        for method, decorator_version in get_special_methods(self._plugin, 'background_task'):
-            thread = Thread(target=PluginRuntime._run_background_task, args=(method,))
-            thread.name = 'Background thread ({0})'.format(method.__name__)
+        for decorated_method, decorator_version in get_special_methods(self._plugin, 'background_task'):
+            thread = Thread(target=PluginRuntime._run_background_task, args=(decorated_method,))
+            thread.name = 'Background thread ({0})'.format(decorated_method.__name__)
             thread.daemon = True
             thread.start()
 
@@ -136,7 +138,7 @@ class PluginRuntime:
                 continue
 
             action = command['action']
-            payload_version = command['payload_version']
+            action_version = command['action_version']
             response = {'cid': command['cid'], 'action': action}
             try:
                 ret = None
@@ -145,16 +147,16 @@ class PluginRuntime:
                 elif action == 'stop':
                     ret = self._handle_stop()
                 elif action == 'input_status':
-                    event = GatewayEvent.deserialize(command['event'])
-                    ret = self._handle_input_status(event)
+                    ret = self._handle_input_status(command['event'])
                 elif action == 'output_status':
-                    if payload_version == 1:
+                    if action_version == 1:
                         # version 1 sends output states of all 'on' outputs to the plugin as a list
-                        ret = self._handle_output_status(command['status'])
+                        data = command['status']
                     else:
                         # Version 2 will send the gateway event per output and in a dict format
                         # also there is no more filtering on the 'on' outputs, a change in any direction is sent downstream as an event
-                        ret = self._handle_output_status(command['event'])
+                        data = command['event']
+                    ret = self._handle_output_status(data, action_version=action_version)
                 elif action == 'shutter_status':
                     ret = self._handle_shutter_status(command)
                 elif action == 'receive_events':
@@ -229,15 +231,17 @@ class PluginRuntime:
                 error = NotImplementedError('Version {} is not supported for input status decorators'.format(version))
                 IO._log_exception('input status', error)
 
-    def _handle_output_status(self, data):
+    def _handle_output_status(self, data, action_version=1):
         for receiver in self._output_status_receivers:
             decorator_version = receiver.output_status.get('version', 1)
-            if decorator_version == 1:
-                status = data
-                IO._with_catch('output status', receiver, [status])
-            elif decorator_version == 2:
-                event = GatewayEvent.deserialize(data)
-                IO._with_catch('output status', receiver, [event])
+            if decorator_version in [1, 2]:
+                if action_version == decorator_version == 1:  # v1 use case
+                    IO._with_catch('output status', receiver, [data])
+                    continue
+                if action_version == decorator_version == 2:  # v2
+                    event = GatewayEvent.deserialize(data)
+                    IO._with_catch('output status', receiver, [event])
+                    continue
             else:
                 error = NotImplementedError('Version {} is not supported for output event decorators'.format(decorator_version))
                 IO._log_exception('output status', error)
