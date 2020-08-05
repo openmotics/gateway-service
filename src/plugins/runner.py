@@ -266,13 +266,13 @@ class PluginRunner:
             try:
                 # Give it a timeout in order to check whether the plugin is not stopped.
                 command = self._async_command_queue.get(block=True, timeout=10)
-                self._do_command(command['action'], command['payload'])
+                self._do_command(command['action'], payload=command['payload'], payload_version=command['payload_version'])
             except Empty:
                 self._do_async('ping', {})
             except Exception as exception:
                 self.logger('[Runner] Failed to perform async command: {0}'.format(exception))
 
-    def _do_command(self, action, payload=None, timeout=None):
+    def _do_command(self, action, payload=None, timeout=None, payload_version=1):
         if payload is None:
             payload = {}
         self._commands_executed += 1
@@ -284,7 +284,7 @@ class PluginRunner:
 
         with self._command_lock:
             try:
-                command = self._create_command(action, payload)
+                command = self._create_command(action, payload, payload_version)
                 self._proc.stdin.write(PluginIPCStream.write(command))
                 self._proc.stdin.flush()
             except Exception:
@@ -307,12 +307,13 @@ class PluginRunner:
                 self._commands_failed += 1
                 raise Exception('Plugin did not respond')
 
-    def _create_command(self, action, payload=None):
+    def _create_command(self, action, payload=None, payload_version=1):
         if payload is None:
             payload = {}
         self._cid += 1
         command = {'cid': self._cid,
-                   'action': action}
+                   'action': action,
+                   'payload_version': payload_version}
         command.update(payload)
         return command
 
