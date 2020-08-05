@@ -36,12 +36,14 @@ class PluginController(object):
 
     @Inject
     def __init__(self,
-                 web_interface=INJECTED, configuration_controller=INJECTED, shutter_controller=INJECTED,
+                 web_interface=INJECTED, configuration_controller=INJECTED, output_controller=INJECTED,
+                 shutter_controller=INJECTED,
                  runtime_path='/opt/openmotics/python/plugin_runtime',
                  plugins_path='/opt/openmotics/python/plugins',
                  plugin_config_path='/opt/openmotics/etc'):
         self.__webinterface = web_interface
         self.__config_controller = configuration_controller
+        self.__output_controller = output_controller
         self.__shuttercontroller = shutter_controller  # type: ShutterController
         self.__runtime_path = runtime_path
         self.__plugins_path = plugins_path
@@ -330,7 +332,11 @@ class PluginController(object):
                 runner.process_input_status(event)
         if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             for runner in self.__iter_running_runners():
-                runner.process_output_status(event)
+                # send states as payload version 1
+                states = [(state.id, state.dimmer) for state in self.__output_controller.get_output_statuses() if state.status]
+                runner.process_output_status(data=states, payload_version=1)
+                # send event as payload version 2
+                runner.process_output_status(data=event, payload_version=2)
         if event.type == GatewayEvent.Types.SHUTTER_CHANGE:
             # TODO: Implement versioning so a plugin can receive per-shutter events
             states = self.__shuttercontroller.get_states()
