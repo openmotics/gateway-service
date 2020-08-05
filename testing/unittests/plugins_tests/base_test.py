@@ -190,6 +190,7 @@ class P1(OMPluginBase):
         self._input_data = None
         self._input_data_version_2 = None
         self._output_data = None
+        self._output_data_version_2 = None
         self._event_data = None
 
     @om_expose(auth=True)
@@ -202,6 +203,7 @@ class P1(OMPluginBase):
                 'input_data': self._input_data,
                 'input_data_version_2': self._input_data_version_2,
                 'output_data': self._output_data,
+                'output_data_version_2': self._output_data_version_2
                 'event_data': self._event_data}
 
     @input_status
@@ -219,6 +221,10 @@ class P1(OMPluginBase):
     @output_status
     def output(self, output_status_inst):
         self._output_data = output_status_inst
+        
+    @output_status(version=2)
+    def output(self, output_status_inst):
+        self._output_data_version_2 = output_status_inst
         
     @receive_events
     def recv_events(self, code):
@@ -249,12 +255,13 @@ class P1(OMPluginBase):
             controller.process_observer_event(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE, data=falling_input_event))
             output_event = {'id': 1,
                             'status': {'on': True,
-                                       'value': 5},
+                                       'value': 5,
+                                       'locked': True},
                             'location': {'room_id': 5}}
             controller.process_observer_event(GatewayEvent(event_type=GatewayEvent.Types.OUTPUT_CHANGE, data=output_event))
             controller.process_event(1)
 
-            keys = ['input_data', 'input_data_version_2', 'output_data', 'event_data']
+            keys = ['input_data', 'input_data_version_2', 'output_data', 'output_data_version_2', 'event_data']
             start = time.time()
             while time.time() - start < 2:
                 response = controller._request('P1', 'get_log')
@@ -264,7 +271,8 @@ class P1(OMPluginBase):
             self.assertEqual(response, {'bg_running': True,
                                         'input_data': [1, None],  # only rising edges should be triggered
                                         'input_data_version_2': {'input_id': 2, 'status': False},
-                                        'output_data': [[1, 5]],
+                                        'output_data': [(1, 5)],
+                                        'output_data_version_2': output_event,
                                         'event_data': 1})
 
             plugin_logs = controller.get_logs().get('P1', '')
