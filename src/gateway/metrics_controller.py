@@ -484,10 +484,17 @@ class MetricsController(object):
             if definition is None:
                 continue
             # Validate metric based on definition
-            for tag in definition['tags']:
-                if tag not in metric['tags'] or metric['tags'][tag] is None:
-                    log('Metric tag {0} should be defined'.format(tag))
-                    metric_ok = False
+            if len(metric['tags']) == 0:
+                log('At least one metric tag should be defined')
+                metric_ok = False
+            else:
+                for tag_name, tag_value in metric['tags']:  # tags are optional but should be in the definition
+                    if tag_name not in definition['tags']:
+                        log('Metric tag {0} should be defined'.format(tag_name))
+                        metric_ok = False
+                    if tag_value is None:
+                        log('Metric tag {0} should not be None'.format(tag_name))
+                        metric_ok = False
             metric_values = set(metric['values'].keys())
             if len(metric_values) == 0:
                 log('Metric should have at least one value')
