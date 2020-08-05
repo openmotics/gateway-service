@@ -5,10 +5,6 @@ import traceback
 import time
 from threading import Thread
 
-import six
-
-from ioc import INJECTED
-
 sys.path.insert(0, '/opt/openmotics/python')
 
 from platform_utils import System
