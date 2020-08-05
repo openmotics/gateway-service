@@ -79,8 +79,14 @@ def input_status(method=None, version=1):
 def output_status(method=None, version=1):
     """
     Decorator to indicate that the method should receive output status messages.
+
+    Version 1
     The receiving method should accept one parameter, a list of tuples (output, dimmer value).
     Each time an output status is changed, the method will be called.
+
+    Version 2
+    The receiving method should accept output_event data, only the output that has changed will be sent
+    sample data:  {'id': 1, 'status': {'on': True, 'value': 5}, 'location': {'room_id': 5}}
 
     Important! This method should not block, as this will result in an unresponsive system.
     Please use a separate thread to perform complex actions on output status messages.
