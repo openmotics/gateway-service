@@ -292,13 +292,16 @@ class P1(OMPluginBase):
         def __init__(self, webservice, logger):
             OMPluginBase.__init__(self, webservice, logger)
 
+        @input_status(version=3)
+        def input_with_unsupported_decorator(self, test_data):
+            pass
+            
         @output_status(version=3)
-        def method_with_unsupported_decorator(self, test_data):
+        def output_with_unsupported_decorator(self, test_data):
             pass
     """)
 
                 output_controller = Mock(OutputController)
-                output_controller.get_output_statuses = lambda: [OutputStateDTO(id=1, status=True, dimmer=5)]
                 controller = PluginControllerTest._get_controller(output_controller=output_controller)
 
                 with self.assertRaises(NotImplementedError) as context:
