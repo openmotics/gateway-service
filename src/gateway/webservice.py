@@ -2023,7 +2023,7 @@ class WebInterface(object):
                 'platform': str(Platform.get_platform())}
 
     @openmotics_api(auth=True, plugin_exposed=False)
-    def update(self, version, md5, update_data):
+    def update(self, version, md5, update_data=None):
         """
         Perform an update.
 
@@ -2034,15 +2034,14 @@ class WebInterface(object):
         :param update_data: a tgz file containing the update script (update.sh) and data.
         :type update_data: multipart/form-data encoded byte string.
         """
-        update_data = update_data.file.read()
-
         if not os.path.exists(constants.get_update_dir()):
             os.mkdir(constants.get_update_dir())
 
-        with open(constants.get_update_file(), "wb") as update_file:
-            update_file.write(update_data)
-        with open(constants.get_update_output_file(), "w") as output_file:
-            output_file.write('\n')  # Truncate file
+        if update_data:
+            logger.info('using old style update.tgz')
+            update_data = update_data.file.read()
+            with open(constants.get_update_file(), "wb") as update_file:
+                update_file.write(update_data)
 
         subprocess.Popen(constants.get_update_cmd(version, md5), close_fds=True)
 

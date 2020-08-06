@@ -107,11 +107,6 @@ def get_update_cmd(version, md5):
     return ["/usr/bin/python", "/opt/openmotics/python/update.py", str(version), str(md5)]
 
 
-def get_update_script():
-    """ Get the bash script that runs the update after the tgz file is extracted. """
-    return "/opt/openmotics/Updater/updater.sh"
-
-
 def get_timezone_file():
     """ Get the path of the timezone file. """
     return "/opt/openmotics/etc/timezone"
