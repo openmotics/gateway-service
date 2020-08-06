@@ -284,8 +284,8 @@ class P1(OMPluginBase):
     import time
     from plugins.base import *
 
-    class Test(OMPluginBase):
-        name = 'Test'
+    class UnsupportedPlugin(OMPluginBase):
+        name = 'UnsupportedPlugin'
         version = '0.1.0'
         interfaces = [('webui', '1.0')]
 
@@ -311,7 +311,7 @@ class P1(OMPluginBase):
         finally:
             if controller is not None:
                 controller.stop()
-            PluginControllerTest._destroy_plugin('Test')
+            PluginControllerTest._destroy_plugin('UnsupportedPlugin')
 
     @mark.slow
     def test_update_plugin(self):
