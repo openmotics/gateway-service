@@ -35,7 +35,7 @@ class PluginRunner:
         self.version = None
         self.interfaces = None
 
-        self._decorators_in_use = []
+        self._decorators_in_use = {}
         self._exposes = []
         self._metric_collectors = []
         self._metric_receivers = []

@@ -214,10 +214,6 @@ class P1(OMPluginBase):
     def input_version_2(self, input_status_inst):
         self._input_data_version_2 = input_status_inst
         
-    @input_status(version=3)
-    def input_version_3(self, input_status_inst):
-        self._input_data_version_3 = input_status_inst
-
     @output_status
     def output(self, output_status_inst):
         self._output_data = output_status_inst
@@ -274,13 +270,45 @@ class P1(OMPluginBase):
                                         'output_data': [[1, 5]],
                                         'output_data_version_2': output_event,
                                         'event_data': 1})
-
-            plugin_logs = controller.get_logs().get('P1', '')
-            self.assertTrue('Version 3 is not supported for input status decorators' in plugin_logs)
         finally:
             if controller is not None:
                 controller.stop()
             PluginControllerTest._destroy_plugin('P1')
+
+        @mark.slow
+        def test_get_unsupported_decorators(self):
+            """ Test getting special methods on a plugin. """
+            controller = None
+            try:
+                PluginControllerTest._create_plugin('test-plugin', """
+    import time
+    from plugins.base import *
+
+    class Test(OMPluginBase):
+        name = 'Test'
+        version = '0.1.0'
+        interfaces = [('webui', '1.0')]
+
+        def __init__(self, webservice, logger):
+            OMPluginBase.__init__(self, webservice, logger)
+
+        @output_status(version=3)
+        def method_with_unsupported_decorator(self, test_data):
+            pass
+    """)
+
+                output_controller = Mock(OutputController)
+                output_controller.get_output_statuses = lambda: [OutputStateDTO(id=1, status=True, dimmer=5)]
+                controller = PluginControllerTest._get_controller(output_controller=output_controller)
+
+                with self.assertRaises(NotImplementedError) as context:
+                    controller.start()
+                    matches = ['Version', 'is not supported']
+                    self.assertTrue(all(match in context.exception for match in matches))
+            finally:
+                if controller is not None:
+                    controller.stop()
+                PluginControllerTest._destroy_plugin('Test')
 
     @mark.slow
     def test_update_plugin(self):
