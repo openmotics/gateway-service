@@ -275,12 +275,12 @@ class P1(OMPluginBase):
                 controller.stop()
             PluginControllerTest._destroy_plugin('P1')
 
-        @mark.slow
-        def test_get_unsupported_decorators(self):
-            """ Test getting special methods on a plugin. """
-            controller = None
-            try:
-                PluginControllerTest._create_plugin('test-plugin', """
+    @mark.slow
+    def test_get_unsupported_decorators(self):
+        """ Test getting special methods on a plugin. """
+        controller = None
+        try:
+            PluginControllerTest._create_plugin('test-plugin', """
     import time
     from plugins.base import *
 
@@ -301,17 +301,17 @@ class P1(OMPluginBase):
             pass
     """)
 
-                output_controller = Mock(OutputController)
-                controller = PluginControllerTest._get_controller(output_controller=output_controller)
+            output_controller = Mock(OutputController)
+            controller = PluginControllerTest._get_controller(output_controller=output_controller)
 
-                with self.assertRaises(NotImplementedError) as context:
-                    controller.start()
-                    matches = ['Version', 'is not supported']
-                    self.assertTrue(all(match in context.exception for match in matches))
-            finally:
-                if controller is not None:
-                    controller.stop()
-                PluginControllerTest._destroy_plugin('Test')
+            with self.assertRaises(NotImplementedError) as context:
+                controller.start()
+                matches = ['Version', 'is not supported']
+                self.assertTrue(all(match in context.exception for match in matches))
+        finally:
+            if controller is not None:
+                controller.stop()
+            PluginControllerTest._destroy_plugin('Test')
 
     @mark.slow
     def test_update_plugin(self):
