@@ -22,38 +22,6 @@ import logging
 logger = logging.getLogger('openmotics')
 
 
-def om_expose(method=None, auth=True, content_type='application/json'):
-    """
-    Decorator to expose a method of the plugin class through the
-    webinterface. The url will be /plugins/<plugin-name>/<method>.
-
-    Normally an authentication token is required to access the method.
-    The token will be checked and removed automatically when using the
-    following construction:
-
-    @om_expose
-    def method_to_expose(self, ...):
-        pass
-
-    It is possible to expose a method without authentication: no token
-    will be required to access the method, this is done as follows:
-
-    @om_expose(auth=False)
-    def method_to_expose(self, ...):
-        pass
-    """
-    def decorate(_method):
-        _method.om_expose = {'method': _method,
-                             'auth': auth,
-                             'content_type': content_type,
-                             'version': 1}
-        return _method
-
-    if method is not None:
-        return decorate(method)
-    return decorate
-
-
 def input_status(method=None, version=1):
     """
     Decorator to indicate that the method should receive input status messages.
@@ -101,7 +69,7 @@ def output_status(method=None, version=1):
     return wrapper
 
 
-def shutter_status(method):
+def shutter_status(method=None, version=1):
     """
     Decorator to indicate that the method should receive shutter status messages.
     The receiving method should accept one parameter, the list of shutter states.
@@ -110,12 +78,20 @@ def shutter_status(method):
     Important! This method should not block, as this will result in an unresponsive system.
     Please use a separate thread to perform complex actions on shutten status messages.
     """
-    args, varargs, kwargs, _ = inspect.getargspec(method)
-    args.pop(0)
+    def add_detail(method):
+        args, varargs, kwargs, _ = inspect.getargspec(method)
+        args.pop(0)
+        return len(args) > 1 or (varargs is not None and len(varargs) >= 1) or kwargs is not None
 
-    method.shutter_status = {'add_detail': len(args) > 1 or (varargs is not None and len(varargs) >= 1) or kwargs is not None,
-                             'version': 1}
-    return method
+    if method is not None:
+        method.shutter_status = {'add_detail': add_detail(method),
+                                 'version': 1}
+        return method
+
+    def wrapper(_method):
+        _method.shutter_status = {'version': version}
+        return _method
+    return wrapper
 
 
 def receive_events(method=None, version=1):
@@ -168,6 +144,37 @@ def on_remove(method=None, version=1):
     return wrapper
 
 
+def om_expose(method=None, auth=True, content_type='application/json'):
+    """
+    Decorator to expose a method of the plugin class through the
+    webinterface. The url will be /plugins/<plugin-name>/<method>.
+
+    Normally an authentication token is required to access the method.
+    The token will be checked and removed automatically when using the
+    following construction:
+
+    @om_expose
+    def method_to_expose(self, ...):
+        pass
+
+    It is possible to expose a method without authentication: no token
+    will be required to access the method, this is done as follows:
+
+    @om_expose(auth=False)
+    def method_to_expose(self, ...):
+        pass
+    """
+    def decorate(_method):
+        _method.om_expose = {'method': _method,
+                             'auth': auth,
+                             'content_type': content_type}
+        return _method
+
+    if method is not None:
+        return decorate(method)
+    return decorate
+
+
 def om_metric_data(interval=5):
     """
     Decorator to indicate that the method should be called periodically to retrieve metrics
@@ -179,8 +186,7 @@ def om_metric_data(interval=5):
         interval = 5
 
     def decorate(method):
-        method.om_metric_data = {'interval': interval,
-                                 'version': 1}
+        method.om_metric_data = {'interval': interval}
         return method
     return decorate
 
@@ -194,7 +200,6 @@ def om_metric_receive(source=None, metric_type=None, interval=None):
         """ The decorated method. """
         method.om_metric_receive = {'source': source,
                                     'metric_type': metric_type,
-                                    'interval': interval,
-                                    'version': 1}
+                                    'interval': interval}
         return method
     return decorate

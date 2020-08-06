@@ -5,6 +5,8 @@ import subprocess
 import sys
 import time
 import traceback
+
+import six
 import ujson as json
 from threading import Thread, Lock
 from six.moves.queue import Queue, Empty, Full
@@ -33,7 +35,7 @@ class PluginRunner:
         self.version = None
         self.interfaces = None
 
-        self._receivers = []
+        self._decorators_in_use = []
         self._exposes = []
         self._metric_collectors = []
         self._metric_receivers = []
@@ -74,7 +76,7 @@ class PluginRunner:
         self.version = start_out['version']
         self.interfaces = start_out['interfaces']
 
-        self._receivers = start_out['receivers']
+        self._decorators_in_use = start_out['decorators']
         self._exposes = start_out['exposes']
         self._metric_collectors = start_out['metric_collectors']
         self._metric_receivers = start_out['metric_receivers']
@@ -251,9 +253,9 @@ class PluginRunner:
 
     def _do_async(self, action, payload, should_filter=False, action_version=1):
         has_receiver = False
-        for receiver in self._receivers:
+        for decorator_name, decorator_versions in six.iteritems(self._decorators_in_use):
             # the action version is linked to a specific decorator version
-            has_receiver |= (action == receiver['decorator_name'] and action_version == receiver['decorator_version'])
+            has_receiver |= (action == decorator_name and action_version in decorator_versions)
         if not self._process_running or (should_filter and not has_receiver):
             return
         try:
