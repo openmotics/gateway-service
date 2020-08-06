@@ -281,25 +281,29 @@ class P1(OMPluginBase):
         controller = None
         try:
             PluginControllerTest._create_plugin('UnsupportedPlugin', """
-    import time
-    from plugins.base import *
+import time
+from plugins.base import *
 
-    class UnsupportedPlugin(OMPluginBase):
-        name = 'UnsupportedPlugin'
-        version = '0.1.0'
-        interfaces = [('webui', '1.0')]
+class UnsupportedPlugin(OMPluginBase):
+    name = 'UnsupportedPlugin'
+    version = '0.1.0'
+    interfaces = [('webui', '1.0')]
+        
+    def __init__(self, webservice, logger):
+        OMPluginBase.__init__(self, webservice, logger)
+        
+    @om_expose(auth=True)
+    def html_index(self):
+        return 'HTML'
 
-        def __init__(self, webservice, logger):
-            OMPluginBase.__init__(self, webservice, logger)
-
-        @input_status(version=3)
-        def input_with_unsupported_decorator(self, test_data):
-            pass
-            
-        @output_status(version=3)
-        def output_with_unsupported_decorator(self, test_data):
-            pass
-    """)
+    @input_status(version=3)
+    def input_with_unsupported_decorator(self, test_data):
+        pass
+        
+    @output_status(version=3)
+    def output_with_unsupported_decorator(self, test_data):
+        pass
+""")
 
             output_controller = Mock(OutputController)
             controller = PluginControllerTest._get_controller(output_controller=output_controller)
@@ -307,8 +311,8 @@ class P1(OMPluginBase):
             controller.start()
             # get the logs and check if we see the output in the logs
             plugin_logs = controller.get_logs()['UnsupportedPlugin']
-            matches = ['Version', 'is not supported']
-            self.assertTrue(all(match in plugin_logs for match in matches))
+            matches = ['Decorator', 'version', 'is not supported']
+            self.assertTrue(all(match in plugin_logs for match in matches), plugin_logs)
         finally:
             if controller is not None:
                 controller.stop()

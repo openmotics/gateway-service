@@ -82,11 +82,9 @@ class PluginRuntime:
         for decorator_name, decorated_methods in six.iteritems(self._decorated_methods):
             for decorated_method, decorator_version in get_special_methods(self._plugin, decorator_name):
                 # only add if supported, raise if an unsupported version is found
-                if decorator_version in PluginRuntime.SUPPORTED_DECORATOR_VERSIONS[decorator_name]:
-                    decorated_methods.append(decorated_method)  # add the decorated method to the list
-
-                else:
+                if decorator_version not in PluginRuntime.SUPPORTED_DECORATOR_VERSIONS[decorator_name]:
                     raise NotImplementedError('Decorator {} version {} is not supported'.format(decorator_name, decorator_version))
+                decorated_methods.append(decorated_method)  # add the decorated method to the list
 
         # Set the exposed methods
         for decorated_method, decorator_version in get_special_methods(self._plugin, 'om_expose'):
