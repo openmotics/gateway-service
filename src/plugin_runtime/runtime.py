@@ -168,7 +168,7 @@ class PluginRuntime:
                     else:
                         # Version 2 will send the gateway event per output and in a dict format
                         # also there is no more filtering on the 'on' outputs, a change in any direction is sent downstream as an event
-                        ret = self._handle_output_status(command['event'])
+                        ret = self._handle_output_status(command['event'], data_type='event')
                 elif action == 'shutter_status':
                     ret = self._handle_shutter_status(command)
                 elif action == 'receive_events':
@@ -241,18 +241,21 @@ class PluginRuntime:
                 error = NotImplementedError('Version {} is not supported for input status decorators'.format(decorator_version))
                 IO._log_exception('input status', error)
 
-    def _handle_output_status(self, data):
+    def _handle_output_status(self, data, data_type='status'):
+        status = data if data_type == 'status' else None
+        event = GatewayEvent.deserialize(data) if data_type == 'event' else None
         for receiver in self._decorated_methods['output_status']:
             decorator_version = receiver.output_status.get('version', 1)
             if decorator_version == 1:
-                status = data
-                IO._with_catch('output status', receiver, [status])
+                if status:
+                    IO._with_catch('output status', receiver, [status])
             elif decorator_version == 2:
-                event = GatewayEvent.deserialize(data)
-                IO._with_catch('output status', receiver, [event.data])
+                if event:
+                    IO._with_catch('output status', receiver, [event.data])
             else:
                 error = NotImplementedError('Version {} is not supported for output status decorators'.format(decorator_version))
-                IO._log_exception('receive events', error)
+                IO._log_exception('output status', error)
+
 
     def _handle_shutter_status(self, status):
         for receiver in self._decorated_methods['shutter_status']:
