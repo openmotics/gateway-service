@@ -280,7 +280,7 @@ class P1(OMPluginBase):
         """ Test getting special methods on a plugin. """
         controller = None
         try:
-            PluginControllerTest._create_plugin('test-plugin', """
+            PluginControllerTest._create_plugin('UnsupportedPlugin', """
     import time
     from plugins.base import *
 
@@ -303,11 +303,12 @@ class P1(OMPluginBase):
 
             output_controller = Mock(OutputController)
             controller = PluginControllerTest._get_controller(output_controller=output_controller)
-
-            with self.assertRaises(NotImplementedError) as context:
-                controller.start()
+            # the plugin will fail to load, but only log this
+            controller.start()
+            # get the logs and check if we see the output in the logs
+            plugin_logs = controller.get_logs()['UnsupportedPlugin']
             matches = ['Version', 'is not supported']
-            self.assertTrue(all(match in context.exception for match in matches))
+            self.assertTrue(all(match in plugin_logs for match in matches))
         finally:
             if controller is not None:
                 controller.stop()
