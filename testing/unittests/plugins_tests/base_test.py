@@ -306,8 +306,8 @@ class P1(OMPluginBase):
 
             with self.assertRaises(NotImplementedError) as context:
                 controller.start()
-                matches = ['Version', 'is not supported']
-                self.assertTrue(all(match in context.exception for match in matches))
+            matches = ['Version', 'is not supported']
+            self.assertTrue(all(match in context.exception for match in matches))
         finally:
             if controller is not None:
                 controller.stop()

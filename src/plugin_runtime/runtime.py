@@ -256,7 +256,6 @@ class PluginRuntime:
                 error = NotImplementedError('Version {} is not supported for output status decorators'.format(decorator_version))
                 IO._log_exception('output status', error)
 
-
     def _handle_shutter_status(self, status):
         for receiver in self._decorated_methods['shutter_status']:
             decorator_version = receiver.shutter_status.get('version', 1)
