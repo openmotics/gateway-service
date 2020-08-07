@@ -32,8 +32,10 @@ from pytest import mark
 
 import plugin_runtime
 from gateway.dto import OutputStateDTO
+from gateway.enums import ShutterEnums
 from gateway.events import GatewayEvent
 from gateway.output_controller import OutputController
+from gateway.shutter_controller import ShutterController
 from ioc import SetTestMode, SetUpTestInjections
 from plugin_runtime.base import PluginConfigChecker, PluginException
 
@@ -83,8 +85,8 @@ class PluginControllerTest(unittest.TestCase):
             shutil.rmtree(path)
 
     @staticmethod
-    def _get_controller(output_controller=None):
-        SetUpTestInjections(shutter_controller=Mock(),
+    def _get_controller(output_controller=None, shutter_controller=None):
+        SetUpTestInjections(shutter_controller=shutter_controller,
                             web_interface=None,
                             configuration_controller=None,
                             output_controller=output_controller)
@@ -264,12 +266,11 @@ class P1(OMPluginBase):
                 if all(response[key] is not None for key in keys):
                     break
                 time.sleep(0.1)
-            self.assertEqual(response, {'bg_running': True,
-                                        'input_data': [1, None],  # only rising edges should be triggered
-                                        'input_data_version_2': {'input_id': 2, 'status': False},
-                                        'output_data': [[1, 5]],
-                                        'output_data_version_2': output_event,
-                                        'event_data': 1})
+            self.assertEqual(response['bg_running'], True)
+            self.assertEqual(response['input_data'], [1, None])  # only rising edges should be triggered
+            self.assertEqual(response['output_data'],  [[1, 5]])
+            self.assertEqual(response['output_data_version_2'],output_event)
+            self.assertEqual(response['event_data'], 1)
         finally:
             if controller is not None:
                 controller.stop()
@@ -291,7 +292,7 @@ class UnsupportedPlugin(OMPluginBase):
         
     def __init__(self, webservice, logger):
         OMPluginBase.__init__(self, webservice, logger)
-        
+
     @om_expose(auth=True)
     def html_index(self):
         return 'HTML'
@@ -299,12 +300,11 @@ class UnsupportedPlugin(OMPluginBase):
     @input_status(version=3)
     def input_with_unsupported_decorator(self, test_data):
         pass
-        
+
     @output_status(version=3)
     def output_with_unsupported_decorator(self, test_data):
         pass
 """)
-
             output_controller = Mock(OutputController)
             controller = PluginControllerTest._get_controller(output_controller=output_controller)
             # the plugin will fail to load, but only log this
@@ -317,6 +317,85 @@ class UnsupportedPlugin(OMPluginBase):
             if controller is not None:
                 controller.stop()
             PluginControllerTest._destroy_plugin('UnsupportedPlugin')
+
+    @mark.slow
+    def test_get_shutter_decorators(self):
+        """ Test getting shutter decorators on a plugin. """
+        controller = None
+        try:
+            PluginControllerTest._create_plugin('ShutterPlugin', """
+from plugins.base import *
+
+class ShutterPlugin(OMPluginBase):
+    name = 'ShutterPlugin'
+    version = '0.1.0'
+    interfaces = [('webui', '1.0')]
+        
+    def __init__(self, webservice, logger):
+        OMPluginBase.__init__(self, webservice, logger)
+        self._shutter_data_v1 = None
+        self._shutter_data_v1_detail = None
+        self._shutter_data_v2 = None
+        self._shutter_data_v3 = None
+        
+    @om_expose(auth=True)
+    def html_index(self):
+        return 'HTML'
+
+    @om_expose(auth=False)
+    def get_log(self):
+        return {'shutter_data_v1': self._shutter_data_v1,
+                'shutter_data_v1_detail': self._shutter_data_v1_detail,
+                'shutter_data_v2': self._shutter_data_v2,
+                'shutter_data_v3': self._shutter_data_v3}
+                
+    @shutter_status
+    def shutter_v1(self, test_data):
+        self._shutter_data_v1 = test_data
+        
+    @shutter_status
+    def shutter_v1_detail(self, test_data, detail):
+        self._shutter_data_v1_detail = (test_data, detail)
+        
+    @shutter_status(version=2)
+    def shutter_v2(self, test_data, detail):
+        self._shutter_data_v2 = (test_data, detail)
+        
+    @shutter_status(version=3)
+    def shutter_v3(self, shutter_event):
+        self._shutter_data_v3 = shutter_event
+""")
+            shutter_controller = Mock(ShutterController)
+            shutter_status = [ShutterEnums.State.STOPPED]
+            detail_for_shutter = {1: {'state': ShutterEnums.State.STOPPED,
+                                      'actual_position': None,
+                                      'desired_position': None,
+                                      'last_change': 1596787761.147892}}
+            shutter_controller.get_states = lambda: {'status': shutter_status,
+                                                     'detail':detail_for_shutter}
+            controller = PluginControllerTest._get_controller(shutter_controller=shutter_controller)
+            controller.start()
+
+            shutter_event = GatewayEvent(event_type=GatewayEvent.Types.SHUTTER_CHANGE, data={'some_random_key': 'some_random_value'})
+            controller.process_observer_event(shutter_event)
+
+            keys = ['shutter_data_v1', 'shutter_data_v1_detail', 'shutter_data_v2', 'shutter_data_v3']
+            start = time.time()
+            response = None
+            while time.time() - start < 2:
+                response = controller._request('ShutterPlugin', 'get_log')
+                if all(response[key] is not None for key in keys):
+                    break
+                time.sleep(0.1)
+            self.maxDiff = None
+            self.assertEqual(response['shutter_data_v1'], shutter_status)
+            self.assertEqual(response['shutter_data_v1_detail'], [shutter_status, detail_for_shutter])
+            self.assertEqual(response['shutter_data_v2'], [shutter_status, detail_for_shutter])
+            self.assertEqual(response['shutter_data_v3'], shutter_event.data)
+        finally:
+            if controller is not None:
+                controller.stop()
+            PluginControllerTest._destroy_plugin('ShutterPlugin')
 
     @mark.slow
     def test_update_plugin(self):

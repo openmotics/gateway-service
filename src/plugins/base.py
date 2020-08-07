@@ -331,17 +331,20 @@ class PluginController(object):
             for runner in self.__iter_running_runners():
                 runner.process_input_status(event)
         if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
+            # TODO: deprecate old versions that use state and move to events
+            states = [(state.id, state.dimmer) for state in self.__output_controller.get_output_statuses() if state.status]
             for runner in self.__iter_running_runners():
-                # send states as payload version 1
-                states = [(state.id, state.dimmer) for state in self.__output_controller.get_output_statuses() if state.status]
-                runner.process_output_status(data=states, action_version=1)
-                # send event as payload version 2
-                runner.process_output_status(data=event, action_version=2)
+                runner.process_output_status(data=states, action_version=1)  # send states as action version 1
+                runner.process_output_status(data=event, action_version=2)   # send event as action version 2
         if event.type == GatewayEvent.Types.SHUTTER_CHANGE:
-            # TODO: Implement versioning so a plugin can receive per-shutter events
+            # TODO: deprecate old versions that use state and move to events
             states = self.__shuttercontroller.get_states()
+            status = states['status']
+            details = states['detail']
             for runner in self.__iter_running_runners():
-                runner.process_shutter_status(states)
+                runner.process_shutter_status(data=status, action_version=1)  # send states as action version 1
+                runner.process_shutter_status(data=(status, details), action_version=2)  # send event as action version 2
+                runner.process_shutter_status(data=event, action_version=3)  # send event as action version 3
 
     def process_event(self, code):
         """ Should be called when an event is triggered, notifies all plugins. """

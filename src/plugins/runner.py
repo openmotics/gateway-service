@@ -166,7 +166,7 @@ class PluginRunner:
 
     def process_input_status(self, input_event):
         event_json = input_event.serialize()
-        self._do_async('input_status', {'event': event_json}, should_filter=True)
+        self._do_async(action='input_status', payload={'event': event_json}, should_filter=True)
 
     def process_output_status(self, data, action_version=1):
         if action_version in [1, 2]:
@@ -175,12 +175,23 @@ class PluginRunner:
             else:
                 event_json = data.serialize()
                 payload = {'event': event_json}
-            self._do_async('output_status', payload, should_filter=True, action_version=action_version)
+            self._do_async(action='output_status', payload=payload, should_filter=True, action_version=action_version)
         else:
             self.logger('Output status version {} not supported.'.format(action_version))
 
-    def process_shutter_status(self, status):
-        self._do_async('shutter_status', status, should_filter=True)
+    def process_shutter_status(self, data, action_version=1):
+        if action_version in [1, 2, 3]:
+            if action_version == 1:
+                payload = {'status': data}
+            elif action_version == 2:
+                status, detail = data
+                payload = {'status': {'status': status, 'detail': detail}}
+            else:
+                event_json = data.serialize()
+                payload = {'event': event_json}
+            self._do_async(action='shutter_status', payload=payload, should_filter=True, action_version=action_version)
+        else:
+            self.logger('Shutter status version {} not supported.'.format(action_version))
 
     def process_event(self, code):
         self._do_async('receive_events', {'code': code}, should_filter=True)

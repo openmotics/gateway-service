@@ -24,7 +24,7 @@ class PluginRuntime:
 
     SUPPORTED_DECORATOR_VERSIONS = {'input_status': [1, 2],
                                     'output_status': [1, 2],
-                                    'shutter_status': [1],
+                                    'shutter_status': [1, 2, 3],
                                     'receive_events': [1],
                                     'background_task': [1],
                                     'on_remove': [1]}
@@ -160,15 +160,19 @@ class PluginRuntime:
                 elif action == 'input_status':
                     ret = self._handle_input_status(command['event'])
                 elif action == 'output_status':
+                    # v1 = state, v2 = event
                     if action_version == 1:
-                        # version 1 sends output states of all 'on' outputs to the plugin as a list
-                        ret = self._handle_output_status(command['status'])
+                        ret = self._handle_output_status(command['status'], data_type='status')
                     else:
-                        # Version 2 will send the gateway event per output and in a dict format
-                        # also there is no more filtering on the 'on' outputs, a change in any direction is sent downstream as an event
                         ret = self._handle_output_status(command['event'], data_type='event')
                 elif action == 'shutter_status':
-                    ret = self._handle_shutter_status(command)
+                    # v1 = state as list, v2 = state as dict, v3 = event
+                    if action_version == 1:
+                        ret = self._handle_shutter_status(command['status'], data_type='status')
+                    elif action_version == 2:
+                        ret = self._handle_shutter_status(command['status'], data_type='status_dict')
+                    else:
+                        ret = self._handle_shutter_status(command['event'], data_type='event')
                 elif action == 'receive_events':
                     ret = self._handle_receive_events(command['code'])
                 elif action == 'get_metric_definitions':
@@ -240,30 +244,32 @@ class PluginRuntime:
                 IO._log_exception('input status', error)
 
     def _handle_output_status(self, data, data_type='status'):
-        status = data if data_type == 'status' else None
         event = GatewayEvent.deserialize(data) if data_type == 'event' else None
         for receiver in self._decorated_methods['output_status']:
             decorator_version = receiver.output_status.get('version', 1)
-            if decorator_version == 1:
-                if status:
-                    IO._with_catch('output status', receiver, [status])
-            elif decorator_version == 2:
-                if event:
-                    IO._with_catch('output status', receiver, [event.data])
-            else:
+            if decorator_version not in PluginRuntime.SUPPORTED_DECORATOR_VERSIONS['output_status']:
                 error = NotImplementedError('Version {} is not supported for output status decorators'.format(decorator_version))
                 IO._log_exception('output status', error)
+            else:
+                if decorator_version == 1 and data_type == 'status':
+                    IO._with_catch('output status', receiver, [data])
+                elif decorator_version == 2 and event:
+                    IO._with_catch('output status', receiver, [event.data])
 
-    def _handle_shutter_status(self, status):
+    def _handle_shutter_status(self, data, data_type='status'):
+        event = GatewayEvent.deserialize(data) if data_type == 'event' else None
         for receiver in self._decorated_methods['shutter_status']:
             decorator_version = receiver.shutter_status.get('version', 1)
-            if decorator_version == 1:
-                IO._with_catch('shutter status', receiver, [status['status']])
-            elif decorator_version == 2:
-                IO._with_catch('shutter status', receiver, [status['status'], status['detail']])
-            else:
+            if decorator_version not in PluginRuntime.SUPPORTED_DECORATOR_VERSIONS['shutter_status']:
                 error = NotImplementedError('Version {} is not supported for shutter status decorators'.format(decorator_version))
-                IO._log_exception('receive events', error)
+                IO._log_exception('shutter status', error)
+            else:
+                if decorator_version == 1 and data_type == 'status':
+                    IO._with_catch('shutter status', receiver, [data])
+                elif decorator_version == 2 and data_type == 'status_dict':
+                    IO._with_catch('shutter status', receiver, [data['status'], data['detail']])
+                elif decorator_version == 3 and event:
+                    IO._with_catch('shutter status', receiver, [event.data])
 
     def _handle_receive_events(self, code):
         for receiver in self._decorated_methods['receive_events']:

@@ -78,6 +78,7 @@ def shutter_status(method=None, version=1):
     Important! This method should not block, as this will result in an unresponsive system.
     Please use a separate thread to perform complex actions on shutten status messages.
     """
+    # if the method requires more than one arg, it needs detail
     def needs_detail(method):
         args, varargs, kwargs, _ = inspect.getargspec(method)
         args.pop(0)
