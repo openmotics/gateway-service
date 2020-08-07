@@ -78,14 +78,16 @@ def shutter_status(method=None, version=1):
     Important! This method should not block, as this will result in an unresponsive system.
     Please use a separate thread to perform complex actions on shutten status messages.
     """
-    def add_detail(method):
+    def needs_detail(method):
         args, varargs, kwargs, _ = inspect.getargspec(method)
         args.pop(0)
         return len(args) > 1 or (varargs is not None and len(varargs) >= 1) or kwargs is not None
 
-    if method is not None:
-        method.shutter_status = {'add_detail': add_detail(method),
-                                 'version': 1}
+    if method is not None:  # no version was given
+        needs_detail = needs_detail(method)
+        # make it version 2 if add_detail was set (used for backwards compatibility)
+        # ideally plugins should just use @shutter_status(version=2)
+        method.shutter_status = {'version': 2 if needs_detail else 1}
         return method
 
     def wrapper(_method):

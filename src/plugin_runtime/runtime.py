@@ -87,7 +87,7 @@ class PluginRuntime:
                 decorated_methods.append(decorated_method)  # add the decorated method to the list
 
         # Set the exposed methods
-        for decorated_method, decorator_version in get_special_methods(self._plugin, 'om_expose'):
+        for decorated_method, _ in get_special_methods(self._plugin, 'om_expose'):
             self._exposes.append({'name': decorated_method.__name__,
                                   'auth': decorated_method.om_expose['auth'],
                                   'content_type': decorated_method.om_expose['content_type']})
@@ -258,10 +258,9 @@ class PluginRuntime:
         for receiver in self._decorated_methods['shutter_status']:
             decorator_version = receiver.shutter_status.get('version', 1)
             if decorator_version == 1:
-                if receiver.shutter_status['add_detail']:
-                    IO._with_catch('shutter status', receiver, [status['status'], status['detail']])
-                else:
-                    IO._with_catch('shutter status', receiver, [status['status']])
+                IO._with_catch('shutter status', receiver, [status['status']])
+            elif decorator_version == 2:
+                IO._with_catch('shutter status', receiver, [status['status'], status['detail']])
             else:
                 error = NotImplementedError('Version {} is not supported for shutter status decorators'.format(decorator_version))
                 IO._log_exception('receive events', error)
