@@ -1,0 +1,8 @@
+{
+    "dependencies": [
+        {
+            "name": "master_classic",
+            "specifier": ">=3.143.89"
+        }
+    ]
+}
