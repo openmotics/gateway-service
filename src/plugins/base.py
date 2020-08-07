@@ -43,11 +43,11 @@ class PluginController(object):
                  plugin_config_path='/opt/openmotics/etc'):
         self.__webinterface = web_interface
         self.__config_controller = configuration_controller
+        self.__output_controller = output_controller
         self.__shuttercontroller = shutter_controller  # type: ShutterController
         self.__runtime_path = runtime_path
         self.__plugins_path = plugins_path
         self.__plugin_config_path = plugin_config_path
-        self.__output_controller = output_controller
 
         self.__stopped = True
         self.__logs = {}
@@ -129,7 +129,7 @@ class PluginController(object):
                 runner.stop()
             except Exception:
                 pass  # Try as best as possible to stop the plugin
-            self.log(runner.name, '[Runner] Could not start plugin', exception)
+            self.log(runner.name, '[Runner] Could not start plugin', exception, traceback.format_exc())
 
     def start_plugin(self, plugin_name):
         """ Request to start a runner """
@@ -331,17 +331,20 @@ class PluginController(object):
             for runner in self.__iter_running_runners():
                 runner.process_input_status(event)
         if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
-            # TODO: Implement versioning so a plugin can also receive "normal" events on version 2
-            # Should be called when the output status changes, notifies all plugins.
-            states = [(state.id, state.dimmer) for state in self.__output_controller.get_output_statuses()
-                      if state.status]
+            # TODO: deprecate old versions that use state and move to events
+            states = [(state.id, state.dimmer) for state in self.__output_controller.get_output_statuses() if state.status]
             for runner in self.__iter_running_runners():
-                runner.process_output_status(states)
+                runner.process_output_status(data=states, action_version=1)  # send states as action version 1
+                runner.process_output_status(data=event, action_version=2)   # send event as action version 2
         if event.type == GatewayEvent.Types.SHUTTER_CHANGE:
-            # TODO: Implement versioning so a plugin can receive per-shutter events
+            # TODO: deprecate old versions that use state and move to events
             states = self.__shuttercontroller.get_states()
+            status = states['status']
+            details = states['detail']
             for runner in self.__iter_running_runners():
-                runner.process_shutter_status(states)
+                runner.process_shutter_status(data=status, action_version=1)  # send states as action version 1
+                runner.process_shutter_status(data=(status, details), action_version=2)  # send event as action version 2
+                runner.process_shutter_status(data=event, action_version=3)  # send event as action version 3
 
     def process_event(self, code):
         """ Should be called when an event is triggered, notifies all plugins. """

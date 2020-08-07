@@ -22,6 +22,131 @@ import logging
 logger = logging.getLogger('openmotics')
 
 
+def input_status(method=None, version=1):
+    """
+    Decorator to indicate that the method should receive input status messages.
+    The receiving method should accept one parameter, a tuple of (input, output).
+    Each time an input changes status, the method will be called.
+
+    Important! This method should not block, as this will result in an unresponsive system.
+    Please use a separate thread to perform complex actions on input status messages.
+
+    Initially only presses (rising edges) of input signals were handled, a version was introduced to support all
+    input status changes, both falling and rising edges.
+    """
+    if method is not None:
+        method.input_status = {'version': 1}
+        return method
+
+    def wrapper(_method):
+        _method.input_status = {'version': version}
+        return _method
+    return wrapper
+
+
+def output_status(method=None, version=1):
+    """
+    Decorator to indicate that the method should receive output status messages.
+
+    Version 1
+    The receiving method should accept one parameter, a list of tuples (output, dimmer value).
+    Each time an output status is changed, the method will be called.
+
+    Version 2
+    The receiving method should accept output_event data, only the output that has changed will be sent
+    sample data:  {'id': 1, 'status': {'on': True, 'value': 5}, 'location': {'room_id': 5}}
+
+    Important! This method should not block, as this will result in an unresponsive system.
+    Please use a separate thread to perform complex actions on output status messages.
+    """
+    if method is not None:
+        method.output_status = {'version': 1}
+        return method
+
+    def wrapper(_method):
+        _method.output_status = {'version': version}
+        return _method
+    return wrapper
+
+
+def shutter_status(method=None, version=1):
+    """
+    Decorator to indicate that the method should receive shutter status messages.
+    The receiving method should accept one parameter, the list of shutter states.
+    Each time an shutter status is changed, the method will be called.
+
+    Important! This method should not block, as this will result in an unresponsive system.
+    Please use a separate thread to perform complex actions on shutten status messages.
+    """
+    # if the method requires more than one arg, it needs detail
+    def needs_detail(method):
+        args, varargs, kwargs, _ = inspect.getargspec(method)
+        args.pop(0)
+        return len(args) > 1 or (varargs is not None and len(varargs) >= 1) or kwargs is not None
+
+    if method is not None:  # no version was given
+        needs_detail = needs_detail(method)
+        # make it version 2 if add_detail was set (used for backwards compatibility)
+        # ideally plugins should just use @shutter_status(version=2)
+        method.shutter_status = {'version': 2 if needs_detail else 1}
+        return method
+
+    def wrapper(_method):
+        _method.shutter_status = {'version': version}
+        return _method
+    return wrapper
+
+
+def receive_events(method=None, version=1):
+    """
+    Decorator to indicate that the method should receive event messages.
+    The receiving method should accept one parameter: the event code.
+    Each time an event is triggered, the method will be called.
+
+    Important! This method should not block, as this will result in an unresponsive system.
+    Please use a separate thread to perform complex actions on event messages.
+    """
+    if method is not None:
+        method.receive_events = {'version': 1}
+        return method
+
+    def wrapper(_method):
+        _method.receive_events = {'version': version}
+        return _method
+    return wrapper
+
+
+def background_task(method=None, version=1):
+    """
+    Decorator to indicate that the method is a background task. A thread running this
+    background task will be started on startup.
+    """
+    if method is not None:
+        method.background_task = {'version': 1}
+        return method
+
+    def wrapper(_method):
+        _method.background_task = {'version': version}
+        return _method
+    return wrapper
+
+
+def on_remove(method=None, version=1):
+    """
+    Decorator to indicate that the method should be called just before removing the plugin.
+    This can be used to cleanup files written by the plugin. Note: the plugin package and plugin
+    configuration data will be removed automatically and should not be touched by this method.
+    """
+    if method is not None:
+        method.on_remove = {'version': 1}
+        return method
+
+    def wrapper(_method):
+        _method.on_remove = {'version': version}
+        return _method
+    return wrapper
+
+
 def om_expose(method=None, auth=True, content_type='application/json'):
     """
     Decorator to expose a method of the plugin class through the
@@ -51,89 +176,6 @@ def om_expose(method=None, auth=True, content_type='application/json'):
     if method is not None:
         return decorate(method)
     return decorate
-
-
-def input_status(method=None, version=1):
-    """
-    Decorator to indicate that the method should receive input status messages.
-    The receiving method should accept one parameter, a tuple of (input, output).
-    Each time an input changes status, the method will be called.
-
-    Important! This method should not block, as this will result in an unresponsive system.
-    Please use a separate thread to perform complex actions on input status messages.
-
-    Initially only presses (rising edges) of input signals were handled, a version was introduced to support all
-    input status changes, both falling and rising edges.
-    """
-    if method is not None:
-        method.input_status = {'version': 1}
-        return method
-
-    def wrapper(_method):
-        _method.input_status = {'version': version}
-        return _method
-    return wrapper
-
-
-def output_status(method, version=1):
-    """
-    Decorator to indicate that the method should receive output status messages.
-    The receiving method should accept one parameter, a list of tuples (output, dimmer value).
-    Each time an output status is changed, the method will be called.
-
-    Important! This method should not block, as this will result in an unresponsive system.
-    Please use a separate thread to perform complex actions on output status messages.
-    """
-    method.output_status = True
-    return method
-
-
-def shutter_status(method):
-    """
-    Decorator to indicate that the method should receive shutter status messages.
-    The receiving method should accept one parameter, the list of shutter states.
-    Each time an shutter status is changed, the method will be called.
-
-    Important! This method should not block, as this will result in an unresponsive system.
-    Please use a separate thread to perform complex actions on shutten status messages.
-    """
-    args, varargs, kwargs, _ = inspect.getargspec(method)
-    args.pop(0)
-
-    method.shutter_status = {'add_detail': len(args) > 1 or (varargs is not None and len(varargs) >= 1) or kwargs is not None}
-    return method
-
-
-def receive_events(method):
-    """
-    Decorator to indicate that the method should receive event messages.
-    The receiving method should accept one parameter: the event code.
-    Each time an event is triggered, the method will be called.
-
-    Important! This method should not block, as this will result in an unresponsive system.
-    Please use a separate thread to perform complex actions on event messages.
-    """
-    method.receive_events = True
-    return method
-
-
-def background_task(method):
-    """
-    Decorator to indicate that the method is a background task. A thread running this
-    background task will be started on startup.
-    """
-    method.background_task = True
-    return method
-
-
-def on_remove(method):
-    """
-    Decorator to indicate that the method should be called just before removing the plugin.
-    This can be used to cleanup files written by the plugin. Note: the plugin package and plugin
-    configuration data will be removed automatically and should not be touched by this method.
-    """
-    method.on_remove = True
-    return method
 
 
 def om_metric_data(interval=5):

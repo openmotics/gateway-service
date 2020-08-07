@@ -5,6 +5,8 @@ import subprocess
 import sys
 import time
 import traceback
+
+import six
 import ujson as json
 from threading import Thread, Lock
 from six.moves.queue import Queue, Empty, Full
@@ -33,7 +35,7 @@ class PluginRunner:
         self.version = None
         self.interfaces = None
 
-        self._receivers = []
+        self._decorators_in_use = {}
         self._exposes = []
         self._metric_collectors = []
         self._metric_receivers = []
@@ -74,7 +76,7 @@ class PluginRunner:
         self.version = start_out['version']
         self.interfaces = start_out['interfaces']
 
-        self._receivers = start_out['receivers']
+        self._decorators_in_use = start_out['decorators']
         self._exposes = start_out['exposes']
         self._metric_collectors = start_out['metric_collectors']
         self._metric_receivers = start_out['metric_receivers']
@@ -164,13 +166,32 @@ class PluginRunner:
 
     def process_input_status(self, input_event):
         event_json = input_event.serialize()
-        self._do_async('input_status', {'event': event_json}, should_filter=True)
+        self._do_async(action='input_status', payload={'event': event_json}, should_filter=True)
 
-    def process_output_status(self, status):
-        self._do_async('output_status', {'status': status}, should_filter=True)
+    def process_output_status(self, data, action_version=1):
+        if action_version in [1, 2]:
+            if action_version == 1:
+                payload = {'status': data}
+            else:
+                event_json = data.serialize()
+                payload = {'event': event_json}
+            self._do_async(action='output_status', payload=payload, should_filter=True, action_version=action_version)
+        else:
+            self.logger('Output status version {} not supported.'.format(action_version))
 
-    def process_shutter_status(self, status):
-        self._do_async('shutter_status', status, should_filter=True)
+    def process_shutter_status(self, data, action_version=1):
+        if action_version in [1, 2, 3]:
+            if action_version == 1:
+                payload = {'status': data}
+            elif action_version == 2:
+                status, detail = data
+                payload = {'status': {'status': status, 'detail': detail}}
+            else:
+                event_json = data.serialize()
+                payload = {'event': event_json}
+            self._do_async(action='shutter_status', payload=payload, should_filter=True, action_version=action_version)
+        else:
+            self.logger('Shutter status version {} not supported.'.format(action_version))
 
     def process_event(self, code):
         self._do_async('receive_events', {'code': code}, should_filter=True)
@@ -241,12 +262,15 @@ class PluginRunner:
         else:
             self.logger('[Runner] Unkown async message: {0}'.format(response))
 
-    def _do_async(self, action, fields, should_filter=False):
-        if (should_filter and action not in self._receivers) or not self._process_running:
+    def _do_async(self, action, payload, should_filter=False, action_version=1):
+        has_receiver = False
+        for decorator_name, decorator_versions in six.iteritems(self._decorators_in_use):
+            # the action version is linked to a specific decorator version
+            has_receiver |= (action == decorator_name and action_version in decorator_versions)
+        if not self._process_running or (should_filter and not has_receiver):
             return
-
         try:
-            self._async_command_queue.put({'action': action, 'fields': fields}, block=False)
+            self._async_command_queue.put({'action': action, 'payload': payload, 'action_version': action_version}, block=False)
         except Full:
             self.logger('Async action cannot be queued, queue is full')
 
@@ -255,15 +279,15 @@ class PluginRunner:
             try:
                 # Give it a timeout in order to check whether the plugin is not stopped.
                 command = self._async_command_queue.get(block=True, timeout=10)
-                self._do_command(command['action'], command['fields'])
+                self._do_command(command['action'], payload=command['payload'], action_version=command['action_version'])
             except Empty:
                 self._do_async('ping', {})
             except Exception as exception:
                 self.logger('[Runner] Failed to perform async command: {0}'.format(exception))
 
-    def _do_command(self, action, fields=None, timeout=None):
-        if fields is None:
-            fields = {}
+    def _do_command(self, action, payload=None, timeout=None, action_version=1):
+        if payload is None:
+            payload = {}
         self._commands_executed += 1
         if timeout is None:
             timeout = self.command_timeout
@@ -273,7 +297,7 @@ class PluginRunner:
 
         with self._command_lock:
             try:
-                command = self._create_command(action, fields)
+                command = self._create_command(action, payload, action_version)
                 self._proc.stdin.write(PluginIPCStream.write(command))
                 self._proc.stdin.flush()
             except Exception:
@@ -291,18 +315,19 @@ class PluginRunner:
             except Empty:
                 metadata = ''
                 if action == 'request':
-                    metadata = ' {0}'.format(fields['method'])
+                    metadata = ' {0}'.format(payload['method'])
                 self.logger('[Runner] No response within {0}s ({1}{2})'.format(timeout, action, metadata))
                 self._commands_failed += 1
                 raise Exception('Plugin did not respond')
 
-    def _create_command(self, action, fields=None):
-        if fields is None:
-            fields = {}
+    def _create_command(self, action, payload=None, action_version=1):
+        if payload is None:
+            payload = {}
         self._cid += 1
         command = {'cid': self._cid,
-                   'action': action}
-        command.update(fields)
+                   'action': action,
+                   'action_version': action_version}
+        command.update(payload)
         return command
 
     def error_score(self):
