@@ -90,7 +90,7 @@ def get_metadata_url(config, version):
     try:
         uri = urlparse(config.get('OpenMotics', 'update_url'))
     except NoOptionError:
-        path = '/portal/update_metadata/'
+        path = '/api/v1/base/updates/metadata'
         vpn_uri = urlparse(config.get('OpenMotics', 'vpn_check_url'))
         uri = urlunparse((vpn_uri.scheme, vpn_uri.netloc, path, '', '', ''))
     path = '{}/{}'.format(uri.path, version)
@@ -275,28 +275,32 @@ def update(version, expected_md5):
     :param version: the new version (after the update).
     :param md5_server: the md5 sum provided by the server.
     """
-    config = ConfigParser()
-    config.read(constants.get_config_file())
-    from_version = config.get('OpenMotics', 'version')
-    logger.info('Update {} -> {}'.format(from_version, version))
-    logger.info('=========================')
+    try:
+        config = ConfigParser()
+        config.read(constants.get_config_file())
+        from_version = config.get('OpenMotics', 'version')
+        logger.info('Update {} -> {}'.format(from_version, version))
+        logger.info('=========================')
 
-    update_file = constants.get_update_file()
-    update_dir = os.path.dirname(update_file)
-    # Change to update directory.
-    os.chdir(update_dir)
+        update_file = constants.get_update_file()
+        update_dir = os.path.dirname(update_file)
+        # Change to update directory.
+        os.chdir(update_dir)
 
-    meta = {}
+        meta = {}
 
-    if os.path.exists(update_file):
-        logger.info(' -> Extracting update.tgz')
-        extract_legacy_update(update_file, expected_md5)
-    else:
-        logger.info(' -> Fetching metadata')
-        meta = fetch_metadata(config, version, expected_md5)
-        logger.info(' -> Downloading firmware for update {}'.format(meta['version']))
-        for data in meta['firmware']:
-            download_firmware(data['type'], data['url'], data['sha256'])
+        if os.path.exists(update_file):
+            logger.info(' -> Extracting update.tgz')
+            extract_legacy_update(update_file, expected_md5)
+        else:
+            logger.info(' -> Fetching metadata')
+            meta = fetch_metadata(config, version, expected_md5)
+            logger.info(' -> Downloading firmware for update {}'.format(meta['version']))
+            for data in meta['firmwares']:
+                download_firmware(data['type'], data['url'], data['sha256'])
+    except Exception:
+        logger.exception('failed to preprepare update')
+        raise SystemExit(1)
 
     try:
         errors = []
@@ -367,8 +371,6 @@ def update(version, expected_md5):
         if errors:
             for error in errors:
                 logger.error(error)
-            logger.error('FAILED')
-            logger.error('exit 1')
             raise SystemExit(1)
 
         config.set('OpenMotics', 'version', version)
@@ -396,9 +398,14 @@ def main():
             fcntl.flock(wfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except Exception:
             logger.exception('failed to aquire update lock')
+            logger.error('FAILED')
+            logger.error('exit 2')
             raise SystemExit(2)
         try:
             update(version, expected_md5)
+        except SystemExit:
+            logger.error('FAILED')
+            logger.error('exit 1')
         finally:
             fcntl.flock(wfd, fcntl.LOCK_UN)
             os.unlink(lockfile)
