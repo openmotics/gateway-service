@@ -35,8 +35,11 @@ from six.moves.urllib.parse import urlparse, urlunparse
 
 from constants import get_config_file, get_update_file, get_update_output_file
 
+logging.basicConfig(level=logging.INFO, filename=get_update_output_file())
 logger = logging.getLogger('update.py')
-logging.basicConfig(filename=get_update_output_file(), level=logging.DEBUG)
+logger.setLevel(logging.DEBUG)
+
+SUPERVISOR_SERVICES = ('openmotics', 'vpn_service')
 
 
 def cmd(command, **kwargs):
@@ -52,21 +55,205 @@ def cmd(command, **kwargs):
     return output
 
 
-def md5(filename):
-    """
-    Generate the md5 sum of a file.
+def extract_legacy_update(update_file, expected_md5):
+    hash = hashlib.md5()
+    with open(update_file, 'rb') as fd:
+        for chunk in iter(lambda: fd.read(128 * hash.block_size), ''):
+            hash.update(chunk)
+    calculated_md5 = hash.hexdigest()
+    if calculated_md5 != expected_md5:
+        raise ValueError('update.tgz md5:%s does not match expected md5:%s' % (calculated_md5, expected_md5))
 
-    :param filename: the name of the file to hash.
-    :returns: md5sum
-    """
-    md5_hash = hashlib.md5()
-    with open(filename, 'rb') as file_to_hash:
-        for chunk in iter(lambda: file_to_hash.read(128 * md5_hash.block_size), ''):
-            md5_hash.update(chunk)
-    return md5_hash.hexdigest()
+    cmd(['tar', 'xzf', update_file])
+
+def fetch_metadata(config, version, expected_md5):
+    response = requests.get(get_metadata_url(config, version))
+    if response.status_code != 200:
+        raise ValueError('failed to get update metadata')
+    hasher = hashlib.md5()
+    hasher.update(response.content)
+    calculated_md5 = hasher.hexdigest()
+    if expected_md5 != calculated_md5:
+        logger.error(response.content)
+        raise ValueError('update metadata md5:%s does not match expected md5:%s' % (calculated_md5, expected_md5))
+    return response.json()
 
 
-def update(version, md5_server):
+def get_metadata_url(config, version):
+    gateway_uuid = config.get('OpenMotics', 'uuid')
+    try:
+        uri = urlparse(config.get('OpenMotics', 'update_url'))
+    except NoOptionError:
+        path = '/portal/update_metadata/'
+        vpn_uri = urlparse(config.get('OpenMotics', 'vpn_check_url'))
+        uri = urlunparse((vpn_uri.scheme, vpn_uri.netloc, path, '', '', ''))
+    path = '{}/{}'.format(uri.path, version)
+    query = 'uuid={0}'.format(gateway_uuid)
+    return urlunparse((uri.scheme, uri.netloc, path, '', query, ''))
+
+
+def download_firmware(firmware_type, url, expected_sha256):
+    firmware_file_map = {'gateway_service': 'gateway.tgz',
+                         'gateway_os': 'gateway_os.tgz',
+                         'master_classic': 'm_classic_firmware.hex',
+                         'can': 'c_firmware.hex'}
+    response = requests.get(url, stream=True)
+    firmware_file = firmware_file_map[firmware_type]
+    logger.info('Downloading {}...'.format(firmware_file))
+    with open(firmware_file, 'wb') as f:
+        shutil.copyfileobj(response.raw, f)
+
+    hasher = hashlib.sha256()
+    with open(firmware_file, 'rb') as f:
+        hasher.update(f.read())
+    calculated_sha256 = hasher.hexdigest()
+    if expected_sha256 != calculated_sha256:
+        raise ValueError('firmware %s sha256:%s does not match expected sha256:%s' % (firmware_file, calculated_sha256, expected_sha256))
+
+
+def check_services():
+    for service in SUPERVISOR_SERVICES:
+        status_output = subprocess.check_output(['supervisorctl', 'status', service])
+        if 'no such process' in status_output.encode().lower():
+            raise Exception('Could not find service "{}"'.format(service))
+
+
+def stop_services():
+    for service in SUPERVISOR_SERVICES:
+        cmd(['supervisorctl', 'stop', service])
+
+
+def start_services():
+    for service in SUPERVISOR_SERVICES:
+        try:
+            cmd(['supervisorctl', 'start', service])
+        except Exception:
+            logger.warning('Starting {} failed'.format(service))
+
+
+def check_master_communication():
+    cmd(['python', '/opt/openmotics/python/master_tool.py', '--reset'])
+    try:
+        cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
+    except Exception:
+        time.sleep(2)
+        try:
+            cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
+        except Exception:
+            logger.info('No communication, resetting master')
+            cmd(['python', '/opt/openmotics/python/master_tool.py', '--hard-reset'])
+            time.sleep(2)
+            try:
+                cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
+            except Exception:
+                time.sleep(2)
+    finally:
+        cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
+
+
+def update_master_firmware(firmware):
+    try:
+        master_firmware = 'm_classic_firmware.hex'
+        output = subprocess.check_output(['python', '/opt/openmotics/python/master_tool.py', '--version'])
+        from_master_version, _, _ = output.decode().rstrip().partition(' ')
+        master_version = next((x['version'] for x in firmware if x['type'] == 'master_classic'), None)
+        if from_master_version == master_version:
+            logger.info('Master is already {}, skipped'.format(master_version))
+        else:
+            logger.info('master {} -> {}'.format(from_master_version, master_version))
+            cmd(['python', '/opt/openmotics/python/master_tool.py', '--update', '--master-firmware-classic', master_firmware])
+            cmd(['cp', master_firmware, '/opt/openmotics/firmware.hex'])
+    except Exception as exc:
+        logger.error('Updating Master firmware failed')
+        return exc
+
+
+def update_can_firmware():
+    check_master_communication()
+    try:
+        can_firmware = 'c_firmware.hex'
+        # TODO: check versions
+        cmd(['python', '/opt/openmotics/python/modules_bootloader.py', '-t', 'c' '-f', can_firmware])
+        cmd(['cp', can_firmware, '/opt/openmotics/c_firmware.hex'])
+    except Exception as exc:
+        logger.error('Updating CAN firmware failed')
+        return exc
+
+
+def update_gateway_os():
+    try:
+        gateway_os = 'gateway_os.tgz'
+        cmd(['mount', '-o', 'remount,rw', '/'])
+        cmd(['tar', '-xz', '--no-same-owner', '-f', gateway_os, '-C', '/'])
+        cmd(['sync'])
+        cmd(['bash', '/usr/bin/os_update.sh'])
+    except Exception as exc:
+        logger.error('Updating Gateway OS failed')
+        return exc
+    finally:
+        cmd(['mount', '-o', 'remount,ro', '/'])
+
+
+def update_gateway_backend(date):
+    try:
+        gateway_service = 'gateway.tgz'
+        backup_dir = '/opt/openmotics/backup'
+        python_dir = '/opt/openmotics/python'
+        etc_dir = '/opt/openmotics/etc'
+        cmd(['mkdir', '-p', backup_dir])
+        cmd('ls -tp | grep "/$" | tail -n +3 | while read file; do rm -r $file; done', shell=True, cwd=backup_dir)
+
+        # TODO: symlink, blue green deployment
+        cmd(['mkdir', '-p', os.path.join(backup_dir, date)])
+        cmd(['mv', python_dir, os.path.join(backup_dir, date)])
+        cmd(['cp', '-r', etc_dir, os.path.join(backup_dir, date)])
+
+        # Cleanup for old versions.
+        old_dist_dir = '/opt/openmotics/dist-packages'
+        if os.path.exists(old_dist_dir):
+            cmd(['mv', old_dist_dir, os.path.join(backup_dir, date)])
+
+        logger.info('Extracting gateway')
+        cmd(['mkdir', '-p', python_dir])
+        cmd(['tar', '-v', '-xzf', gateway_service, '-C', python_dir])
+        cmd(['sync'])
+
+        plugins = glob.glob('{}/{}/python/plugins/*/'.format(backup_dir, date))
+        if plugins:
+            logger.info('Restoring plugins')
+            for plugin in plugins:
+                cmd(['mv', '-v', plugin, os.path.join(python_dir, 'plugins')])
+
+        logger.info('Running post-update')
+        cmd(['bash', os.path.join(python_dir, 'post-update.sh')])
+        cmd(['sync'])
+    except Exception as exc:
+        logger.error('Updating Gateway service failed')
+        return exc
+
+
+def update_gateway_frontend(date):
+    try:
+        gateway_frontend = 'gateway_frontend.tgz'
+        backup_dir = '/opt/openmotics/backup'
+        static_dir = '/opt/openmotics/static'
+        cmd(['mkdir', '-p', backup_dir])
+        cmd('ls -tp | grep "/$" | tail -n +3 | while read file; do rm -r $file; done', shell=True, cwd=backup_dir)
+
+        # TODO: symlink, A-B deployment
+        cmd(['mkdir', '-p', os.path.join(backup_dir, date)])
+        cmd(['mv', static_dir, os.path.join(backup_dir, date)])
+
+        logger.info('Extracting gateway')
+        cmd(['mkdir', '-p', static_dir])
+        cmd(['tar', '-v', '-xzf', gateway_frontend, '-C', static_dir])
+        cmd(['sync'])
+    except Exception as exc:
+        logger.error('Updating Gateway service failed')
+        return exc
+
+
+def update(version, expected_md5):
     """
     Execute the actual update: extract the archive and execute the bash update script.
 
@@ -75,246 +262,92 @@ def update(version, md5_server):
     """
     config = ConfigParser()
     config.read(get_config_file())
-    gateway_uuid = config.get('OpenMotics', 'uuid')
     from_version = config.get('OpenMotics', 'version')
     logger.info('Update {} -> {}'.format(from_version, version))
     logger.info('=========================')
 
-    try:
-        update_url = config.get('OpenMotics', 'update_url')
-    except NoOptionError:
-        path = '/portal/update_metadata/'
-        vpn_uri = urlparse(config.get('OpenMotics', 'vpn_check_url'))
-        update_url = urlunparse((vpn_uri.scheme, vpn_uri.netloc, path, '', '', ''))
-
     update_file = get_update_file()
     update_dir = os.path.dirname(update_file)
+    # Change to update directory.
     os.chdir(update_dir)
 
     meta = {}
 
     if os.path.exists(update_file):
-        md5_client = md5(update_file)
-        if md5_server != md5_client:
-            raise Exception('MD5 of client (' + str(md5_client) + ') and server (' + str(md5_server) + ') don\'t match')
-
         logger.info(' -> Extracting update.tgz')
-        cmd(['tar', 'xzf', update_file])
+        extract_legacy_update(update_file, expected_md5)
     else:
-        uri = urlparse(update_url)
-        path = '{}/{}'.format(uri.path, version)
-        query = 'uuid={0}'.format(gateway_uuid)
-        logger.info('Fetching metadata')
-        response = requests.get(urlunparse((uri.scheme, uri.netloc, path, '', query, '')))
-        if response.status_code != 200:
-            raise ValueError('failed to get update metadata')
-        hasher = hashlib.md5()
-        hasher.update(response.content)
-        calculated_md5 = hasher.hexdigest()
-        if md5_server != calculated_md5:
-            logger.error(response.content)
-            raise ValueError('update metadata md5:%s does not match expected md5:%s' % (calculated_md5, md5_server))
-        meta = response.json()
-        logger.info('Update {}'.format(meta['version']))
-
-        firmware_file_map = {'gateway_service': 'gateway.tgz',
-                             'gateway_os': 'gateway_os.tgz',
-                             'master_classic': 'm_classic_firmware.hex',
-                             'can': 'c_firmware.hex'}
+        logger.info(' -> Fetching metadata')
+        meta = fetch_metadata(config, version, expected_md5)
+        logger.info(' -> Downloading firmware for update {}'.format(meta['version']))
         for data in meta['firmware']:
-            response = requests.get(data['url'], stream=True)
-            firmware_file = os.path.join(update_dir, firmware_file_map[data['type']])
-            logger.info('Downloading {}...'.format(firmware_file))
-            with open(firmware_file, 'wb') as f:
-                shutil.copyfileobj(response.raw, f)
-
-            hasher = hashlib.sha256()
-            with open(firmware_file, 'rb') as f:
-                hasher.update(f.read())
-            calculated_hash = hasher.hexdigest()
-            if calculated_hash != data['sha256']:
-                raise ValueError('firmware sha256:%s does not match' % calculated_hash)
+            download_firmware(data['type'], data['url'], data['sha256'])
 
     try:
-        error = None
+        errors = []
         date = datetime.now().strftime('%Y%m%d%H%M%S')
 
         # TODO: should update and re-execute itself before proceeding?
 
         logger.info(' -> Checking services')
-        for service in ('openmotics', 'vpn_service'):
-            status_output = subprocess.check_output(['supervisorctl', 'status', service])
-            if 'no such process' in status_output.encode().lower():
-                raise Exception('Could not find service "{}"'.format(service))
+        check_services()
 
         logger.info(' -> Stopping services')
-        for service in ('openmotics', 'vpn_service'):
-            cmd(['supervisorctl', 'stop', service])
+        stop_services()
 
-        gateway_os = os.path.join(update_dir, 'gateway_os.tgz')
-        if os.path.exists(gateway_os):
+        if os.path.exists('gateway_os.tgz'):
             logger.info(' -> Updating Gateway OS')
-            try:
-                cmd(['mount', '-o', 'remount,rw', '/'])
-                cmd(['tar', '-xz', '--no-same-owner', '-f', gateway_os, '-C', '/'])
-                cmd(['sync'])
-                cmd(['bash', '/usr/bin/os_update.sh'])
-            except Exception as exc:
-                logger.error('Updating Gateway OS failed')
-                error = exc
-            finally:
-                cmd(['mount', '-o', 'remount,ro', '/'])
+            error = update_gateway_os()
+            if error:
+                errors.append(error)
 
-        gateway_service = os.path.join(update_dir, 'gateway.tgz')
-        if os.path.exists(gateway_service):
+        if os.path.exists('gateway.tgz'):
             logger.info(' -> Updating Gateway service')
-            try:
-                backup_dir = '/opt/openmotics/backup'
-                python_dir = '/opt/openmotics/python'
-                cmd(['mkdir', '-p', backup_dir])
-                cmd('ls -tp | grep "/$" | tail -n +3 | while read file; do rm -r $file; done', shell=True, cwd=backup_dir)
+            error = update_gateway_backend(date)
+            if error:
+                errors.append(error)
 
-                # TODO: symlink, blue green deployment
-                cmd(['mkdir', '-p', os.path.join(backup_dir, date)])
-                cmd(['mv', python_dir, os.path.join(backup_dir, date)])
+        if os.path.exists('m_classic_firmware.hex'):
+            logger.info(' -> Updating Master firmware')
+            error = update_master_firmware(meta.get('firmware', []))
+            if error:
+                errors.append(error)
 
-                # Cleanup for old versions.
-                old_dist_dir = '/opt/openmotics/dist-packages'
-                if os.path.exists(old_dist_dir):
-                    cmd(['mv', old_dist_dir, os.path.join(backup_dir, date)])
-
-                logger.info('Extracting gateway')
-                cmd(['mkdir', '-p', python_dir])
-                cmd(['tar', '-v', '-xzf', gateway_service, '-C', python_dir])
-                cmd(['sync'])
-
-                plugins = glob.glob('{}/{}/python/plugins/*/'.format(backup_dir, date))
-                if plugins:
-                    logger.info('Restoring plugins')
-                    for plugin in plugins:
-                        cmd(['mv', '-v', plugin, os.path.join(python_dir, 'plugins')])
-
-                logger.info('Running post-update')
-                cmd(['bash', os.path.join(python_dir, 'post-update.sh')])
-                cmd(['sync'])
-            except Exception as exc:
-                logger.error('Updating Gateway service failed')
-                error = exc
-
-        master_firmware = os.path.join(update_dir, 'm_classic_firmware.hex')
-        if os.path.exists(master_firmware):
-            try:
-                logger.info(' -> Updating Master firmware')
-                output = subprocess.check_output(['python', '/opt/openmotics/python/master_tool.py', '--version'])
-                from_master_version, _, _ = output.decode().rstrip().partition(' ')
-                master_version = next((x['version'] for x in meta.get('firmware', []) if x['type'] == 'master_classic'), None)
-                if from_master_version == master_version:
-                    logger.info('Master is already {}, skipped'.format(master_version))
-                else:
-                    logger.info('master {} -> {}'.format(from_master_version, master_version))
-                    cmd(['python', '/opt/openmotics/python/master_tool.py', '--update', '--master-firmware-classic', master_firmware])
-                    cmd(['cp', master_firmware, '/opt/openmotics/firmware.hex'])
-            except Exception as exc:
-                logger.error('Updating Master firmware failed')
-                error = exc
-
-        can_firmware = os.path.join(update_dir, 'c_firmware.hex')
-        if os.path.exists(can_firmware):
-            logger.info('Checking master communication')
-            cmd(['python', '/opt/openmotics/python/master_tool.py', '--reset'])
-
-            try:
-                cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
-            except Exception:
-                time.sleep(2)
-                try:
-                    cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
-                except Exception:
-                    logger.info('No communication, resetting master')
-                    cmd(['python', '/opt/openmotics/python/master_tool.py', '--hard-reset'])
-                    time.sleep(2)
-                    try:
-                        cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
-                    except Exception:
-                        time.sleep(2)
-            finally:
-                cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
-
+        if os.path.exists('c_firmware.hex'):
             logger.info(' -> Updating CAN firmware')
-            try:
-                # TODO: check versions
-                cmd(['python', '/opt/openmotics/python/modules_bootloader.py', '-t', 'c' '-f', can_firmware])
-                cmd(['cp', can_firmware, '/opt/openmotics/c_firmware.hex'])
-            except Exception as exc:
-                logger.error('Updating CAN firmware failed')
-                error = exc
+            error = update_can_firmware()
+            if error:
+                errors.append(error)
 
         logger.info('Checking master communication')
-        cmd(['python', '/opt/openmotics/python/master_tool.py', '--reset'])
+        check_master_communication()
 
-        try:
-            cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
-        except Exception:
-            time.sleep(2)
-            try:
-                cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
-            except Exception:
-                logger.info('No communication, resetting master')
-                cmd(['python', '/opt/openmotics/python/master_tool.py', '--hard-reset'])
-                time.sleep(2)
-                try:
-                    cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
-                except Exception:
-                    time.sleep(2)
-        finally:
-            cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
-
-        gateway_frontend = os.path.join(update_dir, 'gateway_frontend.tgz')
-        if os.path.exists(gateway_frontend):
+        if os.path.exists('gateway_frontend.tgz'):
             logger.info(' -> Updating Gateway frontend')
-            try:
-                backup_dir = '/opt/openmotics/backup'
-                static_dir = '/opt/openmotics/static'
-                cmd(['mkdir', '-p', backup_dir])
-                cmd('ls -tp | grep "/$" | tail -n +3 | while read file; do rm -r $file; done', shell=True, cwd=backup_dir)
-
-                # TODO: symlink, A-B deployment
-                cmd(['mkdir', '-p', os.path.join(backup_dir, date)])
-                cmd(['mv', static_dir, os.path.join(backup_dir, date)])
-
-                logger.info('Extracting gateway')
-                cmd(['mkdir', '-p', static_dir])
-                cmd(['tar', '-v', '-xzf', gateway_frontend, '-C', static_dir])
-                cmd(['sync'])
-            except Exception as exc:
-                logger.error('Updating Gateway service failed')
-                error = exc
+            error = update_gateway_frontend(date)
+            if error:
+                errors.append(error)
 
     except Exception as exc:
-        error = exc
+        errors.append(exc)
         # TODO: rollback
     finally:
         logger.info(' -> Starting services')
-        for service in ('openmotics', 'vpn_service'):
-            try:
-                cmd(['supervisorctl', 'start', service])
-            except Exception:
-                logger.warning('Starting {} failed'.format(service))
+        start_services()
 
-        logger.info(' -> Starting cleanup')
+        logger.info(' -> Running cleanup')
         cmd('rm -v -rf {}/*'.format(update_dir), shell=True)
 
-        config.set('OpenMotics', 'version', version)
-        temp_file = get_config_file() + '.update'
-        with open(temp_file, 'wb') as configfile:
-            config.write(configfile)
-        shutil.move(temp_file, get_config_file())
-        subprocess.check_call(['sync'])
-
-        if error:
+        if errors:
+            for error in errors:
+                logger.error(error)
             logger.error('FAILED')
             logger.error('exit 1')
             raise SystemExit(1)
+
+        config.set('OpenMotics', 'version', version)
+        with open(get_config_file(), 'wb') as configfile:
+            config.write(configfile)
 
         if os.path.exists('/tmp/post_update_reboot'):
             logger.info('Scheduling reboot in 5 minutes')
@@ -330,8 +363,8 @@ def main():
         print('Usage: python ' + __file__ + ' version md5sum')
         sys.exit(1)
 
-    (version, md5_sum) = (sys.argv[1], sys.argv[2])
-    update(version, md5_sum)
+    (version, expected_md5) = (sys.argv[1], sys.argv[2])
+    update(version, expected_md5)
 
 
 if __name__ == '__main__':
