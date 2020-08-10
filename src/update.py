@@ -19,6 +19,7 @@ from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 
+import fcntl
 import glob
 import hashlib
 import logging
@@ -33,13 +34,18 @@ import requests
 from six.moves.configparser import ConfigParser, NoOptionError
 from six.moves.urllib.parse import urlparse, urlunparse
 
-from constants import get_config_file, get_update_file, get_update_output_file
+import constants
 
-logging.basicConfig(level=logging.INFO, filename=get_update_output_file())
+logging.basicConfig(level=logging.INFO, filename=constants.get_update_output_file())
 logger = logging.getLogger('update.py')
 logger.setLevel(logging.DEBUG)
 
 SUPERVISOR_SERVICES = ('openmotics', 'vpn_service')
+FIRMWARE_FILES = {'gateway_service': 'gateway.tgz',
+                  'gateway_frontend': 'gateway_frontend.tgz',
+                  'gateway_os': 'gateway_os.tgz',
+                  'master_classic': 'm_classic_firmware.hex',
+                  'can': 'c_firmware.hex'}
 
 
 def cmd(command, **kwargs):
@@ -93,12 +99,8 @@ def get_metadata_url(config, version):
 
 
 def download_firmware(firmware_type, url, expected_sha256):
-    firmware_file_map = {'gateway_service': 'gateway.tgz',
-                         'gateway_os': 'gateway_os.tgz',
-                         'master_classic': 'm_classic_firmware.hex',
-                         'can': 'c_firmware.hex'}
     response = requests.get(url, stream=True)
-    firmware_file = firmware_file_map[firmware_type]
+    firmware_file = FIRMWARE_FILES[firmware_type]
     logger.info('Downloading {}...'.format(firmware_file))
     with open(firmware_file, 'wb') as f:
         shutil.copyfileobj(response.raw, f)
@@ -131,6 +133,24 @@ def start_services():
             logger.warning('Starting {} failed'.format(service))
 
 
+def check_gateway_health(timeout=60):
+    since = time.time()
+    pending = ['unknown']
+    while since > time.time() - timeout:
+        try:
+            response = requests.get('http://127.0.0.1/health_check', timeout=2)
+            data = response.json()
+            if data['success']:
+                pending = [k for k, v in data['health'].items() if not v['state']]
+                if not pending:
+                    return
+        except Exception:
+            pass
+        time.sleep(10)
+    logger.error('health check failed {}'.format(pending))
+    raise Exception('Gateway services failed to start')
+
+
 def check_master_communication():
     cmd(['python', '/opt/openmotics/python/master_tool.py', '--reset'])
     try:
@@ -151,9 +171,8 @@ def check_master_communication():
         cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
 
 
-def update_master_firmware(firmware):
+def update_master_firmware(hexfile, firmware):
     try:
-        master_firmware = 'm_classic_firmware.hex'
         output = subprocess.check_output(['python', '/opt/openmotics/python/master_tool.py', '--version'])
         from_master_version, _, _ = output.decode().rstrip().partition(' ')
         master_version = next((x['version'] for x in firmware if x['type'] == 'master_classic'), None)
@@ -161,30 +180,28 @@ def update_master_firmware(firmware):
             logger.info('Master is already {}, skipped'.format(master_version))
         else:
             logger.info('master {} -> {}'.format(from_master_version, master_version))
-            cmd(['python', '/opt/openmotics/python/master_tool.py', '--update', '--master-firmware-classic', master_firmware])
-            cmd(['cp', master_firmware, '/opt/openmotics/firmware.hex'])
+            cmd(['python', '/opt/openmotics/python/master_tool.py', '--update', '--master-firmware-classic', hexfile])
+            cmd(['cp', hexfile, '/opt/openmotics/firmware.hex'])
     except Exception as exc:
         logger.error('Updating Master firmware failed')
         return exc
 
 
-def update_can_firmware():
+def update_can_firmware(hexfile):
     check_master_communication()
     try:
-        can_firmware = 'c_firmware.hex'
         # TODO: check versions
-        cmd(['python', '/opt/openmotics/python/modules_bootloader.py', '-t', 'c' '-f', can_firmware])
-        cmd(['cp', can_firmware, '/opt/openmotics/c_firmware.hex'])
+        cmd(['python', '/opt/openmotics/python/modules_bootloader.py', '-t', 'c' '-f', hexfile])
+        cmd(['cp', hexfile, os.path.join('/opt/openmotics', os.path.basename(hexfile))])
     except Exception as exc:
         logger.error('Updating CAN firmware failed')
         return exc
 
 
-def update_gateway_os():
+def update_gateway_os(tarball):
     try:
-        gateway_os = 'gateway_os.tgz'
         cmd(['mount', '-o', 'remount,rw', '/'])
-        cmd(['tar', '-xz', '--no-same-owner', '-f', gateway_os, '-C', '/'])
+        cmd(['tar', '-xz', '--no-same-owner', '-f', tarball, '-C', '/'])
         cmd(['sync'])
         cmd(['bash', '/usr/bin/os_update.sh'])
     except Exception as exc:
@@ -194,9 +211,8 @@ def update_gateway_os():
         cmd(['mount', '-o', 'remount,ro', '/'])
 
 
-def update_gateway_backend(date):
+def update_gateway_backend(tarball, date):
     try:
-        gateway_service = 'gateway.tgz'
         backup_dir = '/opt/openmotics/backup'
         python_dir = '/opt/openmotics/python'
         etc_dir = '/opt/openmotics/etc'
@@ -215,7 +231,7 @@ def update_gateway_backend(date):
 
         logger.info('Extracting gateway')
         cmd(['mkdir', '-p', python_dir])
-        cmd(['tar', '-v', '-xzf', gateway_service, '-C', python_dir])
+        cmd(['tar', '-v', '-xzf', tarball, '-C', python_dir])
         cmd(['sync'])
 
         plugins = glob.glob('{}/{}/python/plugins/*/'.format(backup_dir, date))
@@ -232,9 +248,8 @@ def update_gateway_backend(date):
         return exc
 
 
-def update_gateway_frontend(date):
+def update_gateway_frontend(tarball, date):
     try:
-        gateway_frontend = 'gateway_frontend.tgz'
         backup_dir = '/opt/openmotics/backup'
         static_dir = '/opt/openmotics/static'
         cmd(['mkdir', '-p', backup_dir])
@@ -246,7 +261,7 @@ def update_gateway_frontend(date):
 
         logger.info('Extracting gateway')
         cmd(['mkdir', '-p', static_dir])
-        cmd(['tar', '-v', '-xzf', gateway_frontend, '-C', static_dir])
+        cmd(['tar', '-v', '-xzf', tarball, '-C', static_dir])
         cmd(['sync'])
     except Exception as exc:
         logger.error('Updating Gateway service failed')
@@ -261,12 +276,12 @@ def update(version, expected_md5):
     :param md5_server: the md5 sum provided by the server.
     """
     config = ConfigParser()
-    config.read(get_config_file())
+    config.read(constants.get_config_file())
     from_version = config.get('OpenMotics', 'version')
     logger.info('Update {} -> {}'.format(from_version, version))
     logger.info('=========================')
 
-    update_file = get_update_file()
+    update_file = constants.get_update_file()
     update_dir = os.path.dirname(update_file)
     # Change to update directory.
     os.chdir(update_dir)
@@ -295,38 +310,49 @@ def update(version, expected_md5):
         logger.info(' -> Stopping services')
         stop_services()
 
-        if os.path.exists('gateway_os.tgz'):
+        gateway_os = FIRMWARE_FILES['gateway_os']
+        if os.path.exists(gateway_os):
             logger.info(' -> Updating Gateway OS')
-            error = update_gateway_os()
+            error = update_gateway_os(gateway_os)
             if error:
                 errors.append(error)
 
-        if os.path.exists('gateway.tgz'):
+        gateway_service = FIRMWARE_FILES['gateway_service']
+        if os.path.exists(gateway_service):
             logger.info(' -> Updating Gateway service')
-            error = update_gateway_backend(date)
+            error = update_gateway_backend(gateway_service, date)
             if error:
                 errors.append(error)
 
-        if os.path.exists('m_classic_firmware.hex'):
+        master_firmware = FIRMWARE_FILES['master_classic']
+        if os.path.exists(master_firmware):
             logger.info(' -> Updating Master firmware')
-            error = update_master_firmware(meta.get('firmware', []))
+            error = update_master_firmware(master_firmware, meta.get('firmware', []))
             if error:
                 errors.append(error)
 
-        if os.path.exists('c_firmware.hex'):
+        can_firmware = FIRMWARE_FILES['can']
+        if os.path.exists(can_firmware):
             logger.info(' -> Updating CAN firmware')
-            error = update_can_firmware()
+            error = update_can_firmware(can_firmware)
             if error:
                 errors.append(error)
 
         logger.info('Checking master communication')
         check_master_communication()
 
-        if os.path.exists('gateway_frontend.tgz'):
+        gateway_frontend = FIRMWARE_FILES['gateway_frontend']
+        if os.path.exists(gateway_frontend):
             logger.info(' -> Updating Gateway frontend')
-            error = update_gateway_frontend(date)
+            error = update_gateway_frontend(gateway_frontend, date)
             if error:
                 errors.append(error)
+
+        logger.info(' -> Starting services')
+        start_services()
+
+        logger.info(' -> Waiting for health check')
+        check_gateway_health()
 
     except Exception as exc:
         errors.append(exc)
@@ -346,7 +372,7 @@ def update(version, expected_md5):
             raise SystemExit(1)
 
         config.set('OpenMotics', 'version', version)
-        with open(get_config_file(), 'wb') as configfile:
+        with open(constants.get_config_file(), 'wb') as configfile:
             config.write(configfile)
 
         if os.path.exists('/tmp/post_update_reboot'):
@@ -364,7 +390,19 @@ def main():
         sys.exit(1)
 
     (version, expected_md5) = (sys.argv[1], sys.argv[2])
-    update(version, expected_md5)
+    lockfile = constants.get_update_lockfile()
+    with open(lockfile, 'wc') as wfd:
+        try:
+            fcntl.flock(wfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except Exception:
+            logger.exception('failed to aquire update lock')
+            raise SystemExit(2)
+        try:
+            update(version, expected_md5)
+        finally:
+            fcntl.flock(wfd, fcntl.LOCK_UN)
+            os.unlink(lockfile)
+
 
 
 if __name__ == '__main__':

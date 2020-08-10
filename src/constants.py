@@ -136,3 +136,9 @@ def get_init_lockfile():
     # type: () -> str
     """ Returns the lock file used by openmotics_init.py """
     return "/tmp/openmotics_init.lock"
+
+
+def get_update_lockfile():
+    # type: () -> str
+    """ Returns the lock file used by update.py """
+    return "/tmp/openmotics_update.lock"
