@@ -40,6 +40,7 @@ logging.basicConfig(level=logging.INFO, filename=constants.get_update_output_fil
 logger = logging.getLogger('update.py')
 logger.setLevel(logging.DEBUG)
 
+PREFIX = '/opt/openmotics'
 SUPERVISOR_SERVICES = ('openmotics', 'vpn_service')
 FIRMWARE_FILES = {'gateway_service': 'gateway.tgz',
                   'gateway_frontend': 'gateway_frontend.tgz',
@@ -152,36 +153,38 @@ def check_gateway_health(timeout=60):
 
 
 def check_master_communication():
-    cmd(['python', '/opt/openmotics/python/master_tool.py', '--reset'])
+    master_tool = os.path.join(PREFIX, 'python/master_tool.py')
+    cmd(['python', master_tool, '--reset'])
     try:
-        cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
+        cmd(['python', master_tool, '--sync'])
     except Exception:
         time.sleep(2)
         try:
-            cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
+            cmd(['python', master_tool, '--sync'])
         except Exception:
             logger.info('No communication, resetting master')
-            cmd(['python', '/opt/openmotics/python/master_tool.py', '--hard-reset'])
+            cmd(['python', master_tool, '--hard-reset'])
             time.sleep(2)
             try:
-                cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
+                cmd(['python', master_tool, '--sync'])
             except Exception:
                 time.sleep(2)
     finally:
-        cmd(['python', '/opt/openmotics/python/master_tool.py', '--sync'])
+        cmd(['python', master_tool, '--sync'])
 
 
 def update_master_firmware(hexfile, firmware):
+    master_tool = os.path.join(PREFIX, 'python/master_tool.py')
     try:
-        output = subprocess.check_output(['python', '/opt/openmotics/python/master_tool.py', '--version'])
+        output = subprocess.check_output(['python', master_tool, '--version'])
         from_master_version, _, _ = output.decode().rstrip().partition(' ')
         master_version = next((x['version'] for x in firmware if x['type'] == 'master_classic'), None)
         if from_master_version == master_version:
             logger.info('Master is already {}, skipped'.format(master_version))
         else:
             logger.info('master {} -> {}'.format(from_master_version, master_version))
-            cmd(['python', '/opt/openmotics/python/master_tool.py', '--update', '--master-firmware-classic', hexfile])
-            cmd(['cp', hexfile, '/opt/openmotics/firmware.hex'])
+            cmd(['python', master_tool, '--update', '--master-firmware-classic', hexfile])
+            cmd(['cp', hexfile, os.path.join(PREFIX, 'firmware.hex')])
     except Exception as exc:
         logger.error('Updating Master firmware failed')
         return exc
@@ -189,10 +192,11 @@ def update_master_firmware(hexfile, firmware):
 
 def update_can_firmware(hexfile):
     check_master_communication()
+    modules_bootloader = os.path.join(PREFIX, 'python/modules_bootloader.py')
     try:
         # TODO: check versions
-        cmd(['python', '/opt/openmotics/python/modules_bootloader.py', '-t', 'c' '-f', hexfile])
-        cmd(['cp', hexfile, os.path.join('/opt/openmotics', os.path.basename(hexfile))])
+        cmd(['python', modules_bootloader, '-t', 'c' '-f', hexfile])
+        cmd(['cp', hexfile, os.path.join(PREFIX, os.path.basename(hexfile))])
     except Exception as exc:
         logger.error('Updating CAN firmware failed')
         return exc
@@ -213,9 +217,9 @@ def update_gateway_os(tarball):
 
 def update_gateway_backend(tarball, date):
     try:
-        backup_dir = '/opt/openmotics/backup'
-        python_dir = '/opt/openmotics/python'
-        etc_dir = '/opt/openmotics/etc'
+        backup_dir = os.path.join(PREFIX, 'backup')
+        python_dir = os.path.join(PREFIX, 'python')
+        etc_dir = os.path.join(PREFIX, 'etc')
         cmd(['mkdir', '-p', backup_dir])
         cmd('ls -tp | grep "/$" | tail -n +3 | while read file; do rm -r $file; done', shell=True, cwd=backup_dir)
 
@@ -225,7 +229,7 @@ def update_gateway_backend(tarball, date):
         cmd(['cp', '-r', etc_dir, os.path.join(backup_dir, date)])
 
         # Cleanup for old versions.
-        old_dist_dir = '/opt/openmotics/dist-packages'
+        old_dist_dir = os.path.join(PREFIX, 'dist-packages')
         if os.path.exists(old_dist_dir):
             cmd(['mv', old_dist_dir, os.path.join(backup_dir, date)])
 
@@ -250,8 +254,8 @@ def update_gateway_backend(tarball, date):
 
 def update_gateway_frontend(tarball, date):
     try:
-        backup_dir = '/opt/openmotics/backup'
-        static_dir = '/opt/openmotics/static'
+        backup_dir = os.path.join(PREFIX, 'backup')
+        static_dir = os.path.join(PREFIX, 'static')
         cmd(['mkdir', '-p', backup_dir])
         cmd('ls -tp | grep "/$" | tail -n +3 | while read file; do rm -r $file; done', shell=True, cwd=backup_dir)
 
