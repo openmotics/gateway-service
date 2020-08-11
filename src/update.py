@@ -36,7 +36,8 @@ from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
 
-logging.basicConfig(level=logging.INFO, filename=constants.get_update_output_file())
+
+logging.basicConfig(level=logging.INFO, filemode='w', format='%(message)s', filename=constants.get_update_output_file())
 logger = logging.getLogger('update.py')
 logger.setLevel(logging.DEBUG)
 
@@ -283,8 +284,8 @@ def update(version, expected_md5):
         config = ConfigParser()
         config.read(constants.get_config_file())
         from_version = config.get('OpenMotics', 'version')
-        logger.info('Update {} -> {}'.format(from_version, version))
-        logger.info('=========================')
+        logger.info('==================================')
+        logger.info('Starting update {} -> {}'.format(from_version, version))
 
         update_file = constants.get_update_file()
         update_dir = os.path.dirname(update_file)
@@ -385,7 +386,7 @@ def update(version, expected_md5):
             logger.info('Scheduling reboot in 5 minutes')
             subprocess.Popen('sleep 300 && reboot', shell=True)
 
-        logger.info('SUCCESS')
+        logger.info('DONE')
         logger.info('exit 0')
 
 
@@ -396,6 +397,10 @@ def main():
         sys.exit(1)
 
     (version, expected_md5) = (sys.argv[1], sys.argv[2])
+
+    # Start with version line, this is expected by the cloud.
+    logger.info(version)
+
     lockfile = constants.get_update_lockfile()
     with open(lockfile, 'wc') as wfd:
         try:
