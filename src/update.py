@@ -35,7 +35,7 @@ from six.moves.configparser import ConfigParser, NoOptionError
 from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
-
+from platform_utils import Platform
 
 logging.basicConfig(level=logging.INFO, filemode='w', format='%(message)s', filename=constants.get_update_output_file())
 logger = logging.getLogger('update.py')
@@ -47,6 +47,7 @@ FIRMWARE_FILES = {'gateway_service': 'gateway.tgz',
                   'gateway_frontend': 'gateway_frontend.tgz',
                   'gateway_os': 'gateway_os.tgz',
                   'master_classic': 'm_classic_firmware.hex',
+                  'master_coreplus': 'm_core_firmware.hex',
                   'power': 'p_firmware.hex',
                   'energy': 'e_firmware.hex',
                   'can': 'c_firmware.hex',
@@ -109,6 +110,13 @@ def get_metadata_url(config, version):
     path = '{}/{}'.format(uri.path, version)
     query = 'uuid={0}'.format(gateway_uuid)
     return urlunparse((uri.scheme, uri.netloc, path, '', query, ''))
+
+
+def get_master_type():
+    if Platform.get_platform() == Platform.Type.CORE_PLUS:
+        return 'master_coreplus'
+    else:
+        return 'master_classic'
 
 
 def download_firmware(firmware_type, url, expected_sha256):
@@ -185,18 +193,20 @@ def check_master_communication():
         cmd(['python', master_tool, '--sync'])
 
 
-def update_master_firmware(hexfile, firmware):
+def update_master_firmware(master_type, firmware):
     master_tool = os.path.join(PREFIX, 'python/master_tool.py')
+    classic_hexfile = FIRMWARE_FILES['master_classic']
+    core_hexfile = FIRMWARE_FILES['master_coreplus']
     try:
         output = subprocess.check_output(['python', master_tool, '--version'])
         from_master_version, _, _ = output.decode().rstrip().partition(' ')
-        master_version = next((x['version'] for x in firmware if x['type'] == 'master_classic'), None)
+        master_version = next((x['version'] for x in firmware if x['type'] == master_type), None)
         if from_master_version == master_version:
             logger.info('Master is already {}, skipped'.format(master_version))
         else:
             logger.info('master {} -> {}'.format(from_master_version, master_version))
-            cmd(['python', master_tool, '--update', '--master-firmware-classic', hexfile])
-            cmd(['cp', hexfile, os.path.join(PREFIX, 'firmware.hex')])
+            cmd(['python', master_tool, '--update', '--master-firmware-classic', classic_hexfile, '--master-firmware-core', core_hexfile])
+            cmd(['cp', FIRMWARE_FILES[master_type], os.path.join(PREFIX, 'firmware.hex')])
     except Exception as exc:
         logger.error('Updating Master firmware failed')
         return exc
@@ -367,10 +377,11 @@ def update(version, expected_md5):
             if error:
                 errors.append(error)
 
-        master_firmware = FIRMWARE_FILES['master_classic']
+        master_type = get_master_type()
+        master_firmware = FIRMWARE_FILES[master_type]
         if os.path.exists(master_firmware):
             logger.info(' -> Updating Master firmware')
-            error = update_master_firmware(master_firmware, meta.get('firmware', []))
+            error = update_master_firmware(master_type, meta.get('firmware', []))
             if error:
                 errors.append(error)
 
