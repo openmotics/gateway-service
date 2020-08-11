@@ -47,7 +47,18 @@ FIRMWARE_FILES = {'gateway_service': 'gateway.tgz',
                   'gateway_frontend': 'gateway_frontend.tgz',
                   'gateway_os': 'gateway_os.tgz',
                   'master_classic': 'm_classic_firmware.hex',
-                  'can': 'c_firmware.hex'}
+                  'power': 'p_firmware.hex',
+                  'energy': 'e_firmware.hex',
+                  'can': 'c_firmware.hex',
+                  'output': 'o_firmware.hex',
+                  'input': 'i_firmware.hex',
+                  'dimmer': 'd_firmware.hex',
+                  'temperature': 't_firmware.hex'}
+MODULE_TYPES = {'can': 'c',
+                'output': 'o',
+                'input': 'i',
+                'dimmer': 'd',
+                'temperature': 't'}
 
 
 def cmd(command, **kwargs):
@@ -190,16 +201,39 @@ def update_master_firmware(hexfile, firmware):
         logger.error('Updating Master firmware failed')
         return exc
 
+def update_power_firmware(hexfile):
+    check_master_communication()
+    power_bootloader = os.path.join(PREFIX, 'python/power_bootloader.py')
+    try:
+        # TODO: check versions
+        cmd(['python', power_bootloader, '--all', '--8', '--file', hexfile])
+        cmd(['cp', hexfile, os.path.join(PREFIX, os.path.basename(hexfile))])
+    except Exception as exc:
+        logger.error('Updating Power firmware failed')
+        return exc
 
-def update_can_firmware(hexfile):
+
+def update_energy_firmware(hexfile):
+    check_master_communication()
+    power_bootloader = os.path.join(PREFIX, 'python/power_bootloader.py')
+    try:
+        # TODO: check versions
+        cmd(['python', power_bootloader, '--all', '--file', hexfile])
+        cmd(['cp', hexfile, os.path.join(PREFIX, os.path.basename(hexfile))])
+    except Exception as exc:
+        logger.error('Updating Energy firmware failed')
+        return exc
+
+
+def update_module_firmware(hexfile, module):
     check_master_communication()
     modules_bootloader = os.path.join(PREFIX, 'python/modules_bootloader.py')
     try:
         # TODO: check versions
-        cmd(['python', modules_bootloader, '-t', 'c' '-f', hexfile])
+        cmd(['python', modules_bootloader, '-t', MODULE_TYPES[module], '-f', hexfile])
         cmd(['cp', hexfile, os.path.join(PREFIX, os.path.basename(hexfile))])
     except Exception as exc:
-        logger.error('Updating CAN firmware failed')
+        logger.error('Updating {} firmware failed'.format(module))
         return exc
 
 
@@ -340,12 +374,27 @@ def update(version, expected_md5):
             if error:
                 errors.append(error)
 
-        can_firmware = FIRMWARE_FILES['can']
-        if os.path.exists(can_firmware):
-            logger.info(' -> Updating CAN firmware')
-            error = update_can_firmware(can_firmware)
+        power_firmware = FIRMWARE_FILES['power']
+        if os.path.exists(power_firmware):
+            logger.info(' -> Updating Power firmware')
+            error = update_power_firmware(power_firmware)
             if error:
                 errors.append(error)
+
+        energy_firmware = FIRMWARE_FILES['energy']
+        if os.path.exists(energy_firmware):
+            logger.info(' -> Updating Energy firmware')
+            error = update_energy_firmware(energy_firmware)
+            if error:
+                errors.append(error)
+
+        for module in MODULE_TYPES:
+            module_firmware = FIRMWARE_FILES[module]
+            if os.path.exists(module_firmware):
+                logger.info(' -> Updating {} firmware'.format(module))
+                error = update_module_firmware(module_firmware, module)
+                if error:
+                    errors.append(error)
 
         logger.info('Checking master communication')
         check_master_communication()
