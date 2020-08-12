@@ -16,7 +16,7 @@
 
 from __future__ import absolute_import
 
-from platform_utils import System
+from platform_utils import Platform, System
 System.import_libs()
 
 import fcntl
@@ -35,7 +35,6 @@ from six.moves.configparser import ConfigParser, NoOptionError
 from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
-from platform_utils import Platform
 
 logging.basicConfig(level=logging.INFO, filemode='w', format='%(message)s', filename=constants.get_update_output_file())
 logger = logging.getLogger('update.py')
