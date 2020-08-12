@@ -86,7 +86,7 @@ def extract_legacy_update(update_file, expected_md5):
     cmd(['tar', 'xzf', update_file])
 
 def fetch_metadata(config, version, expected_md5):
-    response = requests.get(get_metadata_url(config, version))
+    response = requests.get(get_metadata_url(config, version), timeout=2)
     if response.status_code != 200:
         raise ValueError('failed to get update metadata')
     hasher = hashlib.md5()
@@ -119,7 +119,7 @@ def get_master_type():
 
 
 def download_firmware(firmware_type, url, expected_sha256):
-    response = requests.get(url, stream=True)
+    response = requests.get(url, stream=True, timeout=60)
     firmware_file = FIRMWARE_FILES[firmware_type]
     logger.info('Downloading {}...'.format(firmware_file))
     with open(firmware_file, 'wb') as f:
