@@ -468,8 +468,8 @@ def main():
         except Exception:
             logger.exception('failed to aquire update lock')
             logger.error('FAILED')
-            logger.error('exit 2')
-            raise SystemExit(2)
+            logger.error('exit 1')
+            raise SystemExit(1)
         try:
             update(version, expected_md5)
         except SystemExit:
