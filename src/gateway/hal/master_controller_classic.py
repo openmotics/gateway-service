@@ -58,7 +58,7 @@ from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Tuple
-    from serial import Serial
+    from serial.serialposix import Serial
     from gateway.config import ConfigurationController
 
 logger = logging.getLogger("openmotics")
@@ -877,26 +877,30 @@ class MasterClassicController(MasterController):
         time.sleep(2)
 
         logger.info('* Verify bootloader...')
-        response = str(subprocess.check_output(base_command + ['-s']))
-        # Expected response:
-        # > Serial Bootloader AN1310 v1.05r
-        # > Copyright (c) 2010-2011, Microchip Technology Inc.
-        # >
-        # > Using /dev/ttyO5 at 115200 bps
-        # > Connecting...
-        # > Bootloader Firmware v1.05
-        # > PIC18F67J11 Revision 10
-        match = re.findall(pattern=r'Bootloader Firmware (v[0-9]+\.[0-9]+).*(PIC.*) Revision',
-                           string=response,
-                           flags=re.DOTALL)
-        if not match:
-            raise RuntimeError('Bootloader response did not match: {0}'.format(response))
-        logger.debug(response)
-        logger.info('  * Bootloader information: {1} bootloader {0}'.format(*match[0]))
+        try:
+            response = str(subprocess.check_output(base_command + ['-s']))
+            # Expected response:
+            # > Serial Bootloader AN1310 v1.05r
+            # > Copyright (c) 2010-2011, Microchip Technology Inc.
+            # >
+            # > Using /dev/ttyO5 at 115200 bps
+            # > Connecting...
+            # > Bootloader Firmware v1.05
+            # > PIC18F67J11 Revision 10
+            match = re.findall(pattern=r'Bootloader Firmware (v[0-9]+\.[0-9]+).*(PIC.*) Revision',
+                               string=response,
+                               flags=re.DOTALL)
+            if not match:
+                raise RuntimeError('Bootloader response did not match: {0}'.format(response))
+            logger.debug(response)
+            logger.info('  * Bootloader information: {1} bootloader {0}'.format(*match[0]))
+        except subprocess.CalledProcessError as ex:
+            logger.info(ex.output)
+            raise
 
         logger.info('* Flashing...')
         try:
-            response = subprocess.check_output(base_command + ['-p ', '-c', hex_filename])
+            response = str(subprocess.check_output(base_command + ['-p ', '-c', hex_filename]))
             logger.debug(response)
         except subprocess.CalledProcessError as ex:
             logger.info(ex.output)
@@ -904,7 +908,7 @@ class MasterClassicController(MasterController):
 
         logger.info('* Verifying...')
         try:
-            response = subprocess.check_output(base_command + ['-v', hex_filename])
+            response = str(subprocess.check_output(base_command + ['-v', hex_filename]))
             logger.debug(response)
         except subprocess.CalledProcessError as ex:
             logger.info(ex.output)
@@ -912,7 +916,7 @@ class MasterClassicController(MasterController):
 
         logger.info('* Entering application...')
         try:
-            response = subprocess.check_output(base_command + ['-r'])
+            response = str(subprocess.check_output(base_command + ['-r']))
             logger.debug(response)
         except subprocess.CalledProcessError as ex:
             logger.info(ex.output)
