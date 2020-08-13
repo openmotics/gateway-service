@@ -16,6 +16,7 @@
 Module for communicating with the Master
 """
 from __future__ import absolute_import
+import re
 import logging
 import time
 import six
@@ -862,64 +863,62 @@ class MasterClassicController(MasterController):
         # type: (str, Serial) -> None
         port = controller_serial.port  # type: ignore
         baudrate = str(controller_serial.baudrate)  # type: ignore
+        base_command = ['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate]
 
-        logger.info('Enter bootloader...')
-        # Entering the bootloader requires some correct timing. The AN1310 tool is used to enter bootloader for which the
-        # tool only tries for 5 seconds. To in these 5 seconds, the master needs to be booted up so it can enter (and
-        # stay) into bootloader.
+        logger.info('Updating master...')
+        logger.info('* Enter bootloader...')
+        controller_serial.break_condition = True
+        time.sleep(2)
         MasterClassicController._set_master_power(False)
-        time.sleep(3)
-        process = subprocess.Popen(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-a'],
-                                   stdin=subprocess.PIPE,
-                                   stdout=subprocess.PIPE)
+        time.sleep(2)
         MasterClassicController._set_master_power(True)
-        process.wait()
+        time.sleep(2)
+        controller_serial.break_condition = False
+        time.sleep(2)
 
-        logger.info('Verify bootloader...')
-        tries = 10
-        found = False
-        response = None
-        while tries > 0:
-            # It might take a few seconds before the bootloader is active
-            try:
-                response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-s'])
-                if 'PIC18F67J11' in str(response):
-                    found = True
-                    break
-            except subprocess.CalledProcessError as ex:
-                response = ex.output  # For debugging purposes down below
-                if ex.returncode != 254:
-                    raise
-            time.sleep(1)
-            tries -= 1
-        if not found:
-            error_message = 'Could not enter bootloader: {0}'.format(str(response))
-            logger.error(error_message)
-            raise RuntimeError(error_message)
+        logger.info('* Verify bootloader...')
+        response = str(subprocess.check_output(base_command + ['-s']))
+        # Expected response:
+        # > Serial Bootloader AN1310 v1.05r
+        # > Copyright (c) 2010-2011, Microchip Technology Inc.
+        # >
+        # > Using /dev/ttyO5 at 115200 bps
+        # > Connecting...
+        # > Bootloader Firmware v1.05
+        # > PIC18F67J11 Revision 10
+        match = re.findall(pattern=r'Bootloader Firmware (v[0-9]+\.[0-9]+).*(PIC.*) Revision',
+                           string=response,
+                           flags=re.DOTALL)
+        if not match:
+            raise RuntimeError('Bootloader response did not match: {0}'.format(response))
+        logger.debug(response)
+        logger.info('  * Bootloader information: {1} bootloader {0}'.format(*match[0]))
 
-        logger.info('Flashing...')
+        logger.info('* Flashing...')
         try:
-            response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-p ', '-c', hex_filename])
+            response = subprocess.check_output(base_command + ['-p ', '-c', hex_filename])
             logger.debug(response)
         except subprocess.CalledProcessError as ex:
             logger.info(ex.output)
             raise
 
-        logger.info('Verifying...')
+        logger.info('* Verifying...')
         try:
-            response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-v', hex_filename])
+            response = subprocess.check_output(base_command + ['-v', hex_filename])
             logger.debug(response)
         except subprocess.CalledProcessError as ex:
             logger.info(ex.output)
             raise
 
-        logger.info('Entering application...')
+        logger.info('* Entering application...')
         try:
-            response = subprocess.check_output(['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate, '-r'])
+            response = subprocess.check_output(base_command + ['-r'])
             logger.debug(response)
         except subprocess.CalledProcessError as ex:
             logger.info(ex.output)
             raise
+
+        logger.info('Update completed')
 
     @staticmethod
     def _set_master_power(on):
