@@ -867,12 +867,14 @@ class MasterClassicController(MasterController):
 
         logger.info('Updating master...')
         logger.info('* Enter bootloader...')
+        # Setting this condition will assert a break condition on TX to which the bootloader will react.
         controller_serial.break_condition = True
         time.sleep(2)
         MasterClassicController._set_master_power(False)
         time.sleep(2)
         MasterClassicController._set_master_power(True)
         time.sleep(2)
+        # After the bootloader is active, release the break condition to free up TX for subsequent communications
         controller_serial.break_condition = False
         time.sleep(2)
 
