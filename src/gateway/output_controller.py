@@ -161,6 +161,21 @@ class OutputController(BaseController):
             outputs_to_save.append((output_dto, fields))
         self._master_controller.save_outputs(outputs_to_save)
 
+    def set_all_lights_off(self):
+        # type: () -> None
+        # TODO: also switch other lights (e.g. from plugins)
+        return self._master_controller.set_all_lights_off()
+
+    def set_all_lights_floor_off(self, floor):
+        # type: (int) -> None
+        # TODO: also switch other lights (e.g. from plugins)
+        return self._master_controller.set_all_lights_floor_off(floor)
+
+    def set_all_lights_floor_on(self, floor):
+        # type: (int) -> None
+        # TODO: also switch other lights (e.g. from plugins)
+        return self._master_controller.set_all_lights_floor_on(floor)
+
 
 class OutputStateCache(object):
     def __init__(self):
