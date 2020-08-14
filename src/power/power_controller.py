@@ -91,6 +91,8 @@ class PowerController(object):
             for module in modules:
                 module_address = module['address']
                 module_version = module['version']
+                firmware_version = None  # Optional[str]
+                online = False
                 try:
                     raw_version = self._power_communicator.do_command(module_address, power_api.get_version(module_version))
                     if module_version == power_api.P1_CONCENTRATOR:
@@ -104,8 +106,7 @@ class PowerController(object):
                             firmware_version = '{1}.{2}.{3} ({0})'.format(*parsed_version)
                     online = True
                 except CommunicationTimedOutException:
-                    firmware_version = None
-                    online = False
+                    pass  # No need to log here, there will be tons of other logs anyway
                 information.append(ModuleDTO(source=ModuleDTO.Source.GATEWAY,
                                              address=str(module_address),
                                              module_type=module_type_map.get(module_version),
