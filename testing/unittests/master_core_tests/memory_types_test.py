@@ -296,45 +296,45 @@ class MemoryTypesTest(unittest.TestCase):
 
         SetUpTestInjections(memory_files={MemoryTypes.EEPROM: memory_file_mock})
 
-        class Object(MemoryModelDefinition):
+        class Object2(MemoryModelDefinition):
             class SomeType(MemoryEnumDefinition):
                 FOO = EnumEntry('FOO', values=[0, 255], default=True)
                 BAR = EnumEntry('BAR', values=[1])
 
             enum = SomeType(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (id, 0)))
 
-        instance = Object(0)
-        self.assertEqual(Object.SomeType.FOO, instance.enum)
+        instance = Object2(0)
+        self.assertEqual(Object2.SomeType.FOO, instance.enum)
         self.assertEqual(instance.SomeType.FOO, instance.enum)
 
-        instance.enum = Object.SomeType.BAR
-        self.assertEqual(Object.SomeType.BAR, instance.enum)
+        instance.enum = Object2.SomeType.BAR
+        self.assertEqual(Object2.SomeType.BAR, instance.enum)
         self.assertEqual(0, memory_map[0][0])
         instance.save()
         self.assertEqual(1, memory_map[0][0])
 
         instance.enum = 'FOO'  # It is allowed to directly use the string representation
-        self.assertEqual(Object.SomeType.FOO, instance.enum)
+        self.assertEqual(Object2.SomeType.FOO, instance.enum)
         self.assertEqual(1, memory_map[0][0])
         instance.save()
         self.assertEqual(0, memory_map[0][0])
 
         memory_map[0][0] = 255
-        instance = Object(0)
-        self.assertEqual(Object.SomeType.FOO, instance.enum)
+        instance = Object2(0)
+        self.assertEqual(Object2.SomeType.FOO, instance.enum)
 
         memory_map[0][0] = 123
-        instance = Object(0)
-        self.assertEqual(Object.SomeType.FOO, instance.enum)
+        instance = Object2(0)
+        self.assertEqual(Object2.SomeType.FOO, instance.enum)
 
-        class Object2(MemoryModelDefinition):
+        class Object3(MemoryModelDefinition):
             class SomeType(MemoryEnumDefinition):
                 FOO = EnumEntry('FOO', values=[0, 255])
                 BAR = EnumEntry('BAR', values=[1])
 
             enum = SomeType(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (id, 0)))
 
-        instance = Object2(0)
+        instance = Object3(0)
         with self.assertRaises(ValueError):
             _ = instance.enum
 
