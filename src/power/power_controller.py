@@ -92,16 +92,23 @@ class PowerController(object):
                 module_address = module['address']
                 module_version = module['version']
                 try:
-                    raw_version = self._power_communicator.do_command(module_address, power_api.get_version(module_version))[0]
-                    version_info = raw_version.split('\x00', 1)[0].split('_')
-                    firmware_version = '{0}.{1}.{2}'.format(version_info[1], version_info[2], version_info[3])  # type: Optional[str]
+                    raw_version = self._power_communicator.do_command(module_address, power_api.get_version(module_version))
+                    if module_version == power_api.P1_CONCENTRATOR:
+                        firmware_version = '{1}.{2}.{3} ({0})'.format(*raw_version)
+                    else:
+                        cleaned_version = raw_version[0].split('\x00', 1)[0]
+                        parsed_version = cleaned_version.split('_')
+                        if len(parsed_version) != 4:
+                            firmware_version = cleaned_version
+                        else:
+                            firmware_version = '{1}.{2}.{3} ({0})'.format(*parsed_version)
                     online = True
                 except CommunicationTimedOutException:
                     firmware_version = None
                     online = False
                 information.append(ModuleDTO(source=ModuleDTO.Source.GATEWAY,
                                              address=str(module_address),
-                                             module_type=module_type_map.get(module['version']),
+                                             module_type=module_type_map.get(module_version),
                                              hardware_type=ModuleDTO.HardwareType.PHYSICAL,
                                              firmware_version=firmware_version,
                                              order=module['id'],  # TODO: Will be removed once Energy modules are in the ORM
