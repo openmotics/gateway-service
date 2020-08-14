@@ -18,7 +18,7 @@ Memory models MyPy stub
 from typing import List
 
 from master.core.basic_action import BasicAction
-from master.core.memory_types import MemoryModelDefinition, GlobalMemoryModelDefinition, CompositeMemoryModelDefinition
+from master.core.memory_types import MemoryModelDefinition, GlobalMemoryModelDefinition, CompositeMemoryModelDefinition, MemoryEnumDefinition, EnumEntry
 
 
 class GlobalConfiguration(GlobalMemoryModelDefinition):
@@ -61,13 +61,19 @@ class OutputModuleConfiguration(MemoryModelDefinition):
 
 
 class OutputConfiguration(MemoryModelDefinition):
+    class TimerType(MemoryEnumDefinition):
+        INACTIVE: EnumEntry
+        PER_100_MS: EnumEntry
+        PER_1_S: EnumEntry
+        ABSOLUTE: EnumEntry
+
     class _DALIOutputComposition(CompositeMemoryModelDefinition):
         dali_output_id: int
         dali_group_id: int
 
     module: OutputModuleConfiguration
     timer_value: int
-    timer_type: int
+    timer_type: EnumEntry
     output_type: int
     min_output_level: int
     max_output_level: int
