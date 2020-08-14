@@ -1228,9 +1228,7 @@ class MasterClassicController(MasterController):
                 raise
 
             logger.info('Update completed')
-        finally:
-            self._master_communicator.update_mode_stop()
-            self._communication_enabled = True
+
         finally:
             self._master_communicator.update_mode_stop()
             self._communication_enabled = True
