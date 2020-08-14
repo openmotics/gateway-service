@@ -362,18 +362,18 @@ class MasterCoreController(MasterController):
             return
         _ = dimmer, timer  # TODO: Use `dimmer` and `timer`
         action = 1 if state else 0
-        self._master_communicator.do_command(CoreAPI.basic_action(), {'type': 0, 'action': action,
-                                                                      'device_nr': output_id,
-                                                                      'extra_parameter': 0})
+        self._master_communicator.do_basic_action(action_type=0,
+                                                  action=action,
+                                                  device_nr=output_id)
 
     def toggle_output(self, output_id):
         output = OutputConfiguration(output_id)
         if output.is_shutter:
             # Shutter outputs cannot be controlled
             return
-        self._master_communicator.do_command(CoreAPI.basic_action(), {'type': 0, 'action': 16,
-                                                                      'device_nr': output_id,
-                                                                      'extra_parameter': 0})
+        self._master_communicator.do_basic_action(action_type=0,
+                                                  action=16,
+                                                  device_nr=output_id)
 
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         output = OutputConfiguration(output_id)
@@ -836,12 +836,17 @@ class MasterCoreController(MasterController):
         raise NotImplementedError()
 
     def set_all_lights_off(self):
-        raise NotImplementedError()
+        # type: () -> None
+        self._master_communicator.do_basic_action(action_type=0,
+                                                  action=255,
+                                                  device_nr=1)
 
     def set_all_lights_floor_off(self, floor):
+        # type: (int) -> None
         raise NotImplementedError()
 
     def set_all_lights_floor_on(self, floor):
+        # type: (int) -> None
         raise NotImplementedError()
 
     def get_configuration_dirty_flag(self):

@@ -1552,40 +1552,30 @@ class MasterClassicController(MasterController):
 
     @communication_enabled
     def set_all_lights_off(self):
-        """ Turn all lights off.
-
-        :returns: empty dict.
-        """
+        # type: () -> None
+        """ Turn all lights off. """
         self._master_communicator.do_command(
             master_api.basic_action(),
             {'action_type': master_api.BA_ALL_LIGHTS_OFF, 'action_number': 0}
         )
-        return dict()
 
     @communication_enabled
     def set_all_lights_floor_off(self, floor):
-        """ Turn all lights on a given floor off.
-
-        :returns: empty dict.
-        """
-
+        # type: (int) -> None
+        """ Turn all lights on a given floor off. """
         self._master_communicator.do_command(
             master_api.basic_action(),
             {'action_type': master_api.BA_LIGHTS_OFF_FLOOR, 'action_number': floor}
         )
-        return dict()
 
     @communication_enabled
     def set_all_lights_floor_on(self, floor):
-        """ Turn all lights on a given floor on.
-
-        :returns: empty dict.
-        """
+        # type: (int) -> None
+        """ Turn all lights on a given floor on. """
         self._master_communicator.do_command(
             master_api.basic_action(),
             {'action_type': master_api.BA_LIGHTS_ON_FLOOR, 'action_number': floor}
         )
-        return dict()
 
     # Sensors
 
