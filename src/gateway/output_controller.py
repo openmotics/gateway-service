@@ -169,12 +169,12 @@ class OutputController(BaseController):
     def set_all_lights_floor_off(self, floor):
         # type: (int) -> None
         # TODO: also switch other lights (e.g. from plugins)
-        return self._master_controller.set_all_lights_floor_off(floor)
+        return self._master_controller.set_all_lights_floor_off(floor=floor)
 
     def set_all_lights_floor_on(self, floor):
         # type: (int) -> None
         # TODO: also switch other lights (e.g. from plugins)
-        return self._master_controller.set_all_lights_floor_on(floor)
+        return self._master_controller.set_all_lights_floor_on(floor=floor)
 
 
 class OutputStateCache(object):
