@@ -523,12 +523,15 @@ class MasterController(object):
     # All lights off
 
     def set_all_lights_off(self):
+        # type: () -> None
         raise NotImplementedError()
 
     def set_all_lights_floor_off(self, floor):
+        # type: (int) -> None
         raise NotImplementedError()
 
     def set_all_lights_floor_on(self, floor):
+        # type: (int) -> None
         raise NotImplementedError()
 
     # Validation bits

@@ -197,21 +197,6 @@ class GatewayApi(object):
         # TODO: implement output controller and let her handle routing to either master or e.g. plugin based outputs
         self.__master_controller.set_output(output_id=output_id, state=is_on, dimmer=dimmer, timer=timer)
 
-    def set_all_lights_off(self):  # type: () -> None
-        # TODO: work with output controller
-        # TODO: also switch other lights (e.g. from plugins)
-        return self.__master_controller.set_all_lights_off()
-
-    def set_all_lights_floor_off(self, floor):  # type: (int) -> None
-        # TODO: work with output controller
-        # TODO: also switch other lights (e.g. from plugins)
-        return self.__master_controller.set_all_lights_floor_off(floor)
-
-    def set_all_lights_floor_on(self, floor):  # type: (int) -> None
-        # TODO: work with output controller
-        # TODO: also switch other lights (e.g. from plugins)
-        return self.__master_controller.set_all_lights_floor_on(floor)
-
     # Input functions
 
     def get_input_status(self):

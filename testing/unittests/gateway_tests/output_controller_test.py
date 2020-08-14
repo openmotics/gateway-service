@@ -141,6 +141,17 @@ class OutputControllerTest(unittest.TestCase):
             assert OutputDTO(id=42, room=3) in outputs
             load.assert_called_with(output_id=42)
 
+    def test_output_actions(self):
+        with mock.patch.object(self.master_controller, 'set_all_lights_off') as call:
+            self.controller.set_all_lights_off()
+            call.assert_called_once()
+        with mock.patch.object(self.master_controller, 'set_all_lights_floor_off') as call:
+            self.controller.set_all_lights_floor_off(1)
+            call.assert_called_once_with(floor=1)
+        with mock.patch.object(self.master_controller, 'set_all_lights_floor_on') as call:
+            self.controller.set_all_lights_floor_on(1)
+            call.assert_called_once_with(floor=1)
+
 
 class OutputStateCacheTest(unittest.TestCase):
     def test_update(self):
