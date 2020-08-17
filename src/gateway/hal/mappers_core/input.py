@@ -23,7 +23,7 @@ from master.core.memory_models import InputConfiguration
 from gateway.hal.mappers_core.group_action import GroupActionMapper
 
 if False:  # MYPY
-    from typing import List, Dict, Any
+    from typing import List, Dict, Any, Optional, Tuple
 
 
 class InputMapper(object):
@@ -62,7 +62,7 @@ class InputMapper(object):
 
     @staticmethod
     def core_input_configuration_to_classic_actions(orm_object):
-        # type: (InputConfiguration) -> (int, List[int])
+        # type: (InputConfiguration) -> Tuple[int, List[int]]
         if False:
             return 255, []  # TODO: Detect disabled input
         if not orm_object.input_link.enable_specific_actions:
@@ -86,13 +86,13 @@ class InputMapper(object):
 
     @staticmethod
     def classic_actions_to_core_input_configuration(action, basic_actions):
-        # type: (int, List[int]) -> Dict[str, Any]
-        if action == 255:
+        # type: (Optional[int], List[int]) -> Dict[str, Any]
+        if action is None or action == 255:
             return {}  # TODO: Disable input
         if action < 240:
             return {'input_link': {'output_id': action,
                                    'enable_specific_actions': False}}
-        data = {'input_link': {'enable_specific_actions': True}}
+        data = {'input_link': {'enable_specific_actions': True}}  # type: Dict[str, Any]
         release_actions = []
         release_code = False
         for i in range(0, len(basic_actions), 2):
