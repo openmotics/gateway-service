@@ -25,7 +25,7 @@ import ujson as json
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import Any, Dict
+    from typing import Any, Dict, List, Optional, Union
     from master.core.memory_file import MemoryFile
 
 logger = logging.getLogger("openmotics")
@@ -154,6 +154,7 @@ class MemoryModelDefinition(object):
         """ Get the fields defined by an EepromModel child. """
         if cls.__name__ not in MemoryModelDefinition._cache_fields:
             MemoryModelDefinition._cache_fields[cls.__name__] = {'fields': inspect.getmembers(cls, lambda f: isinstance(f, MemoryField)),
+                                                                 'enums': inspect.getmembers(cls, lambda f: isinstance(f, MemoryEnumDefinition)),
                                                                  'relations': inspect.getmembers(cls, lambda f: isinstance(f, MemoryRelation)),
                                                                  'compositions': inspect.getmembers(cls, lambda f: isinstance(f, CompositeMemoryModelDefinition))}
         return MemoryModelDefinition._cache_fields[cls.__name__]
@@ -164,7 +165,8 @@ class MemoryModelDefinition(object):
         Get a dict from the field name to the field type for each field defined by model
         """
         class_field_dict = {}
-        for name, field_type in cls._get_fields()['fields']:
+        fields = cls._get_fields()
+        for name, field_type in fields['fields'] + fields['enums']:
             class_field_dict[name] = field_type
         return class_field_dict
 
@@ -199,7 +201,7 @@ class MemoryModelDefinition(object):
             return class_cache[id]
         with MemoryModelDefinition._cache_lock:
             cache = {}
-            for field_name, field_type in cls._get_fields()['fields']:
+            for field_name, field_type in cls._get_fields()['fields'] + cls._get_fields()['enums']:
                 cache[field_name] = field_type.get_address(id)
             class_cache[id] = cache
         return cache
@@ -233,7 +235,7 @@ class MemoryFieldContainer(object):
         self._memory_field = memory_field
         self._memory_address = memory_address
         self._memory_files = memory_files
-        self._data = None
+        self._data = None  # type: Optional[List[int]]
 
     def _read_data(self):
         self._data = self._memory_files[self._memory_address.memory_type].read([self._memory_address])[self._memory_address]
@@ -620,3 +622,64 @@ class CompositionContainer(object):
 
     def save(self):
         self._field_container.save()
+
+
+class MemoryEnumDefinition(object):
+    """
+    This object represents an enum
+    """
+    def __init__(self, field):
+        # type: (MemoryField) -> None
+        self._field = field
+        self._entries = [entry for _, entry in inspect.getmembers(self, lambda f: isinstance(f, EnumEntry))]  # type: List[EnumEntry]
+
+    def get_address(self, id):
+        # type: (int) -> MemoryAddress
+        return self._field.get_address(id)
+
+    def encode(self, value):
+        # type: (Union[str, EnumEntry]) -> List[int]
+        found_entry = None  # type: Optional[EnumEntry]
+        for entry in self._entries:
+            if value == entry:
+                found_entry = entry
+                break
+        if found_entry is None:
+            raise ValueError('Value {0} is invalid'.format(value))
+        # Use original entry to make sure only the prefedined values are used
+        return self._field.encode(found_entry.values[0])
+
+    def decode(self, data):
+        # type: (List[int]) -> EnumEntry
+        decoded_field_value = self._field.decode(data)
+        found_entry = None  # type: Optional[EnumEntry]
+        for entry in self._entries:
+            if decoded_field_value in entry.values:
+                found_entry = entry
+                break
+            if found_entry is None and entry.default:
+                found_entry = entry
+        if found_entry is None:
+            raise ValueError('Could not decode {0} to the correct enum entry'.format(decoded_field_value))
+        return found_entry
+
+
+class EnumEntry(object):
+    def __init__(self, name, values, default=False):
+        # type: (str, List[int], bool) -> None
+        self._name = name
+        self.values = values
+        self.default = default
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self._name == other
+        if not isinstance(other, EnumEntry):
+            return False
+        return self._name == other._name
+
+    def __str__(self):
+        return self._name
+
+    def __repr__(self):
+        return self._name
