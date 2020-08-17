@@ -20,8 +20,9 @@ from master.core.memory_file import MemoryTypes
 from master.core.memory_types import (MemoryModelDefinition, GlobalMemoryModelDefinition,
                                       MemoryRelation,
                                       MemoryByteField, MemoryWordField, MemoryAddressField, MemoryStringField, MemoryVersionField, MemoryBasicActionField,
-                                      MemoryByteArrayField, Memory3BytesField, MemoryWordArrayField,
-                                      CompositeMemoryModelDefinition, CompositeNumberField, CompositeBitField)
+                                      MemoryByteArrayField, Memory3BytesField,
+                                      CompositeMemoryModelDefinition, CompositeNumberField, CompositeBitField,
+                                      MemoryEnumDefinition, EnumEntry)
 
 
 class GlobalConfiguration(GlobalMemoryModelDefinition):
@@ -64,13 +65,19 @@ class OutputModuleConfiguration(MemoryModelDefinition):
 
 
 class OutputConfiguration(MemoryModelDefinition):
+    class TimerType(MemoryEnumDefinition):
+        INACTIVE = EnumEntry('INACTIVE', values=[0, 255], default=True)
+        PER_100_MS = EnumEntry('PER_100_MS', values=[1])
+        PER_1_S = EnumEntry('PER_1_S', values=[2])
+        ABSOLUTE = EnumEntry('ABSOLUTE', values=[3])
+
     class _DALIOutputComposition(CompositeMemoryModelDefinition):
         dali_output_id = CompositeNumberField(start_bit=0, width=8, max_value=63)
         dali_group_id = CompositeNumberField(start_bit=0, width=8, max_value=15, value_offset=64)
 
     module = MemoryRelation(OutputModuleConfiguration, id_spec=lambda id: id // 8)
     timer_value = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 7 + id % 8))  # 1-80, 7-22
-    timer_type = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 23 + id % 8))  # 1-80, 23-30
+    timer_type = TimerType(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 23 + id % 8)))  # 1-80, 23-30
     output_type = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 31 + id % 8))  # 1-80, 31-38
     min_output_level = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 39 + id % 8))  # 1-80, 39-46
     max_output_level = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 47 + id % 8))  # 1-80, 47-54

@@ -21,27 +21,43 @@ from gateway.dto.output import OutputDTO
 from master.core.memory_models import OutputConfiguration
 
 if False:  # MYPY
-    from typing import List, Dict, Any
+    from typing import List, Dict, Any, Optional
 
 
 class OutputMapper(object):
+    # TODO: Implement missing parts
+    #  * Floors
+    #  * Locking
+    #  * Absolute (e.g. 15:45) and float (e.g. 15.3 seconds) timers
+
     @staticmethod
     def orm_to_dto(orm_object):  # type: (OutputConfiguration) -> OutputDTO
-        timer = 0.0
-        if orm_object.timer_type == 2:
+        timer = None  # type: Optional[int]
+        if orm_object.timer_type == OutputConfiguration.TimerType.PER_1_S:
             timer = orm_object.timer_value
-        elif orm_object.timer_type == 1:
-            timer = orm_object.timer_value / 10.0
+        elif orm_object.timer_type == OutputConfiguration.TimerType.PER_100_MS:
+            timer = int(orm_object.timer_value / 10.0)
         return OutputDTO(id=orm_object.id,
                          name=orm_object.name,
-                         module_type=orm_object.module.device_type,  # TODO: Proper translation
-                         timer=timer,  # TODO: Proper calculation
-                         output_type=orm_object.output_type)  # TODO: Proper translation
+                         module_type=orm_object.module.device_type,
+                         timer=timer,
+                         output_type=orm_object.output_type)
 
     @staticmethod
     def dto_to_orm(output_dto, fields):  # type: (OutputDTO, List[str]) -> OutputConfiguration
-        new_data = {'id': output_dto.id}  # type: Dict[str, Any]
-        if 'name' in fields:
-            new_data['name'] = output_dto.name
-        # TODO: Rest of the mapping
-        return OutputConfiguration.deserialize(new_data)
+        data = {'id': output_dto.id}  # type: Dict[str, Any]
+        for dto_field, data_field in {'name': 'name',
+                                      'output_type': 'output_type'}.items():
+            if dto_field in fields:
+                data[data_field] = getattr(output_dto, dto_field)
+        if 'module_type' in fields:
+            data['module'] = {'module_type': output_dto.module_type}
+        if 'timer' in fields:
+            timer = output_dto.timer
+            if timer is None or timer <= 0 or timer == 65535:
+                data['timer_type'] = OutputConfiguration.TimerType.INACTIVE
+                data['timer_value'] = 0
+            else:
+                data['timer_type'] = OutputConfiguration.TimerType.PER_1_S
+                data['timer_value'] = min(timer, 65534)
+        return OutputConfiguration.deserialize(data)
