@@ -107,7 +107,7 @@ class InputConfiguration(MemoryModelDefinition):
 
     class _InputLink(CompositeMemoryModelDefinition):
         output_id = CompositeNumberField(start_bit=0, width=10)
-        enable_specific_actions = CompositeBitField(bit=10)
+        enable_press_and_release = CompositeBitField(bit=10)
         dimming_up = CompositeBitField(bit=11)
         enable_1s_press = CompositeBitField(bit=12)
         enable_2s_press = CompositeBitField(bit=13)
@@ -123,6 +123,16 @@ class InputConfiguration(MemoryModelDefinition):
     basic_action_1s_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + id % 2, 112 + id % 8))  # 81-238, 112-159
     basic_action_2s_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + id % 2, 160 + id % 8))  # 81-238, 160-207
     basic_action_double_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + id % 2, 208 + id % 8))  # 81-238, 208-255
+
+    @property
+    def has_direct_output_link(self):
+        return not (self.input_link.enable_press_and_release or self.input_link.dimming_up or
+                    self.input_link.enable_1s_press or self.input_link.enable_2s_press or
+                    self.input_link.enable_double_press)
+
+    @property
+    def in_use(self):
+        return not self.has_direct_output_link or self.input_link.output_id < 1023
 
 
 class SensorModuleConfiguration(MemoryModelDefinition):
