@@ -101,6 +101,7 @@ class Output(BaseModel):
 class Input(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
+    event_enabled = BooleanField(default=False)
     room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='inputs')
 
 
@@ -145,6 +146,12 @@ class Module(BaseModel):
     firmware_version = CharField(null=True)
     hardware_version = CharField(null=True)
     order = IntegerField(null=True)
+
+
+class DataMigration(BaseModel):
+    id = AutoField()
+    name = CharField()
+    migrated = BooleanField()
 
 
 class ThermostatGroup(BaseModel):

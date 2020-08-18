@@ -52,7 +52,7 @@ class MasterClassicControllerTest(unittest.TestCase):
 
     def test_load_input(self):
         input_data = {'id': 1, 'module_type': 'I', 'name': 'foo', 'action': 255,
-                      'basic_actions': '', 'invert': 255, 'can': ' ', 'event_enabled': False}
+                      'basic_actions': '', 'invert': 255, 'can': ' '}
         controller = get_classic_controller_dummy([
             InputConfiguration.deserialize(input_data)
         ])
@@ -61,7 +61,7 @@ class MasterClassicControllerTest(unittest.TestCase):
 
     def test_load_input_with_invalid_type(self):
         input_data = {'id': 1, 'module_type': 'O', 'name': 'foo', 'action': 255,
-                      'basic_actions': '', 'invert': 255, 'can': ' ', 'event_enabled': False}
+                      'basic_actions': '', 'invert': 255, 'can': ' '}
         controller = get_classic_controller_dummy([
             InputConfiguration.deserialize(input_data)
         ])
@@ -69,9 +69,9 @@ class MasterClassicControllerTest(unittest.TestCase):
 
     def test_load_inputs(self):
         input_data1 = {'id': 1, 'module_type': 'I', 'name': 'foo', 'action': 255,
-                       'basic_actions': '', 'invert': 255, 'can': ' ', 'event_enabled': False}
+                       'basic_actions': '', 'invert': 255, 'can': ' '}
         input_data2 = {'id': 2, 'module_type': 'I', 'name': 'foo', 'action': 255,
-                       'basic_actions': '', 'invert': 255, 'can': ' ', 'event_enabled': False}
+                       'basic_actions': '', 'invert': 255, 'can': ' '}
         controller = get_classic_controller_dummy([
             InputConfiguration.deserialize(input_data1),
             InputConfiguration.deserialize(input_data2)
@@ -81,9 +81,9 @@ class MasterClassicControllerTest(unittest.TestCase):
 
     def test_load_inputs_skips_invalid_type(self):
         input_data1 = {'id': 1, 'module_type': 'I', 'name': 'foo', 'action': 255,
-                       'basic_actions': '', 'invert': 255, 'can': ' ', 'event_enabled': False}
+                       'basic_actions': '', 'invert': 255, 'can': ' '}
         input_data2 = {'id': 2, 'module_type': 'O', 'name': 'foo', 'action': 255,
-                       'basic_actions': '', 'invert': 255, 'can': ' ', 'event_enabled': False}
+                       'basic_actions': '', 'invert': 255, 'can': ' '}
         controller = get_classic_controller_dummy([
             InputConfiguration.deserialize(input_data1),
             InputConfiguration.deserialize(input_data2)
