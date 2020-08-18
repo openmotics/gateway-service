@@ -38,15 +38,13 @@ class InputMapper(object):
                         action=Toolbox.nonify(data['action'], InputMapper.BYTE_MAX),
                         basic_actions=[] if data['basic_actions'] == '' else [int(i) for i in data['basic_actions'].split(',')],
                         invert=data['invert'] != 255,
-                        can=data['can'] == 'C',
-                        event_enabled=data['event_enabled'])
+                        can=data['can'] == 'C')
 
     @staticmethod
     def dto_to_orm(input_dto, fields):  # type: (InputDTO, List[str]) -> EepromModel
         data = {'id': input_dto.id}  # type: Dict[str, Any]
         for dto_field, data_field in {'module_type': 'module_type',
-                                      'name': 'name',
-                                      'event_enabled': 'event_enabled'}.items():
+                                      'name': 'name'}.items():
             if dto_field in fields:
                 data[data_field] = getattr(input_dto, dto_field)
         for dto_field, (data_field, default) in {'action': ('action', InputMapper.BYTE_MAX)}.items():

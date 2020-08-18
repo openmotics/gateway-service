@@ -181,6 +181,7 @@ class OutputStateCache(object):
     def __init__(self):
         self._cache = {}  # type: Dict[int,OutputDTO]
         self._lock = Lock()
+        self._loaded = False
 
     def get_state(self):
         # type: () -> Dict[int,OutputStateDTO]
@@ -198,6 +199,7 @@ class OutputStateCache(object):
                     output_dto.state = OutputStateDTO(output_dto.id)
                 new_state[output_dto.id] = output_dto
             self._cache = new_state
+            self._loaded = True
 
     def handle_change(self, output_id, change_data):
         # type: (int, Dict[str,Any]) -> Optional[OutputDTO]
@@ -207,8 +209,10 @@ class OutputStateCache(object):
         this deduplicates actual changes based on the cached state.
         """
         with self._lock:
+            if not self._loaded:
+                return None
             if output_id not in self._cache:
-                logger.warning('Received change for unknown output {} {}'.format(output_id, change_data))
+                logger.warning('Received change for unknown output {0}: {1}'.format(output_id, change_data))
                 return None
             changed = False
             state = self._cache[output_id].state

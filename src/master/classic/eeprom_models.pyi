@@ -46,7 +46,6 @@ class InputConfiguration(EepromModel):
     basic_actions: str
     invert: int
     can: str
-    event_enabled: bool
 
 
 class CanLedConfiguration(EepromModel):

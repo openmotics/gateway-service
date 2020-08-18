@@ -100,7 +100,6 @@ class InputConfiguration(EepromModel):
     basic_actions = EepromActions(15, page_per_module(8, 2, 12, 30))
     invert = EepromByte(lambda mid: (32, mid))
     can = EepromString(1, lambda mid: (2 + mid / 8, 252), read_only=True, shared=True)
-    event_enabled = EextBool()
 
 
 class CanLedConfiguration(EepromModel):

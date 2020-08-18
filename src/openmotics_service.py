@@ -28,6 +28,8 @@ from bus.om_bus_client import MessageClient
 from bus.om_bus_service import MessageService
 from gateway.initialize import initialize
 from gateway.migrations.rooms import RoomsMigrator
+from gateway.migrations.features_data_migrations import FeatureMigrator
+from gateway.migrations.inputs import InputMigrator
 from ioc import INJECTED, Inject
 
 
@@ -167,8 +169,10 @@ class OpenmoticsService(object):
         sensor_controller.run_sync_orm()
         shutter_controller.run_sync_orm()
 
-        # Execute master migration(s)
+        # Execute data migration(s)
+        FeatureMigrator.migrate()
         RoomsMigrator.migrate()
+        InputMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()

@@ -42,6 +42,7 @@ class InputController(BaseController):
         input_ = Input.get(number=input_id)  # type: Input
         input_dto = self._master_controller.load_input(input_id=input_.number)
         input_dto.room = input_.room.number if input_.room is not None else None
+        input_dto.event_enabled = input_.event_enabled
         return input_dto
 
     def load_inputs(self):  # type: () -> List[InputDTO]
@@ -49,6 +50,7 @@ class InputController(BaseController):
         for input_ in Input.select():
             input_dto = self._master_controller.load_input(input_id=input_.number)
             input_dto.room = input_.room.number if input_.room is not None else None
+            input_dto.event_enabled = input_.event_enabled
             inputs_dtos.append(input_dto)
         return inputs_dtos
 
@@ -58,6 +60,9 @@ class InputController(BaseController):
             input_ = Input.get_or_none(number=input_dto.id)  # type: Input
             if input_ is None:
                 logger.info('Ignored saving non-existing Input {0}'.format(input_dto.id))
+            if 'event_enabled' in fields:
+                input_.event_enabled = input_dto.event_enabled
+                input_.save()
             if 'room' in fields:
                 if input_dto.room is None:
                     input_.room = None

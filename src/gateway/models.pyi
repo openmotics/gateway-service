@@ -119,6 +119,7 @@ class OutputForeignKeyField(Output, ForeignKeyField): ...
 class Input(BaseModel):
     id: MixedPrimaryKeyField
     number: MixedIntegerField
+    event_enabled: bool
     room: Optional[RoomForeignKeyField]
 
 
@@ -163,6 +164,12 @@ class Module(BaseModel):
     firmware_version: Optional[str]
     hardware_version: Optional[str]
     order = Optional[MixedIntegerField]
+
+
+class DataMigration(BaseModel):
+    id: MixedPrimaryKeyField
+    name: str
+    migrated: bool
 
 
 class ThermostatGroup(BaseModel):
