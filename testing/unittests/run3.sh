@@ -65,6 +65,9 @@ python3 gateway_tests/hal/frontpanel_controller_core_test.py
 echo "Running output controller tests"
 pytest gateway_tests/output_controller_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/OutputControllerTest.xml
 
+echo "Running input controller tests"
+pytest gateway_tests/input_controller_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/InputControllerTest.xml
+
 #echo "Running Core uCAN tests"
 #python3 master_core_tests/ucan_communicator_test.py
 
