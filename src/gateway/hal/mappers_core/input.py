@@ -31,9 +31,6 @@ class InputMapper(object):
     #  * Core doesn't support actions after 3, 4, 5 seconds and Classic doesn't support actions after 1 second
     #  * Currently no "basic actions" are supported except for long-press action types and "execute group action"
 
-    # TODO:
-    #  * Event enabled to ORM
-
     @staticmethod
     def orm_to_dto(orm_object):  # type: (InputConfiguration) -> InputDTO
         device_type_mapping = {'b': 'O'}  # 'b' is used for CAN-inputs
@@ -45,8 +42,7 @@ class InputMapper(object):
                         action=action,
                         basic_actions=basic_actions,
                         invert=not orm_object.input_config.normal_open,
-                        can=orm_object.module.device_type == 'b',
-                        event_enabled=False)  # TODO: Migrate to ORM
+                        can=orm_object.module.device_type == 'b')
 
     @staticmethod
     def dto_to_orm(input_dto, fields):  # type: (InputDTO, List[str]) -> InputConfiguration
@@ -58,7 +54,6 @@ class InputMapper(object):
                                                                                     input_dto.basic_actions))
         if 'invert' in fields:
             new_data['normal_open'] = not input_dto.invert
-        # TODO event_enabled
         return InputConfiguration.deserialize(new_data)
 
     @staticmethod
