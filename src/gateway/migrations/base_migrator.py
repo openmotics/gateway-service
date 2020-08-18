@@ -39,9 +39,9 @@ class BaseMigrator(object):
             if migration.migrated:
                 return
 
-            logging.info('Migrating ({0})...'.format(cls.__name__))
+            logger.info('Migrating ({0})...'.format(cls.__name__))
             cls._migrate()
-            logging.info('Migrating ({0})... Done'.format(cls.__name__))
+            logger.info('Migrating ({0})... Done'.format(cls.__name__))
 
             # Migration complete
             migration.migrated = True

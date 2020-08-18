@@ -170,8 +170,8 @@ class OpenmoticsService(object):
         shutter_controller.run_sync_orm()
 
         # Execute data migration(s)
-        RoomsMigrator.migrate()
         FeatureMigrator.migrate()
+        RoomsMigrator.migrate()
         InputMigrator.migrate()
 
         # Start rest of the stack

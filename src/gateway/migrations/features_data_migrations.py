@@ -31,4 +31,4 @@ class FeatureMigrator(BaseMigrator):
             orm_rooms_migration = DataMigration(name='rooms',
                                                 migrated=feature.enabled)
             orm_rooms_migration.save()
-            feature.delete()
+            feature.delete_instance()
