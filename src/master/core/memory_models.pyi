@@ -101,7 +101,7 @@ class InputConfiguration(MemoryModelDefinition):
 
     class _InputLink(CompositeMemoryModelDefinition):
         output_id: int
-        enable_specific_actions: bool
+        enable_press_and_release: bool
         dimming_up: bool
         enable_1s_press: bool
         enable_2s_press: bool
@@ -117,6 +117,12 @@ class InputConfiguration(MemoryModelDefinition):
     basic_action_1s_press: BasicAction
     basic_action_2s_press: BasicAction
     basic_action_double_press: BasicAction
+
+    @property
+    def has_direct_output_link(self) -> bool: ...
+
+    @property
+    def in_use(self) -> bool: ...
 
 
 class SensorModuleConfiguration(MemoryModelDefinition):

@@ -21,7 +21,7 @@ from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.memory_file import MemoryFile, MemoryTypes
 from master.core.memory_models import InputConfiguration, \
-    OutputConfiguration, ShutterConfiguration
+    OutputConfiguration, ShutterConfiguration, GlobalConfiguration
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.ucan_communicator import UCANCommunicator
 
@@ -35,6 +35,7 @@ class MasterCoreControllerTest(unittest.TestCase):
 
     def setUp(self):
         self.memory = {}
+        self.return_data = {}
 
         def _do_command(command, fields, timeout=None):
             _ = timeout
@@ -49,6 +50,9 @@ class MasterCoreControllerTest(unittest.TestCase):
                 page_data = self.memory.setdefault(page, [255] * 256)
                 for index, data_byte in enumerate(fields['data']):
                     page_data[start + index] = data_byte
+            elif command.instruction in self.return_data:
+                return self.return_data[command.instruction]
+                return self.return_data[command.instruction]
             else:
                 raise AssertionError('unexpected instruction "{}"'.format(command.instruction))
 
@@ -167,16 +171,14 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.assertEqual('I', data)
 
     def test_load_input(self):
-        with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=get_core_input_dummy(1)):
-            data = self.controller.load_input(1)
-            self.assertEqual(data.id, 1)
+        data = self.controller.load_input(1)
+        self.assertEqual(data.id, 1)
 
     def test_load_inputs(self):
         input_modules = list(map(get_core_input_dummy, range(1, 17)))
+        self.return_data['GC'] = {'input': 2}
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               side_effect=input_modules), \
-             mock.patch.object(self.communicator, 'do_command', return_value={'output': 0, 'input': 2}):
+                               side_effect=input_modules):
             inputs = self.controller.load_inputs()
             self.assertEqual([x.id for x in inputs], list(range(1, 17)))
 
@@ -265,55 +267,6 @@ class MasterCoreControllerTest(unittest.TestCase):
                           'inputs': ['I', 'i', 'J', 'T'],
                           'outputs': ['P', 'P', 'P', 'o', 'O'],
                           'shutters': []}, self.controller.get_modules())
-
-
-class MasterCoreControllerCompatibilityTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        SetTestMode()
-
-    def setUp(self):
-        self.eeprom_controller = mock.Mock(EepromController)
-        self.core_controller = self.create_master_core_controller()
-        self.classic_controller = self.create_master_classic_controller()
-
-    @Scope
-    def create_master_core_controller(self):
-        SetUpTestInjections(master_communicator=mock.Mock(CoreCommunicator))
-        SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
-                            memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
-                                          MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)},
-                            ucan_communicator=UCANCommunicator(),
-                            slave_communicator=SlaveCommunicator())
-        return MasterCoreController()
-
-    @Scope
-    def create_master_classic_controller(self):
-        SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
-                            eeprom_controller=self.eeprom_controller,
-                            master_communicator=mock.Mock(MasterCommunicator))
-        return MasterClassicController()
-
-    def test_load_input(self):
-        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: mock.Mock()})
-        core_input_orm = get_core_input_dummy(1)
-        classic_input_orm = eeprom_models.InputConfiguration.deserialize({'id': 1,
-                                                                          'name': 'foo',
-                                                                          'module_type': 'I',
-                                                                          'action': 255,
-                                                                          'basic_actions': '',
-                                                                          'invert': 255,
-                                                                          'can': ' ',
-                                                                          'event_enabled': False})
-        inputs = [classic_input_orm]
-
-        with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=core_input_orm), \
-             mock.patch.object(self.eeprom_controller, 'read', return_value=inputs[0]), \
-             mock.patch.object(self.eeprom_controller, 'read_all', return_value=inputs):
-            core_data = self.core_controller.load_input(1)
-            classic_data = self.classic_controller.load_input(1)
-            self.assertEqual(classic_data, core_data)
 
 
 class MasterInputState(unittest.TestCase):
@@ -407,6 +360,7 @@ def get_core_input_dummy(i):
                    'address': '0.0.0.0',
                    'firmware_version': '0.0.1'}
     })
+
 
 def get_core_shutter_dummy(i):
     return ShutterConfiguration.deserialize({

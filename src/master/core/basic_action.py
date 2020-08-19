@@ -51,7 +51,11 @@ class BasicAction(object):
 
     @property
     def in_use(self):  # type: () -> bool
-        return self._action_type != 255 and self.action != 255
+        return self.action_type != 255 and self.action != 255
+
+    @property
+    def is_execute_group_action(self):  # type: () -> bool
+        return self.action_type == 19 and self.action == 0
 
     @staticmethod
     def decode(data):  # type: (List[int]) -> BasicAction

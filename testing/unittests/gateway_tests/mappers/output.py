@@ -23,7 +23,7 @@ from master.core.memory_models import OutputConfiguration
 from master.core.memory_file import MemoryTypes
 
 
-class GatewayApiTest(unittest.TestCase):
+class OutputMapperTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()

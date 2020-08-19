@@ -155,6 +155,8 @@ class OutputControllerTest(unittest.TestCase):
 
 class OutputStateCacheTest(unittest.TestCase):
     def test_update(self):
+        _ = self
+
         cache = OutputStateCache()
 
         cache.update_outputs([OutputDTO(id=0),
@@ -173,23 +175,23 @@ class OutputStateCacheTest(unittest.TestCase):
         # Turn two outputs on.
         assert cache.handle_change(0, {'status': False}) is None
         change = cache.handle_change(2, {'status': True})
-        assert change.state.status == True
+        assert change.state.status is True
         change = cache.handle_change(1, {'status': True})
-        assert change.state.status == True
+        assert change.state.status is True
 
         # Turn one outputs off again.
         assert cache.handle_change(0, {'status': False}) is None
         change = cache.handle_change(1, {'status': False})
-        assert change.state.status == False
+        assert change.state.status is False
 
         # Change dimmer value.
         assert cache.handle_change(0, {'dimmer': 0}) is None
         change = cache.handle_change(1, {'status': True, 'dimmer': 100})
         assert change.state.dimmer == 100
         change = cache.handle_change(1, {'dimmer': 50})
-        assert change.state.dimmer == 50
+        assert change.state.dimmer is 50
 
         # Change lock.
         assert cache.handle_change(0, {'locked': False}) is None
         change = cache.handle_change(1, {'locked': True})
-        assert change.state.locked == True
+        assert change.state.locked is True

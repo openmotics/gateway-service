@@ -92,12 +92,12 @@ class MemoryModelDefinition(object):
 
     def _get_property(self, field_name):
         self._loaded_fields.add(field_name)
-        field = getattr(self, '_{0}'.format(field_name))
+        field = getattr(self, '_{0}'.format(field_name))  # type: MemoryFieldContainer
         return field.decode()
 
     def _set_property(self, field_name, value):
         self._loaded_fields.add(field_name)
-        field = getattr(self, '_{0}'.format(field_name))
+        field = getattr(self, '_{0}'.format(field_name))  # type: MemoryFieldContainer
         field.encode(value)
 
     def _add_relation(self, field_name):
@@ -118,14 +118,14 @@ class MemoryModelDefinition(object):
 
     def save(self, activate=True):
         for field_name in self._loaded_fields:
-            field_container = getattr(self, '_{0}'.format(field_name))  # type: MemoryFieldContainer
+            container = getattr(self, '_{0}'.format(field_name))  # type: Union[MemoryFieldContainer, CompositionContainer]
             if self._verbose:
                 logger.info('Saving {0}({1}).{2}'.format(
                     self.__class__.__name__,
                     '' if self.id is None else self.id,
                     field_name
                 ))
-            field_container.save()
+            container.save()
         if activate:
             for memory_file in self._memory_files.values():
                 memory_file.activate()
@@ -270,8 +270,6 @@ class MemoryField(object):
         self._address_generator = None
         self._memory_type = memory_type
         self._length = length
-
-        self._data = None
 
         if isinstance(address_spec, tuple):
             self._address_tuple = address_spec
