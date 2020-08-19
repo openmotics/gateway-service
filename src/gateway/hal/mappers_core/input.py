@@ -33,7 +33,7 @@ class InputMapper(object):
 
     @staticmethod
     def orm_to_dto(orm_object):  # type: (InputConfiguration) -> InputDTO
-        device_type_mapping = {'b': 'O'}  # 'b' is used for CAN-inputs
+        device_type_mapping = {'b': 'I'}  # 'b' is used for CAN-inputs
         action, basic_actions = InputMapper.core_input_configuration_to_classic_actions(orm_object)
         return InputDTO(id=orm_object.id,
                         name=orm_object.name,
@@ -81,7 +81,9 @@ class InputMapper(object):
             if not orm_object.basic_action_2s_press.is_execute_group_action:
                 raise ValueError('Actions are limited to executing GroupActions')
             return 240, [207, orm_object.basic_action_2s_press.device_nr]
-        raise ValueError('Only 2s presses are supported')
+        else:
+            raise ValueError('Only 2s presses can be translated')
+        raise ValueError('The current configuration cannot be translated')
 
     @staticmethod
     def classic_actions_to_core_input_configuration(action, basic_actions):
@@ -97,7 +99,7 @@ class InputMapper(object):
                                    'enable_1s_press': False,
                                    'enable_2s_press': False,
                                    'enable_double_press': False})
-        if action < 240:
+        if action < 240:  # 240 means "execute the list of basic actions"
             data['input_link']['output_id'] = action
             return data
         action_types = set(basic_actions[i] for i in range(0, len(basic_actions), 2))

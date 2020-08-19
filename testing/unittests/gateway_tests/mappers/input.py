@@ -70,9 +70,12 @@ class InputCoreMapperTest(unittest.TestCase):
 
         dto = InputMapper.orm_to_dto(InputConfiguration.deserialize({'id': 1,
                                                                      'name': 'input 1',
-                                                                     'input_config': {'normal_open': True}}))
+                                                                     'input_config': {'normal_open': True},
+                                                                     'module': {'id': 0,
+                                                                                'device_type': 'b'}}))
         self.assertEqual(1, dto.id)
         self.assertEqual('input 1', dto.name)
+        self.assertEqual('I', dto.module_type)
         self.assertFalse(dto.invert)
 
     def test_actions_non_configured_input(self):
