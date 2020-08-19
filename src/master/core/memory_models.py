@@ -126,13 +126,16 @@ class InputConfiguration(MemoryModelDefinition):
 
     @property
     def has_direct_output_link(self):
-        return not (self.input_link.enable_press_and_release or self.input_link.dimming_up or
-                    self.input_link.enable_1s_press or self.input_link.enable_2s_press or
-                    self.input_link.enable_double_press)
+        # There is a direct output link when all of the below entries are False
+        return (not self.input_link.enable_press_and_release and
+                not self.input_link.enable_1s_press and
+                not self.input_link.enable_2s_press and
+                not self.input_link.enable_double_press)
 
     @property
     def in_use(self):
-        return not self.has_direct_output_link or self.input_link.output_id < 1023
+        # An input is in use when any of the `input_link` bits is not 0b1
+        return not getattr(self, '_input_link')._field_container.decode() == 65535
 
 
 class SensorModuleConfiguration(MemoryModelDefinition):

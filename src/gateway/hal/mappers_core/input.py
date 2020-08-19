@@ -53,7 +53,7 @@ class InputMapper(object):
             new_data.update(InputMapper.classic_actions_to_core_input_configuration(input_dto.action,
                                                                                     input_dto.basic_actions))
         if 'invert' in fields:
-            new_data['normal_open'] = not input_dto.invert
+            new_data['input_config'] = {'normal_open': not input_dto.invert}
         return InputConfiguration.deserialize(new_data)
 
     @staticmethod
@@ -88,20 +88,18 @@ class InputMapper(object):
         # type: (Optional[int], List[int]) -> Dict[str, Any]
         data = {'input_link': {'output_id': 1023,
                                'enable_press_and_release': True,
-                               'dimming_up': True,
                                'enable_1s_press': True,
                                'enable_2s_press': True,
                                'enable_double_press': True}}  # type: Dict[str, Any]
-        if action is None or action == 255 or len(basic_actions) == 0:
-            return data
-        if action < 240:
-            data['input_link']['output_id'] = action
+        if action is None or action == 255:
             return data
         data['input_link'].update({'enable_press_and_release': False,
-                                   'dimming_up': False,
                                    'enable_1s_press': False,
                                    'enable_2s_press': False,
                                    'enable_double_press': False})
+        if action < 240:
+            data['input_link']['output_id'] = action
+            return data
         action_types = set(basic_actions[i] for i in range(0, len(basic_actions), 2))
         if 207 in action_types:
             if len(basic_actions) != 2:
@@ -126,8 +124,8 @@ class InputMapper(object):
                 press_action = action_number
         if press_action is not None:
             data['input_link']['enable_press_and_release'] = True
-            data['basic_action_2s_press'] = BasicAction(action_type=19, action=0, device_nr=press_action)
+            data['basic_action_press'] = BasicAction(action_type=19, action=0, device_nr=press_action)
         if release_action is not None:
             data['input_link']['enable_press_and_release'] = True
-            data['basic_action_2s_release'] = BasicAction(action_type=19, action=0, device_nr=release_action)
+            data['basic_action_release'] = BasicAction(action_type=19, action=0, device_nr=release_action)
         return data
