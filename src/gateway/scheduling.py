@@ -26,17 +26,10 @@ from croniter import croniter
 from random import randint
 from threading import Thread
 from ioc import Injectable, Inject, INJECTED, Singleton
-from platform_utils import Platform
+from serial_utils import CommunicationTimedOutException
 from gateway.webservice import params_parser
 import ujson as json
 import six
-
-if Platform.get_platform() == Platform.Type.CLASSIC:
-    from master.classic.master_communicator import CommunicationTimedOutException
-else:
-    # TODO: Replace for the Core+
-    class CommunicationTimedOutException(Exception):  # type: ignore
-        pass
 
 if False:  # MYPY
     from typing import Dict
@@ -50,7 +43,8 @@ logger = logging.getLogger('openmotics')
 
 class Schedule(object):
 
-    timezone = None
+    NO_NTP_LOWER_LIMIT = 1546300800.0  # 2019-01-01
+    TIMEZONE = None
 
     def __init__(self, id, name, start, repeat, duration, end, schedule_type, arguments, status):
         self.id = id
@@ -64,6 +58,9 @@ class Schedule(object):
         self.status = status
         self.last_executed = None
         self.next_execution = None
+        self.is_running = False
+        if self.repeat is not None:
+            self._set_next_execution()
 
     @property
     def is_due(self):
@@ -73,27 +70,26 @@ class Schedule(object):
                 return False
             return self.start <= time.time()
         # Repeating
-        timezone = pytz.timezone(Schedule.timezone)
-        base_date = datetime.fromtimestamp(self.start, timezone)
-        if self.start < time.time():
-            base_date = datetime.now(timezone)
-        cron = croniter(self.repeat, base_date)
-        next_execution = cron.get_next(ret_type=float)
-        if self.next_execution is None:
-            self.next_execution = next_execution
-            return False
-        if self.next_execution < time.time():
-            self.next_execution = next_execution
-            return True
-        return False
+        now = time.time()
+        lower_limit = now - (15 * 60)  # Don't execute a schedule that's overdue for 15 minutes
+        execute = self.next_execution is not None and lower_limit <= self.next_execution <= now
+        self._set_next_execution()
+        return execute
 
     @property
     def has_ended(self):
         if self.repeat is None:
             return self.last_executed is not None
         if self.end is not None:
-            return self.start + self.end < time.time()
+            return self.end < time.time()
         return False
+
+    def _set_next_execution(self):
+        base_time = max(Schedule.NO_NTP_LOWER_LIMIT, self.start, time.time())
+        cron = croniter(self.repeat,
+                        datetime.fromtimestamp(base_time,
+                                               pytz.timezone(Schedule.TIMEZONE)))
+        self.next_execution = cron.get_next(ret_type=float)
 
     def serialize(self):
         return {'id': self.id,
@@ -155,17 +151,12 @@ class SchedulingController(object):
         self._schedules = {}  # type: Dict[int, Schedule]
         self._stop = False
         self._processor = None
-        self._semaphore = None
 
-        Schedule.timezone = gateway_api.get_timezone()
-
+        Schedule.TIMEZONE = gateway_api.get_timezone()
         self._load_schedule()
 
     def set_webinterface(self, web_interface):
         self._web_interface = web_interface
-
-    def set_unittest_semaphore(self, semaphore):
-        self._semaphore = semaphore
 
     @property
     def schedules(self):
@@ -231,21 +222,27 @@ class SchedulingController(object):
 
     def _process(self):
         while self._stop is False:
-            for schedule in self._schedules.values():
+            for schedule_id in list(self._schedules.keys()):
+                schedule = self._schedules.get(schedule_id)
+                if schedule is None:
+                    continue
                 if schedule.status == 'ACTIVE' and schedule.is_due:
                     thread = Thread(target=self._execute_schedule, args=(schedule,),
                                     name='SchedulingController executor')
                     thread.daemon = True
                     thread.start()
-            now = int(time.time())
-            time.sleep(now - now % 60 + 60 - time.time())  # Wait for the next minute mark
+            now = time.time()
+            time.sleep(now - now % 60 + 60 - now)  # Wait for the next minute mark
 
     def _execute_schedule(self, schedule):
         """
         :param schedule: Schedule to execute
         :type schedule: gateway.scheduling.Schedule
         """
+        if schedule.is_running:
+            return
         try:
+            schedule.is_running = True
             # Execute
             if schedule.schedule_type == 'GROUP_ACTION':
                 self._group_action_controller.do_group_action(schedule.arguments)
@@ -267,8 +264,7 @@ class SchedulingController(object):
             logger.error('Got error while executing schedule: {0}'.format(ex))
             schedule.last_executed = time.time()
         finally:
-            if self._semaphore is not None:
-                self._semaphore.release()
+            schedule.is_running = False
 
     def _validate(self, name, start, schedule_type, arguments, repeat, duration, end):
         if name is None or not isinstance(name, six.string_types) or name.strip() == '':
