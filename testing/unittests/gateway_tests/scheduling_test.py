@@ -226,31 +226,40 @@ class SchedulingControllerTest(unittest.TestCase):
         self.assertEqual(controller.schedules[0].name, 'basic_action')
 
     def test_schedule_is_due(self):
+        now_offset = 1577836800  # 2020-01-01
+        offset_2018 = 1514764800  # 2018-01-01
         minute = 60
         hour = 60 * minute
-        fakesleep.reset(seconds=0)
+        fakesleep.reset(seconds=offset_2018)
         Schedule.timezone = 'UTC'
         schedule = Schedule(id=1,
                             name='schedule',
-                            start=1 * hour,
+                            start=offset_2018,
                             repeat='0 * * * *',
                             duration=None,
-                            end=24 * hour,
+                            end=now_offset + 24 * hour,
                             schedule_type='GROUP_ACTION',
                             arguments=1,
                             status='ACTIVE')
         self.assertFalse(schedule.is_due)
-        self.assertEqual(2 * hour, schedule.next_execution)
-        time.sleep(5 * hour)  # Emulated time jump
-        self.assertFalse(schedule.is_due)  # Skipped, time difference too large
-        self.assertEqual(6 * hour, schedule.next_execution)
+        self.assertEqual(offset_2018 + 1 * hour, schedule.next_execution)
+        time.sleep(1 * hour)
+        self.assertFalse(schedule.is_due)  # Date is before 2019
+        self.assertEqual(offset_2018 + 2 * hour, schedule.next_execution)
+        time.sleep(1 * hour)
+        self.assertFalse(schedule.is_due)  # Date is (still) before 2019
+        self.assertEqual(offset_2018 + 3 * hour, schedule.next_execution)
+        fakesleep.reset(seconds=now_offset)
+        self.assertFalse(schedule.is_due)  # Time jump is ignored
+        self.assertEqual(now_offset + 1 * hour, schedule.next_execution)
         time.sleep(1 * hour)
         self.assertTrue(schedule.is_due)
-        self.assertEqual(7 * hour, schedule.next_execution)
+        self.assertEqual(now_offset + 2 * hour, schedule.next_execution)
 
     def test_one_minute_schedule(self):
+        now_offset = 1577836800  # 2020
         minute = 60
-        fakesleep.reset(seconds=0)
+        fakesleep.reset(seconds=now_offset)
         Schedule.timezone = 'UTC'
         schedule = Schedule(id=1,
                             name='schedule',
@@ -262,13 +271,13 @@ class SchedulingControllerTest(unittest.TestCase):
                             arguments=1,
                             status='ACTIVE')
         self.assertFalse(schedule.is_due)
-        self.assertEqual(1 * minute, schedule.next_execution)
+        self.assertEqual(now_offset + 1 * minute, schedule.next_execution)
         time.sleep(1 * minute)
         self.assertTrue(schedule.is_due)
-        self.assertEqual(2 * minute, schedule.next_execution)
+        self.assertEqual(now_offset + 2 * minute, schedule.next_execution)
         time.sleep(1 * minute)
         self.assertTrue(schedule.is_due)
-        self.assertEqual(3 * minute, schedule.next_execution)
+        self.assertEqual(now_offset + 3 * minute, schedule.next_execution)
 
     def test_next_execution(self):
         # Assert that the _next_execution won't return the base_time

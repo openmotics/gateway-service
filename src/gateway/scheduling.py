@@ -43,6 +43,7 @@ logger = logging.getLogger('openmotics')
 
 class Schedule(object):
 
+    NO_NTP_LOWER_LIMIT = 1546300800  # 2019-01-01
     timezone = None
 
     def __init__(self, id, name, start, repeat, duration, end, schedule_type, arguments, status):
@@ -69,7 +70,9 @@ class Schedule(object):
         # Repeating
         now = time.time()
         lower_limit = now - (15 * 60)  # Don't execute a schedule that's overdue for 15 minutes
-        execute = self.next_execution is not None and lower_limit <= self.next_execution <= now
+        execute = (self.next_execution is not None and
+                   self.next_execution > Schedule.NO_NTP_LOWER_LIMIT and
+                   lower_limit <= self.next_execution <= now)
         self.next_execution = Schedule._next_execution(max(self.start, now), self.repeat)
         return execute
 
