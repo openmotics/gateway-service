@@ -225,6 +225,29 @@ class SchedulingControllerTest(unittest.TestCase):
         self.assertEqual(len(controller.schedules), 1)
         self.assertEqual(controller.schedules[0].name, 'basic_action')
 
+    def test_schedule_is_due(self):
+        minute = 60
+        hour = 60 * minute
+        fakesleep.reset(seconds=0)
+        Schedule.timezone = 'UTC'
+        schedule = Schedule(id=1,
+                            name='schedule',
+                            start=1 * hour,
+                            repeat='0 * * * *',
+                            duration=None,
+                            end=24 * hour,
+                            schedule_type='GROUP_ACTION',
+                            arguments=1,
+                            status='ACTIVE')
+        self.assertFalse(schedule.is_due)
+        self.assertEqual(2 * hour, schedule.next_execution)
+        time.sleep(5 * hour)  # Emulated time jump
+        self.assertFalse(schedule.is_due)  # Skipped, time difference too large
+        self.assertEqual(6 * hour, schedule.next_execution)
+        time.sleep(1 * hour)
+        self.assertTrue(schedule.is_due)
+        self.assertEqual(7 * hour, schedule.next_execution)
+
     def test_one_minute_schedule(self):
         minute = 60
         fakesleep.reset(seconds=0)

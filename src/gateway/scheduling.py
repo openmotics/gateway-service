@@ -68,7 +68,8 @@ class Schedule(object):
             return self.start <= time.time()
         # Repeating
         now = time.time()
-        execute = self.next_execution is not None and self.next_execution <= now
+        lower_limit = now - (15 * 60)  # Don't execute a schedule that's overdue for 15 minutes
+        execute = self.next_execution is not None and lower_limit <= self.next_execution <= now
         self.next_execution = Schedule._next_execution(max(self.start, now), self.repeat)
         return execute
 
