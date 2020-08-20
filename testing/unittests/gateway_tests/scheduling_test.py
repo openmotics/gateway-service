@@ -64,7 +64,7 @@ class SchedulingControllerTest(unittest.TestCase):
             return {}
 
         gateway_api = Mock()
-        gateway_api.get_timezone = lambda: 'Europe/Brussels'
+        gateway_api.get_timezone = lambda: 'UTC'
         gateway_api.do_basic_action = _do_basic_action
 
         group_action_controller = Mock()
@@ -231,7 +231,7 @@ class SchedulingControllerTest(unittest.TestCase):
         minute = 60
         hour = 60 * minute
         fakesleep.reset(seconds=offset_2018)
-        Schedule.timezone = 'UTC'
+        Schedule.TIMEZONE = 'Europe/Brussels'
         schedule = Schedule(id=1,
                             name='schedule',
                             start=offset_2018,
@@ -242,13 +242,10 @@ class SchedulingControllerTest(unittest.TestCase):
                             arguments=1,
                             status='ACTIVE')
         self.assertFalse(schedule.is_due)
-        self.assertEqual(offset_2018 + 1 * hour, schedule.next_execution)
+        self.assertEqual(Schedule.NO_NTP_LOWER_LIMIT + 1 * hour, schedule.next_execution)
         time.sleep(1 * hour)
         self.assertFalse(schedule.is_due)  # Date is before 2019
-        self.assertEqual(offset_2018 + 2 * hour, schedule.next_execution)
-        time.sleep(1 * hour)
-        self.assertFalse(schedule.is_due)  # Date is (still) before 2019
-        self.assertEqual(offset_2018 + 3 * hour, schedule.next_execution)
+        self.assertEqual(Schedule.NO_NTP_LOWER_LIMIT + 1 * hour, schedule.next_execution)
         fakesleep.reset(seconds=now_offset)
         self.assertFalse(schedule.is_due)  # Time jump is ignored
         self.assertEqual(now_offset + 1 * hour, schedule.next_execution)
@@ -260,7 +257,7 @@ class SchedulingControllerTest(unittest.TestCase):
         now_offset = 1577836800  # 2020
         minute = 60
         fakesleep.reset(seconds=now_offset)
-        Schedule.timezone = 'UTC'
+        Schedule.TIMEZONE = 'Europe/Brussels'
         schedule = Schedule(id=1,
                             name='schedule',
                             start=0 * minute,
@@ -278,12 +275,6 @@ class SchedulingControllerTest(unittest.TestCase):
         time.sleep(1 * minute)
         self.assertTrue(schedule.is_due)
         self.assertEqual(now_offset + 3 * minute, schedule.next_execution)
-
-    def test_next_execution(self):
-        # Assert that the _next_execution won't return the base_time
-        Schedule.timezone = 'UTC'
-        next_execution = Schedule._next_execution(3600, '0 * * * *')
-        self.assertEqual(7200, next_execution)
 
     def _wait_for_completed(self, schedule, timeout=5):
         def _is_completed():

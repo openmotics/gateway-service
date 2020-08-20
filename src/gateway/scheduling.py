@@ -43,8 +43,8 @@ logger = logging.getLogger('openmotics')
 
 class Schedule(object):
 
-    NO_NTP_LOWER_LIMIT = 1546300800  # 2019-01-01
-    timezone = None
+    NO_NTP_LOWER_LIMIT = 1546300800.0  # 2019-01-01
+    TIMEZONE = None
 
     def __init__(self, id, name, start, repeat, duration, end, schedule_type, arguments, status):
         self.id = id
@@ -59,6 +59,8 @@ class Schedule(object):
         self.last_executed = None
         self.next_execution = None
         self.is_running = False
+        if self.repeat is not None:
+            self._set_next_execution()
 
     @property
     def is_due(self):
@@ -70,10 +72,8 @@ class Schedule(object):
         # Repeating
         now = time.time()
         lower_limit = now - (15 * 60)  # Don't execute a schedule that's overdue for 15 minutes
-        execute = (self.next_execution is not None and
-                   self.next_execution > Schedule.NO_NTP_LOWER_LIMIT and
-                   lower_limit <= self.next_execution <= now)
-        self.next_execution = Schedule._next_execution(max(self.start, now), self.repeat)
+        execute = self.next_execution is not None and lower_limit <= self.next_execution <= now
+        self._set_next_execution()
         return execute
 
     @property
@@ -84,11 +84,12 @@ class Schedule(object):
             return self.end < time.time()
         return False
 
-    @staticmethod
-    def _next_execution(base_time, repeat):
-        timezone = pytz.timezone(Schedule.timezone)
-        cron = croniter(repeat, datetime.fromtimestamp(base_time, timezone))
-        return cron.get_next(ret_type=float)
+    def _set_next_execution(self):
+        base_time = max(Schedule.NO_NTP_LOWER_LIMIT, self.start, time.time())
+        cron = croniter(self.repeat,
+                        datetime.fromtimestamp(base_time,
+                                               pytz.timezone(Schedule.TIMEZONE)))
+        self.next_execution = cron.get_next(ret_type=float)
 
     def serialize(self):
         return {'id': self.id,
@@ -151,8 +152,7 @@ class SchedulingController(object):
         self._stop = False
         self._processor = None
 
-        Schedule.timezone = gateway_api.get_timezone()
-
+        Schedule.TIMEZONE = gateway_api.get_timezone()
         self._load_schedule()
 
     def set_webinterface(self, web_interface):
