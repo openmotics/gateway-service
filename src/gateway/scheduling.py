@@ -129,7 +129,14 @@ class SchedulingController(object):
                 if schedule_tuple is None:
                     continue
                 schedule_dto, schedule = schedule_tuple
-                if schedule_dto.status == 'ACTIVE' and schedule_dto.is_due:
+                if schedule_dto.status != 'ACTIVE':
+                    continue
+                if schedule_dto.end is not None and schedule_dto.end < time.time():
+                    schedule_dto.status = 'COMPLETED'
+                    schedule.status = 'COMPLETED'
+                    schedule.save()
+                    continue
+                if schedule_dto.is_due:
                     thread = Thread(target=self._execute_schedule, args=(schedule_dto, schedule),
                                     name='SchedulingController executor')
                     thread.daemon = True

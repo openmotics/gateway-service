@@ -54,7 +54,8 @@ class ScheduleDTO(BaseDTO):
         # Repeating
         now = time.time()
         lower_limit = now - (15 * 60)  # Don't execute a schedule that's overdue for 15 minutes
-        return self.next_execution is not None and lower_limit <= self.next_execution <= now
+        upper_limit = now if self.end is None else min(now, self.end)
+        return self.next_execution is not None and lower_limit <= self.next_execution <= upper_limit
 
     @property
     def has_ended(self):

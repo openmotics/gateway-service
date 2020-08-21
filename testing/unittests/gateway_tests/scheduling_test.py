@@ -315,7 +315,7 @@ class SchedulingControllerTest(unittest.TestCase):
                                start=0 * minute,
                                repeat='* * * * *',
                                duration=None,
-                               end=60 * minute,
+                               end=now_offset + 60 * minute,
                                action='GROUP_ACTION',
                                arguments=1,
                                status='ACTIVE')
