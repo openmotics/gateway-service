@@ -21,7 +21,7 @@ import mock
 
 from bus.om_bus_client import MessageClient
 from gateway.config import ConfigurationController
-from gateway.dto import OutputStateDTO
+from gateway.dto import OutputStateDTO, ScheduleDTO
 from gateway.gateway_api import GatewayApi
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
@@ -47,6 +47,7 @@ class WebInterfaceTest(unittest.TestCase):
 
     def setUp(self):
         self.output_controller = mock.Mock(OutputController)
+        self.scheduling_controller = mock.Mock(SchedulingController)
         self.gateway_api = mock.Mock(GatewayApi)
         SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
                             frontpanel_controller=mock.Mock(FrontpanelController),
@@ -58,7 +59,7 @@ class WebInterfaceTest(unittest.TestCase):
                             output_controller=self.output_controller,
                             pulse_counter_controller=mock.Mock(PulseCounterController),
                             room_controller =mock.Mock(RoomController),
-                            scheduling_controller=mock.Mock(SchedulingController),
+                            scheduling_controller=self.scheduling_controller,
                             sensor_controller=mock.Mock(SensorController),
                             shutter_controller=mock.Mock(ShutterController),
                             thermostat_controller=mock.Mock(ThermostatController),
@@ -70,4 +71,20 @@ class WebInterfaceTest(unittest.TestCase):
         with mock.patch.object(self.output_controller, 'get_output_statuses',
                                return_value=[OutputStateDTO(id=0, status=True)]):
             response = self.web.get_output_status()
-            assert [{'id': 0, 'status': 1, 'ctimer': 0, 'dimmer': 0, 'locked': False}] == json.loads(response)['status']
+            self.assertEqual([{'id': 0, 'status': 1, 'ctimer': 0, 'dimmer': 0, 'locked': False}], json.loads(response)['status'])
+
+    def test_schedules(self):
+        with mock.patch.object(self.scheduling_controller, 'load_schedules',
+                               return_value=[ScheduleDTO(id=1, name='test', start=0, action='BASIC_ACTION')]):
+            response = self.web.list_schedules()
+            self.assertEqual([{'arguments': None,
+                               'duration': None,
+                               'end': None,
+                               'id': 1,
+                               'last_executed': None,
+                               'name': 'test',
+                               'next_execution': None,
+                               'repeat': None,
+                               'schedule_type': 'BASIC_ACTION',
+                               'start': 0,
+                               'status': None}], json.loads(response)['schedules'])

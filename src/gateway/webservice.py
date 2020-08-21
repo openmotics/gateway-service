@@ -43,8 +43,9 @@ import gateway
 from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     OutputSerializer, OutputStateSerializer, PulseCounterSerializer, \
     RoomSerializer, SensorSerializer, ShutterGroupSerializer, \
-    ShutterSerializer, ThermostatSerializer, ModuleSerializer
-from gateway.dto import RoomDTO
+    ShutterSerializer, ThermostatSerializer, ModuleSerializer, \
+    ScheduleSerializer
+from gateway.dto import RoomDTO, ScheduleDTO
 from gateway.enums import ShutterEnums
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
@@ -2202,32 +2203,44 @@ class WebInterface(object):
 
     @openmotics_api(auth=True, check=types(name=str, start=int, schedule_type=str, arguments='json', repeat='json', duration=int, end=int))
     def add_schedule(self, name, start, schedule_type, arguments=None, repeat=None, duration=None, end=None):
-        self._scheduling_controller.add_schedule(name, start, schedule_type, arguments, repeat, duration, end)
+        schedule_dto = ScheduleDTO(id=None,
+                                   name=name,
+                                   start=start,
+                                   action=schedule_type,
+                                   repeat=repeat,
+                                   duration=duration,
+                                   end=end,
+                                   arguments=arguments)
+        fields = ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']
+        self._scheduling_controller.save_schedules([(schedule_dto, fields)])
         return {}
 
     @openmotics_api(auth=True, deprecated='list_schedules')
     def list_scheduled_actions(self):
+        # Deprecated API, so manual serialization to old format
         return {'actions': [{'timestamp': schedule.start,
                              'from_now': schedule.start - time.time(),
                              'id': schedule.id,
                              'description': schedule.name,
                              'action': json.dumps({'action': schedule.arguments['name'],
                                                    'params': schedule.arguments['parameters']})}
-                            for schedule in self._scheduling_controller.schedules
-                            if schedule.schedule_type == 'LOCAL_API']}
+                            for schedule in self._scheduling_controller.load_schedules()
+                            if schedule.action == 'LOCAL_API']}
 
     @openmotics_api(auth=True)
     def list_schedules(self):
-        return {'schedules': [schedule.serialize() for schedule in self._scheduling_controller.schedules]}
+        return {'schedules': [ScheduleSerializer.serialize(schedule_dto, fields=None)
+                              for schedule_dto in self._scheduling_controller.load_schedules()]}
 
     @openmotics_api(auth=True, check=types(id=int), deprecated='remove_schedule')
     def remove_scheduled_action(self, id):
-        self._scheduling_controller.remove_schedule(id)
+        self.remove_schedule(schedule_id=id)
         return {}
 
     @openmotics_api(auth=True, check=types(schedule_id=int))
     def remove_schedule(self, schedule_id):
-        self._scheduling_controller.remove_schedule(schedule_id)
+        self._scheduling_controller.remove_schedules([ScheduleDTO(id=schedule_id,  # Only ID is relevant for delete action
+                                                                  name=None, start=None, action=None)])
         return {}
 
     @openmotics_api(auth=True)

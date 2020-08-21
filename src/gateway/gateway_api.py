@@ -314,7 +314,6 @@ class GatewayApi(object):
                 eeprom_file.write(self.get_master_backup())
 
             for filename, source in {'config.db': constants.get_config_database_file(),
-                                     'scheduled.db': constants.get_scheduling_database_file(),
                                      'power.db': constants.get_power_database_file(),
                                      'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
                                      'metrics.db': constants.get_metrics_database_file(),
@@ -383,7 +382,6 @@ class GatewayApi(object):
 
             for filename, target in {'config.db': constants.get_config_database_file(),
                                      'users.db': constants.get_config_database_file(),
-                                     'scheduled.db': constants.get_scheduling_database_file(),
                                      'power.db': constants.get_power_database_file(),
                                      'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
                                      'metrics.db': constants.get_metrics_database_file(),
