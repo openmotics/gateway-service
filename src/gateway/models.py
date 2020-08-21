@@ -154,6 +154,18 @@ class DataMigration(BaseModel):
     migrated = BooleanField()
 
 
+class Schedule(BaseModel):
+    id = AutoField()
+    name = CharField()
+    start = FloatField()
+    repeat = CharField(null=True)
+    duration = FloatField(null=True)
+    end = FloatField(null=True)
+    action = CharField()
+    arguments = CharField(null=True)
+    status = CharField()
+
+
 class ThermostatGroup(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)

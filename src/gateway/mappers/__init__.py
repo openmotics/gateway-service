@@ -17,3 +17,4 @@ from gateway.mappers.room import RoomMapper
 from gateway.mappers.floor import FloorMapper
 from gateway.mappers.thermostat import ThermostatMapper
 from gateway.mappers.pulse_counter import PulseCounterMapper
+from gateway.mappers.schedule import ScheduleMapper

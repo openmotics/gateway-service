@@ -141,7 +141,6 @@ def setup_target_platform(target_platform, message_client_name):
     config.read(constants.get_config_file())
 
     config_lock = Lock()
-    scheduling_lock = Lock()
     metrics_lock = Lock()
 
     config_database_file = constants.get_config_database_file()
@@ -220,10 +219,6 @@ def setup_target_platform(target_platform, message_client_name):
 
     # Pulse Controller
     Injectable.value(pulse_db=constants.get_pulse_counter_database_file())
-
-    # Scheduling Controller
-    Injectable.value(scheduling_db=constants.get_scheduling_database_file())
-    Injectable.value(scheduling_db_lock=scheduling_lock)
 
     # Master Controller
     controller_serial_port = config.get('OpenMotics', 'controller_serial')

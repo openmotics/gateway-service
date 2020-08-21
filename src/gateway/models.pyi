@@ -172,6 +172,18 @@ class DataMigration(BaseModel):
     migrated: bool
 
 
+class Schedule(BaseModel):
+    id: MixedPrimaryKeyField
+    name: str
+    start: MixedFloatField
+    repeat: Optional[str]
+    duration: Optional[MixedFloatField]
+    end: Optional[MixedFloatField]
+    action: Literal['BASIC_ACTION', 'GROUP_ACTION', 'LOCAL_API']
+    arguments: Optional[str]
+    status: Literal['ACTIVE', 'COMPLETED']
+
+
 class ThermostatGroup(BaseModel):
     id: MixedPrimaryKeyField
     number: MixedIntegerField
