@@ -108,6 +108,11 @@ class SchedulingControllerTest(unittest.TestCase):
         for field in ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']:
             self.assertEqual(getattr(dto, field), getattr(loaded_dto, field))
         self.assertEqual('ACTIVE', loaded_dto.status)
+        controller = SchedulingControllerTest._get_controller()  # Force new controller
+        loaded_dto = controller.load_schedule(schedule_id=1)
+        for field in ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']:
+            self.assertEqual(getattr(dto, field), getattr(loaded_dto, field))
+        self.assertEqual('ACTIVE', loaded_dto.status)
 
     def test_base_validation(self):
         controller = SchedulingControllerTest._get_controller()

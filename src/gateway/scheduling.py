@@ -212,10 +212,8 @@ class SchedulingController(object):
                 raise RuntimeError('A schedule of type BASIC_ACTION does not have a duration. It is a one-time trigger')
             arguments = None if schedule.arguments is None else json.loads(schedule.arguments)
             if (not isinstance(arguments, dict) or
-                    'action_type' not in arguments or
-                    not isinstance(arguments['action_type'], int) or
-                    'action_number' not in arguments or
-                    not isinstance(arguments['action_number'], int) or
+                    'action_type' not in arguments or not isinstance(arguments['action_type'], int) or
+                    'action_number' not in arguments or not isinstance(arguments['action_number'], int) or
                     len(arguments) != 2):
                 raise RuntimeError('The arguments of a BASIC_ACTION schedule must be of type dict with arguments `action_type` and `action_number`')
         elif schedule.action == 'GROUP_ACTION':
@@ -230,8 +228,7 @@ class SchedulingController(object):
             arguments = None if schedule.arguments is None else json.loads(schedule.arguments)
             if (not isinstance(arguments, dict) or
                     'name' not in arguments or
-                    'parameters' not in arguments or
-                    not isinstance(arguments['parameters'], dict)):
+                    'parameters' not in arguments or not isinstance(arguments['parameters'], dict)):
                 raise RuntimeError('The arguments of a LOCAL_API schedule must be of type dict with arguments `name` and `parameters`')
             func = getattr(self._web_interface, arguments['name']) if hasattr(self._web_interface, arguments['name']) else None
             if func is None or not callable(func) or not hasattr(func, 'plugin_exposed') or getattr(func, 'plugin_exposed') is False:
