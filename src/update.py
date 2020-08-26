@@ -438,8 +438,11 @@ def update(version, expected_md5):
             raise SystemExit(1)
 
         config.set('OpenMotics', 'version', version)
-        with open(constants.get_config_file(), 'wb') as configfile:
+        temp_file = constants.get_config_file() + '.update'
+        with open(temp_file, 'wb') as configfile:
             config.write(configfile)
+        shutil.move(temp_file, constants.get_config_file())
+        cmd(['sync'])
 
         if os.path.exists('/tmp/post_update_reboot'):
             logger.info('Scheduling reboot in 5 minutes')
