@@ -54,7 +54,7 @@ if __name__ == '__main__':
     config.read(constants.get_config_file())
     core_cli_serial_port = config.get('OpenMotics', 'cli_serial')
     Injectable.value(cli_serial=Serial(core_cli_serial_port, 115200))
-    Injectable.value(core_communicator=None)
+    Injectable.value(master_communicator=None)
     Injectable.value(maintenance_communicator=None)
 
     setup_logger()
