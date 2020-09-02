@@ -131,10 +131,10 @@ class MasterCoreControllerTest(unittest.TestCase):
             events.append(master_event)
 
         self.controller.subscribe_event(_on_event)
-        output_status = [{'id': 0, 'status': False, 'dimmer': 0},
-                         {'id': 1, 'status': False, 'dimmer': 0},
-                         {'id': 10, 'status': False, 'dimmer': 0},
-                         {'id': 11, 'status': False, 'dimmer': 0}]
+        output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
+                         {'device_nr': 1, 'status': False, 'dimmer': 0},
+                         {'device_nr': 10, 'status': False, 'dimmer': 0},
+                         {'device_nr': 11, 'status': False, 'dimmer': 0}]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
@@ -142,10 +142,10 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.controller._refresh_shutter_states()
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
-        output_status = [{'id': 0, 'status': False, 'dimmer': 0},
-                         {'id': 1, 'status': True, 'dimmer': 0},
-                         {'id': 10, 'status': True, 'dimmer': 0},
-                         {'id': 11, 'status': False, 'dimmer': 0}]
+        output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
+                         {'device_nr': 1, 'status': True, 'dimmer': 0},
+                         {'device_nr': 10, 'status': True, 'dimmer': 0},
+                         {'device_nr': 11, 'status': False, 'dimmer': 0}]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
@@ -153,10 +153,10 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.controller._refresh_shutter_states()
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_up', 'location': {'room_id': 255}})] == events
 
-        output_status = [{'id': 0, 'status': False, 'dimmer': 0},
-                         {'id': 1, 'status': True, 'dimmer': 0},
-                         {'id': 10, 'status': False, 'dimmer': 0},
-                         {'id': 11, 'status': True, 'dimmer': 0}]
+        output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
+                         {'device_nr': 1, 'status': True, 'dimmer': 0},
+                         {'device_nr': 10, 'status': False, 'dimmer': 0},
+                         {'device_nr': 11, 'status': True, 'dimmer': 0}]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
