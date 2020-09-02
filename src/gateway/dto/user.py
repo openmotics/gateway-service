@@ -16,7 +16,6 @@
 """
 Schedule DTO
 """
-import time
 from gateway.dto.base import BaseDTO
 
 if False:  # MYPY

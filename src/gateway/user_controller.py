@@ -30,7 +30,7 @@ from gateway.models import User
 from gateway.mappers.user import UserMapper
 from gateway.dto.user import UserDTO
 
-if True: # MYPY
+if False: # MYPY
     from typing import Tuple, List
 
 logger = logging.getLogger('openmotics')
@@ -54,6 +54,7 @@ class UserController(object):
         :type config: A dict with keys 'username' and 'password'.
         :param token_timeout: the number of seconds a token is valid.
         """
+        logger.info("Initializing the user controller")
         self._config = config
         self._token_timeout = token_timeout
         self._tokens = {} #type: Dict[str, Tuple(str, float)]
@@ -62,13 +63,14 @@ class UserController(object):
 
         # Create the user for the cloud
         cloud_user_dto = UserDTO(
-            username=self._confi['username'].lower(), 
-            password=self_config['password'],
+            username=self._config['username'].lower(), 
+            password=self._config['password'],
             role="admin",
             enabled=True,
             accepted_terms=UserController.TERMS_VERSION
         )
         # self.save_users(self._config['username'].lower(), self._config['password'], "admin", True, True)
+        logger.info("Adding the cloud user")
         self.save_users(users=[cloud_user_dto])
 
     @staticmethod
@@ -125,7 +127,6 @@ class UserController(object):
 
             for token in to_remove:
                 del self._tokens[token]
-        self.reload_users()
 
     def _get_num_admins(self):
         """ Get the number of admin users in the system. """
