@@ -45,7 +45,7 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     RoomSerializer, SensorSerializer, ShutterGroupSerializer, \
     ShutterSerializer, ThermostatSerializer, ModuleSerializer, \
     ScheduleSerializer
-from gateway.dto import RoomDTO, ScheduleDTO
+from gateway.dto import RoomDTO, ScheduleDTO, UserDTO
 from gateway.enums import ShutterEnums
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
@@ -421,7 +421,13 @@ class WebInterface(object):
         :rtype: str
         """
 
-        success, data = self._user_controller.login(username, password, accept_terms, timeout)
+        user_dto = UserDTO(
+            username=username,
+            password=password,
+            role="admin",
+            enabled=True
+        )
+        success, data = self._user_controller.login(user_dto, accept_terms, timeout)
         if success is True:
             return {'token': data}
         if data == 'terms_not_accepted':
@@ -451,7 +457,13 @@ class WebInterface(object):
         """
         if not self.in_authorized_mode():
             raise cherrypy.HTTPError(401, "unauthorized")
-        self._user_controller.create_user(username, password, 'admin', True)
+        user_dto = UserDTO(
+            username=username, 
+            password=password, 
+            role='admin',
+            enabled=True
+        )
+        self._user_controller.save_users([user_dto])
         return {}
 
     @openmotics_api(plugin_exposed=False)

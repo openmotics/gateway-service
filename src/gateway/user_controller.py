@@ -1,4 +1,4 @@
-# Copyright (C) 2016 OpenMotics BV
+# Copyright (C) 2020 OpenMotics BV
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -22,8 +22,18 @@ import sqlite3
 import hashlib
 import uuid
 import time
+import logging
+import six
 from random import randint
 from ioc import Injectable, Inject, Singleton, INJECTED
+from gateway.models import User
+from gateway.mappers.user import UserMapper
+from gateway.dto.user import UserDTO
+
+if True: # MYPY
+    from typing import Tuple, List
+
+logger = logging.getLogger('openmotics')
 
 
 @Injectable.named('user_controller')
@@ -44,52 +54,22 @@ class UserController(object):
         :type config: A dict with keys 'username' and 'password'.
         :param token_timeout: the number of seconds a token is valid.
         """
-        self._lock = user_db_lock
         self._config = config
-        self._connection = sqlite3.connect(user_db,
-                                           detect_types=sqlite3.PARSE_DECLTYPES,
-                                           check_same_thread=False,
-                                           isolation_level=None)
-        self._cursor = self._connection.cursor()
         self._token_timeout = token_timeout
-        self._tokens = {}
-        self._schema = {'username': "TEXT UNIQUE",
-                        'password': "TEXT",
-                        'role': "TEXT",
-                        'enabled': "INT",
-                        'accepted_terms': "INT default 0"}
-        self._check_tables()
+        self._tokens = {} #type: Dict[str, Tuple(str, float)]
+        # WITH CACHE USE
+        # self._cached_users = {} #type: Dict[str, User]
 
         # Create the user for the cloud
-        self.create_user(self._config['username'].lower(), self._config['password'], "admin", True, True)
-
-    def _execute(self, *args, **kwargs):
-        lock = kwargs.pop('lock', True)
-        try:
-            if lock:
-                self._lock.acquire()
-            return self._cursor.execute(*args, **kwargs)
-        except sqlite3.OperationalError:
-            time.sleep(randint(1, 20) / 10.0)
-            return self._cursor.execute(*args, **kwargs)
-        finally:
-            if lock:
-                self._lock.release()
-
-    def _check_tables(self):
-        """
-        Creates tables and execute migrations
-        """
-        with self._lock:
-            self._execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, {0});".format(
-                ", ".join(['{0} {1}'.format(key, value) for key, value in self._schema.items()])
-            ), lock=False)
-            fields = []
-            for row in self._execute("PRAGMA table_info('users');", lock=False):
-                fields.append(row[1])
-            for field, field_type in self._schema.items():
-                if field not in fields:
-                    self._execute("ALTER TABLE users ADD COLUMN {0} {1};".format(field, field_type), lock=False)
+        cloud_user_dto = UserDTO(
+            username=self._confi['username'].lower(), 
+            password=self_config['password'],
+            role="admin",
+            enabled=True,
+            accepted_terms=UserController.TERMS_VERSION
+        )
+        # self.save_users(self._config['username'].lower(), self._config['password'], "admin", True, True)
+        self.save_users(users=[cloud_user_dto])
 
     @staticmethod
     def _hash(password):
@@ -99,31 +79,31 @@ class UserController(object):
         sha.update(password)
         return sha.hexdigest()
 
-    def create_user(self, username, password, role, enabled, accept_terms=False):
-        """ Create a new user using a username, password, role and enabled. The username is case
-        insensitive.
+    # WITH CACHE USE
+    # def reload_users(self):
+    #     for user in User.select():
+    #         self._cached_users[user.username] = user
 
-        :param username: username for the newly created user.
-        :param password: password for the newly created user.
-        :param role: role for the newly created user.
-        :param enabled: boolean, only enabled users can log into the system.
-        :param accept_terms: indicates whether the user has accepted the terms
+
+    def save_users(self, users):
+        # type: (List[Tuple[UserDTO, List[str]]]) -> None
         """
-        username = username.lower()
-        accepted_terms = UserController.TERMS_VERSION if accept_terms else 0
-
-        self._execute("INSERT OR REPLACE INTO users (username, password, role, enabled, accepted_terms) VALUES (?, ?, ?, ?, ?);",
-                      (username, UserController._hash(password), role, int(enabled), accepted_terms))
+        Create a new user using a user DTO object
+        """
+        for user_dto, fields in users:
+            user = UserMapper.dto_to_orm(user_dto, fields)
+            self._validate(user)
+            user.save()
+            
 
     def get_usernames(self):
         """ Get all usernames.
 
         :returns: a list of strings.
         """
-        usernames = []
-        for row in self._execute("SELECT username FROM users;"):
-            usernames.append(row[0])
-        return usernames
+        users = User.select()
+        return [user.username for user in users]
+
 
     def remove_user(self, username):
         """ Remove a user.
@@ -132,10 +112,11 @@ class UserController(object):
         """
         username = username.lower()
 
+        # check if the removed user is not the last admin user of the system
         if self.get_role(username) == "admin" and self._get_num_admins() == 1:
             raise Exception("Cannot delete last admin account")
         else:
-            self._execute("DELETE FROM users WHERE username = ?;", (username,))
+            User.delete().where(User.username == username).execute()
 
             to_remove = []
             for token in self._tokens:
@@ -144,19 +125,27 @@ class UserController(object):
 
             for token in to_remove:
                 del self._tokens[token]
+        self.reload_users()
 
     def _get_num_admins(self):
         """ Get the number of admin users in the system. """
-        for row in self._execute("SELECT count(*) FROM users WHERE role = ?", ("admin",)):
-            return row[0]
-        return 0
 
-    def login(self, username, password, accept_terms=None, timeout=None):
+        # TO WORK WITH CACHE
+        # count = 0
+        # for user in self._cached_users:
+        #     if self._cached_users[user].role == "admin":
+        #         count += 1
+        # return count
+
+        count = User.select().where(User.role == "admin").count()
+        return count
+
+    def login(self, users, accept_terms=None, timeout=None):
+        # type: (List[UserDTO], bool, float) -> Tuple[bool, str]
         """ Login with a username and password, returns a token for this user.
 
         :returns: a token that identifies this user, None for invalid credentials.
         """
-        username = username.lower()
         if timeout is not None:
             try:
                 timeout = int(timeout)
@@ -166,17 +155,23 @@ class UserController(object):
         if timeout is None:
             timeout = self._token_timeout
 
-        for row in self._execute("SELECT id, accepted_terms FROM users WHERE username = ? AND password = ? AND enabled = ?;",
-                                 (username, UserController._hash(password), 1)):
-            user_id, accepted_terms = row[0], row[1]
-            if accepted_terms == UserController.TERMS_VERSION:
-                return True, self._gen_token(username, time.time() + timeout)
+        for user in users:
+            user_orm = User.select().where(
+                User.username == user.username,
+                User.password == UserController._hash(user.password),
+                User.enabled == 1
+            )
+            if user_orm is None:
+                return False, 'invalid_credentials'
+            if user_orm.accepted_terms == UserController.TERMS_VERSION:
+                return True, self._gen_token(user_orm.username, time.time() + timeout)
             if accept_terms is True:
-                self._execute("UPDATE users SET accepted_terms = ? WHERE id = ?;",
-                              (UserController.TERMS_VERSION, user_id))
-                return True, self._gen_token(username, time.time() + timeout)
+                user_orm.accepted_terms=UserController.TERMS_VERSION
+                user_orm.save()
+                return True, self._gen_token(user_orm.username, time.time() + timeout)
             return False, 'terms_not_accepted'
-        return False, 'invalid_credentials'
+        return False, 'no_user_given'
+
 
     def logout(self, token):
         """ Removes the token from the controller. """
@@ -186,9 +181,10 @@ class UserController(object):
         """ Get the role for a certain user. Returns None is user was not found. """
         username = username.lower()
 
-        for row in self._execute("SELECT role FROM users WHERE username = ?;", (username,)):
-            return row[0]
-
+        user_orm = User.select().where(User.username == username)
+        user_dto = UserMapper.orm_to_dto(user_orm)
+        if user_orm is not None:
+            return user_dto.role
         return None
 
     def _gen_token(self, username, valid_until):
@@ -210,6 +206,13 @@ class UserController(object):
         else:
             return self._tokens[token][1] >= time.time()
 
-    def close(self):
-        """ Cose the database connection. """
-        self._connection.close()
+    def _validate(self, user):
+        # type: (User) -> None
+        if user.username is None or not isinstance(user.username, six.string_types) or user.username.strip() == '':
+            raise RuntimeError("A user must have a username")
+        if user.password is None or not isinstance(user.password, six.string_types) or user.password.strip() == '':
+            raise RuntimeError("A user must have a password")
+        if user.accepted_terms is None or \
+            not isinstance(user.accepted_terms, six.integer_types) or \
+            0 < user.accepted_terms < UserController.TERMS_VERSION:
+            raise RuntimeError("A user must have a valid 'accepted_terms' fields")

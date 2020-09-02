@@ -13,9 +13,26 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from gateway.mappers.room import RoomMapper
-from gateway.mappers.floor import FloorMapper
-from gateway.mappers.thermostat import ThermostatMapper
-from gateway.mappers.pulse_counter import PulseCounterMapper
-from gateway.mappers.schedule import ScheduleMapper
-from gateway.mappers.user import UserMapper
+"""
+Schedule DTO
+"""
+import time
+from gateway.dto.base import BaseDTO
+
+if False:  # MYPY
+    from typing import Optional, Any
+
+
+class UserDTO(BaseDTO):
+    def __init__(self, username, password, role, enabled, accepted_terms=0):
+        self.username = username # type: str
+        self.password = password # type: str
+        self.role = role # type: str
+        self.enabled = enabled # type: int
+        self.accepted_terms = accepted_terms # type: int
+
+    def __eq__(self, other):
+        if not isinstance(other, UserDTO):
+            return False
+        return self.username == other.username
+

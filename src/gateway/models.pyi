@@ -183,6 +183,13 @@ class Schedule(BaseModel):
     arguments: Optional[str]
     status: Literal['ACTIVE', 'COMPLETED']
 
+class User(BaseModel):
+    id: MixedPrimaryKeyField
+    username: MixedTextField
+    password: MixedTextField
+    enabled: MixedIntegerField
+    role: MixedTextField
+    accepted_terms: Optional[MixedIntegerField]
 
 class ThermostatGroup(BaseModel):
     id: MixedPrimaryKeyField
