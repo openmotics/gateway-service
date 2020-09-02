@@ -33,6 +33,7 @@ class SensorSerializer(object):
         data = {'id': sensor_dto.id,
                 'name': sensor_dto.name,
                 'offset': sensor_dto.offset,
+                'room': Toolbox.denonify(sensor_dto.room, SensorSerializer.BYTE_MAX),
                 'virtual': sensor_dto.virtual}
         return SerializerToolbox.filter_fields(data, fields)
 
@@ -45,6 +46,7 @@ class SensorSerializer(object):
             api_data=api_data,
             mapping={'name': ('name', None),
                      'offset': ('offset', None),
+                     'room': ('room', SensorSerializer.BYTE_MAX),
                      'virtual': ('virtual', None)}
         )
         return sensor_dto, loaded_fields

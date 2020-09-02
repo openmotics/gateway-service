@@ -68,6 +68,15 @@ pytest gateway_tests/output_controller_test.py --log-level=DEBUG --durations=2 -
 echo "Running input controller tests"
 pytest gateway_tests/input_controller_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/InputControllerTest.xml
 
+echo "Running input mapper tests"
+pytest gateway_tests/mappers/input_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/InputMapperTest.xml
+
+echo "Running output mapper tests"
+pytest gateway_tests/mappers/output_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/OutputMapperTest.xml
+
+echo "Running sensor serializer tests"
+pytest gateway_tests/serializers/sensor_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/SensorSerializerTest.xml
+
 #echo "Running Core uCAN tests"
 #python3 master_core_tests/ucan_communicator_test.py
 
