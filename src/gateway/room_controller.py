@@ -66,4 +66,4 @@ class RoomController(object):
                     room.floor = floor
                 room.save()
             else:
-                Room.delete().where(number=room_dto.id).execute()
+                Room.delete().where(Room.number == room_dto.id).execute()

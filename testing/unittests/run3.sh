@@ -68,6 +68,9 @@ pytest gateway_tests/output_controller_test.py --log-level=DEBUG --durations=2 -
 echo "Running input controller tests"
 pytest gateway_tests/input_controller_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/InputControllerTest.xml
 
+echo "Running room controller tests"
+pytest gateway_tests/room_controller_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/RoomControllerTest.xml
+
 #echo "Running Core uCAN tests"
 #python3 master_core_tests/ucan_communicator_test.py
 
