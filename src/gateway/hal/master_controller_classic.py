@@ -1337,11 +1337,12 @@ class MasterClassicController(MasterController):
                             1: 'OUTPUT',
                             2: 'INPUT'}
             address = MasterClassicController._format_address(api_data['id'])
+            module_type = chr(api_data['id'][0])
             with self._module_log_lock:
                 self._module_log.append({'code': code_map.get(api_data['instr'], 'UNKNOWN').upper(),
                                          'module_nr': api_data['module_nr'],
                                          'category': category_map[api_data['io_type']],
-                                         'module_type': api_data['id'][0],
+                                         'module_type': module_type,
                                          'address': address})
             logger.info('Initialize/discovery - {0} module found: {1} ({2})'.format(
                 code_map.get(api_data['instr'], 'Unknown'),

@@ -468,7 +468,7 @@ class MasterCoreController(MasterController):
             output_module.save()
 
     def _refresh_shutter_states(self):
-        status_data = {x['id']: x for x in self.load_output_status()}
+        status_data = {x['device_nr']: x for x in self.load_output_status()}
         for shutter_id in range(len(status_data) // 2):
             shutter = ShutterConfiguration(shutter_id)
             output_0 = status_data.get(shutter.outputs.output_0)

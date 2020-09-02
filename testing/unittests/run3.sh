@@ -68,6 +68,9 @@ pytest gateway_tests/output_controller_test.py --log-level=DEBUG --durations=2 -
 echo "Running input controller tests"
 pytest gateway_tests/input_controller_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/InputControllerTest.xml
 
+echo "Running room controller tests"
+pytest gateway_tests/room_controller_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/RoomControllerTest.xml
+
 echo "Running input mapper tests"
 pytest gateway_tests/mappers/input_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/InputMapperTest.xml
 
