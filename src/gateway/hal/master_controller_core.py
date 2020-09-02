@@ -120,7 +120,7 @@ class MasterCoreController(MasterController):
             event_data = {'id': output_id,
                           'status': core_event.data['status'],
                           'dimmer': core_event.data['dimmer_value'],
-                          'ctimer': timer_value}
+                          'ctimer': 0 if timer_value is None else timer_value}
             self._handle_output(output_id, event_data)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             event = self._input_state.handle_event(core_event)
