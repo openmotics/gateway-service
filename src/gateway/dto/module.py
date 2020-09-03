@@ -32,6 +32,7 @@ class ModuleDTO(BaseDTO):
         VIRTUAL = 'virtual'
         PHYSICAL = 'physical'
         EMULATED = 'emulated'
+        INTERNAL = 'internal'
 
     class ModuleType(object):
         SENSOR = 'sensor'
@@ -40,6 +41,7 @@ class ModuleDTO(BaseDTO):
         SHUTTER = 'shutter'
         DIM_CONTROL = 'dim_control'
         CAN_CONTROL = 'can_control'
+        OPEN_COLLECTOR = 'open_collector'
         ENERGY = 'energy'
         POWER = 'power'
         P1_CONCENTRATOR = 'p1_concentrator'

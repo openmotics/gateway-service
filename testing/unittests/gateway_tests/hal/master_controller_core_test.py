@@ -80,7 +80,7 @@ class MasterCoreControllerTest(unittest.TestCase):
         events = []
         self.controller._handle_event({'type': 0, 'device_nr': 0, 'action': 0, 'data': [None, 0, 0, 0]})
         self.controller._handle_event({'type': 0, 'device_nr': 2, 'action': 1, 'data': [100, 2, 0xff, 0xfe]})
-        assert [MasterEvent('OUTPUT_STATUS', {'id': 0, 'status': False, 'dimmer': None, 'ctimer': None}),
+        assert [MasterEvent('OUTPUT_STATUS', {'id': 0, 'status': False, 'dimmer': None, 'ctimer': 0}),
                 MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': True, 'dimmer': 100, 'ctimer': 65534})] == events
 
     def test_master_shutter_event(self):
@@ -101,27 +101,27 @@ class MasterCoreControllerTest(unittest.TestCase):
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 0, 'data': [None, 0, 0, 0]})
             self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 0, 'data': [None, 0, 0, 0]})
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': False, 'dimmer': None, 'ctimer': None}),
-                    MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': False, 'dimmer': None, 'ctimer': None})] == events
+            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': False, 'dimmer': None, 'ctimer': 0}),
+                    MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': False, 'dimmer': None, 'ctimer': 0})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 1, 'data': [None, 0, 0, 0]})
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': True, 'dimmer': None, 'ctimer': None}),
+            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': True, 'dimmer': None, 'ctimer': 0}),
                     MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_up', 'location': {'room_id': 255}})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 1, 'data': [None, 0, 0, 0]})
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': True, 'dimmer': None, 'ctimer': None}),
+            assert [MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': True, 'dimmer': None, 'ctimer': 0}),
                     MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 0, 'data': [None, 0, 0, 0]})
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': False, 'dimmer': None, 'ctimer': None}),
+            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': False, 'dimmer': None, 'ctimer': 0}),
                     MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_down', 'location': {'room_id': 255}})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 0, 'data': [None, 0, 0, 0]})
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': False, 'dimmer': None, 'ctimer': None}),
+            assert [MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': False, 'dimmer': None, 'ctimer': 0}),
                     MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
     def test_master_shutter_refresh(self):

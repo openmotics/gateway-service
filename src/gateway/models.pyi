@@ -159,8 +159,8 @@ class Module(BaseModel):
     id: MixedPrimaryKeyField
     source: Literal['master', 'gateway']
     address: str
-    module_type: Optional[Literal['sensor', 'input', 'output', 'shutter', 'dim_control', 'can_control', 'energy', 'power', 'p1_concentrator']]
-    hardware_type: Literal['physical', 'emulated', 'virtual']
+    module_type: Optional[Literal['sensor', 'input', 'output', 'shutter', 'dim_control', 'can_control', 'open_collector', 'energy', 'power', 'p1_concentrator']]
+    hardware_type: Literal['physical', 'emulated', 'virtual', 'internal']
     firmware_version: Optional[str]
     hardware_version: Optional[str]
     order = Optional[MixedIntegerField]

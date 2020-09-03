@@ -37,6 +37,7 @@ class ModuleSerializer(object):
                             ModuleDTO.ModuleType.SHUTTER: 'SHUTTER',
                             ModuleDTO.ModuleType.OUTPUT: 'OUTPUT',
                             ModuleDTO.ModuleType.DIM_CONTROL: 'OUTPUT',
+                            ModuleDTO.ModuleType.OPEN_COLLECTOR: 'OUTPUT',
                             None: 'UNKNOWN'}
             data.update({'type': chr(int(module_dto.address.split('.')[0])),
                          'module_nr': module_dto.order,

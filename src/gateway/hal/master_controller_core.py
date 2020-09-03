@@ -43,7 +43,8 @@ from master.core.memory_file import MemoryFile, MemoryTypes
 from master.core.memory_models import GlobalConfiguration, \
     InputConfiguration, InputModuleConfiguration, OutputConfiguration, \
     OutputModuleConfiguration, SensorConfiguration, \
-    SensorModuleConfiguration, ShutterConfiguration
+    SensorModuleConfiguration, ShutterConfiguration, \
+    CanControlModuleConfiguration
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.ucan_communicator import UCANCommunicator
 from serial_utils import CommunicationTimedOutException
@@ -120,7 +121,7 @@ class MasterCoreController(MasterController):
             event_data = {'id': output_id,
                           'status': core_event.data['status'],
                           'dimmer': core_event.data['dimmer_value'],
-                          'ctimer': timer_value}
+                          'ctimer': 0 if timer_value is None else timer_value}
             self._handle_output(output_id, event_data)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             event = self._input_state.handle_event(core_event)
@@ -729,13 +730,102 @@ class MasterCoreController(MasterController):
 
         # i/I/J = Virtual/physical/internal Input module
         # o/O/P = Virtual/physical/internal Ouptut module
+        # l = OpenCollector module
         # T = Temperature module
         # C/E = Physical/internal CAN Control
         return {'outputs': outputs, 'inputs': inputs, 'shutters': [], 'can_inputs': can_inputs}
 
     def get_modules_information(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
-        logger.warn('Core `get_modules_information` not yet implemented')  # TODO
-        return []
+        """ Gets module information """
+
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
+        def get_master_version(_module_address):
+            try:
+                # TODO: Implement call to load slave module version
+                return True, None, None
+            except CommunicationTimedOutException:
+                return False, None, None
+
+        information = []
+        module_type_lookup = {'c': ModuleDTO.ModuleType.CAN_CONTROL,
+                              't': ModuleDTO.ModuleType.SENSOR,
+                              's': ModuleDTO.ModuleType.SENSOR,  # uCAN sensor
+                              'i': ModuleDTO.ModuleType.INPUT,
+                              'b': ModuleDTO.ModuleType.INPUT,  # uCAN input
+                              'o': ModuleDTO.ModuleType.OUTPUT,
+                              'l': ModuleDTO.ModuleType.OPEN_COLLECTOR,
+                              'r': ModuleDTO.ModuleType.SHUTTER,
+                              'd': ModuleDTO.ModuleType.DIM_CONTROL}
+
+        general_configuration = GlobalConfiguration()
+        nr_of_input_modules = _default_if_255(general_configuration.number_of_input_modules, 0)
+        for module_id in range(nr_of_input_modules):
+            input_module_info = InputModuleConfiguration(module_id)
+            device_type = input_module_info.device_type
+            hardware_type = ModuleDTO.HardwareType.PHYSICAL
+            if device_type == 'i' and input_module_info.address.endswith('000.000.000'):
+                hardware_type = ModuleDTO.HardwareType.INTERNAL
+            elif device_type == 'b':
+                hardware_type = ModuleDTO.HardwareType.EMULATED
+            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+                            address=input_module_info.address,
+                            module_type=module_type_lookup.get(device_type),
+                            hardware_type=hardware_type,
+                            order=module_id)
+            if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
+                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(input_module_info.address)
+            information.append(dto)
+
+        nr_of_output_modules = _default_if_255(general_configuration.number_of_output_modules, 0)
+        for module_id in range(nr_of_output_modules):
+            output_module_info = OutputModuleConfiguration(module_id)
+            device_type = output_module_info.device_type
+            hardware_type = ModuleDTO.HardwareType.PHYSICAL
+            if output_module_info.address[4:15] in ['000.000.000', '000.000.001', '000.000.002', '000.000.003']:
+                hardware_type = ModuleDTO.HardwareType.INTERNAL
+            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+                            address=output_module_info.address,
+                            module_type=module_type_lookup.get(device_type),
+                            hardware_type=hardware_type,
+                            order=module_id)
+            if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
+                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(output_module_info.address)
+            information.append(dto)
+
+        nr_of_sensor_modules = _default_if_255(general_configuration.number_of_sensor_modules, 0)
+        for module_id in range(nr_of_sensor_modules):
+            sensor_module_info = SensorModuleConfiguration(module_id)
+            device_type = sensor_module_info.device_type
+            online, hardware_version, firmware_version = get_master_version(sensor_module_info.address)
+            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+                            address=sensor_module_info.address,
+                            module_type=module_type_lookup.get(device_type),
+                            hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                            hardware_version=hardware_version,
+                            firmware_version=firmware_version,
+                            order=module_id,
+                            online=online)
+            information.append(dto)
+
+        nr_of_can_controls = _default_if_255(general_configuration.number_of_can_control_modules, 0)
+        for module_id in range(nr_of_can_controls):
+            can_control_module_info = CanControlModuleConfiguration(module_id)
+            device_type = can_control_module_info.device_type
+            hardware_type = ModuleDTO.HardwareType.PHYSICAL
+            if module_id == 0:
+                hardware_type = ModuleDTO.HardwareType.INTERNAL
+            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+                            address=can_control_module_info.address,
+                            module_type=module_type_lookup.get(device_type),
+                            hardware_type=hardware_type,
+                            order=module_id)
+            if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
+                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(can_control_module_info.address)
+            information.append(dto)
+
+        return information
 
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
         raise NotImplementedError('Module replacement not supported')
