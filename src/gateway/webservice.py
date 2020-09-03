@@ -68,7 +68,7 @@ if False:
     from gateway.scheduling import SchedulingController
     from gateway.shutter_controller import ShutterController
     from gateway.thermostat.thermostat_controller import ThermostatController
-    from gateway.users import UserController
+    from gateway.user_controller import UserController
     from gateway.output_controller import OutputController
     from gateway.input_controller import InputController
     from gateway.room_controller import RoomController
@@ -427,7 +427,7 @@ class WebInterface(object):
             role="admin",
             enabled=True
         )
-        success, data = self._user_controller.login(user_dto, accept_terms, timeout)
+        success, data = self._user_controller.login([(user_dto, accept_terms, timeout)])
         if success is True:
             return {'token': data}
         if data == 'terms_not_accepted':

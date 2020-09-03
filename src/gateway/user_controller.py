@@ -44,7 +44,7 @@ class UserController(object):
     TERMS_VERSION = 1
 
     @Inject
-    def __init__(self, user_db=INJECTED, user_db_lock=INJECTED, config=INJECTED, token_timeout=INJECTED):
+    def __init__(self, config=INJECTED, token_timeout=INJECTED):
         """ Constructor a new UserController.
 
         :param user_db: filename of the sqlite database used to store the users and tokens.
@@ -69,9 +69,8 @@ class UserController(object):
             enabled=True,
             accepted_terms=UserController.TERMS_VERSION
         )
-        # self.save_users(self._config['username'].lower(), self._config['password'], "admin", True, True)
         logger.info("Adding the cloud user")
-        self.save_users(users=[cloud_user_dto])
+        self.save_users(users=[(cloud_user_dto, ['username', 'password', 'role', 'enabled', 'accepted_terms'])])
 
     @staticmethod
     def _hash(password):
@@ -93,7 +92,15 @@ class UserController(object):
         Create a new user using a user DTO object
         """
         for user_dto, fields in users:
-            user = UserMapper.dto_to_orm(user_dto, fields)
+            logger.debug("Saving new user with username: [{}]".format(user_dto.username))
+            user_dto_to_save = UserDTO(
+                username=user_dto.username.lower(),
+                password=self._hash(user_dto.password),
+                role=user_dto.role,
+                enabled=user_dto.enabled,
+                accepted_terms=user_dto.accepted_terms
+            )
+            user = UserMapper.dto_to_orm(user_dto_to_save, fields)
             self._validate(user)
             user.save()
             
@@ -103,8 +110,7 @@ class UserController(object):
 
         :returns: a list of strings.
         """
-        users = User.select()
-        return [user.username for user in users]
+        return [user.username for user in User.select()]
 
 
     def remove_user(self, username):
@@ -141,37 +147,49 @@ class UserController(object):
         count = User.select().where(User.role == "admin").count()
         return count
 
-    def login(self, users, accept_terms=None, timeout=None):
-        # type: (List[UserDTO], bool, float) -> Tuple[bool, str]
+    def login(self, users):
+        # type: (List[Tuple[UserDTO, bool, float]]) -> Tuple[bool, str]
         """ Login with a username and password, returns a token for this user.
 
+        :param user: Tuple of the UserDTO object, accepted_terms and timeout value
         :returns: a token that identifies this user, None for invalid credentials.
         """
-        if timeout is not None:
-            try:
-                timeout = int(timeout)
-                timeout = min(60 * 60 * 24 * 30, max(60 * 60, timeout))
-            except ValueError:
-                timeout = None
-        if timeout is None:
-            timeout = self._token_timeout
 
-        for user in users:
-            user_orm = User.select().where(
+        if isinstance(users, tuple):
+            return False, 'User_is_not_a_tuple'
+
+        for user, accept_terms, timeout in users:
+            user.username = user.username.lower()
+            logger.debug("Logging in user with username [{}]".format(user.username))
+            if timeout is not None:
+                try:
+                    timeout = int(timeout)
+                    timeout = min(60 * 60 * 24 * 30, max(60 * 60, timeout))
+                except ValueError:
+                    timeout = None
+            if timeout is None:
+                timeout = self._token_timeout
+
+            for user_orm in User.select().where(
                 User.username == user.username,
                 User.password == UserController._hash(user.password),
                 User.enabled == 1
-            )
-            if user_orm is None:
-                return False, 'invalid_credentials'
-            if user_orm.accepted_terms == UserController.TERMS_VERSION:
-                return True, self._gen_token(user_orm.username, time.time() + timeout)
-            if accept_terms is True:
-                user_orm.accepted_terms=UserController.TERMS_VERSION
-                user_orm.save()
-                return True, self._gen_token(user_orm.username, time.time() + timeout)
-            return False, 'terms_not_accepted'
-        return False, 'no_user_given'
+            ):
+                # check if returned object is valid
+                if user_orm is None or not hasattr(user_orm, 'username'):
+                    logger.debug("User login: Could not find any user with name [{}]".format(user.username))
+                    return False, 'invalid_credentials'
+
+                if user_orm.accepted_terms == UserController.TERMS_VERSION:
+                    return True, self._gen_token(user_orm.username, time.time() + timeout)
+                if accept_terms is True:
+                    user_orm.accepted_terms=UserController.TERMS_VERSION
+                    user_orm.save()
+                    return True, self._gen_token(user_orm.username, time.time() + timeout)
+                logger.debug("User login: User [{}] has not accepted the latest terms".format(user.username))
+                return False, 'terms_not_accepted'
+        logger.debug("User login: Could not find user with credentials")
+        return False, 'invalid_credentials'
 
 
     def logout(self, token):
@@ -182,10 +200,10 @@ class UserController(object):
         """ Get the role for a certain user. Returns None is user was not found. """
         username = username.lower()
 
-        user_orm = User.select().where(User.username == username)
-        user_dto = UserMapper.orm_to_dto(user_orm)
-        if user_orm is not None:
-            return user_dto.role
+        for user_orm in User.select().where(User.username == username):
+            user_dto = UserMapper.orm_to_dto(user_orm)
+            if user_orm is not None:
+                return user_dto.role
         return None
 
     def _gen_token(self, username, valid_until):
@@ -196,6 +214,7 @@ class UserController(object):
         # Delete the expired tokens
         for token in self._tokens.keys():
             if self._tokens[token][1] < time.time():
+                logger.debug("Removing expired token for user: [{}]".format(self._tokens[token][0]))
                 self._tokens.pop(token, None)
 
         return ret
@@ -205,7 +224,8 @@ class UserController(object):
         if token is None or token not in self._tokens:
             return False
         else:
-            return self._tokens[token][1] >= time.time()
+            timed_out = self._tokens[token][1] >= time.time()
+            return timed_out
 
     def _validate(self, user):
         # type: (User) -> None

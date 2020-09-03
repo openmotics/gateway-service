@@ -49,6 +49,9 @@ class UserMapper(object):
             user = User(
                 **{field: getattr(user_dto, field) for field in mandatory_fields}
             )
+        for field in ['accepted_terms']:
+            if field in fields:
+                setattr(user, field, getattr(user_dto, field))
         
         # override or set the unset fields in the user object according to the fields from the user_dto field
         for field in vars(user):
