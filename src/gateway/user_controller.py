@@ -31,7 +31,7 @@ from gateway.mappers.user import UserMapper
 from gateway.dto.user import UserDTO
 
 if False: # MYPY
-    from typing import Tuple, List
+    from typing import Tuple, List, Optional
 
 logger = logging.getLogger('openmotics')
 
@@ -47,19 +47,15 @@ class UserController(object):
     def __init__(self, config=INJECTED, token_timeout=INJECTED):
         """ Constructor a new UserController.
 
-        :param user_db: filename of the sqlite database used to store the users and tokens.
-        :param lock: shared lock for the given DB
-        :type lock: threading.Lock
         :param config: Contains the OpenMotics cloud username and password.
         :type config: A dict with keys 'username' and 'password'.
         :param token_timeout: the number of seconds a token is valid.
+        :type token_timeout: string
         """
         logger.info("Initializing the user controller")
         self._config = config
         self._token_timeout = token_timeout
         self._tokens = {} #type: Dict[str, Tuple(str, float)]
-        # WITH CACHE USE
-        # self._cached_users = {} #type: Dict[str, User]
 
         # Create the user for the cloud
         cloud_user_dto = UserDTO(
@@ -74,22 +70,17 @@ class UserController(object):
 
     @staticmethod
     def _hash(password):
+        # tyep: (str) -> str
         """ Hash the password using sha1. """
         sha = hashlib.sha1()
         sha.update("OpenMotics")
         sha.update(password)
         return sha.hexdigest()
 
-    # WITH CACHE USE
-    # def reload_users(self):
-    #     for user in User.select():
-    #         self._cached_users[user.username] = user
-
-
     def save_users(self, users):
         # type: (List[Tuple[UserDTO, List[str]]]) -> None
         """
-        Create a new user using a user DTO object
+        Create or update a new user using a user DTO object
         """
         for user_dto, fields in users:
             logger.debug("Saving new user with username: [{}]".format(user_dto.username))
@@ -106,7 +97,9 @@ class UserController(object):
             
 
     def get_usernames(self):
-        """ Get all usernames.
+        # type: () -> List[str]
+        """ 
+        Get all usernames.
 
         :returns: a list of strings.
         """
@@ -114,10 +107,13 @@ class UserController(object):
 
 
     def remove_user(self, username):
-        """ Remove a user.
+        # type: (str) -> None
+        """ 
+        Remove a user.
 
         :param username: the name of the user to remove.
         """
+        # set username to lowercase to compare on username
         username = username.lower()
 
         # check if the removed user is not the last admin user of the system
@@ -135,21 +131,16 @@ class UserController(object):
                 del self._tokens[token]
 
     def _get_num_admins(self):
+        # type: () -> int
         """ Get the number of admin users in the system. """
-
-        # TO WORK WITH CACHE
-        # count = 0
-        # for user in self._cached_users:
-        #     if self._cached_users[user].role == "admin":
-        #         count += 1
-        # return count
-
         count = User.select().where(User.role == "admin").count()
         return count
 
     def login(self, users):
-        # type: (List[Tuple[UserDTO, bool, float]]) -> Tuple[bool, str]
-        """ Login with a username and password, returns a token for this user.
+        # type: (List[Tuple[UserDTO, bool, Optional[float]]]) -> Tuple[bool, str]
+        """ 
+        Login with a username and password, returns a tuple of (True, token) for this user on success.
+        Returns false with a reason string on failure
 
         :param user: Tuple of the UserDTO object, accepted_terms and timeout value
         :returns: a token that identifies this user, None for invalid credentials.
@@ -193,11 +184,13 @@ class UserController(object):
 
 
     def logout(self, token):
+        # type: (str) -> None
         """ Removes the token from the controller. """
         self._tokens.pop(token, None)
 
     def get_role(self, username):
-        """ Get the role for a certain user. Returns None is user was not found. """
+        # type: (str) -> Optional[str]
+        """ Get the role for a certain user. Returns None if no user has been found with username. """
         username = username.lower()
 
         for user_orm in User.select().where(User.username == username):
@@ -207,6 +200,7 @@ class UserController(object):
         return None
 
     def _gen_token(self, username, valid_until):
+        # type: (str, float) -> str
         """ Generate a token and insert it into the tokens dict. """
         ret = uuid.uuid4().hex
         self._tokens[ret] = (username, valid_until)
@@ -220,6 +214,7 @@ class UserController(object):
         return ret
 
     def check_token(self, token):
+        # type: (str) -> bool
         """ Returns True if the token is valid, False if the token is invalid. """
         if token is None or token not in self._tokens:
             return False
@@ -229,6 +224,7 @@ class UserController(object):
 
     def _validate(self, user):
         # type: (User) -> None
+        """ Checks if the user object is a valid object to store """
         if user.username is None or not isinstance(user.username, six.string_types) or user.username.strip() == '':
             raise RuntimeError("A user must have a username")
         if user.password is None or not isinstance(user.password, six.string_types) or user.password.strip() == '':

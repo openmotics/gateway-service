@@ -53,9 +53,4 @@ class UserMapper(object):
             if field in fields:
                 setattr(user, field, getattr(user_dto, field))
         
-        # override or set the unset fields in the user object according to the fields from the user_dto field
-        for field in vars(user):
-            if field in fields:
-                setattr(user, field, getattr(user_dto, field))
-
         return user

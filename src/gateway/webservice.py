@@ -463,7 +463,8 @@ class WebInterface(object):
             role='admin',
             enabled=True
         )
-        self._user_controller.save_users([user_dto])
+        fields = ['username', 'password', 'role', 'enabled', 'accepted_terms']
+        self._user_controller.save_users([(user_dto, fields)])
         return {}
 
     @openmotics_api(plugin_exposed=False)
@@ -2364,7 +2365,14 @@ class WebInterface(object):
 
     @openmotics_api(check=types(confirm=bool), auth=True, plugin_exposed=False)
     def factory_reset(self, username, password, confirm=False):
-        success, _ = self._user_controller.login(username, password)
+        user_dto_login = UserDTO(
+            username=username,
+            password=password,
+            role="admin",
+            enabled=True
+        )
+        users_to_login = [(user_dto_login, True, 3600.0)]
+        success, _ = self._user_controller.login(users_to_login)
         if not success:
             raise cherrypy.HTTPError(401, 'invalid_credentials')
         if self._user_controller.get_role(username) != 'admin':
