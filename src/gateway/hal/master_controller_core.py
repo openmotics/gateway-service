@@ -729,6 +729,7 @@ class MasterCoreController(MasterController):
 
         # i/I/J = Virtual/physical/internal Input module
         # o/O/P = Virtual/physical/internal Ouptut module
+        # l = OpenCollector module
         # T = Temperature module
         # C/E = Physical/internal CAN Control
         return {'outputs': outputs, 'inputs': inputs, 'shutters': [], 'can_inputs': can_inputs}
