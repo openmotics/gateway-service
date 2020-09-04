@@ -320,7 +320,7 @@ class PluginController(object):
         """
         :rtype: list of plugins.runner.PluginRunner
         """
-        for runner_name in self.__runners.keys():
+        for runner_name in list(self.__runners.keys()):
             runner = self.__runners.get(runner_name)
             if runner is not None and runner.is_running():
                 yield runner
