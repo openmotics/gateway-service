@@ -56,19 +56,46 @@ class ModuleControllerTest(unittest.TestCase):
                                     hardware_type=ModuleDTO.HardwareType.PHYSICAL,
                                     firmware_version='3.1.0',
                                     hardware_version='4',
-                                    order=0)]
+                                    order=0,
+                                    online=True)]
         energy_modules = [ModuleDTO(source=ModuleDTO.Source.GATEWAY,
                                     module_type=ModuleDTO.ModuleType.ENERGY,
                                     address='2',
                                     hardware_type=ModuleDTO.HardwareType.PHYSICAL,
                                     firmware_version='1.2.3',
-                                    order=0)]
+                                    order=0,
+                                    online=True)]
         self.master_controller.get_modules_information.return_value = master_modules
         self.power_controller.get_modules_information.return_value = energy_modules
         self.controller.run_sync_orm()
         self.assertEqual(master_modules, self.controller.load_master_modules())
         self.assertEqual(energy_modules, self.controller.load_energy_modules())
         self.assertEqual([], self.controller.load_master_modules(address='000.000.000.000'))
+
+    def test_module_offline(self):
+        dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+                        module_type=ModuleDTO.ModuleType.OUTPUT,
+                        address='079.000.000.001',
+                        hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                        firmware_version='3.1.0',
+                        hardware_version='4',
+                        order=0)
+        self.master_controller.get_modules_information.return_value = [dto]
+        self.power_controller.get_modules_information.return_value = []
+        self.controller.run_sync_orm()
+        received_dto = self.controller.load_master_modules()[0]
+        self.assertIsNone(received_dto.firmware_version)
+        self.assertIsNone(received_dto.hardware_version)
+        dto.online = True
+        self.controller.run_sync_orm()
+        received_dto = self.controller.load_master_modules()[0]
+        self.assertEqual('3.1.0', received_dto.firmware_version)
+        self.assertEqual('4', received_dto.hardware_version)
+        dto.online = False
+        self.controller.run_sync_orm()
+        received_dto = self.controller.load_master_modules()[0]
+        self.assertEqual('3.1.0', received_dto.firmware_version)
+        self.assertEqual('4', received_dto.hardware_version)
 
     def test_serialization(self):
         master_module = ModuleDTO(source=ModuleDTO.Source.MASTER,

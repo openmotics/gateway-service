@@ -164,6 +164,7 @@ class Module(BaseModel):
     firmware_version: Optional[str]
     hardware_version: Optional[str]
     order = Optional[MixedIntegerField]
+    last_online_update = Optional[MixedIntegerField]
 
 
 class DataMigration(BaseModel):

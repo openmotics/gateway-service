@@ -18,6 +18,7 @@ Module BLL
 from __future__ import absolute_import
 import logging
 import six
+import time
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.dto import ModuleDTO
 from gateway.base_controller import BaseController
@@ -60,8 +61,10 @@ class ModuleController(BaseController):
                                     address=dto.address)
                 module.module_type = dto.module_type
                 module.hardware_type = dto.hardware_type
-                module.firmware_version = dto.firmware_version
-                module.hardware_version = dto.hardware_version
+                if dto.online:
+                    module.firmware_version = dto.firmware_version
+                    module.hardware_version = dto.hardware_version
+                    module.last_online_update = int(time.time())
                 module.order = dto.order
                 module.save()
                 amounts[dto.online] += 1
