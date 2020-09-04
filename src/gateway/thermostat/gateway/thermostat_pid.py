@@ -156,7 +156,7 @@ class ThermostatPid(object):
                 self.steer(output_power)
                 self.report_state_change()
             except CommunicationTimedOutException as ex:
-                logger.error('Error in PID tick for thermostat {}: {}'.format(self.thermostat.number, str(ex)))
+                logger.error('Error in PID tick for thermostat {}: {}'.format(self.thermostat.number, ex))
                 self._errors += 1
 
     def get_active_valves_percentage(self):

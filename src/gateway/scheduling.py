@@ -180,8 +180,8 @@ class SchedulingController(object):
                 schedule_dto.status = 'COMPLETED'
                 schedule.status = 'COMPLETED'
                 schedule.save()
-        except CommunicationTimedOutException:
-            logger.error('Got error while executing schedule: CommunicationTimedOutException')
+        except CommunicationTimedOutException as ex:
+            logger.error('Got error while executing schedule: {0}'.format(ex))
         except Exception as ex:
             logger.error('Got error while executing schedule: {0}'.format(ex))
             schedule_dto.last_executed = time.time()
