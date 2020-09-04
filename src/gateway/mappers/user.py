@@ -29,13 +29,13 @@ class UserMapper(object):
 
     @staticmethod
     def orm_to_dto(orm_object):  # type: (User) -> UserDTO
-        return UserDTO(
+        user_dto = UserDTO(
             username=orm_object.username,
-            password=orm_object.password,
-            role=orm_object.role,
-            enabled=orm_object.enabled,
             accepted_terms=orm_object.accepted_terms
         )
+        # inserting the hashed_password manually since it is already hashed in the DB
+        user_dto.hashed_password = orm_object.password
+        return user_dto
 
     @staticmethod
     def dto_to_orm(user_dto, fields):  # type: (UserDTO, List[str]) -> User
@@ -43,12 +43,11 @@ class UserMapper(object):
         user = User.get_or_none(username=user_dto.username)
         # if the user is non existing, create a new user with the mandatory fields that can be further filled with the user_dto fields
         if user is None:
-            mandatory_fields = {'username', 'password', 'role', 'enabled'}
+            mandatory_fields = {'username', 'password'}
             if not mandatory_fields.issubset(set(fields)):
                 raise ValueError('Cannot create user without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
-            user = User(
-                **{field: getattr(user_dto, field) for field in mandatory_fields}
-            )
+
+            user = User(username=user_dto.username.lower(), password=user_dto.hashed_password)
         for field in ['accepted_terms']:
             if field in fields:
                 setattr(user, field, getattr(user_dto, field))

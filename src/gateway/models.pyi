@@ -187,9 +187,7 @@ class User(BaseModel):
     id: MixedPrimaryKeyField
     username: MixedTextField
     password: MixedTextField
-    enabled: MixedIntegerField
-    role: MixedTextField
-    accepted_terms: Optional[MixedIntegerField]
+    accepted_terms: MixedIntegerField
 
 class ThermostatGroup(BaseModel):
     id: MixedPrimaryKeyField

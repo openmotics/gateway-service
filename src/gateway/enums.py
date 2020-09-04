@@ -29,3 +29,11 @@ class ShutterEnums(object):
         STOPPED = 'stopped'
         UP = 'up'
         DOWN = 'down'
+
+class UserEnums(object):
+    class AuthenticationErrors(object):
+        INVALID_CREDENTIALS = 'Invalid_credentials'
+        TERMS_NOT_ACCEPTED = 'terms_not_accepted'
+
+    class DeleteErrors(object):
+        LAST_ACCOUNT = 'Cannot delete last user account'

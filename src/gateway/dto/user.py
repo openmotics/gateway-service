@@ -14,8 +14,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-Schedule DTO
+User DTO
 """
+
+import hashlib
+
 from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
@@ -23,15 +26,46 @@ if False:  # MYPY
 
 
 class UserDTO(BaseDTO):
-    def __init__(self, username, password, role, enabled, accepted_terms=0):
-        self.username = username # type: str
-        self.password = password # type: str
-        self.role = role # type: str
-        self.enabled = enabled # type: int
-        self.accepted_terms = accepted_terms # type: int
+
+    @staticmethod
+    def _hash_password(password):
+        # type: (str) -> str
+        """ 
+        Hash the password using sha1. 
+        """
+        sha = hashlib.sha1()
+        sha.update('OpenMotics')  # type: ignore
+        sha.update(password)  # type: ignore
+        return sha.hexdigest()
+
+    def __init__(self, username, accepted_terms=0):
+        # type: (str, int) -> None
+        self.username = username
+        self.hashed_password= ''
+        self.accepted_terms = accepted_terms
+    
+    def clear_password(self):
+        # Type: () -> None
+        """
+        Clears the hashed password field so that it is hidden for future reference.
+        """
+        self.hashed_password = ''
+
+    def set_password(self, password):
+        # type: (str) -> None
+        """
+        Sets the hashed password field of the UserDTO object, this way no cleartext passwords are used.
+        """
+        if password == '':
+            raise ValueError("Password cannot be empty")
+
+        self.hashed_password = UserDTO._hash_password(password)
+
+    def __str__(self):
+        return "UserDTO: {}".format(vars(self))
 
     def __eq__(self, other):
         if not isinstance(other, UserDTO):
             return False
-        return self.username == other.username
+        return self.username.lower() == other.username.lower()
 

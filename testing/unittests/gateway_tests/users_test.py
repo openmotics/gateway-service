@@ -20,20 +20,19 @@ Tests for the users module.
 
 from __future__ import absolute_import
 
+import os
+import tempfile
 import time
 import unittest
-from threading import Lock
-
 import xmlrunner
+from threading import Lock
 from pytest import mark
-
-import os
-# import fakesleep
-import tempfile
 from peewee import SqliteDatabase
 
 from gateway.user_controller import UserController
 from gateway.dto import UserDTO
+from gateway.enums import UserEnums
+from gateway.mappers.user import UserMapper
 from ioc import SetTestMode, SetUpTestInjections
 
 from gateway.models import User
@@ -83,17 +82,16 @@ class UserControllerTest(unittest.TestCase):
     def test_empty(self):
         """ Test an empty database. """
         user_controller = self._get_controller()
-        user_dto = UserDTO("fred", "test", "admin", True)
-        users_to_login = [(user_dto, False, 3600)]
-        success, data = user_controller.login(users_to_login)
+        user_dto = UserDTO("fred")
+        user_dto.set_password("test")
+        success, data = user_controller.login(user_dto)
         self.assertFalse(success)
-        self.assertEqual(data, 'invalid_credentials')
+        self.assertEqual(data, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS)
         self.assertEqual(False, user_controller.check_token('some token 123'))
-        self.assertEqual(None, user_controller.get_role('fred'))
 
-        user_dto = UserDTO("om", "pass", "admin", True)
-        users_to_login = [(user_dto, False, 3600)]
-        success, data = user_controller.login(users_to_login)
+        user_dto = UserDTO("om")
+        user_dto.set_password("pass")
+        success, data = user_controller.login(user_dto)
         self.assertTrue(success)
         self.assertNotEquals(None, data)
 
@@ -103,225 +101,296 @@ class UserControllerTest(unittest.TestCase):
         """ Tests acceptance of the terms """
         user_controller = self._get_controller()
         # adding test user
-        fields = ['username', 'password', 'role', 'enabled', 'accepted_terms']
-        user_dto = UserDTO(
-            username='om2',
-            password='pass',
-            role="admin",
-            enabled=True
-        )
+        fields = ['username', 'password', 'accepted_terms']
+        user_dto = UserDTO(username='om2')
+        user_dto.set_password('pass')
         user_controller.save_users([(user_dto, fields)])
 
         # check if login is possible
-        users_to_login = [(user_dto, False, 0)]
-        success, data = user_controller.login(users_to_login)
+        success, data = user_controller.login(user_dto)
         self.assertFalse(success)
         self.assertEqual(data, 'terms_not_accepted')
 
         # login with accepted terms fields set
-        users_to_login = [(user_dto, True, 0)]
-        success, data = user_controller.login(users_to_login)
+        success, data = user_controller.login(user_dto, accept_terms=True)
         self.assertTrue(success)
         self.assertIsNotNone(data)
 
 
         # login again to see if fields has been saved
-        users_to_login = [(user_dto, False, 0)]
-        success, data = user_controller.login(users_to_login)
+        success, data = user_controller.login(user_dto)
         self.assertTrue(success)
         self.assertIsNotNone(data)
 
     def test_all(self):
         """ Test all methods of UserController. """
         user_controller = self._get_controller()
-        fields = ['username', 'password', 'role', 'enabled', 'accepted_terms']
-        user_dto = UserDTO(
-            username='fred',
-            password='test',
-            role="admin",
-            enabled=True
-        )
+        fields = ['username', 'password', 'accepted_terms']
+
+        # create a new user to test with
+        user_dto = UserDTO(username='fred')
+        user_dto.set_password('test')
         user_controller.save_users([(user_dto, fields)])
 
-        user_dto_login = UserDTO(
-            username='fred',
-            password='123',
-            role="admin",
-            enabled=True
-        )
-        users_to_login = [(user_dto_login, True, 0)]
-        success, _ = user_controller.login(users_to_login)
+        # check if the user has been added to the list
+        users_in_controller = user_controller.load_users()
+        self.assertEqual(2, len(users_in_controller))
+        self.assertEqual('om', users_in_controller[0].username)
+        self.assertEqual('fred', users_in_controller[1].username)
+        self.assertEqual(2, user_controller.get_number_of_users())
+
+        # try if user is able to login without accepting the terms
+        success, token = user_controller.login(user_dto)
         self.assertEqual(False, success)
+        self.assertEqual(UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED, token)
         self.assertFalse(user_controller.check_token('blah'))
 
-        user_dto_login = UserDTO(
-            username='fred',
-            password='test',
-            role="admin",
-            enabled=True
-        )
-        users_to_login = [(user_dto_login, True, 0)]
-        _, token = user_controller.login(users_to_login)
+        # try if the user is able to login with terms accepted
+        success, token = user_controller.login(user_dto, accept_terms=True)
+        self.assertEqual(True, success)
         self.assertNotEquals(None, token)
 
+        # check if the token is valid
         self.assertTrue(user_controller.check_token(token))
         self.assertFalse(user_controller.check_token('blah'))
 
-        self.assertEqual('admin', user_controller.get_role('fred'))
-
-    @mark.slow
-    def test_token_timeout(self):
-        """ Test the timeout on the tokens. """
-        SetUpTestInjections(config={'username': 'om', 'password': 'pass'},
-                            token_timeout=3)
-        user_controller = UserController()
-
-        user_dto_login = UserDTO(
-            username='om',
-            password='pass',
-            role="admin",
-            enabled=True,
-            accepted_terms=True
-        )
-        users_to_login = [(user_dto_login, False, None)]
-        success, token = user_controller.login(users_to_login)
-        self.assertTrue(success)
-        self.assertNotEquals(None, token)
-        self.assertTrue(user_controller.check_token(token))
-
-        time.sleep(4)
-
+        # try to logout the user
+        user_controller.logout(token)
         self.assertFalse(user_controller.check_token(token))
 
-        success, token = user_controller.login(users_to_login)
-        self.assertTrue(success)
+        # try if the user is able to login with terms accepted
+        success, token = user_controller.login(user_dto, accept_terms=True)
+        self.assertEqual(True, success)
         self.assertNotEquals(None, token)
-        self.assertTrue(user_controller.check_token(token))
 
-    def test_timeout(self):
+        # try to remove the user
+        user_controller.remove_user(user_dto)
+        self.assertFalse(user_controller.check_token(token))
+
+        # check if the user has been deleted
+        users_in_controller = user_controller.load_users()
+        self.assertEqual(1, len(users_in_controller))
+        self.assertEqual('om', users_in_controller[0].username)
+        self.assertEqual(1, user_controller.get_number_of_users())
+
+        # try if the user is able to login with terms accepted
+        success, token = user_controller.login(user_dto, accept_terms=True)
+        self.assertEqual(False, success)
+        self.assertEqual(UserEnums.AuthenticationErrors.INVALID_CREDENTIALS, token)
+
+        # create multiple new users
+        users_dto = []
+        user_dto = UserDTO(username='fred')
+        user_dto.set_password('test')
+        users_dto.append(user_dto)
+        user_dto = UserDTO(username='test')
+        user_dto.set_password('test')
+        users_dto.append(user_dto)
+        to_save_users = [(ud, fields) for ud in users_dto]
+        user_controller.save_users(to_save_users)
+
+        # check if the user has been deleted
+        users_in_controller = user_controller.load_users()
+        self.assertEqual(3, len(users_in_controller))
+        self.assertEqual('om', users_in_controller[0].username)
+        self.assertEqual('fred', users_in_controller[1].username)
+        self.assertEqual('test', users_in_controller[2].username)
+        self.assertEqual(3, user_controller.get_number_of_users())
+
+        # try if the user is able to login with terms accepted
+        user_dto = UserDTO(username='fred')
+        user_dto.set_password('test')
+        success, token = user_controller.login(user_dto, accept_terms=True)
+        self.assertEqual(True, success)
+        self.assertNotEquals(None, token)
+
+        # try to logout with the new users
+        user_controller.logout(token)
+        self.assertFalse(user_controller.check_token(token))
+
+
+
+    # @mark.slow
+    # def test_token_timeout(self):
+    #     """ Test the timeout on the tokens. """
+    #     SetUpTestInjections(config={'username': 'om', 'password': 'pass'},
+    #                         token_timeout=3)
+    #     user_controller = UserController()
+
+    #     fields = ['username', 'password', 'accepted_terms']
+
+    #     # create a new user to test with
+    #     user_dto = UserDTO(username='om')
+    #     user_dto.set_password('pass')
+    #     success, token = user_controller.login(user_dto, accept_terms=True)
+    #     self.assertEqual(True, success)
+    #     self.assertNotEquals(None, token)
+    #     self.assertTrue(user_controller.check_token(token))
+
+    #     time.sleep(4)
+
+    #     self.assertFalse(user_controller.check_token(token))
+
+    #     success, token = user_controller.login(user_dto, accept_terms=True)
+    #     self.assertTrue(success)
+    #     self.assertNotEquals(None, token)
+    #     self.assertTrue(user_controller.check_token(token))
+
+    def test_logout(self):
         """ Test logout. """
-        SetUpTestInjections(config={'username': 'om', 'password': 'pass'},
-                            token_timeout=3)
         user_controller = UserController()
 
-        user_dto_login = UserDTO(
-            username='om',
-            password='pass',
-            role="admin",
-            enabled=True,
-            accepted_terms=True
-        )
-        users_to_login = [(user_dto_login, False, None)]
-        success, token = user_controller.login(users_to_login)
+        # create a new user to test with
+        user_dto = UserDTO(username='om')
+        user_dto.set_password('pass')
 
+        # test to see if you are able to login
+        success, token = user_controller.login(user_dto, accept_terms=True)
         self.assertTrue(success)
         self.assertNotEquals(None, token)
         self.assertTrue(user_controller.check_token(token))
 
+        # check if after logout te user has a valid token
         user_controller.logout(token)
         self.assertFalse(user_controller.check_token(token))
 
     def test_get_usernames(self):
         """ Test getting all usernames. """
         user_controller = self._get_controller()
-        self.assertEqual(['om'], user_controller.get_usernames())
 
-        fields = ['username', 'password', 'role', 'enabled', 'accepted_terms']
-        user_dto = UserDTO(
-            username='test',
-            password='test',
-            role="admin",
-            enabled=True
-        )
+        # get first list of users in the user controller
+        users_in_controller = user_controller.load_users()
+        self.assertEqual(1, len(users_in_controller))
+        self.assertEqual('om', users_in_controller[0].username)
+
+
+        fields = ['username', 'password', 'accepted_terms']
+
+        # create a new user to test with
+        user_dto = UserDTO(username='test')
+        user_dto.set_password('test')
         user_controller.save_users([(user_dto, fields)])
 
-        self.assertEqual(['om', 'test'], user_controller.get_usernames())
+
+        # check if the user has been added to the list
+        users_in_controller = user_controller.load_users()
+        self.assertEqual(2, len(users_in_controller))
+        self.assertEqual('om', users_in_controller[0].username)
+        self.assertEqual('test', users_in_controller[1].username)
+
+        # check if the number of users is correct
+        num_users = user_controller.get_number_of_users()
+        self.assertEqual(2, num_users)
+
 
     def test_remove_user(self):
         """ Test removing a user. """
         user_controller = self._get_controller()
-        self.assertEqual(['om'], user_controller.get_usernames())
 
-        fields = ['username', 'password', 'role', 'enabled', 'accepted_terms']
-        user_dto = UserDTO(
-            username='test',
-            password='test',
-            role="admin",
-            enabled=True,
-            accepted_terms=1
-        )
+        fields = ['username', 'password', 'accepted_terms']
+
+        # check that there is only one user in the system
+        users_in_controller = user_controller.load_users()
+        self.assertEqual(1, len(users_in_controller))
+        self.assertEqual('om', users_in_controller[0].username)
+        self.assertEqual(1, user_controller.get_number_of_users())
+
+        # create a new user to test with
+        user_dto = UserDTO(username='test')
+        user_dto.set_password('test')
         user_controller.save_users([(user_dto, fields)])
 
-        user_dto_login = UserDTO(
-            username='test',
-            password='test',
-            role="admin",
-            enabled=True
-        )
-        users_to_login = [(user_dto_login, False, None)]
-        success, token = user_controller.login(users_to_login)
+        # verify that the user has been added
+        users_in_controller = user_controller.load_users()
+        self.assertEqual(2, len(users_in_controller))
+        self.assertEqual('om', users_in_controller[0].username)
+        self.assertEqual('test', users_in_controller[1].username)
+        self.assertEqual(2, user_controller.get_number_of_users())
+
+        # verify that the new user can log in to the system
+        success, token = user_controller.login(user_dto, accept_terms=True)
         self.assertTrue(success)
         self.assertTrue(user_controller.check_token(token))
 
-        user_controller.remove_user('test')
+        # remove the newly created user
+        user_controller.remove_user(user_dto)
 
+        # Verify that the user is logged out of the system
         self.assertFalse(user_controller.check_token(token))
-        self.assertEqual(['om'], user_controller.get_usernames())
+
+        # verify that the user is deleted from the system
+        users_in_controller = user_controller.load_users()
+        self.assertEqual(1, len(users_in_controller))
+        self.assertEqual('om', users_in_controller[0].username)
+        self.assertEqual(1, user_controller.get_number_of_users())
 
         try:
-            user_controller.remove_user('om')
+            last_user_dto = UserDTO(username='om')
+            user_controller.remove_user(last_user_dto)
             self.fail('Should have raised exception !')
         except Exception as exception:
-            self.assertEqual('Cannot delete last admin account', str(exception))
+            self.assertEqual(UserEnums.DeleteErrors.LAST_ACCOUNT, str(exception))
 
     def test_case_insensitive(self):
         """ Test the case insensitivity of the username. """
         user_controller = self._get_controller()
 
-        fields = ['username', 'password', 'role', 'enabled', 'accepted_terms']
-        user_dto = UserDTO(
-            username='TEST',
-            password='test',
-            role="admin",
-            enabled=True,
-            accepted_terms=1
-        )
+        fields = ['username', 'password', 'accepted_terms']
+
+        # check that there is only one user in the system
+        users_in_controller = user_controller.load_users()
+        self.assertEqual(1, len(users_in_controller))
+        self.assertEqual('om', users_in_controller[0].username)
+
+        # create a new user to test with
+        user_dto = UserDTO(username='test')
+        user_dto.set_password('test')
         user_controller.save_users([(user_dto, fields)])
 
-        user_dto_login = UserDTO(
-            username='test',
-            password='test',
-            role="admin",
-            enabled=True
-        )
-        users_to_login = [(user_dto_login, False, None)]
-        success, token = user_controller.login(users_to_login)
+        # verify that the user can log in with regular username
+        success, token = user_controller.login(user_dto, accept_terms=True)
         self.assertTrue(success)
         self.assertTrue(user_controller.check_token(token))
 
-        user_dto_login = UserDTO(
-            username='TeSt',
-            password='test',
-            role="admin",
-            enabled=True
-        )
-        users_to_login = [(user_dto_login, False, None)]
-        success, token = user_controller.login(users_to_login)
+        # verify that the user can log in with capitals
+        user_dto.username = 'TeSt'
+        success, token = user_controller.login(user_dto)
         self.assertTrue(success)
         self.assertTrue(user_controller.check_token(token))
 
-        user_dto_login = UserDTO(
-            username='test',
-            password='TeSt',
-            role="admin",
-            enabled=True
-        )
-        users_to_login = [(user_dto_login, False, None)]
-        success, token = user_controller.login(users_to_login)
+        # verify that the user can not login with password with changed capitals
+        user_dto.set_password('TeSt')
+        success, token = user_controller.login(user_dto)
         self.assertFalse(success)
-        self.assertEqual('invalid_credentials', token)
+        self.assertEqual(UserEnums.AuthenticationErrors.INVALID_CREDENTIALS, token)
 
-        self.assertEqual(['om', 'test'], user_controller.get_usernames())
+        # verify that the user has been added
+        users_in_controller = user_controller.load_users()
+        self.assertEqual(2, len(users_in_controller))
+        self.assertEqual('om', users_in_controller[0].username)
+        self.assertEqual('test', users_in_controller[1].username)
+        self.assertEqual(2, user_controller.get_number_of_users())
+
+
+    def test_usermapper(self):
+        user_dto = UserDTO(username='test', accepted_terms=1)
+        user_dto.set_password('test')
+
+        user_orm = UserMapper.dto_to_orm(user_dto, ['username', 'password'])
+
+        self.assertEqual(True, hasattr(user_orm, "username"))
+        self.assertEqual(True, hasattr(user_orm, "password"))
+        self.assertEqual(True, hasattr(user_orm, "accepted_terms"))
+
+        self.assertEqual('test', user_orm.username)
+        self.assertEqual(UserDTO._hash_password('test'), user_orm.password)
+        self.assertEqual(0, user_orm.accepted_terms)
+
+
+        user_dto = UserMapper.orm_to_dto(user_orm)
+        self.assertEqual('test', user_dto.username)
+        self.assertEqual(user_orm.password, user_dto.hashed_password)
+        self.assertEqual(0, user_dto.accepted_terms)
 
 
 if __name__ == '__main__':

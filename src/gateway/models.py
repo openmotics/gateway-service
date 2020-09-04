@@ -169,8 +169,6 @@ class User(BaseModel):
     id = AutoField()
     username = CharField()
     password = CharField()
-    enabled = IntegerField()
-    role = CharField()
     accepted_terms = IntegerField(default=0)
 
 class ThermostatGroup(BaseModel):

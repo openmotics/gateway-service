@@ -19,6 +19,7 @@ import logging
 import constants
 from ioc import INJECTED, Inject
 from gateway.migrations.base_migrator import BaseMigrator
+from gateway.user_controller import UserController
 from gateway.models import User
 
 if False:  # MYPY
@@ -33,9 +34,9 @@ class UserMigrator(BaseMigrator):
 
     @classmethod
     @Inject
-    def _migrate(cls, scheduling_controller=INJECTED):
-        # type: (SchedulingController) -> None
-        old_sqlite_db = constants.get_scheduling_database_file()
+    def _migrate(cls, user_controller=INJECTED):
+        # type: (UserController) -> None
+        old_sqlite_db = constants.get_config_database_file()
         if os.path.exists(old_sqlite_db):
             import sqlite3
             connection = sqlite3.connect(old_sqlite_db,
@@ -43,16 +44,14 @@ class UserMigrator(BaseMigrator):
                                          check_same_thread=False,
                                          isolation_level=None)
             cursor = connection.cursor()
-            for row in cursor.execute('SELECT id, username, password, enabled, role, accepted_terms FROM users;'):
+            for row in cursor.execute('SELECT id, username, password, accepted_terms FROM users;'):
                 user_id = row[0]
                 user = User.get_or_none(id=user_id)
                 if user is None:
                     user = User(
                         username=row[1],
                         password=row[2],
-                        enabled=row[3],
-                        role=row[4],
-                        accepted_terms=row[5]
+                        accepted_terms=row[3]
                     )
                     user.save()
             cursor.execute('DROP TABLE users;')

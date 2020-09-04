@@ -36,8 +36,6 @@ def migrate(migrator, database, fake=False, **kwargs):
         id = AutoField()
         username = CharField()
         password = CharField()
-        enabled = IntegerField()
-        role = CharField()
         accepted_terms = IntegerField(default=0)
 
     migrator.create_model(User)
