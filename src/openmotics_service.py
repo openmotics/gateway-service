@@ -31,6 +31,7 @@ from gateway.migrations.rooms import RoomsMigrator
 from gateway.migrations.features_data_migrations import FeatureMigrator
 from gateway.migrations.inputs import InputMigrator
 from gateway.migrations.schedules import ScheduleMigrator
+from gateway.migrations.users import UserMigrator
 from ioc import INJECTED, Inject
 
 
@@ -175,6 +176,7 @@ class OpenmoticsService(object):
         RoomsMigrator.migrate()
         InputMigrator.migrate()
         ScheduleMigrator.migrate()
+        UserMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()

@@ -14,8 +14,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 Serial tools contains the RS485 wrapper, printable and CommunicationTimedOutException.
-
-@author: fryckbos
 """
 
 from __future__ import absolute_import
@@ -30,7 +28,10 @@ from gateway.hal.master_controller import CommunicationFailure
 
 class CommunicationTimedOutException(CommunicationFailure):
     """ An exception that is raised when the master did not respond in time. """
-    pass
+    def __init__(self, message=''):
+        if not message:
+            message = self.__class__.__name__
+        super(CommunicationTimedOutException, self).__init__(message)
 
 
 def printable(data):

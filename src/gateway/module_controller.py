@@ -20,6 +20,7 @@ import logging
 import six
 import time
 from ioc import Injectable, Inject, INJECTED, Singleton
+from serial_utils import CommunicationTimedOutException
 from gateway.dto import ModuleDTO
 from gateway.base_controller import BaseController
 from gateway.models import Module
@@ -70,12 +71,16 @@ class ModuleController(BaseController):
                 amounts[dto.online] += 1
                 ids.append(module.id)
             Module.delete().where(Module.id.not_in(ids)).execute()  # type: ignore
+            logger.info('ORM sync (Modules): completed ({0} online, {1} offline, {2} emulated/virtual)'.format(
+                amounts[True], amounts[False], amounts[None]
+            ))
+        except CommunicationTimedOutException as ex:
+            logger.error('ORM sync (Modules): Failed: {0}'.format(ex))
+        except Exception:
+            logger.exception('ORM sync (Modules): Failed')
         finally:
             self._sync_running = False
 
-        logger.info('ORM sync (Modules): completed ({0} online, {1} offline, {2} emulated/virtual)'.format(
-            amounts[True], amounts[False], amounts[None]
-        ))
         return True
 
     def load_master_modules(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]

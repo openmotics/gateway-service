@@ -470,11 +470,13 @@ class Toolbox(object):
 
     def discover_energy_module(self):
         # type: () -> None
-        logger.debug('discover Energy module')
-        self.module_discover_start()
-        self.tester.toggle_output(self.DEBIAN_DISCOVER_ENERGY)
-        self.assert_energy_modules(1, timeout=60)
-        self.module_discover_stop()
+        try:
+            logger.debug('discover Energy module')
+            self.dut.get('/start_power_address_mode')
+            self.tester.toggle_output(self.DEBIAN_DISCOVER_ENERGY, 1.0)
+            self.assert_energy_modules(1, timeout=60)
+        finally:
+            self.dut.get('/stop_power_address_mode')
 
     def assert_energy_modules(self, count, timeout=30):
         # type: (int, float) -> List[List[str]]

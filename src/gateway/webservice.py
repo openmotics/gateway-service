@@ -45,8 +45,8 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     RoomSerializer, SensorSerializer, ShutterGroupSerializer, \
     ShutterSerializer, ThermostatSerializer, ModuleSerializer, \
     ScheduleSerializer
-from gateway.dto import RoomDTO, ScheduleDTO
-from gateway.enums import ShutterEnums
+from gateway.dto import RoomDTO, ScheduleDTO, UserDTO
+from gateway.enums import ShutterEnums, UserEnums
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.models import Feature
@@ -68,7 +68,7 @@ if False:
     from gateway.scheduling import SchedulingController
     from gateway.shutter_controller import ShutterController
     from gateway.thermostat.thermostat_controller import ThermostatController
-    from gateway.users import UserController
+    from gateway.user_controller import UserController
     from gateway.output_controller import OutputController
     from gateway.input_controller import InputController
     from gateway.room_controller import RoomController
@@ -420,11 +420,12 @@ class WebInterface(object):
         :returns: Authentication token
         :rtype: str
         """
-
-        success, data = self._user_controller.login(username, password, accept_terms, timeout)
+        user_dto = UserDTO(username=username)
+        user_dto.set_password(password)
+        success, data = self._user_controller.login(user_dto, accept_terms, timeout)
         if success is True:
             return {'token': data}
-        if data == 'terms_not_accepted':
+        if data == UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED:
             return {'next_step': 'accept_terms'}
         raise cherrypy.HTTPError(401, "invalid_credentials")
 
@@ -451,7 +452,10 @@ class WebInterface(object):
         """
         if not self.in_authorized_mode():
             raise cherrypy.HTTPError(401, "unauthorized")
-        self._user_controller.create_user(username, password, 'admin', True)
+        user_dto = UserDTO(username=username)
+        user_dto.set_password(password)
+        fields = ['username', 'password', 'accepted_terms']
+        self._user_controller.save_user(user_dto, fields)
         return {}
 
     @openmotics_api(plugin_exposed=False)
@@ -464,7 +468,9 @@ class WebInterface(object):
         """
         if not self.in_authorized_mode():
             raise cherrypy.HTTPError(401, "unauthorized")
-        return {'usernames': self._user_controller.get_usernames()}
+        users = self._user_controller.load_users()
+        usernames = [user.username for user in users]
+        return {'usernames': usernames}
 
     @openmotics_api(plugin_exposed=False)
     def remove_user(self, username):
@@ -476,7 +482,8 @@ class WebInterface(object):
         """
         if not self.in_authorized_mode():
             raise cherrypy.HTTPError(401, "unauthorized")
-        self._user_controller.remove_user(username)
+        user_dto = UserDTO(username=username)
+        self._user_controller.remove_user(user_dto)
         return {}
 
     @openmotics_api(auth=True, plugin_exposed=False)
@@ -2352,11 +2359,11 @@ class WebInterface(object):
 
     @openmotics_api(check=types(confirm=bool), auth=True, plugin_exposed=False)
     def factory_reset(self, username, password, confirm=False):
-        success, _ = self._user_controller.login(username, password)
+        user_dto = UserDTO(username=username)
+        user_dto.set_password(password)
+        success, _ = self._user_controller.login(user_dto)
         if not success:
             raise cherrypy.HTTPError(401, 'invalid_credentials')
-        if self._user_controller.get_role(username) != 'admin':
-            raise cherrypy.HTTPError(401, 'user_unauthorized')
         if not confirm:
             raise cherrypy.HTTPError(401, 'not_confirmed')
         return self._gateway_api.factory_reset()

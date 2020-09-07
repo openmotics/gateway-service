@@ -19,6 +19,7 @@ from __future__ import absolute_import
 import logging
 from peewee import fn, DoesNotExist
 from ioc import Injectable, Inject, INJECTED, Singleton
+from serial_utils import CommunicationTimedOutException
 from gateway.base_controller import BaseController
 from gateway.dto import PulseCounterDTO
 from gateway.models import PulseCounter, Room
@@ -57,10 +58,14 @@ class PulseCounterController(BaseController):
                                                  source='master',
                                                  persistent=False)
                     pulse_counter.save()
+            logger.info('ORM sync (PulseCounter): completed')
+        except CommunicationTimedOutException as ex:
+            logger.error('ORM sync (PulseCounter): Failed: {0}'.format(ex))
+        except Exception:
+            logger.exception('ORM sync (PulseCounter): Failed')
         finally:
             self._sync_running = False
 
-        logger.info('ORM sync (PulseCounter): completed')
         return True
 
     def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO

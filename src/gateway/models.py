@@ -166,6 +166,11 @@ class Schedule(BaseModel):
     arguments = CharField(null=True)
     status = CharField()
 
+class User(BaseModel):
+    id = AutoField()
+    username = CharField(unique=True)
+    password = CharField()
+    accepted_terms = IntegerField(default=0)
 
 class ThermostatGroup(BaseModel):
     id = AutoField()

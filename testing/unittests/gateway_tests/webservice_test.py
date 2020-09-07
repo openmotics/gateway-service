@@ -34,7 +34,7 @@ from gateway.scheduling import SchedulingController
 from gateway.sensor_controller import SensorController
 from gateway.shutter_controller import ShutterController
 from gateway.thermostat.thermostat_controller import ThermostatController
-from gateway.users import UserController
+from gateway.user_controller import UserController
 from gateway.webservice import WebInterface
 from gateway.module_controller import ModuleController
 from ioc import SetTestMode, SetUpTestInjections
