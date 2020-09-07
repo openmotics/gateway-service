@@ -18,6 +18,7 @@ Base Controller
 from __future__ import absolute_import
 import logging
 from ioc import INJECTED, Inject
+from serial_utils import CommunicationTimedOutException
 from gateway.daemon_thread import DaemonThread
 from gateway.hal.master_event import MasterEvent
 from gateway.hal.master_controller import MasterController
@@ -105,6 +106,8 @@ class BaseController(object):
                     orm_model.delete().where(orm_model.number.not_in(ids)).execute()  # type: ignore
 
                     logger.info('ORM sync ({0}): completed'.format(orm_model.__name__))
+                except CommunicationTimedOutException as ex:
+                    logger.error('ORM sync ({0}): Failed: {1}'.format(orm_model.__name__, ex))
                 except Exception:
                     logger.exception('ORM sync ({0}): Failed'.format(orm_model.__name__))
         finally:

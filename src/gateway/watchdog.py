@@ -156,14 +156,14 @@ class Watchdog(object):
                 logger.exception('Could not store debug file: {0}'.format(ex))
 
         if service_restart is not None:
-            logger.error('Major issues in communication with {0}. Restarting service...'.format(name))
+            logger.critical('Major issues in communication with {0}. Restarting service...'.format(name))
             recovery_data['service_restart'] = {'reason': service_restart,
                                                 'time': time.time(),
                                                 'backoff': backoff}
             self._config_controller.set(recovery_data_key, recovery_data)
             return 'service'
         if device_reset is not None:
-            logger.error('Major issues in communication with {0}. Resetting {0} & service'.format(name))
+            logger.critical('Major issues in communication with {0}. Resetting {0} & service'.format(name))
             recovery_data['device_reset'] = {'reason': device_reset,
                                              'time': time.time()}
             self._config_controller.set(recovery_data_key, recovery_data)

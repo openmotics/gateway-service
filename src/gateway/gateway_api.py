@@ -766,8 +766,8 @@ class GatewayApi(object):
                                              power=convert_nan(power[i], default=0.0)))
 
                 output[str(module_id)] = out
-            except CommunicationTimedOutException:
-                logger.error('Communication timeout while fetching realtime power from {0}: CommunicationTimedOutException'.format(module_id))
+            except CommunicationTimedOutException as ex:
+                logger.error('Communication timeout while fetching realtime power from {0}: {1}'.format(module_id, ex))
             except Exception as ex:
                 logger.exception('Got exception while fetching realtime power from {0}: {1}'.format(module_id, ex))
 
@@ -827,8 +827,8 @@ class GatewayApi(object):
                     out.append([day[i], night[i]])
 
                 output[str(module_id)] = out
-            except CommunicationTimedOutException:
-                logger.error('Communication timeout while fetching total energy from {0}: CommunicationTimedOutException'.format(module_id))
+            except CommunicationTimedOutException as ex:
+                logger.error('Communication timeout while fetching total energy from {0}: {1}'.format(module_id, ex))
             except Exception as ex:
                 logger.exception('Got exception while fetching total energy from {0}: {1}'.format(module_id, ex))
 
