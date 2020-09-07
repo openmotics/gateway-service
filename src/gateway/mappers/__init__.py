@@ -18,3 +18,4 @@ from gateway.mappers.floor import FloorMapper
 from gateway.mappers.thermostat import ThermostatMapper
 from gateway.mappers.pulse_counter import PulseCounterMapper
 from gateway.mappers.schedule import ScheduleMapper
+from gateway.mappers.user import UserMapper

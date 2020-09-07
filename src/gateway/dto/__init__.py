@@ -27,3 +27,4 @@ from gateway.dto.pulse_counter import PulseCounterDTO
 from gateway.dto.group_action import GroupActionDTO
 from gateway.dto.module import ModuleDTO
 from gateway.dto.schedule import ScheduleDTO
+from gateway.dto.user import UserDTO

@@ -154,12 +154,12 @@ def setup_target_platform(target_platform, message_client_name):
     # thermostats vs gateway thermostats)
     from plugins import base
     from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
-                         maintenance_controller, comm_led_controller, users, pulse_counter_controller, config as config_controller,
+                         maintenance_controller, comm_led_controller, user_controller, pulse_counter_controller, config as config_controller,
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
                          group_action_controller, module_controller)
     from cloud import events
     _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
-         maintenance_controller, base, events, comm_led_controller, users,
+         maintenance_controller, base, events, comm_led_controller, user_controller,
          pulse_counter_controller, config_controller, metrics_caching, watchdog, output_controller,
          room_controller, sensor_controller, group_action_controller, module_controller)
 
