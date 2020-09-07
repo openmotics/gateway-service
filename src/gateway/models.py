@@ -167,7 +167,7 @@ class Schedule(BaseModel):
 
 class User(BaseModel):
     id = AutoField()
-    username = CharField()
+    username = CharField(unique=True)
     password = CharField()
     accepted_terms = IntegerField(default=0)
 

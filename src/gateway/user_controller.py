@@ -21,7 +21,6 @@ from __future__ import absolute_import
 import sqlite3
 import uuid
 import time
-import logging
 import six
 from random import randint
 from ioc import Injectable, Inject, Singleton, INJECTED
@@ -33,7 +32,6 @@ from gateway.enums import UserEnums
 if False: # MYPY
     from typing import Tuple, List, Optional, Dict
 
-logger = logging.getLogger('openmotics')
 
 
 @Injectable.named('user_controller')
@@ -46,12 +44,10 @@ class UserController(object):
     @Inject
     def __init__(self, config=INJECTED, token_timeout=INJECTED):
         # type: (Dict[str, str], int) -> None
-        """ 
-        Constructor a new UserController.
-        """
+        """ Constructor a new UserController. """
         self._config = config
         self._token_timeout = token_timeout
-        self._tokens = {} #type: Dict[str, Tuple[str, float]]
+        self._tokens = {}  # type: Dict[str, Tuple[str, float]]
 
         # Create the user for the cloud
         cloud_user_dto = UserDTO(
@@ -64,11 +60,8 @@ class UserController(object):
 
     def save_user(self, user_dto, fields):
         # type: (UserDTO, List[str]) -> None
-        """
-        Saves one instance of a user with the defined fields in param fields
-        """
+        """ Saves one instance of a user with the defined fields in param fields """
         user_orm = UserMapper.dto_to_orm(user_dto, fields)
-        logger.debug("user_orm: {}".format(vars(user_orm)))
         self._validate(user_orm)
         user_orm.save()
 
@@ -76,18 +69,13 @@ class UserController(object):
 
     def save_users(self, users):
         # type: (List[Tuple[UserDTO, List[str]]]) -> None
-        """
-        Create or update a new user using a user DTO object
-        """
+        """ Create or update a new user using a user DTO object """
         for user_dto, fields in users:
-            logger.debug('Saving new user with username: "{}"'.format(user_dto.username))
             self.save_user(user_dto, fields)
 
     def load_users(self):
         # type: () -> List[UserDTO]
-        """ 
-        Returns a list of UserDTOs with all the usernames
-        """
+        """  Returns a list of UserDTOs with all the usernames """
         users = []
         for user_orm in User.select():
             user_dto = UserMapper.orm_to_dto(user_orm)
@@ -98,41 +86,33 @@ class UserController(object):
 
     def get_number_of_users(self):
         # type: () -> int
-        """
-        Return the number of registred users
-        """
+        """ Return the number of registred users """
 
         return User.select().count()
 
     def remove_user(self, user_dto):
         # type: (UserDTO) -> None
-        """ 
-        Remove a user.
-        """
+        """  Remove a user. """
         # set username to lowercase to compare on username
         username = user_dto.username.lower()
 
         # check if the removed user is not the last admin user of the system
         if self.get_number_of_users() <= 1:
             raise Exception(UserEnums.DeleteErrors.LAST_ACCOUNT)
-        else:
-            User.delete().where(User.username == username).execute()
+        User.delete().where(User.username == username).execute()
 
-            to_remove = []
-            for token in self._tokens:
-                if self._tokens[token][0] == username:
-                    to_remove.append(token)
+        to_remove = []
+        for token in self._tokens:
+            if self._tokens[token][0] == username:
+                to_remove.append(token)
 
-            for token in to_remove:
-                del self._tokens[token]
+        for token in to_remove:
+            del self._tokens[token]
 
     def login(self, user_dto, accept_terms=False, timeout=None):
         # type: (UserDTO, Optional[bool], Optional[float]) -> Tuple[bool, str]
-        """ 
-        Login a user given a UserDTO
-        """
+        """  Login a user given a UserDTO """
 
-        logger.debug('Logging in user with username "{}"'.format(user_dto.username))
         if timeout is not None:
             try:
                 timeout = int(timeout)
@@ -142,56 +122,46 @@ class UserController(object):
         if timeout is None:
             timeout = self._token_timeout
 
-        for user_orm in User.select().where(
+        user_orm = User.select().where(
             User.username == user_dto.username.lower(),
             User.password == user_dto.hashed_password
-        ):
-            # check if returned object is valid
-            if user_orm is None or not hasattr(user_orm, 'username'):
-                logger.debug('User login: Could not find any user with name "{}"'.format(user_dto.username))
-                return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
 
-            if user_orm.accepted_terms == UserController.TERMS_VERSION:
-                return True, self._gen_token(user_orm.username, time.time() + timeout)
-            if accept_terms is True:
-                user_orm.accepted_terms=UserController.TERMS_VERSION
-                user_orm.save()
-                return True, self._gen_token(user_orm.username, time.time() + timeout)
-            logger.debug('User login: User \"{}\" has not accepted the latest terms'.format(user_dto.username))
-            return False, UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED
-        logger.debug('User login: Could not find user with credentials')
-        return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
+        ).first()
+
+        if user_orm is None:
+            return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
+
+        if user_orm.accepted_terms == UserController.TERMS_VERSION:
+            return True, self._gen_token(user_orm.username, time.time() + timeout)
+        if accept_terms is True:
+            user_orm.accepted_terms=UserController.TERMS_VERSION
+            user_orm.save()
+            return True, self._gen_token(user_orm.username, time.time() + timeout)
+        return False, UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED
 
 
     def logout(self, token):
         # type: (str) -> None
-        """ 
-        Removes the token from the controller. 
-        """
+        """  Removes the token from the controller.  """
         self._tokens.pop(token, None)
 
 
     def _gen_token(self, username, valid_until):
         # type: (str, float) -> str
-        """ 
-        Generate a token and insert it into the tokens dict. 
-        """
+        """  Generate a token and insert it into the tokens dict.  """
         ret = uuid.uuid4().hex
         self._tokens[ret] = (username, valid_until)
 
         # Delete the expired tokens
         for token in self._tokens.keys():
             if self._tokens[token][1] < time.time():
-                logger.debug('Removing expired token for user: "{}"'.format(self._tokens[token][0]))
                 self._tokens.pop(token, None)
 
         return ret
 
     def check_token(self, token):
         # type: (str) -> bool
-        """ 
-        Returns True if the token is valid, False if the token is invalid. 
-        """
+        """  Returns True if the token is valid, False if the token is invalid.  """
         if token is None or token not in self._tokens:
             return False
         else:
@@ -200,9 +170,7 @@ class UserController(object):
 
     def _validate(self, user):
         # type: (User) -> None
-        """ 
-        Checks if the user object is a valid object to store 
-        """
+        """  Checks if the user object is a valid object to store  """
         if user.username is None or not isinstance(user.username, six.string_types) or user.username.strip() == '':
             raise RuntimeError('A user must have a username')
         if user.password is None or not isinstance(user.password, six.string_types):

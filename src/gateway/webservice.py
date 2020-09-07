@@ -470,8 +470,7 @@ class WebInterface(object):
             raise cherrypy.HTTPError(401, "unauthorized")
         users = self._user_controller.load_users()
         usernames = [user.username for user in users]
-        usernames_str = ', '.join(usernames)
-        return {'usernames': usernames_str}
+        return {'usernames': usernames}
 
     @openmotics_api(plugin_exposed=False)
     def remove_user(self, username):

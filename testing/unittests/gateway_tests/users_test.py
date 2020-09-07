@@ -82,29 +82,45 @@ class UserControllerTest(unittest.TestCase):
     def test_empty(self):
         """ Test an empty database. """
         user_controller = self._get_controller()
+
+        # setup test credentials
         user_dto = UserDTO("fred")
         user_dto.set_password("test")
+        
+        # verify that the test credentials do not work
         success, data = user_controller.login(user_dto)
         self.assertFalse(success)
         self.assertEqual(data, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS)
+
+        # check that a random token is not valid when empty
         self.assertEqual(False, user_controller.check_token('some token 123'))
 
+        # create the cloud user credentials
         user_dto = UserDTO("om")
         user_dto.set_password("pass")
+
+        # verfify that the cloud user can login
         success, data = user_controller.login(user_dto)
         self.assertTrue(success)
         self.assertNotEquals(None, data)
 
+        # verify that the cloud user token is valid.
         self.assertTrue(user_controller.check_token(data))
 
     def test_terms(self):
         """ Tests acceptance of the terms """
         user_controller = self._get_controller()
-        # adding test user
-        fields = ['username', 'password', 'accepted_terms']
-        user_dto = UserDTO(username='om2')
-        user_dto.set_password('pass')
-        user_controller.save_users([(user_dto, fields)])
+        # adding test user to the DB
+        user_to_add = User(
+            username='test',
+            password=UserDTO._hash_password('test'),
+            accepted_terms=False
+        )
+        user_to_add.save()
+
+        # setup test credentials
+        user_dto = UserDTO(username='test')
+        user_dto.set_password('test')
 
         # check if login is possible
         success, data = user_controller.login(user_dto)
@@ -180,7 +196,7 @@ class UserControllerTest(unittest.TestCase):
 
         # create multiple new users
         users_dto = []
-        user_dto = UserDTO(username='fred')
+        user_dto = UserDTO(username='simon')
         user_dto.set_password('test')
         users_dto.append(user_dto)
         user_dto = UserDTO(username='test')
@@ -193,12 +209,12 @@ class UserControllerTest(unittest.TestCase):
         users_in_controller = user_controller.load_users()
         self.assertEqual(3, len(users_in_controller))
         self.assertEqual('om', users_in_controller[0].username)
-        self.assertEqual('fred', users_in_controller[1].username)
+        self.assertEqual('simon', users_in_controller[1].username)
         self.assertEqual('test', users_in_controller[2].username)
         self.assertEqual(3, user_controller.get_number_of_users())
 
         # try if the user is able to login with terms accepted
-        user_dto = UserDTO(username='fred')
+        user_dto = UserDTO(username='simon')
         user_dto.set_password('test')
         success, token = user_controller.login(user_dto, accept_terms=True)
         self.assertEqual(True, success)
@@ -210,37 +226,40 @@ class UserControllerTest(unittest.TestCase):
 
 
 
-    # @mark.slow
-    # def test_token_timeout(self):
-    #     """ Test the timeout on the tokens. """
-    #     SetUpTestInjections(config={'username': 'om', 'password': 'pass'},
-    #                         token_timeout=3)
-    #     user_controller = UserController()
+    @mark.slow
+    def test_token_timeout(self):
+        """ Test the timeout on the tokens. """
+        SetUpTestInjections(config={'username': 'om', 'password': 'pass'},
+                            token_timeout=3)
+        user_controller = UserController()
 
-    #     fields = ['username', 'password', 'accepted_terms']
+        # Setup credentials
+        user_dto = UserDTO(username='om')
+        user_dto.set_password('pass')
+        # verify that the user can login
+        success, token = user_controller.login(user_dto, accept_terms=True)
+        self.assertEqual(True, success)
+        self.assertNotEquals(None, token)
 
-    #     # create a new user to test with
-    #     user_dto = UserDTO(username='om')
-    #     user_dto.set_password('pass')
-    #     success, token = user_controller.login(user_dto, accept_terms=True)
-    #     self.assertEqual(True, success)
-    #     self.assertNotEquals(None, token)
-    #     self.assertTrue(user_controller.check_token(token))
+        # verify that the token is still valid
+        self.assertTrue(user_controller.check_token(token))
 
-    #     time.sleep(4)
+        time.sleep(4)
 
-    #     self.assertFalse(user_controller.check_token(token))
+        # verify that the token is no longer valid after timeout
+        self.assertFalse(user_controller.check_token(token))
 
-    #     success, token = user_controller.login(user_dto, accept_terms=True)
-    #     self.assertTrue(success)
-    #     self.assertNotEquals(None, token)
-    #     self.assertTrue(user_controller.check_token(token))
+        # login again tot verify that the token is then again valid
+        success, token = user_controller.login(user_dto, accept_terms=True)
+        self.assertTrue(success)
+        self.assertNotEquals(None, token)
+        self.assertTrue(user_controller.check_token(token))
 
     def test_logout(self):
         """ Test logout. """
         user_controller = UserController()
 
-        # create a new user to test with
+        # Setup the user credentials
         user_dto = UserDTO(username='om')
         user_dto.set_password('pass')
 
@@ -254,7 +273,7 @@ class UserControllerTest(unittest.TestCase):
         user_controller.logout(token)
         self.assertFalse(user_controller.check_token(token))
 
-    def test_get_usernames(self):
+    def test_load_users(self):
         """ Test getting all usernames. """
         user_controller = self._get_controller()
 
@@ -263,13 +282,12 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual(1, len(users_in_controller))
         self.assertEqual('om', users_in_controller[0].username)
 
-
-        fields = ['username', 'password', 'accepted_terms']
-
-        # create a new user to test with
-        user_dto = UserDTO(username='test')
-        user_dto.set_password('test')
-        user_controller.save_users([(user_dto, fields)])
+        user_to_add = User(
+            username='test',
+            password=UserDTO._hash_password('test'),
+            accepted_terms=True
+        )
+        user_to_add.save()
 
 
         # check if the user has been added to the list
@@ -287,8 +305,6 @@ class UserControllerTest(unittest.TestCase):
         """ Test removing a user. """
         user_controller = self._get_controller()
 
-        fields = ['username', 'password', 'accepted_terms']
-
         # check that there is only one user in the system
         users_in_controller = user_controller.load_users()
         self.assertEqual(1, len(users_in_controller))
@@ -296,9 +312,16 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual(1, user_controller.get_number_of_users())
 
         # create a new user to test with
+        user_to_add = User(
+            username='test',
+            password=UserDTO._hash_password('test'),
+            accepted_terms=True
+        )
+        user_to_add.save()
+
+        # creating equal credentials to use
         user_dto = UserDTO(username='test')
         user_dto.set_password('test')
-        user_controller.save_users([(user_dto, fields)])
 
         # verify that the user has been added
         users_in_controller = user_controller.load_users()
@@ -324,12 +347,14 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual('om', users_in_controller[0].username)
         self.assertEqual(1, user_controller.get_number_of_users())
 
+        # verify that the last user cannot be deleted.
         try:
             last_user_dto = UserDTO(username='om')
             user_controller.remove_user(last_user_dto)
             self.fail('Should have raised exception !')
         except Exception as exception:
             self.assertEqual(UserEnums.DeleteErrors.LAST_ACCOUNT, str(exception))
+
 
     def test_case_insensitive(self):
         """ Test the case insensitivity of the username. """

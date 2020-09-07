@@ -32,7 +32,7 @@ class ShutterEnums(object):
 
 class UserEnums(object):
     class AuthenticationErrors(object):
-        INVALID_CREDENTIALS = 'Invalid_credentials'
+        INVALID_CREDENTIALS = 'invalid_credentials'
         TERMS_NOT_ACCEPTED = 'terms_not_accepted'
 
     class DeleteErrors(object):

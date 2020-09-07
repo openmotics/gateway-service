@@ -27,6 +27,13 @@ if False:  # MYPY
 
 class UserDTO(BaseDTO):
 
+
+    def __init__(self, username, accepted_terms=0):
+        # type: (str, int) -> None
+        self.username = username
+        self.hashed_password = ''
+        self.accepted_terms = accepted_terms
+    
     @staticmethod
     def _hash_password(password):
         # type: (str) -> str
@@ -37,13 +44,7 @@ class UserDTO(BaseDTO):
         sha.update('OpenMotics')  # type: ignore
         sha.update(password)  # type: ignore
         return sha.hexdigest()
-
-    def __init__(self, username, accepted_terms=0):
-        # type: (str, int) -> None
-        self.username = username
-        self.hashed_password= ''
-        self.accepted_terms = accepted_terms
-    
+        
     def clear_password(self):
         # Type: () -> None
         """
