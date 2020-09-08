@@ -146,6 +146,7 @@ class Module(BaseModel):
     firmware_version = CharField(null=True)
     hardware_version = CharField(null=True)
     order = IntegerField(null=True)
+    last_online_update = IntegerField(null=True)
 
 
 class DataMigration(BaseModel):
