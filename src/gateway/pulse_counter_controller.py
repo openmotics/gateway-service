@@ -17,6 +17,7 @@ PulseCounter BLL
 """
 from __future__ import absolute_import
 import logging
+import time
 from peewee import fn, DoesNotExist
 from ioc import Injectable, Inject, INJECTED, Singleton
 from serial_utils import CommunicationTimedOutException
@@ -46,6 +47,7 @@ class PulseCounterController(BaseController):
             return False
         self._sync_running = True
 
+        start = time.time()
         logger.info('ORM sync (PulseCounter)')
 
         try:
@@ -58,7 +60,8 @@ class PulseCounterController(BaseController):
                                                  source='master',
                                                  persistent=False)
                     pulse_counter.save()
-            logger.info('ORM sync (PulseCounter): completed')
+            duration = time.time() - start
+            logger.info('ORM sync (PulseCounter): completed after {0:.1f}s', duration)
         except CommunicationTimedOutException as ex:
             logger.error('ORM sync (PulseCounter): Failed: {0}'.format(ex))
         except Exception:
