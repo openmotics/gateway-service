@@ -31,14 +31,12 @@ def energy_module(toolbox):
     toolbox.discover_energy_module()
 
 
-@pytest.mark.unstable
 @hypothesis.given(cts())
 def test_realtime_power(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT) -> None
     _assert_realtime(toolbox, ct)
 
 
 @pytest.mark.slow
-@pytest.mark.unstable
 @hypothesis.given(cts())
 def test_power_cycle(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT) -> None
     cycles = 10
