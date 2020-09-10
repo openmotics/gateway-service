@@ -11,6 +11,7 @@ WorkingDirectory=/opt/openmotics/python
 SyslogIdentifier=openmotics-api
 StandardOutput=syslog
 StandardError=syslog
+KillMode=process
 TimeoutStopSec=15
 Restart=always
 RestartSec=10
