@@ -125,7 +125,6 @@ class UserController(object):
         user_orm = User.select().where(
             User.username == user_dto.username.lower(),
             User.password == user_dto.hashed_password
-
         ).first()
 
         if user_orm is None:

@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import absolute_import
+
 import datetime
 import inspect
 import json
@@ -21,13 +22,15 @@ import logging
 import sys
 import time
 
-import constants
-from peewee import (
-    BooleanField, CharField, CompositeKey, DoesNotExist,
-    FloatField, ForeignKeyField, IntegerField, AutoField,
-    SqliteDatabase, TextField
-)
+from peewee import AutoField, BooleanField, CharField, CompositeKey, \
+    DoesNotExist, FloatField, ForeignKeyField, IntegerField, SqliteDatabase, \
+    TextField
 from playhouse.signals import Model, post_save
+
+import constants
+
+if False:  # MYPY
+    from typing import List
 
 logger = logging.getLogger('openmotics')
 
@@ -166,11 +169,13 @@ class Schedule(BaseModel):
     arguments = CharField(null=True)
     status = CharField()
 
+
 class User(BaseModel):
     id = AutoField()
     username = CharField(unique=True)
     password = CharField()
     accepted_terms = IntegerField(default=0)
+
 
 class ThermostatGroup(BaseModel):
     id = AutoField()
@@ -323,9 +328,10 @@ class Thermostat(BaseModel):
             raise ValueError('Not a valid preset {}.'.format(new_preset))
 
     def deactivate_all_presets(self):
-        for preset in Preset.select().where(Preset.thermostat == self.id):
-            preset.active = False
-            preset.save()
+        with Database.get_db().atomic():
+            for preset in Preset.select().where(Preset.thermostat == self.id):
+                preset.active = False
+                preset.save()
 
     @property
     def mode(self):
@@ -362,16 +368,20 @@ class Thermostat(BaseModel):
         return [preset for preset in Preset.select().where(Preset.thermostat == self.id)]
 
     def heating_schedules(self):
-        return DaySchedule.select()\
-                          .where(DaySchedule.thermostat == self.id)\
-                          .where(DaySchedule.mode == 'heating')\
-                          .order_by(DaySchedule.index)
+        # type: () -> List[DaySchedule]
+        return [x for x in
+                DaySchedule.select()
+                    .where(DaySchedule.thermostat == self.id)
+                    .where(DaySchedule.mode == 'heating')
+                    .order_by(DaySchedule.index)]
 
     def cooling_schedules(self):
-        return DaySchedule.select()\
-                          .where(DaySchedule.thermostat == self.id)\
-                          .where(DaySchedule.mode == 'cooling')\
-                          .order_by(DaySchedule.index)
+        # type: () -> List[DaySchedule]
+        return [x for x in
+                DaySchedule.select()
+                    .where(DaySchedule.thermostat == self.id)
+                    .where(DaySchedule.mode == 'cooling')
+                    .order_by(DaySchedule.index)]
 
     def v0_get_output_numbers(self, mode=None):
         # TODO: Remove, will be replaced by mappers

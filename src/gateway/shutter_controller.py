@@ -158,7 +158,7 @@ class ShutterController(BaseController):
 
     def load_shutters(self):  # type: () -> List[ShutterDTO]
         shutter_dtos = []
-        for shutter in Shutter.select():
+        for shutter in list(Shutter.select()):
             shutter_dto = self._master_controller.load_shutter(shutter_id=shutter.number)
             shutter_dto.room = shutter.room.number if shutter.room is not None else None
             shutter_dtos.append(shutter_dto)
@@ -188,7 +188,7 @@ class ShutterController(BaseController):
 
     def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
         shutter_group_dtos = []
-        for shutter_group in ShutterGroup.select():
+        for shutter_group in list(ShutterGroup.select()):
             shutter_group_dto = self._master_controller.load_shutter_group(shutter_group_id=shutter_group.number)
             shutter_group_dto.room = shutter_group.room.number if shutter_group.room is not None else None
             shutter_group_dtos.append(shutter_group_dto)

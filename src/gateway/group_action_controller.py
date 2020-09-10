@@ -48,7 +48,7 @@ class GroupActionController(BaseController):
 
     def load_group_actions(self):  # type: () -> List[GroupActionDTO]
         group_action_dtos = []
-        for group_action in GroupAction.select():
+        for group_action in list(GroupAction.select()):
             group_action_dto = self._master_controller.load_group_action(group_action_id=group_action.number)
             group_action_dtos.append(group_action_dto)
         return group_action_dtos

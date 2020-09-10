@@ -121,6 +121,6 @@ class ModuleController(BaseController):
         if not self.run_sync_orm():
             # The sync might already be running, so we'll make sure it does a full run (again)
             self.request_sync_orm()
-        new_module = Module.select().where(Module.source == new_module.source).where(Module.address == new_module.address)[0]
+        new_module = Module.select().where(Module.source == new_module.source).where(Module.address == new_module.address).first()
         return (ModuleMapper.orm_to_dto(old_module),
                 ModuleMapper.orm_to_dto(new_module))
