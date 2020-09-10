@@ -15,6 +15,10 @@
 """ The update modules provides the update functionality. """
 
 from __future__ import absolute_import
+
+from platform_utils import System
+System.import_libs()
+
 import sys
 import hashlib
 import traceback
