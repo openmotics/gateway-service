@@ -546,6 +546,7 @@ class Toolbox(object):
         logger.debug('ensure output {}#{} is {}    outputs={}'.format(output.type, output.output_id, status, state))
         time.sleep(0.2)
         self.set_output(output, status)
+        time.sleep(0.2)
         self.tester.reset()
 
     def set_output(self, output, status):
