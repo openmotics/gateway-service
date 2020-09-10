@@ -274,12 +274,17 @@ def setup_target_platform(target_platform, message_client_name):
 
 def setup_minimal_master_platform(port):
     # type: (str) -> None
+    config = ConfigParser()
+    config.read(constants.get_config_file())
+
     platform = Platform.get_platform()
     Injectable.value(controller_serial=Serial(port, 115200))
 
     if platform == Platform.Type.CORE_PLUS:
         from master.core import ucan_communicator
         _ = ucan_communicator
+        core_cli_serial_port = config.get('OpenMotics', 'cli_serial')
+        Injectable.value(cli_serial=Serial(core_cli_serial_port, 115200))
         Injectable.value(master_communicator=CoreCommunicator())
         Injectable.value(maintenance_communicator=None)
         Injectable.value(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
