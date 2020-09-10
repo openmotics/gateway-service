@@ -18,6 +18,7 @@ from __future__ import absolute_import
 import sys
 import hashlib
 import traceback
+import shutil
 import subprocess
 
 from six.moves.configparser import ConfigParser
@@ -76,8 +77,11 @@ def update(version, md5_server):
         config = ConfigParser()
         config.read(get_config_file())
         config.set('OpenMotics', 'version', version)
-        with open(get_config_file(), 'wb') as configfile:
+        temp_file = get_config_file() + '.update'
+        with open(temp_file, 'wb') as configfile:
             config.write(configfile)
+        shutil.move(temp_file, get_config_file())
+        subprocess.check_call(['sync'])
 
         return extract_output + '\n' + update_output + '\n' + cleanup_output
 

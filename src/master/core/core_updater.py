@@ -38,19 +38,19 @@ class CoreUpdater(object):
 
     @staticmethod
     @Inject
-    def update(hex_filename, core_communicator=INJECTED, maintenance_communicator=INJECTED, cli_serial=INJECTED):
+    def update(hex_filename, master_communicator=INJECTED, maintenance_communicator=INJECTED, cli_serial=INJECTED):
         """ Flashes the content from an Intel HEX file to the Core """
         try:
             # TODO: Check version and skip update if the version is already active
 
             logger.info('Updating Core')
 
-            core_communicator = core_communicator  # type: CoreCommunicator
+            master_communicator = master_communicator  # type: CoreCommunicator
             maintenance_communicator = maintenance_communicator  # type: MaintenanceCommunicator
 
-            if core_communicator is not None and maintenance_communicator is not None:
+            if master_communicator is not None and maintenance_communicator is not None:
                 maintenance_communicator.stop()
-                # core_communicator.stop()  # TODO: Hold the communicator
+                # master_communicator.stop()  # TODO: Hold the communicator
 
             if not os.path.exists(hex_filename):
                 raise RuntimeError('The given path does not point to an existing file')
@@ -94,9 +94,9 @@ class CoreUpdater(object):
             logger.info('Application version {0} active'.format(firmware_version))
             cli_serial.flushInput()
 
-            if core_communicator is not None and maintenance_communicator is not None:
+            if master_communicator is not None and maintenance_communicator is not None:
                 maintenance_communicator.start()
-                # core_communicator.start()  # TODO: Make sure it can start again
+                # master_communicator.start()  # TODO: Make sure it can start again
 
             # TODO: Also verify CoreCommunicator / API
 
