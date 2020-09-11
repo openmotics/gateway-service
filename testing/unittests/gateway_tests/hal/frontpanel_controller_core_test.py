@@ -34,27 +34,31 @@ class FrontpanelControllerCoreTest(unittest.TestCase):
     def test_serial_activity(self):
         controller = FrontpanelControllerCoreTest._get_controller()
         controller.report_serial_activity(FrontpanelController.SerialPorts.P1, False)
-        self.assertLed(FrontpanelController.Leds.P1, False, FrontpanelController.LedStates.BLINKING_50)
+        self.assertLed(FrontpanelController.Leds.P1, True, FrontpanelController.LedStates.SOLID)
         controller.report_serial_activity(FrontpanelController.SerialPorts.P1, True)
         self.assertLed(FrontpanelController.Leds.P1, True, FrontpanelController.LedStates.BLINKING_50)
 
     def test_report_carrier(self):
         controller = FrontpanelControllerCoreTest._get_controller()
         controller._report_carrier(False)
+        controller._report_connectivity(False)
         self.assertLed(FrontpanelController.Leds.LAN_RED, True, FrontpanelController.LedStates.SOLID)
+        self.assertLed(FrontpanelController.Leds.LAN_GREEN, False, FrontpanelController.LedStates.SOLID)
         controller._report_carrier(True)
+        controller._report_connectivity(False)
+        self.assertLed(FrontpanelController.Leds.LAN_RED, True, FrontpanelController.LedStates.BLINKING_50)
+        self.assertLed(FrontpanelController.Leds.LAN_GREEN, False, FrontpanelController.LedStates.SOLID)
+        controller._report_carrier(True)
+        controller._report_connectivity(True)
         self.assertLed(FrontpanelController.Leds.LAN_RED, False, FrontpanelController.LedStates.SOLID)
+        self.assertLed(FrontpanelController.Leds.LAN_GREEN, True, FrontpanelController.LedStates.SOLID)
 
     def test_report_network_activity(self):
         controller = FrontpanelControllerCoreTest._get_controller()
-        controller._carrier = False
-        controller._report_network_activity(False)
-        self.assertLed(FrontpanelController.Leds.LAN_GREEN, False, FrontpanelController.LedStates.BLINKING_50)
-        controller._report_network_activity(False)
-        self.assertLed(FrontpanelController.Leds.LAN_GREEN, False, FrontpanelController.LedStates.BLINKING_50)
         controller._carrier = True
+        controller._connectivity = True
         controller._report_network_activity(False)
-        self.assertLed(FrontpanelController.Leds.LAN_GREEN, False, FrontpanelController.LedStates.BLINKING_50)
+        self.assertLed(FrontpanelController.Leds.LAN_GREEN, True, FrontpanelController.LedStates.SOLID)
         controller._report_network_activity(True)
         self.assertLed(FrontpanelController.Leds.LAN_GREEN, True, FrontpanelController.LedStates.BLINKING_50)
 
@@ -65,6 +69,9 @@ class FrontpanelControllerCoreTest(unittest.TestCase):
         self.assertLed(FrontpanelController.Leds.CLOUD, False, FrontpanelController.LedStates.SOLID)
         controller._report_cloud_reachable(True)
         controller._report_vpn_open(False)
+        self.assertLed(FrontpanelController.Leds.CLOUD, True, FrontpanelController.LedStates.BLINKING_50)
+        controller._report_cloud_reachable(False)
+        controller._report_vpn_open(True)
         self.assertLed(FrontpanelController.Leds.CLOUD, True, FrontpanelController.LedStates.BLINKING_50)
         controller._report_cloud_reachable(True)
         controller._report_vpn_open(True)

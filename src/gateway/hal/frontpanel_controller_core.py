@@ -24,7 +24,7 @@ from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.events import Event as MasterCoreEvent
 
 if False:  # MYPY
-    from typing import Any, Dict, Set
+    from typing import Any, Dict, Set, Tuple
     from master.core.core_communicator import CoreCommunicator
 
 logger = logging.getLogger("openmotics")
@@ -78,11 +78,12 @@ class FrontpanelCoreController(FrontpanelController):
         )
         self._led_states = {}  # type: Dict[int, str]
         self._active_leds = set()  # type: Set[int]
-        self._carrier = None
-        self._cloud = None
-        self._vpn = None
-        self._lan_green_on = None
-        self._serial_port_on = None
+        self._carrier = True
+        self._connectivity = True
+        self._activity = False
+        self._cloud = False
+        self._vpn = False
+        self._led_drive_states = {}  # type: Dict[str, Tuple[bool, str]]
         self._authorized_mode = True  # TODO: Replace
 
     def _handle_event(self, data):
@@ -123,58 +124,83 @@ class FrontpanelCoreController(FrontpanelController):
 
     def _report_carrier(self, carrier):
         self._carrier = carrier
-        self._set_led(led=FrontpanelController.Leds.LAN_RED,
-                      on=not carrier,
-                      mode=FrontpanelController.LedStates.SOLID)
+        self._update_lan_leds()
+
+    def _report_connectivity(self, connectivity):
+        self._connectivity = connectivity
+        self._update_lan_leds()
 
     def _report_network_activity(self, activity):
-        lan_green = activity and self._carrier
-        if self._lan_green_on != lan_green:
-            self._lan_green_on = lan_green
+        self._activity = activity
+        self._update_lan_leds()
+
+    def _update_lan_leds(self):
+        if not self._carrier or not self._connectivity:
             self._set_led(led=FrontpanelController.Leds.LAN_GREEN,
-                          on=lan_green,
-                          mode=FrontpanelController.LedStates.BLINKING_50)
+                          on=False,
+                          mode=FrontpanelController.LedStates.SOLID)
+            mode = FrontpanelController.LedStates.SOLID
+            if self._carrier:
+                mode = FrontpanelController.LedStates.BLINKING_50
+            self._set_led(led=FrontpanelController.Leds.LAN_RED,
+                          on=True, mode=mode)
+        else:
+            self._set_led(led=FrontpanelController.Leds.LAN_RED,
+                          on=False,
+                          mode=FrontpanelController.LedStates.SOLID)
+            mode = FrontpanelController.LedStates.SOLID
+            if self._activity:
+                mode = FrontpanelController.LedStates.BLINKING_50
+            self._set_led(led=FrontpanelController.Leds.LAN_GREEN,
+                          on=True, mode=mode)
 
     def report_serial_activity(self, serial_port, activity):
         if serial_port != FrontpanelController.SerialPorts.P1:
             return
-        if self._serial_port_on != activity:
-            self._serial_port_on = activity
-            self._set_led(led=FrontpanelController.Leds.P1,
-                          on=activity,
-                          mode=FrontpanelController.LedStates.BLINKING_50)
+        # TODO: Check connection on P1 port. If nothing connected, led should be off
+        mode = FrontpanelController.LedStates.SOLID
+        if activity:
+            mode = FrontpanelController.LedStates.BLINKING_50
+        self._set_led(led=FrontpanelController.Leds.P1,
+                      on=True, mode=mode)
 
     def _report_cloud_reachable(self, reachable):
-        if self._cloud != reachable:
-            self._cloud = reachable
-            self._update_cloud_led()
+        self._cloud = reachable
+        self._update_cloud_led()
 
     def _report_vpn_open(self, vpn_open):
-        if self._vpn != vpn_open:
-            self._vpn = vpn_open
-            self._update_cloud_led()
+        self._vpn = vpn_open
+        self._update_cloud_led()
 
     def _update_cloud_led(self):
         # Cloud led state:
         # * Off: No heartbeat
         # * Blinking: Heartbeat but VPN not (yet) open
         # * Solid: Heartbeat and VPN is open
-        blinking_mode = FrontpanelController.LedStates.SOLID
-        if self._cloud and not self._vpn:
-            blinking_mode = FrontpanelController.LedStates.BLINKING_50
-
+        on = True
+        if not self._cloud and not self._vpn:
+            mode = FrontpanelController.LedStates.SOLID
+            on = False
+        elif self._cloud != self._vpn:
+            mode = FrontpanelController.LedStates.BLINKING_50
+        else:
+            mode = FrontpanelController.LedStates.SOLID
         self._set_led(led=FrontpanelController.Leds.CLOUD,
-                      on=self._cloud,
-                      mode=blinking_mode)
+                      on=on, mode=mode)
 
     def _set_led(self, led, on, mode):
+        # type: (str, bool, str) -> None
         if led not in FrontpanelCoreController.LED_TO_BA:
             return
         action = FrontpanelCoreController.LED_TO_BA[led]
         if mode not in FrontpanelCoreController.BLINKING_MAP:
             return
-        extra_parameter = FrontpanelCoreController.BLINKING_MAP[mode]
-        self._master_communicator.do_basic_action(action_type=210,
-                                                  action=action,
-                                                  device_nr=1 if on else 0,
-                                                  extra_parameter=extra_parameter)
+        state = self._led_drive_states.get(led)
+        if state != (on, mode):
+            extra_parameter = FrontpanelCoreController.BLINKING_MAP[mode]
+            self._master_communicator.do_basic_action(action_type=210,
+                                                      action=action,
+                                                      device_nr=1 if on else 0,
+                                                      extra_parameter=extra_parameter,
+                                                      log=False)
+            self._led_drive_states[led] = on, mode

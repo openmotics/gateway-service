@@ -98,6 +98,8 @@ class FrontpanelController(object):
             self._report_cloud_reachable(payload)
         elif event == OMBusEvents.VPN_OPEN:
             self._report_vpn_open(payload)
+        elif event == OMBusEvents.CONNECTIVITY:
+            self._report_connectivity(payload)
 
     def start(self):
         self._check_network_activity_thread = DaemonThread(name='Frontpanel runner',
@@ -110,6 +112,9 @@ class FrontpanelController(object):
             self._check_network_activity_thread.stop()
 
     def _report_carrier(self, carrier):
+        raise NotImplementedError()
+
+    def _report_connectivity(self, connectivity):
         raise NotImplementedError()
 
     def _report_network_activity(self, activity):

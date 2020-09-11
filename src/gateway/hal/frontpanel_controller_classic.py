@@ -129,6 +129,9 @@ class FrontpanelClassicController(FrontpanelController):
     def _report_carrier(self, carrier):
         self._enabled_leds[FrontpanelController.Leds.STATUS_RED] = not carrier
 
+    def _report_connectivity(self, connectivity):
+        pass  # No support for connectivity
+
     def _report_network_activity(self, activity):
         if activity:
             self._toggle_led(FrontpanelController.Leds.ALIVE)
