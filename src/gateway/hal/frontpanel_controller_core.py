@@ -35,10 +35,6 @@ logger = logging.getLogger("openmotics")
 @Injectable.named('frontpanel_controller')
 @Singleton
 class FrontpanelCoreController(FrontpanelController):
-
-    # TODO:
-    #  * Support authorized mode
-
     LED_MAPPING_ID_TO_ENUM = {0: {0: FrontpanelController.Leds.RS485,
                                   1: FrontpanelController.Leds.STATUS_GREEN,
                                   2: FrontpanelController.Leds.STATUS_RED,
