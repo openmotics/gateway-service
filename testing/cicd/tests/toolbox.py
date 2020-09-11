@@ -563,14 +563,14 @@ class Toolbox(object):
         self.tester.toggle_output(input.tester_output_id)
         logger.debug('toggled {}#{} -> True -> False'.format(input.type, input.input_id))
 
-    def assert_output_changed(self, output, status, between=(0, 30)):
+    def assert_output_changed(self, output, status, between=(0, 5)):
         # type: (Output, bool, Tuple[float,float]) -> None
         hypothesis.note('assert output {}#{} status changed {} -> {}'.format(output.type, output.output_id, not status, status))
         if self.tester.receive_output_event(output.output_id, status, between=between):
             return
         raise AssertionError('expected event {}#{} status={}'.format(output.type, output.output_id, status))
 
-    def assert_output_status(self, output, status, timeout=30):
+    def assert_output_status(self, output, status, timeout=5):
         # type: (Output, bool, float) -> None
         hypothesis.note('assert output {}#{} status is {}'.format(output.type, output.output_id, status))
         since = time.time()
