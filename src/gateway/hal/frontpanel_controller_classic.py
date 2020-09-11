@@ -94,9 +94,9 @@ class FrontpanelClassicController(FrontpanelController):
                 self._button_released = False
                 if self._button_pressed_since is None:
                     self._button_pressed_since = time.time()
-                if time.time() - self._button_pressed_since > FrontpanelClassicController.AUTH_MODE_PRESS_DURATION:
+                if time.time() - self._button_pressed_since > FrontpanelController.AUTH_MODE_PRESS_DURATION:
                     self._authorized_mode = True
-                    self._authorized_mode_timeout = time.time() + FrontpanelClassicController.AUTH_MODE_TIMEOUT
+                    self._authorized_mode_timeout = time.time() + FrontpanelController.AUTH_MODE_TIMEOUT
                     self._button_pressed_since = None
             else:
                 self._button_pressed_since = None

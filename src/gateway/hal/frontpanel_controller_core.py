@@ -17,14 +17,16 @@ Module for the frontpanel
 """
 from __future__ import absolute_import
 import logging
+import time
 from ioc import INJECTED, Inject, Injectable, Singleton
+from gateway.daemon_thread import DaemonThread
 from gateway.hal.frontpanel_controller import FrontpanelController
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.events import Event as MasterCoreEvent
 
 if False:  # MYPY
-    from typing import Any, Dict, Set, Tuple
+    from typing import Any, Dict, Set, Tuple, Optional
     from master.core.core_communicator import CoreCommunicator
 
 logger = logging.getLogger("openmotics")
@@ -84,7 +86,10 @@ class FrontpanelCoreController(FrontpanelController):
         self._cloud = False
         self._vpn = False
         self._led_drive_states = {}  # type: Dict[str, Tuple[bool, str]]
-        self._authorized_mode = True  # TODO: Replace
+        self._check_buttons_thread = None
+        self._authorized_mode_buttons = [False, False]
+        self._authorized_mode_buttons_pressed_since = None  # type: Optional[float]
+        self._authorized_mode_buttons_released = False
 
     def _handle_event(self, data):
         # type: (Dict[str, Any]) -> None
@@ -115,12 +120,47 @@ class FrontpanelCoreController(FrontpanelController):
             if state is not None:
                 button = FrontpanelCoreController.BUTTON_MAPPING_ID_TO_ENUM[core_event.data['button']]
                 logger.info('Button {0} was {1}'.format(button, state))
+                # Detect authorized mode
+                if button == FrontpanelController.Buttons.ACTION:
+                    self._authorized_mode_buttons[0] = state == FrontpanelController.ButtonStates.PRESSED
+                elif button == FrontpanelController.Buttons.SETUP:
+                    self._authorized_mode_buttons[1] = state == FrontpanelController.ButtonStates.PRESSED
 
     def start(self):
         super(FrontpanelCoreController, self).start()
+        # Start polling/writing threads
+        self._check_buttons_thread = DaemonThread(name='Button checker',
+                                                  target=self._check_buttons,
+                                                  interval=0.25)
+        self._check_buttons_thread.start()
+        # TODO: Remove below statement once P1 detection is implemented
+        self._set_led(led=FrontpanelController.Leds.P1,
+                      on=True,
+                      mode=FrontpanelController.LedStates.SOLID)
 
     def stop(self):
         super(FrontpanelCoreController, self).stop()
+        if self._check_buttons_thread is not None:
+            self._check_buttons_thread.stop()
+
+    def _check_buttons(self):
+        buttons_pressed = self._authorized_mode_buttons == [True, True]
+        if not buttons_pressed:
+            self._authorized_mode_buttons_released = True
+        if self._authorized_mode:
+            if time.time() > self._authorized_mode_timeout or (buttons_pressed and self._authorized_mode_buttons_released):
+                self._authorized_mode = False
+        else:
+            if buttons_pressed:
+                self._authorized_mode_buttons_released = False
+                if self._authorized_mode_buttons_pressed_since is None:
+                    self._authorized_mode_buttons_pressed_since = time.time()
+                if time.time() - self._authorized_mode_buttons_pressed_since > FrontpanelController.AUTH_MODE_PRESS_DURATION:
+                    self._authorized_mode = True
+                    self._authorized_mode_timeout = time.time() + FrontpanelController.AUTH_MODE_TIMEOUT
+                    self._authorized_mode_buttons_pressed_since = None
+            else:
+                self._authorized_mode_buttons_pressed_since = None
 
     def _report_carrier(self, carrier):
         self._carrier = carrier

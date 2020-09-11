@@ -28,7 +28,7 @@ logger = logging.getLogger("openmotics")
 class FrontpanelController(object):
 
     INDICATE_TIMEOUT = 30
-    AUTH_MODE_PRESS_DURATION = 5.75
+    AUTH_MODE_PRESS_DURATION = 5
     AUTH_MODE_TIMEOUT = 60
     BOARD_TYPE = Hardware.get_board_type()
     MAIN_INTERFACE = Hardware.get_main_interface()
