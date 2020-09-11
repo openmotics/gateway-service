@@ -578,7 +578,7 @@ class VPNService(object):
                     if not connectivity and self._cloud.get_last_connect() < time.time() - REBOOT_TIMEOUT:
                         reboot_gateway()
                 else:
-                    self._message_client.send_event(OMBusEvents.CONNECTIVITY, False)
+                    self._message_client.send_event(OMBusEvents.CONNECTIVITY, True)
                 # Open or close the VPN
                 self._set_vpn(feedback['open_vpn'])
 
