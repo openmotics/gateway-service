@@ -319,6 +319,10 @@ class Toolbox(object):
         user_data = {'username': self.dut._auth[0], 'password': self.dut._auth[1]}
         self.dut.get('/create_user', params=user_data, use_token=False, success=success)
 
+    def get_gateway_version(self):
+        # type: () -> str
+        return self.dut.get('/get_version')['gateway']
+
     def get_firmware_versions(self):
         # type: () -> Dict[str,str]
         modules = self.dut.get('/get_modules_information')['modules']['master']

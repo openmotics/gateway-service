@@ -38,6 +38,34 @@ def toolbox_session():
 
 
 @fixture(scope='session')
+def software_update(toolbox_session):
+    toolbox = toolbox_session
+
+    update = os.environ.get('OPENMOTICS_UPDATE')
+    if update:
+        try:
+            logger.info('applying update {}...'.format(update))
+            with open(update, 'rb') as fd:
+                hasher = hashlib.md5()
+                hasher.update(fd.read())
+                md5 = hasher.hexdigest()
+            toolbox.dut.post('/update', {'version': '0.0.0', 'md5': md5},
+                             files={'update_data': open(update, 'rb')})
+            logger.info('waiting for update to complete...')
+            time.sleep(120)
+            toolbox.health_check(timeout=120)
+        finally:
+            toolbox.health_check(timeout=120)
+            toolbox.dut.login()
+            logger.debug('update output')
+            output = toolbox.dut.get('/get_update_output')['output']
+            for log in output:
+                print(log)
+
+    logger.info('gateway {}'.format(toolbox.get_gateway_version()))
+
+
+@fixture(scope='session')
 def firmware_updates(toolbox_session):
     toolbox = toolbox_session
 
@@ -70,7 +98,7 @@ def firmware_updates(toolbox_session):
 
 
 @fixture
-def toolbox(toolbox_session, firmware_updates):
+def toolbox(toolbox_session, software_update, firmware_updates):
     toolbox = toolbox_session
     toolbox.tester.get('/plugins/syslog_receiver/reset', success=False)
     yield toolbox
