@@ -35,23 +35,33 @@ logger = logging.getLogger("openmotics")
 @Injectable.named('frontpanel_controller')
 @Singleton
 class FrontpanelCoreController(FrontpanelController):
-    LED_MAPPING_ID_TO_ENUM = {0: {0: FrontpanelController.Leds.RS485,
-                                  1: FrontpanelController.Leds.STATUS_GREEN,
+    LED_MAPPING_ID_TO_ENUM = {0: {0: FrontpanelController.Leds.INPUTS_1_4,
+                                  1: FrontpanelController.Leds.RS485,
                                   2: FrontpanelController.Leds.STATUS_RED,
+                                  3: FrontpanelController.Leds.STATUS_GREEN,
+                                  5: FrontpanelController.Leds.LAN_RED,
+                                  6: FrontpanelController.Leds.CLOUD,
+                                  7: FrontpanelController.Leds.SETUP,
+                                  8: FrontpanelController.Leds.LAN_GREEN,
+                                  9: FrontpanelController.Leds.P1,
+                                  10: FrontpanelController.Leds.CAN_COMMUNICATION,
+                                  11: FrontpanelController.Leds.CAN_STATUS_RED,
+                                  12: FrontpanelController.Leds.CAN_STATUS_GREEN,
+                                  13: FrontpanelController.Leds.OUTPUTS_DIG_1_5,
+                                  15: FrontpanelController.Leds.RELAYS_9_16},
+                              1: {2: FrontpanelController.Leds.CAN_STATUS_RED,
                                   3: FrontpanelController.Leds.CAN_STATUS_GREEN,
-                                  4: FrontpanelController.Leds.CAN_STATUS_RED,
-                                  5: FrontpanelController.Leds.CAN_COMMUNICATION,
-                                  6: FrontpanelController.Leds.P1,
-                                  7: FrontpanelController.Leds.LAN_GREEN,
-                                  8: FrontpanelController.Leds.LAN_RED,
-                                  9: FrontpanelController.Leds.CLOUD,
-                                  10: FrontpanelController.Leds.SETUP,
-                                  11: FrontpanelController.Leds.RELAYS_1_8,
-                                  12: FrontpanelController.Leds.RELAYS_9_16,
-                                  13: FrontpanelController.Leds.OUTPUTS_DIG_1_4,
-                                  14: FrontpanelController.Leds.OUTPUTS_DIG_5_7,
-                                  15: FrontpanelController.Leds.OUTPUTS_ANA_1_4,
-                                  16: FrontpanelController.Leds.INPUTS_1_4}}
+                                  4: FrontpanelController.Leds.CAN_COMMUNICATION,
+                                  5: FrontpanelController.Leds.P1,
+                                  6: FrontpanelController.Leds.RELAYS_1_8,
+                                  7: FrontpanelController.Leds.OUTPUTS_DIG_6_8,
+                                  8: FrontpanelController.Leds.STATUS_GREEN,
+                                  9: FrontpanelController.Leds.STATUS_RED,
+                                  10: FrontpanelController.Leds.RS485,
+                                  11: FrontpanelController.Leds.SETUP,
+                                  12: FrontpanelController.Leds.CLOUD,
+                                  14: FrontpanelController.Leds.LAN_GREEN,
+                                  15: FrontpanelController.Leds.LAN_RED}}
     LED_TO_BA = {FrontpanelController.Leds.P1: 6,
                  FrontpanelController.Leds.LAN_GREEN: 7,
                  FrontpanelController.Leds.LAN_RED: 8,
@@ -74,8 +84,8 @@ class FrontpanelCoreController(FrontpanelController):
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
         )
-        self._led_states = {}  # type: Dict[int, str]
-        self._active_leds = set()  # type: Set[int]
+        self._led_states = {}  # type: Dict[str, str]
+        self._active_leds = set()  # type: Set[str]
         self._carrier = True
         self._connectivity = True
         self._activity = False
@@ -94,23 +104,27 @@ class FrontpanelCoreController(FrontpanelController):
             chip = core_event.data['chip']
             if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM:
                 for led_id in range(16):
-                    led_name = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[chip][led_id]
-                    current_state = self._led_states.get(led_id)
+                    led_name = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[chip].get(led_id)
+                    current_state = self._led_states.get(led_name)
                     new_state = FrontpanelController.LedStates.OFF
-                    if led_id in self._active_leds:
+                    if led_name in self._active_leds:
                         new_state = core_event.data['leds'][led_id]
                     if new_state != current_state:
-                        logger.info('Led {0} state change: {1} > {2}'.format(led_name, current_state, new_state))
-                        self._led_states[led_id] = new_state
+                        self._log_led_state(led_name)
+                        self._led_states[led_name] = new_state
         elif core_event.type == MasterCoreEvent.Types.LED_ON:
             chip = core_event.data['chip']
             if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM:
                 for led_id in range(16):
+                    led_name = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[chip].get(led_id)
                     new_state = core_event.data['leds'].get(led_id, MasterCoreEvent.LedStates.OFF)
                     if new_state == MasterCoreEvent.LedStates.OFF:
-                        self._active_leds.discard(led_id)
-                    else:
-                        self._active_leds.add(led_id)
+                        if led_name in self._active_leds:
+                            self._active_leds.discard(led_name)
+                            self._log_led_state(led_name)
+                    elif led_name not in self._active_leds:
+                        self._active_leds.add(led_name)
+                        self._log_led_state(led_name)
         elif core_event.type == MasterCoreEvent.Types.BUTTON_PRESS:
             state = FrontpanelCoreController.BUTTON_STATE_MAPPING_ID_TO_ENUM.get(core_event.data['state'])
             if state is not None:
@@ -122,6 +136,11 @@ class FrontpanelCoreController(FrontpanelController):
                 elif button == FrontpanelController.Buttons.SETUP:
                     self._authorized_mode_buttons[1] = state == FrontpanelController.ButtonStates.PRESSED
 
+    def _log_led_state(self, led_name):
+        state = self._led_states.get(led_name, 'UNKNOWN')
+        on = led_name in self._active_leds
+        logger.info('Led {0} state: {1} {2}'.format(led_name, state, 'ON' if on else 'OFF'))
+
     def start(self):
         super(FrontpanelCoreController, self).start()
         # Start polling/writing threads
@@ -129,10 +148,6 @@ class FrontpanelCoreController(FrontpanelController):
                                                   target=self._check_buttons,
                                                   interval=0.25)
         self._check_buttons_thread.start()
-        # TODO: Remove below statement once P1 detection is implemented
-        self._set_led(led=FrontpanelController.Leds.P1,
-                      on=True,
-                      mode=FrontpanelController.LedStates.SOLID)
 
     def stop(self):
         super(FrontpanelCoreController, self).stop()
@@ -190,15 +205,17 @@ class FrontpanelCoreController(FrontpanelController):
             self._set_led(led=FrontpanelController.Leds.LAN_GREEN,
                           on=True, mode=mode)
 
-    def report_serial_activity(self, serial_port, activity):
+    def _report_serial_activity(self, serial_port, activity):
         if serial_port != FrontpanelController.SerialPorts.P1:
             return
-        # TODO: Check connection on P1 port. If nothing connected, led should be off
         mode = FrontpanelController.LedStates.SOLID
-        if activity:
+        on = True
+        if activity is None:
+            on = False
+        elif activity:
             mode = FrontpanelController.LedStates.BLINKING_50
         self._set_led(led=FrontpanelController.Leds.P1,
-                      on=True, mode=mode)
+                      on=on, mode=mode)
 
     def _report_cloud_reachable(self, reachable):
         self._cloud = reachable

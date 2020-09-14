@@ -138,7 +138,7 @@ class FrontpanelClassicController(FrontpanelController):
         else:
             self._enabled_leds[FrontpanelController.Leds.ALIVE] = False
 
-    def report_serial_activity(self, serial_port, activity):
+    def _report_serial_activity(self, serial_port, activity):
         led = {FrontpanelController.SerialPorts.ENERGY: FrontpanelController.Leds.COMMUNICATION_1,
                FrontpanelController.SerialPorts.MASTER_API: FrontpanelController.Leds.COMMUNICATION_2}.get(serial_port)
         if led is None:

@@ -18,9 +18,15 @@ Module for the frontpanel
 from __future__ import absolute_import
 import logging
 import time
+from ioc import INJECTED, Inject
 from bus.om_bus_client import OMBusEvents
 from platform_utils import Hardware
 from gateway.daemon_thread import DaemonThread
+
+if False:  # MYPY
+    from typing import Optional
+    from gateway.hal.master_controller import MasterController
+    from power.power_communicator import PowerCommunicator
 
 logger = logging.getLogger("openmotics")
 
@@ -47,8 +53,8 @@ class FrontpanelController(object):
         SETUP = 'SETUP'
         RELAYS_1_8 = 'RELAYS_1_8'
         RELAYS_9_16 = 'RELAYS_9_16'
-        OUTPUTS_DIG_1_4 = 'OUTPUTS_DIG_1_4'
-        OUTPUTS_DIG_5_7 = 'OUTPUTS_DIG_5_7'
+        OUTPUTS_DIG_1_5 = 'OUTPUTS_DIG_1_5'
+        OUTPUTS_DIG_6_8 = 'OUTPUTS_DIG_6_8'
         OUTPUTS_ANA_1_4 = 'OUTPUTS_ANA_1_4'
         INPUTS_1_4 = 'INPUTS_1_4'
         POWER = 'POWER'
@@ -79,7 +85,11 @@ class FrontpanelController(object):
         ENERGY = 'ENERGY'
         P1 = 'P1'
 
-    def __init__(self):  # type: () -> None
+    @Inject
+    def __init__(self, master_controller=INJECTED, power_communicator=INJECTED):
+        # type: (MasterController, PowerCommunicator) -> None
+        self._master_controller = master_controller
+        self._power_communicator = power_communicator
         self._network_carrier = None
         self._network_activity = None
         self._network_bytes = 0
@@ -88,6 +98,8 @@ class FrontpanelController(object):
         self._authorized_mode_timeout = 0
         self._indicate = False
         self._indicate_timeout = 0
+        self._master_stats = 0, 0
+        self._power_stats = 0, 0
 
     @property
     def authorized_mode(self):
@@ -120,7 +132,7 @@ class FrontpanelController(object):
     def _report_network_activity(self, activity):
         raise NotImplementedError()
 
-    def report_serial_activity(self, serial_port, activity):
+    def _report_serial_activity(self, serial_port, activity):
         raise NotImplementedError()
 
     def _report_cloud_reachable(self, reachable):
@@ -165,6 +177,28 @@ class FrontpanelController(object):
                         self._network_activity = network_activity
         except Exception as exception:
             logger.error('Error while checking network activity: {0}'.format(exception))
+
+        # Monitor serial activity
+        try:
+            stats = self._master_controller.get_communication_statistics()
+            new_master_stats = (stats['bytes_read'], stats['bytes_written'])
+            activity = self._master_stats[0] != new_master_stats[0] or self._master_stats[1] != new_master_stats[1]
+            self._report_serial_activity(FrontpanelController.SerialPorts.MASTER_API, activity)
+            self._master_stats = new_master_stats
+
+            if self._power_communicator is None:
+                new_power_stats = 0, 0
+            else:
+                stats = self._power_communicator.get_communication_statistics()
+                new_power_stats = (stats['bytes_read'], stats['bytes_written'])
+            activity = self._power_stats[0] != new_power_stats[0] or self._power_stats[1] != new_power_stats[1]
+            self._report_serial_activity(FrontpanelController.SerialPorts.ENERGY, activity)
+            self._power_stats = new_power_stats
+
+            activity = None  # type: Optional[bool]  # TODO: Load P1/RS232 activity
+            self._report_serial_activity(FrontpanelController.SerialPorts.P1, activity)
+        except Exception as exception:
+            logger.error('Error while checking serial activity: {0}'.format(exception))
 
         # Clear indicate timeout
         if time.time() > self._indicate_timeout:
