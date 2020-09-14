@@ -87,7 +87,9 @@ class FrontpanelControllerCoreTest(unittest.TestCase):
             FrontpanelControllerCoreTest.LED_STATE[led] = (on, mode)
 
         from gateway.hal.frontpanel_controller_core import FrontpanelCoreController
-        SetUpTestInjections(master_communicator=Mock())
+        SetUpTestInjections(master_communicator=Mock(),
+                            master_controller=Mock(),
+                            power_communicator=Mock())
         controller = FrontpanelCoreController()
         controller._set_led = set_led
         return controller
