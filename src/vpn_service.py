@@ -49,6 +49,7 @@ if False:  # MYPY
     from typing import Any, Deque, Dict, Optional
 
 REBOOT_TIMEOUT = 900
+CHECK_CONNECTIVITY_TIMEOUT = 60
 DEFAULT_SLEEP_TIME = 30
 
 logger = logging.getLogger("openmotics")
@@ -362,7 +363,6 @@ class VPNService(object):
             self._message_client.add_event_handler(self._event_receiver)
             self._message_client.set_state_handler(self._check_state)
 
-        self._iterations = 0
         self._last_cycle = 0.0
         self._cloud_enabled = True
         self._sleep_time = 0.0  # type: Optional[float]
@@ -572,12 +572,13 @@ class VPNService(object):
                     self._clean_debug_dumps('energy')
                     self._clean_debug_dumps('master')
 
-                if self._iterations > 20 and self._cloud.get_last_connect() < time.time() - REBOOT_TIMEOUT:
-                    # We can't connect for over `REBOOT_TIMEOUT` seconds and we tried for at least 20 times.
-                    # Try to figure out whether the network stack works as expected
-                    if not VPNService.has_connectivity():
+                if self._cloud.get_last_connect() < time.time() - CHECK_CONNECTIVITY_TIMEOUT:
+                    connectivity = VPNService.has_connectivity()
+                    self._message_client.send_event(OMBusEvents.CONNECTIVITY, connectivity)
+                    if not connectivity and self._cloud.get_last_connect() < time.time() - REBOOT_TIMEOUT:
                         reboot_gateway()
-                self._iterations += 1
+                else:
+                    self._message_client.send_event(OMBusEvents.CONNECTIVITY, True)
                 # Open or close the VPN
                 self._set_vpn(feedback['open_vpn'])
 

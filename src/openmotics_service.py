@@ -52,7 +52,6 @@ if False:  # MYPY
     from gateway.group_action_controller import GroupActionController
     from gateway.watchdog import Watchdog
     from gateway.module_controller import ModuleController
-    from gateway.comm_led_controller import CommunicationLedController
     from gateway.hal.master_controller import MasterController
     from gateway.hal.frontpanel_controller import FrontpanelController
     from plugins.base import PluginController
@@ -146,7 +145,6 @@ class OpenmoticsService(object):
                 web_interface=INJECTED,  # type: WebInterface
                 watchdog=INJECTED,  # type: Watchdog
                 plugin_controller=INJECTED,  # type: PluginController
-                communication_led_controller=INJECTED,  # type: CommunicationLedController
                 event_sender=INJECTED,  # type: EventSender
                 thermostat_controller=INJECTED,  # type: ThermostatController
                 output_controller=INJECTED,  # type: OutputController
@@ -192,7 +190,6 @@ class OpenmoticsService(object):
         metrics_collector.start()
         web_service.start()
         frontpanel_controller.start()
-        communication_led_controller.start()
         event_sender.start()
         watchdog.start()
         plugin_controller.start()
@@ -226,7 +223,6 @@ class OpenmoticsService(object):
             metrics_controller.stop()
             thermostat_controller.stop()
             plugin_controller.stop()
-            communication_led_controller.stop()
             frontpanel_controller.stop()
             event_sender.stop()
             logger.info('Stopping OM core service... Done')

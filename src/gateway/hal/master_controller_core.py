@@ -87,6 +87,9 @@ class MasterCoreController(MasterController):
         )
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.error_information(), 0, lambda e: logger.info('Got master error: {0}'.format(Error(e))))
+            # TODO: Reduce flood of errors if something is wrong:
+            #  Log the first error immediately, then, if the same error occurs within 1 minute, just count it. When
+            #  the minute is over, log the amount of skipped errors (e.g. `X similar ERORR_CODE master errors were supressed`)
         )
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.ucan_module_information(), 0, lambda i: logger.info('Got ucan module information: {0}'.format(i)))
