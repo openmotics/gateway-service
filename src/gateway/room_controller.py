@@ -16,11 +16,13 @@
 Room BLL
 """
 from __future__ import absolute_import
+
 import logging
-from ioc import Injectable, Singleton
+
 from gateway.dto import RoomDTO
-from gateway.models import Room
-from gateway.mappers import RoomMapper, FloorMapper
+from gateway.mappers import FloorMapper, RoomMapper
+from gateway.models import Database, Room
+from ioc import Injectable, Singleton
 
 if False:  # MYPY
     from typing import List, Tuple
@@ -55,15 +57,16 @@ class RoomController(object):
 
     def save_rooms(self, rooms):  # type: (List[Tuple[RoomDTO, List[str]]]) -> None
         _ = self
-        for room_dto, fields in rooms:
-            if room_dto.in_use:
-                room = RoomMapper.dto_to_orm(room_dto, fields)
-                if 'floor' in fields:
-                    floor = None
-                    if room_dto.floor is not None:
-                        floor = FloorMapper.dto_to_orm(room_dto.floor, ['id'])
-                        floor.save()
-                    room.floor = floor
-                room.save()
-            else:
-                Room.delete().where(Room.number == room_dto.id).execute()
+        with Database.get_db().atomic():
+            for room_dto, fields in rooms:
+                if room_dto.in_use:
+                    room = RoomMapper.dto_to_orm(room_dto, fields)
+                    if 'floor' in fields:
+                        floor = None
+                        if room_dto.floor is not None:
+                            floor = FloorMapper.dto_to_orm(room_dto.floor, ['id'])
+                            floor.save()
+                        room.floor = floor
+                    room.save()
+                else:
+                    Room.delete().where(Room.number == room_dto.id).execute()

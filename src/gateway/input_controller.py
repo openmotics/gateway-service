@@ -47,7 +47,7 @@ class InputController(BaseController):
 
     def load_inputs(self):  # type: () -> List[InputDTO]
         inputs_dtos = []
-        for input_ in Input.select():
+        for input_ in list(Input.select()):
             input_dto = self._master_controller.load_input(input_id=input_.number)
             input_dto.room = input_.room.number if input_.room is not None else None
             input_dto.event_enabled = input_.event_enabled

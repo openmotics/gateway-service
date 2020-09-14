@@ -139,7 +139,7 @@ class OutputController(BaseController):
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
         output_dtos = []
-        for output in Output.select():
+        for output in list(Output.select()):
             output_dto = self._master_controller.load_output(output_id=output.number)
             output_dto.room = output.room.number if output.room is not None else None
             output_dtos.append(output_dto)

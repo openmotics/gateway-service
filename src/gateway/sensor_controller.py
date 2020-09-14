@@ -46,7 +46,7 @@ class SensorController(BaseController):
 
     def load_sensors(self):  # type: () -> List[SensorDTO]
         sensor_dtos = []
-        for sensor_ in Sensor.select():
+        for sensor_ in list(Sensor.select()):
             sensor_dto = self._master_controller.load_sensor(sensor_id=sensor_.number)
             sensor_dto.room = sensor_.room.number if sensor_.room is not None else None
             sensor_dtos.append(sensor_dto)

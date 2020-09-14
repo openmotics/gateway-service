@@ -16,32 +16,27 @@
 Tests for the room controller.
 """
 from __future__ import absolute_import
-import unittest
+
 import os
-import xmlrunner
 import tempfile
-from peewee import SqliteDatabase
-from ioc import SetTestMode
-from gateway.dto import RoomDTO, FloorDTO
-from gateway.models import Room, Floor
+import unittest
+
+import mock
+import xmlrunner
+from gateway.dto import FloorDTO, RoomDTO
+from gateway.models import Database, Floor, Room
 from gateway.room_controller import RoomController
+from ioc import SetTestMode
+from peewee import SqliteDatabase
 
 MODELS = [Room, Floor]
 
 
 class RoomControllerTest(unittest.TestCase):
-    _db_filename = None
-
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        cls._db_filename = tempfile.mktemp()
-        cls.test_db = SqliteDatabase(cls._db_filename)
-
-    @classmethod
-    def tearDownClass(cls):
-        if os.path.exists(cls._db_filename):
-            os.remove(cls._db_filename)
+        cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):
         self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
@@ -53,26 +48,27 @@ class RoomControllerTest(unittest.TestCase):
         self.test_db.close()
 
     def test_save_load(self):
-        controller = RoomController()
-        rooms = controller.load_rooms()
-        self.assertEqual(0, len(rooms))
-        room_dto_1 = RoomDTO(id=1, name='one')
-        controller.save_rooms([(room_dto_1, ['id', 'name'])])
-        rooms = controller.load_rooms()
-        self.assertEqual(1, len(rooms))
-        self.assertEqual(room_dto_1, rooms[0])
-        room_dto_2 = RoomDTO(id=2, name='two', floor=FloorDTO(id=1))
-        controller.save_rooms([(room_dto_2, ['id', 'name', 'floor'])])
-        rooms = controller.load_rooms()
-        self.assertEqual(2, len(rooms))
-        self.assertIn(room_dto_1, rooms)
-        self.assertIn(room_dto_2, rooms)
-        room_dto_1.name = ''
-        controller.save_rooms([(room_dto_1, ['id', 'name'])])
-        rooms = controller.load_rooms()
-        self.assertEqual(1, len(rooms))
-        self.assertNotIn(room_dto_1, rooms)
-        self.assertIn(room_dto_2, rooms)
+        with mock.patch.object(Database, 'get_db', return_value=self.test_db):
+            controller = RoomController()
+            rooms = controller.load_rooms()
+            self.assertEqual(0, len(rooms))
+            room_dto_1 = RoomDTO(id=1, name='one')
+            controller.save_rooms([(room_dto_1, ['id', 'name'])])
+            rooms = controller.load_rooms()
+            self.assertEqual(1, len(rooms))
+            self.assertEqual(room_dto_1, rooms[0])
+            room_dto_2 = RoomDTO(id=2, name='two', floor=FloorDTO(id=1))
+            controller.save_rooms([(room_dto_2, ['id', 'name', 'floor'])])
+            rooms = controller.load_rooms()
+            self.assertEqual(2, len(rooms))
+            self.assertIn(room_dto_1, rooms)
+            self.assertIn(room_dto_2, rooms)
+            room_dto_1.name = ''
+            controller.save_rooms([(room_dto_1, ['id', 'name'])])
+            rooms = controller.load_rooms()
+            self.assertEqual(1, len(rooms))
+            self.assertNotIn(room_dto_1, rooms)
+            self.assertIn(room_dto_2, rooms)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ Base Controller
 """
 from __future__ import absolute_import
 import logging
+import time
 from ioc import INJECTED, Inject
 from serial_utils import CommunicationTimedOutException
 from gateway.daemon_thread import DaemonThread
@@ -94,6 +95,7 @@ class BaseController(object):
                     name = structure.name
                     skip = structure.skip
 
+                    start = time.time()
                     logger.info('ORM sync ({0})'.format(orm_model.__name__))
 
                     ids = []
@@ -105,7 +107,8 @@ class BaseController(object):
                         orm_model.get_or_create(number=id_)  # type: ignore
                     orm_model.delete().where(orm_model.number.not_in(ids)).execute()  # type: ignore
 
-                    logger.info('ORM sync ({0}): completed'.format(orm_model.__name__))
+                    duration = time.time() - start
+                    logger.info('ORM sync ({0}): completed after {1:.1f}s'.format(orm_model.__name__, duration))
                 except CommunicationTimedOutException as ex:
                     logger.error('ORM sync ({0}): Failed: {1}'.format(orm_model.__name__, ex))
                 except Exception:
