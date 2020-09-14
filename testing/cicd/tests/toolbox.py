@@ -265,29 +265,6 @@ class Toolbox(object):
         data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
         assert 'o' in data['outputs']
 
-        versions = self.get_firmware_versions()
-        firmware = {}
-        master_firmware = os.environ.get('OPENMOTICS_MASTER_FIRMWARE')
-        if master_firmware and master_firmware != versions['M']:
-            logger.info('master firmware {} -> {}...'.format(versions['M'], master_firmware))
-            firmware['master'] = master_firmware
-        can_firmware = os.environ.get('OPENMOTICS_CAN_FIRMWARE')
-        if can_firmware and can_firmware != versions['C']:
-            logger.info('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
-            firmware['can'] = can_firmware
-        if firmware:
-            logger.info('updating firmware...')
-            for _ in range(8):
-                try:
-                    self.dut.get('/update_firmware', firmware)
-                    self.health_check(timeout=120)
-                    break
-                except Exception:
-                    logger.error('update failed, retrying')
-                    time.sleep(30)
-            versions = self.get_firmware_versions()
-        logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in versions.items())))
-
     def print_logs(self):
         # type: () -> None
         try:
