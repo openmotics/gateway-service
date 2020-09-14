@@ -170,14 +170,17 @@ class FrontpanelCoreController(FrontpanelController):
                 self._authorized_mode_buttons_pressed_since = None
 
     def _report_carrier(self, carrier):
+        # type: (bool) -> None
         self._carrier = carrier
         self._update_lan_leds()
 
     def _report_connectivity(self, connectivity):
+        # type: (bool) -> None
         self._connectivity = connectivity
         self._update_lan_leds()
 
     def _report_network_activity(self, activity):
+        # type: (bool) -> None
         self._activity = activity
         self._update_lan_leds()
 
@@ -202,6 +205,7 @@ class FrontpanelCoreController(FrontpanelController):
                           on=True, mode=mode)
 
     def _report_serial_activity(self, serial_port, activity):
+        # type: (str, Optional[bool]) -> None
         if serial_port != FrontpanelController.SerialPorts.P1:
             return
         mode = FrontpanelController.LedStates.SOLID
@@ -214,10 +218,12 @@ class FrontpanelCoreController(FrontpanelController):
                       on=on, mode=mode)
 
     def _report_cloud_reachable(self, reachable):
+        # type: (bool) -> None
         self._cloud = reachable
         self._update_cloud_led()
 
     def _report_vpn_open(self, vpn_open):
+        # type: (bool) -> None
         self._vpn = vpn_open
         self._update_cloud_led()
 

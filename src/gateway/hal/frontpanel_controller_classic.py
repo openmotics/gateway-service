@@ -127,18 +127,22 @@ class FrontpanelClassicController(FrontpanelController):
         self._enabled_leds[led] = not currently_enabled
 
     def _report_carrier(self, carrier):
+        # type: (bool) -> None
         self._enabled_leds[FrontpanelController.Leds.STATUS_RED] = not carrier
 
     def _report_connectivity(self, connectivity):
+        # type: (bool) -> None
         pass  # No support for connectivity
 
     def _report_network_activity(self, activity):
+        # type: (bool) -> None
         if activity:
             self._toggle_led(FrontpanelController.Leds.ALIVE)
         else:
             self._enabled_leds[FrontpanelController.Leds.ALIVE] = False
 
     def _report_serial_activity(self, serial_port, activity):
+        # type: (str, Optional[bool]) -> None
         led = {FrontpanelController.SerialPorts.ENERGY: FrontpanelController.Leds.COMMUNICATION_1,
                FrontpanelController.SerialPorts.MASTER_API: FrontpanelController.Leds.COMMUNICATION_2}.get(serial_port)
         if led is None:
@@ -149,9 +153,11 @@ class FrontpanelClassicController(FrontpanelController):
             self._enabled_leds[led] = False
 
     def _report_cloud_reachable(self, reachable):
+        # type: (bool) -> None
         self._enabled_leds[FrontpanelController.Leds.CLOUD] = reachable
 
     def _report_vpn_open(self, vpn_open):
+        # type: (bool) -> None
         self._enabled_leds[FrontpanelController.Leds.VPN] = vpn_open
 
     def _write_leds(self):

@@ -124,21 +124,27 @@ class FrontpanelController(object):
             self._check_network_activity_thread.stop()
 
     def _report_carrier(self, carrier):
+        # type: (bool) -> None
         raise NotImplementedError()
 
     def _report_connectivity(self, connectivity):
+        # type: (bool) -> None
         raise NotImplementedError()
 
     def _report_network_activity(self, activity):
+        # type: (bool) -> None
         raise NotImplementedError()
 
     def _report_serial_activity(self, serial_port, activity):
+        # type: (str, Optional[bool]) -> None
         raise NotImplementedError()
 
     def _report_cloud_reachable(self, reachable):
+        # type: (bool) -> None
         raise NotImplementedError()
 
     def _report_vpn_open(self, vpn_open):
+        # type: (bool) -> None
         raise NotImplementedError()
 
     def indicate(self):
