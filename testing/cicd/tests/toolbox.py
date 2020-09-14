@@ -63,6 +63,16 @@ class Client(object):
 
     def get(self, path, params=None, success=True, use_token=True, timeout=30):
         # type: (str, Dict[str,Any], bool, bool, float) -> Any
+        return self._request(requests.get, path, params=params,
+                             success=success, use_token=use_token, timeout=timeout)
+
+    def post(self, path, data=None, files=None, success=True, use_token=True, timeout=30):
+        # type: (str, Dict[str,Any], Dict[str,Any], bool, bool, float) -> Any
+        return self._request(requests.post, path, data=data, files=files,
+                             success=success, use_token=use_token, timeout=timeout)
+
+    def _request(self, f, path, params=None, data=None, files=None, success=True, use_token=True, timeout=30):
+        # type: (Any, str, Dict[str,Any], Dict[str,Any], Dict[str,Any], bool, bool, float) -> Any
         params = params or {}
         headers = requests.utils.default_headers()
         uri = 'https://{}{}'.format(self._host, path)
@@ -81,7 +91,8 @@ class Client(object):
         since = time.time()
         while since > time.time() - timeout:
             try:
-                response = requests.get(uri, params=params, headers=headers, **self._default_kwargs)
+                response = f(uri, params=params, data=data, files=files,
+                             headers=headers, **self._default_kwargs)
                 assert response.status_code != 404, 'not found {}'.format(path)
                 data = response.json()
                 if success and 'success' in data:
