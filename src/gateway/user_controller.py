@@ -18,20 +18,17 @@ and authenticating users.
 """
 
 from __future__ import absolute_import
-import sqlite3
 import uuid
 import time
 import six
-from random import randint
 from ioc import Injectable, Inject, Singleton, INJECTED
 from gateway.models import User
 from gateway.mappers.user import UserMapper
 from gateway.dto.user import UserDTO
 from gateway.enums import UserEnums
 
-if False: # MYPY
+if False:  # MYPY
     from typing import Tuple, List, Optional, Dict
-
 
 
 @Injectable.named('user_controller')
@@ -51,21 +48,19 @@ class UserController(object):
 
         # Create the user for the cloud
         cloud_user_dto = UserDTO(
-            username=self._config['username'].lower(), 
+            username=self._config['username'].lower(),
             accepted_terms=UserController.TERMS_VERSION
         )
         cloud_user_dto.set_password(self._config['password'])
         self.save_users(users=[(cloud_user_dto, ['username', 'password', 'accepted_terms'])])
 
-
     def save_user(self, user_dto, fields):
         # type: (UserDTO, List[str]) -> None
         """ Saves one instance of a user with the defined fields in param fields """
+        _ = self
         user_orm = UserMapper.dto_to_orm(user_dto, fields)
-        self._validate(user_orm)
+        UserController._validate(user_orm)
         user_orm.save()
-
-
 
     def save_users(self, users):
         # type: (List[Tuple[UserDTO, List[str]]]) -> None
@@ -76,6 +71,7 @@ class UserController(object):
     def load_users(self):
         # type: () -> List[UserDTO]
         """  Returns a list of UserDTOs with all the usernames """
+        _ = self
         users = []
         for user_orm in User.select():
             user_dto = UserMapper.orm_to_dto(user_orm)
@@ -83,11 +79,10 @@ class UserController(object):
             users.append(user_dto)
         return users
 
-
-    def get_number_of_users(self):
+    @staticmethod
+    def get_number_of_users():
         # type: () -> int
         """ Return the number of registred users """
-
         return User.select().count()
 
     def remove_user(self, user_dto):
@@ -97,7 +92,7 @@ class UserController(object):
         username = user_dto.username.lower()
 
         # check if the removed user is not the last admin user of the system
-        if self.get_number_of_users() <= 1:
+        if UserController.get_number_of_users() <= 1:
             raise Exception(UserEnums.DeleteErrors.LAST_ACCOUNT)
         User.delete().where(User.username == username).execute()
 
@@ -134,17 +129,15 @@ class UserController(object):
         if user_orm.accepted_terms == UserController.TERMS_VERSION:
             return True, self._gen_token(user_orm.username, time.time() + timeout)
         if accept_terms is True:
-            user_orm.accepted_terms=UserController.TERMS_VERSION
+            user_orm.accepted_terms = UserController.TERMS_VERSION
             user_orm.save()
             return True, self._gen_token(user_orm.username, time.time() + timeout)
         return False, UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED
-
 
     def logout(self, token):
         # type: (str) -> None
         """  Removes the token from the controller.  """
         self._tokens.pop(token, None)
-
 
     def _gen_token(self, username, valid_until):
         # type: (str, float) -> str
@@ -168,7 +161,8 @@ class UserController(object):
             timed_out = self._tokens[token][1] >= time.time()
             return timed_out
 
-    def _validate(self, user):
+    @staticmethod
+    def _validate(user):
         # type: (User) -> None
         """  Checks if the user object is a valid object to store  """
         if user.username is None or not isinstance(user.username, six.string_types) or user.username.strip() == '':
@@ -177,5 +171,5 @@ class UserController(object):
             raise RuntimeError('A user must have a password')
         if user.accepted_terms is None or \
             not isinstance(user.accepted_terms, six.integer_types) or \
-            0 < user.accepted_terms < UserController.TERMS_VERSION:
+                0 < user.accepted_terms < UserController.TERMS_VERSION:
             raise RuntimeError('A user must have a valid "accepted_terms" fields')
