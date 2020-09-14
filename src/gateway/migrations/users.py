@@ -14,16 +14,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
-import json
 import logging
 import constants
-from ioc import INJECTED, Inject
 from gateway.migrations.base_migrator import BaseMigrator
-from gateway.user_controller import UserController
 from gateway.models import User
-
-if False:  # MYPY
-    from gateway.scheduling import SchedulingController
 
 logger = logging.getLogger('openmotics')
 
@@ -33,9 +27,8 @@ class UserMigrator(BaseMigrator):
     MIGRATION_KEY = 'users'
 
     @classmethod
-    @Inject
-    def _migrate(cls, user_controller=INJECTED):
-        # type: (UserController) -> None
+    def _migrate(cls):
+        # type: () -> None
         old_sqlite_db = constants.get_config_database_file()
         if os.path.exists(old_sqlite_db):
             import sqlite3
@@ -45,11 +38,11 @@ class UserMigrator(BaseMigrator):
                                          isolation_level=None)
             cursor = connection.cursor()
             for row in cursor.execute('SELECT id, username, password, accepted_terms FROM users;'):
-                user_id = row[0]
-                user = User.get_or_none(id=user_id)
+                username = row[1]
+                user = User.get_or_none(username=username)
                 if user is None:
                     user = User(
-                        username=row[1],
+                        username=username,
                         password=row[2],
                         accepted_terms=row[3]
                     )
