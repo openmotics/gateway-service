@@ -258,11 +258,11 @@ class Toolbox(object):
         firmware = {}
         master_firmware = os.environ.get('OPENMOTICS_MASTER_FIRMWARE')
         if master_firmware and master_firmware != versions['M']:
-            logger.debug('master firmware {} -> {}...'.format(versions['M'], master_firmware))
+            logger.info('master firmware {} -> {}...'.format(versions['M'], master_firmware))
             firmware['master'] = master_firmware
         can_firmware = os.environ.get('OPENMOTICS_CAN_FIRMWARE')
         if can_firmware and can_firmware != versions['C']:
-            logger.debug('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
+            logger.info('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
             firmware['can'] = can_firmware
         if firmware:
             logger.info('updating firmware...')
