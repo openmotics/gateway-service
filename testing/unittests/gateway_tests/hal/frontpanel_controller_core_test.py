@@ -33,9 +33,9 @@ class FrontpanelControllerCoreTest(unittest.TestCase):
 
     def test_serial_activity(self):
         controller = FrontpanelControllerCoreTest._get_controller()
-        controller.report_serial_activity(FrontpanelController.SerialPorts.P1, False)
+        controller._report_serial_activity(FrontpanelController.SerialPorts.P1, False)
         self.assertLed(FrontpanelController.Leds.P1, True, FrontpanelController.LedStates.SOLID)
-        controller.report_serial_activity(FrontpanelController.SerialPorts.P1, True)
+        controller._report_serial_activity(FrontpanelController.SerialPorts.P1, True)
         self.assertLed(FrontpanelController.Leds.P1, True, FrontpanelController.LedStates.BLINKING_50)
 
     def test_report_carrier(self):

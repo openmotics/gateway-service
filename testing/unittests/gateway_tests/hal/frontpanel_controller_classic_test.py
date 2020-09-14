@@ -36,7 +36,7 @@ class FrontpanelControllerClassicTest(unittest.TestCase):
                                     (True, True),
                                     (False, False),
                                     (False, False)]:
-            controller.report_serial_activity(FrontpanelController.SerialPorts.MASTER_API, activity)
+            controller._report_serial_activity(FrontpanelController.SerialPorts.MASTER_API, activity)
             self.assertEqual(led_state, controller._enabled_leds[FrontpanelController.Leds.COMMUNICATION_2])
 
     def test_report_carrier(self):

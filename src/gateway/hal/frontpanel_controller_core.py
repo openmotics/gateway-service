@@ -18,6 +18,7 @@ Module for the frontpanel
 from __future__ import absolute_import
 import logging
 import time
+from threading import Lock
 from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.daemon_thread import DaemonThread
 from gateway.hal.frontpanel_controller import FrontpanelController
@@ -26,7 +27,7 @@ from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.events import Event as MasterCoreEvent
 
 if False:  # MYPY
-    from typing import Any, Dict, Set, Tuple, Optional
+    from typing import Any, Dict, Tuple, Optional
     from master.core.core_communicator import CoreCommunicator
 
 logger = logging.getLogger("openmotics")
@@ -84,8 +85,8 @@ class FrontpanelCoreController(FrontpanelController):
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
         )
-        self._led_states = {}  # type: Dict[str, str]
-        self._active_leds = set()  # type: Set[str]
+        self._led_states = {}  # type: Dict[str, LedStateTracker]
+        self._led_event_lock = Lock()
         self._carrier = True
         self._connectivity = True
         self._activity = False
@@ -99,32 +100,32 @@ class FrontpanelCoreController(FrontpanelController):
 
     def _handle_event(self, data):
         # type: (Dict[str, Any]) -> None
+        # From both the LED_BLINK and LED_ON event, the LED_ON event will always be send first
         core_event = MasterCoreEvent(data)
         if core_event.type == MasterCoreEvent.Types.LED_BLINK:
-            chip = core_event.data['chip']
-            if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM:
-                for led_id in range(16):
-                    led_name = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[chip].get(led_id)
-                    current_state = self._led_states.get(led_name)
-                    new_state = FrontpanelController.LedStates.OFF
-                    if led_name in self._active_leds:
-                        new_state = core_event.data['leds'][led_id]
-                    if new_state != current_state:
-                        self._log_led_state(led_name)
-                        self._led_states[led_name] = new_state
+            with self._led_event_lock:
+                chip = core_event.data['chip']
+                if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM:
+                    for led_id in range(16):
+                        led_name = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[chip].get(led_id)
+                        if led_name is None:
+                            continue
+                        state_tracker = self._led_states.setdefault(led_name, LedStateTracker(led_name))
+                        state_tracker.set_mode(core_event.data['leds'][led_id])
+                        changed, state = state_tracker.get_state()
+                        if changed:
+                            logger.info('Led {0} state: {1}'.format(led_name, state))
         elif core_event.type == MasterCoreEvent.Types.LED_ON:
-            chip = core_event.data['chip']
-            if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM:
-                for led_id in range(16):
-                    led_name = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[chip].get(led_id)
-                    new_state = core_event.data['leds'].get(led_id, MasterCoreEvent.LedStates.OFF)
-                    if new_state == MasterCoreEvent.LedStates.OFF:
-                        if led_name in self._active_leds:
-                            self._active_leds.discard(led_name)
-                            self._log_led_state(led_name)
-                    elif led_name not in self._active_leds:
-                        self._active_leds.add(led_name)
-                        self._log_led_state(led_name)
+            with self._led_event_lock:
+                chip = core_event.data['chip']
+                if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM:
+                    for led_id in range(16):
+                        led_name = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[chip].get(led_id)
+                        if led_name is None:
+                            continue
+                        state_tracker = self._led_states.setdefault(led_name, LedStateTracker(led_name))
+                        event_state = core_event.data['leds'].get(led_id, MasterCoreEvent.LedStates.OFF)
+                        state_tracker.set_on(event_state != MasterCoreEvent.LedStates.OFF)
         elif core_event.type == MasterCoreEvent.Types.BUTTON_PRESS:
             state = FrontpanelCoreController.BUTTON_STATE_MAPPING_ID_TO_ENUM.get(core_event.data['state'])
             if state is not None:
@@ -135,11 +136,6 @@ class FrontpanelCoreController(FrontpanelController):
                     self._authorized_mode_buttons[0] = state == FrontpanelController.ButtonStates.PRESSED
                 elif button == FrontpanelController.Buttons.SETUP:
                     self._authorized_mode_buttons[1] = state == FrontpanelController.ButtonStates.PRESSED
-
-    def _log_led_state(self, led_name):
-        state = self._led_states.get(led_name, 'UNKNOWN')
-        on = led_name in self._active_leds
-        logger.info('Led {0} state: {1} {2}'.format(led_name, state, 'ON' if on else 'OFF'))
 
     def start(self):
         super(FrontpanelCoreController, self).start()
@@ -257,3 +253,37 @@ class FrontpanelCoreController(FrontpanelController):
                                                       extra_parameter=extra_parameter,
                                                       log=False)
             self._led_drive_states[led] = on, mode
+
+
+class LedStateTracker(object):
+    def __init__(self, led_name):
+        self._led_name = led_name
+        self._on = None  # type: Optional[bool]
+        self._mode = None  # type: Optional[str]
+        self._change_pending = False
+
+    def set_on(self, on):
+        # type: (bool) -> None
+        if self._on != on:
+            self._change_pending = True
+        self._on = on
+
+    def set_mode(self, mode):
+        # type: (str) -> None
+        if self._mode != mode:
+            self._change_pending = True
+        self._mode = mode
+        if self._mode == FrontpanelController.LedStates.OFF:
+            if self._on:
+                self._change_pending = True
+            self._on = False
+
+    def get_state(self):
+        # type: () -> Tuple[bool, str]
+        if not self._on:
+            state = FrontpanelController.LedStates.OFF
+        else:
+            state = self._mode if self._mode else FrontpanelController.LedStates.SOLID
+        return_data = self._change_pending, state
+        self._change_pending = False
+        return return_data
