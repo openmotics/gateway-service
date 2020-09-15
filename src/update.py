@@ -414,7 +414,7 @@ def update(version, expected_md5):
 
         gateway_os = FIRMWARE_FILES['gateway_os']
         if os.path.exists(gateway_os):
-            version = version_mapping['gateway_os']
+            version = version_mapping.get('gateway_os')
             logger.info(' -> Updating Gateway OS to v{0}'.format(version))
             error = update_gateway_os(gateway_os, version)
             if error:
@@ -422,7 +422,7 @@ def update(version, expected_md5):
 
         gateway_service = FIRMWARE_FILES['gateway_service']
         if os.path.exists(gateway_service):
-            version = version_mapping['gateway_service']
+            version = version_mapping.get('gateway_service')
             logger.info(' -> Updating Gateway service to v{0}'.format(version))
             error = update_gateway_backend(gateway_service, date, version)
             if error:
@@ -431,7 +431,7 @@ def update(version, expected_md5):
         master_type = get_master_type()
         master_firmware = FIRMWARE_FILES[master_type]
         if os.path.exists(master_firmware):
-            version = version_mapping[master_type]
+            version = version_mapping.get(master_type)
             logger.info(' -> Updating Master firmware to v{0}'.format(version))
             error = update_master_firmware(master_type, master_firmware, version)
             if error:
@@ -440,7 +440,7 @@ def update(version, expected_md5):
         for module, filename, arguments in [('energy', FIRMWARE_FILES['energy'], []),
                                             ('power', FIRMWARE_FILES['power'], ['--8'])]:
             if os.path.exists(filename):
-                version = version_mapping[module]
+                version = version_mapping.get(module)
                 logger.info(' -> Updating {0} firmware to v{1}'.format(module, version))
                 error = update_energy_firmware(module, filename, version, arguments)
                 if error:
@@ -448,7 +448,7 @@ def update(version, expected_md5):
 
         for module in MODULE_TYPES:
             module_firmware = FIRMWARE_FILES[module]
-            version = version_mapping[module]
+            version = version_mapping.get(module)
             if os.path.exists(module_firmware):
                 logger.info(' -> Updating {0} firmware to v{1}'.format(module, version))
                 error = update_module_firmware(module, module_firmware, version)
@@ -460,7 +460,7 @@ def update(version, expected_md5):
 
         gateway_frontend = FIRMWARE_FILES['gateway_frontend']
         if os.path.exists(gateway_frontend):
-            version = version_mapping['gateway_frontend']
+            version = version_mapping.get('gateway_frontend')
             logger.info(' -> Updating Gateway frontend to v{0}'.format(version))
             error = update_gateway_frontend(gateway_frontend, date, version)
             if error:
