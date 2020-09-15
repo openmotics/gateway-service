@@ -473,6 +473,7 @@ def update(version, expected_md5):
         check_gateway_health()
 
     except Exception as exc:
+        logger.exception('Unexpected exception updating')
         errors.append(exc)
         # TODO: rollback
     finally:
