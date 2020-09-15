@@ -77,15 +77,20 @@ MODULE_TYPES = {'can': 'c',
 
 def cmd(command, **kwargs):
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs)
+    output, ret = cmd_wait_output(proc)
+    if ret != 0:
+        raise Exception('Command {} failed'.format(command))
+    return output
+
+
+def cmd_wait_output(proc):
     output = ''
     for line in proc.stdout:
         if line:
             logger.debug(line.rstrip('\n'))
         output += line
     ret = proc.wait()
-    if ret != 0:
-        raise Exception('Command {} failed'.format(command))
-    return output
+    return output, ret != 0
 
 
 def extract_legacy_update(update_file, expected_md5):
@@ -159,20 +164,21 @@ def download_firmware(firmware_type, url, expected_sha256):
 
 def check_services():
     for service in SUPERVISOR_SERVICES:
-        status_output = subprocess.check_output(['supervisorctl', 'status', service])
-        if 'no such process' in status_output.encode().lower():
+        status_output, _ = cmd_wait_output(System.run_service_action('status', service))
+        if 'no such process' in status_output.decode('utf-8').lower():
             raise Exception('Could not find service "{}"'.format(service))
 
 
 def stop_services():
     for service in SUPERVISOR_SERVICES:
-        cmd(['supervisorctl', 'stop', service])
+        proc = System.run_service_action('stop', service)
+        proc.wait()
 
 
 def start_services():
     for service in SUPERVISOR_SERVICES:
         try:
-            cmd(['supervisorctl', 'start', service])
+            cmd_wait_output(System.run_service_action('start', service))
         except Exception:
             logger.warning('Starting {} failed'.format(service))
 
@@ -246,7 +252,7 @@ def update_master_firmware(master_type, hexfile, version):
         arguments += ['--master-firmware-core', hexfile]
     try:
         output = subprocess.check_output(['python', master_tool, '--version'])
-        current_version, _, _ = output.decode().rstrip().partition(' ')
+        current_version, _, _ = output.decode('utf-8').rstrip().partition(' ')
         if current_version == version:
             logger.info('Master is already v{}, skipped'.format(version))
         else:

@@ -1,11 +1,13 @@
 from __future__ import absolute_import
 
+import hashlib
 import logging
 import os
 import sys
+import time
 
 from hypothesis import Verbosity, settings
-from pytest import fixture
+from pytest import fixture, mark
 from requests.packages import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -35,8 +37,68 @@ def toolbox_session():
     return toolbox
 
 
+@fixture(scope='session')
+def software_update(toolbox_session):
+    toolbox = toolbox_session
+
+    update = os.environ.get('OPENMOTICS_UPDATE')
+    if update:
+        try:
+            logger.info('applying update {}...'.format(update))
+            with open(update, 'rb') as fd:
+                hasher = hashlib.md5()
+                hasher.update(fd.read())
+                md5 = hasher.hexdigest()
+            toolbox.dut.post('/update', {'version': '0.0.0', 'md5': md5},
+                             files={'update_data': open(update, 'rb')})
+            logger.info('waiting for update to complete...')
+            time.sleep(120)
+            toolbox.health_check(timeout=120)
+        finally:
+            toolbox.health_check(timeout=120)
+            toolbox.dut.login()
+            logger.debug('update output')
+            output = toolbox.dut.get('/get_update_output')['output']
+            for log in output:
+                print(log)
+
+    logger.info('gateway {}'.format(toolbox.get_gateway_version()))
+
+
+@fixture(scope='session')
+def firmware_updates(toolbox_session):
+    toolbox = toolbox_session
+
+    if os.environ.get('OPENMOTICS_UPDATE'):
+        logger.debug('firmware updates, skipped')
+        return
+
+    versions = toolbox.get_firmware_versions()
+    firmware = {}
+    master_firmware = os.environ.get('OPENMOTICS_MASTER_FIRMWARE')
+    if master_firmware and master_firmware != versions['M']:
+        logger.info('master firmware {} -> {}...'.format(versions['M'], master_firmware))
+        firmware['master'] = master_firmware
+    can_firmware = os.environ.get('OPENMOTICS_CAN_FIRMWARE')
+    if can_firmware and can_firmware != versions['C']:
+        logger.info('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
+        firmware['can'] = can_firmware
+    if firmware:
+        logger.info('updating firmware...')
+        for _ in range(8):
+            try:
+                toolbox.dut.get('/update_firmware', firmware)
+                toolbox.health_check(timeout=120)
+                break
+            except Exception:
+                logger.error('update failed, retrying')
+                time.sleep(30)
+        versions = toolbox.get_firmware_versions()
+    logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in versions.items())))
+
+
 @fixture
-def toolbox(toolbox_session):
+def toolbox(toolbox_session, software_update, firmware_updates):
     toolbox = toolbox_session
     toolbox.tester.get('/plugins/syslog_receiver/reset', success=False)
     yield toolbox
