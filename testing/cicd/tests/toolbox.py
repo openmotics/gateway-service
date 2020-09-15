@@ -63,6 +63,16 @@ class Client(object):
 
     def get(self, path, params=None, success=True, use_token=True, timeout=30):
         # type: (str, Dict[str,Any], bool, bool, float) -> Any
+        return self._request(requests.get, path, params=params,
+                             success=success, use_token=use_token, timeout=timeout)
+
+    def post(self, path, data=None, files=None, success=True, use_token=True, timeout=30):
+        # type: (str, Dict[str,Any], Dict[str,Any], bool, bool, float) -> Any
+        return self._request(requests.post, path, data=data, files=files,
+                             success=success, use_token=use_token, timeout=timeout)
+
+    def _request(self, f, path, params=None, data=None, files=None, success=True, use_token=True, timeout=30):
+        # type: (Any, str, Dict[str,Any], Dict[str,Any], Dict[str,Any], bool, bool, float) -> Any
         params = params or {}
         headers = requests.utils.default_headers()
         uri = 'https://{}{}'.format(self._host, path)
@@ -81,7 +91,8 @@ class Client(object):
         since = time.time()
         while since > time.time() - timeout:
             try:
-                response = requests.get(uri, params=params, headers=headers, **self._default_kwargs)
+                response = f(uri, params=params, data=data, files=files,
+                             headers=headers, **self._default_kwargs)
                 assert response.status_code != 404, 'not found {}'.format(path)
                 data = response.json()
                 if success and 'success' in data:
@@ -254,29 +265,6 @@ class Toolbox(object):
         data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
         assert 'o' in data['outputs']
 
-        versions = self.get_firmware_versions()
-        firmware = {}
-        master_firmware = os.environ.get('OPENMOTICS_MASTER_FIRMWARE')
-        if master_firmware and master_firmware != versions['M']:
-            logger.info('master firmware {} -> {}...'.format(versions['M'], master_firmware))
-            firmware['master'] = master_firmware
-        can_firmware = os.environ.get('OPENMOTICS_CAN_FIRMWARE')
-        if can_firmware and can_firmware != versions['C']:
-            logger.info('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
-            firmware['can'] = can_firmware
-        if firmware:
-            logger.info('updating firmware...')
-            for _ in range(8):
-                try:
-                    self.dut.get('/update_firmware', firmware)
-                    self.health_check(timeout=120)
-                    break
-                except Exception:
-                    logger.error('update failed, retrying')
-                    time.sleep(30)
-            versions = self.get_firmware_versions()
-        logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in versions.items())))
-
     def print_logs(self):
         # type: () -> None
         try:
@@ -330,6 +318,10 @@ class Toolbox(object):
         assert self.dut._auth
         user_data = {'username': self.dut._auth[0], 'password': self.dut._auth[1]}
         self.dut.get('/create_user', params=user_data, use_token=False, success=success)
+
+    def get_gateway_version(self):
+        # type: () -> str
+        return self.dut.get('/get_version')['gateway']
 
     def get_firmware_versions(self):
         # type: () -> Dict[str,str]
