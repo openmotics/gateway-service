@@ -132,24 +132,29 @@ def get_module_firmware_version(module_address, version, power_communicator):
     """
     raw_version = power_communicator.do_command(module_address, power_api.get_version(version))
     if version == power_api.P1_CONCENTRATOR:
-        return '{0}.{1}.{2} ({3})'.format(raw_version[1], raw_version[2], raw_version[3], raw_version[0])
+        return '{0}.{1}.{2}'.format(raw_version[1], raw_version[2], raw_version[3]), str(raw_version[0])
     else:
         cleaned_version = raw_version[0].split('\x00', 1)[0]
         parsed_version = cleaned_version.split('_')
         if len(parsed_version) != 4:
-            return cleaned_version
-        return '{0}.{1}.{2} ({3})'.format(parsed_version[1], parsed_version[2], parsed_version[3], parsed_version[0])
+            return cleaned_version, None
+        return '{0}.{1}.{2}'.format(parsed_version[1], parsed_version[2], parsed_version[3]), str(parsed_version[0])
 
 
-def bootload_power_module(module_address, hex_file, power_communicator):
+def bootload_power_module(module_address, hex_file, power_communicator, version):
     """
     Bootload a 8 port power module.
 
     :param module_address: The address of a power module (integer).
     :param hex_file: The filename of the hex file to write.
     :param power_communicator: Communication with the power modules.
+    :param version: Version of the provided hexfile
     """
-    logger.info('P{0} - Version: {1}'.format(module_address, get_module_firmware_version(module_address, power_api.POWER_MODULE, power_communicator)))
+    firmware_version, hardware_version = get_module_firmware_version(module_address, power_api.POWER_MODULE, power_communicator)
+    logger.info('P{0} - Version: {1} ({2})'.format(module_address, firmware_version, hardware_version))
+    if firmware_version == version:
+        logger.info('P{0} - Already up-to-date. Skipping')
+        return
     logger.info('P{0} - Start bootloading'.format(module_address))
     reader = HexReader(hex_file)
 
@@ -177,15 +182,20 @@ def bootload_power_module(module_address, hex_file, power_communicator):
     logger.info('P{0} - Done'.format(module_address))
 
 
-def bootload_energy_module(module_address, hex_file, power_communicator):
+def bootload_energy_module(module_address, hex_file, power_communicator, version):
     """
     Bootload a 12 port power module.
 
     :param module_address: The address of a power module (integer).
     :param hex_file: The filename of the hex file to write.
     :param power_communicator: Communication with the power modules.
+    :param version: Version of the provided hexfile
     """
-    logger.info('E{0} - Version: {1}'.format(module_address, get_module_firmware_version(module_address, power_api.ENERGY_MODULE, power_communicator)))
+    firmware_version, hardware_version = get_module_firmware_version(module_address, power_api.ENERGY_MODULE, power_communicator)
+    logger.info('E{0} - Version: {1} ({2})'.format(module_address, firmware_version, hardware_version))
+    if firmware_version == version:
+        logger.info('E{0} - Already up-to-date. Skipping')
+        return
     logger.info('E{0} - Start bootloading'.format(module_address))
 
     try:
@@ -235,10 +245,14 @@ def bootload_energy_module(module_address, hex_file, power_communicator):
     logger.info('E{0} - Done'.format(module_address))
 
 
-def bootload_p1_concentrator(module_address, hex_file, power_communicator):
+def bootload_p1_concentrator(module_address, hex_file, power_communicator, version):
     """ Bootload a P1 Concentrator module """
 
-    logger.info('C{0} - Version: {1}'.format(module_address, get_module_firmware_version(module_address, power_api.P1_CONCENTRATOR, power_communicator)))
+    firmware_version, hardware_version = get_module_firmware_version(module_address, power_api.P1_CONCENTRATOR, power_communicator)
+    logger.info('C{0} - Version: {1} ({2})'.format(module_address, firmware_version, hardware_version))
+    if firmware_version == version:
+        logger.info('C{0} - Already up-to-date. Skipping')
+        return
     logger.info('C{0} - Start bootloading'.format(module_address))
 
     logger.info('C{0} - Going to bootloader'.format(module_address))
@@ -269,6 +283,8 @@ def main():
                         help='show the serial output')
     parser.add_argument('--scan', dest='scan', action='store_true',
                         help='Scan the energy bus for modules')
+    parser.add_argument('--version', dest='firmware_version', required=False,
+                        help='version of the provided hex file')
 
     args = parser.parse_args()
 
@@ -308,11 +324,11 @@ def main():
     def _bootload(_module, _module_address, filename):
         try:
             if version == _module['version'] == power_api.POWER_MODULE:
-                bootload_power_module(_module_address, filename, communicator)
+                bootload_power_module(_module_address, filename, communicator, args.firmware_version)
             elif version == _module['version'] == power_api.ENERGY_MODULE:
-                bootload_energy_module(_module_address, filename, communicator)
+                bootload_energy_module(_module_address, filename, communicator, args.firmware_version)
             elif version == _module['version'] == power_api.P1_CONCENTRATOR:
-                bootload_p1_concentrator(_module_address, filename, communicator)
+                bootload_p1_concentrator(_module_address, filename, communicator, args.firmware_version)
         except CommunicationTimedOutException:
             logger.warning('E{0} - Module unavailable. Skipping...'.format(address))
         except Exception:

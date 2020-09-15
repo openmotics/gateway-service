@@ -57,11 +57,13 @@ def get_communicator(master_communicator=INJECTED):
 
 def main():
     supported_modules = ['O', 'R', 'D', 'I', 'T', 'C']
+    supported_modules_gen3 = ['O3', 'R3', 'D3', 'I3', 'T3', 'C3']
+    all_supported_modules = supported_modules + supported_modules_gen3
 
     parser = argparse.ArgumentParser(description='Tool to bootload the slave modules.')
 
-    parser.add_argument('-t', '--type', dest='type', choices=supported_modules + [m.lower() for m in supported_modules], required=True,
-                        help='The type of module to bootload (choices: {0})'.format(', '.join(supported_modules)))
+    parser.add_argument('-t', '--type', dest='type', choices=all_supported_modules + [m.lower() for m in all_supported_modules], required=True,
+                        help='The type of module to bootload (choices: {0})'.format(', '.join(all_supported_modules)))
     parser.add_argument('-f', '--file', dest='file', required=True,
                         help='The filename of the hex file to bootload')
     parser.add_argument('-v', '--version', dest='version', required=False,
@@ -101,7 +103,8 @@ def main():
                 return False
 
             update_success = bootload_modules(module_type=module_type,
-                                              filename=filename)
+                                              filename=filename,
+                                              version=version)
     finally:
         communicator.stop()
         time.sleep(3)

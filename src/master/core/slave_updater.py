@@ -51,12 +51,14 @@ class SlaveUpdater(object):
     @staticmethod
     def update_all(module_type, hex_filename, version):  # type: (str, str, Optional[str]) -> bool
         general_configuration = GlobalConfiguration()
-        # All module types: ['O', 'R', 'D', 'I', 'T', 'C']  # TODO: Implement `D`
+        # All module types: ['O', 'R', 'D', 'I', 'T', 'C'] + there Gen3 variant  # TODO: Implement `D`
         update_map = {'I': (InputModuleConfiguration, general_configuration.number_of_input_modules),
                       'O': (OutputModuleConfiguration, general_configuration.number_of_output_modules),
                       'T': (SensorModuleConfiguration, general_configuration.number_of_sensor_modules),
                       'C': (CanControlModuleConfiguration, general_configuration.number_of_can_control_modules)}
-        if module_type in update_map:
+        for supported_module_type in update_map:
+            if not module_type.startswith(supported_module_type):
+                continue
             module_configuration_class, number_of_modules = update_map[module_type]
             addresses = []
             for module_id in range(number_of_modules):
@@ -73,12 +75,13 @@ class SlaveUpdater(object):
 
         success = True
         for address in addresses:
-            success &= SlaveUpdater.update(address, hex_filename, version)
+            success &= SlaveUpdater.update(module_type, address, hex_filename, version)
         return success
 
     @staticmethod
     @Inject
-    def update(address, hex_filename, version, slave_communicator=INJECTED):  # type: (str, str, Optional[str], SlaveCommunicator) -> bool
+    def update(module_type, address, hex_filename, version, slave_communicator=INJECTED):
+        # type: (str, str, str, Optional[str], SlaveCommunicator) -> bool
         """ Flashes the content from an Intel HEX file to a slave module """
         try:
             with slave_communicator:
@@ -99,6 +102,16 @@ class SlaveUpdater(object):
 
                 if version == firmware_version:
                     logger.info('{0} - Already up-to-date. Skipping'.format(address))
+                    return True
+
+                major_version = int(firmware_version.split('.')[0])
+                is_gen3 = major_version >= 6
+                gen3_firmware = module_type.endswith('3')
+                if gen3_firmware and (is_gen3 is None or is_gen3 is False):
+                    logger.info('{0} - Skip flashing Gen3 firmware on Gen2 or unknown module'.format(address))
+                    return True
+                if is_gen3 and not gen3_firmware:
+                    logger.info('{0} - Skip flashing Gen2 firmware on Gen3 module'.format(address))
                     return True
 
                 logger.info('{0} - Entering bootloader'.format(address))
