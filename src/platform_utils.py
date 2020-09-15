@@ -99,23 +99,35 @@ class System(object):
     Abstracts the system related functions
     """
 
+    SYSTEMD_UNIT_MAP = {'openmotics': 'openmotics-api.service',
+                        'vpn_service': 'openmotics-vpn.service'}
+
     class OS(object):
         ANGSTROM = 'angstrom'
         DEBIAN = 'debian'
 
+
     @staticmethod
     def restart_service(service):
         # type: (str) -> None
+        System.run_service_action('restart', service)
+
+    @staticmethod
+    def run_service_action(action, service):
+        # type: (str) -> subprocess.Popen
+        unit_name = System.SYSTEMD_UNIT_MAP.get(service, service)
         try:
-            subprocess.check_output(['systemctl', 'is-enabled', service])
+            subprocess.check_output(['systemctl', 'is-enabled', unit_name])
             is_systemd = True
         except subprocess.CalledProcessError:
             is_systemd = False
 
         if is_systemd:
-            subprocess.Popen(['systemctl', 'restart', '--no-block', service])
+            return subprocess.Popen(['systemctl', action, '--no-pager', unit_name],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         else:
-            subprocess.Popen(['supervisorctl', 'restart', service])
+            return subprocess.Popen(['supervisorctl', action, service],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     @staticmethod
     def get_operating_system():
