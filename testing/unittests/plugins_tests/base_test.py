@@ -50,11 +50,15 @@ class PluginControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
+        cls.test_db = SqliteDatabase(':memory:')
+        cls.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        cls.test_db.create_tables(MODELS)
         cls.PLUGINS_PATH = tempfile.mkdtemp()
         cls.PLUGIN_CONFIG_PATH = tempfile.mkdtemp()
 
     @classmethod
     def tearDownClass(cls):
+        cls.test_db.close()
         try:
             if cls.PLUGINS_PATH is not None:
                 shutil.rmtree(cls.PLUGINS_PATH)

@@ -177,6 +177,27 @@ class User(BaseModel):
     accepted_terms = IntegerField(default=0)
 
 
+class Plugin(BaseModel):
+    id = AutoField()
+    name = CharField(unique=True)
+    version = CharField()
+
+
+class Ventilation(BaseModel):
+    id = AutoField()
+    source = CharField()  # Options: 'gateway' or 'plugin'
+    plugin = ForeignKeyField(Plugin, null=True, on_delete='CASCADE')
+    external_id = CharField()  # eg. serial number
+    name = CharField()
+    type = CharField()
+    vendor = CharField()
+    steps = IntegerField()
+
+    class Meta:
+        indexes = (
+            (('source', 'plugin_id', 'external_id'), True),
+        )
+
 class ThermostatGroup(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
