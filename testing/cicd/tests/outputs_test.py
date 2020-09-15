@@ -66,7 +66,7 @@ def test_timers(toolbox, output, to_status):
     hypothesis.note('after output {}#{} set to {}'.format(output.type, output.output_id, to_status))
     toolbox.set_output(output, to_status)
     toolbox.assert_output_changed(output, to_status)
-    toolbox.assert_output_changed(output, from_status, between=(3, 7))
+    toolbox.assert_output_changed(output, from_status, between=(2, 7))
 
 
 @pytest.mark.smoke

@@ -258,11 +258,11 @@ class Toolbox(object):
         firmware = {}
         master_firmware = os.environ.get('OPENMOTICS_MASTER_FIRMWARE')
         if master_firmware and master_firmware != versions['M']:
-            logger.debug('master firmware {} -> {}...'.format(versions['M'], master_firmware))
+            logger.info('master firmware {} -> {}...'.format(versions['M'], master_firmware))
             firmware['master'] = master_firmware
         can_firmware = os.environ.get('OPENMOTICS_CAN_FIRMWARE')
         if can_firmware and can_firmware != versions['C']:
-            logger.debug('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
+            logger.info('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
             firmware['can'] = can_firmware
         if firmware:
             logger.info('updating firmware...')
@@ -546,6 +546,7 @@ class Toolbox(object):
         logger.debug('ensure output {}#{} is {}    outputs={}'.format(output.type, output.output_id, status, state))
         time.sleep(0.2)
         self.set_output(output, status)
+        time.sleep(0.2)
         self.tester.reset()
 
     def set_output(self, output, status):
@@ -562,14 +563,14 @@ class Toolbox(object):
         self.tester.toggle_output(input.tester_output_id)
         logger.debug('toggled {}#{} -> True -> False'.format(input.type, input.input_id))
 
-    def assert_output_changed(self, output, status, between=(0, 30)):
+    def assert_output_changed(self, output, status, between=(0, 5)):
         # type: (Output, bool, Tuple[float,float]) -> None
         hypothesis.note('assert output {}#{} status changed {} -> {}'.format(output.type, output.output_id, not status, status))
         if self.tester.receive_output_event(output.output_id, status, between=between):
             return
         raise AssertionError('expected event {}#{} status={}'.format(output.type, output.output_id, status))
 
-    def assert_output_status(self, output, status, timeout=30):
+    def assert_output_status(self, output, status, timeout=5):
         # type: (Output, bool, float) -> None
         hypothesis.note('assert output {}#{} status is {}'.format(output.type, output.output_id, status))
         since = time.time()
