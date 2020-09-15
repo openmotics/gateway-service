@@ -876,7 +876,7 @@ class MasterCoreController(MasterController):
 
         return {'status': 'OK'}
 
-    def update(self, hex_filename):
+    def update_master(self, hex_filename):
         # type: (str) -> None
         CoreUpdater.update(hex_filename=hex_filename)
 
