@@ -27,6 +27,7 @@ from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
 from gateway.input_controller import InputController
 from gateway.maintenance_controller import MaintenanceController
+from gateway.module_controller import ModuleController
 from gateway.output_controller import OutputController
 from gateway.pulse_counter_controller import PulseCounterController
 from gateway.room_controller import RoomController
@@ -35,8 +36,8 @@ from gateway.sensor_controller import SensorController
 from gateway.shutter_controller import ShutterController
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.user_controller import UserController
+from gateway.ventilation_controller import VentilationController
 from gateway.webservice import WebInterface
-from gateway.module_controller import ModuleController
 from ioc import SetTestMode, SetUpTestInjections
 
 
@@ -64,6 +65,7 @@ class WebInterfaceTest(unittest.TestCase):
                             shutter_controller=mock.Mock(ShutterController),
                             thermostat_controller=mock.Mock(ThermostatController),
                             user_controller=mock.Mock(UserController),
+                            ventilation_controller=mock.Mock(VentilationController),
                             module_controller=mock.Mock(ModuleController))
         self.web = WebInterface()
 

@@ -44,7 +44,7 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     OutputSerializer, OutputStateSerializer, PulseCounterSerializer, \
     RoomSerializer, SensorSerializer, ShutterGroupSerializer, \
     ShutterSerializer, ThermostatSerializer, ModuleSerializer, \
-    ScheduleSerializer
+    ScheduleSerializer, VentilationSerializer
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO
 from gateway.enums import ShutterEnums, UserEnums
 from gateway.hal.master_controller import CommunicationFailure
@@ -57,26 +57,27 @@ from platform_utils import Hardware, Platform, System
 from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
 
-if False:
-    from typing import Dict, Optional, Any, List, Tuple
+if False:  # MYPY
+    from typing import Dict, Optional, Any, List
     from bus.om_bus_client import MessageClient
     from gateway.config import ConfigurationController
     from gateway.gateway_api import GatewayApi
+    from gateway.group_action_controller import GroupActionController
+    from gateway.hal.frontpanel_controller import FrontpanelController
+    from gateway.input_controller import InputController
     from gateway.maintenance_controller import MaintenanceController
     from gateway.metrics_collector import MetricsCollector
     from gateway.metrics_controller import MetricsController
+    from gateway.module_controller import ModuleController
+    from gateway.output_controller import OutputController
+    from gateway.pulse_counter_controller import PulseCounterController
+    from gateway.room_controller import RoomController
     from gateway.scheduling import SchedulingController
+    from gateway.sensor_controller import SensorController
     from gateway.shutter_controller import ShutterController
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.user_controller import UserController
-    from gateway.output_controller import OutputController
-    from gateway.input_controller import InputController
-    from gateway.room_controller import RoomController
-    from gateway.sensor_controller import SensorController
-    from gateway.pulse_counter_controller import PulseCounterController
-    from gateway.group_action_controller import GroupActionController
-    from gateway.module_controller import ModuleController
-    from gateway.hal.frontpanel_controller import FrontpanelController
+    from gateway.ventilation_controller import VentilationController
     from plugins.base import PluginController
 
 logger = logging.getLogger("openmotics")
@@ -295,7 +296,7 @@ class WebInterface(object):
                  thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED,
                  room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
-                 frontpanel_controller=INJECTED, module_controller=INJECTED):
+                 frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -312,6 +313,7 @@ class WebInterface(object):
         self._group_action_controller = group_action_controller  # type: GroupActionController
         self._frontpanel_controller = frontpanel_controller  # type: FrontpanelController
         self._module_controller = module_controller  # type: ModuleController
+        self._ventilation_controller = ventilation_controller  # type: VentilationController
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
@@ -871,6 +873,38 @@ class WebInterface(object):
         :rtype: dict
         """
         return self._thermostat_controller.v0_set_airco_status(thermostat_id, airco_on)
+
+    # Ventilation
+
+    # methods=['GET']
+    @openmotics_api(auth=True, check=types(ventilation_id=int, fields='json'))
+    def get_ventilation_configuration(self, ventilation_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str, Any]
+        ventilation_dto = self._ventilation_controller.load_ventilation(ventilation_id)
+        return {'config': VentilationSerializer.serialize(ventilation_dto, fields)}
+
+    # methods=['POST']
+    @openmotics_api(auth=True, check=types(config='json'))
+    def set_ventilation_configuration(self, config):
+        # type: (Dict[str,Any]) -> Dict[str, Any]
+        ventilation_dto, fields = VentilationSerializer.deserialize(config)
+        ventilation_dto = self._ventilation_controller.save_ventilation(ventilation_dto, fields)
+        fields.append('id')
+        return {'config': VentilationSerializer.serialize(ventilation_dto, fields)}
+
+    # methods=['GET']
+    @openmotics_api(auth=True, check=types(ventilation_id=int))
+    def get_ventilation_level(self, ventilation_id):
+        # type: (int) -> Dict[str, Any]
+        level = self._ventilation_controller.get_level(ventilation_id)
+        return {'level': level}
+
+    # methods=['PUT']
+    @openmotics_api(auth=True, check=types(ventilation_id=int, level=int, timer=float))
+    def set_ventilation_level(self, ventilation_id, level, timer=None):
+        # type: (int, int, Optional[float]) -> Dict[str, Any]
+        level = self._ventilation_controller.set_level(ventilation_id, level, timer)
+        return {'level': level}
 
     @openmotics_api(auth=True)
     def get_sensor_temperature_status(self):

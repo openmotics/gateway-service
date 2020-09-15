@@ -198,6 +198,7 @@ class Ventilation(BaseModel):
             (('source', 'plugin_id', 'external_id'), True),
         )
 
+
 class ThermostatGroup(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)

@@ -34,31 +34,32 @@ from gateway.migrations.schedules import ScheduleMigrator
 from gateway.migrations.users import UserMigrator
 from ioc import INJECTED, Inject
 
+from gateway.gateway_api import GatewayApi
+from gateway.group_action_controller import GroupActionController
+from gateway.input_controller import InputController
+from gateway.maintenance_controller import MaintenanceController
+from gateway.metrics_collector import MetricsCollector
+from gateway.metrics_controller import MetricsController
+from gateway.observer import Observer
+from gateway.pulse_counter_controller import PulseCounterController
+from gateway.scheduling import SchedulingController
+from gateway.sensor_controller import SensorController
+from gateway.shutter_controller import ShutterController
+from gateway.thermostat.thermostat_controller import ThermostatController
+from gateway.ventilation_controller import VentilationController
+from gateway.webservice import WebInterface, WebService
+from gateway.watchdog import Watchdog
+from gateway.module_controller import ModuleController
+from gateway.hal.master_controller import MasterController
+from gateway.hal.frontpanel_controller import FrontpanelController
+from plugins.base import PluginController
+from power.power_communicator import PowerCommunicator
+from master.classic.passthrough import PassthroughService
+from cloud.events import EventSender
+from serial_utils import RS485
 
 if False:  # MYPY
-    from gateway.metrics_controller import MetricsController
-    from gateway.metrics_collector import MetricsCollector
-    from gateway.webservice import WebInterface, WebService
-    from gateway.scheduling import SchedulingController
-    from gateway.observer import Observer
-    from gateway.gateway_api import GatewayApi
-    from gateway.maintenance_controller import MaintenanceController
-    from gateway.thermostat.thermostat_controller import ThermostatController
-    from gateway.shutter_controller import ShutterController
     from gateway.output_controller import OutputController
-    from gateway.input_controller import InputController
-    from gateway.sensor_controller import SensorController
-    from gateway.pulse_counter_controller import PulseCounterController
-    from gateway.group_action_controller import GroupActionController
-    from gateway.watchdog import Watchdog
-    from gateway.module_controller import ModuleController
-    from gateway.hal.master_controller import MasterController
-    from gateway.hal.frontpanel_controller import FrontpanelController
-    from plugins.base import PluginController
-    from power.power_communicator import PowerCommunicator
-    from master.classic.passthrough import PassthroughService
-    from cloud.events import EventSender
-    from serial_utils import RS485
 
 logger = logging.getLogger("openmotics")
 
@@ -154,7 +155,8 @@ class OpenmoticsService(object):
                 shutter_controller=INJECTED,  # type: ShutterController
                 group_action_controller=INJECTED,  # type: GroupActionController
                 frontpanel_controller=INJECTED,  # type: FrontpanelController
-                module_controller=INJECTED  # type: ModuleController
+                module_controller=INJECTED,  # type: ModuleController
+                ventilation_controller=INJECTED  # type: VentilationController
             ):
         """ Main function. """
         logger.info('Starting OM core service...')
@@ -187,6 +189,7 @@ class OpenmoticsService(object):
         scheduling_controller.start()
         module_controller.start()
         thermostat_controller.start()
+        ventilation_controller.start()
         metrics_collector.start()
         web_service.start()
         frontpanel_controller.start()
@@ -221,6 +224,7 @@ class OpenmoticsService(object):
             maintenance_controller.stop()
             metrics_collector.stop()
             metrics_controller.stop()
+            ventilation_controller.start()
             thermostat_controller.stop()
             plugin_controller.stop()
             frontpanel_controller.stop()

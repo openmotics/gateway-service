@@ -24,3 +24,4 @@ from gateway.api.serializers.pulse_counter import PulseCounterSerializer
 from gateway.api.serializers.group_action import GroupActionSerializer
 from gateway.api.serializers.module import ModuleSerializer
 from gateway.api.serializers.schedule import ScheduleSerializer
+from gateway.api.serializers.ventilation import VentilationSerializer

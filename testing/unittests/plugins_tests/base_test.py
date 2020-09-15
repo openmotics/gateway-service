@@ -28,16 +28,20 @@ import unittest
 from subprocess import call
 
 from mock import Mock
+from peewee import SqliteDatabase
 from pytest import mark
 
 import plugin_runtime
 from gateway.dto import OutputStateDTO
 from gateway.enums import ShutterEnums
 from gateway.events import GatewayEvent
+from gateway.models import Plugin
 from gateway.output_controller import OutputController
 from gateway.shutter_controller import ShutterController
 from ioc import SetTestMode, SetUpTestInjections
 from plugin_runtime.base import PluginConfigChecker, PluginException
+
+MODELS = [Plugin]
 
 
 class PluginControllerTest(unittest.TestCase):
@@ -66,6 +70,10 @@ class PluginControllerTest(unittest.TestCase):
                 shutil.rmtree(cls.PLUGIN_CONFIG_PATH)
         except Exception:
             pass
+
+    def setUp(self):
+        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        self.test_db.create_tables(MODELS)
 
     @staticmethod
     def _create_plugin(name, code, base_path=None):
