@@ -193,18 +193,18 @@ def do_command(cmd, fields, retry=True, success_code=0, master_communicator=INJE
 
 
 @Inject
-def bootload(module_type, address, ihex, crc, blocks, version, master_communicator=INJECTED):
-    # type: (str, bytearray, intelhex.IntelHex, Tuple[int, int, int, int], int, Optional[str], MasterCommunicator) -> None
+def bootload(address, ihex, crc, blocks, version, gen3_firmware, master_communicator=INJECTED):
+    # type: (bytearray, intelhex.IntelHex, Tuple[int, int, int, int], int, Optional[str], bool, MasterCommunicator) -> None
     """
     Bootload 1 module.
 
-    :param module_type: The type of the module to flash
     :param master_communicator: Used to communicate with the master.
     :param address: Address for the module to bootload
     :param ihex: The hex file
     :param crc: The crc for the hex file
     :param blocks: The number of blocks to write
     :param version: Optional version
+    :param gen3_firmware: Specifies whether it's gen3 firmware
     """
     is_gen3 = None  # type: Optional[bool]
     logger.info('Checking the version')
@@ -222,7 +222,6 @@ def bootload(module_type, address, ihex, crc, blocks, version, master_communicat
     except Exception:
         logger.info('Version call not (yet) implemented or module unavailable')
 
-    gen3_firmware = module_type.endswith('3')
     if gen3_firmware and (is_gen3 is None or is_gen3 is False):
         logger.info('Skip flashing Gen3 firmware on Gen2 or unknown module')
         return
@@ -306,7 +305,7 @@ def bootload_modules(module_type, filename, version):
     """
 
     logger.info('Loading module addresses...')
-    addresses = get_module_addresses(module_type)
+    addresses = get_module_addresses(module_type[0])
 
     blocks = 922 if module_type.startswith('C') else 410
     ihex = intelhex.IntelHex(filename)
@@ -316,7 +315,7 @@ def bootload_modules(module_type, filename, version):
     for address in addresses:
         logger.info('Bootloading module {0}'.format(pretty_address(address)))
         try:
-            bootload(module_type, address, ihex, crc, blocks, version)
+            bootload(address, ihex, crc, blocks, version, module_type.endswith('3'))
         except Exception:
             update_success = False
             logger.info('Bootloading failed:')
