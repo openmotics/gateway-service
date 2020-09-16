@@ -114,7 +114,7 @@ def get_module_addresses(module_type):
         address = EepromAddress(33 + i, 0, 4)
         modules.append(eeprom_file.read([address])[address].bytes)
 
-    return [module for module in modules if module[0] == module_type]
+    return [module for module in modules if chr(module[0]) == module_type]
 
 
 def pretty_address(address):
