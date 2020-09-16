@@ -303,6 +303,10 @@ class MasterCoreController(MasterController):
         # type: () -> None
         self._input_last_updated = 0
 
+    def get_master_online(self):
+        # type: () -> bool
+        return self._master_online
+
     def get_firmware_version(self):
         version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
         return tuple(version.split('.'))
