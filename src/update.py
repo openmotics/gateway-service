@@ -94,11 +94,11 @@ def cmd_wait_output(proc):
 
 
 def extract_legacy_update(update_file, expected_md5):
-    calculated_md5 = hashlib.md5()
+    md5_hasher = hashlib.md5()
     with open(update_file, 'rb') as fd:
-        for chunk in iter(lambda: fd.read(128 * calculated_md5.block_size), ''):
-            calculated_md5.update(chunk)
-    calculated_md5 = calculated_md5.hexdigest()
+        for chunk in iter(lambda: fd.read(128 * md5_hasher.block_size), ''):
+            md5_hasher.update(chunk)
+    calculated_md5 = md5_hasher.hexdigest()
     if calculated_md5 != expected_md5:
         raise ValueError('update.tgz md5:%s does not match expected md5:%s' % (calculated_md5, expected_md5))
 
