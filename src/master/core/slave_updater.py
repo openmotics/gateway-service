@@ -50,12 +50,15 @@ class SlaveUpdater(object):
 
     @staticmethod
     def update_all(module_type, hex_filename, version):  # type: (str, str, Optional[str]) -> bool
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
         general_configuration = GlobalConfiguration()
         # All module types: ['O', 'R', 'D', 'I', 'T', 'C'] + their Gen3 variants  # TODO: Implement `D`
-        update_map = {'I': (InputModuleConfiguration, general_configuration.number_of_input_modules),
-                      'O': (OutputModuleConfiguration, general_configuration.number_of_output_modules),
-                      'T': (SensorModuleConfiguration, general_configuration.number_of_sensor_modules),
-                      'C': (CanControlModuleConfiguration, general_configuration.number_of_can_control_modules)}
+        update_map = {'I': (InputModuleConfiguration, _default_if_255(general_configuration.number_of_input_modules, 0)),
+                      'O': (OutputModuleConfiguration, _default_if_255(general_configuration.number_of_output_modules, 0)),
+                      'T': (SensorModuleConfiguration, _default_if_255(general_configuration.number_of_sensor_modules, 0)),
+                      'C': (CanControlModuleConfiguration, _default_if_255(general_configuration.number_of_can_control_modules, 0))}
         for supported_module_type in update_map:
             if not module_type.startswith(supported_module_type):
                 continue
