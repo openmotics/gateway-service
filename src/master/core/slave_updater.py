@@ -51,7 +51,7 @@ class SlaveUpdater(object):
     @staticmethod
     def update_all(module_type, hex_filename, version):  # type: (str, str, Optional[str]) -> bool
         general_configuration = GlobalConfiguration()
-        # All module types: ['O', 'R', 'D', 'I', 'T', 'C'] + there Gen3 variant  # TODO: Implement `D`
+        # All module types: ['O', 'R', 'D', 'I', 'T', 'C'] + their Gen3 variants  # TODO: Implement `D`
         update_map = {'I': (InputModuleConfiguration, general_configuration.number_of_input_modules),
                       'O': (OutputModuleConfiguration, general_configuration.number_of_output_modules),
                       'T': (SensorModuleConfiguration, general_configuration.number_of_sensor_modules),
