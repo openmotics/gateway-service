@@ -292,8 +292,6 @@ def update_module_firmware(module, hexfile, version):
 
 def update_gateway_os(tarball, version):
     try:
-        if is_up_to_date('gateway_os', version):
-            return
         cmd(['mount', '-o', 'remount,rw', '/'])
         cmd(['tar', '-xz', '--no-same-owner', '-f', tarball, '-C', '/'])
         cmd(['sync'])
@@ -308,8 +306,6 @@ def update_gateway_os(tarball, version):
 
 def update_gateway_backend(tarball, date, version):
     try:
-        if is_up_to_date('gateway_service', version):
-            return
         backup_dir = os.path.join(PREFIX, 'backup')
         python_dir = os.path.join(PREFIX, 'python')
         etc_dir = os.path.join(PREFIX, 'etc')
@@ -339,7 +335,6 @@ def update_gateway_backend(tarball, date, version):
 
         logger.info('Running post-update')
         cmd(['bash', os.path.join(python_dir, 'post-update.sh')])
-        mark_installed_version('gateway_service', version)
         cmd(['sync'])
     except Exception as exc:
         logger.exception('Updating Gateway service failed')
