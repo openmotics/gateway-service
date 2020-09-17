@@ -371,7 +371,7 @@ class PluginController(object):
                 runner.process_shutter_status(data=status, action_version=1)  # send states as action version 1
                 runner.process_shutter_status(data=(status, details), action_version=2)  # send event as action version 2
                 runner.process_shutter_status(data=event, action_version=3)  # send event as action version 3
-        if event.type == GatewayEvent.Types.VENTILATION_CHANGE:
+        if event.type == GatewayEvent.Types.VENTILATION_CHANGE and 'plugin' in event.data:
             plugin_name = event.data['plugin']
             for runner in (x for x in self.__iter_running_runners() if x.name == plugin_name):
                 runner.process_ventilation_status(data=event)

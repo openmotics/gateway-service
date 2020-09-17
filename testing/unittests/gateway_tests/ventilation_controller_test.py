@@ -49,7 +49,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.controller.set_level(43, 2, timer=60.0)
             status = self.controller.get_status()
             assert {'manual'} == set(x.mode for x in status)
-            assert {42, 43} == set(x.id for x in status)
+            assert {42, 43} == set(x.ventilation.id for x in status)
             assert {0, 2} == set(x.level for x in status)
             assert {None, 60.0} == set(x.timer for x in status)
 
@@ -71,7 +71,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.controller.set_mode_auto(43)
             status = self.controller.get_status()
             assert {'auto'} == set(x.mode for x in status)
-            assert {42, 43} == set(x.id for x in status)
+            assert {42, 43} == set(x.ventilation.id for x in status)
             assert {None} == set(x.level for x in status)
             assert {None} == set(x.timer for x in status)
 

@@ -31,10 +31,8 @@ class VentilationSerializer(object):
     def serialize(ventilation_dto, fields):
         # type: (VentilationDTO, Optional[List[str]]) -> Dict[str,Any]
         data = {'id': ventilation_dto.id,
-                'source': {
-                    'type': ventilation_dto.source.type,
-                    'name': ventilation_dto.source.name,
-                },
+                'source': {'type': ventilation_dto.source.type,
+                           'name': ventilation_dto.source.name},
                 'external_id': Toolbox.denonify(ventilation_dto.external_id, ''),
                 'name': Toolbox.denonify(ventilation_dto.name, ''),
                 'type': Toolbox.denonify(ventilation_dto.type, ''),

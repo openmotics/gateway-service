@@ -905,7 +905,7 @@ class WebInterface(object):
     def get_ventilation_status(self):
         # type: () -> Dict[str, Any]
         status = self._ventilation_controller.get_status()
-        return {'status': [{'id': status_dto.id, 'mode': status_dto.mode, 'level': status_dto.level}
+        return {'status': [{'id': status_dto.ventilation.id, 'mode': status_dto.mode, 'level': status_dto.level}
                            for status_dto in status]}
 
     # methods=['PUT']

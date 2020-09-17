@@ -35,7 +35,7 @@ class VentilationMapper(object):
     def orm_to_dto(orm_object):
         # type: (Ventilation) -> VentilationDTO
         source_dto = VentilationSourceDTO(None, type=orm_object.source)
-        if source_dto.type == VentilationSourceDTO.Type.PLUGIN:
+        if source_dto.is_plugin:
             source_dto.id = orm_object.plugin.id
             source_dto.name = orm_object.plugin.name
         return VentilationDTO(orm_object.id,
@@ -52,7 +52,7 @@ class VentilationMapper(object):
         lookup_kwargs = {}  # type: Dict[str,Any]
         if ventilation_dto.id:
             lookup_kwargs.update({'id': ventilation_dto.id})
-        if ventilation_dto.source.type == VentilationSourceDTO.Type.PLUGIN:
+        if ventilation_dto.source.is_plugin:
             plugin = Plugin.get(name=ventilation_dto.source.name)
             lookup_kwargs.update({'plugin': plugin,
                                   'source': ventilation_dto.source.type,
