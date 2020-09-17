@@ -50,8 +50,6 @@ class OutputMapper(object):
                                       'output_type': 'output_type'}.items():
             if dto_field in fields:
                 data[data_field] = getattr(output_dto, dto_field)
-        if 'module_type' in fields:
-            data['module'] = {'module_type': output_dto.module_type}
         if 'timer' in fields:
             timer = output_dto.timer
             if timer is None or timer <= 0 or timer == 65535:

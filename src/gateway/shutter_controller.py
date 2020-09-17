@@ -84,10 +84,12 @@ class ShutterController(BaseController):
 
     def _handle_master_event(self, event):  # type: (MasterEvent) -> None
         super(ShutterController, self)._handle_master_event(event)
-        if event.type == MasterEvent.Types.EEPROM_CHANGE:
-            self.update_config(self.load_shutters())
         if event.type == MasterEvent.Types.SHUTTER_CHANGE:
             self._report_shutter_state(event.data['id'], event.data['status'])
+
+    def _sync_orm(self):
+        super(ShutterController, self)._sync_orm()
+        self.update_config(self.load_shutters())
 
     def update_config(self, config):  # type: (List[ShutterDTO]) -> None
         with self._config_lock:

@@ -61,7 +61,7 @@ class PulseCounterController(BaseController):
                                                  persistent=False)
                     pulse_counter.save()
             duration = time.time() - start
-            logger.info('ORM sync (PulseCounter): completed after {0:.1f}s', duration)
+            logger.info('ORM sync (PulseCounter): completed after {0:.1f}s'.format(duration))
         except CommunicationTimedOutException as ex:
             logger.error('ORM sync (PulseCounter): Failed: {0}'.format(ex))
         except Exception:
