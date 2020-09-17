@@ -206,7 +206,7 @@ def bootload(address, ihex, crc, blocks, version, gen3_firmware, master_communic
     :param version: Optional version
     :param gen3_firmware: Specifies whether it's gen3 firmware
     """
-    is_gen3 = None  # type: Optional[bool]
+    gen3_module = None  # type: Optional[bool]
     logger.info('Checking the version')
     try:
         result = do_command(cmd=master_api.modules_get_version(),
@@ -214,7 +214,7 @@ def bootload(address, ihex, crc, blocks, version, gen3_firmware, master_communic
                             retry=False,
                             success_code=255)
         current_version = '{0}.{1}.{2}'.format(result['f1'], result['f2'], result['f3'])
-        is_gen3 = result['f1'] >= 6
+        gen3_module = result['f1'] >= 6
         logger.info('Current version: v{0}'.format(current_version))
         if current_version == version:
             logger.info('Firmware up-to-date. Skipping')
@@ -222,10 +222,10 @@ def bootload(address, ihex, crc, blocks, version, gen3_firmware, master_communic
     except Exception:
         logger.info('Version call not (yet) implemented or module unavailable')
 
-    if gen3_firmware and (is_gen3 is None or is_gen3 is False):
+    if gen3_firmware and (gen3_module is None or gen3_module is False):
         logger.info('Skip flashing Gen3 firmware on Gen2 or unknown module')
         return
-    if is_gen3 and not gen3_firmware:
+    if gen3_module and not gen3_firmware:
         logger.info('Skip flashing Gen2 firmware on Gen3 module')
         return
 
@@ -294,20 +294,21 @@ def bootload(address, ihex, crc, blocks, version, gen3_firmware, master_communic
 
 
 @Inject
-def bootload_modules(module_type, filename, version):
-    # type: (str, str, Optional[str]) -> bool
+def bootload_modules(module_type, filename, gen3_firmware, version):
+    # type: (str, str, bool, Optional[str]) -> bool
     """
     Bootload all modules of the given type with the firmware in the given filename.
 
-    :param module_type: Type of the modules (O, R, D, I, T, C, O3, R3, D3, I3, T3, C3)
+    :param module_type: Type of the modules (O, R, D, I, T, C)
     :param filename: The filename for the hex file to load
+    :param gen3_firmware: Indicates whether it's a gen3 firmware
     :param version: The version of the hexfile, if known
     """
 
     logger.info('Loading module addresses...')
-    addresses = get_module_addresses(module_type[0])
+    addresses = get_module_addresses(module_type)
 
-    blocks = 922 if module_type.startswith('C') else 410
+    blocks = 922 if module_type == 'C' else 410
     ihex = intelhex.IntelHex(filename)
     crc = calc_crc(ihex, blocks)
 
@@ -315,7 +316,7 @@ def bootload_modules(module_type, filename, version):
     for address in addresses:
         logger.info('Bootloading module {0}'.format(pretty_address(address)))
         try:
-            bootload(address, ihex, crc, blocks, version, module_type.endswith('3'))
+            bootload(address, ihex, crc, blocks, version, gen3_firmware)
         except Exception:
             update_success = False
             logger.info('Bootloading failed:')

@@ -75,6 +75,8 @@ def main():
     module_type = args.type.upper()
     filename = args.file
     version = args.version
+    gen3_firmware = module_type.endswith('3')
+    module_type = module_type[0]
 
     config = ConfigParser()
     config.read(constants.get_config_file())
@@ -90,6 +92,7 @@ def main():
 
             update_success = SlaveUpdater.update_all(module_type=module_type,
                                                      hex_filename=filename,
+                                                     gen3_firmware=gen3_firmware,
                                                      version=version)
         else:
             from master.classic.slave_updater import bootload_modules
@@ -104,6 +107,7 @@ def main():
 
             update_success = bootload_modules(module_type=module_type,
                                               filename=filename,
+                                              gen3_firmware=gen3_firmware,
                                               version=version)
     finally:
         communicator.stop()
