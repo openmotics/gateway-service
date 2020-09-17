@@ -37,19 +37,49 @@ class VentilationControllerTest(unittest.TestCase):
         self.controller = VentilationController()
 
     def test_set_level(self):
+        plugin = Plugin(id=2, name='dummy', version='0.0.1')
         with mock.patch.object(Select, 'count', return_value=1), \
              mock.patch.object(Ventilation, 'get',
-                               side_effect=[Ventilation(id=42, amount_of_levels=4),
-                                            Ventilation(id=43, amount_of_levels=4)]):
+                               side_effect=[Ventilation(id=42, amount_of_levels=4, source='plugin', plugin=plugin),
+                                            Ventilation(id=43, amount_of_levels=4, source='plugin', plugin=plugin)]), \
+             mock.patch.object(Ventilation, 'select',
+                               return_value=[Ventilation(id=42, amount_of_levels=4, source='plugin', plugin=plugin),
+                                             Ventilation(id=43, amount_of_levels=4, source='plugin', plugin=plugin)]):
             self.controller.set_level(42, 0)
-            self.controller.set_level(43, 2)
-            assert self.controller.get_level(42) == 0
-            assert self.controller.get_level(43) == 2
+            self.controller.set_level(43, 2, timer=60.0)
+            status = self.controller.get_status()
+            assert {'manual'} == set(x.mode for x in status)
+            assert {42, 43} == set(x.id for x in status)
+            assert {0, 2} == set(x.level for x in status)
+            assert {None, 60.0} == set(x.timer for x in status)
+
+    def test_mode_auto(self):
+        plugin = Plugin(id=2, name='dummy', version='0.0.1')
+        with mock.patch.object(Select, 'count', return_value=1), \
+             mock.patch.object(Ventilation, 'get',
+                               side_effect=[Ventilation(id=42, amount_of_levels=4, source='plugin', plugin=plugin),
+                                            Ventilation(id=43, amount_of_levels=4, source='plugin', plugin=plugin),
+                                            Ventilation(id=43, amount_of_levels=4, source='plugin', plugin=plugin)]), \
+             mock.patch.object(Ventilation, 'select',
+                               return_value=[Ventilation(id=42, amount_of_levels=4, source='plugin', plugin=plugin),
+                                             Ventilation(id=43, amount_of_levels=4, source='plugin', plugin=plugin)]):
+            self.controller.set_mode_auto(42)
+            self.controller.set_level(43, 2, timer=60.0)
+            status = self.controller.get_status()
+            assert {'auto', 'manual'} == set(x.mode for x in status)
+
+            self.controller.set_mode_auto(43)
+            status = self.controller.get_status()
+            assert {'auto'} == set(x.mode for x in status)
+            assert {42, 43} == set(x.id for x in status)
+            assert {None} == set(x.level for x in status)
+            assert {None} == set(x.timer for x in status)
 
     def test_set_invalid_level(self):
+        plugin = Plugin(id=2, name='dummy', version='0.0.1')
         with mock.patch.object(Select, 'count', return_value=1), \
              mock.patch.object(Ventilation, 'get',
-                               return_value=Ventilation(id=42, amount_of_levels=4)):
+                               return_value=Ventilation(id=42, amount_of_levels=4, souurce='plugin', plugin=plugin)):
             self.assertRaises(ValueError, self.controller.set_level, 42, 5)
             self.assertRaises(ValueError, self.controller.set_level, 42, -1)
 

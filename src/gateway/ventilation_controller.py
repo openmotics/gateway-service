@@ -20,13 +20,15 @@ from __future__ import absolute_import
 import logging
 
 from bus.om_bus_client import MessageClient
-from gateway.dto import VentilationDTO, VentilationSourceDTO
+from gateway.dto import VentilationDTO
+from gateway.dto.base import BaseDTO
+from gateway.events import GatewayEvent
 from gateway.mappers import VentilationMapper
 from gateway.models import Ventilation
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MYPY
-    from typing import Dict, List, Optional
+    from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,8 @@ class VentilationController(object):
     @Inject
     def __init__(self, message_client=INJECTED):
         # type: (MessageClient) -> None
-        self._levels = {}  # type: Dict[int,int]
+        self._event_subscriptions = []  # type: List[Callable[[GatewayEvent],None]]
+        self._status = {}  # type: Dict[int, StateDTO]
 
     def start(self):
         # type: () -> None
@@ -47,6 +50,20 @@ class VentilationController(object):
     def stop(self):
         # type: () -> None
         pass
+
+    def subscribe_events(self, callback):
+        # type: (Callable[[GatewayEvent],None]) -> None
+        self._event_subscriptions.append(callback)
+
+    def _publish_events(self, state_dto, plugin):
+        # type: (StateDTO, str) -> None
+        event_data = {'plugin': plugin,
+                      'id': state_dto.id,
+                      'mode': state_dto.mode,
+                      'level': state_dto.level,
+                      'timer': state_dto.timer}
+        for callback in self._event_subscriptions:
+            callback(GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE, event_data))
 
     def load_ventilations(self):
         # type: () -> List[VentilationDTO]
@@ -66,21 +83,59 @@ class VentilationController(object):
         ventilation.save()
         return VentilationMapper.orm_to_dto(ventilation)
 
-    def get_level(self, ventilation_id):
-        # type: (int) -> Optional[int]
-        if Ventilation.select(id == ventilation_id).count() == 1:
-            return self._levels[ventilation_id]
-        else:
-            return None
+    def get_status(self):
+        # type: () -> List[StateDTO]
+        status = []
+        for ventilation in Ventilation.select():
+            state_dto = self._status.get(ventilation.id)
+            if state_dto:
+                status.append(state_dto)
+        return status
+
+    def set_mode_auto(self, ventilation_id):
+        # type: (int) -> None
+        ventilation = Ventilation.get(id=ventilation_id)
+        state_dto = StateDTO(ventilation_id, mode=StateDTO.Mode.AUTO)
+        if state_dto != self._status.get(ventilation_id):
+            self._status[ventilation_id] = state_dto
+            self._publish_events(state_dto, ventilation.plugin.name)
 
     def set_level(self, ventilation_id, level, timer=None):
-        # type: (int, int, Optional[float]) -> Optional[int]
+        # type: (int, int, Optional[float]) -> None
         ventilation = Ventilation.get(id=ventilation_id)
-        if level < 0 or level > ventilation.amount_of_levels:
-            values = list(range(ventilation.amount_of_levels + 1))
-            raise ValueError('level {0} not in {1}'.format(level, values))
-        current_level = self._levels.get(ventilation_id)
-        if level != current_level:
-            self._levels[ventilation_id] = level
-            # TODO broadcast gateway event
-        return level
+        state_dto = StateDTO(ventilation_id, mode=StateDTO.Mode.MANUAL, level=level, timer=timer)
+        self._validate_state(ventilation, state_dto)
+        if state_dto != self._status.get(ventilation_id):
+            self._status[ventilation_id] = state_dto
+            self._publish_events(state_dto, ventilation.plugin.name)
+
+    def _validate_state(self, ventilation, state_dto):
+        # type: (Ventilation, StateDTO) -> None
+        if state_dto.level:
+            if state_dto.mode == StateDTO.Mode.AUTO:
+                raise ValueError('ventilation mode {} does not support level'.format(state_dto.level))
+            if state_dto.level < 0 or state_dto.level > ventilation.amount_of_levels:
+                values = list(range(ventilation.amount_of_levels + 1))
+                raise ValueError('ventilation level {0} not in {1}'.format(state_dto.level, values))
+
+
+class StateDTO(BaseDTO):
+    class Mode:
+        AUTO = 'auto'
+        MANUAL = 'manual'
+
+    def __init__(self, id, mode, level=None, timer=None):
+        self.id = id  # type: int
+        self.mode = mode  # type: str
+        self.level = level  # type: Optional[int]
+        self.timer = timer  # type: Optional[float]
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        if not isinstance(other, StateDTO):
+            return False
+        if self.timer:
+            return False
+        return (self.id == other.id and
+                self.mode == other.mode and
+                self.level == other.level)

@@ -97,6 +97,21 @@ def shutter_status(method=None, version=1):
     return wrapper
 
 
+def ventilation_status(method=None, version=1):
+    """
+    Decorator to indicate that the method should receive ventilation status messages.
+    The receiving method should accept one parameter, the list of ventilation states.
+    Each time an ventilation status is changed, the method will be called.
+
+    Important! This method should not block, as this will result in an unresponsive system.
+    Please use a separate thread to perform complex actions on shutten status messages.
+    """
+    def wrapper(_method):
+        _method.ventilation_status = {'version': version}
+        return _method
+    return wrapper
+
+
 def receive_events(method=None, version=1):
     """
     Decorator to indicate that the method should receive event messages.

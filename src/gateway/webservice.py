@@ -902,17 +902,25 @@ class WebInterface(object):
 
     # methods=['GET']
     @openmotics_api(auth=True, check=types(ventilation_id=int))
-    def get_ventilation_level(self, ventilation_id):
+    def get_ventilation_status(self):
+        # type: () -> Dict[str, Any]
+        status = self._ventilation_controller.get_status()
+        return {'status': [{'id': status_dto.id, 'mode': status_dto.mode, 'level': status_dto.level}
+                           for status_dto in status]}
+
+    # methods=['PUT']
+    @openmotics_api(auth=True, check=types(ventilation_id=int))
+    def set_ventilation_mode_auto(self, ventilation_id):
         # type: (int) -> Dict[str, Any]
-        level = self._ventilation_controller.get_level(ventilation_id)
-        return {'level': level}
+        self._ventilation_controller.set_mode_auto(ventilation_id)
+        return {}
 
     # methods=['PUT']
     @openmotics_api(auth=True, check=types(ventilation_id=int, level=int, timer=float))
     def set_ventilation_level(self, ventilation_id, level, timer=None):
         # type: (int, int, Optional[float]) -> Dict[str, Any]
-        level = self._ventilation_controller.set_level(ventilation_id, level, timer)
-        return {'level': level}
+        self._ventilation_controller.set_level(ventilation_id, level, timer)
+        return {}
 
     @openmotics_api(auth=True)
     def get_sensor_temperature_status(self):

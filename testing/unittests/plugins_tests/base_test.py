@@ -71,10 +71,6 @@ class PluginControllerTest(unittest.TestCase):
         except Exception:
             pass
 
-    def setUp(self):
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
-        self.test_db.create_tables(MODELS)
-
     @staticmethod
     def _create_plugin(name, code, base_path=None):
         """ Create a plugin with a given name and the provided code. """

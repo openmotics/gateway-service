@@ -33,6 +33,12 @@ class GatewayEvent(object):
        'status': {'on': bool,         # On/off
                   'value': int},      # Optional, dimmer value
        'location': {'room_id': int}}  # Room ID
+
+    * VENTILATION_CHANGE
+      {'id': str,      # Device ID
+       'plugin': str,  # Target Plugin
+       'mode': str,    # Auto/Manual
+       'level': int}
     """
 
     class Types(object):
@@ -41,6 +47,7 @@ class GatewayEvent(object):
         SHUTTER_CHANGE = 'SHUTTER_CHANGE'
         THERMOSTAT_CHANGE = 'THERMOSTAT_CHANGE'
         THERMOSTAT_GROUP_CHANGE = 'THERMOSTAT_GROUP_CHANGE'
+        VENTILATION_CHANGE = 'VENTILATION_CHANGE'
         ACTION = 'ACTION'
         PING = 'PING'
         PONG = 'PONG'

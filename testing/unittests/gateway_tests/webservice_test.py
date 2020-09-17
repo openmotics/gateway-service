@@ -21,7 +21,8 @@ import mock
 
 from bus.om_bus_client import MessageClient
 from gateway.config import ConfigurationController
-from gateway.dto import OutputStateDTO, ScheduleDTO
+from gateway.dto import OutputStateDTO, ScheduleDTO, VentilationDTO, \
+    VentilationSourceDTO
 from gateway.gateway_api import GatewayApi
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
@@ -49,6 +50,7 @@ class WebInterfaceTest(unittest.TestCase):
     def setUp(self):
         self.output_controller = mock.Mock(OutputController)
         self.scheduling_controller = mock.Mock(SchedulingController)
+        self.ventilation_controller = mock.Mock(VentilationController)
         self.gateway_api = mock.Mock(GatewayApi)
         SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
                             frontpanel_controller=mock.Mock(FrontpanelController),
@@ -65,7 +67,7 @@ class WebInterfaceTest(unittest.TestCase):
                             shutter_controller=mock.Mock(ShutterController),
                             thermostat_controller=mock.Mock(ThermostatController),
                             user_controller=mock.Mock(UserController),
-                            ventilation_controller=mock.Mock(VentilationController),
+                            ventilation_controller=self.ventilation_controller,
                             module_controller=mock.Mock(ModuleController))
         self.web = WebInterface()
 
@@ -90,3 +92,19 @@ class WebInterfaceTest(unittest.TestCase):
                                'schedule_type': 'BASIC_ACTION',
                                'start': 0,
                                'status': None}], json.loads(response)['schedules'])
+
+    def test_ventilation_configurations(self):
+        with mock.patch.object(self.ventilation_controller, 'load_ventilations',
+                               return_value=[VentilationDTO(id=1, name='test', amount_of_levels=4, type='0A', vendor='example',
+                                                            external_id='device-00001',
+                                                            source=VentilationSourceDTO(id=2, type='plugin', name='dummy'))]):
+            response = self.web.get_ventilation_configurations()
+            self.assertEqual([{
+                'amount_of_levels': 4,
+                'external_id': 'device-00001',
+                'id': 1,
+                'name': 'test',
+                'source': {'name': 'dummy', 'type': 'plugin'},
+                'type': '0A',
+                'vendor': 'example'
+            }], json.loads(response)['config'])

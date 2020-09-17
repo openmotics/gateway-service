@@ -193,6 +193,16 @@ class PluginRunner:
         else:
             self.logger('Shutter status version {} not supported.'.format(action_version))
 
+    def process_ventilation_status(self, data, action_version=1):
+        logger.error('process_ventilation_status %s', data)
+        if action_version in [1]:
+            if action_version == 1:
+                event_json = data.serialize()
+                payload = {'event': event_json}
+            self._do_async(action='ventilation_status', payload=payload, should_filter=True, action_version=action_version)
+        else:
+            self.logger('Ventilation status version {} not supported.'.format(action_version))
+
     def process_event(self, code):
         self._do_async('receive_events', {'code': code}, should_filter=True)
 

@@ -93,6 +93,7 @@ class OpenmoticsService(object):
                 maintenance_controller=INJECTED,  # type: MaintenanceController
                 output_controller=INJECTED,  # type: OutputController
                 thermostat_controller=INJECTED,  # type: ThermostatController
+                ventilation_controller=INJECTED,  # type: VentilationController
                 shutter_controller=INJECTED,  # type: ShutterController
                 frontpanel_controller=INJECTED  # type: FrontpanelController
             ):
@@ -103,6 +104,8 @@ class OpenmoticsService(object):
         thermostat_controller.subscribe_events(web_interface.send_event_websocket)
         thermostat_controller.subscribe_events(event_sender.enqueue_event)
         thermostat_controller.subscribe_events(plugin_controller.process_observer_event)
+        ventilation_controller.subscribe_events(plugin_controller.process_observer_event)
+        ventilation_controller.subscribe_events(event_sender.enqueue_event)
         message_client.add_event_handler(metrics_controller.event_receiver)
         message_client.add_event_handler(frontpanel_controller.event_receiver)
         web_interface.set_plugin_controller(plugin_controller)
