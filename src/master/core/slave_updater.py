@@ -49,13 +49,16 @@ class SlaveUpdater(object):
     BLOCK_SIZE = 64
 
     @staticmethod
-    def update_all(module_type, hex_filename, version):  # type: (str, str, Optional[str]) -> bool
+    def update_all(module_type, hex_filename, gen3_firmware, version):  # type: (str, str, bool, Optional[str]) -> bool
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
         general_configuration = GlobalConfiguration()
         # All module types: ['O', 'R', 'D', 'I', 'T', 'C']  # TODO: Implement `D`
-        update_map = {'I': (InputModuleConfiguration, general_configuration.number_of_input_modules),
-                      'O': (OutputModuleConfiguration, general_configuration.number_of_output_modules),
-                      'T': (SensorModuleConfiguration, general_configuration.number_of_sensor_modules),
-                      'C': (CanControlModuleConfiguration, general_configuration.number_of_can_control_modules)}
+        update_map = {'I': (InputModuleConfiguration, _default_if_255(general_configuration.number_of_input_modules, 0)),
+                      'O': (OutputModuleConfiguration, _default_if_255(general_configuration.number_of_output_modules, 0)),
+                      'T': (SensorModuleConfiguration, _default_if_255(general_configuration.number_of_sensor_modules, 0)),
+                      'C': (CanControlModuleConfiguration, _default_if_255(general_configuration.number_of_can_control_modules, 0))}
         if module_type in update_map:
             module_configuration_class, number_of_modules = update_map[module_type]
             addresses = []
@@ -73,12 +76,13 @@ class SlaveUpdater(object):
 
         success = True
         for address in addresses:
-            success &= SlaveUpdater.update(address, hex_filename, version)
+            success &= SlaveUpdater.update(address, hex_filename, gen3_firmware, version)
         return success
 
     @staticmethod
     @Inject
-    def update(address, hex_filename, version, slave_communicator=INJECTED):  # type: (str, str, Optional[str], SlaveCommunicator) -> bool
+    def update(address, hex_filename, gen3_firmware, version, slave_communicator=INJECTED):
+        # type: (str, str, bool, Optional[str], SlaveCommunicator) -> bool
         """ Flashes the content from an Intel HEX file to a slave module """
         try:
             with slave_communicator:
@@ -99,6 +103,14 @@ class SlaveUpdater(object):
 
                 if version == firmware_version:
                     logger.info('{0} - Already up-to-date. Skipping'.format(address))
+                    return True
+
+                gen3_module = int(firmware_version.split('.')[0]) >= 6
+                if gen3_firmware and not gen3_module:
+                    logger.info('{0} - Skip flashing Gen3 firmware on Gen2 module'.format(address))
+                    return True
+                if gen3_module and not gen3_firmware:
+                    logger.info('{0} - Skip flashing Gen2 firmware on Gen3 module'.format(address))
                     return True
 
                 logger.info('{0} - Entering bootloader'.format(address))

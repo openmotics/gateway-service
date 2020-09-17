@@ -51,14 +51,28 @@ FIRMWARE_FILES = {'gateway_service': 'gateway.tgz',
                   'energy': 'e_firmware.hex',
                   'can': 'c_firmware.hex',
                   'output': 'o_firmware.hex',
+                  'shutter': 'r_firmware.hex',
                   'input': 'i_firmware.hex',
                   'dimmer': 'd_firmware.hex',
-                  'temperature': 't_firmware.hex'}
+                  'temperature': 't_firmware.hex',
+                  'can_gen3': 'c_firmware_gen3.hex',
+                  'output_gen3': 'o_firmware_gen3.hex',
+                  'shutter_gen3': 'r_firmware_gen3.hex',
+                  'input_gen3': 'i_firmware_gen3.hex',
+                  'dimmer_gen3': 'd_firmware_gen3.hex',
+                  'temperature_gen3': 't_firmware_gen3.hex'}
 MODULE_TYPES = {'can': 'c',
                 'output': 'o',
+                'shutter': 'r',
                 'input': 'i',
                 'dimmer': 'd',
-                'temperature': 't'}
+                'temperature': 't',
+                'can_gen3': 'c3',
+                'output_gen3': 'o3',
+                'shutter_gen3': 'r3',
+                'input_gen3': 'i3',
+                'dimmer_gen3': 'd3',
+                'temperature_gen3': 't3'}
 
 
 def cmd(command, **kwargs):
@@ -80,17 +94,27 @@ def cmd_wait_output(proc):
 
 
 def extract_legacy_update(update_file, expected_md5):
-    hash = hashlib.md5()
+    md5_hasher = hashlib.md5()
     with open(update_file, 'rb') as fd:
-        for chunk in iter(lambda: fd.read(128 * hash.block_size), ''):
-            hash.update(chunk)
-    calculated_md5 = hash.hexdigest()
+        for chunk in iter(lambda: fd.read(128 * md5_hasher.block_size), ''):
+            md5_hasher.update(chunk)
+    calculated_md5 = md5_hasher.hexdigest()
     if calculated_md5 != expected_md5:
         raise ValueError('update.tgz md5:%s does not match expected md5:%s' % (calculated_md5, expected_md5))
 
     cmd(['tar', 'xzf', update_file])
 
+
 def fetch_metadata(config, version, expected_md5):
+    """
+    Example metadata:
+    {'version': '1.2.3',
+     'firmwares': [{'type': 'master_coreplus',
+                    'version': '3.12.3'
+                    'dependencies': ['gateway_service >= 3.1.1'],
+                    'sha256': 'abcdef',
+                    'url': 'https://foo.bar/master-coreplus_3.12.3.hex'})
+    """
     response = requests.get(get_metadata_url(config, version), timeout=2)
     if response.status_code != 200:
         raise ValueError('failed to get update metadata')
@@ -177,6 +201,27 @@ def check_gateway_health(timeout=60):
     raise Exception('Gateway services failed to start')
 
 
+def is_up_to_date(name, new_version):
+    current_version = None
+    current_version_filename = os.path.join(PREFIX, 'etc/{0}.version'.format(name))
+    try:
+        if os.path.exists:
+            with open(current_version_filename, 'r') as current_version_file:
+                current_version = current_version_file.read().strip()
+    except Exception:
+        return False  # If the current version can't be loaded just update it
+    if current_version == new_version:
+        logger.info('Skipping already up-to-date {0}'.format(name))
+        return True
+    return False
+
+
+def mark_installed_version(name, version):
+    current_version_filename = os.path.join(PREFIX, 'etc/{0}.version'.format(name))
+    with open(current_version_filename, 'w+') as current_version_file:
+        current_version_file.write('{0}\n'.format(version))
+
+
 def check_master_communication():
     master_tool = os.path.join(PREFIX, 'python/master_tool.py')
     cmd(['python', master_tool, '--reset'])
@@ -198,74 +243,68 @@ def check_master_communication():
         cmd(['python', master_tool, '--sync'])
 
 
-def update_master_firmware(master_type, firmware):
+def update_master_firmware(master_type, hexfile, version):
     master_tool = os.path.join(PREFIX, 'python/master_tool.py')
-    classic_hexfile = FIRMWARE_FILES['master_classic']
-    core_hexfile = FIRMWARE_FILES['master_coreplus']
+    arguments = []
+    if master_type == 'master_classic':
+        arguments += ['--master-firmware-classic', hexfile]
+    elif master_type == 'master_coreplus':
+        arguments += ['--master-firmware-core', hexfile]
     try:
         output = subprocess.check_output(['python', master_tool, '--version'])
-        from_master_version, _, _ = output.decode('utf-8').rstrip().partition(' ')
-        master_version = next((x['version'] for x in firmware if x['type'] == master_type), None)
-        if from_master_version == master_version:
-            logger.info('Master is already {}, skipped'.format(master_version))
+        current_version, _, _ = output.decode('utf-8').rstrip().partition(' ')
+        if current_version == version:
+            logger.info('Master is already v{}, skipped'.format(version))
         else:
-            logger.info('master {} -> {}'.format(from_master_version, master_version))
-            cmd(['python', master_tool, '--update', '--master-firmware-classic', classic_hexfile, '--master-firmware-core', core_hexfile])
-            cmd(['cp', FIRMWARE_FILES[master_type], os.path.join(PREFIX, 'firmware.hex')])
+            logger.info('Master {} -> {}'.format(current_version, version if version else 'unknown'))
+            cmd(['python', master_tool, '--update'] + arguments)
+            cmd(['cp', hexfile, os.path.join(PREFIX, 'firmware.hex')])
     except Exception as exc:
-        logger.error('Updating Master firmware failed')
+        logger.exception('Updating Master firmware failed')
         return exc
 
-def update_power_firmware(hexfile):
-    check_master_communication()
+
+def update_energy_firmware(module, hexfile, version, arguments):
     power_bootloader = os.path.join(PREFIX, 'python/power_bootloader.py')
     try:
-        # TODO: check versions
-        cmd(['python', power_bootloader, '--all', '--8', '--file', hexfile])
+        if version:
+            arguments += ['--version', version]
+        cmd(['python', power_bootloader, '--all', '--file', hexfile] + arguments)
         cmd(['cp', hexfile, os.path.join(PREFIX, os.path.basename(hexfile))])
     except Exception as exc:
-        logger.error('Updating Power firmware failed')
+        logger.exception('Updating {} firmware failed'.format(module))
         return exc
 
 
-def update_energy_firmware(hexfile):
-    check_master_communication()
-    power_bootloader = os.path.join(PREFIX, 'python/power_bootloader.py')
-    try:
-        # TODO: check versions
-        cmd(['python', power_bootloader, '--all', '--file', hexfile])
-        cmd(['cp', hexfile, os.path.join(PREFIX, os.path.basename(hexfile))])
-    except Exception as exc:
-        logger.error('Updating Energy firmware failed')
-        return exc
-
-
-def update_module_firmware(hexfile, module):
+def update_module_firmware(module, hexfile, version):
     check_master_communication()
     modules_bootloader = os.path.join(PREFIX, 'python/modules_bootloader.py')
     try:
-        # TODO: check versions
-        cmd(['python', modules_bootloader, '-t', MODULE_TYPES[module], '-f', hexfile])
+        arguments = []
+        if version:
+            arguments += ['--version', version]
+        cmd(['python', modules_bootloader, '-t', MODULE_TYPES[module], '-f', hexfile] + arguments)
         cmd(['cp', hexfile, os.path.join(PREFIX, os.path.basename(hexfile))])
     except Exception as exc:
-        logger.error('Updating {} firmware failed'.format(module))
+        logger.exception('Updating {} firmware failed'.format(module))
         return exc
 
 
-def update_gateway_os(tarball):
+def update_gateway_os(tarball, version):
     try:
         cmd(['mount', '-o', 'remount,rw', '/'])
         cmd(['tar', '-xz', '--no-same-owner', '-f', tarball, '-C', '/'])
         cmd(['sync'])
         cmd(['bash', '/usr/bin/os_update.sh'])
+        mark_installed_version('gateway_os', version)
     except Exception as exc:
-        logger.error('Updating Gateway OS failed')
+        logger.exception('Updating Gateway OS failed')
         return exc
     finally:
         cmd(['mount', '-o', 'remount,ro', '/'])
 
 
-def update_gateway_backend(tarball, date):
+def update_gateway_backend(tarball, date, version):
     try:
         backup_dir = os.path.join(PREFIX, 'backup')
         python_dir = os.path.join(PREFIX, 'python')
@@ -298,12 +337,14 @@ def update_gateway_backend(tarball, date):
         cmd(['bash', os.path.join(python_dir, 'post-update.sh')])
         cmd(['sync'])
     except Exception as exc:
-        logger.error('Updating Gateway service failed')
+        logger.exception('Updating Gateway service failed')
         return exc
 
 
-def update_gateway_frontend(tarball, date):
+def update_gateway_frontend(tarball, date, version):
     try:
+        if is_up_to_date('gateway_frontend', version):
+            return
         backup_dir = os.path.join(PREFIX, 'backup')
         static_dir = os.path.join(PREFIX, 'static')
         cmd(['mkdir', '-p', backup_dir])
@@ -316,9 +357,10 @@ def update_gateway_frontend(tarball, date):
         logger.info('Extracting gateway')
         cmd(['mkdir', '-p', static_dir])
         cmd(['tar', '-v', '-xzf', tarball, '-C', static_dir])
+        mark_installed_version('gateway_frontend', version)
         cmd(['sync'])
     except Exception as exc:
-        logger.error('Updating Gateway service failed')
+        logger.exception('Updating Gateway service failed')
         return exc
 
 
@@ -327,8 +369,10 @@ def update(version, expected_md5):
     Execute the actual update: extract the archive and execute the bash update script.
 
     :param version: the new version (after the update).
-    :param md5_server: the md5 sum provided by the server.
+    :param expected_md5: the md5 sum provided by the server.
     """
+    version_mapping = {}
+
     try:
         config = ConfigParser()
         config.read(constants.get_config_file())
@@ -341,8 +385,6 @@ def update(version, expected_md5):
         # Change to update directory.
         os.chdir(update_dir)
 
-        meta = {}
-
         if os.path.exists(update_file):
             logger.info(' -> Extracting update.tgz')
             extract_legacy_update(update_file, expected_md5)
@@ -352,12 +394,13 @@ def update(version, expected_md5):
             logger.info(' -> Downloading firmware for update {}'.format(meta['version']))
             for data in meta['firmwares']:
                 download_firmware(data['type'], data['url'], data['sha256'])
+                version_mapping[data['type']] = data['version']
     except Exception:
         logger.exception('failed to preprepare update')
         raise SystemExit(1)
 
+    errors = []
     try:
-        errors = []
         date = datetime.now().strftime('%Y%m%d%H%M%S')
 
         # TODO: should update and re-execute itself before proceeding?
@@ -370,45 +413,44 @@ def update(version, expected_md5):
 
         gateway_os = FIRMWARE_FILES['gateway_os']
         if os.path.exists(gateway_os):
-            logger.info(' -> Updating Gateway OS')
-            error = update_gateway_os(gateway_os)
+            version = version_mapping.get('gateway_os')
+            logger.info(' -> Updating Gateway OS to {0}'.format(version if version else 'unknown version'))
+            error = update_gateway_os(gateway_os, version)
             if error:
                 errors.append(error)
 
         gateway_service = FIRMWARE_FILES['gateway_service']
         if os.path.exists(gateway_service):
-            logger.info(' -> Updating Gateway service')
-            error = update_gateway_backend(gateway_service, date)
+            version = version_mapping.get('gateway_service')
+            logger.info(' -> Updating Gateway service to {0}'.format(version if version else 'unknown version'))
+            error = update_gateway_backend(gateway_service, date, version)
             if error:
                 errors.append(error)
 
         master_type = get_master_type()
         master_firmware = FIRMWARE_FILES[master_type]
         if os.path.exists(master_firmware):
-            logger.info(' -> Updating Master firmware')
-            error = update_master_firmware(master_type, meta.get('firmware', []))
+            version = version_mapping.get(master_type)
+            logger.info(' -> Updating Master firmware to {0}'.format(version if version else 'unknown version'))
+            error = update_master_firmware(master_type, master_firmware, version)
             if error:
                 errors.append(error)
 
-        power_firmware = FIRMWARE_FILES['power']
-        if os.path.exists(power_firmware):
-            logger.info(' -> Updating Power firmware')
-            error = update_power_firmware(power_firmware)
-            if error:
-                errors.append(error)
-
-        energy_firmware = FIRMWARE_FILES['energy']
-        if os.path.exists(energy_firmware):
-            logger.info(' -> Updating Energy firmware')
-            error = update_energy_firmware(energy_firmware)
-            if error:
-                errors.append(error)
+        for module, filename, arguments in [('energy', FIRMWARE_FILES['energy'], []),
+                                            ('power', FIRMWARE_FILES['power'], ['--8'])]:
+            if os.path.exists(filename):
+                version = version_mapping.get(module)
+                logger.info(' -> Updating {0} firmware to {1}'.format(module, version if version else 'unknown version'))
+                error = update_energy_firmware(module, filename, version, arguments)
+                if error:
+                    errors.append(error)
 
         for module in MODULE_TYPES:
             module_firmware = FIRMWARE_FILES[module]
+            version = version_mapping.get(module)
             if os.path.exists(module_firmware):
-                logger.info(' -> Updating {} firmware'.format(module))
-                error = update_module_firmware(module_firmware, module)
+                logger.info(' -> Updating {0} firmware to {1}'.format(module, version if version else 'unknown version'))
+                error = update_module_firmware(module, module_firmware, version)
                 if error:
                     errors.append(error)
 
@@ -417,8 +459,9 @@ def update(version, expected_md5):
 
         gateway_frontend = FIRMWARE_FILES['gateway_frontend']
         if os.path.exists(gateway_frontend):
-            logger.info(' -> Updating Gateway frontend')
-            error = update_gateway_frontend(gateway_frontend, date)
+            version = version_mapping.get('gateway_frontend')
+            logger.info(' -> Updating Gateway frontend to {0}'.format(version if version else 'unknown version'))
+            error = update_gateway_frontend(gateway_frontend, date, version)
             if error:
                 errors.append(error)
 
@@ -429,6 +472,7 @@ def update(version, expected_md5):
         check_gateway_health()
 
     except Exception as exc:
+        logger.exception('Unexpected exception updating')
         errors.append(exc)
         # TODO: rollback
     finally:
@@ -439,8 +483,9 @@ def update(version, expected_md5):
         cmd('rm -v -rf {}/*'.format(update_dir), shell=True)
 
         if errors:
+            logger.error('Exceptions:')
             for error in errors:
-                logger.error(error)
+                logger.error('- {0}'.format(error))
             raise SystemExit(1)
 
         config.set('OpenMotics', 'version', version)
@@ -486,7 +531,6 @@ def main():
         finally:
             fcntl.flock(wfd, fcntl.LOCK_UN)
             os.unlink(lockfile)
-
 
 
 if __name__ == '__main__':

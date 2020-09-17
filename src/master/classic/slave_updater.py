@@ -32,7 +32,7 @@ from master.classic.master_communicator import MasterCommunicator, Communication
 from master.classic.eeprom_controller import EepromFile, EepromAddress
 
 if False:  # MYPY
-    from typing import Tuple, List, Dict, Any, Union
+    from typing import Tuple, List, Dict, Any, Union, Optional
     from master.classic.master_api import MasterCommandSpec
 
 logger = logging.getLogger("openmotics")
@@ -114,7 +114,7 @@ def get_module_addresses(module_type):
         address = EepromAddress(33 + i, 0, 4)
         modules.append(eeprom_file.read([address])[address].bytes)
 
-    return [module for module in modules if module[0] == module_type]
+    return [module for module in modules if chr(module[0]) == module_type]
 
 
 def pretty_address(address):
@@ -193,8 +193,8 @@ def do_command(cmd, fields, retry=True, success_code=0, master_communicator=INJE
 
 
 @Inject
-def bootload(address, ihex, crc, blocks, master_communicator=INJECTED):
-    # type: (bytearray, intelhex.IntelHex, Tuple[int, int, int, int], int, MasterCommunicator) -> None
+def bootload(address, ihex, crc, blocks, version, gen3_firmware, master_communicator=INJECTED):
+    # type: (bytearray, intelhex.IntelHex, Tuple[int, int, int, int], int, Optional[str], bool, MasterCommunicator) -> None
     """
     Bootload 1 module.
 
@@ -203,16 +203,31 @@ def bootload(address, ihex, crc, blocks, master_communicator=INJECTED):
     :param ihex: The hex file
     :param crc: The crc for the hex file
     :param blocks: The number of blocks to write
+    :param version: Optional version
+    :param gen3_firmware: Specifies whether it's gen3 firmware
     """
+    gen3_module = None  # type: Optional[bool]
     logger.info('Checking the version')
     try:
         result = do_command(cmd=master_api.modules_get_version(),
                             fields={'addr': address},
                             retry=False,
                             success_code=255)
-        logger.info('Current version: v{0}.{1}.{2}'.format(result['f1'], result['f2'], result['f3']))
+        current_version = '{0}.{1}.{2}'.format(result['f1'], result['f2'], result['f3'])
+        gen3_module = result['f1'] >= 6
+        logger.info('Current version: v{0}'.format(current_version))
+        if current_version == version:
+            logger.info('Firmware up-to-date. Skipping')
+            return
     except Exception:
         logger.info('Version call not (yet) implemented or module unavailable')
+
+    if gen3_firmware and (gen3_module is None or gen3_module is False):
+        logger.info('Skip flashing Gen3 firmware on {0} module'.format('unknown' if gen3_module is None else 'Gen2'))
+        return
+    if gen3_module and not gen3_firmware:
+        logger.info('Skip flashing Gen2 firmware on Gen3 module')
+        return
 
     logger.info('Going to bootloader')
     try:
@@ -279,13 +294,15 @@ def bootload(address, ihex, crc, blocks, master_communicator=INJECTED):
 
 
 @Inject
-def bootload_modules(module_type, filename):
-    # type: (str, str) -> bool
+def bootload_modules(module_type, filename, gen3_firmware, version):
+    # type: (str, str, bool, Optional[str]) -> bool
     """
     Bootload all modules of the given type with the firmware in the given filename.
 
     :param module_type: Type of the modules (O, R, D, I, T, C)
     :param filename: The filename for the hex file to load
+    :param gen3_firmware: Indicates whether it's a gen3 firmware
+    :param version: The version of the hexfile, if known
     """
 
     logger.info('Loading module addresses...')
@@ -299,7 +316,7 @@ def bootload_modules(module_type, filename):
     for address in addresses:
         logger.info('Bootloading module {0}'.format(pretty_address(address)))
         try:
-            bootload(address, ihex, crc, blocks)
+            bootload(address, ihex, crc, blocks, version, gen3_firmware)
         except Exception:
             update_success = False
             logger.info('Bootloading failed:')
