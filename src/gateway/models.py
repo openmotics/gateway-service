@@ -191,7 +191,7 @@ class Ventilation(BaseModel):
     name = CharField()
     type = CharField()
     vendor = CharField()
-    steps = IntegerField()
+    amount_of_levels = IntegerField()
 
     class Meta:
         indexes = (

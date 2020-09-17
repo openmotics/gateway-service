@@ -206,7 +206,7 @@ class Ventilation(BaseModel):
     name: MixedTextField
     type: MixedTextField
     vendor: MixedTextField
-    steps: MixedIntegerField
+    amount_of_levels: MixedIntegerField
 
 class ThermostatGroup(BaseModel):
     id: MixedPrimaryKeyField
