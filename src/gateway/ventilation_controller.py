@@ -48,6 +48,13 @@ class VentilationController(object):
         # type: () -> None
         pass
 
+    def load_ventilations(self):
+        # type: () -> List[VentilationDTO]
+        ventilations = []
+        for ventilation in Ventilation.select():
+            ventilations.append(VentilationMapper.orm_to_dto(ventilation))
+        return ventilations
+
     def load_ventilation(self, ventilation_id):
         # type: (int) -> VentilationDTO
         ventilation = Ventilation.get(id=ventilation_id)

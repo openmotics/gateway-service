@@ -877,6 +877,14 @@ class WebInterface(object):
     # Ventilation
 
     # methods=['GET']
+    @openmotics_api(auth=True, check=types(fields='json'))
+    def get_ventilation_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str, Any]
+        ventilation_dtos = self._ventilation_controller.load_ventilations()
+        return {'config': [VentilationSerializer.serialize(ventilation_dto, fields)
+                           for ventilation_dto in ventilation_dtos]}
+
+    # methods=['GET']
     @openmotics_api(auth=True, check=types(ventilation_id=int, fields='json'))
     def get_ventilation_configuration(self, ventilation_id, fields=None):
         # type: (int, Optional[List[str]]) -> Dict[str, Any]
