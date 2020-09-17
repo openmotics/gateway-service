@@ -365,7 +365,8 @@ class ThermostatControllerGateway(ThermostatController):
     def v0_get_global_thermostat_configuration(self, fields=None):
         # TODO: Implement this with sqlite as backing
         global_thermostat_group = ThermostatGroup.v0_get_global()
-        config = {'outside_sensor': global_thermostat_group.sensor,
+        outside_sensor = global_thermostat_group.sensor
+        config = {'outside_sensor': 255 if outside_sensor is None else outside_sensor,
                   'pump_delay': 255,
                   'threshold_temp': global_thermostat_group.threshold_temp}
 
@@ -466,7 +467,13 @@ class ThermostatControllerGateway(ThermostatController):
         raise NotImplementedError()
 
     def v0_get_global_rtd10_configuration(self, fields=None):
-        raise NotImplementedError()
+        data = {}  # TODO: Implement
+        for i in range(16, 25):
+            data.update({'output_value_heating_{0}'.format(i): 0,
+                         'output_value_heating_{0}_5'.format(i): 0,
+                         'output_value_cooling_{0}'.format(i): 0,
+                         'output_value_cooling_{0}_5'.format(i): 0})
+        return data
 
     def v0_set_global_rtd10_configuration(self, config):
         raise NotImplementedError()
@@ -475,7 +482,7 @@ class ThermostatControllerGateway(ThermostatController):
         raise NotImplementedError()
 
     def v0_get_rtd10_heating_configurations(self, fields=None):
-        raise NotImplementedError()
+        return []
 
     def v0_set_rtd10_heating_configuration(self, config):
         raise NotImplementedError()
@@ -487,7 +494,7 @@ class ThermostatControllerGateway(ThermostatController):
         raise NotImplementedError()
 
     def v0_get_rtd10_cooling_configurations(self, fields=None):
-        raise NotImplementedError()
+        return []
 
     def v0_set_rtd10_cooling_configuration(self, config):
         raise NotImplementedError()

@@ -949,6 +949,23 @@ class MasterCoreController(MasterController):
     def get_configuration_dirty_flag(self):
         return False  # TODO: Implement
 
+    # Legacy
+
+    def load_scheduled_action_configurations(self, fields=None):
+        # type: (Any) -> List[Dict[str,Any]]
+        return []
+
+    def load_startup_action_configuration(self, fields=None):
+        # type: (Any) -> Dict[str,Any]
+        return {'actions': ''}
+
+    def load_dimmer_configuration(self, fields=None):
+        # type: (Any) -> Dict[str,Any]
+        return {'min_dim_level': 0,  # TODO: Implement
+                'dim_step': 0,
+                'dim_wait_cycle': 0,
+                'dim_memory': 0}
+
 
 class MasterInputState(object):
     def __init__(self, interval=300):
