@@ -223,7 +223,7 @@ def bootload(address, ihex, crc, blocks, version, gen3_firmware, master_communic
         logger.info('Version call not (yet) implemented or module unavailable')
 
     if gen3_firmware and (gen3_module is None or gen3_module is False):
-        logger.info('Skip flashing Gen3 firmware on Gen2 or unknown module')
+        logger.info('Skip flashing Gen3 firmware on {0} module'.format('unknown' if gen3_module is None else 'Gen2'))
         return
     if gen3_module and not gen3_firmware:
         logger.info('Skip flashing Gen2 firmware on Gen3 module')
