@@ -176,7 +176,7 @@ class Consumer(object):
     def send_only(self):  # type: () -> bool
         return len(self.command.response_instructions) == 0
 
-    def get(self, timeout):  # type: (int) -> Dict[str, Any]
+    def get(self, timeout):  # type: (Union[int, float]) -> Dict[str, Any]
         """
         Wait until the uCAN (or CC) replies or the timeout expires.
 

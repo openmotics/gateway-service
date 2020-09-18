@@ -66,7 +66,7 @@ class MemoryModelDefinition(object):
             self._relations.append(field_name)
         for field_name, composition in self.__class__._get_composite_fields().items():
             setattr(self, '_{0}'.format(field_name), CompositionContainer(composition,
-                                                                          composition._field._length * 8,
+                                                                          composition._field.length * 8,
                                                                           MemoryFieldContainer(composition._field,
                                                                                                composition._field.get_address(self._id),
                                                                                                self._memory_files)))
@@ -280,7 +280,7 @@ class MemoryField(object):
         self._address_tuple = None
         self._address_generator = None
         self._memory_type = memory_type
-        self._length = length
+        self.length = length
         if limits is not None:
             self.limits = limits
         else:
@@ -309,7 +309,7 @@ class MemoryField(object):
             if self._address_generator is None:
                 raise TypeError('MemoryField did not expect an id')
             page, offset = self._address_generator(id)
-        return MemoryAddress(self._memory_type, page, offset, self._length)
+        return MemoryAddress(self._memory_type, page, offset, self.length)
 
     def encode(self, data):  # type: (Any) -> bytearray
         """ Encodes changes a high-level value such as a string or large integer into a bytearray """
@@ -329,12 +329,12 @@ class MemoryStringField(MemoryField):
         super(MemoryStringField, self).__init__(memory_type, address_spec, length)
 
     def encode(self, value):  # type: (str) -> bytearray
-        if len(value) > self._length:
-            raise ValueError('Value {0} should be a string of {1} characters'.format(value, self._length))
+        if len(value) > self.length:
+            raise ValueError('Value {0} should be a string of {1} characters'.format(value, self.length))
         data = []
         for char in value:
             data.append(ord(char))
-        data += [255] * (self._length - len(data))
+        data += [255] * (self.length - len(data))
         return bytearray(data)
 
     def decode(self, data):  # type: (bytearray) -> str
@@ -361,10 +361,10 @@ class MemoryWordField(MemoryField):
 
     def encode(self, value):  # type: (int) -> bytearray
         self._check_limits(value)
-        return bytearray(struct.pack('>h', value))
+        return bytearray(struct.pack('>H', value))
 
     def decode(self, data):  # type: (bytearray) -> int
-        return struct.unpack('>h', data)[0]
+        return struct.unpack('>H', data)[0]
 
 
 class Memory3BytesField(MemoryField):
@@ -456,10 +456,10 @@ class MemoryAddressField(MemoryField):
         super(MemoryAddressField, self).__init__(memory_type, address_spec, length)
 
     def encode(self, value):  # type: (str) -> bytearray
-        example = '.'.join(['ID{0}'.format(i) for i in range(self._length - 1, -1, -1)])
+        example = '.'.join(['ID{0}'.format(i) for i in range(self.length - 1, -1, -1)])
         error_message = 'Value `{0}` should be a string in the format of {1}, where 0 <= IDx <= 255'.format(value, example)
         parts = str(value).split('.')
-        if len(parts) != self._length:
+        if len(parts) != self.length:
             raise ValueError(error_message)
         data = []
         for part in parts:

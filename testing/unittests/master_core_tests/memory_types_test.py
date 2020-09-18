@@ -21,7 +21,7 @@ import unittest
 import xmlrunner
 from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
-from master.core.basic_action import BasicAction
+from master.core.basic_action import BasicAction  # Must be imported
 from master.core.memory_types import *
 from master.core.memory_file import MemoryTypes, MemoryFile
 
@@ -56,64 +56,64 @@ class MemoryTypesTest(unittest.TestCase):
             self.assertEqual(MemoryAddress(MemoryTypes.EEPROM, expected_address[0], expected_address[1], 1), field.get_address(object_id))
 
     def test_string_field(self):
-        self._test_field(MemoryStringField, [[[1], 'a', [97]],
+        self._test_field(MemoryStringField, [[[1], 'a', bytearray([97])],
                                              [[1], 'ab', ValueError],
-                                             [[3], 'abc', [97, 98, 99]]])
+                                             [[3], 'abc', bytearray([97, 98, 99])]])
 
     def test_byte_field(self):
         self._test_field(MemoryByteField, [[[], -1, ValueError],
-                                           [[], 0, [0]],
-                                           [[], 20, [20]],
-                                           [[], 2 ** 8 - 1, [255]],
+                                           [[], 0, bytearray([0])],
+                                           [[], 20, bytearray([20])],
+                                           [[], 2 ** 8 - 1, bytearray([255])],
                                            [[], 2 ** 8, ValueError]])
 
     def test_word_field(self):
         self._test_field(MemoryWordField, [[[], -1, ValueError],
-                                           [[], 0, [0, 0]],
-                                           [[], 2 ** 8, [1, 0]],
-                                           [[], 2 ** 16 - 1, [255, 255]],
+                                           [[], 0, bytearray([0, 0])],
+                                           [[], 2 ** 8, bytearray([1, 0])],
+                                           [[], 2 ** 16 - 1, bytearray([255, 255])],
                                            [[], 2 ** 16, ValueError]])
 
     def test_3bytes_field(self):
         self._test_field(Memory3BytesField, [[[], -1, ValueError],
-                                             [[], 0, [0, 0, 0]],
-                                             [[], 2 ** 8, [0, 1, 0]],
-                                             [[], 2 ** 16 - 1, [0, 255, 255]],
-                                             [[], 2 ** 16, [1, 0, 0]],
-                                             [[], 2 ** 24 - 1, [255, 255, 255]],
+                                             [[], 0, bytearray([0, 0, 0])],
+                                             [[], 2 ** 8, bytearray([0, 1, 0])],
+                                             [[], 2 ** 16 - 1, bytearray([0, 255, 255])],
+                                             [[], 2 ** 16, bytearray([1, 0, 0])],
+                                             [[], 2 ** 24 - 1, bytearray([255, 255, 255])],
                                              [[], 2 ** 24, ValueError]])
 
     def test_bytearray_field(self):
         self._test_field(MemoryByteArrayField, [[[1], [], ValueError],
                                                 [[1], [-1], ValueError],
-                                                [[1], [0], [0]],
+                                                [[1], [0], bytearray([0])],
                                                 [[2], [0], ValueError],
                                                 [[2], [0, 0, 0], ValueError],
-                                                [[2], [10, 0], [10, 0]],
+                                                [[2], [10, 0], bytearray([10, 0])],
                                                 [[2], [10, 265], ValueError]])
 
     def test_memoryarray_field(self):
         self._test_field(MemoryWordArrayField, [[[1], [], ValueError],
                                                 [[1], [-1], ValueError],
-                                                [[1], [0], [0, 0]],
+                                                [[1], [0], bytearray([0, 0])],
                                                 [[2], [0], ValueError],
-                                                [[2], [0, 0], [0, 0, 0, 0]],
-                                                [[2], [2 ** 8, 2 ** 16 - 1], [1, 0, 255, 255]],
+                                                [[2], [0, 0], bytearray([0, 0, 0, 0])],
+                                                [[2], [2 ** 8, 2 ** 16 - 1], bytearray([1, 0, 255, 255])],
                                                 [[2], [2 ** 8, 2 ** 16], ValueError]])
 
     def test_basicaction_field(self):
-        self._test_field(MemoryBasicActionField, [[[], BasicAction(10, 10, 0, 0), [10, 10, 0, 0, 0, 0]],
-                                                  [[], BasicAction(10, 20, 256, 256), [10, 20, 1, 0, 1, 0]]])
+        self._test_field(MemoryBasicActionField, [[[], BasicAction(10, 10, 0, 0), bytearray([10, 10, 0, 0, 0, 0])],
+                                                  [[], BasicAction(10, 20, 256, 256), bytearray([10, 20, 1, 0, 1, 0])]])
 
     def test_address_field(self):
         self._test_field(MemoryAddressField, [[[], '0', ValueError],
-                                              [[], '0.0.0.0', [0, 0, 0, 0], '000.000.000.000'],
-                                              [[], '1.2.3.4', [1, 2, 3, 4], '001.002.003.004']])
+                                              [[], '0.0.0.0', bytearray([0, 0, 0, 0]), '000.000.000.000'],
+                                              [[], '1.2.3.4', bytearray([1, 2, 3, 4]), '001.002.003.004']])
 
     def test_version_field(self):
         self._test_field(MemoryVersionField, [[[], '0', ValueError],
-                                              [[], '0.0.0', [0, 0, 0]],
-                                              [[], '1.2.3', [1, 2, 3]]])
+                                              [[], '0.0.0', bytearray([0, 0, 0])],
+                                              [[], '1.2.3', bytearray([1, 2, 3])]])
 
     def _test_field(self, field_type, scenario):
         for item in scenario:
@@ -135,7 +135,7 @@ class MemoryTypesTest(unittest.TestCase):
     def test_memory_field_container(self):
         address = MemoryAddress(MemoryTypes.EEPROM, 0, 1, 1)
         memory_file_mock = Mock(MemoryFile)
-        memory_file_mock.read.return_value = {address: [1]}
+        memory_file_mock.read.return_value = {address: bytearray([1])}
         container = MemoryFieldContainer(memory_field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)),
                                          memory_address=address,
                                          memory_files={MemoryTypes.EEPROM: memory_file_mock})
@@ -146,7 +146,7 @@ class MemoryTypesTest(unittest.TestCase):
         data = container.decode()
         self.assertEqual(2, data)
         container.save()
-        memory_file_mock.write.assert_called_with({address: [2]})
+        memory_file_mock.write.assert_called_with({address: bytearray([2])})
 
     def test_model_definition(self):
         memory_map = {0: [30, 31, 32],

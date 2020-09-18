@@ -132,10 +132,10 @@ class WordField(Field):
 
     def encode(self, value):  # type: (int) -> bytearray
         self._check_limits(value)
-        return bytearray(struct.pack('>h', value))
+        return bytearray(struct.pack('>H', value))
 
     def decode(self, data):  # type: (bytearray) -> int
-        return struct.unpack('>h', data)[0]
+        return struct.unpack('>H', data)[0]
 
 
 class UInt32Field(Field):

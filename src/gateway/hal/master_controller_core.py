@@ -108,7 +108,7 @@ class MasterCoreController(MasterController):
         self._publish_event(MasterEvent(event_type=MasterEvent.Types.EEPROM_CHANGE, data=None))
 
     def _handle_event(self, data):
-        # type: (Dict[str,Any]) -> None
+        # type: (Dict[str, Any]) -> None
         core_event = MasterCoreEvent(data)
         if core_event.type not in [MasterCoreEvent.Types.LED_BLINK,
                                    MasterCoreEvent.Types.LED_ON,

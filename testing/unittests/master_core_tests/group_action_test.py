@@ -25,7 +25,7 @@ from ioc import SetTestMode, SetUpTestInjections
 from master.core.basic_action import BasicAction
 from master.core.group_action import GroupActionController, GroupAction
 from master.core.memory_file import MemoryTypes, MemoryFile
-from master.core.memory_types import MemoryWordField
+from master.core.fields import WordField
 
 
 class GroupActionTest(unittest.TestCase):
@@ -48,6 +48,7 @@ class GroupActionTest(unittest.TestCase):
 
     def setUp(self):
         self.maxDiff = None
+        self._word_helper = WordField('')
 
     @staticmethod
     def _encode_string(value):
@@ -55,7 +56,7 @@ class GroupActionTest(unittest.TestCase):
         for char in value:
             data.append(ord(char))
         data.append(255)
-        return data
+        return bytearray(data)
 
     @staticmethod
     def _write(memory_page, start_address, data):
@@ -97,7 +98,7 @@ class GroupActionTest(unittest.TestCase):
     def test_list_group_actions(self):
         memory = {}
         for page in range(256, 381):
-            memory[page] = [255] * 256
+            memory[page] = bytearray([255] * 256)
         GroupActionTest._setup_master_communicator(memory)
 
         group_actions = GroupActionController.load_group_actions()
@@ -106,7 +107,7 @@ class GroupActionTest(unittest.TestCase):
             self.assertFalse(group_actions[i].in_use, 'GA {0} should not be in use'.format(i))
 
         # Set valid start address
-        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 0 * 4, MemoryWordField.encode(0))
+        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 0 * 4, self._word_helper.encode(0))
 
         group_actions = GroupActionController.load_group_actions()
         self.assertEqual(256, len(group_actions), 'There should still be 256 GAs')
@@ -128,7 +129,7 @@ class GroupActionTest(unittest.TestCase):
         self.assertFalse(group_action.in_use, 'The GA is still not in use')
 
         # Write valid end address but remove BA
-        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 0 * 4 + 2, MemoryWordField.encode(0))
+        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 0 * 4 + 2, self._word_helper.encode(0))
         GroupActionTest._write(memory[GroupActionTest.ACTIONS_START_PAGE], 0 * 6, [255, 255, 255, 255, 255, 255])
 
         group_action = GroupActionController.load_group_action(0)
@@ -143,7 +144,7 @@ class GroupActionTest(unittest.TestCase):
         self.assertEqual(basic_action_1, group_action.actions[0], 'The expected BA should be configured')
 
         # Make the GA point to two BAs
-        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 0 * 4 + 2, MemoryWordField.encode(1))
+        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 0 * 4 + 2, self._word_helper.encode(1))
 
         group_action = GroupActionController.load_group_action(0)
         self.assertTrue(group_action.in_use, 'The GA is still in use')
@@ -169,8 +170,8 @@ class GroupActionTest(unittest.TestCase):
         basic_action_3 = BasicAction(0, 2)
         GroupActionTest._write(memory[GroupActionTest.ACTIONS_START_PAGE], 2 * 6, basic_action_3.encode())
         GroupActionTest._write(memory[GroupActionTest.GANAMES_START_PAGE], 2 * 16, GroupActionTest._encode_string('three'))
-        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 2 * 4, MemoryWordField.encode(2))
-        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 2 * 4 + 2, MemoryWordField.encode(2))
+        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 2 * 4, self._word_helper.encode(2))
+        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 2 * 4 + 2, self._word_helper.encode(2))
 
         group_action_2 = GroupActionController.load_group_action(2)
         group_actions = GroupActionController.load_group_actions()
@@ -185,20 +186,20 @@ class GroupActionTest(unittest.TestCase):
     def test_space_map(self):
         memory = {}
         for page in range(256, 381):
-            memory[page] = [255] * 256
+            memory[page] = bytearray([255] * 256)
         GroupActionTest._setup_master_communicator(memory)
 
         space_map = GroupActionController._free_address_space_map()
         self.assertEqual({4200: [0]}, space_map, 'An empty map is expected')
 
         # Write a single start address
-        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 0 * 4, MemoryWordField.encode(0))
+        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 0 * 4, self._word_helper.encode(0))
 
         space_map = GroupActionController._free_address_space_map()
         self.assertEqual({4200: [0]}, space_map, 'There should still be an empty map')
 
         # Write an end address
-        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 0 * 4 + 2, MemoryWordField.encode(0))
+        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 0 * 4 + 2, self._word_helper.encode(0))
 
         space_map = GroupActionController._free_address_space_map()
         self.assertEqual({4199: [1]}, space_map, 'First address is used')
@@ -206,13 +207,13 @@ class GroupActionTest(unittest.TestCase):
         # Write a few more addresses:
         # Range 0-0 already used by above code
         # Range 1-9 (0)
-        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 1 * 4, MemoryWordField.encode(10) + MemoryWordField.encode(14))
+        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 1 * 4, self._word_helper.encode(10) + self._word_helper.encode(14))
         # Range 15-19 (5)
-        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 2 * 4, MemoryWordField.encode(20) + MemoryWordField.encode(24))
+        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 2 * 4, self._word_helper.encode(20) + self._word_helper.encode(24))
         # Range 25-29 (5)
-        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 4 * 4, MemoryWordField.encode(30) + MemoryWordField.encode(34))
+        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 4 * 4, self._word_helper.encode(30) + self._word_helper.encode(34))
         # Range 35-99 (65)
-        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 3 * 4, MemoryWordField.encode(100) + MemoryWordField.encode(163))
+        GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], 3 * 4, self._word_helper.encode(100) + self._word_helper.encode(163))
         # Range 164-4199 (4036)
 
         space_map = GroupActionController._free_address_space_map()
@@ -224,7 +225,7 @@ class GroupActionTest(unittest.TestCase):
     def test_save_configuration(self):
         memory = {}
         for page in range(256, 381):
-            memory[page] = [255] * 256
+            memory[page] = bytearray([255] * 256)
         GroupActionTest._setup_master_communicator(memory)
 
         group_action = GroupAction(id=5, name='five')
@@ -246,7 +247,7 @@ class GroupActionTest(unittest.TestCase):
         """
         memory = {}
         for page in range(256, 381):
-            memory[page] = [255] * 256
+            memory[page] = bytearray([255] * 256)
         GroupActionTest._setup_master_communicator(memory)
 
         space_map = GroupActionController._free_address_space_map()
@@ -258,7 +259,7 @@ class GroupActionTest(unittest.TestCase):
         # Generate "pre-defined" GAs
         for group_action_id, address in {10: 0, 11: 2, 12: 5, 13: 8, 14: 14, 15: 25, 16: (41, 4199)}.items():
             start, end = (address[0], address[1]) if isinstance(address, tuple) else (address, address)
-            GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], group_action_id * 4, MemoryWordField.encode(start) + MemoryWordField.encode(end))
+            GroupActionTest._write(memory[GroupActionTest.ADDRESS_START_PAGE], group_action_id * 4, self._word_helper.encode(start) + self._word_helper.encode(end))
             memory[GroupActionTest.ACTIONS_START_PAGE][start * 6] = 100 + group_action_id
 
         space_map = GroupActionController._free_address_space_map()

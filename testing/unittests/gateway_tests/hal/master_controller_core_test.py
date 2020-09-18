@@ -10,18 +10,14 @@ from six.moves.queue import Queue
 import gateway.hal.master_controller_core
 from gateway.config import ConfigurationController
 from gateway.dto import InputDTO, OutputStateDTO
-from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.hal.master_controller_core import MasterCoreController
 from gateway.hal.master_event import MasterEvent
-from ioc import Scope, SetTestMode, SetUpTestInjections
-from master.classic import eeprom_models
-from master.classic.eeprom_controller import EepromController
-from master.classic.master_communicator import MasterCommunicator
+from ioc import SetTestMode, SetUpTestInjections
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.memory_file import MemoryFile, MemoryTypes
 from master.core.memory_models import InputConfiguration, \
-    OutputConfiguration, ShutterConfiguration, GlobalConfiguration
+    OutputConfiguration, ShutterConfiguration
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.ucan_communicator import UCANCommunicator
 
@@ -39,22 +35,22 @@ class MasterCoreControllerTest(unittest.TestCase):
 
         def _do_command(command, fields, timeout=None):
             _ = timeout
-            if command.instruction == 'MR':
+            instruction = ''.join(str(chr(c)) for c in command.instruction)
+            if instruction == 'MR':
                 page = fields['page']
                 start = fields['start']
                 length = fields['length']
-                return {'data': self.memory.get(page, [255] * 256)[start:start + length]}
-            elif command.instruction == 'MW':
+                return {'data': self.memory.get(page, bytearray([255] * 256))[start:start + length]}
+            elif instruction == 'MW':
                 page = fields['page']
                 start = fields['start']
-                page_data = self.memory.setdefault(page, [255] * 256)
+                page_data = self.memory.setdefault(page, bytearray([255] * 256))
                 for index, data_byte in enumerate(fields['data']):
                     page_data[start + index] = data_byte
-            elif command.instruction in self.return_data:
-                return self.return_data[command.instruction]
-                return self.return_data[command.instruction]
+            elif instruction in self.return_data:
+                return self.return_data[instruction]
             else:
-                raise AssertionError('unexpected instruction "{}"'.format(command.instruction))
+                raise AssertionError('unexpected instruction: {0}'.format(instruction))
 
         self.communicator = mock.Mock(CoreCommunicator)
         self.communicator.do_command = _do_command
@@ -78,10 +74,10 @@ class MasterCoreControllerTest(unittest.TestCase):
         self.controller.subscribe_event(_on_event)
 
         events = []
-        self.controller._handle_event({'type': 0, 'device_nr': 0, 'action': 0, 'data': [None, 0, 0, 0]})
-        self.controller._handle_event({'type': 0, 'device_nr': 2, 'action': 1, 'data': [100, 2, 0xff, 0xfe]})
-        assert [MasterEvent('OUTPUT_STATUS', {'id': 0, 'status': False, 'dimmer': None, 'ctimer': 0}),
-                MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': True, 'dimmer': 100, 'ctimer': 65534})] == events
+        self.controller._handle_event({'type': 0, 'device_nr': 0, 'action': 0, 'data': bytearray([255, 0, 0, 0])})
+        self.controller._handle_event({'type': 0, 'device_nr': 2, 'action': 1, 'data': bytearray([100, 2, 0xff, 0xfe])})
+        self.assertEqual([MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'id': 0, 'status': False, 'dimmer': 255, 'ctimer': 0}),
+                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'id': 2, 'status': True, 'dimmer': 100, 'ctimer': 65534})], events)
 
     def test_master_shutter_event(self):
         events = []

@@ -35,19 +35,20 @@ class InputCoreMapperTest(unittest.TestCase):
 
         def _do_command(command, fields, timeout=None):
             _ = timeout
-            if command.instruction == 'MR':
+            instruction = ''.join(str(chr(c)) for c in command.instruction)
+            if instruction == 'MR':
                 page = fields['page']
                 start = fields['start']
                 length = fields['length']
-                return {'data': self.memory.get(page, [255] * 256)[start:start + length]}
-            elif command.instruction == 'MW':
+                return {'data': self.memory.get(page, bytearray([255] * 256))[start:start + length]}
+            elif instruction == 'MW':
                 page = fields['page']
                 start = fields['start']
-                page_data = self.memory.setdefault(page, [255] * 256)
+                page_data = self.memory.setdefault(page, bytearray([255] * 256))
                 for index, data_byte in enumerate(fields['data']):
                     page_data[start + index] = data_byte
             else:
-                raise AssertionError('unexpected instruction "{}"'.format(command.instruction))
+                raise AssertionError('unexpected instruction: {0}'.format(instruction))
 
         self.communicator = Mock(CoreCommunicator)
         self.communicator.do_command = _do_command
