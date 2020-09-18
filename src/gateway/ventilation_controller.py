@@ -92,10 +92,11 @@ class VentilationController(object):
 
     def set_status(self, status_dto):
         # type: (VentilationStatusDTO) -> VentilationStatusDTO
-        _ = self.load_ventilation(status_dto.id)
+        ventilation_dto = self.load_ventilation(status_dto.id)
+        self._validate_state(ventilation_dto, status_dto)
         if status_dto != self._status.get(status_dto.id):
-            self._status[status_dto.id] = status_dto
             self._publish_events(status_dto)
+        self._status[status_dto.id] = status_dto
         return status_dto
 
     def set_mode_auto(self, ventilation_id):

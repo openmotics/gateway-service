@@ -106,6 +106,10 @@ def ventilation_status(method=None, version=1):
     Important! This method should not block, as this will result in an unresponsive system.
     Please use a separate thread to perform complex actions on shutten status messages.
     """
+    if method is not None:
+        method.output_status = {'version': 1}
+        return method
+
     def wrapper(_method):
         _method.ventilation_status = {'version': version}
         return _method
