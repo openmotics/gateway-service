@@ -2,26 +2,11 @@
 
 export PYTHONPATH=$PYTHONPATH:`pwd`/../../src
 
-echo "Running master api tests"
-pytest master_tests/master_api_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterApiTest.xml
-
-echo "Running master command tests"
-pytest master_tests/master_command_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterCommandTest.xml
-
-echo "Running master communicator tests"
-pytest master_tests/master_communicator_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterCommunicatorTest.xml
-
-echo "Running inputs tests"
-pytest master_tests/inputs_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterInputsTest.xml
-
-echo "Running passthrough tests"
-pytest master_tests/passthrough_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterPassthroughTest.xml
-
-echo "Running eeprom controller tests"
-pytest master_tests/eeprom_controller_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterEEPROMControllerTest.xml
-
-echo "Running eeprom extension tests"
-pytest master_tests/eeprom_extension_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterEEPROMExtensionTest.xml
+pytest master_tests --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/master.xml
+pytest master_core_tests --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/master_core.xml
+pytest gateway_tests/mappers --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/gateway-mappers.xml
+pytest gateway_tests/serializers --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/gateway-serializers.xml
+pytest thermostat_tests --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/thermostats.xml
 
 #echo "Running users tests"
 #pytest gateway_tests/users_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/GatewayUsersTest.xml
@@ -74,38 +59,8 @@ pytest gateway_tests/room_controller_test.py --log-level=DEBUG --durations=2 --j
 echo "Running module controller tests"
 pytest gateway_tests/module_controller_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/ModuleControllerTest.xml
 
-echo "Running input mapper tests"
-pytest gateway_tests/mappers/input_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/InputMapperTest.xml
-
-echo "Running output mapper tests"
-pytest gateway_tests/mappers/output_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/OutputMapperTest.xml
-
-echo "Running sensor serializer tests"
-pytest gateway_tests/serializers/sensor_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/SensorSerializerTest.xml
-
-#echo "Running Core uCAN tests"
-#python3 master_core_tests/ucan_communicator_test.py
-
-#echo "Running Core memory file tests"
-#python3 master_core_tests/memory_file_test.py
-
-echo "Running Core memory types tests"
-pytest master_core_tests/memory_types_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/CoreMemoryTypesTest.xml
-
-#echo "Running Core api field tests"
-#pytest master_core_tests/api_field_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/CoreAPIFieldsTest.xml
-
-echo "running Core communicator tests"
-pytest master_core_tests/core_communicator_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterCoreCommunicatorTest.xml
-
-echo "running Core group action tests"
-pytest master_core_tests/group_action_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterCoreGATest.xml
-
 #echo "Running metrics tests"
 #python3 gateway_tests/metrics_test.py
-
-echo "Running thermostat tests"
-pytest thermostat_tests/gateway_mapping_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/GatewayThermostatMappingTest.xml
 
 echo "Running master_tool.py tests"
 pytest master_tool_test.py --log-level=DEBUG --durations=2 --junit-xml ../gw-unit-reports-3/MasterToolTests.xml

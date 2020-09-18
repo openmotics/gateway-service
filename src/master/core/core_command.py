@@ -48,7 +48,7 @@ class CoreCommandSpec(object):
         self.instruction = bytearray([ord(c) for c in instruction])
         self.request_fields = [] if request_fields is None else request_fields
         self.response_fields = [] if response_fields is None else response_fields
-        self.response_instruction = response_instruction if response_instruction is not None else instruction
+        self.response_instruction = bytearray([ord(c) for c in response_instruction]) if response_instruction is not None else self.instruction
 
     def create_request_payload(self, fields):  # type: (Dict[str, Any]) -> bytearray
         """
