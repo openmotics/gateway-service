@@ -20,7 +20,8 @@ import mock
 from peewee import Select
 
 from bus.om_bus_client import MessageClient
-from gateway.dto import VentilationDTO, VentilationSourceDTO
+from gateway.dto import VentilationDTO, VentilationSourceDTO, \
+    VentilationStatusDTO
 from gateway.events import GatewayEvent
 from gateway.models import Plugin, Ventilation
 from gateway.ventilation_controller import VentilationController
@@ -36,6 +37,23 @@ class VentilationControllerTest(unittest.TestCase):
         SetUpTestInjections(message_client=mock.Mock(MessageClient))
         self.controller = VentilationController()
 
+    def test_set_status(self):
+        plugin = Plugin(id=2, name='dummy', version='0.0.1')
+        with mock.patch.object(Select, 'count', return_value=1), \
+             mock.patch.object(Ventilation, 'get',
+                               side_effect=[Ventilation(id=42, amount_of_levels=4, source='plugin', plugin=plugin),
+                                            Ventilation(id=43, amount_of_levels=4, source='plugin', plugin=plugin)]), \
+             mock.patch.object(Ventilation, 'select',
+                               return_value=[Ventilation(id=42, amount_of_levels=4, source='plugin', plugin=plugin),
+                                             Ventilation(id=43, amount_of_levels=4, source='plugin', plugin=plugin)]):
+            self.controller.set_status(VentilationStatusDTO(42, 'manual', level=0))
+            self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0))
+            status = self.controller.get_status()
+            assert {'manual'} == set(x.mode for x in status)
+            assert {42, 43} == set(x.id for x in status)
+            assert {0, 2} == set(x.level for x in status)
+            assert {None, 60.0} == set(x.timer for x in status)
+
     def test_set_level(self):
         plugin = Plugin(id=2, name='dummy', version='0.0.1')
         with mock.patch.object(Select, 'count', return_value=1), \
@@ -49,7 +67,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.controller.set_level(43, 2, timer=60.0)
             status = self.controller.get_status()
             assert {'manual'} == set(x.mode for x in status)
-            assert {42, 43} == set(x.ventilation.id for x in status)
+            assert {42, 43} == set(x.id for x in status)
             assert {0, 2} == set(x.level for x in status)
             assert {None, 60.0} == set(x.timer for x in status)
 
@@ -71,7 +89,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.controller.set_mode_auto(43)
             status = self.controller.get_status()
             assert {'auto'} == set(x.mode for x in status)
-            assert {42, 43} == set(x.ventilation.id for x in status)
+            assert {42, 43} == set(x.id for x in status)
             assert {None} == set(x.level for x in status)
             assert {None} == set(x.timer for x in status)
 

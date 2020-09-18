@@ -20,7 +20,8 @@ from __future__ import absolute_import
 import logging
 
 from bus.om_bus_client import MessageClient
-from gateway.dto import VentilationDTO, VentilationSourceDTO
+from gateway.dto import VentilationDTO, VentilationSourceDTO, \
+    VentilationStatusDTO
 from gateway.dto.base import BaseDTO
 from gateway.events import GatewayEvent
 from gateway.mappers import VentilationMapper
@@ -41,7 +42,7 @@ class VentilationController(object):
     def __init__(self, message_client=INJECTED):
         # type: (MessageClient) -> None
         self._event_subscriptions = []  # type: List[Callable[[GatewayEvent],None]]
-        self._status = {}  # type: Dict[int, StateDTO]
+        self._status = {}  # type: Dict[int, VentilationStatusDTO]
 
     def start(self):
         # type: () -> None
@@ -55,15 +56,12 @@ class VentilationController(object):
         # type: (Callable[[GatewayEvent],None]) -> None
         self._event_subscriptions.append(callback)
 
-    def _publish_events(self, state_dto, plugin=None):
-        # type: (StateDTO, Optional[Plugin]) -> None
-        event_data = {'id': state_dto.ventilation.id,
+    def _publish_events(self, state_dto):
+        # type: (VentilationStatusDTO) -> None
+        event_data = {'id': state_dto.id,
                       'mode': state_dto.mode,
                       'level': state_dto.level,
                       'timer': state_dto.timer}
-        if state_dto.ventilation.source.is_plugin:
-            event_data.update({'source': VentilationSourceDTO.Type.PLUGIN,
-                               'plugin': state_dto.ventilation.source.name})
         for callback in self._event_subscriptions:
             callback(GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE, event_data))
 
@@ -84,7 +82,7 @@ class VentilationController(object):
         return VentilationMapper.orm_to_dto(ventilation)
 
     def get_status(self):
-        # type: () -> List[StateDTO]
+        # type: () -> List[VentilationStatusDTO]
         status = []
         for ventilation in Ventilation.select():
             state_dto = self._status.get(ventilation.id)
@@ -92,51 +90,36 @@ class VentilationController(object):
                 status.append(state_dto)
         return status
 
+    def set_status(self, status_dto):
+        # type: (VentilationStatusDTO) -> VentilationStatusDTO
+        _ = self.load_ventilation(status_dto.id)
+        if status_dto != self._status.get(status_dto.id):
+            self._status[status_dto.id] = status_dto
+            self._publish_events(status_dto)
+        return status_dto
+
     def set_mode_auto(self, ventilation_id):
         # type: (int) -> None
-        ventilation_dto = self.load_ventilation(ventilation_id)
-        state_dto = StateDTO(ventilation_dto, mode=StateDTO.Mode.AUTO)
-        if state_dto != self._status.get(ventilation_id):
-            self._status[ventilation_id] = state_dto
-            self._publish_events(state_dto)
+        _ = self.load_ventilation(ventilation_id)
+        status_dto = VentilationStatusDTO(ventilation_id, mode=VentilationStatusDTO.Mode.AUTO)
+        if status_dto != self._status.get(ventilation_id):
+            self._status[ventilation_id] = status_dto
+            self._publish_events(status_dto)
 
     def set_level(self, ventilation_id, level, timer=None):
         # type: (int, int, Optional[float]) -> None
         ventilation_dto = self.load_ventilation(ventilation_id)
-        state_dto = StateDTO(ventilation_dto, mode=StateDTO.Mode.MANUAL, level=level, timer=timer)
-        self._validate_state(state_dto)
-        if state_dto != self._status.get(ventilation_id):
-            self._status[ventilation_id] = state_dto
-            self._publish_events(state_dto)
+        status_dto = VentilationStatusDTO(ventilation_id, mode=VentilationStatusDTO.Mode.MANUAL, level=level, timer=timer)
+        self._validate_state(ventilation_dto, status_dto)
+        if status_dto != self._status.get(ventilation_id):
+            self._status[ventilation_id] = status_dto
+            self._publish_events(status_dto)
 
-    def _validate_state(self, state_dto):
-        # type: (StateDTO) -> None
-        if state_dto.level:
-            if state_dto.mode == StateDTO.Mode.AUTO:
-                raise ValueError('ventilation mode {} does not support level'.format(state_dto.level))
-            if state_dto.level < 0 or state_dto.level > state_dto.ventilation.amount_of_levels:
-                values = list(range(state_dto.ventilation.amount_of_levels + 1))
-                raise ValueError('ventilation level {0} not in {1}'.format(state_dto.level, values))
-
-
-class StateDTO(BaseDTO):
-    class Mode:
-        AUTO = 'auto'
-        MANUAL = 'manual'
-
-    def __init__(self, ventilation, mode, level=None, timer=None):
-        # type: (VentilationDTO, str, Optional[int], Optional[float]) -> None
-        self.ventilation = ventilation
-        self.mode = mode
-        self.level = level
-        self.timer = timer
-
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        if not isinstance(other, StateDTO):
-            return False
-        if self.timer:
-            return False
-        return (self.ventilation == other.ventilation and
-                self.mode == other.mode and
-                self.level == other.level)
+    def _validate_state(self, ventilation_dto, status_dto):
+        # type: (VentilationDTO, VentilationStatusDTO) -> None
+        if status_dto.level:
+            if status_dto.mode == VentilationStatusDTO.Mode.AUTO:
+                raise ValueError('ventilation mode {} does not support level'.format(status_dto.level))
+            if status_dto.level < 0 or status_dto.level > ventilation_dto.amount_of_levels:
+                values = list(range(ventilation_dto.amount_of_levels + 1))
+                raise ValueError('ventilation level {0} not in {1}'.format(status_dto.level, values))

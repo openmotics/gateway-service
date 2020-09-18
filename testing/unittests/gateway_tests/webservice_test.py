@@ -22,7 +22,7 @@ import mock
 from bus.om_bus_client import MessageClient
 from gateway.config import ConfigurationController
 from gateway.dto import OutputStateDTO, ScheduleDTO, VentilationDTO, \
-    VentilationSourceDTO
+    VentilationSourceDTO, VentilationStatusDTO
 from gateway.gateway_api import GatewayApi
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
@@ -104,7 +104,44 @@ class WebInterfaceTest(unittest.TestCase):
                 'external_id': 'device-00001',
                 'id': 1,
                 'name': 'test',
-                'source': {'name': 'dummy', 'type': 'plugin'},
+                'source': {'type': 'plugin', 'name': 'dummy'},
                 'type': '0A',
                 'vendor': 'example'
             }], json.loads(response)['config'])
+
+    def test_set_ventilation_configuration(self):
+        with mock.patch.object(self.ventilation_controller, 'save_ventilation',
+                               return_value=VentilationDTO(id=1, name='test', amount_of_levels=4, type='0A', vendor='example',
+                                                           external_id='device-00001',
+                                                           source=VentilationSourceDTO(id=2, type='plugin', name='dummy'))) as save:
+            config = {'source': {'type': 'plugin', 'name': 'dummy'},
+                      'external_id': 'device-00001',
+                      'name': 'test',
+                      'type': '0A',
+                      'vendor': 'example'}
+            response = self.web.set_ventilation_configuration(config=config)
+            self.assertEqual({
+                'id': 1,
+                'source': {'type': 'plugin', 'name': 'dummy'},
+                'external_id': 'device-00001',
+                'name': 'test',
+                'type': '0A',
+                'vendor': 'example',
+            }, json.loads(response)['config'])
+            save.assert_called()
+
+    def test_set_ventilation_status(self):
+        with mock.patch.object(self.ventilation_controller, 'set_status',
+                               return_value=VentilationStatusDTO(id=1,
+                                                                 mode='manual',
+                                                                 level=2,
+                                                                 remaining_time=60.0)) as set_status:
+            status = {'id': 1, 'mode': 'manual', 'level': 2, 'remaining_time': 60.0}
+            response = self.web.set_ventilation_status(status=status)
+            self.assertEqual({
+                'id': 1,
+                'mode': 'manual',
+                'level': 2,
+                'remaining_time': 60.0
+            }, json.loads(response)['status'])
+            set_status.assert_called()

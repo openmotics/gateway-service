@@ -41,10 +41,10 @@ from six.moves.urllib.parse import urlparse, urlunparse
 import constants
 import gateway
 from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
-    OutputSerializer, OutputStateSerializer, PulseCounterSerializer, \
-    RoomSerializer, SensorSerializer, ShutterGroupSerializer, \
-    ShutterSerializer, ThermostatSerializer, ModuleSerializer, \
-    ScheduleSerializer, VentilationSerializer
+    ModuleSerializer, OutputSerializer, OutputStateSerializer, \
+    PulseCounterSerializer, RoomSerializer, ScheduleSerializer, \
+    SensorSerializer, ShutterGroupSerializer, ShutterSerializer, \
+    ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO
 from gateway.enums import ShutterEnums, UserEnums
 from gateway.hal.master_controller import CommunicationFailure
@@ -901,21 +901,33 @@ class WebInterface(object):
         return {'config': VentilationSerializer.serialize(ventilation_dto, fields)}
 
     # methods=['GET']
-    @openmotics_api(auth=True, check=types(ventilation_id=int))
-    def get_ventilation_status(self):
-        # type: () -> Dict[str, Any]
+    @openmotics_api(auth=True, check=types(fields='json'))
+    def get_ventilation_status(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str, Any]
         status = self._ventilation_controller.get_status()
-        return {'status': [{'id': status_dto.ventilation.id, 'mode': status_dto.mode, 'level': status_dto.level}
+        return {'status': [VentilationStatusSerializer.serialize(status_dto, fields)
                            for status_dto in status]}
 
     # methods=['PUT']
+    @openmotics_api(auth=True, check=types(status='json'))
+    def set_ventilation_status(self, status):
+        # type: (Dict[str,Any]) -> Dict[str, Any]
+        """
+        Update the current ventilation status, used by plugins to report the current
+        status of devices.
+        """
+        status_dto, fields = VentilationStatusSerializer.deserialize(status)
+        status_dto = self._ventilation_controller.set_status(status_dto)
+        return {'status': VentilationStatusSerializer.serialize(status_dto, fields)}
+
+    # methods=['POST']
     @openmotics_api(auth=True, check=types(ventilation_id=int))
     def set_ventilation_mode_auto(self, ventilation_id):
         # type: (int) -> Dict[str, Any]
         self._ventilation_controller.set_mode_auto(ventilation_id)
         return {}
 
-    # methods=['PUT']
+    # methods=['POST']
     @openmotics_api(auth=True, check=types(ventilation_id=int, level=int, timer=float))
     def set_ventilation_level(self, ventilation_id, level, timer=None):
         # type: (int, int, Optional[float]) -> Dict[str, Any]

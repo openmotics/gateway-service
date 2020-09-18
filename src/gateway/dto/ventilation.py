@@ -65,3 +65,27 @@ class VentilationSourceDTO(BaseDTO):
         return (self.id == other.id and
                 self.name == other.name and
                 self.type == other.type)
+
+
+class VentilationStatusDTO(BaseDTO):
+    class Mode:
+        AUTO = 'auto'
+        MANUAL = 'manual'
+
+    def __init__(self, id, mode, level=None, timer=None, remaining_time=None):
+        # type: (int, str, Optional[int], Optional[float], Optional[float]) -> None
+        self.id = id
+        self.mode = mode
+        self.level = level
+        self.timer = timer
+        self.remaining_time = remaining_time
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        if not isinstance(other, VentilationStatusDTO):
+            return False
+        if self.timer:  # is write only
+            return False
+        return (self.id == other.id and
+                self.mode == other.mode and
+                self.level == other.level)
