@@ -17,36 +17,38 @@ Contains Basic Action related code
 """
 
 from __future__ import absolute_import
-from master.core.memory_types import MemoryByteField, MemoryWordField
+from master.core.fields import ByteField, WordField
 
 if False:  # MYPY
-    from typing import List, Optional, Any
+    from typing import Optional, Any
 
 
 class BasicAction(object):
     def __init__(self, action_type, action, device_nr=None, extra_parameter=None):  # type: (int, int, Optional[int], Optional[int]) -> None
-        self._action_type = MemoryByteField.encode(action_type)  # type: List[int]
-        self._action = MemoryByteField.encode(action)  # type: List[int]
-        self._device_nr = MemoryWordField.encode(device_nr if device_nr is not None else 0)  # type: List[int]
-        self._extra_parameter = MemoryWordField.encode(extra_parameter if extra_parameter is not None else 0)  # type: List[int]
+        self._word_helper = WordField('')
+        self._byte_helper = ByteField('')
+        self._action_type = self._byte_helper.encode(action_type)  # type: bytearray
+        self._action = self._byte_helper.encode(action)  # type: bytearray
+        self._device_nr = self._word_helper.encode(device_nr if device_nr is not None else 0)  # type: bytearray
+        self._extra_parameter = self._word_helper.encode(extra_parameter if extra_parameter is not None else 0)  # type: bytearray
 
     @property
     def action_type(self):  # type: () -> int
-        return MemoryByteField.decode(self._action_type)
+        return self._byte_helper.decode(self._action_type)
 
     @property
     def action(self):  # type: () -> int
-        return MemoryByteField.decode(self._action)
+        return self._byte_helper.decode(self._action)
 
     @property
     def device_nr(self):  # type: () -> int
-        return MemoryWordField.decode(self._device_nr)
+        return self._word_helper.decode(self._device_nr)
 
     @property
     def extra_parameter(self):  # type: () -> int
-        return MemoryWordField.decode(self._extra_parameter)
+        return self._word_helper.decode(self._extra_parameter)
 
-    def encode(self):  # type: () -> List[int]
+    def encode(self):  # type: () -> bytearray
         return self._action_type + self._action + self._device_nr + self._extra_parameter
 
     @property
@@ -58,7 +60,7 @@ class BasicAction(object):
         return self.action_type == 19 and self.action == 0
 
     @staticmethod
-    def decode(data):  # type: (List[int]) -> BasicAction
+    def decode(data):  # type: (bytearray) -> BasicAction
         basic_action = BasicAction(action_type=data[0],
                                    action=data[1])
         basic_action._device_nr = data[2:4]

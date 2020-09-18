@@ -885,27 +885,27 @@ class MasterCoreController(MasterController):
         CoreUpdater.update(hex_filename=hex_filename)
 
     def get_backup(self):
-        data = []
+        data = bytearray()
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         for page in range(pages):
             data += self._memory_files[MemoryTypes.EEPROM].read_page(page)
-        return ''.join(chr(entry) for entry in data)
+        return ''.join(str(chr(entry)) for entry in data)
 
     def restore(self, data):
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
-        data_structure = {}
+        data_structure = {}  # type: Dict[int, bytearray]
         for page in range(pages):
-            page_data = [ord(entry) for entry in data[page * page_length:(page + 1) * page_length]]
+            page_data = bytearray([ord(entry) for entry in data[page * page_length:(page + 1) * page_length]])
             if len(page_data) < page_length:
-                page_data += [255] * (page_length - len(page_data))
+                page_data += bytearray([255] * (page_length - len(page_data)))
             data_structure[page] = page_data
         self._restore(data_structure)
 
     def factory_reset(self):
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
-        self._restore({page: [255] * page_length for page in range(pages)})
+        self._restore({page: bytearray([255] * page_length) for page in range(pages)})
 
-    def _restore(self, data):  # type: (Dict[int, List[int]]) -> None
+    def _restore(self, data):  # type: (Dict[int, bytearray]) -> None
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         page_retry = None
         page = 0

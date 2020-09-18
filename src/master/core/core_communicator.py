@@ -20,16 +20,19 @@ Module to communicate with the Core.
 from __future__ import absolute_import
 import logging
 import time
+import struct
 from threading import Thread, Lock
 from six.moves.queue import Queue, Empty
 from ioc import Inject, INJECTED
 from master.core.core_api import CoreAPI
 from master.core.fields import WordField
 from master.core.core_command import CoreCommandSpec
+from master.core.toolbox import Toolbox
 from serial_utils import CommunicationTimedOutException, printable
 
 if False:  # MYPY
-    from typing import Dict, Any, Optional, TypeVar, Union
+    from typing import Dict, Any, Optional, TypeVar, Union, Callable, Set, List
+    from serial.serialposix import Serial
     T_co = TypeVar('T_co', bound=None, covariant=True)
 
 logger = logging.getLogger('openmotics')
@@ -42,19 +45,14 @@ class CoreCommunicator(object):
     """
 
     # Message constants. There are here for better code readability, you can't just simply change them
-    START_OF_REQUEST = 'STR'
-    END_OF_REQUEST = '\r\n\r\n'
-    START_OF_REPLY = 'RTR'
-    END_OF_REPLY = '\r\n'
+    START_OF_REQUEST = bytearray(b'STR')
+    END_OF_REQUEST = bytearray(b'\r\n\r\n')
+    START_OF_REPLY = bytearray(b'RTR')
+    END_OF_REPLY = bytearray(b'\r\n')
 
     @Inject
     def __init__(self, controller_serial=INJECTED, verbose=False):
-        """
-        :param controller_serial: Serial port to communicate with
-        :type controller_serial: serial.Serial
-        :param verbose: Log all serial communication
-        :type verbose: boolean.
-        """
+        # type: (Serial, bool) -> None
         self._verbose = verbose
         self._serial = controller_serial
         self._serial_write_lock = Lock()
@@ -62,11 +60,13 @@ class CoreCommunicator(object):
         self._serial_bytes_written = 0
         self._serial_bytes_read = 0
 
-        self._cid = None  # Reserved CIDs: 0 = Core events, 1 = uCAN transport, 2 = Slave transport
-        self._cids_in_use = set()
-        self._consumers = {}
-        self._last_success = 0
+        self._cid = None  # type: Optional[int]  # Reserved CIDs: 0 = Core events, 1 = uCAN transport, 2 = Slave transport
+        self._cids_in_use = set()  # type: Set[int]
+        self._consumers = {}  # type: Dict[int, List[Union[Consumer, BackgroundConsumer]]]
+        self._last_success = 0.0
         self._stop = False
+
+        self._word_helper = WordField('')
 
         self._read_thread = Thread(target=self._read, name='CoreCommunicator read thread')
         self._read_thread.setDaemon(True)
@@ -74,9 +74,9 @@ class CoreCommunicator(object):
         self._communication_stats = {'calls_succeeded': [],
                                      'calls_timedout': [],
                                      'bytes_written': 0,
-                                     'bytes_read': 0}
+                                     'bytes_read': 0}  # type: Dict[str,Any]
         self._debug_buffer = {'read': {},
-                              'write': {}}
+                              'write': {}}  # type: Dict[str, Dict[float, str]]
         self._debug_buffer_duration = 300
 
     def start(self):
@@ -94,20 +94,20 @@ class CoreCommunicator(object):
     def get_debug_buffer(self):
         return self._debug_buffer
 
-    def get_seconds_since_last_success(self):
+    def get_seconds_since_last_success(self):  # type: () -> float
         """ Get the number of seconds since the last successful communication. """
         if self._last_success == 0:
-            return 0  # No communication - return 0 sec since last success
+            return 0.0  # No communication - return 0 sec since last success
         else:
             return time.time() - self._last_success
 
-    def _get_cid(self):
+    def _get_cid(self):  # type: () -> int
         """ Get a communication id. 0 and 1 are reserved. """
-        def _increment_cid(current_cid):
+        def _increment_cid(current_cid):  # type: (Optional[int]) -> int
             # Reserved CIDs: 0 = Core events, 1 = uCAN transport, 2 = Slave transport
             return current_cid + 1 if (current_cid is not None and current_cid < 255) else 3
 
-        def _available(candidate_cid):
+        def _available(candidate_cid):  # type: (Optional[int]) -> bool
             if candidate_cid is None:
                 return False
             if candidate_cid == self._cid:
@@ -117,22 +117,24 @@ class CoreCommunicator(object):
             return True
 
         with self._cid_lock:
-            cid = self._cid  # Initial value
+            cid = self._cid  # type: Optional[int]  # Initial value
             while not _available(cid):
                 cid = _increment_cid(cid)
                 if cid == self._cid:
                     # Seems there is no CID available at this moment
                     raise RuntimeError('No available CID')
+            if cid is None:
+                # This is impossible due to `_available`, but mypy doesn't know that
+                raise RuntimeError('CID should not be None')
             self._cid = cid
             self._cids_in_use.add(cid)
             return cid
 
-    def _write_to_serial(self, data):
+    def _write_to_serial(self, data):  # type: (bytearray) -> None
         """
         Write data to the serial port.
 
         :param data: the data to write
-        :type data: string
         """
         with self._serial_write_lock:
             if self._verbose:
@@ -148,28 +150,25 @@ class CoreCommunicator(object):
             self._serial_bytes_written += len(data)
             self._communication_stats['bytes_written'] += len(data)
 
-    def register_consumer(self, consumer):
+    def register_consumer(self, consumer):  # type: (Union[Consumer, BackgroundConsumer]) -> None
         """
         Register a consumer
         :param consumer: The consumer to register.
-        :type consumer: Consumer or BackgroundConsumer.
         """
-        self._consumers.setdefault(consumer.get_header(), []).append(consumer)
+        self._consumers.setdefault(consumer.get_hash(), []).append(consumer)
 
-    def discard_cid(self, cid):
+    def discard_cid(self, cid):  # type: (int) -> None
         """
         Discards a Command ID.
         """
         with self._cid_lock:
             self._cids_in_use.discard(cid)
 
-    def unregister_consumer(self, consumer):
+    def unregister_consumer(self, consumer):  # type: (Union[Consumer, BackgroundConsumer]) -> None
         """
         Unregister a consumer
-        :param consumer: The consumer to register.
-        :type consumer: Consumer or BackgroundConsumer.
         """
-        consumers = self._consumers.get(consumer.get_header(), [])
+        consumers = self._consumers.get(consumer.get_hash(), [])
         if consumer in consumers:
             consumers.remove(consumer)
         self.discard_cid(consumer.cid)
@@ -203,7 +202,7 @@ class CoreCommunicator(object):
         command = consumer.command
 
         try:
-            self._consumers.setdefault(consumer.get_header(), []).append(consumer)
+            self._consumers.setdefault(consumer.get_hash(), []).append(consumer)
             self._send_command(cid, command, fields)
         except Exception:
             self.discard_cid(cid)
@@ -234,24 +233,21 @@ class CoreCommunicator(object):
 
         payload = command.create_request_payload(fields)
 
-        checked_payload = (str(chr(cid)) +
+        checked_payload = (bytearray([cid]) +
                            command.instruction +
-                           WordField.encode(len(payload)) +
+                           self._word_helper.encode(len(payload)) +
                            payload)
 
         data = (CoreCommunicator.START_OF_REQUEST +
-                str(chr(cid)) +
-                command.instruction +
-                WordField.encode(len(payload)) +
-                payload +
-                'C' +
-                str(chr(CoreCommunicator._calculate_crc(checked_payload))) +
+                checked_payload +
+                bytearray(b'C') +
+                CoreCommunicator._calculate_crc(checked_payload) +
                 CoreCommunicator.END_OF_REQUEST)
 
         self._write_to_serial(data)
 
     @staticmethod
-    def _calculate_crc(data):
+    def _calculate_crc(data):  # type: (bytearray) -> bytearray
         """
         Calculate the CRC of the data.
 
@@ -260,8 +256,8 @@ class CoreCommunicator(object):
         """
         crc = 0
         for byte in data:
-            crc += ord(byte)
-        return crc % 256
+            crc += byte
+        return bytearray([crc % 256])
 
     def _read(self):
         """
@@ -272,7 +268,7 @@ class CoreCommunicator(object):
         Response format: 'RTR' + {CID, 1 byte} + {command, 2 bytes} + {length, 2 bytes} + {payload, `length` bytes} + 'C' + {checksum, 1 byte} + '\r\n'
 
         """
-        data = ''
+        data = bytearray()
         wait_for_length = None
         header_length = len(CoreCommunicator.START_OF_REPLY) + 1 + 2 + 2  # RTR + CID (1 byte) + command (2 bytes) + length (2 bytes)
         footer_length = 1 + 1 + len(CoreCommunicator.END_OF_REPLY)  # 'C' + checksum (1 byte) + \r\n
@@ -310,8 +306,8 @@ class CoreCommunicator(object):
                     wait_for_length = message_length
                     continue
 
-                message = data[:message_length]
-                data = data[message_length:]
+                message = data[:message_length]  # type: bytearray
+                data = data[message_length:]  # type: bytearray
 
                 # A possible message is received, log where appropriate
                 if self._verbose:
@@ -332,9 +328,9 @@ class CoreCommunicator(object):
                     continue
 
                 # Validate message CRC
-                crc = ord(message[-3])
-                payload = message[8:-4]
-                checked_payload = message[3:-4]
+                crc = bytearray([message[-3]])
+                payload = message[8:-4]  # type: bytearray
+                checked_payload = message[3:-4]  # type: bytearray
                 expected_crc = CoreCommunicator._calculate_crc(checked_payload)
                 if crc != expected_crc:
                     logger.info('Unexpected CRC ({0} vs expected {1}): {2}'.format(crc, expected_crc, printable(checked_payload)))
@@ -344,7 +340,7 @@ class CoreCommunicator(object):
                     continue
 
                 # A valid message is received, reliver it to the correct consumer
-                consumers = self._consumers.get(header_fields['header'], [])
+                consumers = self._consumers.get(header_fields['hash'], [])
                 for consumer in consumers[:]:
                     if self._verbose:
                         logger.info('Delivering payload to consumer {0}.{1}: {2}'.format(header_fields['command'], header_fields['cid'], printable(payload)))
@@ -358,16 +354,16 @@ class CoreCommunicator(object):
                 wait_for_length = None
             except Exception:
                 logger.exception('Unexpected exception at Core read thread')
-                data = ''
+                data = bytearray()
                 wait_for_length = None
 
     @staticmethod
-    def _parse_header(data):
+    def _parse_header(data):  # type: (bytearray) -> Dict[str, Union[int, bytearray]]
         base = len(CoreCommunicator.START_OF_REPLY)
-        return {'cid': ord(data[base]),
+        return {'cid': data[base],
                 'command': data[base + 1:base + 3],
-                'header': data[:base + 3],
-                'length': ord(data[base + 3]) * 256 + ord(data[base + 4])}
+                'hash': Toolbox.hash(data[:base + 3]),
+                'length': struct.unpack('>h', data[base + 3:base + 4])[0]}
 
 
 class Consumer(object):
@@ -376,26 +372,27 @@ class Consumer(object):
     matches the consumer, the output will unblock the get() caller.
     """
 
-    def __init__(self, command, cid):
+    def __init__(self, command, cid):  # type: (CoreCommandSpec, int) -> None
         self.cid = cid
         self.command = command
-        self._queue = Queue()
+        self._queue = Queue()  # type: Queue[Dict[str, Any]]
 
-    def get_header(self):
-        """ Get the prefix of the answer from the Core. """
-        return CoreCommunicator.START_OF_REPLY + str(chr(self.cid)) + self.command.response_instruction
+    def get_hash(self):  # type: () -> int
+        """ Get an identification hash for this consumer. """
+        return Toolbox.hash(CoreCommunicator.START_OF_REPLY +
+                            bytearray([self.cid]) +
+                            self.command.response_instruction)
 
-    def consume(self, payload):
+    def consume(self, payload):  # type: (bytearray) -> None
         """ Consume payload. """
         data = self.command.consume_response_payload(payload)
         self._queue.put(data)
 
-    def get(self, timeout):
+    def get(self, timeout):  # type: (Union[T_co, int]) -> Dict[str, Any]
         """
         Wait until the Core replies or the timeout expires.
 
         :param timeout: timeout in seconds
-        :raises: :class`CommunicationTimedOutException` if Core did not respond in time
         :returns: dict containing the output fields of the command
         """
         try:
@@ -410,7 +407,7 @@ class BackgroundConsumer(object):
     but does a callback to a function whenever a message was consumed.
     """
 
-    def __init__(self, command, cid, callback):
+    def __init__(self, command, cid, callback):  # type: (CoreCommandSpec, int, Callable[[Dict[str, Any]], None]) -> None
         """
         Create a background consumer using a cmd, cid and callback.
 
@@ -421,7 +418,7 @@ class BackgroundConsumer(object):
         self.cid = cid
         self.command = command
         self._callback = callback
-        self._queue = Queue()
+        self._queue = Queue()  # type: Queue[Dict[str, Any]]
 
         self._callback_thread = Thread(target=self._consumer, name='CoreCommunicator BackgroundConsumer delivery thread')
         self._callback_thread.setDaemon(True)
@@ -435,11 +432,13 @@ class BackgroundConsumer(object):
                 logger.exception('Unexpected exception delivering background consumer data')
                 time.sleep(1)
 
-    def get_header(self):
-        """ Get the prefix of the answer from the Core. """
-        return CoreCommunicator.START_OF_REPLY + str(chr(self.cid)) + self.command.response_instruction
+    def get_hash(self):  # type: () -> int
+        """ Get an identification hash for this consumer. """
+        return Toolbox.hash(CoreCommunicator.START_OF_REPLY +
+                            bytearray([self.cid]) +
+                            self.command.response_instruction)
 
-    def consume(self, payload):
+    def consume(self, payload):  # type: (bytearray) -> None
         """ Consume payload. """
         data = self.command.consume_response_payload(payload)
         self._queue.put(data)

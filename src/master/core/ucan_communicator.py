@@ -28,7 +28,7 @@ from master.core.ucan_api import UCANAPI
 from serial_utils import CommunicationTimedOutException, printable
 
 if False:  # MYPY
-    from typing import Optional, Dict, Any, Union
+    from typing import Optional, Dict, Any, Union, Callable, List
 
 logger = logging.getLogger('openmotics')
 
@@ -41,21 +41,20 @@ class UCANCommunicator(object):
     """
 
     @Inject
-    def __init__(self, master_communicator=INJECTED, verbose=False):
+    def __init__(self, master_communicator=INJECTED, verbose=False):  # type: (CoreCommunicator, bool) -> None
         """
         :param master_communicator: CoreCommunicator
         :param verbose: Log all communication
         """
-        self._verbose = verbose  # type: bool
-        self._communicator = master_communicator  # type: CoreCommunicator
-        self._read_buffer = []
-        self._consumers = {}
-        self._cc_pallet_mode = {}
+        self._verbose = verbose
+        self._communicator = master_communicator
+        self._consumers = {}  # type: Dict[str, List[Union[Consumer, PalletConsumer]]]
+        self._cc_pallet_mode = {}  # type: Dict[str, bool]
 
         self._background_consumer = BackgroundConsumer(CoreAPI.ucan_rx_transport_message(), 1, self._process_transport_message)
         self._communicator.register_consumer(self._background_consumer)
 
-    def is_ucan_in_bootloader(self, cc_address, ucan_address):
+    def is_ucan_in_bootloader(self, cc_address, ucan_address):  # type: (str, str) -> bool
         """
         Figures out whether a uCAN is in bootloader or application mode. This can be a rather slow call since it might rely on a communication timeout
         :param cc_address: The address of the CAN Control
@@ -69,20 +68,12 @@ class UCANCommunicator(object):
             self.do_command(cc_address, UCANAPI.ping(SID.BOOTLOADER_COMMAND), ucan_address, {'data': 1})
             return True
 
-    def register_consumer(self, consumer):
-        """
-        Register a consumer
-        :param consumer: The consumer to register.
-        :type consumer: Consumer or PalletConsumer.
-        """
+    def register_consumer(self, consumer):  # type: (Union[Consumer, PalletConsumer]) -> None
+        """ Register a consumer """
         self._consumers.setdefault(consumer.cc_address, []).append(consumer)
 
-    def unregister_consumer(self, consumer):
-        """
-        Unregister a consumer
-        :param consumer: The consumer to register.
-        :type consumer: Consumer or PalletConsumer.
-        """
+    def unregister_consumer(self, consumer):  # type: (Union[Consumer, PalletConsumer]) -> None
+        """ Unregister a consumer """
         consumers = self._consumers.get(consumer.cc_address, [])
         if consumer in consumers:
             consumers.remove(consumer)
@@ -121,7 +112,7 @@ class UCANCommunicator(object):
                                               fields={'cc_address': cc_address,
                                                       'nr_can_bytes': len(payload),
                                                       'sid': command.sid,
-                                                      'payload': payload + [0] * (8 - len(payload))},
+                                                      'payload': payload + bytearray([0] * (8 - len(payload)))},
                                               timeout=timeout)
             except CommunicationTimedOutException as ex:
                 logger.error('Internal timeout during uCAN transport to CC {0}: {1}'.format(cc_address, ex))
@@ -140,14 +131,14 @@ class UCANCommunicator(object):
             raise
         return None
 
-    def _release_pallet_mode(self, cc_address):
+    def _release_pallet_mode(self, cc_address):  # type: (str) -> None
         self._cc_pallet_mode[cc_address] = False
 
-    def _process_transport_message(self, package):
-        payload_length = package['nr_can_bytes']
-        payload = package['payload'][:payload_length]
-        sid = package['sid']
-        cc_address = package['cc_address']
+    def _process_transport_message(self, package):  # type: (Dict[str, Any]) -> None
+        payload_length = package['nr_can_bytes']  # type: int
+        payload = package['payload'][:payload_length]  # type: bytearray
+        sid = package['sid']  # type: int
+        cc_address = package['cc_address']  # type: str
         if self._verbose:
             logger.info('Reading from uCAN transport: CC {0} - SID {1} - Data: {2}'.format(cc_address, sid, printable(payload)))
 
@@ -163,31 +154,33 @@ class Consumer(object):
     matches the consumer, the output will unblock the get() caller.
     """
 
-    def __init__(self, cc_address, command):
+    def __init__(self, cc_address, command):  # type: (str, UCANCommandSpec) -> None
         self.cc_address = cc_address
         self.command = command
-        self._queue = Queue()
-        self._payload_set = {}
+        self._queue = Queue()  # type: Queue[Dict[str, Any]]
+        self._payload_set = {}  # type: Dict[int, bytearray]
 
-    def suggest_payload(self, payload):
+    def suggest_payload(self, payload):  # type: (bytearray) -> bool
         """ Consume payload if needed """
         payload_hash = self.command.extract_hash(payload)
         if payload_hash in self.command.headers:
             self._payload_set[payload_hash] = payload
         if len(self._payload_set) == len(self.command.headers):
-            self._queue.put(self.command.consume_response_payload(self._payload_set))
+            response = self.command.consume_response_payload(self._payload_set)
+            if response is None:
+                return False
+            self._queue.put(response)
             return True
         return False
 
-    def send_only(self):
+    def send_only(self):  # type: () -> bool
         return len(self.command.response_instructions) == 0
 
-    def get(self, timeout):
+    def get(self, timeout):  # type: (int) -> Dict[str, Any]
         """
         Wait until the uCAN (or CC) replies or the timeout expires.
 
         :param timeout: timeout in seconds
-        :raises: :class`CommunicationTimedOutException` if Core did not respond in time
         :returns: dict containing the output fields of the command
         """
         try:
@@ -206,7 +199,7 @@ class PalletConsumer(Consumer):
     matches the consumer, the output will unblock the get() caller.
     """
 
-    def __init__(self, cc_address, command, finished_callback):
+    def __init__(self, cc_address, command, finished_callback):  # type: (str, UCANCommandSpec, Callable[[str], None]) -> None
         super(PalletConsumer, self).__init__(cc_address=cc_address,
                                              command=command)
         self._amount_of_segments = None
@@ -222,7 +215,7 @@ class PalletConsumer(Consumer):
         segment_data = payload[1:]
         self._payload_set[segments_remaining] = segment_data
         if self._amount_of_segments is not None and sorted(self._payload_set.keys()) == list(range(self._amount_of_segments)):
-            pallet = []
+            pallet = bytearray()
             for segment in sorted(list(self._payload_set.keys()), reverse=True):
                 pallet += self._payload_set[segment]
             self._queue.put(self.command.consume_response_payload(pallet))

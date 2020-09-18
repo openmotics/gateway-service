@@ -86,26 +86,24 @@ class UCANUpdater(object):
 
             logger.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
             logger.info('Flashing...')
+            uint32_helper = UInt32Field('')
             address_blocks = list(range(UCANUpdater.ADDRESS_START, UCANUpdater.ADDRESS_END, UCANUpdater.MAX_FLASH_BYTES))
             total_amount = float(len(address_blocks))
             crc = 0
-            total_payload = []
+            total_payload = bytearray()
             logged_percentage = -1
-            reset_vector = [intel_hex[i] for i in range(4)]
+            reset_vector = bytearray([intel_hex[i] for i in range(4)])
             for index, start_address in enumerate(address_blocks):
-                end_address = min(UCANUpdater.ADDRESS_END, start_address + UCANUpdater.MAX_FLASH_BYTES)
+                end_address = min(UCANUpdater.ADDRESS_END, start_address + UCANUpdater.MAX_FLASH_BYTES) - 1
 
-                payload = []
-                for i in range(start_address, end_address):
-                    payload.append(intel_hex[i])
-
+                payload = intel_hex.tobinarray(start=start_address, end=end_address)
                 crc = UCANPalletCommandSpec.calculate_crc(payload, crc)
                 if start_address == address_blocks[-1]:
                     crc = UCANPalletCommandSpec.calculate_crc(reset_vector, crc)
                     payload += reset_vector
-                    payload += UInt32Field.encode_bytes(crc)
+                    payload += uint32_helper.encode(crc)
 
-                little_start_address = struct.unpack('<I', struct.pack('>I', start_address))[0]  # TODO: Handle endianness in API definition using Field endianness
+                little_start_address = struct.unpack('<I', struct.pack('>I', start_address))[0]
 
                 if payload != [255] * UCANUpdater.MAX_FLASH_BYTES:
                     # Since the uCAN flash area is erased, skip empty blocks
