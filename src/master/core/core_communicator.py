@@ -363,7 +363,7 @@ class CoreCommunicator(object):
         return {'cid': data[base],
                 'command': data[base + 1:base + 3],
                 'hash': Toolbox.hash(data[:base + 3]),
-                'length': struct.unpack('>H', data[base + 3:base + 4])[0]}
+                'length': struct.unpack('>H', data[base + 3:base + 5])[0]}
 
 
 class Consumer(object):

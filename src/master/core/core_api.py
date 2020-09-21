@@ -142,7 +142,8 @@ class CoreAPI(object):
                                                 ByteField('dimmer'), ByteField('dimmer_min'), ByteField('dimmer_max'),
                                                 ByteField('timer_type'), ByteField('timer_type_standard'),
                                                 WordField('timer'), WordField('timer_standard'),
-                                                WordField('group_action'), ByteField('dali_output')])
+                                                WordField('group_action'), ByteField('dali_output'),
+                                                ByteField('output_lock')])
 
     @staticmethod
     def sensor_temperature_values():  # type: () -> CoreCommandSpec
