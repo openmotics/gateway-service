@@ -197,3 +197,26 @@ class VentilationControllerTest(unittest.TestCase):
             ventilation_dto = self.controller.save_ventilation(ventilation_dto, [])
             get_or_none.assert_called_with(id=42, source='plugin', plugin=plugin, external_id='device-000001')
             save.assert_called()
+
+    def test_ventilation_change_events(self):
+        plugin = Plugin(id=2, name='dummy', version='0.0.1')
+        def get_ventilation(id):
+            return Ventilation(id=id, amount_of_levels=4, source='plugin', plugin=plugin)
+        with mock.patch.object(Select, 'count', return_value=1), \
+             mock.patch.object(Ventilation, 'get', side_effect=get_ventilation), \
+             mock.patch.object(Ventilation, 'select',
+                               return_value=[get_ventilation(42), get_ventilation(43)]):
+            self.controller.set_status(VentilationStatusDTO(42, 'manual', level=0))
+            self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0))
+
+            events = []
+
+            def callback(event):
+                events.append(event)
+            self.controller.subscribe_events(callback)
+
+            self.controller.set_status(VentilationStatusDTO(42, 'manual', level=0))
+            self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0))
+            assert GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE,
+                                {'id': 43, 'mode': 'manual', 'level': 2, 'timer': 60.0}) in events
+            assert len(events) == 1, events
