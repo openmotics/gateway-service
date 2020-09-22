@@ -147,10 +147,10 @@ class MasterClassicControllerTest(unittest.TestCase):
                                   2: OutputDTO(id=2, room=3)}
 
         events = []
-        classic._on_master_output_event({'outputs': [(0, 0), (2, 0)]})
+        classic._on_master_output_event({'outputs': [(0, 0), (2, 5)]})
         assert [MasterEvent('OUTPUT_STATUS', {'id': 0, 'status': True, 'dimmer': 0}),
-                MasterEvent('OUTPUT_STATUS', {'id': 1, 'status': False, 'dimmer': 0}),
-                MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': True, 'dimmer': 0})] == events
+                MasterEvent('OUTPUT_STATUS', {'id': 1, 'status': False}),
+                MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': True, 'dimmer': 5})] == events
 
     def test_validation_bits_passthrough(self):
         # Important note: bits are ordened per byte, so the sequence is like:

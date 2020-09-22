@@ -305,11 +305,13 @@ class MasterClassicController(MasterController):
         # Publish status of all outputs. Since the event from the master contains
         # all outputs that are currently on, the output(s) that changed can't be
         # determined here.
-        state = {k: (False, 0) for k, v in self._output_config.items()}
+        state = {k: (False, None) for k, v in self._output_config.items()}
         for output_id, dimmer in data['outputs']:
             state[output_id] = (True, dimmer)
         for output_id, (status, dimmer) in state.items():
-            event_data = {'id': output_id, 'status': status, 'dimmer': dimmer}
+            event_data = {'id': output_id, 'status': status}
+            if dimmer is not None:
+                event_data['dimmer'] = dimmer
             self._publish_event(MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data))
 
     #######################
