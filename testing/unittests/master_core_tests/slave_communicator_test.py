@@ -99,7 +99,7 @@ class SlaveCommunicatorTest(unittest.TestCase):
         self.assertEqual(1, len(received_commands))
         self.assertTrue('payload' in received_commands[0])
         payload = received_commands[0]['payload']
-        self.assertEqual(list(SlaveCommunicatorTest._build_request_message(b'\x00\x00\x00\x00AB\x00')), payload)
+        self.assertEqual(SlaveCommunicatorTest._build_request_message(b'\x00\x00\x00\x00AB\x00'), payload)
         consumer = slave_communicator._consumers[0]
         response_payload = SlaveCommunicatorTest._build_response_message(b'\x00\x00\x00\x00AC\x04')
         slave_communicator._process_transport_message({'payload': bytearray(b'FOO') + response_payload[:5]})
