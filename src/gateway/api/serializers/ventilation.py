@@ -36,15 +36,15 @@ class VentilationSerializer(object):
     def serialize(ventilation_dto, fields):
         # type: (VentilationDTO, Optional[List[str]]) -> Dict[str,Any]
         data = {'id': ventilation_dto.id,
+                'external_id': Toolbox.denonify(ventilation_dto.external_id, ''),
                 'source': {'type': ventilation_dto.source.type,
                            'name': ventilation_dto.source.name},
-                'external_id': Toolbox.denonify(ventilation_dto.external_id, ''),
                 'name': Toolbox.denonify(ventilation_dto.name, ''),
-                'type': Toolbox.denonify(ventilation_dto.type, ''),
-                'vendor': Toolbox.denonify(ventilation_dto.vendor, ''),
-                'amount_of_levels': Toolbox.denonify(ventilation_dto.amount_of_levels, 0)}
-        if ventilation_dto.source.is_plugin:
-            data.update({'serial': Toolbox.denonify(ventilation_dto.external_id, '')})
+                'amount_of_levels': Toolbox.denonify(ventilation_dto.amount_of_levels, 0),
+                'device': {'vendor': Toolbox.denonify(ventilation_dto.device_vendor, ''),
+                           'type': Toolbox.denonify(ventilation_dto.device_type, '')}}
+        if ventilation_dto.device_serial:
+            data['device'].update({'serial': Toolbox.denonify(ventilation_dto.device_serial, '')})
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
@@ -67,15 +67,17 @@ class VentilationSerializer(object):
         if 'name' in api_data:
             loaded_fields.append('name')
             ventilation_dto.name = Toolbox.nonify(api_data['name'], '')
-        if 'type' in api_data:
-            loaded_fields.append('type')
-            ventilation_dto.type = Toolbox.nonify(api_data['type'], '')
-        if 'vendor' in api_data:
-            loaded_fields.append('vendor')
-            ventilation_dto.vendor = Toolbox.nonify(api_data['vendor'], '')
         if 'amount_of_levels' in api_data:
             loaded_fields.append('amount_of_levels')
             ventilation_dto.amount_of_levels = Toolbox.nonify(api_data['amount_of_levels'], '')
+        if 'device' in api_data:
+            loaded_fields.append('device')
+            if 'type' in api_data['device']:
+                ventilation_dto.device_type = Toolbox.nonify(api_data['device']['type'], '')
+            if 'vendor' in api_data['device']:
+                ventilation_dto.device_vendor = Toolbox.nonify(api_data['device']['vendor'], '')
+            if 'serial' in api_data['device']:
+                ventilation_dto.device_serial = Toolbox.nonify(api_data['device']['serial'], '')
         return ventilation_dto, loaded_fields
 
 

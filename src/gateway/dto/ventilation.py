@@ -23,14 +23,16 @@ if False:  # MYPY
 
 
 class VentilationDTO(BaseDTO):
-    def __init__(self, id, source, external_id='', name='', type='', vendor='', amount_of_levels=0):
+    def __init__(self, id, source, external_id='', name='', amount_of_levels=0,
+                 device_vendor='', device_type='', device_serial=''):
         self.id = id  # type: int
         self.source = source  # type: VentilationSourceDTO
         self.external_id = external_id  # type: str
         self.name = name  # type: str
-        self.type = type  # type: str
-        self.vendor = vendor  # type: str
         self.amount_of_levels = amount_of_levels  # type: int
+        self.device_vendor = device_vendor  # type: str
+        self.device_type = device_type  # type: str
+        self.device_serial = device_serial  # type: str
 
     def __eq__(self, other):
         # type: (Any) -> bool
@@ -40,8 +42,9 @@ class VentilationDTO(BaseDTO):
                 self.source == other.source and
                 self.external_id == other.external_id and
                 self.name == other.name and
-                self.type == other.type and
-                self.vendor == other.vendor and
+                self.device_vendor == other.device_vendor and
+                self.device_type == other.device_type and
+                self.device_serial == other.device_serial and
                 self.amount_of_levels == other.amount_of_levels)
 
 

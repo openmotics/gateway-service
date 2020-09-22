@@ -42,9 +42,10 @@ class VentilationMapper(object):
                               source=source_dto,
                               external_id=orm_object.external_id,
                               name=orm_object.name,
-                              type=orm_object.type,
-                              vendor=orm_object.vendor,
-                              amount_of_levels=orm_object.amount_of_levels)
+                              amount_of_levels=orm_object.amount_of_levels,
+                              device_vendor=orm_object.device_vendor,
+                              device_type=orm_object.device_type,
+                              device_serial=orm_object.device_serial)
 
     @staticmethod
     def dto_to_orm(ventilation_dto, fields):
@@ -62,10 +63,11 @@ class VentilationMapper(object):
             ventilation = Ventilation(**lookup_kwargs)
         if 'name' in fields:
             ventilation.name = ventilation_dto.name
-        if 'type' in fields:
-            ventilation.type = ventilation_dto.type
-        if 'vendor' in fields:
-            ventilation.vendor = ventilation_dto.vendor
         if 'amount_of_levels' in fields:
             ventilation.amount_of_levels = ventilation_dto.amount_of_levels
+        if 'device' in fields:
+            ventilation.device_vendor = ventilation_dto.device_vendor
+            ventilation.device_type = ventilation_dto.device_type
+            if ventilation_dto.device_serial:
+                ventilation.device_serial = ventilation_dto.device_serial
         return ventilation

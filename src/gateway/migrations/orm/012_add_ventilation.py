@@ -43,9 +43,10 @@ def migrate(migrator, database, fake=False, **kwargs):
         plugin = ForeignKeyField(Plugin, null=True, on_delete='CASCADE')
         external_id = CharField()
         name = CharField()
-        type = CharField()
-        vendor = CharField()
         amount_of_levels = IntegerField()
+        device_vendor = CharField()
+        device_type = CharField()
+        device_serial = CharField()
 
         class Meta:
             indexes = (

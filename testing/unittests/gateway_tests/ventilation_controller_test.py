@@ -107,9 +107,10 @@ class VentilationControllerTest(unittest.TestCase):
                                                         source='plugin',
                                                         external_id='device-000001',
                                                         name='foo',
-                                                        type='model-0',
-                                                        vendor='example',
                                                         amount_of_levels=4,
+                                                        device_vendor='example',
+                                                        device_type='model-0',
+                                                        device_serial='device-000001',
                                                         plugin=Plugin(id=2,
                                                                       name='dummy',
                                                                       version='0.0.1'))):
@@ -120,9 +121,10 @@ class VentilationControllerTest(unittest.TestCase):
                                                                                  name='dummy',
                                                                                  type='plugin'),
                                                      name='foo',
-                                                     vendor='example',
-                                                     type='model-0',
-                                                     amount_of_levels=4)
+                                                     amount_of_levels=4,
+                                                     device_vendor='example',
+                                                     device_type='model-0',
+                                                     device_serial='device-000001')
 
     def test_create_ventilation(self):
         plugin = Plugin(id=2, name='dummy', version='0.0.1')
@@ -136,9 +138,10 @@ class VentilationControllerTest(unittest.TestCase):
                                                                          name='dummy',
                                                                          type='plugin'),
                                              name='foo',
-                                             vendor='example',
-                                             type='model-0',
-                                             amount_of_levels=4)
+                                             amount_of_levels=4,
+                                             device_vendor='example',
+                                             device_type='model-0',
+                                             device_serial='device-000001')
             ventilation_dto = self.controller.save_ventilation(ventilation_dto, [])
             get_or_none.assert_called_with(source='plugin', plugin=plugin, external_id='device-000001')
             save.assert_called()
@@ -153,9 +156,10 @@ class VentilationControllerTest(unittest.TestCase):
                                                         source_id=2,
                                                         external_id='device-000001',
                                                         name='foo',
-                                                        type='model-0',
-                                                        vendor='example',
                                                         amount_of_levels=4,
+                                                        device_type='model-0',
+                                                        device_vendor='example',
+                                                        device_serial='device-000001',
                                                         plugin=plugin)) as get_or_none, \
              mock.patch.object(Ventilation, 'save', return_value=None) as save:
             ventilation_dto = VentilationDTO(None,
@@ -164,9 +168,10 @@ class VentilationControllerTest(unittest.TestCase):
                                                                          name='dummy',
                                                                          type='plugin'),
                                              name='foo',
-                                             vendor='example',
-                                             type='model-0',
-                                             amount_of_levels=4)
+                                             amount_of_levels=4,
+                                             device_vendor='example',
+                                             device_type='model-0',
+                                             device_serial='device-000001')
             ventilation_dto = self.controller.save_ventilation(ventilation_dto, [])
             get_or_none.assert_called_with(source='plugin', plugin=plugin, external_id='device-000001')
             save.assert_called()
@@ -180,9 +185,10 @@ class VentilationControllerTest(unittest.TestCase):
                                                         source_id=2,
                                                         external_id='device-000001',
                                                         name='foo',
-                                                        type='model-0',
-                                                        vendor='example',
                                                         amount_of_levels=4,
+                                                        device_type='model-0',
+                                                        device_vendor='example',
+                                                        device_serial='device-000001',
                                                         plugin=plugin)) as get_or_none, \
              mock.patch.object(Ventilation, 'save', return_value=None) as save:
             ventilation_dto = VentilationDTO(id=42,
@@ -191,9 +197,10 @@ class VentilationControllerTest(unittest.TestCase):
                                                                          name='dummy',
                                                                          type='plugin'),
                                              name='foo',
-                                             vendor='example',
-                                             type='model-0',
-                                             amount_of_levels=4)
+                                             amount_of_levels=4,
+                                             device_vendor='example',
+                                             device_type='model-0',
+                                             device_serial='device-000001')
             ventilation_dto = self.controller.save_ventilation(ventilation_dto, [])
             get_or_none.assert_called_with(id=42, source='plugin', plugin=plugin, external_id='device-000001')
             save.assert_called()

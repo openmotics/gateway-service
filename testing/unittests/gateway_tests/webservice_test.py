@@ -95,7 +95,10 @@ class WebInterfaceTest(unittest.TestCase):
 
     def test_ventilation_configurations(self):
         with mock.patch.object(self.ventilation_controller, 'load_ventilations',
-                               return_value=[VentilationDTO(id=1, name='test', amount_of_levels=4, type='0A', vendor='example',
+                               return_value=[VentilationDTO(id=1, name='test', amount_of_levels=4,
+                                                            device_vendor='example',
+                                                            device_type='0A',
+                                                            device_serial='device-00001',
                                                             external_id='device-00001',
                                                             source=VentilationSourceDTO(id=2, type='plugin', name='dummy'))]):
             response = self.web.get_ventilation_configurations()
@@ -105,29 +108,34 @@ class WebInterfaceTest(unittest.TestCase):
                 'amount_of_levels': 4,
                 'external_id': 'device-00001',
                 'source': {'type': 'plugin', 'name': 'dummy'},
-                'vendor': 'example',
-                'type': '0A',
-                'serial': 'device-00001',
+                'device': {'vendor': 'example',
+                           'type': '0A',
+                           'serial': 'device-00001'}
             }], json.loads(response)['config'])
 
     def test_set_ventilation_configuration(self):
         with mock.patch.object(self.ventilation_controller, 'save_ventilation',
-                               return_value=VentilationDTO(id=1, name='test', amount_of_levels=4, type='0A', vendor='example',
+                               return_value=VentilationDTO(id=1, name='test', amount_of_levels=4,
+                                                           device_vendor='example',
+                                                           device_type='0A',
+                                                           device_serial='device-00001',
                                                            external_id='device-00001',
                                                            source=VentilationSourceDTO(id=2, type='plugin', name='dummy'))) as save:
             config = {'source': {'type': 'plugin', 'name': 'dummy'},
                       'external_id': 'device-00001',
                       'name': 'test',
-                      'type': '0A',
-                      'vendor': 'example'}
+                      'device': {'vendor': 'example',
+                                 'type': '0A',
+                                 'serial': 'device-00001'}}
             response = self.web.set_ventilation_configuration(config=config)
             self.assertEqual({
                 'id': 1,
                 'source': {'type': 'plugin', 'name': 'dummy'},
                 'external_id': 'device-00001',
                 'name': 'test',
-                'type': '0A',
-                'vendor': 'example',
+                'device': {'vendor': 'example',
+                           'type': '0A',
+                           'serial': 'device-00001'},
             }, json.loads(response)['config'])
             save.assert_called()
 
