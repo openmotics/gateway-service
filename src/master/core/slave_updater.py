@@ -25,7 +25,7 @@ from intelhex import IntelHex
 from master.core.memory_models import (
     GlobalConfiguration,
     InputModuleConfiguration, OutputModuleConfiguration, SensorModuleConfiguration,
-    CanControlModuleConfiguration
+    CanControlModuleConfiguration, UCanModuleConfiguration
 )
 from master.core.slave_communicator import SlaveCommunicator, CommunicationTimedOutException
 from master.core.slave_api import SlaveAPI
@@ -54,10 +54,12 @@ class SlaveUpdater(object):
             return value if value != 255 else default
 
         general_configuration = GlobalConfiguration()
-        # All module types: ['O', 'R', 'D', 'I', 'T', 'C']  # TODO: Implement `D`
+        # All module types: ['O', 'R', 'D', 'I', 'T', 'C']
         update_map = {'I': (InputModuleConfiguration, _default_if_255(general_configuration.number_of_input_modules, 0)),
                       'O': (OutputModuleConfiguration, _default_if_255(general_configuration.number_of_output_modules, 0)),
+                      'D': (OutputModuleConfiguration, _default_if_255(general_configuration.number_of_output_modules, 0)),
                       'T': (SensorModuleConfiguration, _default_if_255(general_configuration.number_of_sensor_modules, 0)),
+                      # 'UC': (UCanModuleConfiguration, _default_if_255(general_configuration.number_of_ucan_modules, 0)),  # TODO: Implement
                       'C': (CanControlModuleConfiguration, _default_if_255(general_configuration.number_of_can_control_modules, 0))}
         if module_type in update_map:
             module_configuration_class, number_of_modules = update_map[module_type]
@@ -67,7 +69,7 @@ class SlaveUpdater(object):
                 if module_configuration.device_type == module_type:
                     addresses.append(module_configuration.address)
                 else:
-                    logger.warning('Skip updating unsupported module {0}: {1} != {2}'.format(
+                    logger.info('Skip updating unsupported module {0}: {1} != {2}'.format(
                         module_configuration.address, module_type, module_configuration.device_type
                     ))
         else:

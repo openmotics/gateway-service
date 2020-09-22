@@ -183,6 +183,36 @@ class CanControlModuleConfiguration(MemoryModelDefinition):
     address: str
 
 
+class UCanModuleConfiguration(MemoryModelDefinition):
+    class ModbusSpeed(MemoryEnumDefinition):
+        B4800: EnumEntry
+        B9600: EnumEntry
+        B19200: EnumEntry
+        B38400: EnumEntry
+        B57600: EnumEntry
+        B115200: EnumEntry
+
+    class ModbusModel(MemoryEnumDefinition):
+        OPENMOTICS_COLOR_THERMOSTAT: EnumEntry
+        HEATMISER_THERMOSTAT: EnumEntry
+
+    class _ModbusTypeComposition(CompositeMemoryModelDefinition):
+        ucan_voc: bool
+        ucan_co2: bool
+        ucan_hum: bool
+        ucan_temp: bool
+        ucan_lux: bool
+        ucan_sound: bool
+
+    device_type: str
+    address: str
+    module: CanControlModuleConfiguration
+    modbus_address: int
+    modbus_type: _ModbusTypeComposition
+    modbus_model: ModbusModel
+    modbus_speed: ModbusSpeed
+
+
 class ExtraSensorConfiguration(MemoryModelDefinition):
     grouaction_changed: int
     name: str
