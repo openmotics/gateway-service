@@ -64,7 +64,7 @@ class MemoryModelDefinition(object):
             setattr(self, '_{0}'.format(field_name), relation)
             self._add_relation(field_name)
             self._relations.append(field_name)
-            if relation.field is not None:
+            if relation._field is not None:
                 relation.set_field_container(MemoryFieldContainer(relation._field,
                                                                   relation._field.get_address(self.id),
                                                                   self._memory_files))
