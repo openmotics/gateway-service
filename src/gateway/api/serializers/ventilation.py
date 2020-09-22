@@ -43,6 +43,8 @@ class VentilationSerializer(object):
                 'type': Toolbox.denonify(ventilation_dto.type, ''),
                 'vendor': Toolbox.denonify(ventilation_dto.vendor, ''),
                 'amount_of_levels': Toolbox.denonify(ventilation_dto.amount_of_levels, 0)}
+        if ventilation_dto.source.is_plugin:
+            data.update({'serial': Toolbox.denonify(ventilation_dto.external_id, '')})
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod

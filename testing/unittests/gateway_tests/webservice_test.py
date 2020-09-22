@@ -100,13 +100,14 @@ class WebInterfaceTest(unittest.TestCase):
                                                             source=VentilationSourceDTO(id=2, type='plugin', name='dummy'))]):
             response = self.web.get_ventilation_configurations()
             self.assertEqual([{
-                'amount_of_levels': 4,
-                'external_id': 'device-00001',
                 'id': 1,
                 'name': 'test',
+                'amount_of_levels': 4,
+                'external_id': 'device-00001',
                 'source': {'type': 'plugin', 'name': 'dummy'},
+                'vendor': 'example',
                 'type': '0A',
-                'vendor': 'example'
+                'serial': 'device-00001',
             }], json.loads(response)['config'])
 
     def test_set_ventilation_configuration(self):
