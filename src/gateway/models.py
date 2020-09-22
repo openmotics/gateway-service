@@ -30,7 +30,7 @@ from playhouse.signals import Model, post_save
 import constants
 
 if False:  # MYPY
-    from typing import List
+    from typing import Dict, List
 
 logger = logging.getLogger('openmotics')
 
@@ -41,7 +41,8 @@ class Database(object):
     _db = SqliteDatabase(filename, pragmas={'foreign_keys': 1})
 
     # Used to store database metrics (e.g. number of saves)
-    _metrics = {}
+    _metrics = {}  # type: Dict[str,int]
+    _dirty_flag = False
 
     @classmethod
     def get_db(cls):
@@ -51,6 +52,16 @@ class Database(object):
     def incr_metrics(cls, sender, incr=1):
         cls._metrics.setdefault(sender, 0)
         cls._metrics[sender] += incr
+
+    @classmethod
+    def get_dirty_flag(cls):
+        dirty = cls._dirty_flag
+        cls._dirty_flag = False
+        return dirty
+
+    @classmethod
+    def set_dirty(cls):
+        cls._dirty_flag = True
 
     @classmethod
     def get_models(cls):
@@ -68,6 +79,7 @@ class Database(object):
 @post_save()
 def db_metrics_handler(sender, instance, created):
     _, _ = instance, created
+    Database.set_dirty()
     Database.incr_metrics(sender.__name__.lower())
 
 
