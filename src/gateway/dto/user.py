@@ -26,25 +26,23 @@ if False:  # MYPY
 
 
 class UserDTO(BaseDTO):
-
-
     def __init__(self, username, accepted_terms=0):
         # type: (str, int) -> None
         self.username = username
         self.hashed_password = ''
         self.accepted_terms = accepted_terms
-    
+
     @staticmethod
     def _hash_password(password):
         # type: (str) -> str
-        """ 
-        Hash the password using sha1. 
+        """
+        Hash the password using sha1.
         """
         sha = hashlib.sha1()
-        sha.update('OpenMotics')  # type: ignore
-        sha.update(password)  # type: ignore
+        sha.update(b'OpenMotics')
+        sha.update(password.encode('utf-8'))
         return sha.hexdigest()
-        
+
     def clear_password(self):
         # Type: () -> None
         """
@@ -69,4 +67,3 @@ class UserDTO(BaseDTO):
         if not isinstance(other, UserDTO):
             return False
         return self.username.lower() == other.username.lower()
-
