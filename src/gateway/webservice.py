@@ -578,6 +578,7 @@ class WebInterface(object):
             'isolated_plugins',  # Plugins run in a separate process, so allow fine-graded control
             'websocket_maintenance',  # Maintenance over websockets
             'shutter_positions',  # Shutter positions
+            'ventilation',
         ]
 
         master_version = self._gateway_api.get_master_version()
@@ -588,9 +589,10 @@ class WebInterface(object):
         if master_version >= (3, 143, 88):
             features.append('input_states')
 
-        thermostats_gateway = Feature.get_or_none(name='thermostats_gateway')
-        if thermostats_gateway is not None and thermostats_gateway.enabled:
-            features.append('thermostats_gateway')
+        for name in ('thermostats_gateway',):
+            feature = Feature.get_or_none(name=name)
+            if feature and feature.enabled:
+                features.append(name)
 
         return {'features': features}
 

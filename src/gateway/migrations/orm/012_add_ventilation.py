@@ -15,7 +15,7 @@
 
 from peewee import (
     Model, Database, SqliteDatabase,
-    AutoField, CharField, ForeignKeyField, IntegerField
+    AutoField, BooleanField, CharField, ForeignKeyField, IntegerField
 )
 from peewee_migrate import Migrator
 import constants

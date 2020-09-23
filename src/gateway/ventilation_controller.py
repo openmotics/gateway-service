@@ -78,6 +78,8 @@ class VentilationController(object):
     def save_ventilation(self, ventilation_dto, fields):
         # type: (VentilationDTO, List[str]) -> VentilationDTO
         ventilation = VentilationMapper.dto_to_orm(ventilation_dto, fields)
+        if ventilation.id is None:
+            logger.info('Registered new ventilation unit %s', ventilation)
         ventilation.save()
         return VentilationMapper.orm_to_dto(ventilation)
 
