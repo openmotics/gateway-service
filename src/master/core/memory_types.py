@@ -489,13 +489,12 @@ class MemoryVersionField(MemoryAddressField):
 
 
 class MemoryRelation(object):
-    def __init__(self, instance_type, id_spec, field=None, offset=0):
-        # type: (type, Callable[[int], int], Optional[MemoryField], int) -> None
+    def __init__(self, instance_type, id_spec, field=None):
+        # type: (type, Callable[[int], int], Optional[MemoryField]) -> None
         self.instance_type = instance_type
         self._id_spec = id_spec
         self._field = field
         self._field_container = None  # type: Optional[MemoryFieldContainer]
-        self._offset = offset
 
     def set_field_container(self, field_container):  # type: (MemoryFieldContainer) -> None
         self._field_container = field_container

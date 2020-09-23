@@ -149,28 +149,12 @@ class MemoryTypesTest(unittest.TestCase):
         memory_file_mock.write.assert_called_with({address: bytearray([2])})
 
     def test_model_definition(self):
-        memory_map = {0: [30, 31, 32],
-                      1: [40, 0b0101],
-                      2: [41, 0b1011],
-                      3: [42, 0b1000],
-                      4: [43, 0b0000]}
-
-        def _read(addresses):
-            data_ = {}
-            for address in addresses:
-                data_[address] = memory_map[address.page][address.offset:address.offset + address.length]
-            return data_
-
-        def _write(data_map):
-            for address, data_ in data_map.items():
-                for index, data_byte in enumerate(data_):
-                    memory_map[address.page][address.offset + index] = data_byte
-
-        memory_file_mock = Mock(MemoryFile)
-        memory_file_mock.read = _read
-        memory_file_mock.write = _write
-
-        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: memory_file_mock})
+        memory_map = {0: bytearray([30, 31, 32]),
+                      1: bytearray([40, 0b0101]),
+                      2: bytearray([41, 0b1011]),
+                      3: bytearray([42, 0b1000]),
+                      4: bytearray([43, 0b0000])}
+        MemoryTypesTest._mock_memory(memory_map)
 
         class Parent(MemoryModelDefinition):
             info = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, id))
@@ -220,7 +204,7 @@ class MemoryTypesTest(unittest.TestCase):
         with self.assertRaises(AttributeError):
             child.parent = parent
         child.save()
-        self.assertEqual([20, 0b1000], memory_map[4])
+        self.assertEqual(bytearray([20, 0b1000]), memory_map[4])
         child.composed.bit = False
         child.composed.info = 4
         self.assertEqual({'id': 4,
@@ -228,27 +212,34 @@ class MemoryTypesTest(unittest.TestCase):
                           'composed': {'bit': False,
                                        'info': 4}}, child.serialize())
         child.save()
-        self.assertEqual([20, 0b0110], memory_map[4])
+        self.assertEqual(bytearray([20, 0b0110]), memory_map[4])
+
+    def test_fk_relation(self):
+        memory_map = {0: bytearray([10]),
+                      1: bytearray([0, 20]),
+                      2: bytearray([1, 30])}
+        MemoryTypesTest._mock_memory(memory_map)
+
+        class FKParent(MemoryModelDefinition):
+            info = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, id))
+
+        class FKChild(MemoryModelDefinition):
+            parent = MemoryRelation(FKParent,
+                                    field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (id + 1, 0)),
+                                    id_spec=lambda id: None if id == 0 else id - 1)
+            info = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (id + 1, 1))
+
+        child_0 = FKChild(0)
+        self.assertEqual(20, child_0.info)
+        self.assertIsNone(child_0.parent)
+        child_1 = FKChild(1)
+        self.assertEqual(30, child_1.info)
+        self.assertIsNotNone(child_1.parent)
+        self.assertEqual(10, child_1.parent.info)
 
     def test_factor_composition(self):
-        memory_map = {0: [0]}
-
-        def _read(addresses):
-            data_ = {}
-            for address in addresses:
-                data_[address] = memory_map[address.page][address.offset:address.offset + address.length]
-            return data_
-
-        def _write(data_map):
-            for address, data_ in data_map.items():
-                for index, data_byte in enumerate(data_):
-                    memory_map[address.page][address.offset + index] = data_byte
-
-        memory_file_mock = Mock(MemoryFile)
-        memory_file_mock.read = _read
-        memory_file_mock.write = _write
-
-        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: memory_file_mock})
+        memory_map = {0: bytearray([0])}
+        MemoryTypesTest._mock_memory(memory_map)
 
         class Object(MemoryModelDefinition):
             class _ObjectComposed(CompositeMemoryModelDefinition):
@@ -277,24 +268,8 @@ class MemoryTypesTest(unittest.TestCase):
         self.assertEqual(511, instance.composed.field_1)
 
     def test_enums(self):
-        memory_map = {0: [0]}
-
-        def _read(addresses):
-            data_ = {}
-            for address in addresses:
-                data_[address] = memory_map[address.page][address.offset:address.offset + address.length]
-            return data_
-
-        def _write(data_map):
-            for address, data_ in data_map.items():
-                for index, data_byte in enumerate(data_):
-                    memory_map[address.page][address.offset + index] = data_byte
-
-        memory_file_mock = Mock(MemoryFile)
-        memory_file_mock.read = _read
-        memory_file_mock.write = _write
-
-        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: memory_file_mock})
+        memory_map = {0: bytearray([0])}
+        MemoryTypesTest._mock_memory(memory_map)
 
         class Object2(MemoryModelDefinition):
             class SomeType(MemoryEnumDefinition):
@@ -343,6 +318,25 @@ class MemoryTypesTest(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             instance.enum = 'BAR_'
+
+    @staticmethod
+    def _mock_memory(memory_map):
+        def _read(addresses):
+            data_ = {}
+            for address in addresses:
+                data_[address] = memory_map[address.page][address.offset:address.offset + address.length]
+            return data_
+
+        def _write(data_map):
+            for address, data_ in data_map.items():
+                for index, data_byte in enumerate(data_):
+                    memory_map[address.page][address.offset + index] = data_byte
+
+        memory_file_mock = Mock(MemoryFile)
+        memory_file_mock.read = _read
+        memory_file_mock.write = _write
+
+        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: memory_file_mock})
 
 
 if __name__ == "__main__":
