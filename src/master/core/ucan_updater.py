@@ -68,6 +68,7 @@ class UCANUpdater(object):
 
             if current_version == version:
                 logger.info('uCAN already up-to-date. Skipping')
+                return True
 
             if not os.path.exists(hex_filename):
                 raise RuntimeError('The given path does not point to an existing file')
