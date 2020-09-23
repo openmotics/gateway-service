@@ -26,6 +26,7 @@ from croniter import croniter
 from threading import Thread
 from ioc import Injectable, Inject, INJECTED, Singleton
 from serial_utils import CommunicationTimedOutException
+from gateway.daemon_thread import DaemonThread
 from gateway.dto import ScheduleDTO
 from gateway.mappers import ScheduleMapper
 from gateway.webservice import params_parser
@@ -72,7 +73,7 @@ class SchedulingController(object):
         self._group_action_controller = group_action_controller
         self._web_interface = None
         self._stop = False
-        self._processor = None
+        self._processor = None  # type: Optional[DaemonThread]
         self._schedules = {}  # type: Dict[int, Tuple[ScheduleDTO, Schedule]]
 
         SchedulingController.TIMEZONE = gateway_api.get_timezone()
@@ -115,34 +116,33 @@ class SchedulingController(object):
 
     def start(self):
         self._stop = False
-        self._processor = Thread(target=self._process, name='SchedulingController processor')
-        self._processor.daemon = True
+        self._processor = DaemonThread(target=self._process,
+                                       name='SchedulingController processor',
+                                       interval=60)
         self._processor.start()
 
     def stop(self):
-        self._stop = True
+        if self._processor is not None:
+            self._processor.stop()
 
     def _process(self):
-        while self._stop is False:
-            for schedule_id in list(self._schedules.keys()):
-                schedule_tuple = self._schedules.get(schedule_id)
-                if schedule_tuple is None:
-                    continue
-                schedule_dto, schedule = schedule_tuple
-                if schedule_dto.status != 'ACTIVE':
-                    continue
-                if schedule_dto.end is not None and schedule_dto.end < time.time():
-                    schedule_dto.status = 'COMPLETED'
-                    schedule.status = 'COMPLETED'
-                    schedule.save()
-                    continue
-                if schedule_dto.is_due:
-                    thread = Thread(target=self._execute_schedule, args=(schedule_dto, schedule),
-                                    name='SchedulingController executor')
-                    thread.daemon = True
-                    thread.start()
-            now = time.time()
-            time.sleep(now - now % 60 + 60 - now)  # Wait for the next minute mark
+        for schedule_id in list(self._schedules.keys()):
+            schedule_tuple = self._schedules.get(schedule_id)
+            if schedule_tuple is None:
+                continue
+            schedule_dto, schedule = schedule_tuple
+            if schedule_dto.status != 'ACTIVE':
+                continue
+            if schedule_dto.end is not None and schedule_dto.end < time.time():
+                schedule_dto.status = 'COMPLETED'
+                schedule.status = 'COMPLETED'
+                schedule.save()
+                continue
+            if schedule_dto.is_due:
+                thread = Thread(target=self._execute_schedule, args=(schedule_dto, schedule),
+                                name='SchedulingController executor')
+                thread.daemon = True
+                thread.start()
 
     @staticmethod
     def _get_next_execution(schedule_dto):
