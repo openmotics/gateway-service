@@ -25,6 +25,10 @@ from ioc import Inject, INJECTED
 from master.core.core_communicator import CoreCommunicator
 from master.core.maintenance import MaintenanceCommunicator
 
+if False:  # MYPY
+    from typing import Optional
+    from serial.serialposix import Serial
+
 logger = logging.getLogger('openmotics')
 
 
@@ -39,14 +43,15 @@ class CoreUpdater(object):
     @staticmethod
     @Inject
     def update(hex_filename, master_communicator=INJECTED, maintenance_communicator=INJECTED, cli_serial=INJECTED):
+        # type: (str, CoreCommunicator, MaintenanceCommunicator, Serial) -> bool
         """ Flashes the content from an Intel HEX file to the Core """
         try:
             # TODO: Check version and skip update if the version is already active
 
             logger.info('Updating Core')
 
-            master_communicator = master_communicator  # type: CoreCommunicator
-            maintenance_communicator = maintenance_communicator  # type: MaintenanceCommunicator
+            master_communicator = master_communicator
+            maintenance_communicator = maintenance_communicator
 
             if master_communicator is not None and maintenance_communicator is not None:
                 maintenance_communicator.stop()
@@ -107,7 +112,7 @@ class CoreUpdater(object):
             return False
 
     @staticmethod
-    def _in_bootloader(serial):
+    def _in_bootloader(serial):  # type: (Serial) -> Optional[str]
         serial.flushInput()
         serial.write('hi\n')
         response = CoreUpdater._read_line(serial)
@@ -117,7 +122,7 @@ class CoreUpdater(object):
         return response.split('=')[-1]
 
     @staticmethod
-    def _read_line(serial, verbose=True, discard_lines=0):
+    def _read_line(serial, verbose=True, discard_lines=0):  # type: (Serial, bool, int) -> str
         timeout = time.time() + CoreUpdater.BOOTLOADER_SERIAL_READ_TIMEOUT
         line = ''
         while time.time() < timeout:

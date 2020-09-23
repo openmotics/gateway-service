@@ -108,7 +108,7 @@ class SlaveCommunicator(object):
             logger.info('Writing to slave transport:   Address: {0} - Data: {1}'.format(address, printable(payload)))
         try:
             self._communicator.do_command(command=CoreAPI.slave_tx_transport_message(len(payload)),
-                                          fields={'payload': list(payload)},  # TODO: Remove list() once CoreCommunicator uses bytearrays
+                                          fields={'payload': payload},
                                           timeout=timeout)
         except CommunicationTimedOutException as ex:
             logger.error('Internal timeout during slave transport: {0}'.format(ex))
@@ -127,7 +127,7 @@ class SlaveCommunicator(object):
         return None
 
     def _process_transport_message(self, package):
-        payload = bytearray(package['payload'])  # TODO: Remove bytearray() once the CoreCommunicator uses bytearrays
+        payload = package['payload']
         if self._verbose:
             logger.info('Reading from slave transport: Data: {0}'.format(printable(payload)))
 

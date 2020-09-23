@@ -22,7 +22,7 @@ from master.core.fields import PaddingField
 from master.core.fields import Field
 
 if False:  # MYPY
-    from typing import List, Dict, Any
+    from typing import List, Dict, Any, Union, Callable
 
 
 logger = logging.getLogger('openmotics')
@@ -34,7 +34,6 @@ class CoreCommandSpec(object):
     """
 
     # TODO: Add validation callback which is - if not None - is called when the response payload is processed. Arguments are request and response, and it should return a bool indicating whether the validation passed or not.
-    # TODO: Add some kind of byte bit field where that byte is represented as a dict or class where every bit can be named and get/set
 
     def __init__(self, instruction, request_fields=None, response_fields=None, response_instruction=None):
         # type: (str, List[Field], List[Field], str) -> None
@@ -46,23 +45,23 @@ class CoreCommandSpec(object):
         :param response_fields: Fields in the response
         :param response_instruction: name of the instruction of the answer in case it would be different from the response
         """
-        self.instruction = instruction
+        self.instruction = bytearray([ord(c) for c in instruction])
         self.request_fields = [] if request_fields is None else request_fields
         self.response_fields = [] if response_fields is None else response_fields
-        self.response_instruction = response_instruction if response_instruction is not None else instruction
+        self.response_instruction = bytearray([ord(c) for c in response_instruction]) if response_instruction is not None else self.instruction
 
-    def create_request_payload(self, fields):  # type: (Dict[str, Any]) -> str
+    def create_request_payload(self, fields):  # type: (Dict[str, Any]) -> bytearray
         """
         Create the request payload for the Core using this spec and the provided fields.
 
         :param fields: dictionary with values for the fields
         """
-        payload = ''
+        payload = bytearray()
         for field in self.request_fields:
             payload += field.encode(fields.get(field.name))
         return payload
 
-    def consume_response_payload(self, payload):  # type: (str) -> Dict[str, Any]
+    def consume_response_payload(self, payload):  # type: (bytearray) -> Dict[str, Any]
         """
         Consumes the payload bytes
 
@@ -72,7 +71,9 @@ class CoreCommandSpec(object):
         payload_length = len(payload)
         result = {}
         for field in self.response_fields:
-            field_length = field.length
+            if field.length is None:
+                continue
+            field_length = field.length  # type: Union[int, Callable[[int], int]]
             if callable(field_length):
                 field_length = field_length(payload_length)
             if len(payload) < field_length:
