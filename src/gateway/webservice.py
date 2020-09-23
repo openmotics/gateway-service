@@ -49,7 +49,7 @@ from gateway.dto import RoomDTO, ScheduleDTO, UserDTO
 from gateway.enums import ShutterEnums, UserEnums
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
-from gateway.models import Feature
+from gateway.models import Database, Feature
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -1904,9 +1904,11 @@ class WebInterface(object):
         """
         power_dirty = self._power_dirty
         self._power_dirty = False
+        orm_dirty = Database.get_dirty_flag()
         # eeprom key used here for compatibility
         return {'eeprom': self._gateway_api.get_configuration_dirty_flag(),
-                'power': power_dirty}
+                'power': power_dirty,
+                'orm': orm_dirty}
 
     # Energy modules
 
