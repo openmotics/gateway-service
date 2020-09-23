@@ -20,6 +20,9 @@ from __future__ import absolute_import
 import logging
 from master.core.fields import WordField
 
+if False:  # MYPY
+    from typing import List
+
 logger = logging.getLogger('openmotics')
 
 
@@ -101,6 +104,7 @@ class Event(object):
         self._action = data['action']
         self._device_nr = data['device_nr']
         self._data = data['data']
+        self._word_helper = WordField('')
 
     @property
     def type(self):
@@ -119,7 +123,7 @@ class Event(object):
     def data(self):
         if self.type == Event.Types.OUTPUT:
             timer_factor = None
-            timer_value = Event._word_decode(self._data[2:])
+            timer_value = self._word_decode(self._data[2:])
             if self._data[1] == 0:
                 timer_value = None
             elif self._data[1] == 1:
@@ -147,7 +151,7 @@ class Event(object):
                 sensor_value = self._data[1]
             elif self._action == 2:
                 sensor_type = Event.SensorType.BRIGHTNESS
-                sensor_value = Event._word_decode(self._data[0:2])
+                sensor_value = self._word_decode(self._data[0:2])
             return {'sensor': self._device_nr,
                     'type': sensor_type,
                     'value': sensor_value}
@@ -163,8 +167,8 @@ class Event(object):
                     'state': self._data[0]}
         if self.type == Event.Types.LED_BLINK:
             word_25 = self._device_nr
-            word_50 = Event._word_decode(self._data[0:2])
-            word_75 = Event._word_decode(self._data[2:4])
+            word_50 = self._word_decode(self._data[0:2])
+            word_75 = self._word_decode(self._data[2:4])
             leds = {}
             for i in range(16):
                 if word_25 & (1 << i):
@@ -178,7 +182,7 @@ class Event(object):
             return {'chip': self._device_nr,
                     'leds': leds}
         if self.type == Event.Types.LED_ON:
-            word_on = Event._word_decode(self._data[0:2])
+            word_on = self._word_decode(self._data[0:2])
             leds = {}
             for i in range(16):
                 leds[i] = Event.LedStates.ON if word_on & (1 << i) else Event.LedStates.OFF
@@ -197,9 +201,8 @@ class Event(object):
             return event_data
         return None
 
-    @staticmethod
-    def _word_decode(data):
-        return WordField.decode(str(chr(data[0])) + str(chr(data[1])))
+    def _word_decode(self, data):  # type: (List[int]) -> int
+        return self._word_helper.decode(bytearray(data[0:2]))
 
     def __str__(self):
         return '{0} ({1})'.format(self.type, self.data if self.type != Event.Types.UNKNOWN else self._type)

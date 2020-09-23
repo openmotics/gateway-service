@@ -21,7 +21,7 @@ from master.core.fields import Field, PaddingField, AddressField
 from serial_utils import printable
 
 if False:  # MYPY
-    from typing import Optional, List, Dict, Any
+    from typing import Optional, List, Dict, Any, Union, Callable
 
 
 logger = logging.getLogger('openmotics')
@@ -56,15 +56,17 @@ class SlaveCommandSpec(object):
         self._request_padded_suffix = bytearray([0] * self.instruction.padding) + b'\r\n\r\n'
         self._response_prefix_length = len(SlaveCommandSpec.RESPONSE_PREFIX)
         self._response_footer_length = 3 + len(SlaveCommandSpec.RESPONSE_SUFFIX)  # Literal 'C' + 2 CRC bytes + RESPONSE_SUFFIX
+        if any(not isinstance(field.length, int) for field in self.response_fields):
+            raise RuntimeError('SlaveCommandSpec expects fields with integer lengths')
         self.response_length = (
             self.header_length +
             self._instruction_length +
-            sum(field.length for field in self.response_fields) +
+            sum(field.length for field in self.response_fields if isinstance(field.length, int)) +
             self._response_footer_length
         )
 
     def set_address(self, address):  # type: (str) -> None
-        self.address = bytearray(self._address_field.encode_bytes(address))  # TODO: Probably need to change once bytearrays are used everywhere
+        self.address = self._address_field.encode(address)
         self.expected_response_hash = SlaveCommandSpec.hash(self.address + self.instruction.instruction.encode())
 
     def create_request_payload(self, fields):  # type: (Dict[str, Any]) -> bytearray
@@ -74,7 +76,7 @@ class SlaveCommandSpec(object):
         prefix = bytearray(SlaveCommandSpec.REQUEST_PREFIX)
         payload = self.address + self.instruction.instruction.encode()
         for field in self._request_fields:
-            payload += bytearray(field.encode_bytes(fields.get(field.name)))
+            payload += field.encode(fields.get(field.name))
         checksum = bytearray(b'C') + SlaveCommandSpec.calculate_crc(payload)
         return prefix + payload + checksum + self._request_padded_suffix
 
@@ -92,7 +94,9 @@ class SlaveCommandSpec(object):
         result = {}
         payload_length = len(payload_data)
         for field in self.response_fields:
-            field_length = field.length
+            if field.length is None:
+                continue
+            field_length = field.length  # type: Union[int, Callable[[int], int]]
             if callable(field_length):
                 field_length = field_length(payload_length)
             if len(payload_data) < field_length:
@@ -100,7 +104,7 @@ class SlaveCommandSpec(object):
                 break
             data = payload_data[:field_length]  # type: bytearray
             if not isinstance(field, PaddingField):
-                result[field.name] = field.decode_bytes(list(data))
+                result[field.name] = field.decode(data)
             payload_data = payload_data[field_length:]
         return result
 
@@ -131,4 +135,3 @@ class SlaveCommandSpec(object):
             result += (entry * 256 * times)
             times += 1
         return result
-

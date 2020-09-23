@@ -25,7 +25,7 @@ from master.core.events import Event
 from master.core.memory_types import MemoryAddress
 
 if False:  # MYPY
-    from typing import List, Dict
+    from typing import List, Dict, Callable, Any, Optional, Iterator
 
 logger = logging.getLogger("openmotics")
 
@@ -45,7 +45,7 @@ class MemoryFile(object):
              MemoryTypes.FRAM: (128, 256)}
 
     @Inject
-    def __init__(self, memory_type, master_communicator=INJECTED):
+    def __init__(self, memory_type, master_communicator=INJECTED):  # type: (str, CoreCommunicator) -> None
         """
         Initializes the MemoryFile instance, reprensenting one of the supported memory types.
         It provides caching for EEPROM, and direct write/read through for FRAM
@@ -53,21 +53,21 @@ class MemoryFile(object):
         if not master_communicator:
             raise RuntimeError('Could not inject argument: core_communicator')
 
-        self._core_communicator = master_communicator  # type: CoreCommunicator
-        self.type = memory_type  # type: str
-        self._cache = {}
-        self._eeprom_change_callback = None
-        self._pages, self._page_length = MemoryFile.SIZES[memory_type]
+        self._core_communicator = master_communicator
+        self.type = memory_type
+        self._cache = {}  # type: Dict[int, bytearray]
+        self._eeprom_change_callback = None  # type: Optional[Callable[[], None]]
+        self._pages, self._page_length = MemoryFile.SIZES[memory_type]  # type: int, int
 
         if memory_type == MemoryTypes.EEPROM:
             self._core_communicator.register_consumer(
                 BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
             )
 
-    def subscribe_eeprom_change(self, callback):
+    def subscribe_eeprom_change(self, callback):  # type: (Callable[[], None]) -> None
         self._eeprom_change_callback = callback
 
-    def _handle_event(self, data):
+    def _handle_event(self, data):  # type: (Dict[str, Any]) -> None
         core_event = Event(data)
         if core_event.type == Event.Types.SYSTEM and core_event.data['type'] == Event.SystemEventTypes.EEPROM_ACTIVATE:
             self.invalidate_cache()
@@ -75,23 +75,23 @@ class MemoryFile(object):
                 self._eeprom_change_callback()
             logger.info('Cache cleared: EEPROM_ACTIVATE')
 
-    def read(self, addresses):  # type: (List[MemoryAddress]) -> Dict[MemoryAddress, List[int]]
+    def read(self, addresses):  # type: (List[MemoryAddress]) -> Dict[MemoryAddress, bytearray]
         data = {}
         for address in addresses:
             page_data = self.read_page(address.page)
             data[address] = page_data[address.offset:address.offset + address.length]
         return data
 
-    def write(self, data_map):  # type: (Dict[MemoryAddress, List[int]]) -> None
+    def write(self, data_map):  # type: (Dict[MemoryAddress, bytearray]) -> None
         for address, data in data_map.items():
             page_data = self.read_page(address.page)
             for index, data_byte in enumerate(data):
                 page_data[address.offset + index] = data_byte
             self.write_page(address.page, page_data)
 
-    def read_page(self, page):
+    def read_page(self, page):  # type: (int) -> bytearray
         def _read_page():
-            page_data = []
+            page_data = bytearray()
             for i in range(self._page_length // 32):
                 page_data += self._core_communicator.do_command(
                     command=CoreAPI.memory_read(),
@@ -107,7 +107,7 @@ class MemoryFile(object):
             self._cache[page] = _read_page()
         return copy.copy(self._cache[page])
 
-    def write_page(self, page, data):
+    def write_page(self, page, data):  # type: (int, bytearray) -> None
         cached_data = None
         if self.type == MemoryTypes.EEPROM:
             cached_data = self._cache.get(page)
@@ -129,14 +129,15 @@ class MemoryFile(object):
         if self.type == MemoryTypes.EEPROM:
             self._cache[page] = data
 
-    def activate(self):
+    def activate(self):  # type: () -> None
         if self.type == MemoryTypes.EEPROM:
             logger.info('MEMORY.{0}: Activate'.format(self.type))
             self._core_communicator.do_basic_action(action_type=200, action=1, timeout=MemoryFile.ACTIVATE_TIMEOUT)
 
-    def invalidate_cache(self, page=None):
-        pages = [page]
+    def invalidate_cache(self, page=None):  # type: (Optional[int]) -> None
         if page is None:
-            pages = range(self._pages)
+            pages = list(range(self._pages))  # type: List[int]
+        else:
+            pages = [page]
         for page in pages:
             self._cache.pop(page, None)

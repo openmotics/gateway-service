@@ -41,6 +41,9 @@ class UCANCommunicatorTest(unittest.TestCase):
         handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
         logger.addHandler(handler)
 
+    def setUp(self):
+        self._uint32_helper = UInt32Field('')
+
     def test_pallet_reconstructing(self):
         received_commands = []
 
@@ -69,31 +72,31 @@ class UCANCommunicatorTest(unittest.TestCase):
             self.assertEqual(len(received_commands), 2)
             self.assertDictEqual(received_commands[0], {'cc_address': cc_address,
                                                         'nr_can_bytes': 8,
-                                                        'payload': [129, 0, 0, 0, 0, 0, 0, pallet_type],
-                                                        #                +--------------+ = source and destination uCAN address
+                                                        'payload': bytearray([129, 0, 0, 0, 0, 0, 0, pallet_type]),
+                                                        #                          +--------------+ = source and destination uCAN address
                                                         'sid': SID.BOOTLOADER_PALLET})
             self.assertDictEqual(received_commands[1], {'cc_address': cc_address,
                                                         'nr_can_bytes': 7,
-                                                        'payload': [0, 1, 2, 219, 155, 250, 178, 0],
-                                                        #              |  |  +----------------+ = checksum
-                                                        #              |  + = bar
-                                                        #              + = foo
+                                                        'payload': bytearray([0, 1, 2, 219, 155, 250, 178, 0]),
+                                                        #                        |  |  +----------------+ = checksum
+                                                        #                        |  + = bar
+                                                        #                        + = foo
                                                         'sid': SID.BOOTLOADER_PALLET})
 
             # Build fake reply from Core
             consumer = ucan_communicator._consumers[cc_address][0]
-            fixed_payload = [0, 0, 0, 0, 0, 0, pallet_type]
-            variable_payload = list(range(7, 7 + length))  # [7] or [7, 8, 9]
-            crc_payload = UInt32Field.encode_bytes(UCANPalletCommandSpec.calculate_crc(fixed_payload + variable_payload))
+            fixed_payload = bytearray([0, 0, 0, 0, 0, 0, pallet_type])
+            variable_payload = bytearray(list(range(7, 7 + length)))  # [7] or [7, 8, 9]
+            crc_payload = self._uint32_helper.encode(UCANPalletCommandSpec.calculate_crc(fixed_payload + variable_payload))
             ucan_communicator._process_transport_message({'cc_address': cc_address,
                                                           'nr_can_bytes': 8,
                                                           'sid': 1,
-                                                          'payload': [129] + fixed_payload})
+                                                          'payload': bytearray([129]) + fixed_payload})
             ucan_communicator._process_transport_message({'cc_address': cc_address,
                                                           'nr_can_bytes': length + 5,
                                                           'sid': 1,
-                                                          'payload': [0] + variable_payload + crc_payload})
-            self.assertDictEqual(consumer.get(1), {'other': variable_payload})
+                                                          'payload': bytearray([0]) + variable_payload + crc_payload})
+            self.assertDictEqual(consumer.get(1), {'other': list(variable_payload)})
 
     def test_string_parsing(self):
         core_communicator = Mock()
@@ -111,18 +114,18 @@ class UCANCommunicatorTest(unittest.TestCase):
         consumer = ucan_communicator._consumers[cc_address][0]
 
         # Build and validate fake reply from Core
-        payload_segment_1 = [0, 0, 0, 0, 0, 0, PalletType.MCU_ID_REPLY]
-        payload_segment_2 = [ord(x) for x in '{0}\x00'.format(foo)]
-        crc_payload = UInt32Field.encode_bytes(UCANPalletCommandSpec.calculate_crc(payload_segment_1 + payload_segment_2))
+        payload_segment_1 = bytearray([0, 0, 0, 0, 0, 0, PalletType.MCU_ID_REPLY])
+        payload_segment_2 = bytearray([ord(x) for x in '{0}\x00'.format(foo)])
+        crc_payload = self._uint32_helper.encode(UCANPalletCommandSpec.calculate_crc(payload_segment_1 + payload_segment_2))
         payload_segment_2 += crc_payload
         ucan_communicator._process_transport_message({'cc_address': cc_address,
                                                       'nr_can_bytes': 8,
                                                       'sid': 1,
-                                                      'payload': [129] + payload_segment_1})
+                                                      'payload': bytearray([129]) + payload_segment_1})
         ucan_communicator._process_transport_message({'cc_address': cc_address,
                                                       'nr_can_bytes': 8,
                                                       'sid': 1,
-                                                      'payload': [0] + payload_segment_2})
+                                                      'payload': bytearray([0]) + payload_segment_2})
         self.assertDictEqual(consumer.get(1), {'foo': foo})
 
     def test_bootload_lock(self):
@@ -163,13 +166,13 @@ class UCANCommunicatorTest(unittest.TestCase):
         ucan_communicator.do_command(cc_address, command, ucan_address, {}, timeout=None)
 
     def test_crc(self):
-        payload = [10, 50, 250]
-        total_payload = payload + UInt32Field.encode_bytes(UCANPalletCommandSpec.calculate_crc(payload))
+        payload = bytearray([10, 50, 250])
+        total_payload = payload + self._uint32_helper.encode(UCANPalletCommandSpec.calculate_crc(payload))
         self.assertEqual(0, UCANPalletCommandSpec.calculate_crc(total_payload))
         crc = 0
         for part in payload:
-            crc = UCANPalletCommandSpec.calculate_crc([part], crc)
-        total_payload = payload + UInt32Field.encode_bytes(crc)
+            crc = UCANPalletCommandSpec.calculate_crc(bytearray([part]), crc)
+        total_payload = payload + self._uint32_helper.encode(crc)
         self.assertEqual(0, UCANPalletCommandSpec.calculate_crc(total_payload))
 
 

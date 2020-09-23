@@ -18,14 +18,14 @@ Contains memory (field) types
 from __future__ import absolute_import
 import inspect
 import logging
-import types
-from threading import Lock
-
 import ujson as json
+import struct
+from threading import Lock
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Optional, Union, Callable
+    from typing import Any, Dict, List, Optional, Union, Tuple, Callable, Set
+    from master.core.basic_action import BasicAction
     from master.core.memory_file import MemoryFile
 
 logger = logging.getLogger("openmotics")
@@ -44,16 +44,16 @@ class MemoryModelDefinition(object):
     _cache_lock = Lock()
 
     @Inject
-    def __init__(self, id, memory_files=INJECTED, verbose=False):
-        self.id = id  # type: int
+    def __init__(self, id, memory_files=INJECTED, verbose=False):  # type: (Optional[int], Dict[str, MemoryFile], bool) -> None
+        self._id = id
         self._verbose = verbose
-        self._memory_files = memory_files  # type: Dict[str, MemoryFile]
-        self._fields = []
-        self._loaded_fields = set()
-        self._relations = []
-        self._relations_cache = {}
-        self._compositions = []
-        address_cache = self.__class__._get_address_cache(self.id)
+        self._memory_files = memory_files
+        self._fields = []  # type: List[str]
+        self._loaded_fields = set()  # type: Set[str]
+        self._relations = []  # type: List[str]
+        self._relations_cache = {}  # type: Dict[str, MemoryModelDefinition]
+        self._compositions = []  # type: List[str]
+        address_cache = self.__class__._get_address_cache(self._id)
         for field_name, field_type in self.__class__._get_field_dict().items():
             setattr(self, '_{0}'.format(field_name), MemoryFieldContainer(field_type,
                                                                           address_cache[field_name],
@@ -70,9 +70,9 @@ class MemoryModelDefinition(object):
                                                                   self._memory_files))
         for field_name, composition in self.__class__._get_composite_fields().items():
             setattr(self, '_{0}'.format(field_name), CompositionContainer(composition,
-                                                                          composition._field._length * 8,
+                                                                          composition._field.length * 8,
                                                                           MemoryFieldContainer(composition._field,
-                                                                                               composition._field.get_address(self.id),
+                                                                                               composition._field.get_address(self._id),
                                                                                                self._memory_files)))
             self._add_composition(field_name)
             self._compositions.append(field_name)
@@ -80,53 +80,59 @@ class MemoryModelDefinition(object):
     def __str__(self):
         return str(json.dumps(self.serialize(), indent=4))
 
-    def serialize(self):
+    @property
+    def id(self):  # type: () -> int
+        if self._id is None:
+            raise AttributeError("type object '{0}' has no attribute 'id'".format(self.__class__.__name__))
+        return self._id
+
+    def serialize(self):  # type: () -> Dict[str, Any]
         data = {}
-        if self.id is not None:
-            data['id'] = self.id
+        if self._id is not None:
+            data['id'] = self._id
         for field_name in self._fields:
             data[field_name] = getattr(self, field_name)
         for field_name in self._compositions:
             data[field_name] = getattr(self, field_name).serialize()
         return data
 
-    def _add_property(self, field_name):
+    def _add_property(self, field_name):  # type: (str) -> None
         setattr(self.__class__, field_name, property(lambda s: s._get_property(field_name),
                                                      lambda s, v: s._set_property(field_name, v)))
 
-    def _get_property(self, field_name):
+    def _get_property(self, field_name):  # type: (str) -> Any
         self._loaded_fields.add(field_name)
         field = getattr(self, '_{0}'.format(field_name))  # type: MemoryFieldContainer
         return field.decode()
 
-    def _set_property(self, field_name, value):
+    def _set_property(self, field_name, value):  # type: (str, Any) -> None
         self._loaded_fields.add(field_name)
         field = getattr(self, '_{0}'.format(field_name))  # type: MemoryFieldContainer
         field.encode(value)
 
-    def _add_relation(self, field_name):
+    def _add_relation(self, field_name):  # type: (str) -> None
         setattr(self.__class__, field_name, property(lambda s: s._get_relation(field_name)))
 
-    def _get_relation(self, field_name):
+    def _get_relation(self, field_name):  # type: (str) -> MemoryModelDefinition
         if field_name not in self._relations_cache:
             relation = getattr(self, '_{0}'.format(field_name))
-            self._relations_cache[field_name] = relation.yield_instance(self.id)
+            self._relations_cache[field_name] = relation.yield_instance(self._id)
         return self._relations_cache[field_name]
 
-    def _add_composition(self, field_name):
+    def _add_composition(self, field_name):  # type: (str) -> None
         setattr(self.__class__, field_name, property(lambda s: s._get_composition(field_name)))
 
-    def _get_composition(self, field_name):
+    def _get_composition(self, field_name):  # type: (str) -> CompositionContainer
         self._loaded_fields.add(field_name)
         return getattr(self, '_{0}'.format(field_name))
 
-    def save(self, activate=True):
+    def save(self, activate=True):  # type: (bool) -> None
         for field_name in self._loaded_fields:
             container = getattr(self, '_{0}'.format(field_name))  # type: Union[MemoryFieldContainer, CompositionContainer]
             if self._verbose:
                 logger.info('Saving {0}({1}).{2}'.format(
                     self.__class__.__name__,
-                    '' if self.id is None else self.id,
+                    '' if self._id is None else self._id,
                     field_name
                 ))
             container.save()
@@ -135,7 +141,7 @@ class MemoryModelDefinition(object):
                 memory_file.activate()
 
     @classmethod
-    def deserialize(cls, data):
+    def deserialize(cls, data):  # type: (Dict[str, Any]) -> MemoryModelDefinition
         instance_id = data['id']
         instance = cls(instance_id)
         for field_name, value in data.items():
@@ -154,7 +160,7 @@ class MemoryModelDefinition(object):
         return instance
 
     @classmethod
-    def _get_fields(cls):
+    def _get_fields(cls):  # type: () -> Dict[str, Any]
         """ Get the fields defined by an EepromModel child. """
         if cls.__name__ not in MemoryModelDefinition._cache_fields:
             MemoryModelDefinition._cache_fields[cls.__name__] = {'fields': inspect.getmembers(cls, lambda f: isinstance(f, MemoryField)),
@@ -164,7 +170,7 @@ class MemoryModelDefinition(object):
         return MemoryModelDefinition._cache_fields[cls.__name__]
 
     @classmethod
-    def _get_field_dict(cls):
+    def _get_field_dict(cls):  # type: () -> Dict[str, Any]
         """
         Get a dict from the field name to the field type for each field defined by model
         """
@@ -175,7 +181,7 @@ class MemoryModelDefinition(object):
         return class_field_dict
 
     @classmethod
-    def _get_relational_fields(cls):
+    def _get_relational_fields(cls):  # type: () -> Dict[str, Any]
         """
         Gets a dict of all relational fields
         """
@@ -185,7 +191,7 @@ class MemoryModelDefinition(object):
         return relation_field_dict
 
     @classmethod
-    def _get_composite_fields(cls):
+    def _get_composite_fields(cls):  # type: () -> Dict[str, Any]
         """
         Gets a dict of all composite fields
         """
@@ -195,7 +201,7 @@ class MemoryModelDefinition(object):
         return composite_field_dict
 
     @classmethod
-    def _get_address_cache(cls, id):
+    def _get_address_cache(cls, id):  # type: (Optional[int]) -> Any
         if cls.__name__ in MemoryModelDefinition._cache_addresses:
             class_cache = MemoryModelDefinition._cache_addresses[cls.__name__]
         else:
@@ -215,7 +221,7 @@ class MemoryActivator(object):
     """ Holds a static method to activate memory """
     @staticmethod
     @Inject
-    def activate(memory_files=INJECTED):
+    def activate(memory_files=INJECTED):  # type: (Dict[str, MemoryFile]) -> None
         for memory_file in memory_files.values():
             memory_file.activate()
 
@@ -239,22 +245,26 @@ class MemoryFieldContainer(object):
         self._memory_field = memory_field
         self._memory_address = memory_address
         self._memory_files = memory_files
-        self._data = None  # type: Optional[List[int]]
+        self._data = None  # type: Optional[bytearray]
 
-    def _read_data(self):
+    def _read_data(self):  # type: () -> None
         self._data = self._memory_files[self._memory_address.memory_type].read([self._memory_address])[self._memory_address]
 
-    def encode(self, value):
+    def encode(self, value):  # type: (Any) -> None
         """ Encodes changes a high-level value such as a string or large integer into a memory byte array (array of 0 <= x <= 255) """
         self._data = self._memory_field.encode(value)
 
-    def decode(self):
+    def decode(self):  # type: () -> Any
         """ Decodes a memory byte array (array of 0 <= x <= 255) into a high-level valuye shuch as a string or large integer """
         if self._data is None:
             self._read_data()
+        if self._data is None:
+            raise RuntimeError('No data was read from memory')
         return self._memory_field.decode(self._data)
 
-    def save(self):
+    def save(self):  # type: () -> None
+        if self._data is None:
+            raise RuntimeError('No data to save')
         self._memory_files[self._memory_address.memory_type].write({self._memory_address: self._data})
 
 
@@ -264,20 +274,25 @@ class MemoryField(object):
     Besides these functions, the memory type also contains the address or address generator (in case the model has an id).
     """
 
-    def __init__(self, memory_type, address_spec, length):
+    # TODO: See if this can inherit from Field or use Fields internally so the implementations are unified
+
+    def __init__(self, memory_type, address_spec, length, limits=None):
+        # type: (str, Union[Tuple[int, int], Callable[[int], Tuple[int, int]]], int, Optional[Tuple[int, int]]) -> None
         """
         Create an instance of an MemoryDataType with an address or an address generator.
-
-        :type address_spec: (int, int) or (int) => (int, int)
         """
         self._address_tuple = None
         self._address_generator = None
         self._memory_type = memory_type
-        self._length = length
+        self.length = length
+        if limits is not None:
+            self.limits = limits
+        else:
+            self.limits = (0, 2 ** (8 * length) - 1)
 
         if isinstance(address_spec, tuple):
             self._address_tuple = address_spec
-        elif isinstance(address_spec, types.FunctionType):
+        elif callable(address_spec):
             args = inspect.getargspec(address_spec).args
             if len(args) == 1:
                 self._address_generator = address_spec
@@ -286,7 +301,7 @@ class MemoryField(object):
         else:
             raise TypeError('Parameter `address_spec` should be a tuple (page, offset) or a function that takes an id and returns the same tuple.')
 
-    def get_address(self, id):  # type: (int) -> MemoryAddress
+    def get_address(self, id):  # type: (Optional[int]) -> MemoryAddress
         """
         Calculate the address for this field.
         """
@@ -298,31 +313,35 @@ class MemoryField(object):
             if self._address_generator is None:
                 raise TypeError('MemoryField did not expect an id')
             page, offset = self._address_generator(id)
-        return MemoryAddress(self._memory_type, page, offset, self._length)
+        return MemoryAddress(self._memory_type, page, offset, self.length)
 
-    def encode(self, data):
-        """ Encodes changes a high-level value such as a string or large integer into a memory byte array (array of 0 <= x <= 255) """
+    def encode(self, data):  # type: (Any) -> bytearray
+        """ Encodes changes a high-level value such as a string or large integer into a bytearray """
         raise NotImplementedError()
 
-    def decode(self, value):
-        """ Decodes a memory byte array (array of 0 <= x <= 255) into a high-level valuye shuch as a string or large integer """
+    def decode(self, value):  # type: (bytearray) -> Any
+        """ Decodes a bytearray into a high-level valuye shuch as a string or large integer """
         raise NotImplementedError()
+
+    def _check_limits(self, value):  # type: (Union[float, int]) -> None
+        if value is None or not (self.limits[0] <= value <= self.limits[1]):
+            raise ValueError('Value `{0}` out of limits: {1} <= value <= {2}'.format(value, self.limits[0], self.limits[1]))
 
 
 class MemoryStringField(MemoryField):
     def __init__(self, memory_type, address_spec, length):
         super(MemoryStringField, self).__init__(memory_type, address_spec, length)
 
-    def encode(self, value):
-        if len(value) > self._length:
-            raise ValueError('Value {0} should be a string of {1} characters'.format(value, self._length))
+    def encode(self, value):  # type: (str) -> bytearray
+        if len(value) > self.length:
+            raise ValueError('Value {0} should be a string of {1} characters'.format(value, self.length))
         data = []
         for char in value:
             data.append(ord(char))
-        data += [255] * (self._length - len(data))
-        return data
+        data += [255] * (self.length - len(data))
+        return bytearray(data)
 
-    def decode(self, data):
+    def decode(self, data):  # type: (bytearray) -> str
         while len(data) >= 1 and data[-1] in [0, 255]:
             data.pop()
         return ''.join([str(chr(item)) if 32 <= item <= 126 else ' ' for item in data])
@@ -332,14 +351,11 @@ class MemoryByteField(MemoryField):
     def __init__(self, memory_type, address_spec):
         super(MemoryByteField, self).__init__(memory_type, address_spec, 1)
 
-    @classmethod
-    def encode(cls, value):
-        if not (0 <= value <= 255):
-            raise ValueError('Value {0} out of limits: 0 <= value <= 255'.format(value))
-        return [value]
+    def encode(self, value):  # type: (int) -> bytearray
+        self._check_limits(value)
+        return bytearray([value])
 
-    @classmethod
-    def decode(cls, data):
+    def decode(self, data):  # type: (bytearray) -> int
         return data[0]
 
 
@@ -347,85 +363,93 @@ class MemoryWordField(MemoryField):
     def __init__(self, memory_type, address_spec):
         super(MemoryWordField, self).__init__(memory_type, address_spec, 2)
 
-    @classmethod
-    def encode(cls, value):
-        max_value = 2 ** 16 - 1
-        if not (0 <= value <= max_value):
-            raise ValueError('Value {0} out of limits: 0 <= value <= {1}'.format(value, max_value))
-        return [value // 256, value % 256]
+    def encode(self, value):  # type: (int) -> bytearray
+        self._check_limits(value)
+        return bytearray(struct.pack('>H', value))
 
-    @classmethod
-    def decode(cls, data):
-        return (data[0] * 256) + data[1]
+    def decode(self, data):  # type: (bytearray) -> int
+        return struct.unpack('>H', data)[0]
 
 
 class Memory3BytesField(MemoryField):
     def __init__(self, memory_type, address_spec):
         super(Memory3BytesField, self).__init__(memory_type, address_spec, 3)
 
-    @classmethod
-    def encode(cls, value):
-        max_value = 2 ** 24 - 1
-        if not (0 <= value <= max_value):
-            raise ValueError('Value {0} out of limits: 0 <= value <= {1}'.format(value, max_value))
-        ms_byte = value // (256 * 256)
-        rest = value % (256 * 256)
-        return [ms_byte, rest // 256, rest % 256]
+    def encode(self, value):  # type: (int) -> bytearray
+        self._check_limits(value)
+        return bytearray(struct.pack('>I', value))[-3:]
 
-    @classmethod
-    def decode(cls, data):
-        return (data[0] * 256 * 256) + (data[1] * 256) + data[2]
+    def decode(self, data):  # type: (bytearray) -> int
+        return struct.unpack('>I', bytearray([0]) + data)[0]
 
 
-class MemoryByteArrayField(MemoryField):
-    def __init__(self, memory_type, address_spec, length):
-        super(MemoryByteArrayField, self).__init__(memory_type, address_spec, length)
+class _MemoryArrayField(MemoryField):
+    def __init__(self, memory_type, address_spec, length, field):
+        self._field = field(memory_type, address_spec)
+        self._entry_length = length
+        super(_MemoryArrayField, self).__init__(memory_type,
+                                                address_spec,
+                                                self._field.length * self._entry_length)
 
-    def encode(self, value):
-        if len(value) != self._length:
-            raise ValueError('Value {0} should be an array of {1} items with 0 <= item <= 255'.format(value, self._length))
-        data = []
+    def encode(self, value):  # type: (Any) -> bytearray
+        if len(value) != self._entry_length:
+            raise ValueError('Value `{0}` should be an array of {1} items with {2} <= item <= {3}'.format(value,
+                                                                                                          self._entry_length,
+                                                                                                          self._field.limits[0],
+                                                                                                          self._field.limits[1]))
+        data = bytearray()
         for item in value:
-            data += MemoryByteField.encode(item)
+            data += self._field.encode(item)
         return data
 
-    def decode(self, data):
-        return data
+    def decode(self, data):  # type: (bytearray) -> Any
+        result = []
+        for i in range(0, len(data), self._field.length):
+            result.append(self._field.decode(data[i:i + self._field.length]))
+        return result
 
 
-class MemoryWordArrayField(MemoryField):
+class MemoryRawByteArrayField(_MemoryArrayField):
     def __init__(self, memory_type, address_spec, length):
-        super(MemoryWordArrayField, self).__init__(memory_type, address_spec, length * 2)
-        self._word_length = length
+        super(MemoryRawByteArrayField, self).__init__(memory_type, address_spec, length, MemoryByteField)
 
-    def encode(self, value):
-        max_value = 2 ** 16 - 1
-        if len(value) != self._word_length:
-            raise ValueError('Value {0} should be an array of {1} items with 0 <= item <= {2}'.format(value, self._word_length, max_value))
-        data = []
-        for item in value:
-            data += MemoryWordField.encode(item)
-        return data
+    def encode(self, value):  # type: (bytearray) -> bytearray
+        return super(MemoryRawByteArrayField, self).encode(list(value))
 
-    def decode(self, data):
-        value = []
-        for i in range(0, len(data), 2):
-            value.append(MemoryWordField.decode(data[i:i + 2]))
-        return value
+    def decode(self, data):  # type: (bytearray) -> bytearray
+        return bytearray(super(MemoryRawByteArrayField, self).decode(data))
 
 
-class MemoryBasicActionField(MemoryByteArrayField):
+class MemoryByteArrayField(_MemoryArrayField):
+    def __init__(self, memory_type, address_spec, length, field=None):
+        if field is None:
+            field = MemoryByteField
+        super(MemoryByteArrayField, self).__init__(memory_type, address_spec, length, field)
+
+    def encode(self, value):  # type: (List[int]) -> bytearray
+        return super(MemoryByteArrayField, self).encode(value)
+
+    def decode(self, data):  # type: (bytearray) -> List[int]
+        return super(MemoryByteArrayField, self).decode(data)
+
+
+class MemoryWordArrayField(MemoryByteArrayField):
+    def __init__(self, memory_type, address_spec, length):
+        super(MemoryWordArrayField, self).__init__(memory_type, address_spec, length, MemoryWordField)
+
+
+class MemoryBasicActionField(MemoryField):
     def __init__(self, memory_type, address_spec):
         super(MemoryBasicActionField, self).__init__(memory_type, address_spec, 6)
 
-    def encode(self, value):
+    def encode(self, value):  # type: (BasicAction) -> bytearray
         from master.core.basic_action import BasicAction  # Prevent circular import
 
         if not isinstance(value, BasicAction):
             raise ValueError('Value should be a BasicAction')
         return value.encode()
 
-    def decode(self, data):
+    def decode(self, data):  # type: (bytearray) -> BasicAction
         from master.core.basic_action import BasicAction  # Prevent circular import
 
         return BasicAction.decode(data)
@@ -435,24 +459,24 @@ class MemoryAddressField(MemoryField):
     def __init__(self, memory_type, address_spec, length=4):
         super(MemoryAddressField, self).__init__(memory_type, address_spec, length)
 
-    def encode(self, value):
-        example = '.'.join(['ID{0}'.format(i) for i in range(self._length - 1, -1, -1)])
-        error_message = 'Value should be a string in the format of {0}, where 0 <= IDx <= 255'.format(example)
+    def encode(self, value):  # type: (str) -> bytearray
+        example = '.'.join(['ID{0}'.format(i) for i in range(self.length - 1, -1, -1)])
+        error_message = 'Value `{0}` should be a string in the format of {1}, where 0 <= IDx <= 255'.format(value, example)
         parts = str(value).split('.')
-        if len(parts) != self._length:
+        if len(parts) != self.length:
             raise ValueError(error_message)
         data = []
         for part in parts:
             try:
-                part = int(part)
+                int_part = int(part)
             except ValueError:
                 raise ValueError(error_message)
-            if not (0 <= part <= 255):
+            if not (0 <= int_part <= 255):
                 raise ValueError(error_message)
-            data.append(part)
-        return data
+            data.append(int_part)
+        return bytearray(data)
 
-    def decode(self, data):
+    def decode(self, data):  # type: (bytearray) -> str
         return '.'.join('{0:03}'.format(item) for item in data)
 
 
@@ -460,7 +484,7 @@ class MemoryVersionField(MemoryAddressField):
     def __init__(self, memory_type, address_spec):
         super(MemoryVersionField, self).__init__(memory_type, address_spec, length=3)
 
-    def decode(self, data):
+    def decode(self, data):  # type: (bytearray) -> str
         return '.'.join(str(item) for item in data)
 
 
@@ -488,20 +512,20 @@ class MemoryRelation(object):
     def serialize(self):
         raise NotImplementedError()
 
-    def save(self):
+    def save(self):  # type: () -> None
         raise NotImplementedError()
 
 
 class MemoryAddress(object):
     """ Represents an address in the EEPROM/FRAM. Has a memory type, page, offset and length """
 
-    def __init__(self, memory_type, page, offset, length):
+    def __init__(self, memory_type, page, offset, length):  # type: (str, int, int, int) -> None
         self.memory_type = memory_type
         self.page = page
         self.offset = offset
         self.length = length
 
-    def __hash__(self):
+    def __hash__(self):  # type: () -> int
         return ord(self.memory_type) + self.page * 256 + self.offset * 256 * 256 + self.length * 256 * 256 * 256
 
     def __str__(self):
@@ -514,17 +538,18 @@ class MemoryAddress(object):
 
 
 class CompositeField(object):
-    def decompose(self, value):
+    def decompose(self, value):  # type: (int) -> Any
         """ Decomposes a value out of the given composite value """
         raise NotImplementedError()
 
-    def compose(self, base_value, value, composition_width):
+    def compose(self, base_value, value, composition_width):  # type: (int, Any, int) -> Any
         """ Composes a value onto a base (current) value """
         raise NotImplementedError()
 
 
 class CompositeNumberField(CompositeField):
     def __init__(self, start_bit, width, value_offset=0, value_factor=1, max_value=None):
+        # type: (int, int, int, int, Optional[int]) -> None
         super(CompositeNumberField, self).__init__()
         self._mask = 2 ** width - 1 << start_bit
         self._start_bit = start_bit
@@ -535,19 +560,19 @@ class CompositeNumberField(CompositeField):
         self._value_offset = value_offset
         self._value_factor = value_factor
 
-    def decompose(self, value):
+    def decompose(self, value):  # type: (int) -> Optional[Any]
         return self._decompose(value)
 
-    def _decompose(self, value):
+    def _decompose(self, value):  # type: (int) -> Optional[Any]
         value = (value & self._mask) >> self._start_bit
         if self._max_value is None or 0 <= value <= self._max_value:
             return (value * self._value_factor) - self._value_offset
         return None
 
-    def compose(self, current_composition, value, composition_width):
+    def compose(self, current_composition, value, composition_width):  # type: (int, Any, int) -> int
         return self._compose(current_composition, value, composition_width)
 
-    def _compose(self, current_composition, value, composition_width):
+    def _compose(self, current_composition, value, composition_width):  # type: (int, Any, int) -> int
         current_value = self._decompose(current_composition)
         if value == current_value:
             return current_composition
@@ -562,13 +587,13 @@ class CompositeBitField(CompositeNumberField):
     def __init__(self, bit):
         super(CompositeBitField, self).__init__(bit, 1)
 
-    def decompose(self, value):
-        value = super(CompositeBitField, self).decompose(value)
-        return value == 1
+    def decompose(self, value):  # type: (int) -> bool
+        decomposed_value = super(CompositeBitField, self)._decompose(value)
+        return decomposed_value == 1
 
-    def compose(self, current_composition, value, composition_width):
-        value = 1 if value else 0
-        return super(CompositeBitField, self)._compose(current_composition, value, composition_width)
+    def compose(self, current_composition, value, composition_width):  # type: (int, bool, int) -> int
+        value_to_compose = 1 if value else 0
+        return super(CompositeBitField, self)._compose(current_composition, value_to_compose, composition_width)
 
 
 class CompositeMemoryModelDefinition(object):
@@ -604,20 +629,20 @@ class CompositionContainer(object):
             self._add_property(field_name)
             self._fields.append(field_name)
 
-    def _add_property(self, field_name):
+    def _add_property(self, field_name):  # type: (str) -> None
         setattr(self.__class__, field_name, property(lambda s: s._get_property(field_name),
                                                      lambda s, v: s._set_property(field_name, v)))
 
-    def _get_property(self, field_name):
+    def _get_property(self, field_name):  # type: (str) -> Any
         field = getattr(self._composite_definition, field_name)
         return field.decompose(self._field_container.decode())
 
-    def _set_property(self, field_name, value):
+    def _set_property(self, field_name, value):  # type: (str, Any) -> None
         field = getattr(self._composite_definition, field_name)
         current_composition = self._field_container.decode()
         self._field_container.encode(field.compose(current_composition, value, self._composition_width))
 
-    def _load(self, data):
+    def _load(self, data):  # type: (Dict[str, Any]) -> None
         for field_name, value in data.items():
             if field_name == 'id':
                 pass
@@ -626,7 +651,7 @@ class CompositionContainer(object):
             else:
                 raise ValueError('Unknown field: {0}', field_name)
 
-    def serialize(self):
+    def serialize(self):  # type: () -> Dict[str, Any]
         data = {}
         for field_name in self._fields:
             data[field_name] = self._get_property(field_name)
@@ -640,17 +665,14 @@ class MemoryEnumDefinition(object):
     """
     This object represents an enum
     """
-    def __init__(self, field):
-        # type: (MemoryField) -> None
+    def __init__(self, field):  # type: (MemoryField) -> None
         self._field = field
         self._entries = [entry for _, entry in inspect.getmembers(self, lambda f: isinstance(f, EnumEntry))]  # type: List[EnumEntry]
 
-    def get_address(self, id):
-        # type: (int) -> MemoryAddress
+    def get_address(self, id):  # type: (int) -> MemoryAddress
         return self._field.get_address(id)
 
-    def encode(self, value):
-        # type: (Union[str, EnumEntry]) -> List[int]
+    def encode(self, value):  # type: (Union[str, EnumEntry]) -> bytearray
         found_entry = None  # type: Optional[EnumEntry]
         for entry in self._entries:
             if value == entry:
@@ -661,8 +683,7 @@ class MemoryEnumDefinition(object):
         # Use original entry to make sure only the prefedined values are used
         return self._field.encode(found_entry.values[0])
 
-    def decode(self, data):
-        # type: (List[int]) -> EnumEntry
+    def decode(self, data):  # type: (bytearray) -> EnumEntry
         decoded_field_value = self._field.decode(data)
         found_entry = None  # type: Optional[EnumEntry]
         for entry in self._entries:
@@ -677,8 +698,7 @@ class MemoryEnumDefinition(object):
 
 
 class EnumEntry(object):
-    def __init__(self, name, values, default=False):
-        # type: (str, List[int], bool) -> None
+    def __init__(self, name, values, default=False):  # type: (str, List[int], bool) -> None
         self._name = name
         self.values = values
         self.default = default
