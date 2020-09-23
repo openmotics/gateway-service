@@ -46,7 +46,6 @@ class SlaveCommunicator(object):
         """
         self._verbose = verbose  # type: bool
         self._communicator = master_communicator  # type: CoreCommunicator
-        self._read_buffer = []
         self._consumers = []
         self._transparent_mode = False
         self._read_buffer = bytearray()
