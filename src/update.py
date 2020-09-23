@@ -60,7 +60,8 @@ FIRMWARE_FILES = {'gateway_service': 'gateway.tgz',
                   'shutter_gen3': 'r_firmware_gen3.hex',
                   'input_gen3': 'i_firmware_gen3.hex',
                   'dimmer_gen3': 'd_firmware_gen3.hex',
-                  'temperature_gen3': 't_firmware_gen3.hex'}
+                  'temperature_gen3': 't_firmware_gen3.hex',
+                  'ucan': 'uc_firmware.hex'}
 MODULE_TYPES = {'can': 'c',
                 'output': 'o',
                 'shutter': 'r',
@@ -72,7 +73,8 @@ MODULE_TYPES = {'can': 'c',
                 'shutter_gen3': 'r3',
                 'input_gen3': 'i3',
                 'dimmer_gen3': 'd3',
-                'temperature_gen3': 't3'}
+                'temperature_gen3': 't3',
+                'ucan': 'uc'}
 
 
 def cmd(command, **kwargs):

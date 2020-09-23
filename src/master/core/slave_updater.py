@@ -91,7 +91,8 @@ class SlaveUpdater(object):
                     success &= UCANUpdater.update(cc_address=ucan_configuration.module.address,
                                                   ucan_address=ucan_configuration.address,
                                                   ucan_communicator=ucan_communicator,
-                                                  hex_filename=hex_filename)
+                                                  hex_filename=hex_filename,
+                                                  version=version)
 
         if not executed_update:
             logger.warning('Skip updating unsupported modules of type: {0}'.format(module_type))

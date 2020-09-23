@@ -66,23 +66,23 @@ class UCANCommandSpec(object):
     Defines payload handling and de(serialization)
     """
 
-    def __init__(self, sid, instruction, identifier, request_fields=None, response_instructions=None, response_fields=None):
-        # type: (int, Optional[Instruction], Field, List[Field], List[Instruction], List[Field]) -> None
+    def __init__(self, sid, identifier, instructions, request_fields=None, response_instructions=None, response_fields=None):
+        # type: (int, Field, Optional[List[Instruction]], Optional[List[List[Field]]], Optional[List[Instruction]], Optional[List[Field]]) -> None
         """
         Create a UCANCommandSpec.
 
         :param sid: SID
-        :param instruction: Instruction object for this command
+        :param instructions: Instruction objects for this command
         :param identifier: The field to be used as extra identifier
         :param request_fields: Fields in this request
         :param response_instructions: List of all the response instruction bytes
         :param response_fields: Fields in the response
         """
         self.sid = sid
-        self.instruction = instruction
+        self.instructions = instructions
         self._identifier = identifier
 
-        self._request_fields = [] if request_fields is None else request_fields
+        self._request_fields = [[]] if request_fields is None else request_fields  # type: List[List[Field]]
         self._response_fields = [] if response_fields is None else response_fields
         self.response_instructions = [] if response_instructions is None else response_instructions
 
@@ -108,14 +108,15 @@ class UCANCommandSpec(object):
         :param identity: The actual identity
         :param fields: dictionary with values for the fields
         """
-        if self.instruction is None:
+        if self.instructions is None or len(self.instructions) == 0:
             raise RuntimeError('Cannot generate payloads for an empty instruction')
         destination_address = self._identifier.encode(identity)
-        payload = self.instruction.instruction + destination_address
-        for field in self._request_fields:
-            payload += field.encode(fields.get(field.name))
-        payload.append(UCANCommandSpec.calculate_crc(payload))
-        yield payload
+        for index, instruction in enumerate(self.instructions):
+            payload = instruction.instruction + destination_address
+            for field in self._request_fields[index]:
+                payload += field.encode(fields.get(field.name))
+            payload.append(UCANCommandSpec.calculate_crc(payload))
+            yield payload
 
     def consume_response_payload(self, payload):  # type: (Union[bytearray, Dict[int, bytearray]]) -> Optional[Dict[str, Any]]
         """
@@ -189,7 +190,7 @@ class UCANPalletCommandSpec(UCANCommandSpec):
     """
 
     def __init__(self, identifier, pallet_type, request_fields=None, response_fields=None):
-        # type: (Field, int, List[Field], List[Field]) -> None
+        # type: (Field, int, Optional[List[Field]], Optional[List[Field]]) -> None
         """
         Create a UCANCommandSpec.
 
@@ -199,9 +200,9 @@ class UCANPalletCommandSpec(UCANCommandSpec):
         :param response_fields: Fields in the response
         """
         super(UCANPalletCommandSpec, self).__init__(sid=SID.BOOTLOADER_PALLET,
-                                                    instruction=None,
                                                     identifier=identifier,
-                                                    request_fields=request_fields,
+                                                    instructions=None,
+                                                    request_fields=[request_fields] if request_fields is not None else None,
                                                     response_instructions=[],
                                                     response_fields=response_fields)
         self._pallet_type = pallet_type
@@ -221,7 +222,7 @@ class UCANPalletCommandSpec(UCANCommandSpec):
         destination_address = self._identifier.encode(identity)
         source_address = self._identifier.encode('000.000.000')
         payload = source_address + destination_address + bytearray([self._pallet_type])
-        for field in self._request_fields:
+        for field in self._request_fields[0]:
             payload += field.encode(fields.get(field.name))
         payload += self._uint32_helper.encode(UCANPalletCommandSpec.calculate_crc(payload))
         segments = int(math.ceil(len(payload) / 7.0))
