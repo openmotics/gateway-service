@@ -29,6 +29,8 @@ from master.core.memory_models import (
 )
 from master.core.slave_communicator import SlaveCommunicator, CommunicationTimedOutException
 from master.core.slave_api import SlaveAPI
+from master.core.ucan_communicator import UCANCommunicator
+from master.core.ucan_updater import UCANUpdater
 
 logger = logging.getLogger('openmotics')
 
@@ -54,31 +56,46 @@ class SlaveUpdater(object):
             return value if value != 255 else default
 
         general_configuration = GlobalConfiguration()
-        # All module types: ['O', 'R', 'D', 'I', 'T', 'C']
+        executed_update = False
+        success = True
+
+        # Classic master slave modules: ['O', 'R', 'D', 'I', 'T', 'C']
         update_map = {'I': (InputModuleConfiguration, _default_if_255(general_configuration.number_of_input_modules, 0)),
                       'O': (OutputModuleConfiguration, _default_if_255(general_configuration.number_of_output_modules, 0)),
                       'D': (OutputModuleConfiguration, _default_if_255(general_configuration.number_of_output_modules, 0)),
                       'T': (SensorModuleConfiguration, _default_if_255(general_configuration.number_of_sensor_modules, 0)),
-                      # 'UC': (UCanModuleConfiguration, _default_if_255(general_configuration.number_of_ucan_modules, 0)),  # TODO: Implement
                       'C': (CanControlModuleConfiguration, _default_if_255(general_configuration.number_of_can_control_modules, 0))}
         if module_type in update_map:
             module_configuration_class, number_of_modules = update_map[module_type]
-            addresses = []
             for module_id in range(number_of_modules):
                 module_configuration = module_configuration_class(module_id)  # type: Union[InputModuleConfiguration, OutputModuleConfiguration, SensorModuleConfiguration, CanControlModuleConfiguration]
                 if module_configuration.device_type == module_type:
-                    addresses.append(module_configuration.address)
+                    executed_update = True
+                    success &= SlaveUpdater.update(address=module_configuration.address,
+                                                   hex_filename=hex_filename,
+                                                   gen3_firmware=gen3_firmware,
+                                                   version=version)
                 else:
                     logger.info('Skip updating unsupported module {0}: {1} != {2}'.format(
                         module_configuration.address, module_type, module_configuration.device_type
                     ))
-        else:
+
+        # MicroCAN (uCAN)
+        if module_type == 'UC':
+            number_of_ucs = _default_if_255(general_configuration.number_of_ucan_modules, 0)
+            if number_of_ucs:
+                ucan_communicator = UCANCommunicator()
+                for module_id in range(number_of_ucs):
+                    ucan_configuration = UCanModuleConfiguration(module_id)
+                    executed_update = True
+                    success &= UCANUpdater.update(cc_address=ucan_configuration.module.address,
+                                                  ucan_address=ucan_configuration.address,
+                                                  ucan_communicator=ucan_communicator,
+                                                  hex_filename=hex_filename)
+
+        if not executed_update:
             logger.warning('Skip updating unsupported modules of type: {0}'.format(module_type))
             return True
-
-        success = True
-        for address in addresses:
-            success &= SlaveUpdater.update(address, hex_filename, gen3_firmware, version)
         return success
 
     @staticmethod
