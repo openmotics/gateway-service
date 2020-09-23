@@ -58,7 +58,8 @@ def get_communicator(master_communicator=INJECTED):
 def main():
     supported_modules = ['O', 'R', 'D', 'I', 'T', 'C']
     supported_modules_gen3 = ['O3', 'R3', 'D3', 'I3', 'T3', 'C3']
-    all_supported_modules = supported_modules + supported_modules_gen3
+    supported_can_modules = ['UC']
+    all_supported_modules = supported_modules + supported_modules_gen3 + supported_can_modules
 
     parser = argparse.ArgumentParser(description='Tool to bootload the slave modules.')
 
@@ -76,7 +77,8 @@ def main():
     filename = args.file
     version = args.version
     gen3_firmware = module_type.endswith('3')
-    module_type = module_type[0]
+    if gen3_firmware:
+        module_type = module_type[0]
 
     config = ConfigParser()
     config.read(constants.get_config_file())
@@ -104,6 +106,10 @@ def main():
             except OSError as ex:
                 print('Could not open hex: {0}'.format(ex))
                 return False
+
+            if module_type == 'UC':
+                print('Updating uCAN modules not supported on Classic platform')
+                return True  # Don't fail the update
 
             update_success = bootload_modules(module_type=module_type,
                                               filename=filename,

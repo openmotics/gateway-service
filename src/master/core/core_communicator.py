@@ -285,7 +285,7 @@ class CoreCommunicator(object):
                 self._communication_stats['bytes_read'] += num_bytes
 
                 # Wait for a speicific number of bytes, or the header length
-                if (wait_for_length is None and len(data) < header_length) or len(data) < wait_for_length:
+                if (wait_for_length is None and len(data) < header_length) or (wait_for_length is not None and len(data) < wait_for_length):
                     continue
 
                 # Check if the data contains the START_OF_REPLY
@@ -307,7 +307,7 @@ class CoreCommunicator(object):
                     continue
 
                 message = data[:message_length]  # type: bytearray
-                data = data[message_length:]  # type: bytearray
+                data = data[message_length:]
 
                 # A possible message is received, log where appropriate
                 if self._verbose:

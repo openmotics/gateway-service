@@ -64,6 +64,10 @@ class MemoryModelDefinition(object):
             setattr(self, '_{0}'.format(field_name), relation)
             self._add_relation(field_name)
             self._relations.append(field_name)
+            if relation._field is not None:
+                relation.set_field_container(MemoryFieldContainer(relation._field,
+                                                                  relation._field.get_address(self.id),
+                                                                  self._memory_files))
         for field_name, composition in self.__class__._get_composite_fields().items():
             setattr(self, '_{0}'.format(field_name), CompositionContainer(composition,
                                                                           composition._field.length * 8,
@@ -485,17 +489,26 @@ class MemoryVersionField(MemoryAddressField):
 
 
 class MemoryRelation(object):
-    def __init__(self, instance_type, id_spec):  # type: (type, Callable[[int], int]) -> None
-        """
-        :type instance_type: type
-        """
+    def __init__(self, instance_type, id_spec, field=None):
+        # type: (type, Callable[[int], int], Optional[MemoryField]) -> None
         self.instance_type = instance_type
         self._id_spec = id_spec
+        self._field = field
+        self._field_container = None  # type: Optional[MemoryFieldContainer]
 
-    def yield_instance(self, own_id):  # type: (int) -> MemoryModelDefinition
-        return self.instance_type(self._id_spec(own_id))
+    def set_field_container(self, field_container):  # type: (MemoryFieldContainer) -> None
+        self._field_container = field_container
 
-    def serialize(self):  # type: () -> Dict[str, Any]
+    def yield_instance(self, own_id):  # type: (int) -> Optional[MemoryModelDefinition]
+        base_id = own_id
+        if self._field_container is not None:
+            base_id = self._field_container.decode()
+        instance_id = self._id_spec(base_id)
+        if instance_id is None:
+            return None
+        return self.instance_type(instance_id)
+
+    def serialize(self):
         raise NotImplementedError()
 
     def save(self):  # type: () -> None

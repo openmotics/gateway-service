@@ -197,6 +197,36 @@ class CanControlModuleConfiguration(MemoryModelDefinition):
     address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (255, id * 16))  # 255, 0-255
 
 
+class UCanModuleConfiguration(MemoryModelDefinition):
+    class ModbusSpeed(MemoryEnumDefinition):
+        B4800 = EnumEntry('B4800', values=[0, 255], default=True)
+        B9600 = EnumEntry('B9600', values=[1])
+        B19200 = EnumEntry('B19200', values=[2])
+        B38400 = EnumEntry('B38400', values=[3])
+        B57600 = EnumEntry('B57600', values=[4])
+        B115200 = EnumEntry('B115200', values=[5])
+
+    class ModbusModel(MemoryEnumDefinition):
+        OPENMOTICS_COLOR_THERMOSTAT = EnumEntry('OPENMOTICS_COLOR_THERMOSTAT', values=[0, 255], default=True)
+        HEATMISER_THERMOSTAT = EnumEntry('HEATMISER_THERMOSTAT', values=[1])
+
+    class _ModbusTypeComposition(CompositeMemoryModelDefinition):
+        ucan_voc = CompositeBitField(bit=7)
+        ucan_co2 = CompositeBitField(bit=6)
+        ucan_hum = CompositeBitField(bit=5)
+        ucan_temp = CompositeBitField(bit=4)
+        ucan_lux = CompositeBitField(bit=3)
+        ucan_sound = CompositeBitField(bit=2)
+
+    device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16), length=1)  # 383-390, 0-255
+    address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16), length=3)  # 383-390, 0-255
+    module = MemoryRelation(CanControlModuleConfiguration, id_spec=lambda id: None if id == 0 else id - 1, field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 3)))
+    modbus_address = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 12))
+    modbus_type = _ModbusTypeComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 13)))
+    modbus_model = ModbusModel(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 14)))
+    modbus_speed = ModbusSpeed(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 15)))
+
+
 class ExtraSensorConfiguration(MemoryModelDefinition):
     grouaction_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (471, id * 2))  # 471, 0-255
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (476 + id // 16, (id % 16) * 16), length=16)  # 476-479, 0-255

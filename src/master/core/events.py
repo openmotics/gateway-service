@@ -21,7 +21,7 @@ import logging
 from master.core.fields import WordField
 
 if False:  # MYPY
-    from typing import List
+    from typing import List, Optional
 
 logger = logging.getLogger('openmotics')
 
@@ -123,7 +123,7 @@ class Event(object):
     def data(self):
         if self.type == Event.Types.OUTPUT:
             timer_factor = None
-            timer_value = self._word_decode(self._data[2:])
+            timer_value = self._word_decode(self._data[2:])  # type: Optional[int]
             if self._data[1] == 0:
                 timer_value = None
             elif self._data[1] == 1:

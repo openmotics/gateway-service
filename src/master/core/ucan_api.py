@@ -18,7 +18,7 @@ Contains the definition of the Core API
 
 from __future__ import absolute_import
 from master.core.ucan_command import UCANCommandSpec, UCANPalletCommandSpec, SID, PalletType, Instruction
-from master.core.fields import AddressField, ByteField, WordField, VersionField, StringField, UInt32Field, ByteArrayField
+from master.core.fields import AddressField, ByteField, WordField, VersionField, StringField, UInt32Field, ByteArrayField, LiteralBytesField
 
 
 class UCANAPI(object):
@@ -27,9 +27,9 @@ class UCANAPI(object):
     def ping(sid=SID.NORMAL_COMMAND):  # type: (int) -> UCANCommandSpec
         """ Basic action spec """
         return UCANCommandSpec(sid=sid,
-                               instruction=Instruction(instruction=[0, 96]),
                                identifier=AddressField('ucan_address', 3),
-                               request_fields=[ByteField('data')],
+                               instructions=[Instruction(instruction=[0, 96])],
+                               request_fields=[[ByteField('data')]],
                                response_instructions=[Instruction(instruction=[1, 96], checksum_byte=6)],
                                response_fields=[ByteField('data')])
 
@@ -37,8 +37,8 @@ class UCANAPI(object):
     def read_ucan_config():  # type: () -> UCANCommandSpec
         """ Reads the full uCAN config """
         return UCANCommandSpec(sid=SID.NORMAL_COMMAND,
-                               instruction=Instruction(instruction=[0, 199]),
                                identifier=AddressField('ucan_address', 3),
+                               instructions=[Instruction(instruction=[0, 199])],
                                response_instructions=[Instruction(instruction=[i, 199], checksum_byte=7) for i in range(1, 14)],
                                response_fields=[ByteField('input_link_0'), ByteField('input_link_1'), ByteField('input_link_2'),
                                                 ByteField('input_link_3'), ByteField('input_link_4'), ByteField('input_link_5'),
@@ -49,28 +49,39 @@ class UCANAPI(object):
                                                 WordField('adc_input_5'), WordField('adc_dc_input')])
 
     @staticmethod
+    def get_version():  # type: () -> UCANCommandSpec
+        """ Gets a uCAN version """
+        return UCANCommandSpec(sid=SID.NORMAL_COMMAND,
+                               identifier=AddressField('ucan_address', 3),
+                               instructions=[Instruction(instruction=[0, 198]), Instruction(instruction=[0, 198])],
+                               request_fields=[[LiteralBytesField(5)], [LiteralBytesField(6)]],
+                               response_instructions=[Instruction(instruction=[5, 199], checksum_byte=7),
+                                                      Instruction(instruction=[6, 199], checksum_byte=7)],
+                               response_fields=[ByteField('sensor_type'), VersionField('firmware_version')])
+
+    @staticmethod
     def set_min_led_brightness():  # type: () -> UCANCommandSpec
         """ Sets the minimum brightness for a uCAN led """
         return UCANCommandSpec(sid=SID.NORMAL_COMMAND,
-                               instruction=Instruction(instruction=[0, 246]),
                                identifier=AddressField('ucan_address', 3),
-                               request_fields=[ByteField('brightness')])
+                               instructions=[Instruction(instruction=[0, 246])],
+                               request_fields=[[ByteField('brightness')]])
 
     @staticmethod
     def set_max_led_brightness():  # type: () -> UCANCommandSpec
         """ Sets the maximum brightness for a uCAN led """
         return UCANCommandSpec(sid=SID.NORMAL_COMMAND,
-                               instruction=Instruction(instruction=[0, 247]),
                                identifier=AddressField('ucan_address', 3),
-                               request_fields=[ByteField('brightness')])
+                               instructions=[Instruction(instruction=[0, 247])],
+                               request_fields=[[ByteField('brightness')]])
 
     @staticmethod
     def set_bootloader_timeout(sid=SID.NORMAL_COMMAND):  # type: (int) -> UCANCommandSpec
         """ Sets the bootloader timeout """
         return UCANCommandSpec(sid=sid,
-                               instruction=Instruction(instruction=[0, 123]),
                                identifier=AddressField('ucan_address', 3),
-                               request_fields=[ByteField('timeout')],
+                               instructions=[Instruction(instruction=[0, 123])],
+                               request_fields=[[ByteField('timeout')]],
                                response_instructions=[Instruction(instruction=[123, 123], checksum_byte=6)],
                                response_fields=[ByteField('timeout')])
 
@@ -78,8 +89,8 @@ class UCANAPI(object):
     def reset(sid=SID.NORMAL_COMMAND):  # type: (int) -> UCANCommandSpec
         """ Resets the uCAN """
         return UCANCommandSpec(sid=sid,
-                               instruction=Instruction(instruction=[0, 94]),
                                identifier=AddressField('ucan_address', 3),
+                               instructions=[Instruction(instruction=[0, 94])],
                                response_instructions=[Instruction(instruction=[94, 94], checksum_byte=6)],
                                response_fields=[ByteField('application_mode')])
 
@@ -87,9 +98,9 @@ class UCANAPI(object):
     def set_bootloader_safety_flag():  # type: () -> UCANCommandSpec
         """ Sets the bootloader's safety flag """
         return UCANCommandSpec(sid=SID.BOOTLOADER_COMMAND,
-                               instruction=Instruction(instruction=[0, 125]),
                                identifier=AddressField('ucan_address', 3),
-                               request_fields=[ByteField('safety_flag')],
+                               instructions=[Instruction(instruction=[0, 125])],
+                               request_fields=[[ByteField('safety_flag')]],
                                response_instructions=[Instruction(instruction=[125, 125], checksum_byte=6)],
                                response_fields=[ByteField('safety_flag')])
 
