@@ -190,6 +190,24 @@ class User(BaseModel):
     password: MixedTextField
     accepted_terms: MixedIntegerField
 
+class Plugin(BaseModel):
+    id: MixedPrimaryKeyField
+    name: MixedTextField
+    version: MixedTextField
+
+
+class PluginForeignKeyField(Plugin, ForeignKeyField): ...
+
+class Ventilation(BaseModel):
+    id: MixedPrimaryKeyField
+    source: MixedTextField
+    plugin: PluginForeignKeyField
+    external_id: MixedTextField
+    name: MixedTextField
+    type: MixedTextField
+    vendor: MixedTextField
+    amount_of_levels: MixedIntegerField
+
 class ThermostatGroup(BaseModel):
     id: MixedPrimaryKeyField
     number: MixedIntegerField

@@ -15,18 +15,25 @@
 """ The OpenMotics plugin controller. """
 
 from __future__ import absolute_import
+
 import logging
 import os
 import pkgutil
 import traceback
 from datetime import datetime
-from ioc import Injectable, Inject, INJECTED, Singleton
-from gateway.events import GatewayEvent
-from gateway.shutter_controller import ShutterController
-from plugins.runner import PluginRunner, RunnerWatchdog
+
 import six
 
-logger = logging.getLogger("openmotics")
+from gateway.events import GatewayEvent
+from gateway.models import Plugin
+from gateway.shutter_controller import ShutterController
+from ioc import INJECTED, Inject, Injectable, Singleton
+from plugins.runner import PluginRunner, RunnerWatchdog
+
+if False:  # MYPY
+    from typing import List
+
+logger = logging.getLogger('openmotics')
 
 
 @Injectable.named('plugin_controller')
@@ -85,6 +92,7 @@ class PluginController(object):
 
     def __init_runners(self):
         """ Scan the plugins package for installed plugins in the form of subpackages. """
+        # TODO query the orm instead, used now to initialize already installed plugins.
         objects = pkgutil.iter_modules([self.__plugins_path])  # (module_loader, name, ispkg)
         package_names = [o[1] for o in objects if o[2]]
 
@@ -123,6 +131,7 @@ class PluginController(object):
                 watchdog.start()
             if update_dependencies:
                 self.__update_dependencies()
+            self._update_orm(runner.name, runner.version)
             logger.info('Plugin {0}: {1}'.format(runner_name, 'Starting... Done'))
         except Exception as exception:
             try:
@@ -181,13 +190,26 @@ class PluginController(object):
         if self.__metrics_controller is not None:
             self.__metrics_controller.set_plugin_definitions(self.__get_metric_definitions())
 
+    def _update_orm(self, name, version):
+        # type: (str, str) -> None
+        plugin, _ = Plugin.get_or_create(name=name, defaults={'version': version})
+        if plugin.version != version:
+            plugin.version = version
+            plugin.save()
+
     def get_plugins(self):
+        # type: () -> List[PluginRunner]
         """
         Get a list of all installed plugins.
-
-        :rtype: list of plugins.runner.PluginRunner
         """
-        return list(self.__runners.values())
+        plugins = []
+        for plugin_orm in list(Plugin.select()):
+            plugin = self.__runners.get(plugin_orm.name)
+            if plugin:
+                plugins.append(plugin)
+            else:
+                logger.warning('missing runner for plugin {}'.format(plugin_orm.name))
+        return plugins
 
     def __get_plugin(self, name):
         """
@@ -290,6 +312,7 @@ class PluginController(object):
 
         # Check if the plugin in installed
         if plugin is None:
+            Plugin.delete().where(name==name).execute()
             raise Exception('Plugin \'{0}\' is not installed.'.format(name))
 
         # Execute the on_remove callbacks
@@ -313,6 +336,9 @@ class PluginController(object):
         conf_file = '{0}/pi_{1}.conf'.format(self.__plugin_config_path, name)
         if os.path.exists(conf_file):
             os.remove(conf_file)
+
+        # Finally remove database entry.
+        Plugin.delete().where(name==name).execute()
 
         return {'msg': 'Plugin successfully removed'}
 
@@ -345,6 +371,9 @@ class PluginController(object):
                 runner.process_shutter_status(data=status, action_version=1)  # send states as action version 1
                 runner.process_shutter_status(data=(status, details), action_version=2)  # send event as action version 2
                 runner.process_shutter_status(data=event, action_version=3)  # send event as action version 3
+        if event.type == GatewayEvent.Types.VENTILATION_CHANGE:
+            for runner in self.__iter_running_runners():
+                runner.process_ventilation_status(data=event)
 
     def process_event(self, code):
         """ Should be called when an event is triggered, notifies all plugins. """

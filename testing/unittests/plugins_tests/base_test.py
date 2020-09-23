@@ -28,16 +28,20 @@ import unittest
 from subprocess import call
 
 from mock import Mock
+from peewee import SqliteDatabase
 from pytest import mark
 
 import plugin_runtime
 from gateway.dto import OutputStateDTO
 from gateway.enums import ShutterEnums
 from gateway.events import GatewayEvent
+from gateway.models import Plugin
 from gateway.output_controller import OutputController
 from gateway.shutter_controller import ShutterController
 from ioc import SetTestMode, SetUpTestInjections
 from plugin_runtime.base import PluginConfigChecker, PluginException
+
+MODELS = [Plugin]
 
 
 class PluginControllerTest(unittest.TestCase):
@@ -50,11 +54,15 @@ class PluginControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
+        cls.test_db = SqliteDatabase(':memory:')
+        cls.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        cls.test_db.create_tables(MODELS)
         cls.PLUGINS_PATH = tempfile.mkdtemp()
         cls.PLUGIN_CONFIG_PATH = tempfile.mkdtemp()
 
     @classmethod
     def tearDownClass(cls):
+        cls.test_db.close()
         try:
             if cls.PLUGINS_PATH is not None:
                 shutil.rmtree(cls.PLUGINS_PATH)

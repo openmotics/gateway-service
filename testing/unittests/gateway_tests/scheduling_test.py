@@ -16,19 +16,23 @@
 Tests for the scheduling module.
 """
 from __future__ import absolute_import
-import unittest
+
 import os
-import xmlrunner
 import tempfile
 import time
-import fakesleep
+import unittest
+
+import xmlrunner
 from mock import Mock
 from peewee import SqliteDatabase
-from ioc import SetTestMode, SetUpTestInjections
+
+import fakesleep
 from gateway.dto import ScheduleDTO
 from gateway.models import Schedule
 from gateway.scheduling import SchedulingController
+from gateway.ventilation_controller import VentilationController
 from gateway.webservice import WebInterface
+from ioc import SetTestMode, SetUpTestInjections
 
 MODELS = [Schedule]
 
@@ -86,6 +90,7 @@ class SchedulingControllerTest(unittest.TestCase):
                             message_client=None,
                             configuration_controller=None,
                             thermostat_controller=None,
+                            ventilation_controller=Mock(VentilationController),
                             shutter_controller=Mock(),
                             output_controller=Mock(),
                             room_controller=Mock(),
