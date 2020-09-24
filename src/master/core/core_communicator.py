@@ -32,7 +32,7 @@ from serial_utils import CommunicationTimedOutException, printable
 
 if False:  # MYPY
     from typing import Dict, Any, Optional, TypeVar, Union, Callable, Set, List
-    from serial.serialposix import Serial
+    from serial import Serial
     T_co = TypeVar('T_co', bound=None, covariant=True)
 
 logger = logging.getLogger('openmotics')

@@ -27,7 +27,7 @@ from master.core.maintenance import MaintenanceCommunicator
 
 if False:  # MYPY
     from typing import Optional
-    from serial.serialposix import Serial
+    from serial import Serial
 
 logger = logging.getLogger('openmotics')
 
@@ -69,7 +69,7 @@ class CoreUpdater(object):
                 logger.info('Bootloader {0} active'.format(bootloader_version))
             else:
                 logger.info('Bootloader not active, switching to bootloader')
-                cli_serial.write('reset\r\n')
+                cli_serial.write(b'reset\r\n')
                 time.sleep(CoreUpdater.RESET_DELAY)
                 bootloader_version = CoreUpdater._in_bootloader(cli_serial)
                 if bootloader_version is None:
@@ -80,7 +80,7 @@ class CoreUpdater(object):
             logger.info('Flashing...')
             amount_lines = len(hex_lines)
             for index, line in enumerate(hex_lines):
-                cli_serial.write(line)
+                cli_serial.write(line.encode())
                 response = CoreUpdater._read_line(cli_serial)
                 if response.startswith('nok'):
                     raise RuntimeError('Unexpected NOK while flashing: {0}'.format(response))
@@ -94,7 +94,7 @@ class CoreUpdater(object):
             time.sleep(CoreUpdater.RESET_DELAY)
             if CoreUpdater._in_bootloader(cli_serial):
                 raise RuntimeError('Still in bootloader')
-            cli_serial.write('firmware version\r\n')
+            cli_serial.write(b'firmware version\r\n')
             firmware_version = CoreUpdater._read_line(cli_serial, discard_lines=2)
             logger.info('Application version {0} active'.format(firmware_version))
             cli_serial.flushInput()
@@ -114,7 +114,7 @@ class CoreUpdater(object):
     @staticmethod
     def _in_bootloader(serial):  # type: (Serial) -> Optional[str]
         serial.flushInput()
-        serial.write('hi\n')
+        serial.write(b'hi\n')
         response = CoreUpdater._read_line(serial)
         serial.flushInput()
         if not response.startswith('hi;ver='):
@@ -127,7 +127,7 @@ class CoreUpdater(object):
         line = ''
         while time.time() < timeout:
             if serial.inWaiting():
-                char = serial.read(1)
+                char = serial.read(1).decode()
                 line += char
                 if char == '\n':
                     if line[0] == '#' and verbose:
