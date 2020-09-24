@@ -16,6 +16,7 @@
 Tests for metrics.
 """
 from __future__ import absolute_import
+import logging
 import os
 import unittest
 import requests
@@ -30,6 +31,8 @@ from ioc import SetTestMode, SetUpTestInjections
 from gateway.config import ConfigurationController
 from gateway.metrics_controller import MetricsController
 from gateway.metrics_caching import MetricsCacheController
+
+logger = logging.getLogger('test')
 
 
 class MetricsTest(unittest.TestCase):
@@ -272,7 +275,7 @@ class MetricsTest(unittest.TestCase):
                       last_try=0,
                       retry_interval=None)
 
-        # Send first metrics, but raise exception on "cloud"
+        logger.info('Send first metrics, but raise exception on "cloud"')
 
         send_metrics = []
         config['cloud_metrics_batch_size'] = 0
@@ -297,7 +300,7 @@ class MetricsTest(unittest.TestCase):
         buffered_metrics = MetricsTest._load_buffered_metrics(metrics_cache)
         self.assertEqual(buffered_metrics, [{'timestamp': buffer_metric_timestamp, 'counter': 0}])
 
-        # Send another metric, still errors on "cloud"
+        logger.info('Send another metric, still errors on "cloud"')
 
         time.sleep(10)  # Time moves on inside fakesleep
         metric_2 = send_metric(counter=1, error=True)
@@ -319,7 +322,7 @@ class MetricsTest(unittest.TestCase):
         buffered_metrics = MetricsTest._load_buffered_metrics(metrics_cache)
         self.assertEqual(buffered_metrics, [{'timestamp': buffer_metric_timestamp, 'counter': 0}])
 
-        # Send another metric, this time the call is accepted correctly
+        logger.info('Send another metric, this time the call is accepted correctly')
 
         time.sleep(10)  # Time moves on inside fakesleep
         metric_3 = send_metric(counter=2, error=False)
@@ -342,7 +345,7 @@ class MetricsTest(unittest.TestCase):
         buffered_metrics = MetricsTest._load_buffered_metrics(metrics_cache)
         self.assertEqual(buffered_metrics, [])
 
-        # Validate increased batch sizes
+        logger.info('Send another metrics, with increased batch sizes')
 
         send_metrics = []
         config['cloud_metrics_batch_size'] = 3
@@ -390,7 +393,7 @@ class MetricsTest(unittest.TestCase):
         buffered_metrics = MetricsTest._load_buffered_metrics(metrics_cache)
         self.assertEqual(buffered_metrics, [])
 
-        # Send metric after minimum interval, even though batch size isn't reached
+        logger.info('Send metric after minimum interval, even though batch size isn\'t reached')
 
         time.sleep(300)  # Time moves on inside fakesleep
         metric_1 = send_metric(counter=6, error=False)  # Add another metric, now reaching batch size
@@ -410,7 +413,7 @@ class MetricsTest(unittest.TestCase):
         buffered_metrics = MetricsTest._load_buffered_metrics(metrics_cache)
         self.assertEqual(buffered_metrics, [])
 
-        # Send metric, but raise exception on "cloud"
+        logger.info('Send metric, but raise exception on "cloud"')
 
         send_metrics = []
         config['cloud_metrics_batch_size'] = 0
@@ -453,7 +456,7 @@ class MetricsTest(unittest.TestCase):
         buffered_metrics = MetricsTest._load_buffered_metrics(metrics_cache)
         self.assertEqual(buffered_metrics, [{'timestamp': buffer_metric_timestamp, 'counter': 7}])
 
-        # Send another metric which should result in sending queue en buffer
+        logger.info('Send another metric which should result in sending queue en buffer')
 
         time.sleep(10)  # Time moves on inside fakesleep
         metric_2 = send_metric(counter=8, error=False)

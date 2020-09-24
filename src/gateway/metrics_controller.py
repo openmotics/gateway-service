@@ -30,6 +30,9 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from ioc import INJECTED, Inject, Injectable, Singleton
 import six
 
+if False:  # MYPY
+    from typing import Any, Dict, Optional
+
 logger = logging.getLogger("openmotics")
 
 
@@ -84,7 +87,7 @@ class MetricsController(object):
         self._load_cloud_buffer()
         self._cloud_last_send = time.time()
         self._cloud_last_try = time.time()
-        self._cloud_retry_interval = None
+        self._cloud_retry_interval = None  # type: Optional[int]
         self._gateway_uuid = gateway_uuid
         self._throttled_down = False
         self.cloud_stats = {'queue': 0,
@@ -286,6 +289,7 @@ class MetricsController(object):
         return True
 
     def receiver(self, metric):
+        # type: (Dict[str,Any]) -> None
         """
         Collects all metrics made available by the MetricsCollector and the plugins. These metrics
         are cached locally for configurable (and optional) pushing metrics to the Cloud.
@@ -315,8 +319,8 @@ class MetricsController(object):
         else:
             timestamp = int(metric['timestamp'])
 
-        cloud_batch_size = self._config_controller.get('cloud_metrics_batch_size')
-        cloud_min_interval = self._config_controller.get('cloud_metrics_min_interval')
+        cloud_batch_size = self._config_controller.get('cloud_metrics_batch_size', 0)  # type: int
+        cloud_min_interval = self._config_controller.get('cloud_metrics_min_interval')  # type: Optional[int]
         if self._cloud_retry_interval is None:
             self._cloud_retry_interval = cloud_min_interval
         endpoint = self._config_controller.get('cloud_endpoint')
@@ -351,10 +355,22 @@ class MetricsController(object):
         time_ago_send = int(now - self._cloud_last_send)
         time_ago_try = int(now - self._cloud_last_try)
         outstanding_data_length = len(self._cloud_buffer) + len(self._cloud_queue)
-        send = (outstanding_data_length > 0 and  # There must be outstanding data
-                ((outstanding_data_length >= cloud_batch_size and time_ago_send == time_ago_try) or  # Last send was successful, but the buffer length > batch size
-                 (time_ago_send > cloud_min_interval and time_ago_send == time_ago_try) or  # Last send was successful, but it has been too long ago
-                 (time_ago_send > time_ago_try > self._cloud_retry_interval)))  # Last send was unsuccessful, and it has been a while
+
+        send = False
+        if outstanding_data_length > 0:  # There must be outstanding data
+            # Last send was successful, but the buffer length > batch size
+            send |= outstanding_data_length >= cloud_batch_size and time_ago_send == time_ago_try
+            if cloud_min_interval is None:
+                send |= True
+            else:
+                # Last send was successful, but it has been too long ago
+                send |= time_ago_send > cloud_min_interval and time_ago_send == time_ago_try
+            if self._cloud_retry_interval is None:
+                send |= True
+            else:
+                # Last send was unsuccessful, and it has been a while
+                send |= time_ago_send > time_ago_try > self._cloud_retry_interval
+
         self.cloud_stats['queue'] = len(self._cloud_queue)
         self.cloud_stats['buffer'] = self._cloud_buffer_length
         self.cloud_stats['time_ago_send'] = time_ago_send
