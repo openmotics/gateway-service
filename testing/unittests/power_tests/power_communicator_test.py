@@ -18,7 +18,6 @@ Tests for PowerCommunicator module.
 
 from __future__ import absolute_import
 
-import os
 import time
 import unittest
 
@@ -36,26 +35,14 @@ from serial_utils import RS485, CommunicationTimedOutException
 class PowerCommunicatorTest(unittest.TestCase):
     """ Tests for PowerCommunicator class """
 
-    FILE = "test.db"
-
     @classmethod
     def setUpClass(cls):
         SetTestMode()
 
-    def setUp(self):
-        """ Run before each test. """
-        if os.path.exists(PowerCommunicatorTest.FILE):
-            os.remove(PowerCommunicatorTest.FILE)
-
-    def tearDown(self):
-        """ Run after each test. """
-        if os.path.exists(PowerCommunicatorTest.FILE):
-            os.remove(PowerCommunicatorTest.FILE)
-
     @staticmethod
     def _get_communicator(serial_mock, time_keeper_period=0, address_mode_timeout=60, power_store=None):
         """ Get a PowerCommunicator. """
-        SetUpTestInjections(power_db=PowerCommunicatorTest.FILE,
+        SetUpTestInjections(power_db=':memory:',
                             power_serial=serial_mock)
         if power_store is not None:
             SetUpTestInjections(power_store=power_store)
@@ -164,7 +151,7 @@ class PowerCommunicatorTest(unittest.TestCase):
             1
         ))
         serial_mock.start()
-        SetUpTestInjections(power_db=PowerCommunicatorTest.FILE)
+        SetUpTestInjections(power_db=':memory:')
 
         store = PowerStore()
         comm = PowerCommunicatorTest._get_communicator(serial_mock, power_store=store)
@@ -241,7 +228,7 @@ class PowerCommunicatorTest(unittest.TestCase):
     @mark.slow
     def test_timekeeper(self):
         """ Test the TimeKeeper. """
-        SetUpTestInjections(power_db=PowerCommunicatorTest.FILE)
+        SetUpTestInjections(power_db=':memory:')
         store = PowerStore()
         store.register_power_module(1, power_api.POWER_MODULE)
 
