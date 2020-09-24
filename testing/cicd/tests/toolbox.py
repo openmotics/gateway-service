@@ -399,9 +399,9 @@ class Toolbox(object):
         previous_virtual_modules = _get_current_virtual_modules()
 
         for _ in range(desired_new_outputs):
-            self.dut.get('/add_virtual_output')
+            self.dut.get('/add_virtual_output_module')
         for _ in range(desired_new_inputs):
-            self.dut.get('/add_virtual_input')
+            self.dut.get('/add_virtual_input_module')
         # TODO: We should/could use the module discover log as well, but adding virtual modules isn't generate events
 
         while since > time.time() - timeout:

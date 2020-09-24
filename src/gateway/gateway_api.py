@@ -253,21 +253,6 @@ class GatewayApi(object):
             values += [None] * (32 - len(values))
         return values
 
-    def add_virtual_output_module(self):
-        # type: () -> str
-        # TODO: work with output controller
-        return self.__master_controller.add_virtual_output_module()
-
-    def add_virtual_dim_module(self):
-        # type: () -> str
-        # TODO: work with output controller
-        return self.__master_controller.add_virtual_dim_module()
-
-    def add_virtual_input_module(self):
-        # type: () -> str
-        # TODO: work with input controller
-        return self.__master_controller.add_virtual_input_module()
-
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         # TODO: work with sensor controller
         # TODO: add other sensors too (e.g. from database <-- plugins)

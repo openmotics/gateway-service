@@ -30,6 +30,7 @@ class ShutterEnums(object):
         UP = 'up'
         DOWN = 'down'
 
+
 class UserEnums(object):
     class AuthenticationErrors(object):
         INVALID_CREDENTIALS = 'invalid_credentials'

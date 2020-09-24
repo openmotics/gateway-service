@@ -890,24 +890,26 @@ class MasterClassicController(MasterController):
 
     @communication_enabled
     def add_virtual_output_module(self):
-        # type: () -> str
-        module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'o'})
+        # type: () -> None
+        self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'o'})
         self._broadcast_module_discovery()
-        return module['resp']
 
     @communication_enabled
-    def add_virtual_dim_module(self):
-        # type: () -> str
-        module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'd'})
+    def add_virtual_dim_control_module(self):
+        # type: () -> None
+        self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'd'})
         self._broadcast_module_discovery()
-        return module['resp']
 
     @communication_enabled
     def add_virtual_input_module(self):
-        # type: () -> str
-        module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'i'})
+        # type: () -> None
+        self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'i'})
         self._broadcast_module_discovery()
-        return module['resp']
+
+    @communication_enabled
+    def add_virtual_sensor_module(self):
+        # type: () -> None
+        raise NotImplementedError()  # TODO: Use not supported exception
 
     # Generic
 

@@ -19,6 +19,7 @@ from __future__ import absolute_import
 
 import logging
 import time
+import struct
 from datetime import datetime
 from threading import Thread, Timer
 
@@ -50,7 +51,7 @@ from master.core.ucan_communicator import UCANCommunicator
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Tuple, Optional
+    from typing import Any, Dict, List, Tuple, Optional, Type, Union
     from gateway.dto import OutputStateDTO
 
 logger = logging.getLogger("openmotics")
@@ -648,17 +649,6 @@ class MasterCoreController(MasterController):
             group_action = GroupActionMapper.dto_to_orm(group_action_dto, fields)
             GroupActionController.save_group_action(group_action, fields)
 
-    # Virtual modules
-
-    def add_virtual_output_module(self):
-        raise NotImplementedError()
-
-    def add_virtual_dim_module(self):
-        raise NotImplementedError()
-
-    def add_virtual_input_module(self):
-        raise NotImplementedError()
-
     # Module management
 
     def module_discover_start(self, timeout):  # type: (int) -> None
@@ -681,11 +671,13 @@ class MasterCoreController(MasterController):
         self._master_communicator.do_basic_action(action_type=200,
                                                   action=0,
                                                   extra_parameter=255)
-
-        self._publish_event(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
+        self._broadcast_module_discovery()
 
     def module_discover_status(self):  # type: () -> bool
         return self._discover_mode_timer is not None
+
+    def _broadcast_module_discovery(self):
+        self._publish_event(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
 
     def get_module_log(self):  # type: () -> List[Dict[str, Any]]
         raise NotImplementedError()  # No need to implement. Not used and rather obsolete code anyway
@@ -738,7 +730,7 @@ class MasterCoreController(MasterController):
         # i/I/J = Virtual/physical/internal Input module
         # o/O/P = Virtual/physical/internal Ouptut module
         # l = OpenCollector module
-        # T = Temperature module
+        # T/t = Physical/internal Temperature module
         # C/E = Physical/internal CAN Control
         return {'outputs': outputs, 'inputs': inputs, 'shutters': [], 'can_inputs': can_inputs}
 
@@ -772,8 +764,11 @@ class MasterCoreController(MasterController):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
             hardware_type = ModuleDTO.HardwareType.PHYSICAL
-            if device_type == 'i' and input_module_info.address.endswith('000.000.000'):
-                hardware_type = ModuleDTO.HardwareType.INTERNAL
+            if device_type == 'i':
+                if '.000.000.' in input_module_info.address:
+                    hardware_type = ModuleDTO.HardwareType.INTERNAL
+                else:
+                    hardware_type = ModuleDTO.HardwareType.VIRTUAL
             elif device_type == 'b':
                 hardware_type = ModuleDTO.HardwareType.EMULATED
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
@@ -790,8 +785,11 @@ class MasterCoreController(MasterController):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
             hardware_type = ModuleDTO.HardwareType.PHYSICAL
-            if output_module_info.address[4:15] in ['000.000.000', '000.000.001', '000.000.002', '000.000.003']:
-                hardware_type = ModuleDTO.HardwareType.INTERNAL
+            if device_type in ['l', 'o', 'd']:
+                if '.000.000.' in output_module_info.address:
+                    hardware_type = ModuleDTO.HardwareType.INTERNAL
+                else:
+                    hardware_type = ModuleDTO.HardwareType.VIRTUAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=output_module_info.address,
                             module_type=module_type_lookup.get(device_type),
@@ -806,10 +804,16 @@ class MasterCoreController(MasterController):
             sensor_module_info = SensorModuleConfiguration(module_id)
             device_type = sensor_module_info.device_type
             online, hardware_version, firmware_version = get_master_version(sensor_module_info.address)
+            hardware_type = ModuleDTO.HardwareType.PHYSICAL
+            if device_type == 't':
+                if '.000.000.' in sensor_module_info.address:
+                    hardware_type = ModuleDTO.HardwareType.INTERNAL
+                else:
+                    hardware_type = ModuleDTO.HardwareType.VIRTUAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=sensor_module_info.address,
                             module_type=module_type_lookup.get(device_type),
-                            hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                            hardware_type=hardware_type,
                             hardware_version=hardware_version,
                             firmware_version=firmware_version,
                             order=module_id,
@@ -839,6 +843,59 @@ class MasterCoreController(MasterController):
 
     def flash_leds(self, led_type, led_id):
         raise NotImplementedError()
+
+    # Virtual modules
+
+    def add_virtual_output_module(self):
+        # type: () -> None
+        self._add_virtual_module(OutputModuleConfiguration, 'output', 'o')
+        self._broadcast_module_discovery()
+
+    def add_virtual_dim_control_module(self):
+        # type: () -> None
+        self._add_virtual_module(OutputModuleConfiguration, 'output', 'd')
+        self._broadcast_module_discovery()
+
+    def add_virtual_input_module(self):
+        # type: () -> None
+        self._add_virtual_module(InputModuleConfiguration, 'input', 'i')
+        self._broadcast_module_discovery()
+
+    def add_virtual_sensor_module(self):
+        # type: () -> None
+        self._add_virtual_module(SensorModuleConfiguration, 'sensor', 't')
+        self._broadcast_module_discovery()
+
+    def _add_virtual_module(self, configuration_type, module_type_name, module_type):
+        # type: (Union[Type[OutputModuleConfiguration], Type[InputModuleConfiguration], Type[SensorModuleConfiguration]], str, str) -> None
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
+        global_configuration = GlobalConfiguration()
+        number_of_modules = _default_if_255(getattr(global_configuration, 'number_of_{0}_modules'.format(module_type_name)), 0)
+        addresses = []  # type: List[Optional[int]]
+        for module_id in range(number_of_modules):
+            module_info = configuration_type(module_id)
+            device_type = module_info.device_type
+            if device_type == module_type:
+                parts = [int(part) for part in module_info.address[4:15].split('.')]
+                address = parts[0] * 256 * 256 + parts[1] * 256 + parts[2]
+                if address >= 256:
+                    addresses.append(address)
+        next_address = next(i for i, e in enumerate(sorted(addresses) + [None], 256) if i != e)
+        new_address = bytearray([ord(module_type)]) + struct.pack('>I', next_address)[-3:]
+        self._master_communicator.do_basic_action(action_type={'output': 201,
+                                                               'input': 202,
+                                                               'sensor': 203}[module_type_name],
+                                                  action=number_of_modules,  # 0-based, so no +1 needed here
+                                                  device_nr=struct.unpack('>H', new_address[0:2])[0],
+                                                  extra_parameter=struct.unpack('>H', new_address[2:4])[0])
+        self._master_communicator.do_basic_action(action_type=200,
+                                                  action=4,
+                                                  device_nr={'output': 0,
+                                                             'input': 1,
+                                                             'sensor': 2}[module_type_name],
+                                                  extra_parameter=number_of_modules + 1)
 
     # Generic
 
