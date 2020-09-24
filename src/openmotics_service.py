@@ -34,32 +34,31 @@ from gateway.migrations.schedules import ScheduleMigrator
 from gateway.migrations.users import UserMigrator
 from ioc import INJECTED, Inject
 
-from gateway.gateway_api import GatewayApi
-from gateway.group_action_controller import GroupActionController
-from gateway.input_controller import InputController
-from gateway.maintenance_controller import MaintenanceController
-from gateway.metrics_collector import MetricsCollector
-from gateway.metrics_controller import MetricsController
-from gateway.observer import Observer
-from gateway.pulse_counter_controller import PulseCounterController
-from gateway.scheduling import SchedulingController
-from gateway.sensor_controller import SensorController
-from gateway.shutter_controller import ShutterController
-from gateway.thermostat.thermostat_controller import ThermostatController
-from gateway.ventilation_controller import VentilationController
-from gateway.webservice import WebInterface, WebService
-from gateway.watchdog import Watchdog
-from gateway.module_controller import ModuleController
-from gateway.hal.master_controller import MasterController
-from gateway.hal.frontpanel_controller import FrontpanelController
-from plugins.base import PluginController
-from power.power_communicator import PowerCommunicator
-from master.classic.passthrough import PassthroughService
-from cloud.events import EventSender
-from serial_utils import RS485
-
 if False:  # MYPY
     from gateway.output_controller import OutputController
+    from gateway.gateway_api import GatewayApi
+    from gateway.group_action_controller import GroupActionController
+    from gateway.input_controller import InputController
+    from gateway.maintenance_controller import MaintenanceController
+    from gateway.metrics_collector import MetricsCollector
+    from gateway.metrics_controller import MetricsController
+    from gateway.observer import Observer
+    from gateway.pulse_counter_controller import PulseCounterController
+    from gateway.scheduling import SchedulingController
+    from gateway.sensor_controller import SensorController
+    from gateway.shutter_controller import ShutterController
+    from gateway.thermostat.thermostat_controller import ThermostatController
+    from gateway.ventilation_controller import VentilationController
+    from gateway.webservice import WebInterface, WebService
+    from gateway.watchdog import Watchdog
+    from gateway.module_controller import ModuleController
+    from gateway.hal.master_controller import MasterController
+    from gateway.hal.frontpanel_controller import FrontpanelController
+    from plugins.base import PluginController
+    from power.power_communicator import PowerCommunicator
+    from master.classic.passthrough import PassthroughService
+    from cloud.events import EventSender
+    from serial_utils import RS485
 
 logger = logging.getLogger("openmotics")
 
