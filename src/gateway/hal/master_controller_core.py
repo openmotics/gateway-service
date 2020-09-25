@@ -803,7 +803,6 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_sensor_modules):
             sensor_module_info = SensorModuleConfiguration(module_id)
             device_type = sensor_module_info.device_type
-            online, hardware_version, firmware_version = get_master_version(sensor_module_info.address)
             hardware_type = ModuleDTO.HardwareType.PHYSICAL
             if device_type == 't':
                 if '.000.000.' in sensor_module_info.address:
@@ -814,10 +813,9 @@ class MasterCoreController(MasterController):
                             address=sensor_module_info.address,
                             module_type=module_type_lookup.get(device_type),
                             hardware_type=hardware_type,
-                            hardware_version=hardware_version,
-                            firmware_version=firmware_version,
-                            order=module_id,
-                            online=online)
+                            order=module_id)
+            if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
+                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(sensor_module_info.address)
             information.append(dto)
 
         nr_of_can_controls = _default_if_255(general_configuration.number_of_can_control_modules, 0)

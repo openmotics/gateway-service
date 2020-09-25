@@ -152,13 +152,19 @@ class UInt32Field(Field):
 
 class _ArrayField(Field):
     def __init__(self, name, length, field):
-        super(_ArrayField, self).__init__(name, length)
         self._field = field(name)
+        self._entry_length = length
+        super_length = None  # type: Optional[Union[int, Callable[[int], int]]]
+        if callable(length):
+            super_length = lambda l: self._field.length * length(l)
+        elif length is not None:
+            super_length = self._field.length * length
+        super(_ArrayField, self).__init__(name, super_length)
 
     def encode(self, value):  # type: (Any) -> bytearray
-        if len(value) != self.length:
+        if len(value) != self._entry_length:
             raise ValueError('Value `{0}` should be an array of {1} items with {2} <= item <= {3}'.format(value,
-                                                                                                          self.length,
+                                                                                                          self._entry_length,
                                                                                                           self._field.limits[0],
                                                                                                           self._field.limits[1]))
         data = bytearray()
