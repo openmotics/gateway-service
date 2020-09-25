@@ -11,7 +11,6 @@ declare -a blacklist=(
     gateway_tests/webservice_test.py
     plugins_tests/base_test.py
     plugins_tests/runner_test.py
-    power_tests/power_communicator_test.py
 )
 
 find . -name '*_test.py' | while read -r f; do

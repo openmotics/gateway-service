@@ -47,8 +47,8 @@ def crc7(to_send):
     Calculate the crc7 checksum of a string.
     """
     ret = 0
-    for part in ''.join(chr(c) for c in to_send):
-        ret = CRC_TABLE[ret ^ ord(part)]
+    for part in to_send:
+        ret = CRC_TABLE[ret ^ part]
     return ret
 
 
@@ -67,8 +67,8 @@ def crc8(to_send):
         return crc & 0xFF
 
     ret = 0
-    for part in ''.join(chr(c) for c in to_send):
-        ret = _add_crc(ret, ord(part))
+    for part in to_send:
+        ret = _add_crc(ret, part)
     return ret
 
 

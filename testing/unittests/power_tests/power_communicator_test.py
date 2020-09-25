@@ -179,7 +179,7 @@ class PowerCommunicatorTest(unittest.TestCase):
         serial_mock = RS485(SerialMock(
             [sin(sad.create_input(power_api.BROADCAST_ADDRESS, 1, power_api.ADDRESS_MODE)),
              sin(sad_p1c.create_input(power_api.BROADCAST_ADDRESS, 2, power_api.ADDRESS_MODE)),
-             sout(''),  # Timeout read after 1 second
+             sout(bytearray()),  # Timeout read after 1 second
              sin(sad.create_input(power_api.BROADCAST_ADDRESS, 3, power_api.NORMAL_MODE)),
              sin(sad_p1c.create_input(power_api.BROADCAST_ADDRESS, 4, power_api.NORMAL_MODE)),
              sin(action.create_input(1, 5)),
@@ -210,7 +210,7 @@ class PowerCommunicatorTest(unittest.TestCase):
         serial_mock = RS485(SerialMock(
             [sin(sad.create_input(power_api.BROADCAST_ADDRESS, 1, power_api.ADDRESS_MODE)),
              sin(sad_p1c.create_input(power_api.BROADCAST_ADDRESS, 2, power_api.ADDRESS_MODE)),
-             sout(''),  # Timeout read after 1 second
+             sout(bytearray()),  # Timeout read after 1 second
              sin(sad.create_input(power_api.BROADCAST_ADDRESS, 3, power_api.NORMAL_MODE)),
              sin(sad_p1c.create_input(power_api.BROADCAST_ADDRESS, 4, power_api.NORMAL_MODE)),
              sin(action.create_input(1, 5)),

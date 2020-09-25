@@ -85,13 +85,13 @@ class DummyPty(object):
 
 
 def sin(data):
-    # type: (bytes) -> Tuple[str, bytearray]
+    # type: (bytearray) -> Tuple[str, bytearray]
     """ Input for the SerialMock """
     return 'i', bytearray(data)
 
 
 def sout(data):
-    # type: (bytes) -> Tuple[str, bytearray]
+    # type: (bytearray) -> Tuple[str, bytearray]
     """ Output from the SerialMock """
     return 'o', bytearray(data)
 
