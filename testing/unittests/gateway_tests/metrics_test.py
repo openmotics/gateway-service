@@ -38,9 +38,6 @@ logger = logging.getLogger('test')
 class MetricsTest(unittest.TestCase):
     intervals = {}
 
-    BUFFER_FILE = 'buffer_test.db'
-    CONFIG_FILE = 'config_test.db'
-
     @classmethod
     def setUpClass(cls):
         SetTestMode()
@@ -50,19 +47,6 @@ class MetricsTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         fakesleep.monkey_restore()
-
-    def setUp(self):
-        if os.path.exists(MetricsTest.CONFIG_FILE):
-            os.remove(MetricsTest.CONFIG_FILE)
-        if os.path.exists(MetricsTest.BUFFER_FILE):
-            os.remove(MetricsTest.BUFFER_FILE)
-        self.maxDiff = None
-
-    def tearDown(self):
-        if os.path.exists(MetricsTest.CONFIG_FILE):
-            os.remove(MetricsTest.CONFIG_FILE)
-        if os.path.exists(MetricsTest.BUFFER_FILE):
-            os.remove(MetricsTest.BUFFER_FILE)
 
     @staticmethod
     def _set_cloud_interval(self, metric_type, interval):
@@ -77,7 +61,7 @@ class MetricsTest(unittest.TestCase):
                                                           'set_cloud_interval': MetricsTest._set_cloud_interval})()
         metrics_cache_controller = type('MetricsCacheController', (), {'load_buffer': lambda *args, **kwargs: []})()
         plugin_controller = type('PluginController', (), {'get_metric_definitions': lambda *args, **kwargs: {}})()
-        SetUpTestInjections(config_db=MetricsTest.CONFIG_FILE,
+        SetUpTestInjections(config_db=':memory:',
                             config_db_lock=Lock())
         config_controller = ConfigurationController()
         SetUpTestInjections(plugin_controller=plugin_controller,
@@ -215,7 +199,7 @@ class MetricsTest(unittest.TestCase):
 
         requests.post = post
 
-        SetUpTestInjections(metrics_db=MetricsTest.BUFFER_FILE, metrics_db_lock=Lock())
+        SetUpTestInjections(metrics_db=':memory:', metrics_db_lock=Lock())
 
         metrics_cache = MetricsCacheController()
         config_controller = Mock()
@@ -479,7 +463,7 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(buffered_metrics, [])
 
     def test_buffer(self):
-        SetUpTestInjections(metrics_db=MetricsTest.BUFFER_FILE,
+        SetUpTestInjections(metrics_db=':memory:',
                             metrics_db_lock=Lock())
         controller = MetricsCacheController()
         tags = {'name': 'name', 'id': 0}
