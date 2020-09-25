@@ -25,6 +25,9 @@ from threading import Thread
 from six.moves.queue import Queue
 from gateway.hal.master_controller import CommunicationFailure
 
+if False:  # MYPY
+    from serial import Serial
+
 
 class CommunicationTimedOutException(CommunicationFailure):
     """ An exception that is raised when the master did not respond in time. """
@@ -46,10 +49,12 @@ def printable(data):
     return '{0}    {1}'.format(byte_notation, string_notation)
 
 
+# FIXME this shouldn't use strings
 class RS485(object):
     """ Replicates the pyserial interface. """
 
     def __init__(self, serial):
+        # type: (Serial) -> None
         """ Initialize a rs485 connection using the serial port. """
         self._serial = serial
         fileno = serial.fileno()
@@ -60,24 +65,27 @@ class RS485(object):
         self._serial.timeout = None
         self._thread = Thread(target=self._reader, name='RS485 reader')
         self._thread.daemon = True
-        self.read_queue = Queue()
+        self.read_queue = Queue()  # type: Queue[str]
 
     def start(self):
+        # type: () -> None
         self._thread.start()
 
     def write(self, data):
+        # type: (str) -> None
         """ Write data to serial port """
-        self._serial.write(data)
+        self._serial.write(bytearray(ord(c) for c in data))
 
     def _reader(self):
+        # type: () -> None
         try:
             while True:
-                byte = self._serial.read(1)
-                if len(byte) == 1:
-                    self.read_queue.put(byte)
+                data = self._serial.read(1)
+                if len(data) == 1:
+                    self.read_queue.put(chr(data[0]))
                 size = self._serial.inWaiting()
                 if size > 0:
                     for byte in self._serial.read(size):
-                        self.read_queue.put(byte)
+                        self.read_queue.put(chr(byte))
         except Exception as ex:
             print('Error in reader: {0}'.format(ex))

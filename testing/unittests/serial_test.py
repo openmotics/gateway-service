@@ -17,27 +17,26 @@ Contains the SerialMock.
 
 @author: fryckbos
 """
-
 from __future__ import absolute_import
+
 import os
 import pty
 import threading
 import time
 import unittest
 
-import xmlrunner
 from serial import Serial
 
 from serial_utils import printable
 
 if False:  # MYPY
-    from typing import List, Optional
+    from typing import List, Optional, Tuple
 
 
 class DummyPty(object):
     def __init__(self, sequence):
-        # type: (List[str]) -> None
-        self._replies = []  # type: List[str]
+        # type: (List[bytes]) -> None
+        self._replies = []  # type: List[bytes]
         self._sequence = sequence
         self._read = threading.Event()
         master, slave = pty.openpty()
@@ -46,7 +45,7 @@ class DummyPty(object):
         self._serial.timeout = None
 
     def master_reply(self, data):
-        # type: (str) -> None
+        # type: (bytes) -> None
         self._replies.append(data)
 
     def master_wait(self, timeout=2):
@@ -55,14 +54,14 @@ class DummyPty(object):
         self._read.wait(timeout)
 
     def read(self, size=None):
-        # type: (Optional[int]) -> str
+        # type: (Optional[int]) -> bytes
         data = self._serial.read(size)
         if data:
             self._read.set()
         return data
 
     def write(self, data):
-        # type: (str) -> int
+        # type: (bytes) -> int
         if data != self._sequence[0]:
             assert printable(self._sequence[0]) == printable(data)
         self._sequence.pop(0)
@@ -86,13 +85,15 @@ class DummyPty(object):
 
 
 def sin(data):
+    # type: (bytes) -> Tuple[str, bytearray]
     """ Input for the SerialMock """
-    return 'i', data
+    return 'i', bytearray(data)
 
 
 def sout(data):
+    # type: (bytes) -> Tuple[str, bytearray]
     """ Output from the SerialMock """
-    return 'o', data
+    return 'o', bytearray(data)
 
 
 class SerialMock(object):
@@ -104,6 +105,7 @@ class SerialMock(object):
     """
 
     def __init__(self, sequence, timeout=0):
+        # type: (List[Tuple[str,bytearray]], float) -> None
         """ Takes a sequence of sin() and sout(). Check if we get the sin bytes on write(),
         gives the sout bytes to read(). """
         self.__sequence = sequence
@@ -113,17 +115,19 @@ class SerialMock(object):
         self.bytes_read = 0
 
     def write(self, data):
+        # type: (bytes) -> None
         """ Write data to serial port """
         while self.__sequence[0][0] == 'o':
             time.sleep(0.01)
 
-        if data != self.__sequence[0][1]:
-            raise Exception("Got wrong data in SerialMock\n  expected %s\n       got %s" %
+        if bytearray(data) != self.__sequence[0][1]:
+            raise Exception("Got wrong data in SerialMock:\n  expected %s,\n       got %s" %
                             (printable(self.__sequence[0][1]), printable(data)))
         self.__sequence.pop(0)
         self.bytes_written += len(data)
 
     def read(self, size):
+        # type: (int) -> bytes
         """ Read size bytes from serial port """
         while len(self.__sequence) == 0 or self.__sequence[0][0] == 'i':
             time.sleep(0.01)
@@ -131,7 +135,7 @@ class SerialMock(object):
         if self.__timeout != 0 and self.__sequence[0][1] == '':
             time.sleep(self.__timeout)
             self.__sequence.pop(0)
-            return ''
+            return bytearray()
         else:
             ret = self.__sequence[0][1][:size]
             self.__sequence[0] = (self.__sequence[0][0], self.__sequence[0][1][size:])
@@ -142,7 +146,7 @@ class SerialMock(object):
             self.bytes_read += len(ret)
             return ret
 
-    def inWaiting(self): #pylint: disable=C0103
+    def inWaiting(self):  # pylint: disable=C0103
         """ Get the number of bytes pending to be read """
         if len(self.__sequence) == 0 or self.__sequence[0][0] == 'i':
             return 0
@@ -152,8 +156,8 @@ class SerialMock(object):
     def interrupt(self):
         """ Interrupt a read that is waiting until the end of time. """
         if len(self.__sequence) > 0:
-            raise Exception("Can only interrupt read at end of stream")
-        self.__sequence.append(sout("\x00"))
+            raise Exception('Can only interrupt read at end of stream')
+        self.__sequence.append(sout(bytearray(b'\x00')))
 
     def fileno(self):
         return None
@@ -164,37 +168,43 @@ class SerialMockTest(unittest.TestCase):
 
     def test_serial_mock(self):
         """ Tests for SerialMock. """
-        serial_mock = SerialMock([sin("abc"), sout("def"), sin("g"), sout("h")])
-        serial_mock.write("abc")
-        self.assertEqual("d", serial_mock.read(1))
+        serial_mock = SerialMock([
+            sin(b'abc'), sout(b'def'),
+            sin(b'g'), sout(b'h')
+        ])
+        serial_mock.write(b'abc')
+        self.assertEqual(b'd', serial_mock.read(1))
         self.assertEqual(2, serial_mock.inWaiting())
-        self.assertEqual("ef", serial_mock.read(2))
-        serial_mock.write("g")
-        self.assertEqual("h", serial_mock.read(1))
+        self.assertEqual(b'ef', serial_mock.read(2))
+        serial_mock.write(b'g')
+        self.assertEqual(b'h', serial_mock.read(1))
         self.assertEqual(0, serial_mock.inWaiting())
 
     def test_threaded_serial_mock(self):
         """ Tests for SerialMock in thread, check if reads and writes are in sequence. """
-        serial_mock = SerialMock([sin("abc"), sout("def"), sin("g"), sout("h")])
-        phase = {'phase':0}
+        serial_mock = SerialMock([
+            sin(b'abc'), sout(b'def'),
+            sin(b'g'), sout(b'h')
+        ])
+        phase = {'phase': 0}
 
         def __reader(serial, phase):
             """ Code for reading from a differen thread, checks the output and phase. """
-            self.assertEqual("d", serial.read(1))
+            self.assertEqual(b'd', serial.read(1))
             self.assertEqual(1, phase['phase'])
             phase['phase'] = 2
             self.assertEqual(2, serial.inWaiting())
-            self.assertEqual("ef", serial.read(2))
+            self.assertEqual(b'ef', serial.read(2))
 
-            self.assertEqual("h", serial.read(1))
+            self.assertEqual(b'h', serial.read(1))
             self.assertEqual(3, phase['phase'])
             self.assertEqual(0, serial.inWaiting())
 
         threading.Thread(target=__reader, args=(serial_mock, phase)).start()
 
-        serial_mock.write("abc")
+        serial_mock.write(b'abc')
         phase['phase'] = 1
-        serial_mock.write("g")
+        serial_mock.write(b'g')
         self.assertEqual(2, phase['phase'])
         phase['phase'] = 3
 
@@ -202,7 +212,7 @@ class SerialMockTest(unittest.TestCase):
         """ Tests for serial mock, that checks if a read() stays waiting if there is
         no data available. """
         serial_mock = SerialMock([])
-        phase = {'phase':0}
+        phase = {'phase': 0}
 
         def __timeout(serial, phase):
             """ Interrupts the read to make the test finish. """
@@ -214,7 +224,3 @@ class SerialMockTest(unittest.TestCase):
 
         serial_mock.read(1)
         self.assertEqual(1, phase['phase'])
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='gw-unit-reports'))

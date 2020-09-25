@@ -42,10 +42,10 @@ class PassthroughServiceTest(unittest.TestCase):
         """ Test the passthrough. """
         master_pty = DummyPty([bytearray(b'response'),
                                bytearray(b'more response')])
-        passthrough_mock = SerialMock([sin(bytearray(b'data for the passthrough')),
-                                       sout(bytearray(b'response')),
-                                       sin(bytearray(b'more data')),
-                                       sout(bytearray(b'more response'))])
+        passthrough_mock = SerialMock([sin('data for the passthrough'),
+                                       sout('response'),
+                                       sin('more data'),
+                                       sout('more response')])
         SetUpTestInjections(controller_serial=master_pty,
                             passthrough_serial=passthrough_mock)
 

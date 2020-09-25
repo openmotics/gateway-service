@@ -72,7 +72,8 @@ class PowerCommunicatorTest(unittest.TestCase):
         """ Test for timeout in PowerCommunicator.do_command. """
         action = power_api.get_voltage(power_api.POWER_MODULE)
 
-        serial_mock = RS485(SerialMock([sin(action.create_input(1, 1)), sout(''),
+        serial_mock = RS485(SerialMock([sin(action.create_input(1, 1)),
+                                        sout(bytearray()),
                                         sin(action.create_input(1, 2)),
                                         sout(action.create_output(1, 2, 49.5))]))
         serial_mock.start()
@@ -87,9 +88,10 @@ class PowerCommunicatorTest(unittest.TestCase):
         """ Test for timeout in PowerCommunicator.do_command. """
         action = power_api.get_voltage(power_api.POWER_MODULE)
 
-        serial_mock = RS485(SerialMock([sin(action.create_input(1, 1)), sout(''),
+        serial_mock = RS485(SerialMock([sin(action.create_input(1, 1)),
+                                        sout(bytearray()),
                                         sin(action.create_input(1, 2)),
-                                        sout('')]))
+                                        sout(bytearray())]))
         serial_mock.start()
 
         comm = PowerCommunicatorTest._get_communicator(serial_mock)
@@ -145,7 +147,7 @@ class PowerCommunicatorTest(unittest.TestCase):
              sin(power_api.set_address(power_api.ENERGY_MODULE).create_input(0, 0, 2)),
              sout(power_api.want_an_address(power_api.P1_CONCENTRATOR).create_output(0, 0)),
              sin(power_api.set_address(power_api.P1_CONCENTRATOR).create_input(0, 0, 3)),
-             sout(''),  # Timeout read after 1 second
+             sout(bytearray()),  # Timeout read after 1 second
              sin(sad.create_input(power_api.BROADCAST_ADDRESS, 3, power_api.NORMAL_MODE)),
              sin(sad_p1c.create_input(power_api.BROADCAST_ADDRESS, 4, power_api.NORMAL_MODE))],
             1
