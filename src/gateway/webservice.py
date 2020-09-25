@@ -47,6 +47,7 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO
 from gateway.enums import ShutterEnums, UserEnums
+from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.models import Database, Feature
@@ -250,6 +251,10 @@ def _openmotics_api(f, *args, **kwargs):
         logger.error('Could not find the requested object')
         status = 200  # OK
         data = {'success': False, 'msg': 'Object not found'}
+    except UnsupportedException:
+        logger.error('Some features for API call %s are unsupported on this device', f.__name__)
+        status = 200  # OK
+        data = {'success': False, 'msg': 'Unsupported'}
     except Exception as ex:
         logger.exception('Unexpected error during API call %s', f.__name__)
         status = 200  # OK

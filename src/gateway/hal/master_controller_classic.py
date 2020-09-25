@@ -31,6 +31,7 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO
 from gateway.enums import ShutterEnums
+from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
     OutputMapper, PulseCounterMapper, SensorMapper, ShutterGroupMapper, \
     ShutterMapper, ThermostatMapper
@@ -909,7 +910,7 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def add_virtual_sensor_module(self):
         # type: () -> None
-        raise NotImplementedError()  # TODO: Use not supported exception
+        raise UnsupportedException()
 
     # Generic
 
