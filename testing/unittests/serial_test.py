@@ -118,7 +118,7 @@ class SerialMock(object):
             time.sleep(0.01)
 
         if data != self.__sequence[0][1]:
-            raise Exception("Got wrong data in SerialMock: expected %s, got %s",
+            raise Exception("Got wrong data in SerialMock\n  expected %s\n       got %s" %
                             (printable(self.__sequence[0][1]), printable(data)))
         self.__sequence.pop(0)
         self.bytes_written += len(data)
