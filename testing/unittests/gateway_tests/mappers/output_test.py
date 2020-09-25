@@ -20,7 +20,7 @@ from ioc import SetTestMode, SetUpTestInjections
 from gateway.dto import OutputDTO
 from gateway.hal.mappers_core import OutputMapper
 from master.core.memory_models import OutputConfiguration, OutputModuleConfiguration
-from master.core.memory_file import MemoryTypes
+from master.core.memory_file import MemoryTypes, MemoryFile
 
 
 class OutputMapperTest(unittest.TestCase):
@@ -29,7 +29,24 @@ class OutputMapperTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
-        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: Mock()})
+        self.memory_map = {0: bytearray([0, 1])}
+
+        def _read(addresses):
+            data_ = {}
+            for address in addresses:
+                data_[address] = self.memory_map[address.page][address.offset:address.offset + address.length]
+            return data_
+
+        def _write(data_map):
+            for address, data_ in data_map.items():
+                for index, data_byte in enumerate(data_):
+                    self.memory_map[address.page][address.offset + index] = data_byte
+
+        memory_file_mock = Mock(MemoryFile)
+        memory_file_mock.read = _read
+        memory_file_mock.write = _write
+
+        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: memory_file_mock})
 
         # Remove read-only flags from device_type for testing purposes below
         if hasattr(OutputModuleConfiguration, '_device_type'):

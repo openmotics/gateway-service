@@ -337,6 +337,37 @@ class MemoryTypesTest(unittest.TestCase):
         instance.save()
         self.assertEqual(0, memory_map[0][1])
 
+    def test_model_ids(self):
+        memory_map = {0: bytearray([2])}
+        MemoryTypesTest._mock_memory(memory_map)
+
+        with self.assertRaises(ValueError):
+            class InvalidFixedLimitObject(MemoryModelDefinition):
+                id = IdField(limits=(0, 2),
+                             field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 0)))
+
+        with self.assertRaises(ValueError):
+            class InvalidFieldLimitObject(MemoryModelDefinition):
+                id = IdField(limits=lambda f: (0, f - 1))
+
+        class FixedLimitObject(MemoryModelDefinition):
+            id = IdField(limits=(0, 2))
+
+        class FieldLimitObject(MemoryModelDefinition):
+            id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 0)))
+
+        for invalid_id in [None, -1, 3]:
+            with self.assertRaises(RuntimeError):
+                _ = FixedLimitObject(invalid_id)
+        for valid_id in [0, 1, 2]:
+            self.assertEqual(valid_id, FixedLimitObject(valid_id).id)
+
+        for invalid_id in [None, -1, 2]:
+            with self.assertRaises(RuntimeError):
+                _ = FieldLimitObject(invalid_id)
+        for valid_id in [0, 1]:
+            self.assertEqual(valid_id, FieldLimitObject(valid_id).id)
+
     @staticmethod
     def _mock_memory(memory_map):
         def _read(addresses):

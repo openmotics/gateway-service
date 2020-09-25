@@ -54,6 +54,7 @@ class OutputModuleConfiguration(MemoryModelDefinition):
         are_45_outputs: bool
         are_67_outputs: bool
 
+    id: int
     device_type: str
     address: str
     firmware_version: str
@@ -71,6 +72,7 @@ class OutputConfiguration(MemoryModelDefinition):
         dali_output_id: int
         dali_group_id: int
 
+    id: int
     module: OutputModuleConfiguration
     timer_value: int
     timer_type: EnumEntry
@@ -86,6 +88,7 @@ class OutputConfiguration(MemoryModelDefinition):
 
 
 class InputModuleConfiguration(MemoryModelDefinition):
+    id: int
     device_type: str
     address: str
     firmware_version: str
@@ -107,6 +110,7 @@ class InputConfiguration(MemoryModelDefinition):
         enable_2s_press: bool
         enable_double_press: bool
 
+    id: int
     module: InputModuleConfiguration
     input_config: _InputConfigComposition
     dali_mapping: _DALIInputComposition
@@ -126,6 +130,7 @@ class InputConfiguration(MemoryModelDefinition):
 
 
 class SensorModuleConfiguration(MemoryModelDefinition):
+    id: int
     device_type: str
     address: str
     firmware_version: str
@@ -136,6 +141,7 @@ class SensorConfiguration(MemoryModelDefinition):
         dali_output_id: int
         dali_group_id: int
 
+    id: int
     module: SensorModuleConfiguration
     temperature_groupaction_follow: int
     humidity_groupaction_follow: int
@@ -168,6 +174,7 @@ class ShutterConfiguration(MemoryModelDefinition):
         group_14: bool
         group_15: bool
 
+    id: int
     outputs: _OutputMappingComposition
     timer_up: int
     timer_down: int
@@ -179,6 +186,7 @@ class ShutterConfiguration(MemoryModelDefinition):
 
 
 class CanControlModuleConfiguration(MemoryModelDefinition):
+    id: int
     device_type: str
     address: str
 
@@ -204,6 +212,7 @@ class UCanModuleConfiguration(MemoryModelDefinition):
         ucan_lux: bool
         ucan_sound: bool
 
+    id: int
     device_type: str
     address: str
     module: CanControlModuleConfiguration
@@ -214,23 +223,28 @@ class UCanModuleConfiguration(MemoryModelDefinition):
 
 
 class ExtraSensorConfiguration(MemoryModelDefinition):
+    id: int
     grouaction_changed: int
     name: str
 
 
 class ValidationBitConfiguration(MemoryModelDefinition):
+    id: int
     grouaction_changed: int
     name: str
 
 
 class GroupActionAddressConfiguration(MemoryModelDefinition):
+    id: int
     start: int
     end: int
 
 
 class GroupActionConfiguration(MemoryModelDefinition):
+    id: int
     name: str
 
 
 class GroupActionBasicAction(MemoryModelDefinition):
+    id: int
     basic_action: BasicAction

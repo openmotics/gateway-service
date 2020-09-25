@@ -36,8 +36,6 @@ class MemoryModelDefinition(object):
     Represents a model definition
     """
 
-    # TODO: Add (id) limits so we can't read memory we shouldn't read
-
     _cache_fields = {}  # type: Dict[str,Any]
     _cache_addresses = {}  # type: Dict[str,Any]
     _cache_lock = Lock()
@@ -45,6 +43,12 @@ class MemoryModelDefinition(object):
     @Inject
     def __init__(self, id, memory_files=INJECTED, verbose=False):  # type: (Optional[int], Dict[str, MemoryFile], bool) -> None
         self._id = id
+        self._id_field = self.__class__._get_id_field()  # TODO: Make sure that an id field is mandatory for id-lookups
+        if self._id_field is not None:
+            if id is None:
+                raise RuntimeError('An id is mandatory')
+            self._id_field.validate(self.__class__.__name__, id)
+            setattr(self.__class__, 'id', property(lambda s: s._id))
         self._verbose = verbose
         self._memory_files = memory_files
         self._fields = []  # type: List[str]
@@ -56,8 +60,7 @@ class MemoryModelDefinition(object):
         for field_name, field_type in self.__class__._get_field_dict().items():
             setattr(self, '_{0}'.format(field_name), MemoryFieldContainer(name=field_name,
                                                                           memory_field=field_type,
-                                                                          memory_address=address_cache[field_name],
-                                                                          memory_files=self._memory_files))
+                                                                          memory_address=address_cache[field_name]))
             self._add_property(field_name)
             self._fields.append(field_name)
         for field_name, relation in self.__class__._get_relational_fields().items():
@@ -67,26 +70,18 @@ class MemoryModelDefinition(object):
             if relation._field is not None:
                 relation.set_field_container(MemoryFieldContainer(name=field_name,
                                                                   memory_field=relation._field,
-                                                                  memory_address=relation._field.get_address(self.id),
-                                                                  memory_files=self._memory_files))
+                                                                  memory_address=relation._field.get_address(self._id)))
         for field_name, composition in self.__class__._get_composite_fields().items():
             setattr(self, '_{0}'.format(field_name), CompositionContainer(composite_definition=composition,
                                                                           composition_width=composition._field.length * 8,
                                                                           field_container=MemoryFieldContainer(name=field_name,
                                                                                                                memory_field=composition._field,
-                                                                                                               memory_address=composition._field.get_address(self._id),
-                                                                                                               memory_files=self._memory_files)))
+                                                                                                               memory_address=composition._field.get_address(self._id))))
             self._add_composition(field_name)
             self._compositions.append(field_name)
 
     def __str__(self):
         return str(json.dumps(self.serialize(), indent=4))
-
-    @property
-    def id(self):  # type: () -> int
-        if self._id is None:
-            raise AttributeError("type object '{0}' has no attribute 'id'".format(self.__class__.__name__))
-        return self._id
 
     def serialize(self):  # type: () -> Dict[str, Any]
         data = {}
@@ -166,11 +161,20 @@ class MemoryModelDefinition(object):
     def _get_fields(cls):  # type: () -> Dict[str, Any]
         """ Get the fields defined by an EepromModel child. """
         if cls.__name__ not in MemoryModelDefinition._cache_fields:
-            MemoryModelDefinition._cache_fields[cls.__name__] = {'fields': inspect.getmembers(cls, lambda f: isinstance(f, MemoryField)),
+            MemoryModelDefinition._cache_fields[cls.__name__] = {'id': inspect.getmembers(cls, lambda f: isinstance(f, IdField)),
+                                                                 'fields': inspect.getmembers(cls, lambda f: isinstance(f, MemoryField)),
                                                                  'enums': inspect.getmembers(cls, lambda f: isinstance(f, MemoryEnumDefinition)),
                                                                  'relations': inspect.getmembers(cls, lambda f: isinstance(f, MemoryRelation)),
                                                                  'compositions': inspect.getmembers(cls, lambda f: isinstance(f, CompositeMemoryModelDefinition))}
         return MemoryModelDefinition._cache_fields[cls.__name__]
+
+    @classmethod
+    def _get_id_field(cls):  # type: () -> Optional[IdField]
+        """ Gets the classes ID field definition """
+        fields = cls._get_fields()
+        for _, field_type in fields['id']:
+            return field_type
+        return None
 
     @classmethod
     def _get_field_dict(cls):  # type: () -> Dict[str, Any]
@@ -243,7 +247,8 @@ class MemoryFieldContainer(object):
     This object holds the MemoryField and the data.
     """
 
-    def __init__(self, name, memory_field, memory_address, memory_files):
+    @Inject
+    def __init__(self, name, memory_field, memory_address, memory_files=INJECTED):
         # type: (str, MemoryField, MemoryAddress, Dict[str, MemoryFile]) -> None
         self._field_name = name
         self._memory_field = memory_field
@@ -527,6 +532,40 @@ class MemoryVersionField(MemoryAddressField):
 
     def decode(self, data):  # type: (bytearray) -> str
         return '.'.join(str(item) for item in data)
+
+
+class IdField(object):
+    def __init__(self, limits, field=None):
+        # type: (Union[Tuple[int, int], Callable[[int], Tuple[int, int]]], Optional[MemoryField]) -> None
+        self._limits = limits
+        self._field = field
+        if field is None:
+            if not isinstance(limits, tuple):
+                raise ValueError('When no fields are configured, a fixed limit should be given')
+        elif not callable(limits):
+            raise ValueError('Limits should be generated at runtime if a field is given')
+
+    @Inject
+    def validate(self, class_name, id):  # type: (str, Optional[int]) -> None
+        if self._field is None:
+            if not isinstance(self._limits, tuple):
+                raise RuntimeError('Expected a fixed limit')
+            limits = self._limits
+        else:
+            if not callable(self._limits):
+                raise RuntimeError('Expected a limit generator')
+            container = MemoryFieldContainer(name='id',
+                                             memory_field=self._field,
+                                             memory_address=self._field.get_address(None))
+            limits = self._limits(container.decode())
+        if id is None or not (limits[0] <= id <= limits[1]):
+            if limits[0] > limits[1]:
+                limit_info = 'No records available.'
+            elif limits[0] == limits[1]:
+                limit_info = 'Only one records available: {0}'.format(limits[0])
+            else:
+                limit_info = 'Available records: {0} <= id <= {1}'.format(limits[0], limits[1])
+            raise RuntimeError('Could not find {0}({1}). {2}'.format(class_name, '' if id is None else id, limit_info))
 
 
 class MemoryRelation(object):
