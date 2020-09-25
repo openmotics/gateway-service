@@ -942,32 +942,23 @@ class WebInterface(object):
         return {}
 
     @openmotics_api(auth=True)
-    def get_sensor_temperature_status(self):
+    def get_sensor_temperature_status(self):  # type: () -> Dict[str, Any]
         """
-        Get the current temperature of all sensors.
-
-        :returns: 'status': list of 32 temperatures, 1 for each sensor.
-        :rtype: dict
+        Get the current temperature of all sensors as a list of N values, one for each sensor
         """
         return {'status': self._gateway_api.get_sensors_temperature_status()}
 
     @openmotics_api(auth=True)
-    def get_sensor_humidity_status(self):
+    def get_sensor_humidity_status(self):  # type: () -> Dict[str, Any]
         """
-        Get the current humidity of all sensors.
-
-        :returns: 'status': List of 32 bytes, 1 for each sensor.
-        :rtype: dict
+        Get the current humidity of all sensors as a list of N values, one for each sensor
         """
         return {'status': self._gateway_api.get_sensors_humidity_status()}
 
     @openmotics_api(auth=True)
-    def get_sensor_brightness_status(self):
+    def get_sensor_brightness_status(self):  # type: () -> Dict[str, Any]
         """
-        Get the current brightness of all sensors.
-
-        :returns: 'status': List of 32 bytes, 1 for each sensor.
-        :rtype: dict
+        Get the current brightness of all sensors as a list of N values, one for each sensor
         """
         return {'status': self._gateway_api.get_sensors_brightness_status()}
 
@@ -977,17 +968,12 @@ class WebInterface(object):
         Set the temperature, humidity and brightness value of a virtual sensor.
 
         :param sensor_id: The id of the sensor.
-        :type sensor_id: int
         :param temperature: The temperature to set in degrees Celcius
-        :type temperature: float
         :param humidity: The humidity to set in percentage
-        :type humidity: float
         :param brightness: The brightness to set in percentage
-        :type brightness: int
-        :returns: dict with 'status'.
-        :rtype: dict
         """
-        return self._gateway_api.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
+        self._gateway_api.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
+        return {}
 
     @openmotics_api(auth=True)
     def add_virtual_output_module(self):

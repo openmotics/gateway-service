@@ -257,7 +257,7 @@ class GatewayApi(object):
         # TODO: work with sensor controller
         # TODO: add other sensors too (e.g. from database <-- plugins)
         """ Set the temperature, humidity and brightness value of a virtual sensor. """
-        return self.__master_controller.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
+        self.__master_controller.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
 
     # Basic and group actions
 

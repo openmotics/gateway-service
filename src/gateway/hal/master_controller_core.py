@@ -47,6 +47,7 @@ from master.core.memory_models import GlobalConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration, \
     CanControlModuleConfiguration
 from master.core.slave_communicator import SlaveCommunicator
+from master.core.system_value import Temperature, Humidity
 from master.core.ucan_communicator import UCANCommunicator
 from serial_utils import CommunicationTimedOutException
 
@@ -604,7 +605,20 @@ class MasterCoreController(MasterController):
         self._sensor_last_updated = time.time()
 
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
-        raise NotImplementedError()
+        sensor_configuration = SensorConfiguration(sensor_id)
+        if sensor_configuration.module.device_type != 't':
+            raise ValueError('Sensor ID {0} does not map to a virtual Sensor'.format(sensor_id))
+        self._master_communicator.do_basic_action(action_type=3,
+                                                  action=sensor_id,
+                                                  device_nr=Temperature.temperature_to_system_value(temperature))
+        self._master_communicator.do_basic_action(action_type=4,
+                                                  action=sensor_id,
+                                                  device_nr=Humidity.humidity_to_system_value(humidity))
+        self._master_communicator.do_basic_action(action_type=5,
+                                                  action=sensor_id,
+                                                  device_nr=brightness if brightness is not None else (2 ** 16 - 1),
+                                                  extra_parameter=3)  # Store full word-size brightness value
+        self._refresh_sensor_states()
 
     # PulseCounters
 

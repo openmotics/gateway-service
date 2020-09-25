@@ -1637,7 +1637,6 @@ class MasterClassicController(MasterController):
              'hum': master_api.Svt.humidity(humidity),
              'bri': master_api.Svt.brightness(brightness)}
         )
-        return dict()
 
     @communication_enabled
     def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
