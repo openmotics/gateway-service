@@ -7,7 +7,6 @@ declare -a blacklist=(
     gateway_tests/metrics_test.py
     gateway_tests/scheduling_test.py
     gateway_tests/shutter_test.py
-    gateway_tests/users_test.py
     gateway_tests/webservice_test.py
     plugins_tests/base_test.py
     plugins_tests/runner_test.py
