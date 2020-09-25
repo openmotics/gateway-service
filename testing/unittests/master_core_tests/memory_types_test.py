@@ -136,7 +136,8 @@ class MemoryTypesTest(unittest.TestCase):
         address = MemoryAddress(MemoryTypes.EEPROM, 0, 1, 1)
         memory_file_mock = Mock(MemoryFile)
         memory_file_mock.read.return_value = {address: bytearray([1])}
-        container = MemoryFieldContainer(memory_field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)),
+        container = MemoryFieldContainer(name='field',
+                                         memory_field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)),
                                          memory_address=address,
                                          memory_files={MemoryTypes.EEPROM: memory_file_mock})
         data = container.decode()
@@ -318,6 +319,23 @@ class MemoryTypesTest(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             instance.enum = 'BAR_'
+
+    def test_readonly(self):
+        memory_map = {0: bytearray([0, 0])}
+        MemoryTypesTest._mock_memory(memory_map)
+
+        class RObject(MemoryModelDefinition):
+            rw = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, 0))
+            ro = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, 1), read_only=True)
+
+        instance = RObject(0)
+        instance.rw = 1
+        instance.save()
+        self.assertEqual(1, memory_map[0][0])
+        with self.assertRaises(AttributeError):
+            instance.ro = 2
+        instance.save()
+        self.assertEqual(0, memory_map[0][1])
 
     @staticmethod
     def _mock_memory(memory_map):

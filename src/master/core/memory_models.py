@@ -42,9 +42,9 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
     groupaction_minutes_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 54))  # 0, 54-55
     groupaction_hours_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 56))  # 0, 56-57
     groupaction_day_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 58))  # 0, 58-59
-    startup_time = MemoryByteArrayField(MemoryTypes.FRAM, address_spec=(0, 64), length=3)  # 0, 64-66
-    startup_date = MemoryByteArrayField(MemoryTypes.FRAM, address_spec=(0, 67), length=3)  # 0, 67-69
-    uptime_hours = Memory3BytesField(MemoryTypes.FRAM, address_spec=(0, 70))  # 0, 70-72
+    startup_time = MemoryByteArrayField(MemoryTypes.FRAM, address_spec=(0, 64), length=3, read_only=True)  # 0, 64-66
+    startup_date = MemoryByteArrayField(MemoryTypes.FRAM, address_spec=(0, 67), length=3, read_only=True)  # 0, 67-69
+    uptime_hours = Memory3BytesField(MemoryTypes.FRAM, address_spec=(0, 70), read_only=True)  # 0, 70-72
 
 
 class OutputModuleConfiguration(MemoryModelDefinition):
@@ -58,9 +58,9 @@ class OutputModuleConfiguration(MemoryModelDefinition):
         are_45_outputs = CompositeBitField(bit=6)
         are_67_outputs = CompositeBitField(bit=7)
 
-    device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 0), length=1)  # 1-80, 0-3
-    address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 0))  # 1-80, 0-3
-    firmware_version = MemoryVersionField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 4))  # 1-80, 4-6
+    device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 0), length=1, read_only=True)  # 1-80, 0-3
+    address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 0), read_only=True)  # 1-80, 0-3
+    firmware_version = MemoryVersionField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id, 4), read_only=True)  # 1-80, 4-6
     shutter_config = _ShutterComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (392, id)))  # 392, 0-79
 
 
@@ -92,9 +92,9 @@ class OutputConfiguration(MemoryModelDefinition):
 
 
 class InputModuleConfiguration(MemoryModelDefinition):
-    device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 0), length=1)  # 81-238, 0-3
-    address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 0))  # 81-238, 0-3
-    firmware_version = MemoryVersionField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 4))  # 81-238, 4-6
+    device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 0), length=1, read_only=True)  # 81-238, 0-3
+    address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 0), read_only=True)  # 81-238, 0-3
+    firmware_version = MemoryVersionField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 4), read_only=True)  # 81-238, 4-6
 
 
 class InputConfiguration(MemoryModelDefinition):
@@ -139,9 +139,9 @@ class InputConfiguration(MemoryModelDefinition):
 
 
 class SensorModuleConfiguration(MemoryModelDefinition):
-    device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id, 0), length=1)  # 239-254, 0-3
-    address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id, 0))  # 239-254, 0-3
-    firmware_version = MemoryVersionField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id, 4))  # 239-254, 4-6
+    device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id, 0), length=1, read_only=True)  # 239-254, 0-3
+    address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id, 0), read_only=True)  # 239-254, 0-3
+    firmware_version = MemoryVersionField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id, 4), read_only=True)  # 239-254, 4-6
 
 
 class SensorConfiguration(MemoryModelDefinition):
@@ -193,8 +193,8 @@ class ShutterConfiguration(MemoryModelDefinition):
 
 
 class CanControlModuleConfiguration(MemoryModelDefinition):
-    device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (255, id * 16), length=1)  # 255, 0-255
-    address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (255, id * 16))  # 255, 0-255
+    device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (255, id * 16), length=1, read_only=True)  # 255, 0-255
+    address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (255, id * 16), read_only=True)  # 255, 0-255
 
 
 class UCanModuleConfiguration(MemoryModelDefinition):
@@ -218,8 +218,8 @@ class UCanModuleConfiguration(MemoryModelDefinition):
         ucan_lux = CompositeBitField(bit=3)
         ucan_sound = CompositeBitField(bit=2)
 
-    device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16), length=1)  # 383-390, 0-255
-    address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16), length=3)  # 383-390, 0-255
+    device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16), length=1, read_only=True)  # 383-390, 0-255
+    address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16), length=3, read_only=True)  # 383-390, 0-255
     module = MemoryRelation(CanControlModuleConfiguration, id_spec=lambda id: None if id == 0 else id - 1, field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 3)))
     modbus_address = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 12))
     modbus_type = _ModbusTypeComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 13)))

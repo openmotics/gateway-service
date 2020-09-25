@@ -19,7 +19,7 @@ from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
 from gateway.dto import OutputDTO
 from gateway.hal.mappers_core import OutputMapper
-from master.core.memory_models import OutputConfiguration
+from master.core.memory_models import OutputConfiguration, OutputModuleConfiguration
 from master.core.memory_file import MemoryTypes
 
 
@@ -30,6 +30,12 @@ class OutputMapperTest(unittest.TestCase):
 
     def setUp(self):
         SetUpTestInjections(memory_files={MemoryTypes.EEPROM: Mock()})
+
+        # Remove read-only flags from device_type for testing purposes below
+        if hasattr(OutputModuleConfiguration, '_device_type'):
+            OutputModuleConfiguration._device_type._read_only = False
+        else:
+            OutputModuleConfiguration.device_type._read_only = False
 
     def test_output_mapper_timer(self):
         # Inactive
