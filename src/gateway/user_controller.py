@@ -145,7 +145,7 @@ class UserController(object):
         self._tokens[ret] = (username, valid_until)
 
         # Delete the expired tokens
-        for token in self._tokens.keys():
+        for token in list(self._tokens.keys()):
             if self._tokens[token][1] < time.time():
                 self._tokens.pop(token, None)
 
