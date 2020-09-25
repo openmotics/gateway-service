@@ -321,7 +321,7 @@ class MetricsController(object):
 
         cloud_batch_size = self._config_controller.get('cloud_metrics_batch_size', 0)  # type: int
         cloud_min_interval = self._config_controller.get('cloud_metrics_min_interval')  # type: Optional[int]
-        if self._cloud_retry_interval is None:
+        if cloud_min_interval is not None:
             self._cloud_retry_interval = cloud_min_interval
         endpoint = self._config_controller.get('cloud_endpoint')
         metrics_endpoint = '{0}/{1}?uuid={2}'.format(
@@ -360,14 +360,10 @@ class MetricsController(object):
         if outstanding_data_length > 0:  # There must be outstanding data
             # Last send was successful, but the buffer length > batch size
             send |= outstanding_data_length >= cloud_batch_size and time_ago_send == time_ago_try
-            if cloud_min_interval is None:
-                send |= True
-            else:
+            if cloud_min_interval is not None:
                 # Last send was successful, but it has been too long ago
                 send |= time_ago_send > cloud_min_interval and time_ago_send == time_ago_try
-            if self._cloud_retry_interval is None:
-                send |= True
-            else:
+            if self._cloud_retry_interval is not None:
                 # Last send was unsuccessful, and it has been a while
                 send |= time_ago_send > time_ago_try > self._cloud_retry_interval
 

@@ -263,6 +263,7 @@ class MetricsTest(unittest.TestCase):
 
         send_metrics = []
         config['cloud_metrics_batch_size'] = 0
+        config['cloud_metrics_min_interval'] = 0
 
         time.sleep(10)  # Time moves on inside fakesleep
         metric_1 = send_metric(counter=0, error=True)
@@ -280,7 +281,7 @@ class MetricsTest(unittest.TestCase):
                       buffer=[],
                       last_send=0,
                       last_try=10,
-                      retry_interval=None)
+                      retry_interval=0)
         buffered_metrics = MetricsTest._load_buffered_metrics(metrics_cache)
         self.assertEqual(buffered_metrics, [{'timestamp': buffer_metric_timestamp, 'counter': 0}])
 
@@ -302,7 +303,7 @@ class MetricsTest(unittest.TestCase):
                       buffer=[],
                       last_send=0,
                       last_try=21,
-                      retry_interval=None)
+                      retry_interval=0)
         buffered_metrics = MetricsTest._load_buffered_metrics(metrics_cache)
         self.assertEqual(buffered_metrics, [{'timestamp': buffer_metric_timestamp, 'counter': 0}])
 
@@ -325,7 +326,7 @@ class MetricsTest(unittest.TestCase):
                       buffer=[],
                       last_send=32,
                       last_try=32,
-                      retry_interval=None)
+                      retry_interval=0)
         buffered_metrics = MetricsTest._load_buffered_metrics(metrics_cache)
         self.assertEqual(buffered_metrics, [])
 
