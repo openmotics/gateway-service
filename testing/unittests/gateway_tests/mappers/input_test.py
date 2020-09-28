@@ -21,7 +21,7 @@ from gateway.dto import InputDTO
 from gateway.hal.mappers_core import InputMapper
 from master.core.core_communicator import CoreCommunicator
 from master.core.basic_action import BasicAction
-from master.core.memory_models import InputConfiguration
+from master.core.memory_models import InputConfiguration, InputModuleConfiguration
 from master.core.memory_file import MemoryTypes, MemoryFile
 
 
@@ -58,6 +58,12 @@ class InputCoreMapperTest(unittest.TestCase):
         eeprom_file._cache = self.memory
         SetUpTestInjections(memory_files={MemoryTypes.EEPROM: eeprom_file,
                                           MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
+
+        # Remove read-only flags from device_type for testing purposes below
+        if hasattr(InputModuleConfiguration, '_device_type'):
+            InputModuleConfiguration._device_type._read_only = False
+        else:
+            InputModuleConfiguration.device_type._read_only = False
 
     def test_mapping_basic(self):
         orm = InputMapper.dto_to_orm(InputDTO(id=0,

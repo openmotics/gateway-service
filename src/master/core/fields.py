@@ -17,6 +17,7 @@ Communication fields
 """
 from __future__ import absolute_import
 import struct
+from master.core.system_value import Humidity, Temperature
 
 if False:  # MYPY
     from typing import Any, Optional, List, Tuple, Union, Callable
@@ -97,15 +98,11 @@ class TemperatureField(Field):
     def encode(self, value):  # type: (Optional[float]) -> bytearray
         if value is not None:
             self._check_limits(value)
-        if value is None:
-            return bytearray([255])
-        value = int((float(value) + 32) * 2)
-        return bytearray([value])
+        system_value = Temperature.temperature_to_system_value(value)
+        return bytearray([system_value])
 
     def decode(self, data):  # type: (bytearray) -> Optional[float]
-        if data[0] == 255:
-            return None
-        return float(data[0]) / 2 - 32
+        return Temperature.system_value_to_temperature(data[0])
 
 
 class HumidityField(Field):
@@ -115,15 +112,11 @@ class HumidityField(Field):
     def encode(self, value):  # type: (Optional[float]) -> bytearray
         if value is not None:
             self._check_limits(value)
-        if value is None:
-            return bytearray([255])
-        value = int(float(value) * 2)
-        return bytearray([value])
+        system_value = Humidity.humidity_to_system_value(value)
+        return bytearray([system_value])
 
     def decode(self, data):  # type: (bytearray) -> Optional[float]
-        if data[0] == 255:
-            return None
-        return float(data[0]) / 2
+        return Humidity.system_value_to_humidity(data[0])
 
 
 class WordField(Field):
@@ -152,13 +145,19 @@ class UInt32Field(Field):
 
 class _ArrayField(Field):
     def __init__(self, name, length, field):
-        super(_ArrayField, self).__init__(name, length)
         self._field = field(name)
+        self._entry_length = length
+        super_length = None  # type: Optional[Union[int, Callable[[int], int]]]
+        if callable(length):
+            super_length = lambda l: self._field.length * length(l)
+        elif length is not None:
+            super_length = self._field.length * length
+        super(_ArrayField, self).__init__(name, super_length)
 
     def encode(self, value):  # type: (Any) -> bytearray
-        if len(value) != self.length:
+        if len(value) != self._entry_length:
             raise ValueError('Value `{0}` should be an array of {1} items with {2} <= item <= {3}'.format(value,
-                                                                                                          self.length,
+                                                                                                          self._entry_length,
                                                                                                           self._field.limits[0],
                                                                                                           self._field.limits[1]))
         data = bytearray()

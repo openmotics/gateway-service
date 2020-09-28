@@ -359,15 +359,19 @@ class MasterController(object):
     # Virtual modules
 
     def add_virtual_output_module(self):
-        # type: () -> str
+        # type: () -> None
         raise NotImplementedError()
 
-    def add_virtual_dim_module(self):
-        # type: () -> str
+    def add_virtual_dim_control_module(self):
+        # type: () -> None
         raise NotImplementedError()
 
     def add_virtual_input_module(self):
-        # type: () -> str
+        # type: () -> None
+        raise NotImplementedError()
+
+    def add_virtual_sensor_module(self):
+        # type: () -> None
         raise NotImplementedError()
 
     # Generic

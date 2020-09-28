@@ -402,6 +402,7 @@ def update(version, expected_md5):
         raise SystemExit(1)
 
     errors = []
+    services_running = True
     try:
         date = datetime.now().strftime('%Y%m%d%H%M%S')
 
@@ -412,6 +413,7 @@ def update(version, expected_md5):
 
         logger.info(' -> Stopping services')
         stop_services()
+        services_running = False
 
         gateway_os = FIRMWARE_FILES['gateway_os']
         if os.path.exists(gateway_os):
@@ -469,6 +471,7 @@ def update(version, expected_md5):
 
         logger.info(' -> Starting services')
         start_services()
+        services_running = True
 
         logger.info(' -> Waiting for health check')
         check_gateway_health()
@@ -478,8 +481,9 @@ def update(version, expected_md5):
         errors.append(exc)
         # TODO: rollback
     finally:
-        logger.info(' -> Starting services')
-        start_services()
+        if not services_running:
+            logger.info(' -> Starting services')
+            start_services()
 
         logger.info(' -> Running cleanup')
         cmd('rm -v -rf {}/*'.format(update_dir), shell=True)

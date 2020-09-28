@@ -45,8 +45,9 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     PulseCounterSerializer, RoomSerializer, ScheduleSerializer, \
     SensorSerializer, ShutterGroupSerializer, ShutterSerializer, \
     ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer
-from gateway.dto import RoomDTO, ScheduleDTO, UserDTO
+from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO
 from gateway.enums import ShutterEnums, UserEnums
+from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.models import Database, Feature
@@ -250,6 +251,10 @@ def _openmotics_api(f, *args, **kwargs):
         logger.error('Could not find the requested object')
         status = 200  # OK
         data = {'success': False, 'msg': 'Object not found'}
+    except UnsupportedException:
+        logger.error('Some features for API call %s are unsupported on this device', f.__name__)
+        status = 200  # OK
+        data = {'success': False, 'msg': 'Unsupported'}
     except Exception as ex:
         logger.exception('Unexpected error during API call %s', f.__name__)
         status = 200  # OK
@@ -937,32 +942,23 @@ class WebInterface(object):
         return {}
 
     @openmotics_api(auth=True)
-    def get_sensor_temperature_status(self):
+    def get_sensor_temperature_status(self):  # type: () -> Dict[str, Any]
         """
-        Get the current temperature of all sensors.
-
-        :returns: 'status': list of 32 temperatures, 1 for each sensor.
-        :rtype: dict
+        Get the current temperature of all sensors as a list of N values, one for each sensor
         """
         return {'status': self._gateway_api.get_sensors_temperature_status()}
 
     @openmotics_api(auth=True)
-    def get_sensor_humidity_status(self):
+    def get_sensor_humidity_status(self):  # type: () -> Dict[str, Any]
         """
-        Get the current humidity of all sensors.
-
-        :returns: 'status': List of 32 bytes, 1 for each sensor.
-        :rtype: dict
+        Get the current humidity of all sensors as a list of N values, one for each sensor
         """
         return {'status': self._gateway_api.get_sensors_humidity_status()}
 
     @openmotics_api(auth=True)
-    def get_sensor_brightness_status(self):
+    def get_sensor_brightness_status(self):  # type: () -> Dict[str, Any]
         """
-        Get the current brightness of all sensors.
-
-        :returns: 'status': List of 32 bytes, 1 for each sensor.
-        :rtype: dict
+        Get the current brightness of all sensors as a list of N values, one for each sensor
         """
         return {'status': self._gateway_api.get_sensors_brightness_status()}
 
@@ -972,39 +968,40 @@ class WebInterface(object):
         Set the temperature, humidity and brightness value of a virtual sensor.
 
         :param sensor_id: The id of the sensor.
-        :type sensor_id: int
         :param temperature: The temperature to set in degrees Celcius
-        :type temperature: float
         :param humidity: The humidity to set in percentage
-        :type humidity: float
         :param brightness: The brightness to set in percentage
-        :type brightness: int
-        :returns: dict with 'status'.
-        :rtype: dict
         """
-        return self._gateway_api.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
+        self._gateway_api.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
+        return {}
 
     @openmotics_api(auth=True)
-    def add_virtual_output(self):
-        # type: () -> Dict[str,Any]
-        """
-        Adds a new virtual output module.
-
-        :returns: dict with 'status'.
-        :rtype: dict
-        """
-        return {'status': self._gateway_api.add_virtual_output_module()}
+    def add_virtual_output_module(self):
+        # type: () -> Dict[str, Any]
+        """ Adds a new virtual output module. """
+        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.OUTPUT)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True)
-    def add_virtual_input(self):
-        # type: () -> Dict[str,Any]
-        """
-        Adds a new virtual input module.
+    def add_virtual_input_module(self):
+        # type: () -> Dict[str, Any]
+        """ Adds a new virtual input module. """
+        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.INPUT)
+        return {'status': 'OK'}
 
-        :returns: dict with 'status'.
-        :rtype: dict
-        """
-        return {'status': self._gateway_api.add_virtual_input_module()}
+    @openmotics_api(auth=True)
+    def add_virtual_dim_control_module(self):
+        # type: () -> Dict[str, Any]
+        """ Adds a new virtual dim control module """
+        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.DIM_CONTROL)
+        return {'status': 'OK'}
+
+    @openmotics_api(auth=True)
+    def add_virtual_sensor_module(self):
+        # type: () -> Dict[str, Any]
+        """ Adds a new virtual sensor module """
+        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.SENSOR)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(action_type=int, action_number=int))
     def do_basic_action(self, action_type, action_number):

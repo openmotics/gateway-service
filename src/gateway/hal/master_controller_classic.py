@@ -31,6 +31,7 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO
 from gateway.enums import ShutterEnums
+from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
     OutputMapper, PulseCounterMapper, SensorMapper, ShutterGroupMapper, \
     ShutterMapper, ThermostatMapper
@@ -890,24 +891,26 @@ class MasterClassicController(MasterController):
 
     @communication_enabled
     def add_virtual_output_module(self):
-        # type: () -> str
-        module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'o'})
+        # type: () -> None
+        self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'o'})
         self._broadcast_module_discovery()
-        return module['resp']
 
     @communication_enabled
-    def add_virtual_dim_module(self):
-        # type: () -> str
-        module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'd'})
+    def add_virtual_dim_control_module(self):
+        # type: () -> None
+        self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'd'})
         self._broadcast_module_discovery()
-        return module['resp']
 
     @communication_enabled
     def add_virtual_input_module(self):
-        # type: () -> str
-        module = self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'i'})
+        # type: () -> None
+        self._master_communicator.do_command(master_api.add_virtual_module(), {'vmt': 'i'})
         self._broadcast_module_discovery()
-        return module['resp']
+
+    @communication_enabled
+    def add_virtual_sensor_module(self):
+        # type: () -> None
+        raise UnsupportedException()
 
     # Generic
 
@@ -1634,7 +1637,6 @@ class MasterClassicController(MasterController):
              'hum': master_api.Svt.humidity(humidity),
              'bri': master_api.Svt.brightness(brightness)}
         )
-        return dict()
 
     @communication_enabled
     def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO

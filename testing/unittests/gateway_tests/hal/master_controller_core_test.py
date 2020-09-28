@@ -17,7 +17,8 @@ from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.memory_file import MemoryFile, MemoryTypes
 from master.core.memory_models import InputConfiguration, \
-    OutputConfiguration, ShutterConfiguration
+    OutputConfiguration, ShutterConfiguration, OutputModuleConfiguration, \
+    InputModuleConfiguration, SensorModuleConfiguration
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.ucan_communicator import UCANCommunicator
 
@@ -64,6 +65,14 @@ class MasterCoreControllerTest(unittest.TestCase):
                             ucan_communicator=UCANCommunicator(),
                             slave_communicator=SlaveCommunicator())
         self.controller = MasterCoreController()
+
+        # For testing purposes, remove read-only flag from certain properties
+        for field_name in ['device_type', 'address', 'firmware_version']:
+            for model_type in [OutputModuleConfiguration, InputModuleConfiguration, SensorModuleConfiguration]:
+                if hasattr(model_type, '_{0}'.format(field_name)):
+                    getattr(model_type, '_{0}'.format(field_name))._read_only = False
+                else:
+                    getattr(model_type, field_name)._read_only = False
 
     def test_master_output_event(self):
         events = []

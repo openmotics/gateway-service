@@ -77,7 +77,7 @@ class SlaveUpdater(object):
                                                    version=version)
                 else:
                     logger.info('Skip updating unsupported module {0}: {1} != {2}'.format(
-                        module_configuration.address, module_type, module_configuration.device_type
+                        module_configuration.address, module_configuration.device_type, module_type
                     ))
 
         # MicroCAN (uCAN)
@@ -95,7 +95,7 @@ class SlaveUpdater(object):
                                                   version=version)
 
         if not executed_update:
-            logger.warning('Skip updating unsupported modules of type: {0}'.format(module_type))
+            logger.info('No modules of type {0} were updated'.format(module_type))
             return True
         return success
 

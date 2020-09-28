@@ -124,3 +124,15 @@ class ModuleController(BaseController):
         new_module = Module.select().where(Module.source == new_module.source).where(Module.address == new_module.address).first()
         return (ModuleMapper.orm_to_dto(old_module),
                 ModuleMapper.orm_to_dto(new_module))
+
+    def add_virtual_module(self, module_type):  # type: (str) -> None
+        if module_type == ModuleDTO.ModuleType.OUTPUT:
+            self._master_controller.add_virtual_output_module()
+        elif module_type == ModuleDTO.ModuleType.DIM_CONTROL:
+            self._master_controller.add_virtual_dim_control_module()
+        elif module_type == ModuleDTO.ModuleType.INPUT:
+            self._master_controller.add_virtual_input_module()
+        elif module_type == ModuleDTO.ModuleType.SENSOR:
+            self._master_controller.add_virtual_sensor_module()
+        else:
+            raise RuntimeError('Adding a virtual module of type `{0}` is not supported'.format(module_type))

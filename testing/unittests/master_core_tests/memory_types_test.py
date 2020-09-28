@@ -19,6 +19,7 @@ Tests for the types module
 from __future__ import absolute_import
 import unittest
 import xmlrunner
+from peewee import DoesNotExist
 from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
 from master.core.basic_action import BasicAction  # Must be imported
@@ -136,7 +137,8 @@ class MemoryTypesTest(unittest.TestCase):
         address = MemoryAddress(MemoryTypes.EEPROM, 0, 1, 1)
         memory_file_mock = Mock(MemoryFile)
         memory_file_mock.read.return_value = {address: bytearray([1])}
-        container = MemoryFieldContainer(memory_field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)),
+        container = MemoryFieldContainer(name='field',
+                                         memory_field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)),
                                          memory_address=address,
                                          memory_files={MemoryTypes.EEPROM: memory_file_mock})
         data = container.decode()
@@ -318,6 +320,54 @@ class MemoryTypesTest(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             instance.enum = 'BAR_'
+
+    def test_readonly(self):
+        memory_map = {0: bytearray([0, 0])}
+        MemoryTypesTest._mock_memory(memory_map)
+
+        class RObject(MemoryModelDefinition):
+            rw = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, 0))
+            ro = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, 1), read_only=True)
+
+        instance = RObject(0)
+        instance.rw = 1
+        instance.save()
+        self.assertEqual(1, memory_map[0][0])
+        with self.assertRaises(AttributeError):
+            instance.ro = 2
+        instance.save()
+        self.assertEqual(0, memory_map[0][1])
+
+    def test_model_ids(self):
+        memory_map = {0: bytearray([2])}
+        MemoryTypesTest._mock_memory(memory_map)
+
+        with self.assertRaises(ValueError):
+            class InvalidFixedLimitObject(MemoryModelDefinition):
+                id = IdField(limits=(0, 2),
+                             field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 0)))
+
+        with self.assertRaises(ValueError):
+            class InvalidFieldLimitObject(MemoryModelDefinition):
+                id = IdField(limits=lambda f: (0, f - 1))
+
+        class FixedLimitObject(MemoryModelDefinition):
+            id = IdField(limits=(0, 2))
+
+        class FieldLimitObject(MemoryModelDefinition):
+            id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 0)))
+
+        for invalid_id in [None, -1, 3]:
+            with self.assertRaises(RuntimeError if invalid_id is None else DoesNotExist):
+                _ = FixedLimitObject(invalid_id)
+        for valid_id in [0, 1, 2]:
+            self.assertEqual(valid_id, FixedLimitObject(valid_id).id)
+
+        for invalid_id in [None, -1, 2]:
+            with self.assertRaises(RuntimeError if invalid_id is None else DoesNotExist):
+                _ = FieldLimitObject(invalid_id)
+        for valid_id in [0, 1]:
+            self.assertEqual(valid_id, FieldLimitObject(valid_id).id)
 
     @staticmethod
     def _mock_memory(memory_map):

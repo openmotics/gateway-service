@@ -1,4 +1,4 @@
-# Copyright (C) 2019 OpenMotics BV
+# Copyright (C) 2020 OpenMotics BV
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -12,29 +12,6 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-"""
-Generic module that houses various enums
-"""
 
-
-class ShutterEnums(object):
-    class Direction(object):
-        UP = 'UP'
-        DOWN = 'DOWN'
-        STOP = 'STOP'
-
-    class State(object):
-        GOING_UP = 'going_up'
-        GOING_DOWN = 'going_down'
-        STOPPED = 'stopped'
-        UP = 'up'
-        DOWN = 'down'
-
-
-class UserEnums(object):
-    class AuthenticationErrors(object):
-        INVALID_CREDENTIALS = 'invalid_credentials'
-        TERMS_NOT_ACCEPTED = 'terms_not_accepted'
-
-    class DeleteErrors(object):
-        LAST_ACCOUNT = 'Cannot delete last user account'
+class UnsupportedException(Exception):
+    pass
