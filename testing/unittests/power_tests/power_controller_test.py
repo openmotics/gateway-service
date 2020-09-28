@@ -45,7 +45,7 @@ class PowerControllerTest(unittest.TestCase):
             self.controller.get_module_current({'version': POWER_MODULE,
                                                 'address': '11.0'})
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'CUR', '', '8f', module_type='E'))
+                mock.call('11.0', PowerCommand('G', 'CUR', '', '8f', module_type=bytearray(b'E')))
             ]
 
     def test_get_module_frequency(self):
@@ -53,7 +53,7 @@ class PowerControllerTest(unittest.TestCase):
             self.controller.get_module_frequency({'version': POWER_MODULE,
                                                 'address': '11.0'})
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'FRE', '', 'f', module_type='E'))
+                mock.call('11.0', PowerCommand('G', 'FRE', '', 'f', module_type=bytearray(b'E')))
             ]
 
     def test_get_module_power(self):
@@ -61,7 +61,7 @@ class PowerControllerTest(unittest.TestCase):
             self.controller.get_module_power({'version': POWER_MODULE,
                                               'address': '11.0'})
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'POW', '', '8f', module_type='E'))
+                mock.call('11.0', PowerCommand('G', 'POW', '', '8f', module_type=bytearray(b'E')))
             ]
 
     def test_get_module_voltage(self):
@@ -69,7 +69,7 @@ class PowerControllerTest(unittest.TestCase):
             self.controller.get_module_voltage({'version': POWER_MODULE,
                                                 'address': '11.0'})
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'VOL', '', 'f', module_type='E'))
+                mock.call('11.0', PowerCommand('G', 'VOL', '', 'f', module_type=bytearray(b'E')))
             ]
 
     def test_get_module_day_energy(self):
@@ -77,7 +77,7 @@ class PowerControllerTest(unittest.TestCase):
             self.controller.get_module_day_energy({'version': POWER_MODULE,
                                                    'address': '11.0'})
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'EDA', '', '8L', module_type='E'))
+                mock.call('11.0', PowerCommand('G', 'EDA', '', '8L', module_type=bytearray(b'E')))
             ]
 
     def test_get_module_night_energy(self):
@@ -85,7 +85,7 @@ class PowerControllerTest(unittest.TestCase):
             self.controller.get_module_night_energy({'version': POWER_MODULE,
                                                      'address': '11.0'})
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'ENI', '', '8L', module_type='E'))
+                mock.call('11.0', PowerCommand('G', 'ENI', '', '8L', module_type=bytearray(b'E')))
             ]
 
 class P1ControllerTest(unittest.TestCase):
@@ -204,7 +204,7 @@ class P1ControllerTest(unittest.TestCase):
                 False, False, False, False
             ]
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'SP\x00', '', 'B', module_type='C'))
+                mock.call('11.0', PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C')))
             ]
 
     def test_get_module_meter(self):
@@ -222,7 +222,7 @@ class P1ControllerTest(unittest.TestCase):
                 '', '', '', '',
             ]
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'M1\x00', '', '224s', module_type='C'))
+                mock.call('11.0', PowerCommand('G', 'M1\x00', '', '224s', module_type=bytearray(b'C')))
             ]
 
     def test_get_module_timestamp(self):
@@ -234,7 +234,7 @@ class P1ControllerTest(unittest.TestCase):
                                                            'address': '11.0'})
             assert meters == [1.0, 2.0, None, 12.0, None, None, None, None]
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'TS\x00', '', '104s', module_type='C'))
+                mock.call('11.0', PowerCommand('G', 'TS\x00', '', '104s', module_type=bytearray(b'C')))
             ]
 
     def test_get_module_gas(self):
@@ -245,7 +245,7 @@ class P1ControllerTest(unittest.TestCase):
                                                                   'address': '11.0'})
             assert meters == [1.0, 2.3, None, 12.0, None, None, None, None]
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'cG\x00', '', '112s', module_type='C'))
+                mock.call('11.0', PowerCommand('G', 'cG\x00', '', '112s', module_type=bytearray(b'C')))
             ]
 
     def test_get_module_consumption_tariff(self):
@@ -257,7 +257,7 @@ class P1ControllerTest(unittest.TestCase):
                                                                  type=1)
             assert meters == [1.0, 2.3, None, 12.0, None, None, None, None]
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'c1\x00', '', '112s', module_type='C'))
+                mock.call('11.0', PowerCommand('G', 'c1\x00', '', '112s', module_type=bytearray(b'C')))
             ]
 
     def test_get_module_injection_tariff(self):
@@ -269,7 +269,7 @@ class P1ControllerTest(unittest.TestCase):
                                                                  type=1)
             assert meters == [1.0, 2.3, None, 12.0, None, None, None, None]
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'i1\x00', '', '112s', module_type='C'))
+                mock.call('11.0', PowerCommand('G', 'i1\x00', '', '112s', module_type=bytearray(b'C')))
             ]
 
     def test_get_module_tariff_indicator(self):
@@ -281,7 +281,7 @@ class P1ControllerTest(unittest.TestCase):
                                                                   'address': '11.0'})
             assert meters == [1.0, 2.0, None, 12.0, None, None, None, None]
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'ti\x00', '', '32s', module_type='C'))
+                mock.call('11.0', PowerCommand('G', 'ti\x00', '', '32s', module_type=bytearray(b'C')))
             ]
 
     def test_get_module_current(self):
@@ -300,11 +300,11 @@ class P1ControllerTest(unittest.TestCase):
                 {'phase1': None, 'phase2': None, 'phase3': None},
                 {'phase1': None, 'phase2': None, 'phase3': None}
             ]
-            self.assertIn(mock.call('11.0', PowerCommand('G', 'C1\x00', '', '40s', module_type='C')),
+            self.assertIn(mock.call('11.0', PowerCommand('G', 'C1\x00', '', '40s', module_type=bytearray(b'C'))),
                           cmd.call_args_list)
-            self.assertIn(mock.call('11.0', PowerCommand('G', 'C2\x00', '', '40s', module_type='C')),
+            self.assertIn(mock.call('11.0', PowerCommand('G', 'C2\x00', '', '40s', module_type=bytearray(b'C'))),
                           cmd.call_args_list)
-            self.assertIn(mock.call('11.0', PowerCommand('G', 'C3\x00', '', '40s', module_type='C')),
+            self.assertIn(mock.call('11.0', PowerCommand('G', 'C3\x00', '', '40s', module_type=bytearray(b'C'))),
                           cmd.call_args_list)
 
     def test_get_module_voltage(self):
@@ -323,11 +323,11 @@ class P1ControllerTest(unittest.TestCase):
                 {'phase1': None, 'phase2': None, 'phase3': None},
                 {'phase1': None, 'phase2': None, 'phase3': None}
             ]
-            self.assertIn(mock.call('11.0', PowerCommand('G', 'V1\x00', '', '56s', module_type='C')),
+            self.assertIn(mock.call('11.0', PowerCommand('G', 'V1\x00', '', '56s', module_type=bytearray(b'C'))),
                           cmd.call_args_list)
-            self.assertIn(mock.call('11.0', PowerCommand('G', 'V2\x00', '', '56s', module_type='C')),
+            self.assertIn(mock.call('11.0', PowerCommand('G', 'V2\x00', '', '56s', module_type=bytearray(b'C'))),
                           cmd.call_args_list)
-            self.assertIn(mock.call('11.0', PowerCommand('G', 'V3\x00', '', '56s', module_type='C')),
+            self.assertIn(mock.call('11.0', PowerCommand('G', 'V3\x00', '', '56s', module_type=bytearray(b'C'))),
                           cmd.call_args_list)
 
     def test_get_module_delivered_power(self):
@@ -338,7 +338,7 @@ class P1ControllerTest(unittest.TestCase):
                                                                     'address': '11.0'})
             assert delivered == [1.0, 2.0, None, 12.0, None, None, None, None]
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'PD\x00', '', '72s', module_type='C')),
+                mock.call('11.0', PowerCommand('G', 'PD\x00', '', '72s', module_type=bytearray(b'C'))),
             ]
 
     def test_get_module_received_power(self):
@@ -349,7 +349,7 @@ class P1ControllerTest(unittest.TestCase):
                                                                   'address': '11.0'})
             assert received == [1.0, 2.0, None, 12.0, None, None, None, None]
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'PR\x00', '', '72s', module_type='C')),
+                mock.call('11.0', PowerCommand('G', 'PR\x00', '', '72s', module_type=bytearray(b'C'))),
             ]
 
     def test_get_module_day_energy(self):
@@ -360,7 +360,7 @@ class P1ControllerTest(unittest.TestCase):
                                                               'address': '11.0'})
             assert received == [0.001, 0.002, None, 0.012, None, None, None, None]
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'c1\x00', '', '112s', module_type='C')),
+                mock.call('11.0', PowerCommand('G', 'c1\x00', '', '112s', module_type=bytearray(b'C'))),
             ]
 
     def test_get_module_night_energy(self):
@@ -371,5 +371,5 @@ class P1ControllerTest(unittest.TestCase):
                                                                 'address': '11.0'})
             assert received == [0.001, 0.002, None, 0.012, None, None, None, None]
             assert cmd.call_args_list == [
-                mock.call('11.0', PowerCommand('G', 'c2\x00', '', '112s', module_type='C')),
+                mock.call('11.0', PowerCommand('G', 'c2\x00', '', '112s', module_type=bytearray(b'C'))),
             ]
