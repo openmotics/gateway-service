@@ -36,7 +36,7 @@ class ShutterMapper(object):
             kwargs[field] = Toolbox.nonify(getattr(orm_object, field), ShutterMapper.WORD_MAX)
             if kwargs[field] is not None:
                 # TODO: High-level code currently assumes this is a byte
-                kwargs[field] = min(ShutterMapper.BYTE_MAX, kwargs[field])
+                kwargs[field] = min(ShutterMapper.BYTE_MAX, kwargs[field] // 10)
         member_groups = []
         for group_id in range(16):
             if getattr(orm_object.groups, 'group_{0}'.format(group_id)):
@@ -56,7 +56,11 @@ class ShutterMapper(object):
             new_data['name'] = shutter_dto.name
         for field in ['timer_up', 'timer_down']:
             # TODO: Currently denonify as byte, since high-level code most likely assumes this is a byte
-            new_data[field] = Toolbox.denonify(getattr(shutter_dto, field), ShutterMapper.BYTE_MAX)
+            dto_value = getattr(shutter_dto, field)
+            if dto_value is None:
+                new_data[field] = ShutterMapper.BYTE_MAX * 10
+            else:
+                new_data[field] = dto_value * 10
         groups = {}
         for group_id in range(16):
             group_name = 'group_{0}'.format(group_id)
