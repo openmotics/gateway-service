@@ -3,7 +3,6 @@
 export PYTHONPATH=$PYTHONPATH:`pwd`/../../src
 
 declare -a blacklist=(
-    gateway_tests/hal/master_controller_classic_test.py
     gateway_tests/scheduling_test.py
     gateway_tests/shutter_test.py
     gateway_tests/webservice_test.py
