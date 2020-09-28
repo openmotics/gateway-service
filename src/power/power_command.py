@@ -22,8 +22,12 @@ from __future__ import absolute_import
 import struct
 
 if False:  # MYPY
-    from typing import Any, Optional, Tuple, Union
+    from typing import Any, Callable, Optional, Tuple, Union
     DataType = Union[float, int, str]
+
+STR = bytearray(b'STR')
+RTR = bytearray(b'RTR')
+CRNL = bytearray(b'\r\n')
 
 CRC_TABLE = [0, 49, 98, 83, 196, 245, 166, 151, 185, 136, 219, 234, 125, 76, 31, 46, 67, 114, 33,
              16, 135, 182, 229, 212, 250, 203, 152, 169, 62, 15, 92, 109, 134, 183, 228, 213, 66,
@@ -72,14 +76,20 @@ def crc8(to_send):
     return ret
 
 
+class PowerModuleType:
+    E = bytearray(b'E')
+    C = bytearray(b'C')
+
+
 class PowerCommand(object):
     """
     A PowerCommand is an command that can be send to a Power Module over RS485. The commands
     look like this: 'STR' 'E' Address CID Mode(G/S) Type LEN Data CRC7/8 '\r\n'.
     """
 
-    def __init__(self, mode, type, input_format, output_format, module_type='E'):
-        # type: (str, str, str, Optional[str], str) -> None
+    def __init__(self, mode, type, input_format, output_format,
+                 module_type=PowerModuleType.E):
+        # type: (str, str, str, Optional[str], bytearray) -> None
         """
         Create PowerCommand using the fixed fields of the input command and the format of the
         command returned by the power module.
@@ -93,7 +103,15 @@ class PowerCommand(object):
         self.type = bytearray(ord(c) for c in type)
         self.input_format = input_format
         self.output_format = output_format if output_format is not None else ""
-        self.module_type = bytearray(ord(c) for c in module_type)
+        self.module_type = module_type
+
+    @staticmethod
+    def get_crc(header, payload):
+        # type: (bytearray) -> int
+        if header[:1] == PowerModuleType.E:
+            return crc7(header + payload)
+        else:
+            return crc8(payload)
 
     def create_input(self, address, cid, *data):
         # type: (int, int, *DataType) -> bytearray
@@ -106,11 +124,8 @@ class PowerCommand(object):
         buffer = bytearray(struct.pack(self.input_format, *data))
         header = self.module_type + bytearray([address, cid]) + self.mode + self.type
         payload = bytearray([len(buffer)]) + buffer
-        if self.module_type == bytearray(b'E'):
-            crc = crc7(header + payload)
-        else:
-            crc = crc8(payload)
-        return bytearray(b'STR') + header + payload + bytearray([crc]) + bytearray(b'\r\n')
+        crc = PowerCommand.get_crc(header, payload)
+        return STR + header + payload + bytearray([crc]) + CRNL
 
     def create_output(self, address, cid, *data):
         # type: (int, int, *DataType) -> bytearray
@@ -124,11 +139,8 @@ class PowerCommand(object):
         buffer = bytearray(struct.pack(self.output_format, *data))
         header = self.module_type + bytearray([address, cid]) + self.mode + self.type
         payload = bytearray([len(buffer)]) + buffer
-        if self.module_type == bytearray(b'E'):
-            crc = crc7(header + payload)
-        else:
-            crc = crc8(payload)
-        return bytearray(b'RTR') + header + payload + bytearray([crc]) + bytearray(b'\r\n')
+        crc = PowerCommand.get_crc(header, payload)
+        return RTR + header + payload + bytearray([crc]) + CRNL
 
     def check_header(self, header, address, cid):
         # type: (bytearray, int, int) -> bool

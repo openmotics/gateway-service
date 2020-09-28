@@ -26,14 +26,13 @@ from six.moves.queue import Empty
 from gateway.hal.master_controller import CommunicationFailure
 from ioc import INJECTED, Inject
 from power import power_api
-from power.power_command import crc7, crc8
+from power.power_command import PowerCommand
 from power.time_keeper import TimeKeeper
 from serial_utils import CommunicationTimedOutException, printable
 
 if False:  # MYPY:
     from typing import Any, Dict, List, Optional, Tuple, Union
     from serial_utils import RS485
-    from power.power_command import PowerCommand
     from power.power_store import PowerStore
     DataType = Union[float, int, str]
 
@@ -391,9 +390,8 @@ class PowerCommunicator(object):
                         phase = 8
                     else:
                         raise Exception("Unexpected character")
-            crc_match = (crc7(header + data) == crc) if header[:1] == bytearray(b'E') else (crc8(data) == crc)
-            if not crc_match:
-                raise Exception('CRC{0} doesn\'t match'.format('7' if header[:1] == bytearray(b'E') else '8'))
+            if PowerCommand.get_crc(header, data) != crc:
+                raise Exception('CRC doesn\'t match')
         except Empty:
             raise CommunicationTimedOutException('Communication timed out')
         except Exception:
