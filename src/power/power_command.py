@@ -42,18 +42,18 @@ CRC_TABLE = [0, 49, 98, 83, 196, 245, 166, 151, 185, 136, 219, 234, 125, 76, 31,
 
 
 def crc7(to_send):
-    # type: (str) -> int
+    # type: (bytearray) -> int
     """
     Calculate the crc7 checksum of a string.
     """
     ret = 0
-    for part in to_send:
+    for part in ''.join(chr(c) for c in to_send):
         ret = CRC_TABLE[ret ^ ord(part)]
     return ret
 
 
 def crc8(to_send):
-    # type: (str) -> int
+    # type: (bytearray) -> int
     """
     Calculate the crc8 checksum of a string.
     """
@@ -67,7 +67,7 @@ def crc8(to_send):
         return crc & 0xFF
 
     ret = 0
-    for part in to_send:
+    for part in ''.join(chr(c) for c in to_send):
         ret = _add_crc(ret, ord(part))
     return ret
 
@@ -89,31 +89,31 @@ class PowerCommand(object):
         :param input_format: the format of the data in the command
         :param output_format: the format of the data returned by the power module
         """
-        self.mode = mode
-        self.type = type
+        self.mode = bytearray(ord(c) for c in mode)
+        self.type = bytearray(ord(c) for c in type)
         self.input_format = input_format
         self.output_format = output_format if output_format is not None else ""
-        self.module_type = module_type
+        self.module_type = bytearray(ord(c) for c in module_type)
 
     def create_input(self, address, cid, *data):
-        # type: (int, int, *DataType) -> str
+        # type: (int, int, *DataType) -> bytearray
         """
         Create an input string for the power module using this command and the provided fields.
         :param address: 1 byte, the address of the module
         :param cid: 1 byte, communication id
         :param data: data to send to the power module
         """
-        buffer = struct.pack(self.input_format, *data)
-        header = self.module_type + chr(address) + chr(cid) + str(self.mode) + str(self.type)
-        payload = chr(len(buffer)) + str(buffer)
-        if self.module_type == 'E':
+        buffer = bytearray(struct.pack(self.input_format, *data))
+        header = self.module_type + bytearray([address, cid]) + self.mode + self.type
+        payload = bytearray([len(buffer)]) + buffer
+        if self.module_type == bytearray(b'E'):
             crc = crc7(header + payload)
         else:
             crc = crc8(payload)
-        return 'STR{0}{1}{2}\r\n'.format(header, payload, chr(crc))
+        return bytearray(b'STR') + header + payload + bytearray([crc]) + bytearray(b'\r\n')
 
     def create_output(self, address, cid, *data):
-        # type: (int, int, *DataType) -> str
+        # type: (int, int, *DataType) -> bytearray
         """
         Create an output command from the power module using this command and the provided
         fields. --- Only used for testing !
@@ -121,33 +121,34 @@ class PowerCommand(object):
         :param cid: 1 byte, communication id
         :param data: data to send to the power module
         """
-        buffer = struct.pack(self.output_format, *data)
-        header = self.module_type + chr(address) + chr(cid) + str(self.mode) + str(self.type)
-        payload = chr(len(buffer)) + str(buffer)
-        if self.module_type == 'E':
+        buffer = bytearray(struct.pack(self.output_format, *data))
+        header = self.module_type + bytearray([address, cid]) + self.mode + self.type
+        payload = bytearray([len(buffer)]) + buffer
+        if self.module_type == bytearray(b'E'):
             crc = crc7(header + payload)
         else:
             crc = crc8(payload)
-        return 'RTR{0}{1}{2}\r\n'.format(header, payload, chr(crc))
+        return bytearray(b'RTR') + header + payload + bytearray([crc]) + bytearray(b'\r\n')
 
     def check_header(self, header, address, cid):
-        # type: (str, int, int) -> bool
+        # type: (bytearray, int, int) -> bool
         """
         Check if the response header matches the command,
         when an address and cid are provided. """
-        return header[:-1] == '{0}{1}{2}{3}{4}'.format(self.module_type, chr(address), chr(cid), self.mode, self.type)
+        return header[:-1] == self.module_type + bytearray([address, cid]) + self.mode + self.type
 
     def is_nack(self, header, address, cid):
-        # type: (str, int, int) -> bool
+        # type: (bytearray, int, int) -> bool
         """
         Check if the response header is a nack to the command, when an address and cid are
         provided. """
-        return header[:-1] == '{0}{1}{2}N{3}'.format(self.module_type, chr(address), chr(cid), self.type)
+        return header[:-1] == self.module_type + bytearray([address, cid]) + self.type
 
     def check_header_partial(self, header):
-        # type: (str) -> bool
+        # type: (bytearray) -> bool
         """ Check if the header matches the command, does not check address and cid. """
-        return header[0] == self.module_type and header[3:-1] == '{0}{1}'.format(self.mode, self.type)
+        return header[:1] == self.module_type \
+            and header[3:-1] == self.mode + self.type
 
     def read_output(self, data):
         # type: (Any) -> Tuple[Any, ...]

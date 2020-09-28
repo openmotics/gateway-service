@@ -71,10 +71,10 @@ class PowerCommunicator(object):
             self.__time_keeper = None
 
         self.__communication_stats_calls = {'calls_succeeded': [],
-                                      'calls_timedout': []}  # type: Dict[str, List]
+                                            'calls_timedout': []}  # type: Dict[str, List]
 
         self.__communication_stats_bytes = {'bytes_written': 0,
-                                      'bytes_read': 0}  # Dict[str, int]
+                                            'bytes_read': 0}  # type: Dict[str, int]
 
         self.__debug_buffer = {'read': {},
                                'write': {}}  # type: Dict[str,Dict[float,str]]
@@ -99,7 +99,6 @@ class PowerCommunicator(object):
         ret.update(self.__communication_stats_calls)
         ret.update(self.__communication_stats_bytes)
         return ret
-
 
     def get_debug_buffer(self):
         # type: () -> Dict[str, Dict[Any, Any]]
@@ -126,7 +125,7 @@ class PowerCommunicator(object):
             logger.info("%.3f %s power: %s" % (time.time(), action, printable(data)))
 
     def __write_to_serial(self, data):
-        # type: (str) -> None
+        # type: (bytearray) -> None
         """ Write data to the serial port.
 
         :param data: the data to write
@@ -279,7 +278,7 @@ class PowerCommunicator(object):
                 if version is None:
                     logger.warning("Received unexpected message in address mode")
                 else:
-                    (old_address, cid) = (ord(header[:2][1]), header[2:3])
+                    (old_address, cid) = (header[:2][1], header[2:3])
                     # Ask power_controller for new address, and register it.
                     new_address = self.__power_store.get_free_address()
 
@@ -330,17 +329,17 @@ class PowerCommunicator(object):
         return self.__address_mode
 
     def __read_from_serial(self):
-        # type: () -> Tuple[str, str]
+        # type: () -> Tuple[bytearray, bytearray]
         """ Read a PowerCommand from the serial port. """
         phase = 0
         index = 0
 
-        header = ""
+        header = bytearray()
         length = 0
-        data = ""
+        data = bytearray()
         crc = 0
 
-        command = ""
+        command = bytearray()
 
         try:
             while phase < 8:
@@ -349,17 +348,17 @@ class PowerCommunicator(object):
                 self.__communication_stats_bytes['bytes_read'] += 1
 
                 if phase == 0:  # Skip non 'R' bytes
-                    if byte == 'R':
+                    if byte == bytearray(b'R'):
                         phase = 1
                     else:
                         phase = 0
                 elif phase == 1:  # Expect 'T'
-                    if byte == 'T':
+                    if byte == bytearray(b'T'):
                         phase = 2
                     else:
                         raise Exception("Unexpected character")
                 elif phase == 2:  # Expect 'R'
-                    if byte == 'R':
+                    if byte == bytearray(b'R'):
                         phase = 3
                         index = 0
                     else:
@@ -383,18 +382,18 @@ class PowerCommunicator(object):
                     crc = ord(byte)
                     phase = 6
                 elif phase == 6:  # Expect '\r'
-                    if byte == '\r':
+                    if byte == bytearray(b'\r'):
                         phase = 7
                     else:
                         raise Exception("Unexpected character")
                 elif phase == 7:  # Expect '\n'
-                    if byte == '\n':
+                    if byte == bytearray(b'\n'):
                         phase = 8
                     else:
                         raise Exception("Unexpected character")
-            crc_match = (crc7(header + data) == crc) if header[0] == 'E' else (crc8(data) == crc)
+            crc_match = (crc7(header + data) == crc) if header[:1] == bytearray(b'E') else (crc8(data) == crc)
             if not crc_match:
-                raise Exception('CRC{0} doesn\'t match'.format('7' if header[0] == 'E' else '8'))
+                raise Exception('CRC{0} doesn\'t match'.format('7' if header[:1] == bytearray(b'E') else '8'))
         except Empty:
             raise CommunicationTimedOutException('Communication timed out')
         except Exception:

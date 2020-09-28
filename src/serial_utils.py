@@ -49,7 +49,6 @@ def printable(data):
     return '{0}    {1}'.format(byte_notation, string_notation)
 
 
-# FIXME this shouldn't use strings
 class RS485(object):
     """ Replicates the pyserial interface. """
 
@@ -65,27 +64,29 @@ class RS485(object):
         self._serial.timeout = None
         self._thread = Thread(target=self._reader, name='RS485 reader')
         self._thread.daemon = True
-        self.read_queue = Queue()  # type: Queue[str]
+        # TODO why does this stream byte by byte?
+        self.read_queue = Queue()  # type: Queue[bytearray]
 
     def start(self):
         # type: () -> None
         self._thread.start()
 
     def write(self, data):
-        # type: (str) -> None
+        # type: (bytes) -> None
         """ Write data to serial port """
-        self._serial.write(bytearray(ord(c) for c in data))
+        self._serial.write(data)
 
     def _reader(self):
         # type: () -> None
         try:
             while True:
-                data = self._serial.read(1)
+                data = bytearray(self._serial.read(1))
                 if len(data) == 1:
-                    self.read_queue.put(chr(data[0]))
+                    self.read_queue.put(data[:1])
                 size = self._serial.inWaiting()
                 if size > 0:
-                    for byte in self._serial.read(size):
-                        self.read_queue.put(chr(byte))
+                    data = bytearray(self._serial.read(size))
+                    for i in range(size):
+                        self.read_queue.put(data[i:i + 1])
         except Exception as ex:
             print('Error in reader: {0}'.format(ex))
