@@ -80,7 +80,7 @@ class CoreUpdater(object):
             logger.info('Flashing...')
             amount_lines = len(hex_lines)
             for index, line in enumerate(hex_lines):
-                cli_serial.write(line.encode())
+                cli_serial.write(bytearray(ord(c) for c in line))
                 response = CoreUpdater._read_line(cli_serial)
                 if response.startswith('nok'):
                     raise RuntimeError('Unexpected NOK while flashing: {0}'.format(response))
@@ -127,9 +127,9 @@ class CoreUpdater(object):
         line = ''
         while time.time() < timeout:
             if serial.inWaiting():
-                char = serial.read(1).decode()
-                line += char
-                if char == '\n':
+                data = bytearray(serial.read(1))
+                line += chr(data[0])
+                if data == bytearray(b'\n'):
                     if line[0] == '#' and verbose:
                         logger.debug('* Debug: {0}'.format(line.strip()))
                         line = ''
