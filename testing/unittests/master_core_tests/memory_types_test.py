@@ -19,6 +19,7 @@ Tests for the types module
 from __future__ import absolute_import
 import unittest
 import xmlrunner
+from peewee import DoesNotExist
 from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
 from master.core.basic_action import BasicAction  # Must be imported
@@ -357,13 +358,13 @@ class MemoryTypesTest(unittest.TestCase):
             id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 0)))
 
         for invalid_id in [None, -1, 3]:
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(RuntimeError if invalid_id is None else DoesNotExist):
                 _ = FixedLimitObject(invalid_id)
         for valid_id in [0, 1, 2]:
             self.assertEqual(valid_id, FixedLimitObject(valid_id).id)
 
         for invalid_id in [None, -1, 2]:
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(RuntimeError if invalid_id is None else DoesNotExist):
                 _ = FieldLimitObject(invalid_id)
         for valid_id in [0, 1]:
             self.assertEqual(valid_id, FieldLimitObject(valid_id).id)

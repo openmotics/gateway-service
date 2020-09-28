@@ -435,11 +435,14 @@ class MasterCoreController(MasterController):
         shutter = ShutterConfiguration(shutter_id)
         shutter_dto = ShutterMapper.orm_to_dto(shutter)
         # Load information that is set on the Output(Module)Configuration
-        output_module = OutputConfiguration(shutter.outputs.output_0).module
-        if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
-            shutter_dto.up_down_config = 1
-        else:
+        if shutter.outputs.output_0 == 255 * 2:
             shutter_dto.up_down_config = 0
+        else:
+            output_module = OutputConfiguration(shutter.outputs.output_0).module
+            if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
+                shutter_dto.up_down_config = 1
+            else:
+                shutter_dto.up_down_config = 0
         return shutter_dto
 
     def load_shutters(self):  # type: () -> List[ShutterDTO]
@@ -457,6 +460,8 @@ class MasterCoreController(MasterController):
         # TODO: Batch saving - postpone eeprom activate if relevant for the Core
         # TODO: Atomic saving
         for shutter_dto, fields in shutters:
+            # Validate whether output module exists
+            output_module = OutputConfiguration(shutter_dto.id * 2).module
             # Configure shutter
             shutter = ShutterMapper.dto_to_orm(shutter_dto, fields)
             if shutter.timer_down is not None and shutter.timer_up is not None:
@@ -472,7 +477,6 @@ class MasterCoreController(MasterController):
                 is_configured = False
             shutter.save()
             # Mark related Outputs as "occupied by shutter"
-            output_module = OutputConfiguration(shutter_dto.id * 2).module
             setattr(output_module.shutter_config, 'are_{0}_outputs'.format(shutter.output_set), not is_configured)
             setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
             output_module.save()

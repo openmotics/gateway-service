@@ -171,7 +171,7 @@ class SensorConfiguration(MemoryModelDefinition):
 class ShutterConfiguration(MemoryModelDefinition):
     class _OutputMappingComposition(CompositeMemoryModelDefinition):
         output_0 = CompositeNumberField(start_bit=0, width=8, value_factor=2)
-        output_1 = CompositeNumberField(start_bit=0, width=8, value_offset=-1, value_factor=2)
+        output_1 = CompositeNumberField(start_bit=0, width=8, value_factor=2, value_offset=-1)
 
     class _ShutterGroupMembershipComposition(CompositeMemoryModelDefinition):
         group_0 = CompositeBitField(bit=0)
