@@ -62,6 +62,7 @@ class RS485(object):
             fcntl.ioctl(fileno, 0x542F, serial_rs485)
 
         self._serial.timeout = None
+        self._running = False
         self._thread = Thread(target=self._reader, name='RS485 reader')
         self._thread.daemon = True
         # TODO why does this stream byte by byte?
@@ -69,7 +70,13 @@ class RS485(object):
 
     def start(self):
         # type: () -> None
-        self._thread.start()
+        if not self._running:
+            self._running = True
+            self._thread.start()
+
+    def stop(self):
+        # type: () -> None
+        self._running = False
 
     def write(self, data):
         # type: (bytes) -> None
@@ -79,7 +86,7 @@ class RS485(object):
     def _reader(self):
         # type: () -> None
         try:
-            while True:
+            while self._running:
                 data = bytearray(self._serial.read(1))
                 if len(data) == 1:
                     self.read_queue.put(data[:1])
