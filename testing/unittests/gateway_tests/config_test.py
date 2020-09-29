@@ -115,7 +115,7 @@ class ConfigControllerTest(unittest.TestCase):
         self.assertEqual(res, True)
 
     def test_delete_non_existing(self):
-        """ Test different types """
+        """ Test deleting non existing setting """
         config_controller = self._get_controller()
 
         config_controller.set('str', 'test')

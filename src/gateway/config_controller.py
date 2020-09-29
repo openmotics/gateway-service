@@ -22,6 +22,9 @@ import ujson as json
 from ioc import Injectable, Inject, Singleton, INJECTED
 from gateway.models import Config
 
+if False:  # MYPY
+    from typing import Optional, Any
+
 logger = logging.getLogger("openmotics")
 
 
@@ -31,15 +34,13 @@ class ConfigurationController(object):
 
     @Inject
     def __init__(self):
-        """
-        Constructs a new ConfigController.
-        """
+        # type: () -> None
+        """ Constructs a new ConfigController. """
         self.__check_tables()
 
     def __check_tables(self):
-        """
-        Creates tables and execute migrations
-        """
+        # type: () -> None
+        """ Creates tables and execute migrations """
 
         for key, default_value in {'cloud_enabled': True,
                                    'cloud_endpoint': 'cloud.openmotics.com',
@@ -56,6 +57,8 @@ class ConfigurationController(object):
                 self.set(key, default_value)
 
     def get(self, key, fallback=None):
+        # type: (str, Optional[Any]) -> Optional[Any]
+        """ Retrieves a setting from the DB, returns the argument 'fallback' when non existing """
         _ = self
         config_orm = Config.select().where(
             Config.setting == key.lower()
@@ -65,6 +68,8 @@ class ConfigurationController(object):
         return fallback
 
     def set(self, key, value):
+        # type: (str, Any) -> None
+        """ Sets a setting in the DB, does overwrite if already existing """
         _ = self
         config_orm = Config.select().where(
             Config.setting == key.lower()
@@ -83,6 +88,8 @@ class ConfigurationController(object):
             config_orm.save()
 
     def remove(self, key):
+        # type: (str) -> None
+        """ Removes a setting from the DB """
         _ = self
         Config.delete().where(
             Config.setting == key.lower()
