@@ -40,8 +40,8 @@ from six.moves.configparser import ConfigParser
 import constants
 from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
-from gateway.config_controller import ConfigurationController
 from gateway.initialize import initialize
+from gateway.models import Config
 from ioc import INJECTED, Inject
 
 
@@ -128,12 +128,11 @@ class Cloud(object):
     """ Connects to the cloud """
 
     @Inject
-    def __init__(self, url, config, sleep_time=DEFAULT_SLEEP_TIME, message_client=INJECTED):
+    def __init__(self, url, sleep_time=DEFAULT_SLEEP_TIME, message_client=INJECTED):
         self._url = url
         self._message_client = message_client
         self._last_connect = time.time()
         self._sleep_time = sleep_time
-        self._config = config
         self._intervals = {}
         self._configuration = {}
 
@@ -154,7 +153,7 @@ class Cloud(object):
                 configuration_changed = cmp(self._configuration, data['configuration']) != 0
                 if configuration_changed:
                     for setting, value in data['configuration'].items():
-                        self._config.set(setting, value)
+                        Config.set(setting, value)
                     logger.info('Configuration changed: {0}'.format(data['configuration']))
 
                 # update __configuration when storing config is successful
@@ -353,8 +352,8 @@ class VPNService(object):
     """ The VPNService contains all logic to be able to send the heartbeat and check whether the VPN should be opened """
 
     @Inject
-    def __init__(self, configuration_controller=INJECTED, message_client=INJECTED):
-        # type: (ConfigurationController, MessageClient) -> None
+    def __init__(self, message_client=INJECTED):
+        # type: (MessageClient) -> None
         config = ConfigParser()
         config.read(constants.get_config_file())
 
@@ -373,9 +372,7 @@ class VPNService(object):
         self._eeprom_events = deque()  # type: Deque[bool]
         self._gateway = Gateway()
         self._vpn_controller = VpnController()
-        self._config_controller = configuration_controller  # type: ConfigurationController
-        self._cloud = Cloud(config.get('OpenMotics', 'vpn_check_url') % config.get('OpenMotics', 'uuid'),
-                            self._config_controller)
+        self._cloud = Cloud(config.get('OpenMotics', 'vpn_check_url') % config.get('OpenMotics', 'uuid'))
 
         self._collectors = {'thermostats': DataCollector(self._gateway.get_thermostats, 60),
                             'inputs': DataCollector(self._gateway.get_inputs_status),
@@ -529,7 +526,7 @@ class VPNService(object):
                 start_time = time.time()
 
                 # Check whether connection to the Cloud is enabled/disabled
-                cloud_enabled = self._config_controller.get('cloud_enabled')
+                cloud_enabled = Config.get('cloud_enabled')
                 if cloud_enabled is False:
                     self._sleep_time = None
                     self._set_vpn(False)
@@ -562,7 +559,7 @@ class VPNService(object):
                 call_data['debug'] = {'dumps': {}, 'dump_info': dump_info}
 
                 # Include full dumps when support is enabled
-                if self._config_controller.get('cloud_support', False):
+                if Config.get('cloud_support', False):
                     call_data['debug']['dumps'] = dumps
 
                 # Send data to the cloud and see if the VPN should be opened

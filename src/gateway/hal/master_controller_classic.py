@@ -58,7 +58,6 @@ from toolbox import Toolbox
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Tuple
     from serial import Serial
-    from gateway.config_controller import ConfigurationController
 
 logger = logging.getLogger("openmotics")
 
@@ -77,12 +76,10 @@ class MasterClassicController(MasterController):
     @Inject
     def __init__(self,
                  master_communicator=INJECTED,
-                 configuration_controller=INJECTED,
                  eeprom_controller=INJECTED):
-        # type: (MasterCommunicator, ConfigurationController, EepromController) -> None
+        # type: (MasterCommunicator, EepromController) -> None
         super(MasterClassicController, self).__init__(master_communicator)
         self._master_communicator = master_communicator  # type: MasterCommunicator
-        self._config_controller = configuration_controller
         self._eeprom_controller = eeprom_controller
         self._plugin_controller = None  # type: Optional[Any]
 

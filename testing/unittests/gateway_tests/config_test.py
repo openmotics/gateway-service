@@ -24,7 +24,6 @@ import unittest
 import xmlrunner
 from peewee import SqliteDatabase
 
-from gateway.config_controller import ConfigurationController
 from ioc import SetTestMode
 
 from gateway.models import Config
@@ -57,83 +56,71 @@ class ConfigControllerTest(unittest.TestCase):
         self.test_db.drop_tables(MODELS)
         self.test_db.close()
 
-    def _get_controller(self):
-        """ Get a ConfigController using FILE. """
-        return ConfigurationController()
-
     def test_empty(self):
         """ Test an empty database. """
-        config_controller = self._get_controller()
-
-        res = config_controller.get('test')
+        res = Config.get('test')
         self.assertIsNone(res)
 
-        config_controller.set('test', 'test')
+        Config.set('test', 'test')
 
-        res = config_controller.get('test')
+        res = Config.get('test')
         self.assertEqual(res, 'test')
 
-        config_controller.remove('test')
+        Config.remove('test')
 
-        res = config_controller.get('test')
+        res = Config.get('test')
         self.assertIsNone(res)
 
     def test_duplicates(self):
         """test of duplicate settings"""
-        config_controller = self._get_controller()
+        Config.set('test', 'test')
 
-        config_controller.set('test', 'test')
-
-        res = config_controller.get('test')
+        res = Config.get('test')
         self.assertEqual(res, 'test')
 
-        config_controller.set('test', 'test2')
+        Config.set('test', 'test2')
 
-        res = config_controller.get('test')
+        res = Config.get('test')
         self.assertEqual(res, 'test2')
 
-        config_controller.remove('test')
+        Config.remove('test')
 
-        res = config_controller.get('test')
+        res = Config.get('test')
         self.assertIsNone(res)
 
     def test_multiple_types(self):
         """ Test different types """
-        config_controller = self._get_controller()
+        Config.set('str', 'test')
+        Config.set('int', 37)
+        Config.set('bool', True)
 
-        config_controller.set('str', 'test')
-        config_controller.set('int', 37)
-        config_controller.set('bool', True)
-
-        res = config_controller.get('str')
+        res = Config.get('str')
         self.assertEqual(res, 'test')
 
-        res = config_controller.get('int')
+        res = Config.get('int')
         self.assertEqual(res, 37)
 
-        res = config_controller.get('bool')
+        res = Config.get('bool')
         self.assertEqual(res, True)
 
     def test_delete_non_existing(self):
         """ Test deleting non existing setting """
-        config_controller = self._get_controller()
+        Config.set('str', 'test')
+        Config.set('int', 37)
+        Config.set('bool', True)
 
-        config_controller.set('str', 'test')
-        config_controller.set('int', 37)
-        config_controller.set('bool', True)
-
-        config_controller.remove('str')
-        res = config_controller.get('str')
+        Config.remove('str')
+        res = Config.get('str')
         self.assertIsNone(res)
 
-        config_controller.remove('str')
-        res = config_controller.get('str')
+        Config.remove('str')
+        res = Config.get('str')
         self.assertIsNone(res)
 
-        res = config_controller.get('int')
+        res = Config.get('int')
         self.assertEqual(res, 37)
 
-        res = config_controller.get('bool')
+        res = Config.get('bool')
         self.assertEqual(res, True)
 
 
