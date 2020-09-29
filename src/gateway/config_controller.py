@@ -78,7 +78,6 @@ class ConfigurationController(object):
             # if the key already exists, update the value
             config_orm.data = json.dumps(value)
             config_orm.save()
-            return config_orm.data
         else:
             # create a new setting if it was non existing
             config_orm = Config(
