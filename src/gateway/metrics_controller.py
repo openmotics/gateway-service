@@ -27,11 +27,16 @@ import ujson as json
 
 from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
+from gateway.models import Config
 from ioc import INJECTED, Inject, Injectable, Singleton
 import six
 
 if False:  # MYPY
-    from typing import Any, Dict, Optional
+    from typing import Any, Dict, Optional, List
+    from plugins.base import PluginController
+    from gateway.metrics_collector import MetricsCollector
+    from gateway.metrics_caching import MetricsCacheController
+    from gateway.config_controller import ConfigurationController
 
 logger = logging.getLogger("openmotics")
 
@@ -48,41 +53,29 @@ class MetricsController(object):
     """
 
     @Inject
-    def __init__(self, plugin_controller=INJECTED, metrics_collector=INJECTED, metrics_cache_controller=INJECTED, configuration_controller=INJECTED, gateway_uuid=INJECTED):
-        """
-        :param plugin_controller: Plugin Controller
-        :type plugin_controller: plugins.base.PluginController
-        :param metrics_collector: Metrics Collector
-        :type metrics_collector: gateway.metrics_collector.MetricsCollector
-        :param metrics_cache_controller: Metrics cache Controller
-        :type metrics_cache_controller: gateway.metrics_caching.MetricsCacheController
-        :param configuration_controller: Configuration Controller
-        :type configuration_controller: gateway.config_controller.ConfigurationController
-        :param gateway_uuid: Gateway UUID
-        :type gateway_uuid: basestring
-        """
+    def __init__(self, plugin_controller=INJECTED, metrics_collector=INJECTED, metrics_cache_controller=INJECTED, gateway_uuid=INJECTED):
+        # type: (PluginController, MetricsCollector, MetricsCacheController, str) -> None
         self._plugin_controller = plugin_controller
         self._metrics_collector = metrics_collector
         self._metrics_cache_controller = metrics_cache_controller
-        self._config_controller = configuration_controller
-        self._persist_counters = {}
-        self._buffer_counters = {}
-        self.definitions = {}
-        self._definition_filters = {'source': {}, 'metric_type': {}}
-        self._metrics_cache = {}
-        self._collector_plugins = None
-        self._collector_openmotics = None
+        self._persist_counters = {}  # type: Dict
+        self._buffer_counters = {}  # type: Dict
+        self.definitions = {}  # type: Dict
+        self._definition_filters = {'source': {}, 'metric_type': {}}  # type: Dict
+        self._metrics_cache = {}  # type: Dict
+        self._collector_plugins = None  # type: Optional[DaemonThread]
+        self._collector_openmotics = None  # type: Optional[DaemonThread]
         self._internal_stats = None
-        self._distributor_plugins = None
-        self._distributor_openmotics = None
-        self.metrics_queue_plugins = deque()
-        self.metrics_queue_openmotics = deque()
+        self._distributor_plugins = None  # type: Optional[DaemonThread]
+        self._distributor_openmotics = None  # type: Optional[DaemonThread]
+        self.metrics_queue_plugins = deque()  # type: deque
+        self.metrics_queue_openmotics = deque()  # type: deque
         self.inbound_rates = {'total': 0}
         self.outbound_rates = {'total': 0}
-        self._openmotics_receivers = []
-        self._cloud_cache = {}
-        self._cloud_queue = []
-        self._cloud_buffer = []
+        self._openmotics_receivers = []  # type: List
+        self._cloud_cache = {}  # type: Dict
+        self._cloud_queue = []  # type: List
+        self._cloud_buffer = []  # type: List
         self._cloud_buffer_length = 0
         self._load_cloud_buffer()
         self._cloud_last_send = time.time()
@@ -124,20 +117,24 @@ class MetricsController(object):
 
     def stop(self):
         # type: () -> None
-        self._collector_plugins.stop()
-        self._collector_openmotics.stop()
-        self._distributor_plugins.stop()
-        self._distributor_openmotics.stop()
+        if self._collector_plugins is not None:
+            self._collector_plugins.stop()
+        if self._collector_openmotics is not None:
+            self._collector_openmotics.stop()
+        if self._distributor_plugins is not None:
+            self._distributor_plugins.stop()
+        if self._distributor_openmotics is not None:
+            self._distributor_openmotics.stop()
 
     def set_cloud_interval(self, metric_type, interval, save=True):
         logger.info('Setting cloud interval {0}_{1}'.format(metric_type, interval))
         self._metrics_collector.set_cloud_interval(metric_type, interval)
         if save:
-            self._config_controller.set('cloud_metrics_interval|{0}'.format(metric_type), interval)
+            Config.set('cloud_metrics_interval|{0}'.format(metric_type), interval)
 
     def _refresh_cloud_interval(self):
         for metric_type in self._metrics_collector.intervals:
-            interval = self._config_controller.get('cloud_metrics_interval|{0}'.format(metric_type), 300)
+            interval = Config.get('cloud_metrics_interval|{0}'.format(metric_type), 300)
             self.set_cloud_interval(metric_type, interval, save=False)
         self._throttled_down = False
 
@@ -267,21 +264,21 @@ class MetricsController(object):
         if definition is None:
             return False
 
-        if self._config_controller.get('cloud_enabled', True) is False:
+        if Config.get('cloud_enabled', True) is False:
             return False
 
         if metric_source == 'OpenMotics':
-            if self._config_controller.get('cloud_metrics_enabled|{0}'.format(metric_type), True) is False:
+            if Config.get('cloud_metrics_enabled|{0}'.format(metric_type), True) is False:
                 return False
 
             # filter openmotics metrics that are not listed in cloud_metrics_types
-            metric_types = self._config_controller.get('cloud_metrics_types')
+            metric_types = Config.get('cloud_metrics_types')
             if metric_type not in metric_types:
                 return False
 
         else:
             # filter 3rd party (plugin) metrics that are not listed in cloud_metrics_sources
-            metric_sources = self._config_controller.get('cloud_metrics_sources')
+            metric_sources = Config.get('cloud_metrics_sources')
             # make sure to get the lowercase metric_source
             if metric_source.lower() not in metric_sources:
                 return False
@@ -314,19 +311,19 @@ class MetricsController(object):
 
         if metric_source == 'OpenMotics':
             # round off timestamps for openmotics metrics
-            modulo_interval = self._config_controller.get('cloud_metrics_interval|{0}'.format(metric_type), 900)
+            modulo_interval = Config.get('cloud_metrics_interval|{0}'.format(metric_type), 900)
             timestamp = int(metric['timestamp'] - metric['timestamp'] % modulo_interval)
         else:
             timestamp = int(metric['timestamp'])
 
-        cloud_batch_size = self._config_controller.get('cloud_metrics_batch_size', 0)  # type: int
-        cloud_min_interval = self._config_controller.get('cloud_metrics_min_interval')  # type: Optional[int]
+        cloud_batch_size = Config.get('cloud_metrics_batch_size', 0)  # type: int
+        cloud_min_interval = Config.get('cloud_metrics_min_interval')  # type: Optional[int]
         if cloud_min_interval is not None:
             self._cloud_retry_interval = cloud_min_interval
-        endpoint = self._config_controller.get('cloud_endpoint')
+        endpoint = Config.get('cloud_endpoint')
         metrics_endpoint = '{0}/{1}?uuid={2}'.format(
             endpoint if endpoint.startswith('http') else 'https://{0}'.format(endpoint),
-            self._config_controller.get('cloud_endpoint_metrics'),
+            Config.get('cloud_endpoint_metrics'),
             self._gateway_uuid
         )
 
@@ -405,7 +402,7 @@ class MetricsController(object):
                         self._cloud_retry_interval = 60 * 60
                         new_interval = 2 * 60 * 60
                     self._throttled_down = True
-                    metric_types = self._config_controller.get('cloud_metrics_types')
+                    metric_types = Config.get('cloud_metrics_types')
                     for mtype in metric_types:
                         self.set_cloud_interval(mtype, new_interval, save=False)
 

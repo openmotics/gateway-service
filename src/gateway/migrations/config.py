@@ -47,3 +47,23 @@ class ConfigMigrator(BaseMigrator):
                     )
                     config.save()
             os.rename(old_sqlite_db, '{0}.bak'.format(old_sqlite_db))
+            cls._insert_defaults()
+
+    @staticmethod
+    def _insert_defaults():
+        # type: () -> None
+        """ Inserting the default values into the table """
+
+        for key, default_value in {'cloud_enabled': True,
+                                   'cloud_endpoint': 'cloud.openmotics.com',
+                                   'cloud_endpoint_metrics': 'portal/metrics/',
+                                   'cloud_metrics_types': [],
+                                   'cloud_metrics_sources': [],
+                                   'cloud_metrics_enabled|energy': True,
+                                   'cloud_metrics_enabled|counter': True,
+                                   'cloud_metrics_batch_size': 50,
+                                   'cloud_metrics_min_interval': 300,
+                                   'cloud_support': False,
+                                   'cors_enabled': False}.items():
+            if Config.get(key) is None:
+                Config.set(key, default_value)

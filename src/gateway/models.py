@@ -193,6 +193,44 @@ class Config(BaseModel):
     setting = CharField(unique=True)
     data = CharField()
 
+    @staticmethod
+    def get(key, fallback=None):
+        # type: (str, Optional[Any]) -> Optional[Any]
+        """ Retrieves a setting from the DB, returns the argument 'fallback' when non existing """
+        config_orm = Config.select().where(
+            Config.setting == key.lower()
+        ).first()
+        if config_orm is not None:
+            return json.loads(config_orm.data)
+        return fallback
+
+    @staticmethod
+    def set(key, value):
+        # type: (str, Any) -> None
+        """ Sets a setting in the DB, does overwrite if already existing """
+        config_orm = Config.select().where(
+            Config.setting == key.lower()
+        ).first()
+        if config_orm is not None:
+            # if the key already exists, update the value
+            config_orm.data = json.dumps(value)
+            config_orm.save()
+        else:
+            # create a new setting if it was non existing
+            config_orm = Config(
+                setting=key,
+                data=json.dumps(value)
+            )
+            config_orm.save()
+
+    @staticmethod
+    def remove(key):
+        # type: (str) -> None
+        """ Removes a setting from the DB """
+        Config.delete().where(
+            Config.setting == key.lower()
+        ).execute()
+
 class Plugin(BaseModel):
     id = AutoField()
     name = CharField(unique=True)

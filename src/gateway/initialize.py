@@ -154,13 +154,13 @@ def setup_target_platform(target_platform, message_client_name):
     # thermostats vs gateway thermostats)
     from plugins import base
     from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
-                         maintenance_controller, user_controller, pulse_counter_controller, config_controller as config_controller,
+                         maintenance_controller, user_controller, pulse_counter_controller,
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
                          group_action_controller, module_controller, ventilation_controller)
     from cloud import events
     _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
          maintenance_controller, base, events, user_controller,
-         pulse_counter_controller, config_controller, metrics_caching, watchdog, output_controller,
+         pulse_counter_controller, metrics_caching, watchdog, output_controller,
          room_controller, sensor_controller, group_action_controller, module_controller, ventilation_controller)
 
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
@@ -195,10 +195,6 @@ def setup_target_platform(target_platform, message_client_name):
     Injectable.value(token_timeout=3600)
     Injectable.value(config={'username': config.get('OpenMotics', 'cloud_user'),
                              'password': config.get('OpenMotics', 'cloud_pass')})
-
-    # Configuration Controller
-    Injectable.value(config_db=config_database_file)
-    Injectable.value(config_db_lock=config_lock)
 
     # Energy Controller
     power_serial_port = config.get('OpenMotics', 'power_serial')
@@ -291,7 +287,6 @@ def setup_minimal_master_platform(port):
                                        MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
         Injectable.value(master_controller=MasterCoreController())
     else:
-        Injectable.value(configuration_controller=None)
         Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
         from master.classic import eeprom_extension
         _ = eeprom_extension
