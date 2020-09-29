@@ -28,7 +28,7 @@ import time
 from threading import Lock
 from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
-from gateway.config import ConfigurationController
+from gateway.config_controller import ConfigurationController
 from gateway.metrics_controller import MetricsController
 from gateway.metrics_caching import MetricsCacheController
 

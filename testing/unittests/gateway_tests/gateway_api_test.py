@@ -19,7 +19,7 @@ import unittest
 import mock
 
 from bus.om_bus_client import MessageClient
-from gateway.config import ConfigurationController
+from gateway.config_controller import ConfigurationController
 from gateway.dto import OutputStateDTO
 from gateway.gateway_api import GatewayApi
 from gateway.hal.master_controller import MasterController

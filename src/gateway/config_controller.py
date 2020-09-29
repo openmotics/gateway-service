@@ -61,7 +61,7 @@ class ConfigurationController(object):
             Config.setting == key.lower()
         ).first()
         if config_orm is not None:
-            return config_orm.data
+            return json.loads(config_orm.data)
         return fallback
 
     def set(self, key, value):

@@ -8,7 +8,7 @@ from six.moves import map
 from six.moves.queue import Queue
 
 import gateway.hal.master_controller_core
-from gateway.config import ConfigurationController
+from gateway.config_controller import ConfigurationController
 from gateway.dto import InputDTO, OutputStateDTO
 from gateway.hal.master_controller_core import MasterCoreController
 from gateway.hal.master_event import MasterEvent

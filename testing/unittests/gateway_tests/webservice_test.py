@@ -20,7 +20,7 @@ import unittest
 import mock
 
 from bus.om_bus_client import MessageClient
-from gateway.config import ConfigurationController
+from gateway.config_controller import ConfigurationController
 from gateway.dto import OutputStateDTO, ScheduleDTO, VentilationDTO, \
     VentilationSourceDTO, VentilationStatusDTO
 from gateway.gateway_api import GatewayApi
