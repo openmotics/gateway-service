@@ -1009,7 +1009,7 @@ class MasterClassicController(MasterController):
 
         no_modules = self._master_communicator.do_command(master_api.number_of_io_modules())
         for i in range(no_modules['in']):
-            is_can = self._eeprom_controller.read_address(EepromAddress(2 + i, 252, 1)).bytes == 'C'
+            is_can = self._eeprom_controller.read_address(EepromAddress(2 + i, 252, 1)).bytes == bytearray(b'C')
             module_address = self._eeprom_controller.read_address(EepromAddress(2 + i, 0, 4))
             module_type_letter = chr(module_address.bytes[0]).lower()
             is_virtual = chr(module_address.bytes[0]).islower()

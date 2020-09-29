@@ -53,7 +53,7 @@ def add_crc(command, command_input):
     crc += command.action[1]
 
     for field in command.input_fields:
-        if field.name == 'literal' and field.encode(None) == 'C':
+        if field.name == 'literal' and field.encode(None) == bytearray(b'C'):
             break
 
         for byte in field.encode(command_input[field.name]):
@@ -78,7 +78,7 @@ def check_bl_crc(command, command_output):
     crc += command.action[1]
 
     for field in command.output_fields:
-        if field.name == 'literal' and field.encode(None) == 'C':
+        if field.name == 'literal' and field.encode(None) == bytearray(b'C'):
             break
 
         for byte in field.encode(command_output[field.name]):
