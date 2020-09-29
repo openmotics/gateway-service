@@ -106,7 +106,7 @@ class InputModuleConfiguration(MemoryModelDefinition):
 
 class InputConfiguration(MemoryModelDefinition):
     class _InputConfigComposition(CompositeMemoryModelDefinition):
-        normal_open = CompositeBitField(bit=1)
+        normal_open = CompositeBitField(bit=0)
 
     class _DALIInputComposition(CompositeMemoryModelDefinition):
         lunatone_input_id = CompositeNumberField(start_bit=0, width=8, max_value=63)
@@ -122,15 +122,15 @@ class InputConfiguration(MemoryModelDefinition):
 
     id = IdField(limits=lambda f: (0, f * 8 - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 2)))
     module = MemoryRelation(InputModuleConfiguration, id_spec=lambda id: id // 8)
-    input_config = _InputConfigComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 7 + id)))  # 81-238, 7-14
-    dali_mapping = _DALIInputComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 15 + id % 8)))  # 81-238, 15-22
-    name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + id * 2, 128 + id * 16), length=16)  # 81-238, 128-255
-    input_link = _InputLink(field=MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + id * 2, id % 8 * 2)))  # 81-238, 0-15
-    basic_action_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + id * 2, 16 + id % 8))  # 81-238, 16-63
-    basic_action_release = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + id % 2, 64 + id % 8))  # 81-238, 64-111
-    basic_action_1s_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + id % 2, 112 + id % 8))  # 81-238, 112-159
-    basic_action_2s_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + id % 2, 160 + id % 8))  # 81-238, 160-207
-    basic_action_double_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + id % 2, 208 + id % 8))  # 81-238, 208-255
+    input_config = _InputConfigComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 7 + id % 8)))  # 81-238, 7-14
+    dali_mapping = _DALIInputComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 15 + id % 8)))  # 81-238, 15-22
+    name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 128 + id % 8 * 16), length=16)  # 81-238, 128-255
+    input_link = _InputLink(field=MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, id % 8 * 2)))  # 81-238, 0-15
+    basic_action_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 16 + id % 8 * 6))  # 81-238, 16-63
+    basic_action_release = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 64 + id % 8 * 6))  # 81-238, 64-111
+    basic_action_1s_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 112 + id % 8 * 6))  # 81-238, 112-159
+    basic_action_2s_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 160 + id % 8 * 6))  # 81-238, 160-207
+    basic_action_double_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 208 + id % 8 * 6))  # 81-238, 208-255
 
     @property
     def has_direct_output_link(self):
@@ -142,8 +142,9 @@ class InputConfiguration(MemoryModelDefinition):
 
     @property
     def in_use(self):
-        # An input is in use when any of the `input_link` bits is not 0b1
-        return not getattr(self, '_input_link')._field_container.decode() == 65535
+        # An input is in use when any of the relevant `input_link` bits is not 0b1
+        raw_value = getattr(self, '_input_link')._field_container.decode()
+        return (raw_value & 0b1011011111111111) != 0b1011011111111111
 
 
 class SensorModuleConfiguration(MemoryModelDefinition):
