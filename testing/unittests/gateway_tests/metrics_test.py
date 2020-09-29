@@ -25,28 +25,46 @@ import ujson as json
 import fakesleep
 import xmlrunner
 import time
+import tempfile
+from peewee import SqliteDatabase
 from threading import Lock
 from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
 from gateway.config_controller import ConfigurationController
 from gateway.metrics_controller import MetricsController
 from gateway.metrics_caching import MetricsCacheController
+from gateway.models import Config
 
 logger = logging.getLogger('test')
 
+MODELS = [Config]
 
 class MetricsTest(unittest.TestCase):
     intervals = {}
+
+    def setUp(self):
+        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        self.test_db.connect()
+        self.test_db.create_tables(MODELS)
+
+    def tearDown(self):
+        self.test_db.drop_tables(MODELS)
+        self.test_db.close()
+
 
     @classmethod
     def setUpClass(cls):
         SetTestMode()
         fakesleep.monkey_patch()
         fakesleep.reset(seconds=0)
+        cls._db_filename = tempfile.mktemp()
+        cls.test_db = SqliteDatabase(cls._db_filename)
 
     @classmethod
     def tearDownClass(cls):
         fakesleep.monkey_restore()
+        if os.path.exists(cls._db_filename):
+            os.remove(cls._db_filename)
 
     @staticmethod
     def _set_cloud_interval(self, metric_type, interval):
@@ -61,8 +79,6 @@ class MetricsTest(unittest.TestCase):
                                                           'set_cloud_interval': MetricsTest._set_cloud_interval})()
         metrics_cache_controller = type('MetricsCacheController', (), {'load_buffer': lambda *args, **kwargs: []})()
         plugin_controller = type('PluginController', (), {'get_metric_definitions': lambda *args, **kwargs: {}})()
-        SetUpTestInjections(config_db=':memory:',
-                            config_db_lock=Lock())
         config_controller = ConfigurationController()
         SetUpTestInjections(plugin_controller=plugin_controller,
                             metrics_collector=metrics_collector,
