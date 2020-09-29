@@ -57,7 +57,7 @@ class MetricsController(object):
         :param metrics_cache_controller: Metrics cache Controller
         :type metrics_cache_controller: gateway.metrics_caching.MetricsCacheController
         :param configuration_controller: Configuration Controller
-        :type configuration_controller: gateway.config.ConfigurationController
+        :type configuration_controller: gateway.config_controller.ConfigurationController
         :param gateway_uuid: Gateway UUID
         :type gateway_uuid: basestring
         """

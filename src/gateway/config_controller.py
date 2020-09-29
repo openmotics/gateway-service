@@ -17,12 +17,10 @@ Configuration controller
 """
 
 from __future__ import absolute_import
-import time
-import sqlite3
 import logging
 import ujson as json
-from random import randint
 from ioc import Injectable, Inject, Singleton, INJECTED
+from gateway.models import Config
 
 logger = logging.getLogger("openmotics")
 
@@ -32,34 +30,17 @@ logger = logging.getLogger("openmotics")
 class ConfigurationController(object):
 
     @Inject
-    def __init__(self, config_db=INJECTED, config_db_lock=INJECTED):
+    def __init__(self):
         """
         Constructs a new ConfigController.
-
-        :param config_db: filename of the sqlite database used to store the configuration
-        :param config_db_lock: DB lock
         """
-        self.__lock = config_db_lock
-        self.__connection = sqlite3.connect(config_db,
-                                            detect_types=sqlite3.PARSE_DECLTYPES,
-                                            check_same_thread=False,
-                                            isolation_level=None)
-        self.__cursor = self.__connection.cursor()
         self.__check_tables()
-
-    def __execute(self, *args, **kwargs):
-        with self.__lock:
-            try:
-                return self.__cursor.execute(*args, **kwargs)
-            except (sqlite3.OperationalError, sqlite3.InterfaceError):
-                time.sleep(randint(1, 20) / 10.0)
-                return self.__cursor.execute(*args, **kwargs)
 
     def __check_tables(self):
         """
         Creates tables and execute migrations
         """
-        self.__execute('CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY, setting TEXT UNIQUE, data TEXT);')
+
         for key, default_value in {'cloud_enabled': True,
                                    'cloud_endpoint': 'cloud.openmotics.com',
                                    'cloud_endpoint_metrics': 'portal/metrics/',
@@ -75,17 +56,36 @@ class ConfigurationController(object):
                 self.set(key, default_value)
 
     def get(self, key, fallback=None):
-        for entry in self.__execute('SELECT data FROM settings WHERE setting=?;', (key.lower(),)):
-            return json.loads(entry[0])
+        _ = self
+        config_orm = Config.select().where(
+            Config.setting == key.lower()
+        ).first()
+        if config_orm is not None:
+            return config_orm.data
         return fallback
 
     def set(self, key, value):
-        self.__execute('INSERT OR REPLACE INTO settings (setting, data) VALUES (?, ?);',
-                       (key.lower(), json.dumps(value)))
+        _ = self
+        config_orm = Config.select().where(
+            Config.setting == key.lower()
+        ).first()
+        if config_orm is not None:
+            # if the key already exists, update the value
+            config_orm.data = json.dumps(value)
+            config_orm.save()
+            return config_orm.data
+        else:
+            # create a new setting if it was non existing
+            config_orm = Config(
+                setting=key,
+                data=json.dumps(value)
+            )
+            config_orm.save()
 
     def remove(self, key):
-        self.__execute('DELETE FROM settings WHERE setting=?;', (key.lower(),))
+        _ = self
+        Config.delete().where(
+            Config.setting == key.lower()
+        ).execute()
 
-    def close(self):
-        """ Close the database connection. """
-        self.__connection.close()
+

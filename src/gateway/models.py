@@ -188,6 +188,10 @@ class User(BaseModel):
     password = CharField()
     accepted_terms = IntegerField(default=0)
 
+class Config(BaseModel):
+    id = AutoField()
+    setting = CharField(unique=True)
+    data = CharField()
 
 class Plugin(BaseModel):
     id = AutoField()

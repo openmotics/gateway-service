@@ -46,7 +46,7 @@ if False:  # MYPY:
     from power.power_store import PowerStore
     from power.power_controller import PowerController, P1Controller
     from bus.om_bus_client import MessageClient
-    from gateway.config import ConfigurationController
+    from gateway.config_controller import ConfigurationController
     from gateway.observer import Observer
     from gateway.watchdog import Watchdog
 

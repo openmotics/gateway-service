@@ -28,5 +28,6 @@ from gateway.dto.shutter_group import ShutterGroupDTO
 from gateway.dto.thermostat import ThermostatDTO
 from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
 from gateway.dto.user import UserDTO
+from gateway.dto.config import ConfigDTO
 from gateway.dto.ventilation import VentilationDTO, VentilationSourceDTO, \
     VentilationStatusDTO

@@ -40,7 +40,7 @@ from six.moves.configparser import ConfigParser
 import constants
 from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
-from gateway.config import ConfigurationController
+from gateway.config_controller import ConfigurationController
 from gateway.initialize import initialize
 from ioc import INJECTED, Inject
 

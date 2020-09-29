@@ -61,7 +61,7 @@ from serial_utils import CommunicationTimedOutException
 if False:  # MYPY
     from typing import Dict, Optional, Any, List
     from bus.om_bus_client import MessageClient
-    from gateway.config import ConfigurationController
+    from gateway.config_controller import ConfigurationController
     from gateway.gateway_api import GatewayApi
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.frontpanel_controller import FrontpanelController

@@ -58,7 +58,7 @@ from toolbox import Toolbox
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Tuple
     from serial import Serial
-    from gateway.config import ConfigurationController
+    from gateway.config_controller import ConfigurationController
 
 logger = logging.getLogger("openmotics")
 
