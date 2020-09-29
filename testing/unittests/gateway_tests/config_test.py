@@ -20,17 +20,12 @@ from __future__ import absolute_import
 
 import os
 import tempfile
-import time
 import unittest
 import xmlrunner
-from threading import Lock
-from pytest import mark
 from peewee import SqliteDatabase
 
 from gateway.config_controller import ConfigurationController
-from gateway.dto import ConfigDTO
-from gateway.mappers.config import ConfigMapper
-from ioc import SetTestMode, SetUpTestInjections
+from ioc import SetTestMode
 
 from gateway.models import Config
 
@@ -38,7 +33,7 @@ MODELS = [Config]
 
 
 class ConfigControllerTest(unittest.TestCase):
-    """ Tests for UserController. """
+    """ Tests for ConfigurationController. """
 
     _db_filename = None
 
@@ -57,10 +52,8 @@ class ConfigControllerTest(unittest.TestCase):
         self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
-        ConfigControllerTest.RETURN_DATA = {}
 
     def tearDown(self):
-        ConfigControllerTest.RETURN_DATA = {}
         self.test_db.drop_tables(MODELS)
         self.test_db.close()
 

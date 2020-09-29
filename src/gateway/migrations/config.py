@@ -22,7 +22,7 @@ from gateway.models import Config
 logger = logging.getLogger('openmotics')
 
 
-class UserMigrator(BaseMigrator):
+class ConfigMigrator(BaseMigrator):
 
     MIGRATION_KEY = 'config'
 

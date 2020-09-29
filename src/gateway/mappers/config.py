@@ -36,7 +36,7 @@ class ConfigMapper(object):
 
     @staticmethod
     def dto_to_orm(config_dto, fields):  # type: (ConfigDTO, List[str]) -> Config
-        # Look if there is a user in the DB to take over the unchanged fields
+        # Look if there is a setting in the DB to take over the unchanged fields
         config = Config.get_or_none(setting=config_dto.setting)
         # if the setting is non existing, create a new setting with the mandatory fields that can be further filled with the config_dto fields
         if config is None:
