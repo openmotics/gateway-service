@@ -83,7 +83,7 @@ class CoreCommandSpec(object):
             if not isinstance(field, PaddingField):
                 result[field.name] = field.decode(data)
             payload = payload[field_length:]
-        if payload != '':
+        if payload != bytearray():
             logger.warning('Payload for instruction {0} could not be consumed completely: {1}'.format(self.instruction, printable(payload)))
         return result
 

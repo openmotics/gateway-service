@@ -177,7 +177,7 @@ class PowerCommunicator(object):
                         # next in line.
                         header, response_data = self.__read_from_serial()
                         if not _cmd.check_header(header, _address, cid):
-                            if _cmd.is_nack(header, _address, cid) and response_data == "\x02":
+                            if _cmd.is_nack(header, _address, cid) and response_data == bytearray([2]):
                                 raise UnkownCommandException('Unknown command')
                             tries += 1
                             logger.warning("Header did not match command ({0})".format(tries))
