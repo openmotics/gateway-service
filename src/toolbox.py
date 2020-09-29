@@ -17,13 +17,21 @@ A few helper classes
 """
 
 from __future__ import absolute_import
-import time
-import msgpack
+
 import inspect
-import six
-from select import select
+import logging
+import time
 from collections import deque
+from select import select
 from threading import Thread
+
+import msgpack
+import six
+
+logger = logging.getLogger('openmotics')
+
+if False:  # MYPY
+    from typing import Any, Callable, Dict, IO, Optional
 
 
 class Full(Exception):
@@ -36,7 +44,7 @@ class Empty(Exception):
 
 class Queue(object):
     def __init__(self, size=None):
-        self._queue = deque()
+        self._queue = deque()  # type: deque
         self._size = size  # Not used
 
     def put(self, value, block=False):
@@ -80,26 +88,30 @@ class PluginIPCStream(object):
     """
 
     def __init__(self, stream, logger, command_receiver=None):
+        # type: (IO[bytes], Callable[[str,Exception],None], Callable[[Dict[str,Any]],None]) -> None
         self._buffer = ''
         self._command_queue = Queue()
         self._stream = stream
-        self._read_thread = None
+        self._read_thread = None  # type: Optional[Thread]
         self._logger = logger
         self._running = False
         self._command_receiver = command_receiver
 
     def start(self):
+        # type: () -> None
         self._running = True
         self._read_thread = Thread(target=self._read)
         self._read_thread.daemon = True
         self._read_thread.start()
 
     def stop(self):
+        # type: () -> None
         self._running = False
         if self._read_thread is not None:
             self._read_thread.join()
 
     def _read(self):
+        # type: () -> None
         wait_for_length = None
         while self._running:
             try:
@@ -110,7 +122,8 @@ class PluginIPCStream(object):
                     if not read_available:
                         continue
                 # Minimum dataset: 0:x:,\n = 6 characters, so we always read at least 6 chars
-                self._buffer += self._stream.read(6 if wait_for_length is None else wait_for_length)
+                data = self._stream.read(6 if wait_for_length is None else wait_for_length)
+                self._buffer += data
                 if wait_for_length is None:
                     if ':' not in self._buffer:
                         # This is unexpected, discard data

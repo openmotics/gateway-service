@@ -1,17 +1,17 @@
 from __future__ import absolute_import
+import logging
 import os
 import sys
-import traceback
 import time
+import traceback
 from threading import Thread
-
-import six
 
 sys.path.insert(0, '/opt/openmotics/python')
 
 from platform_utils import System
 System.import_libs()
 
+import six
 from toolbox import PluginIPCStream, Toolbox
 from gateway.events import GatewayEvent
 from plugin_runtime import base
@@ -19,8 +19,13 @@ from plugin_runtime.utils import get_plugin_class, check_plugin, get_special_met
 from plugin_runtime.interfaces import has_interface
 from plugin_runtime.web import WebInterfaceDispatcher
 
+logger = logging.getLogger('openmotics')
 
-class PluginRuntime:
+if False:  # MYPY
+    from typing import Any, Callable, Dict, List, Optional
+
+
+class PluginRuntime(object):
 
     SUPPORTED_DECORATOR_VERSIONS = {'input_status': [1, 2],
                                     'output_status': [1, 2],
@@ -31,6 +36,7 @@ class PluginRuntime:
                                     'on_remove': [1]}
 
     def __init__(self, path):
+        # type: (str) -> None
         self._stopped = False
         self._path = path.rstrip('/')
 
@@ -40,15 +46,15 @@ class PluginRuntime:
                                    'ventilation_status': [],
                                    'receive_events': [],
                                    'background_task': [],
-                                   'on_remove': []}
+                                   'on_remove': []}  # type: Dict[str,List[Any]]
 
         self._name = None
         self._version = None
-        self._interfaces = []
-        self._exposes = []
-        self._metric_definitions = []
-        self._metric_collectors = []
-        self._metric_receivers = []
+        self._interfaces = []  # type: List[Any]
+        self._exposes = []  # type: List[Any]
+        self._metric_definitions = []  # type: List[Any]
+        self._metric_collectors = []  # type: List[Any]
+        self._metric_receivers = []  # type: List[Any]
 
         self._plugin = None
         self._stream = PluginIPCStream(sys.stdin, IO._log_exception)
@@ -56,6 +62,7 @@ class PluginRuntime:
         self._webinterface = WebInterfaceDispatcher(IO._log)
 
     def _init_plugin(self):
+        # type: () -> None
         plugin_root = os.path.dirname(self._path)
         plugin_dir = os.path.basename(self._path)
 
@@ -112,6 +119,7 @@ class PluginRuntime:
                 self._metric_definitions = plugin_class.metric_definitions
 
     def _start_background_tasks(self):
+        # type: () -> None
         """ Start all background tasks. """
         for decorated_method in self._decorated_methods['background_task']:
             thread = Thread(target=PluginRuntime._run_background_task, args=(decorated_method,))
@@ -131,9 +139,9 @@ class PluginRuntime:
         # something in the form of e.g. {'output_status': [1,2], 'input_status': [1]} where 1,2,... are the versions
         return registered_decorators
 
-
     @staticmethod
     def _run_background_task(task):
+        # type: (Callable[[],None]) -> None
         running = True
         while running:
             try:
@@ -144,6 +152,7 @@ class PluginRuntime:
                 time.sleep(30)
 
     def process_stdin(self):
+        # type: () -> None
         self._stream.start()
         while not self._stopped:
             command = self._stream.get(block=True)
@@ -201,8 +210,9 @@ class PluginRuntime:
             IO._write(response)
 
     def _handle_start(self):
+        # type: () -> Dict[str,Any]
         """ Handles the start command. Cover exceptions manually to make sure as much metadata is returned as possible. """
-        data = {}
+        data = {}  # type: Dict[str,Any]
         try:
             self._init_plugin()
             self._start_background_tasks()
@@ -334,17 +344,21 @@ class PluginRuntime:
         except Exception as exception:
             return {'success': False, 'exception': str(exception), 'stacktrace': traceback.format_exc()}
 
+
 class IO(object):
     @staticmethod
     def _log(msg):
+        # type: (str) -> None
         IO._write({'cid': 0, 'action': 'logs', 'logs': str(msg)})
 
     @staticmethod
     def _log_exception(name, exception):
+        # type: (str, Exception) -> None
         IO._log('Exception ({0}) in {1}: {2}'.format(exception, name, traceback.format_exc()))
 
     @staticmethod
     def _with_catch(name, target, args):
+        # type: (str, Callable[...,None], List[Any]) -> None
         """ Logs Exceptions that happen in target(*args). """
         try:
             return target(*args)
@@ -353,6 +367,7 @@ class IO(object):
 
     @staticmethod
     def _write(msg):
+        # type: (Dict[str,Any]) -> None
         sys.stdout.write(PluginIPCStream.write(msg))
         sys.stdout.flush()
 
