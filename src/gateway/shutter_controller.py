@@ -104,7 +104,7 @@ class ShutterController(BaseController):
                     self._desired_positions[shutter_id] = None
                     self._directions[shutter_id] = ShutterEnums.Direction.STOP
 
-            for shutter_id in self._shutters.keys():
+            for shutter_id in list(self._shutters.keys()):
                 if shutter_id not in shutter_ids:
                     del self._shutters[shutter_id]
                     del self._states[shutter_id]

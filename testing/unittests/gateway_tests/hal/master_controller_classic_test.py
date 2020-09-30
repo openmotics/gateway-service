@@ -96,7 +96,7 @@ class MasterClassicControllerTest(unittest.TestCase):
                                return_value=None) as consumer:
             controller = get_classic_controller_dummy()
             controller._register_version_depending_background_consumers()
-            expected_call = mock.call(master.classic.master_api.input_list(None), 0, mock.ANY)
+            expected_call = mock.call(master.classic.master_api.input_list((3, 143, 102)), 0, mock.ANY)
             self.assertIn(expected_call, consumer.call_args_list)
 
     def test_subscribe_input_events(self):
@@ -165,11 +165,12 @@ class MasterClassicControllerTest(unittest.TestCase):
                     0b00000000, 0b00000000, 0b00000000, 0b01000000]
 
         def _do_command(cmd, fields):
-            start = fields['number'] / 8
+            start = fields['number'] // 8
             return {'data': bit_data[start:start + 11]}
 
         classic = get_classic_controller_dummy()
         classic._master_communicator.do_command = _do_command
+        classic._master_version = (0, 0, 0)
 
         bits = classic.load_validation_bits()
         self.assertIsNone(bits)
@@ -241,4 +242,7 @@ def get_classic_controller_dummy(inputs=None):
     SetUpTestInjections(configuration_controller=mock.Mock(),
                         master_communicator=communicator_mock,
                         eeprom_controller=eeprom_mock)
-    return MasterClassicController()
+
+    controller = MasterClassicController()
+    controller._master_version = (3, 143, 102)
+    return controller

@@ -246,7 +246,7 @@ class SchedulingControllerTest(unittest.TestCase):
                                                    arguments={'name': 'do_basic_action',
                                                               'parameters': {'action_type': 'foo',
                                                                              'action_number': 4}})
-        self.assertEqual('could not convert string to float: foo', str(ctx.exception))
+        self.assertIn('could not convert string to float', str(ctx.exception))
 
         # Normal
         SchedulingControllerTest._add_schedule(controller,
