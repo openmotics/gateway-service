@@ -57,8 +57,9 @@ class PluginRuntime(object):
         self._metric_receivers = []  # type: List[Any]
 
         self._plugin = None
-        self._writer = PluginIPCWriter(sys.stdout)
-        self._stream = PluginIPCReader(sys.stdin, self._writer.log_exception)
+        self._writer = PluginIPCWriter(os.fdopen(sys.stdout.fileno(), 'wb', 0))
+        self._reader = PluginIPCReader(os.fdopen(sys.stdin.fileno(), 'rb', 0),
+                                       self._writer.log_exception)
 
         self._webinterface = WebInterfaceDispatcher(self._writer.log)
 
@@ -153,9 +154,9 @@ class PluginRuntime(object):
 
     def process_stdin(self):
         # type: () -> None
-        self._stream.start()
+        self._reader.start()
         while not self._stopped:
-            command = self._stream.get(block=True)
+            command = self._reader.get(block=True)
             if command is None:
                 continue
 
@@ -236,7 +237,7 @@ class PluginRuntime(object):
         stop_thread.daemon = True
         stop_thread.start()
 
-        self._stream.stop()
+        self._reader.stop()
         self._stopped = True
 
     def _handle_input_status(self, data):
@@ -370,7 +371,8 @@ if __name__ == '__main__':
         runtime = PluginRuntime(path=sys.argv[2])
         runtime.process_stdin()
     except BaseException as ex:
-        self._writer.log_exception('__main__', ex)
+        writer = PluginIPCWriter(os.fdopen(sys.stdout.fileno(), 'wb', 0))
+        writer.log_exception('__main__', ex)
         os._exit(1)
 
     os._exit(0)

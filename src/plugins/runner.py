@@ -12,7 +12,7 @@ import six
 import ujson as json
 from six.moves.queue import Empty, Full, Queue
 
-from toolbox import PluginIPCReader
+from toolbox import PluginIPCReader, PluginIPCWriter
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional
@@ -68,7 +68,8 @@ class PluginRunner(object):
         self._process_running = False
         self._command_lock = Lock()
         self._response_queue = Queue()  # type: Queue[Dict[str,Any]]
-        self._stream = None  # type: Optional[PluginIPCStream]
+        self._writer = None  # type: Optional[PluginIPCWriter]
+        self._reader = None  # type: Optional[PluginIPCReader]
 
         self.name = name
         self.version = None
@@ -107,10 +108,12 @@ class PluginRunner(object):
         self._commands_executed = 0
         self._commands_failed = 0
 
-        self._stream = PluginIPCReader(stream=self._proc.stdout,
+        assert self._proc.stdin, 'Plugin stdin not defined'
+        self._writer = PluginIPCWriter(stream=self._proc.stdin)
+        self._reader = PluginIPCReader(stream=self._proc.stdout,
                                        logger=lambda message, ex: self.logger('{0}: {1}'.format(message, ex)),
                                        command_receiver=self._process_command)
-        self._stream.start()
+        self._reader.start()
 
         start_out = self._do_command('start', timeout=180)
         self.name = start_out['name']
@@ -160,8 +163,8 @@ class PluginRunner(object):
                 self.logger('[Runner] Exception during stopping plugin: {0}'.format(exception))
             time.sleep(0.1)
 
-            if self._stream:
-                self._stream.stop()
+            if self._reader:
+                self._reader.stop()
             self._process_running = False
 
             if self._proc and self._proc.poll() is None:
@@ -331,11 +334,8 @@ class PluginRunner(object):
         with self._command_lock:
             try:
                 command = self._create_command(action, payload, action_version)
-                assert self._proc, 'Plugin process not defined'
-                writer = self._proc.stdin
-                assert writer, 'Plugin stdin not available'
-                writer.write(PluginIPCReader.write(command))
-                writer.flush()
+                assert self._writer, 'Plugin stdin not defined'
+                self._writer.write(command)
             except Exception:
                 self._commands_failed += 1
                 raise

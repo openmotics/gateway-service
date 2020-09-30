@@ -23,7 +23,6 @@ import logging
 import time
 import traceback
 from collections import deque
-from select import select
 from threading import Thread
 
 import msgpack
@@ -80,19 +79,13 @@ class PluginIPCReader(object):
     """
     This class handles IPC communications.
 
-    It uses netstring: <data_length>:<data>,\n
-    * data_length: The length of `data`
-    * data: The actual payload, using the format <encoding_type>:<encoded_data>
-      * encoding_type: A one-character reference to the used encoding protocol
-        * 1 = msgpack
-      * encoded_data: The encoded data
+    It uses a stream of msgpack encoded dict values.
     """
 
     def __init__(self, stream, logger, command_receiver=None):
         # type: (IO[bytes], Callable[[str,Exception],None], Callable[[Dict[str,Any]],None]) -> None
-        self._buffer = ''
         self._command_queue = Queue()
-        self._stream = stream
+        self._unpacker = msgpack.Unpacker(stream, read_size=1, raw=False)  # type: msgpack.Unpacker[Dict[str,Any]]
         self._read_thread = None  # type: Optional[Thread]
         self._logger = logger
         self._running = False
@@ -113,72 +106,29 @@ class PluginIPCReader(object):
 
     def _read(self):
         # type: () -> None
-        wait_for_length = None
         while self._running:
             try:
-                if wait_for_length is None:
-                    # Waiting for a new command to start. Let's do 1 second polls to make sure we're not blocking forever
-                    # in case no new data will come
-                    read_available, _, _ = select([self._stream], [], [], 1.0)
-                    if not read_available:
-                        continue
-                # Minimum dataset: 0:x:,\n = 6 characters, so we always read at least 6 chars
-                data = self._stream.read(6 if wait_for_length is None else wait_for_length)
-                self._buffer += data
-                if wait_for_length is None:
-                    if ':' not in self._buffer:
-                        # This is unexpected, discard data
-                        self._buffer = ''
-                        continue
-                    length, self._buffer = self._buffer.split(':', 1)
-                    # The length defines the encoded data length. We to add 4 because of the `<encoding_protocol>:` and `,\n`
-                    wait_for_length = int(length) - len(self._buffer) + 2
-                    if wait_for_length > 0:
-                        continue
-                if self._buffer.endswith(',\n'):
-                    protocol, self._buffer = self._buffer.split(':', 1)
-                    command = PluginIPCReader._decode(protocol, self._buffer[:-2])
-                    if command is None:
-                        # Unexpected protocol
-                        self._buffer = ''
-                        wait_for_length = None
-                        continue
-                    if self._command_receiver is not None:
-                        self._command_receiver(command)
-                    else:
-                        self._command_queue.put(command)
-                self._buffer = ''
-                wait_for_length = None
+                command = next(self._unpacker)
+                if not isinstance(command, dict):
+                    raise ValueError('invalid value %s' % command)
+                if self._command_receiver is not None:
+                    self._command_receiver(command)
+                else:
+                    self._command_queue.put(command)
+            except StopIteration as ex:
+                self._logger('PluginIPCReader stopped', ex)
+                self._running = False
             except Exception as ex:
                 self._logger('Unexpected read exception', ex)
 
     def get(self, block=True, timeout=None):
         return self._command_queue.get(block, timeout)
 
-    @staticmethod
-    def write(data):
-        encode_type = '1'
-        data = PluginIPCReader._encode(encode_type, data)
-        return '{0}:{1}:{2},\n'.format(len(data) + 2, encode_type, data)
-
-    @staticmethod
-    def _encode(encode_type, data):
-        if encode_type == '1':
-            return msgpack.dumps(data)
-        return ''
-
-    @staticmethod
-    def _decode(encode_type, data):
-        if data == '':
-            return None
-        if encode_type == '1':
-            return msgpack.loads(data)
-        return None
-
 
 class PluginIPCWriter(object):
     def __init__(self, stream):
         # type: (IO[bytes]) -> None
+        self._packer = msgpack.Packer()  # type: msgpack.Packer[Dict[str,Any]]
         self._stream = stream
 
     def log(self, msg):
@@ -186,7 +136,7 @@ class PluginIPCWriter(object):
         self.write({'cid': 0, 'action': 'logs', 'logs': str(msg)})
 
     def log_exception(self, name, exception):
-        # type: (str, Exception) -> None
+        # type: (str, BaseException) -> None
         self.log('Exception ({0}) in {1}: {2}'.format(exception, name, traceback.format_exc()))
 
     def with_catch(self, name, target, args):
@@ -199,7 +149,7 @@ class PluginIPCWriter(object):
 
     def write(self, response):
         # type: (Dict[str,Any]) -> None
-        self._stream.write(PluginIPCReader.write(response))
+        self._stream.write(self._packer.pack(response))
         self._stream.flush()
 
 
