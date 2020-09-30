@@ -196,6 +196,11 @@ class User(BaseModel):
     password: MixedTextField
     accepted_terms: MixedIntegerField
 
+class Config(BaseModel):
+    id: MixedPrimaryKeyField
+    setting: MixedTextField
+    data: MixedTextField
+
 class Plugin(BaseModel):
     id: MixedPrimaryKeyField
     name: MixedTextField

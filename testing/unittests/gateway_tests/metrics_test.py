@@ -25,28 +25,47 @@ import ujson as json
 import fakesleep
 import xmlrunner
 import time
+import tempfile
+from peewee import SqliteDatabase
 from threading import Lock
 from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
-from gateway.config import ConfigurationController
+from gateway.migrations.config import ConfigMigrator
 from gateway.metrics_controller import MetricsController
 from gateway.metrics_caching import MetricsCacheController
+from gateway.models import Config
 
 logger = logging.getLogger('test')
 
+MODELS = [Config]
 
 class MetricsTest(unittest.TestCase):
     intervals = {}
+
+    def setUp(self):
+        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        self.test_db.connect()
+        self.test_db.create_tables(MODELS)
+        ConfigMigrator._insert_defaults()
+
+    def tearDown(self):
+        self.test_db.drop_tables(MODELS)
+        self.test_db.close()
+
 
     @classmethod
     def setUpClass(cls):
         SetTestMode()
         fakesleep.monkey_patch()
         fakesleep.reset(seconds=0)
+        cls._db_filename = tempfile.mktemp()
+        cls.test_db = SqliteDatabase(cls._db_filename)
 
     @classmethod
     def tearDownClass(cls):
         fakesleep.monkey_restore()
+        if os.path.exists(cls._db_filename):
+            os.remove(cls._db_filename)
 
     @staticmethod
     def _set_cloud_interval(self, metric_type, interval):
@@ -61,41 +80,32 @@ class MetricsTest(unittest.TestCase):
                                                           'set_cloud_interval': MetricsTest._set_cloud_interval})()
         metrics_cache_controller = type('MetricsCacheController', (), {'load_buffer': lambda *args, **kwargs: []})()
         plugin_controller = type('PluginController', (), {'get_metric_definitions': lambda *args, **kwargs: {}})()
-        SetUpTestInjections(config_db=':memory:',
-                            config_db_lock=Lock())
-        config_controller = ConfigurationController()
         SetUpTestInjections(plugin_controller=plugin_controller,
                             metrics_collector=metrics_collector,
                             metrics_cache_controller=metrics_cache_controller,
-                            configuration_controller=config_controller,
                             gateway_uuid='none')
         metrics_controller = MetricsController()
-        return config_controller, metrics_controller
+        return metrics_controller
 
     def test_base_validation(self):
         MetricsTest.intervals = {}
-        _, _ = MetricsTest._get_controller(intervals=['energy'])
+        _ = MetricsTest._get_controller(intervals=['energy'])
         self.assertEqual(MetricsTest.intervals.get('energy'), 300)
 
     def test_set_cloud_interval(self):
         MetricsTest.intervals = {}
-        config_controller, metrics_controller = MetricsTest._get_controller(intervals=['energy'])
+        metrics_controller = MetricsTest._get_controller(intervals=['energy'])
         self.assertEqual(MetricsTest.intervals.get('energy'), 300)
         metrics_controller.set_cloud_interval('energy', 900)
         self.assertEqual(MetricsTest.intervals.get('energy'), 900)
-        self.assertEqual(config_controller.get('cloud_metrics_interval|energy'), 900)
+        self.assertEqual(Config.get('cloud_metrics_interval|energy'), 900)
 
     def test_needs_upload(self):
         # 0. the boring stuff
-        def get(key, fallback=None):
-            return config.get(key, fallback)
-
         def load_buffer(before=None):
             _ = before
             return []
 
-        config_controller = Mock()
-        config_controller.get = get
         metrics_cache_mock = Mock()
         metrics_cache_mock.load_buffer = load_buffer
         metrics_collector_mock = Mock()
@@ -103,17 +113,16 @@ class MetricsTest(unittest.TestCase):
         metrics_collector_mock.get_definitions = lambda: []
 
         # 1. baseline config and definitions
-        config = {'cloud_enabled': True,
-                  'cloud_metrics_types': ['counter', 'energy'],
-                  'cloud_metrics_sources': ['openmotics'],
-                  'cloud_metrics_enabled|energy': True}
+        Config.set('cloud_enabled', True)
+        Config.set('cloud_metrics_types', ['counter', 'energy'])
+        Config.set('cloud_metrics_sources', ['openmotics'])
+        Config.set('cloud_metrics_enabled|energy', True)
 
         definitions = {'OpenMotics': {'counter': Mock(), 'energy': Mock()}}
 
         SetUpTestInjections(plugin_controller=Mock(),
                             metrics_collector=metrics_collector_mock,
                             metrics_cache_controller=metrics_cache_mock,
-                            configuration_controller=config_controller,
                             gateway_uuid=Mock())
 
         metrics_controller = MetricsController()
@@ -130,16 +139,16 @@ class MetricsTest(unittest.TestCase):
         self.assertTrue(needs_upload)
 
         # 3. disable energy metric type, now test again
-        config['cloud_metrics_enabled|energy'] = False
+        Config.set('cloud_metrics_enabled|energy', False)
         needs_upload = metrics_controller._needs_upload_to_cloud(metric)
         self.assertFalse(needs_upload)
-        config['cloud_metrics_enabled|energy'] = True
+        Config.set('cloud_metrics_enabled|energy', True)
 
         # 3. disable energy metric type, now test again
-        config['cloud_metrics_types'] = ['counter']
+        Config.set('cloud_metrics_types', ['counter'])
         needs_upload = metrics_controller._needs_upload_to_cloud(metric)
         self.assertFalse(needs_upload)
-        config['cloud_metrics_types'] = ['counter', 'energy']
+        Config.set('cloud_metrics_types', ['counter', 'energy'])
 
         # 4. test metric with unconfigured definition
         metric = {'source': 'MBus',
@@ -157,28 +166,27 @@ class MetricsTest(unittest.TestCase):
         self.assertFalse(needs_upload)
 
         # 5. configure source, now test again
-        config['cloud_metrics_sources'].append('mbus')
+        cnf = Config.get('cloud_metrics_sources')
+        cnf.append('mbus')
+        Config.set('cloud_metrics_sources', cnf)
         needs_upload = metrics_controller._needs_upload_to_cloud(metric)
         self.assertTrue(needs_upload)
 
         # 7. disable cloud, now test again
-        config['cloud_enabled'] = False
+        Config.set('cloud_enabled', False)
         needs_upload = metrics_controller._needs_upload_to_cloud(metric)
         self.assertFalse(needs_upload)
 
     def test_metrics_receiver(self):
 
-        config = {'cloud_endpoint': 'tests.openmotics.com',
-                  'cloud_endpoint_metrics': 'metrics',
-                  'cloud_metrics_interval|foobar': 5}
+        Config.set('cloud_endpoint', 'tests.openmotics.com')
+        Config.set('cloud_endpoint_metrics', 'metrics')
+        Config.set('cloud_metrics_interval|foobar', 5)
 
         # Add interceptors
 
         send_metrics = []
         response_data = {}
-
-        def get(key, fallback=None):
-            return config.get(key, fallback)
 
         def post(url, data, timeout):
             _ = url, timeout
@@ -202,8 +210,6 @@ class MetricsTest(unittest.TestCase):
         SetUpTestInjections(metrics_db=':memory:', metrics_db_lock=Lock())
 
         metrics_cache = MetricsCacheController()
-        config_controller = Mock()
-        config_controller.get = get
         metrics_collector_mock = Mock()
         metrics_collector_mock.intervals = []
 
@@ -219,7 +225,6 @@ class MetricsTest(unittest.TestCase):
         SetUpTestInjections(plugin_controller=Mock(),
                             metrics_collector=metrics_collector_mock,
                             metrics_cache_controller=metrics_cache,
-                            configuration_controller=config_controller,
                             gateway_uuid='uuid')
 
         metrics_controller = MetricsController()
@@ -262,8 +267,8 @@ class MetricsTest(unittest.TestCase):
         logger.info('Send first metrics, but raise exception on "cloud"')
 
         send_metrics = []
-        config['cloud_metrics_batch_size'] = 0
-        config['cloud_metrics_min_interval'] = 0
+        Config.set('cloud_metrics_batch_size', 0)
+        Config.set('cloud_metrics_min_interval', 0)
 
         time.sleep(10)  # Time moves on inside fakesleep
         metric_1 = send_metric(counter=0, error=True)
@@ -333,8 +338,8 @@ class MetricsTest(unittest.TestCase):
         logger.info('Send another metrics, with increased batch sizes')
 
         send_metrics = []
-        config['cloud_metrics_batch_size'] = 3
-        config['cloud_metrics_min_interval'] = 300
+        Config.set('cloud_metrics_batch_size', 3)
+        Config.set('cloud_metrics_min_interval', 300)
 
         time.sleep(10)  # Time moves on inside fakesleep
         metric_1 = send_metric(counter=3, error=False)
@@ -401,7 +406,7 @@ class MetricsTest(unittest.TestCase):
         logger.info('Send metric, but raise exception on "cloud"')
 
         send_metrics = []
-        config['cloud_metrics_batch_size'] = 0
+        Config.set('cloud_metrics_batch_size', 0)
 
         time.sleep(10)  # Time moves on inside fakesleep
         metric_1 = send_metric(counter=7, error=True)

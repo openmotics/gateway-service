@@ -46,7 +46,6 @@ if False:  # MYPY:
     from power.power_store import PowerStore
     from power.power_controller import PowerController, P1Controller
     from bus.om_bus_client import MessageClient
-    from gateway.config import ConfigurationController
     from gateway.observer import Observer
     from gateway.watchdog import Watchdog
 
@@ -77,10 +76,9 @@ class GatewayApi(object):
     def __init__(self,
                  master_controller=INJECTED, power_store=INJECTED, power_communicator=INJECTED,
                  power_controller=INJECTED, p1_controller=INJECTED, message_client=INJECTED,
-                 observer=INJECTED, configuration_controller=INJECTED):
-        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer, ConfigurationController) -> None
+                 observer=INJECTED):
+        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer) -> None
         self.__master_controller = master_controller  # type: MasterController
-        self.__config_controller = configuration_controller
         self.__power_store = power_store
         self.__power_communicator = power_communicator
         self.__p1_controller = p1_controller

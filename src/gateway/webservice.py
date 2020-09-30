@@ -50,7 +50,7 @@ from gateway.enums import ShutterEnums, UserEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
-from gateway.models import Database, Feature
+from gateway.models import Database, Feature, Config
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -61,7 +61,6 @@ from serial_utils import CommunicationTimedOutException
 if False:  # MYPY
     from typing import Dict, Optional, Any, List
     from bus.om_bus_client import MessageClient
-    from gateway.config import ConfigurationController
     from gateway.gateway_api import GatewayApi
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.frontpanel_controller import FrontpanelController
@@ -297,7 +296,7 @@ class WebInterface(object):
 
     @Inject
     def __init__(self, user_controller=INJECTED, gateway_api=INJECTED, maintenance_controller=INJECTED,
-                 message_client=INJECTED, configuration_controller=INJECTED, scheduling_controller=INJECTED,
+                 message_client=INJECTED, scheduling_controller=INJECTED,
                  thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED,
                  room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
@@ -306,7 +305,6 @@ class WebInterface(object):
         Constructor for the WebInterface.
         """
         self._user_controller = user_controller  # type: UserController
-        self._config_controller = configuration_controller  # type: ConfigurationController
         self._scheduling_controller = scheduling_controller  # type: SchedulingController
         self._thermostat_controller = thermostat_controller  # type: ThermostatController
         self._shutter_controller = shutter_controller  # type: ShutterController
@@ -2385,7 +2383,7 @@ class WebInterface(object):
         """
         values = {}
         for setting in settings:
-            value = self._config_controller.get(setting)
+            value = Config.get(setting)
             if value is not None:
                 values[setting] = value
         return {'values': values}
@@ -2398,7 +2396,7 @@ class WebInterface(object):
         if setting not in ['cloud_enabled', 'cloud_metrics_enabled|energy', 'cloud_metrics_enabled|counter',
                            'cloud_support']:
             raise RuntimeError('Setting {0} cannot be set'.format(setting))
-        self._config_controller.set(setting, value)
+        Config.set(setting, value)
         return {}
 
     @openmotics_api(auth=True, check=types(active=bool), plugin_exposed=False)
@@ -2488,10 +2486,9 @@ class WebService(object):
     name = 'web'
 
     @Inject
-    def __init__(self, web_interface=INJECTED, configuration_controller=INJECTED, verbose=False):
-        # type: (WebInterface, ConfigurationController, bool) -> None
+    def __init__(self, web_interface=INJECTED, verbose=False):
+        # type: (WebInterface, bool) -> None
         self._webinterface = web_interface
-        self._config_controller = configuration_controller
         self._https_server = None  # type: Optional[cherrypy._cpserver.Server]
         self._http_server = None  # type: Optional[cherrypy._cpserver.Server]
         if not verbose:
@@ -2526,7 +2523,7 @@ class WebService(object):
                                      'tools.websocket.handler_cls': EventsSocket},
                       '/ws_maintenance': {'tools.websocket.on': True,
                                           'tools.websocket.handler_cls': MaintenanceSocket},
-                      '/': {'tools.cors.on': self._config_controller.get('cors_enabled', False),
+                      '/': {'tools.cors.on': Config.get('cors_enabled', False),
                             'tools.sessions.on': False}}
 
             cherrypy.tree.mount(root=self._webinterface,
@@ -2546,7 +2543,7 @@ class WebService(object):
 
             self._http_server = cherrypy._cpserver.Server()
             self._http_server.socket_port = 80
-            if self._config_controller.get('enable_http', False):
+            if Config.get('enable_http', False):
                 # This is added for development purposes.
                 # Do NOT enable unless you know what you're doing and understand the risks.
                 self._http_server._socket_host = '0.0.0.0'

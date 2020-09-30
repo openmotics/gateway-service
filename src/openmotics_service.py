@@ -32,6 +32,7 @@ from gateway.migrations.features_data_migrations import FeatureMigrator
 from gateway.migrations.inputs import InputMigrator
 from gateway.migrations.schedules import ScheduleMigrator
 from gateway.migrations.users import UserMigrator
+from gateway.migrations.config import ConfigMigrator
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
@@ -179,6 +180,7 @@ class OpenmoticsService(object):
         InputMigrator.migrate()
         ScheduleMigrator.migrate()
         UserMigrator.migrate()
+        ConfigMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()

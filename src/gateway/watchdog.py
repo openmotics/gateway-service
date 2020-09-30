@@ -25,7 +25,9 @@ from subprocess import check_output
 import ujson as json
 
 from gateway.daemon_thread import DaemonThread
+from gateway.models import Config
 from ioc import INJECTED, Inject, Injectable, Singleton
+
 
 if False:  # MYPY
     from typing import Any, Optional
@@ -41,10 +43,9 @@ class Watchdog(object):
     """
 
     @Inject
-    def __init__(self, power_communicator=INJECTED, master_controller=INJECTED, configuration_controller=INJECTED):
+    def __init__(self, power_communicator=INJECTED, master_controller=INJECTED):
         self._master_controller = master_controller
         self._power_communicator = power_communicator
-        self._config_controller = configuration_controller
         self._watchdog_thread = None  # type: Optional[DaemonThread]
         self.start_time = 0.0
 
@@ -66,7 +67,7 @@ class Watchdog(object):
     def _watch(self):
         # type: () -> None
         # Cleanup legacy
-        self._config_controller.remove('communication_recovery')
+        Config.remove('communication_recovery')
 
         reset_requirement = self._controller_check('master', self._master_controller)
         if reset_requirement is not None:
@@ -85,7 +86,7 @@ class Watchdog(object):
     def _controller_check(self, name, controller):
         # type: (str, Any) -> Optional[str]
         recovery_data_key = 'communication_recovery_{0}'.format(name)
-        recovery_data = self._config_controller.get(recovery_data_key, {})
+        recovery_data = Config.get(recovery_data_key, {})
 
         calls_timedout = [call for call in controller.get_communication_statistics()['calls_timedout']
                           if call > self.start_time]
@@ -96,7 +97,7 @@ class Watchdog(object):
         if len(calls_timedout) == 0:
             # If there are no timeouts at all
             if len(calls_succeeded) > 30:
-                self._config_controller.remove(recovery_data_key)
+                Config.remove(recovery_data_key)
             return None
         if len(all_calls) <= 10:
             # Not enough calls made to have a decent view on what's going on
@@ -160,12 +161,12 @@ class Watchdog(object):
             recovery_data['service_restart'] = {'reason': service_restart,
                                                 'time': time.time(),
                                                 'backoff': backoff}
-            self._config_controller.set(recovery_data_key, recovery_data)
+            Config.set(recovery_data_key, recovery_data)
             return 'service'
         if device_reset is not None:
             logger.critical('Major issues in communication with {0}. Resetting {0} & service'.format(name))
             recovery_data['device_reset'] = {'reason': device_reset,
                                              'time': time.time()}
-            self._config_controller.set(recovery_data_key, recovery_data)
+            Config.set(recovery_data_key, recovery_data)
             return 'device'
         return None

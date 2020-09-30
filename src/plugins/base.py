@@ -25,7 +25,7 @@ from datetime import datetime
 import six
 
 from gateway.events import GatewayEvent
-from gateway.models import Plugin
+from gateway.models import Plugin, Config
 from gateway.shutter_controller import ShutterController
 from ioc import INJECTED, Inject, Injectable, Singleton
 from plugins.runner import PluginRunner, RunnerWatchdog
@@ -43,13 +43,12 @@ class PluginController(object):
 
     @Inject
     def __init__(self,
-                 web_interface=INJECTED, configuration_controller=INJECTED, output_controller=INJECTED,
+                 web_interface=INJECTED, output_controller=INJECTED,
                  shutter_controller=INJECTED,
                  runtime_path='/opt/openmotics/python/plugin_runtime',
                  plugins_path='/opt/openmotics/python/plugins',
                  plugin_config_path='/opt/openmotics/etc'):
         self.__webinterface = web_interface
-        self.__config_controller = configuration_controller
         self.__output_controller = output_controller
         self.__shuttercontroller = shutter_controller  # type: ShutterController
         self.__runtime_path = runtime_path
@@ -424,7 +423,7 @@ class PluginController(object):
 
     def __get_cherrypy_mounts(self):
         mounts = []
-        cors_enabled = self.__config_controller.get('cors_enabled', False)
+        cors_enabled = Config.get('cors_enabled', False)
         for runner in self.__iter_running_runners():
             mounts.append({'root': runner.get_webservice(self.__webinterface),
                            'script_name': '/plugins/{0}'.format(runner.name),

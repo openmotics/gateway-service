@@ -20,7 +20,6 @@ import unittest
 import mock
 
 from bus.om_bus_client import MessageClient
-from gateway.config import ConfigurationController
 from gateway.dto import OutputStateDTO, ScheduleDTO, VentilationDTO, \
     VentilationSourceDTO, VentilationStatusDTO
 from gateway.gateway_api import GatewayApi
@@ -52,8 +51,7 @@ class WebInterfaceTest(unittest.TestCase):
         self.scheduling_controller = mock.Mock(SchedulingController)
         self.ventilation_controller = mock.Mock(VentilationController)
         self.gateway_api = mock.Mock(GatewayApi)
-        SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
-                            frontpanel_controller=mock.Mock(FrontpanelController),
+        SetUpTestInjections(frontpanel_controller=mock.Mock(FrontpanelController),
                             gateway_api=self.gateway_api,
                             group_action_controller=mock.Mock(GroupActionController),
                             input_controller=mock.Mock(InputController),
