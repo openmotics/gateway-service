@@ -608,6 +608,8 @@ FULL_DESCR = [
 class PluginConfigCheckerTest(unittest.TestCase):
     """ Tests for the PluginConfigChecker. """
 
+    maxDiff = None
+
     def test_constructor(self):
         """ Test for the constructor. """
         _ = self
@@ -851,7 +853,7 @@ class PluginConfigCheckerTest(unittest.TestCase):
         found_calls = web._load_webinterface()
 
         ramaining_methods = list(found_calls.keys())
-        for method_info in inspect.getmembers(WebInterface, predicate=lambda m: inspect.ismethod(m)):
+        for method_info in inspect.getmembers(WebInterface, predicate=lambda m: inspect.isfunction(m) or inspect.ismethod(m)):
             method = method_info[1]
             method_name = method.__name__
             call_info = found_calls.get(method_name)
