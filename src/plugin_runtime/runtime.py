@@ -12,7 +12,7 @@ from platform_utils import System
 System.import_libs()
 
 import six
-from toolbox import PluginIPCStream, Toolbox
+from toolbox import PluginIPCReader, PluginIPCWriter, Toolbox
 from gateway.events import GatewayEvent
 from plugin_runtime import base
 from plugin_runtime.utils import get_plugin_class, check_plugin, get_special_methods
@@ -57,9 +57,10 @@ class PluginRuntime(object):
         self._metric_receivers = []  # type: List[Any]
 
         self._plugin = None
-        self._stream = PluginIPCStream(sys.stdin, IO._log_exception)
+        self._writer = PluginIPCWriter(sys.stdout)
+        self._stream = PluginIPCReader(sys.stdin, self._writer.log_exception)
 
-        self._webinterface = WebInterfaceDispatcher(IO._log)
+        self._webinterface = WebInterfaceDispatcher(self._writer.log)
 
     def _init_plugin(self):
         # type: () -> None
@@ -86,7 +87,7 @@ class PluginRuntime(object):
         self._interfaces = plugin_class.interfaces
 
         # Initialze the plugin
-        self._plugin = plugin_class(self._webinterface, IO._log)
+        self._plugin = plugin_class(self._webinterface, self._writer.log)
 
         for decorator_name, decorated_methods in six.iteritems(self._decorated_methods):
             for decorated_method, decorator_version in get_special_methods(self._plugin, decorator_name):
@@ -122,7 +123,7 @@ class PluginRuntime(object):
         # type: () -> None
         """ Start all background tasks. """
         for decorated_method in self._decorated_methods['background_task']:
-            thread = Thread(target=PluginRuntime._run_background_task, args=(decorated_method,))
+            thread = Thread(target=self._run_background_task, args=(decorated_method,))
             thread.name = 'Background thread ({0})'.format(decorated_method.__name__)
             thread.daemon = True
             thread.start()
@@ -139,8 +140,7 @@ class PluginRuntime(object):
         # something in the form of e.g. {'output_status': [1,2], 'input_status': [1]} where 1,2,... are the versions
         return registered_decorators
 
-    @staticmethod
-    def _run_background_task(task):
+    def _run_background_task(self, task):
         # type: (Callable[[],None]) -> None
         running = True
         while running:
@@ -148,7 +148,7 @@ class PluginRuntime(object):
                 task()
                 running = False  # Stop execution if the task returns without exception
             except Exception as exception:
-                IO._log_exception('background task', exception)
+                self._writer.log_exception('background task', exception)
                 time.sleep(30)
 
     def process_stdin(self):
@@ -207,7 +207,7 @@ class PluginRuntime(object):
                     response.update(ret)
             except Exception as exception:
                 response['_exception'] = str(exception)
-            IO._write(response)
+            self._writer.write(response)
 
     def _handle_start(self):
         # type: () -> Dict[str,Any]
@@ -249,13 +249,13 @@ class PluginRuntime(object):
             if decorator_version == 1:
                 # Backwards compatibility: only send rising edges of the input (no input releases)
                 if status:
-                    IO._with_catch('input status', decorated_method, [(input_id, None)])
+                    self._writer.with_catch('input status', decorated_method, [(input_id, None)])
             elif decorator_version == 2:
                 # Version 2 will send ALL input status changes AND in a dict format
-                IO._with_catch('input status', decorated_method, [{'input_id': input_id, 'status': status}])
+                self._writer.with_catch('input status', decorated_method, [{'input_id': input_id, 'status': status}])
             else:
                 error = NotImplementedError('Version {} is not supported for input status decorators'.format(decorator_version))
-                IO._log_exception('input status', error)
+                self._writer.log_exception('input status', error)
 
     def _handle_output_status(self, data, data_type='status'):
         event = GatewayEvent.deserialize(data) if data_type == 'event' else None
@@ -263,17 +263,17 @@ class PluginRuntime(object):
             decorator_version = receiver.output_status.get('version', 1)
             if decorator_version not in PluginRuntime.SUPPORTED_DECORATOR_VERSIONS['output_status']:
                 error = NotImplementedError('Version {} is not supported for output status decorators'.format(decorator_version))
-                IO._log_exception('output status', error)
+                self._writer.log_exception('output status', error)
             else:
                 if decorator_version == 1 and data_type == 'status':
-                    IO._with_catch('output status', receiver, [data])
+                    self._writer.with_catch('output status', receiver, [data])
                 elif decorator_version == 2 and event:
-                    IO._with_catch('output status', receiver, [event.data])
+                    self._writer.with_catch('output status', receiver, [event.data])
 
     def _handle_ventilation_status(self, data):
         event = GatewayEvent.deserialize(data)
         for receiver in self._decorated_methods['ventilation_status']:
-            IO._with_catch('ventilation status', receiver, [event.data])
+            self._writer.with_catch('ventilation status', receiver, [event.data])
 
     def _handle_shutter_status(self, data, data_type='status'):
         event = GatewayEvent.deserialize(data) if data_type == 'event' else None
@@ -281,23 +281,23 @@ class PluginRuntime(object):
             decorator_version = receiver.shutter_status.get('version', 1)
             if decorator_version not in PluginRuntime.SUPPORTED_DECORATOR_VERSIONS['shutter_status']:
                 error = NotImplementedError('Version {} is not supported for shutter status decorators'.format(decorator_version))
-                IO._log_exception('shutter status', error)
+                self._writer.log_exception('shutter status', error)
             else:
                 if decorator_version == 1 and data_type == 'status':
-                    IO._with_catch('shutter status', receiver, [data])
+                    self._writer.with_catch('shutter status', receiver, [data])
                 elif decorator_version == 2 and data_type == 'status_dict':
-                    IO._with_catch('shutter status', receiver, [data['status'], data['detail']])
+                    self._writer.with_catch('shutter status', receiver, [data['status'], data['detail']])
                 elif decorator_version == 3 and event:
-                    IO._with_catch('shutter status', receiver, [event.data])
+                    self._writer.with_catch('shutter status', receiver, [event.data])
 
     def _handle_receive_events(self, code):
         for receiver in self._decorated_methods['receive_events']:
             decorator_version = receiver.receive_events.get('version', 1)
             if decorator_version == 1:
-                IO._with_catch('process event', receiver, [code])
+                self._writer.with_catch('process event', receiver, [code])
             else:
                 error = NotImplementedError('Version {} is not supported for receive events decorators'.format(decorator_version))
-                IO._log_exception('receive events', error)
+                self._writer.log_exception('receive events', error)
 
     def _handle_remove_callback(self):
         for decorated_method in self._decorated_methods['on_remove']:
@@ -306,10 +306,10 @@ class PluginRuntime(object):
                 try:
                     decorated_method()
                 except Exception as exception:
-                    IO._log_exception('on remove', exception)
+                    self._writer.log_exception('on remove', exception)
             else:
                 error = NotImplementedError('Version {} is not supported for shutter status decorators'.format(decorator_version))
-                IO._log_exception('on remove', error)
+                self._writer.log_exception('on remove', error)
 
     def _handle_get_metric_definitions(self):
         return {'metric_definitions': self._metric_definitions}
@@ -320,13 +320,13 @@ class PluginRuntime(object):
         try:
             metrics.extend(list(collect()))
         except Exception as exception:
-            IO._log_exception('collect metrics', exception)
+            self._writer.log_exception('collect metrics', exception)
         return {'metrics': metrics}
 
     def _handle_distribute_metrics(self, name, metrics):
         receive = getattr(self._plugin, name)
         for metric in metrics:
-            IO._with_catch('distribute metric', receive, [metric])
+            self._writer.with_catch('distribute metric', receive, [metric])
 
     def _handle_request(self, method, args, kwargs):
         func = getattr(self._plugin, method)
@@ -343,33 +343,6 @@ class PluginRuntime(object):
             return {'success': True, 'response': func(*args, **kwargs)}
         except Exception as exception:
             return {'success': False, 'exception': str(exception), 'stacktrace': traceback.format_exc()}
-
-
-class IO(object):
-    @staticmethod
-    def _log(msg):
-        # type: (str) -> None
-        IO._write({'cid': 0, 'action': 'logs', 'logs': str(msg)})
-
-    @staticmethod
-    def _log_exception(name, exception):
-        # type: (str, Exception) -> None
-        IO._log('Exception ({0}) in {1}: {2}'.format(exception, name, traceback.format_exc()))
-
-    @staticmethod
-    def _with_catch(name, target, args):
-        # type: (str, Callable[...,None], List[Any]) -> None
-        """ Logs Exceptions that happen in target(*args). """
-        try:
-            return target(*args)
-        except Exception as exception:
-            IO._log_exception(name, exception)
-
-    @staticmethod
-    def _write(msg):
-        # type: (Dict[str,Any]) -> None
-        sys.stdout.write(PluginIPCStream.write(msg))
-        sys.stdout.flush()
 
 
 if __name__ == '__main__':
@@ -397,7 +370,7 @@ if __name__ == '__main__':
         runtime = PluginRuntime(path=sys.argv[2])
         runtime.process_stdin()
     except BaseException as ex:
-        IO._log_exception('__main__', ex)
+        self._writer.log_exception('__main__', ex)
         os._exit(1)
 
     os._exit(0)

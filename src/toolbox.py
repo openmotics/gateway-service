@@ -21,6 +21,7 @@ from __future__ import absolute_import
 import inspect
 import logging
 import time
+import traceback
 from collections import deque
 from select import select
 from threading import Thread
@@ -31,7 +32,7 @@ import six
 logger = logging.getLogger('openmotics')
 
 if False:  # MYPY
-    from typing import Any, Callable, Dict, IO, Optional
+    from typing import Any, Callable, Dict, IO, List, Optional
 
 
 class Full(Exception):
@@ -75,7 +76,7 @@ class Queue(object):
         return self._queue.clear()
 
 
-class PluginIPCStream(object):
+class PluginIPCReader(object):
     """
     This class handles IPC communications.
 
@@ -136,7 +137,7 @@ class PluginIPCStream(object):
                         continue
                 if self._buffer.endswith(',\n'):
                     protocol, self._buffer = self._buffer.split(':', 1)
-                    command = PluginIPCStream._decode(protocol, self._buffer[:-2])
+                    command = PluginIPCReader._decode(protocol, self._buffer[:-2])
                     if command is None:
                         # Unexpected protocol
                         self._buffer = ''
@@ -157,7 +158,7 @@ class PluginIPCStream(object):
     @staticmethod
     def write(data):
         encode_type = '1'
-        data = PluginIPCStream._encode(encode_type, data)
+        data = PluginIPCReader._encode(encode_type, data)
         return '{0}:{1}:{2},\n'.format(len(data) + 2, encode_type, data)
 
     @staticmethod
@@ -173,6 +174,33 @@ class PluginIPCStream(object):
         if encode_type == '1':
             return msgpack.loads(data)
         return None
+
+
+class PluginIPCWriter(object):
+    def __init__(self, stream):
+        # type: (IO[bytes]) -> None
+        self._stream = stream
+
+    def log(self, msg):
+        # type: (str) -> None
+        self.write({'cid': 0, 'action': 'logs', 'logs': str(msg)})
+
+    def log_exception(self, name, exception):
+        # type: (str, Exception) -> None
+        self.log('Exception ({0}) in {1}: {2}'.format(exception, name, traceback.format_exc()))
+
+    def with_catch(self, name, target, args):
+        # type: (str, Callable[...,None], List[Any]) -> None
+        """ Logs Exceptions that happen in target(*args). """
+        try:
+            return target(*args)
+        except Exception as exception:
+            self.log_exception(name, exception)
+
+    def write(self, response):
+        # type: (Dict[str,Any]) -> None
+        self._stream.write(PluginIPCReader.write(response))
+        self._stream.flush()
 
 
 class Toolbox(object):

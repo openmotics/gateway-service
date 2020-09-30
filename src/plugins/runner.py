@@ -12,7 +12,7 @@ import six
 import ujson as json
 from six.moves.queue import Empty, Full, Queue
 
-from toolbox import PluginIPCStream
+from toolbox import PluginIPCReader
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional
@@ -107,7 +107,7 @@ class PluginRunner(object):
         self._commands_executed = 0
         self._commands_failed = 0
 
-        self._stream = PluginIPCStream(stream=self._proc.stdout,
+        self._stream = PluginIPCReader(stream=self._proc.stdout,
                                        logger=lambda message, ex: self.logger('{0}: {1}'.format(message, ex)),
                                        command_receiver=self._process_command)
         self._stream.start()
@@ -334,7 +334,7 @@ class PluginRunner(object):
                 assert self._proc, 'Plugin process not defined'
                 writer = self._proc.stdin
                 assert writer, 'Plugin stdin not available'
-                writer.write(PluginIPCStream.write(command))
+                writer.write(PluginIPCReader.write(command))
                 writer.flush()
             except Exception:
                 self._commands_failed += 1
