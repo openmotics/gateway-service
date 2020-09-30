@@ -108,6 +108,7 @@ class InputConfiguration(MemoryModelDefinition):
         dimming_up: bool
         enable_1s_press: bool
         enable_2s_press: bool
+        not_used: bool
         enable_double_press: bool
 
     id: int
