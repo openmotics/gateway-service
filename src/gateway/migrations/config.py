@@ -46,7 +46,10 @@ class ConfigMigrator(BaseMigrator):
                 setting = row[1]
                 config = Config.get_or_none(setting=setting)
                 if config is None:
-                    config.data = row[2]
+                    config = Config(
+                        setting=setting,
+                        data=row[2]
+                    )
                     config.save()
             os.rename(old_sqlite_db, '{0}.bak'.format(old_sqlite_db))
 
