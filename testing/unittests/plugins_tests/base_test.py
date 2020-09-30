@@ -113,7 +113,7 @@ class PluginControllerTest(unittest.TestCase):
         try:
             PluginControllerTest._create_plugin(name, code, temp_directory)
             call('cd {0}/{1}; tar -czf ../package.tgz .'.format(temp_directory, name), shell=True)
-            with open('{0}/package.tgz'.format(temp_directory), 'r') as package_file:
+            with open('{0}/package.tgz'.format(temp_directory), 'rb') as package_file:
                 package_data = package_file.read()
             hasher = hashlib.md5()
             hasher.update(package_data)
