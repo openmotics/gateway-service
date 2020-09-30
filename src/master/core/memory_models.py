@@ -119,7 +119,7 @@ class InputConfiguration(MemoryModelDefinition):
         dimming_up = CompositeBitField(bit=11)
         enable_1s_press = CompositeBitField(bit=12)
         enable_2s_press = CompositeBitField(bit=13)
-        not_used = CompositeBitField(bit=14)  # This bit field is literally not used my the firmware
+        not_used = CompositeBitField(bit=14)  # This bit field is not used by the firmware, yet still needed
         enable_double_press = CompositeBitField(bit=15)
 
     id = IdField(limits=lambda f: (0, f * 8 - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 2)))
