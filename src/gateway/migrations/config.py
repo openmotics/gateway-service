@@ -28,11 +28,7 @@ class ConfigMigrator(BaseMigrator):
 
     @classmethod
     def migrate(cls):
-        BaseMigrator.MIGRATION_KEY = 'config'
-        BaseMigrator._migrate = cls._migrate
-        BaseMigrator.migrate()
-        BaseMigrator.MIGRATION_KEY = None
-        BaseMigrator._migrate = BaseMigrator._migrate
+        super(ConfigMigrator, cls).migrate()
         cls._insert_defaults()
 
 
