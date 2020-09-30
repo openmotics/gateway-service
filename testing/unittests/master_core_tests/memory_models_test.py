@@ -103,7 +103,7 @@ class MemoryModelsTest(unittest.TestCase):
             else:
                 for i in range(amount):
                     self._enumerate_instance(orm_type(i), code)
-        self._validate_and_report(print_overview=True)
+        self._validate_and_report(print_overview=False)  # Set to `True` when debugging or when a visual overview is wanted
 
     def _enumerate_instance(self, instance, code):
         fields = instance._get_fields()
