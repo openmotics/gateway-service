@@ -27,6 +27,11 @@ class ConfigMigrator(BaseMigrator):
     MIGRATION_KEY = 'config'
 
     @classmethod
+    def migrate(cls):
+        cls._insert_defaults()
+        BaseMigrator.migrate()
+
+    @classmethod
     def _migrate(cls):
         # type: () -> None
         old_sqlite_db = constants.get_config_database_file()
@@ -37,17 +42,13 @@ class ConfigMigrator(BaseMigrator):
                                          check_same_thread=False,
                                          isolation_level=None)
             cursor = connection.cursor()
-            for row in cursor.execute('SELECT FROM config;'):
+            for row in cursor.execute('SELECT * FROM config;'):
                 setting = row[1]
                 config = Config.get_or_none(setting=setting)
                 if config is None:
-                    config = Config(
-                        setting=setting,
-                        data=row[2]
-                    )
+                    config.data = row[2]
                     config.save()
             os.rename(old_sqlite_db, '{0}.bak'.format(old_sqlite_db))
-            cls._insert_defaults()
 
     @staticmethod
     def _insert_defaults():
