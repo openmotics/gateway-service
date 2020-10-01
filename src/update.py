@@ -417,44 +417,44 @@ def update(version, expected_md5):
 
         gateway_os = FIRMWARE_FILES['gateway_os']
         if os.path.exists(gateway_os):
-            version = version_mapping.get('gateway_os')
-            logger.info(' -> Updating Gateway OS to {0}'.format(version if version else 'unknown version'))
-            error = update_gateway_os(gateway_os, version)
+            os_version = version_mapping.get('gateway_os')
+            logger.info(' -> Updating Gateway OS to {0}'.format(os_version if os_version else 'unknown version'))
+            error = update_gateway_os(gateway_os, os_version)
             if error:
                 errors.append(error)
 
         gateway_service = FIRMWARE_FILES['gateway_service']
         if os.path.exists(gateway_service):
-            version = version_mapping.get('gateway_service')
-            logger.info(' -> Updating Gateway service to {0}'.format(version if version else 'unknown version'))
-            error = update_gateway_backend(gateway_service, date, version)
+            service_version = version_mapping.get('gateway_service')
+            logger.info(' -> Updating Gateway service to {0}'.format(service_version if service_version else 'unknown version'))
+            error = update_gateway_backend(gateway_service, date, service_version)
             if error:
                 errors.append(error)
 
         master_type = get_master_type()
         master_firmware = FIRMWARE_FILES[master_type]
         if os.path.exists(master_firmware):
-            version = version_mapping.get(master_type)
-            logger.info(' -> Updating Master firmware to {0}'.format(version if version else 'unknown version'))
-            error = update_master_firmware(master_type, master_firmware, version)
+            master_version = version_mapping.get(master_type)
+            logger.info(' -> Updating Master firmware to {0}'.format(master_version if master_version else 'unknown version'))
+            error = update_master_firmware(master_type, master_firmware, master_version)
             if error:
                 errors.append(error)
 
         for module, filename, arguments in [('energy', FIRMWARE_FILES['energy'], []),
                                             ('power', FIRMWARE_FILES['power'], ['--8'])]:
             if os.path.exists(filename):
-                version = version_mapping.get(module)
-                logger.info(' -> Updating {0} firmware to {1}'.format(module, version if version else 'unknown version'))
-                error = update_energy_firmware(module, filename, version, arguments)
+                energy_version = version_mapping.get(module)
+                logger.info(' -> Updating {0} firmware to {1}'.format(module, energy_version if energy_version else 'unknown version'))
+                error = update_energy_firmware(module, filename, energy_version, arguments)
                 if error:
                     errors.append(error)
 
         for module in MODULE_TYPES:
             module_firmware = FIRMWARE_FILES[module]
-            version = version_mapping.get(module)
+            module_version = version_mapping.get(module)
             if os.path.exists(module_firmware):
-                logger.info(' -> Updating {0} firmware to {1}'.format(module, version if version else 'unknown version'))
-                error = update_module_firmware(module, module_firmware, version)
+                logger.info(' -> Updating {0} firmware to {1}'.format(module, module_version if module_version else 'unknown version'))
+                error = update_module_firmware(module, module_firmware, module_version)
                 if error:
                     errors.append(error)
 
@@ -463,9 +463,9 @@ def update(version, expected_md5):
 
         gateway_frontend = FIRMWARE_FILES['gateway_frontend']
         if os.path.exists(gateway_frontend):
-            version = version_mapping.get('gateway_frontend')
-            logger.info(' -> Updating Gateway frontend to {0}'.format(version if version else 'unknown version'))
-            error = update_gateway_frontend(gateway_frontend, date, version)
+            frontend_version = version_mapping.get('gateway_frontend')
+            logger.info(' -> Updating Gateway frontend to {0}'.format(frontend_version if frontend_version else 'unknown version'))
+            error = update_gateway_frontend(gateway_frontend, date, frontend_version)
             if error:
                 errors.append(error)
 
