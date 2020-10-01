@@ -121,10 +121,11 @@ class MemoryModelsTest(unittest.TestCase):
             self._register_address(id.format(field_name), getattr(instance, '_{0}'.format(field_name))._field_container._memory_address)
 
     def _register_address(self, id, address):  # type: (str, MemoryAddress) -> None
-        self.assertLess(address.page, 512, 'Page overflow: {0} > {1}'.format(id, address.page))
-        page = self._memory_access[address.memory_type].setdefault(address.page, [[] for _ in range(256)])
+        self.assertLess(address.page, MemoryFile.SIZES[address.memory_type][0], 'Page overflow: {0} > {1}'.format(id, address.page))
+        page_size = MemoryFile.SIZES[address.memory_type][1]
+        page = self._memory_access[address.memory_type].setdefault(address.page, [[] for _ in range(page_size)])
         for i in range(address.offset, address.offset + address.length):
-            self.assertLess(i, 256, 'Memory range overflow: {0} > {1}'.format(id, address))
+            self.assertLess(i, page_size, 'Memory range overflow: {0} > {1}'.format(id, address))
             self.assertNotIn(id, page[i], 'Duplicate entry: {0} > {1}'.format(id, address))
             page[i].append(id)
 
