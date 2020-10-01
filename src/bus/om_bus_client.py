@@ -17,6 +17,7 @@ IPC Bus messaging client
 """
 
 from __future__ import absolute_import
+
 import logging
 import time
 from multiprocessing.connection import Client
@@ -24,18 +25,21 @@ from signal import SIGTERM, signal
 from threading import Lock, Thread
 
 import ujson as json
+
 from bus.om_bus_events import OMBusEvents
+
+if False:  # MYPY
+    from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger('openmotics')
 
 
 class MessageClient(object):
-
-    def __init__(self, name, ip='localhost', port=10000, authkey='openmotics'):
+    def __init__(self, name, ip='localhost', port=10000, authkey=b'openmotics'):
         self.address = (ip, port)  # family is deduced to be 'AF_INET'
         self.authkey = authkey
         self.callbacks = []
-        self.client = None
+        self.client = None  # type: Optional[Client]
         self._get_state = None
         self.client_name = name
         self.latest_state_received = {}
@@ -77,6 +81,7 @@ class MessageClient(object):
         self._stop = False
         while not self._stop:
             try:
+                assert self.client, 'Client not defined'
                 msg = self.client.recv_bytes()
                 self._process_message(msg)
             except EOFError:
@@ -100,6 +105,7 @@ class MessageClient(object):
             logger.error('Unable to send payload. Client still connected?')
 
     def _connect(self):
+        # type: () -> None
         while not self._connected:
             try:
                 self.client = Client(self.address, authkey=self.authkey)
