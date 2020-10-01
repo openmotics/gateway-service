@@ -246,7 +246,7 @@ class UCanModuleConfiguration(MemoryModelDefinition):
 class ExtraSensorConfiguration(MemoryModelDefinition):
     id = IdField(limits=(0, 63))
     grouaction_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (471, id * 2))  # 471, 0-255
-    name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (476 + id // 16, (id % 16) * 16), length=16)  # 476-479, 0-255
+    name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (472 + id // 16, (id % 16) * 16), length=16)  # 472-479, 0-255
 
 
 class ValidationBitConfiguration(MemoryModelDefinition):
