@@ -10,7 +10,7 @@ hypothesis==4.57.1
 intelhex==2.2.1
 ipython==5.10.0
 mock==3.0.5
-msgpack==1.0.0
+msgpack==0.6.2
 peewee-migrate==1.1.6
 peewee==3.13.3
 psutil==5.7.2

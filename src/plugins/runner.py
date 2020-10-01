@@ -1,35 +1,75 @@
 from __future__ import absolute_import
-import cherrypy
+
 import logging
 import subprocess
 import sys
 import time
 import traceback
+from threading import Lock, Thread
 
+import cherrypy
 import six
 import ujson as json
-from threading import Thread, Lock
-from six.moves.queue import Queue, Empty, Full
-from toolbox import PluginIPCStream
+from six.moves.queue import Empty, Full, Queue
 
-logger = logging.getLogger("openmotics")
+from toolbox import PluginIPCReader, PluginIPCWriter
+
+if False:  # MYPY
+    from typing import Any, Dict, List, Optional
+    from gateway.webservice import WebInterface
+
+logger = logging.getLogger('openmotics')
 
 
-class PluginRunner:
+class Service(object):
+    def __init__(self, runner, webinterface):
+        # type: (PluginRunner, WebInterface) -> None
+        self.runner = runner
+        # Set the user controller, required to check the auth token
+        self._user_controller = webinterface._user_controller
 
-    def __init__(self, name, runtime_path, plugin_path, logger, command_timeout=5):
+    def _cp_dispatch(self, vpath):
+        # type: (List[str]) -> Any
+        request = cherrypy.request
+        response = cherrypy.response
+        method = vpath.pop()
+        for exposed in self.runner._exposes:
+            if exposed['name'] == method:
+                request.params['method'] = method
+                response.headers['Content-Type'] = exposed['content_type']
+                if exposed['auth'] is True:
+                    request.hooks.attach('before_handler', cherrypy.tools.authenticated.callable)
+                request.hooks.attach('before_handler', cherrypy.tools.params.callable)
+                return self
+
+        return None
+
+    @cherrypy.expose
+    def index(self, method, *args, **kwargs):
+        try:
+            return self.runner.request(method, args=args, kwargs=kwargs)
+        except Exception as ex:
+            cherrypy.response.headers["Content-Type"] = "application/json"
+            cherrypy.response.status = 500
+            return json.dumps({"success": False, "msg": str(ex)})
+
+
+
+class PluginRunner(object):
+    def __init__(self, name, runtime_path, plugin_path, logger, command_timeout=5.0):
         self.runtime_path = runtime_path
         self.plugin_path = plugin_path
         self.command_timeout = command_timeout
 
         self._logger = logger
         self._cid = 0
-        self._proc = None
+        self._proc = None  # type: Optional[subprocess.Popen[bytes]]
         self._running = False
         self._process_running = False
         self._command_lock = Lock()
-        self._response_queue = Queue()
-        self._stream = None
+        self._response_queue = Queue()  # type: Queue[Dict[str,Any]]
+        self._writer = None  # type: Optional[PluginIPCWriter]
+        self._reader = None  # type: Optional[PluginIPCReader]
 
         self.name = name
         self.version = None
@@ -41,14 +81,15 @@ class PluginRunner:
         self._metric_receivers = []
 
         self._async_command_thread = None
-        self._async_command_queue = None
+        self._async_command_queue = None  # type: Optional[Queue[Dict[str,Any]]]
 
         self._commands_executed = 0
         self._commands_failed = 0
 
-        self.__collector_runs = {}
+        self.__collector_runs = {}  # type: Dict[str,float]
 
     def start(self):
+        # type: () -> None
         if self._running:
             raise Exception('PluginRunner is already running')
 
@@ -61,15 +102,18 @@ class PluginRunner:
         self._proc = subprocess.Popen([python_executable, "runtime.py", "start", self.plugin_path],
                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=None,
                                       cwd=self.runtime_path)
+        assert self._proc.stdout, 'Plugin stdout not available'
         self._process_running = True
 
         self._commands_executed = 0
         self._commands_failed = 0
 
-        self._stream = PluginIPCStream(stream=self._proc.stdout,
+        assert self._proc.stdin, 'Plugin stdin not defined'
+        self._writer = PluginIPCWriter(stream=self._proc.stdin)
+        self._reader = PluginIPCReader(stream=self._proc.stdout,
                                        logger=lambda message, ex: self.logger('{0}: {1}'.format(message, ex)),
                                        command_receiver=self._process_command)
-        self._stream.start()
+        self._reader.start()
 
         start_out = self._do_command('start', timeout=180)
         self.name = start_out['name']
@@ -95,46 +139,20 @@ class PluginRunner:
         self.logger('[Runner] Started')
 
     def logger(self, message):
+        # type: (str) -> None
         self._logger(message)
         logger.info('Plugin {0} - {1}'.format(self.name, message))
 
     def get_webservice(self, webinterface):
-        class Service:
-            def __init__(self, runner):
-                self.runner = runner
-                # Set the user controller, required to check the auth token
-                self._user_controller = webinterface._user_controller
-
-            def _cp_dispatch(self, vpath):
-                request = cherrypy.request
-                response = cherrypy.response
-                method = vpath.pop()
-                for exposed in self.runner._exposes:
-                    if exposed['name'] == method:
-                        request.params['method'] = method
-                        response.headers['Content-Type'] = exposed['content_type']
-                        if exposed['auth'] is True:
-                            request.hooks.attach('before_handler', cherrypy.tools.authenticated.callable)
-                        request.hooks.attach('before_handler', cherrypy.tools.params.callable)
-                        return self
-
-                return None
-
-            @cherrypy.expose
-            def index(self, method, *args, **kwargs):
-                try:
-                    return self.runner.request(method, args=args, kwargs=kwargs)
-                except Exception as ex:
-                    cherrypy.response.headers["Content-Type"] = "application/json"
-                    cherrypy.response.status = 500
-                    return json.dumps({"success": False, "msg": str(ex)})
-
-        return Service(self)
+        # type: (WebInterface) -> Service
+        return Service(self, webinterface)
 
     def is_running(self):
+        # type: () -> bool
         return self._running
 
     def stop(self):
+        # type: () -> None
         if self._process_running:
             self._running = False
 
@@ -145,10 +163,11 @@ class PluginRunner:
                 self.logger('[Runner] Exception during stopping plugin: {0}'.format(exception))
             time.sleep(0.1)
 
-            self._stream.stop()
+            if self._reader:
+                self._reader.stop()
             self._process_running = False
 
-            if self._proc.poll() is None:
+            if self._proc and self._proc.poll() is None:
                 self.logger('[Runner] Terminating process')
                 try:
                     self._proc.terminate()
@@ -210,7 +229,7 @@ class PluginRunner:
                 now = time.time()
                 (name, interval) = (mc['name'], mc['interval'])
 
-                if self.__collector_runs.get(name, 0) < now - interval:
+                if self.__collector_runs.get(name, 0.0) < now - interval:
                     self.__collector_runs[name] = now
                     metrics = self._do_command('collect_metrics', {'name': name})['metrics']
                     for metric in metrics:
@@ -246,11 +265,14 @@ class PluginRunner:
         raise Exception(ret['exception'])
 
     def remove_callback(self):
+        # type: () -> None
         self._do_command('remove_callback')
 
     def _process_command(self, response):
+        # type: (Dict[str,Any]) -> None
         if not self._process_running:
             return
+        assert self._proc, 'Plugin process not defined'
         exit_code = self._proc.poll()
         if exit_code is not None:
             self.logger('[Runner] Stopped with exit code {0}'.format(exit_code))
@@ -265,12 +287,14 @@ class PluginRunner:
             self.logger('[Runner] Received message with unknown cid: {0}'.format(response))
 
     def _handle_async_response(self, response):
+        # type: (Dict[str,Any]) -> None
         if response['action'] == 'logs':
             self.logger(response['logs'])
         else:
             self.logger('[Runner] Unkown async message: {0}'.format(response))
 
     def _do_async(self, action, payload, should_filter=False, action_version=1):
+        # type: (str, Dict[str,Any], bool, int) -> None
         has_receiver = False
         for decorator_name, decorator_versions in six.iteritems(self._decorators_in_use):
             # the action version is linked to a specific decorator version
@@ -278,14 +302,17 @@ class PluginRunner:
         if not self._process_running or (should_filter and not has_receiver):
             return
         try:
+            assert self._async_command_queue, 'Command Queue not defined'
             self._async_command_queue.put({'action': action, 'payload': payload, 'action_version': action_version}, block=False)
         except Full:
             self.logger('Async action cannot be queued, queue is full')
 
     def _perform_async_commands(self):
+        # type: () -> None
         while self._process_running:
             try:
                 # Give it a timeout in order to check whether the plugin is not stopped.
+                assert self._async_command_queue, 'Command Queue not defined'
                 command = self._async_command_queue.get(block=True, timeout=10)
                 self._do_command(command['action'], payload=command['payload'], action_version=command['action_version'])
             except Empty:
@@ -294,6 +321,7 @@ class PluginRunner:
                 self.logger('[Runner] Failed to perform async command: {0}'.format(exception))
 
     def _do_command(self, action, payload=None, timeout=None, action_version=1):
+        # type: (str, Dict[str,Any], Optional[float], int) -> Dict[str,Any]
         if payload is None:
             payload = {}
         self._commands_executed += 1
@@ -306,8 +334,8 @@ class PluginRunner:
         with self._command_lock:
             try:
                 command = self._create_command(action, payload, action_version)
-                self._proc.stdin.write(PluginIPCStream.write(command))
-                self._proc.stdin.flush()
+                assert self._writer, 'Plugin stdin not defined'
+                self._writer.write(command)
             except Exception:
                 self._commands_failed += 1
                 raise
@@ -329,6 +357,7 @@ class PluginRunner:
                 raise Exception('Plugin did not respond')
 
     def _create_command(self, action, payload=None, action_version=1):
+        # type: (str, Dict[str,Any], int) -> Dict[str,Any]
         if payload is None:
             payload = {}
         self._cid += 1
@@ -339,8 +368,9 @@ class PluginRunner:
         return command
 
     def error_score(self):
+        # type: () -> float
         if self._commands_executed == 0:
-            return 0
+            return 0.0
         else:
             score = float(self._commands_failed) / self._commands_executed
             self._commands_failed = 0
@@ -348,23 +378,26 @@ class PluginRunner:
             return score
 
     def get_queue_length(self):
+        # type: () -> int
         if self._async_command_queue is None:
             return 0
         return self._async_command_queue.qsize()
 
 
-class RunnerWatchdog:
-
+class RunnerWatchdog(object):
     def __init__(self, plugin_runner, threshold=0.25, check_interval=60):
+        # type: (PluginRunner, float, int) -> None
         self._plugin_runner = plugin_runner
         self._threshold = threshold
         self._check_interval = check_interval
         self._stopped = False
 
     def stop(self):
+        # type: () -> None
         self._stopped = True
 
     def start(self):
+        # type: () -> None
         self._stopped = False
         thread = Thread(target=self.run, name='RunnerWatchdog for {0}'.format(self._plugin_runner.plugin_path))
         thread.daemon = True
