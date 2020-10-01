@@ -112,7 +112,8 @@ class PluginRunner(object):
         self._writer = PluginIPCWriter(stream=self._proc.stdin)
         self._reader = PluginIPCReader(stream=self._proc.stdout,
                                        logger=lambda message, ex: self.logger('{0}: {1}'.format(message, ex)),
-                                       command_receiver=self._process_command)
+                                       command_receiver=self._process_command,
+                                       name=self.name)
         self._reader.start()
 
         start_out = self._do_command('start', timeout=180)
