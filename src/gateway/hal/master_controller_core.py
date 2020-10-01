@@ -370,11 +370,19 @@ class MasterCoreController(MasterController):
         if output.is_shutter:
             # Shutter outputs cannot be controlled
             return
-        _ = dimmer, timer  # TODO: Use `dimmer` and `timer`
-        action = 1 if state else 0
         self._master_communicator.do_basic_action(action_type=0,
-                                                  action=action,
+                                                  action=1 if state else 0,
                                                   device_nr=output_id)
+        if dimmer is not None:
+            self._master_communicator.do_basic_action(action_type=0,
+                                                      action=9,
+                                                      device_nr=output_id,
+                                                      extra_parameter=int(2.55 * dimmer))  # Map 0-100 to 0-255
+        if timer is not None:
+            self._master_communicator.do_basic_action(action_type=0,
+                                                      action=11,
+                                                      device_nr=output_id,
+                                                      extra_parameter=timer)
 
     def toggle_output(self, output_id):
         output = OutputConfiguration(output_id)

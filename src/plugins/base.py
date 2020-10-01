@@ -25,13 +25,16 @@ from datetime import datetime
 import six
 
 from gateway.events import GatewayEvent
-from gateway.models import Plugin
+from gateway.models import Config, Plugin
 from gateway.shutter_controller import ShutterController
 from ioc import INJECTED, Inject, Injectable, Singleton
 from plugins.runner import PluginRunner, RunnerWatchdog
 
 if False:  # MYPY
-    from typing import List
+    from typing import Dict, List
+    from gateway.output_controller import OutputController
+    from gateway.shutter_controller import ShutterController
+    from gateway.webservice import WebInterface
 
 logger = logging.getLogger('openmotics')
 
@@ -43,29 +46,30 @@ class PluginController(object):
 
     @Inject
     def __init__(self,
-                 web_interface=INJECTED, configuration_controller=INJECTED, output_controller=INJECTED,
+                 web_interface=INJECTED, output_controller=INJECTED,
                  shutter_controller=INJECTED,
                  runtime_path='/opt/openmotics/python/plugin_runtime',
                  plugins_path='/opt/openmotics/python/plugins',
                  plugin_config_path='/opt/openmotics/etc'):
+        # type: (WebInterface, OutputController, ShutterController, str, str, str) -> None
         self.__webinterface = web_interface
-        self.__config_controller = configuration_controller
         self.__output_controller = output_controller
-        self.__shuttercontroller = shutter_controller  # type: ShutterController
+        self.__shuttercontroller = shutter_controller
         self.__runtime_path = runtime_path
         self.__plugins_path = plugins_path
         self.__plugin_config_path = plugin_config_path
 
         self.__stopped = True
-        self.__logs = {}
-        self.__runners = {}
-        self.__runner_watchdogs = {}
+        self.__logs = {}  # type: Dict[str,List[str]]
+        self.__runners = {}  # type: Dict[str,PluginRunner]
+        self.__runner_watchdogs = {}  # type: Dict[str,RunnerWatchdog]
 
         self.__metrics_controller = None
         self.__metrics_collector = None
         self.__web_service = None
 
     def start(self):
+        # type: () -> None
         """ Start the plugins and expose them via the webinterface. """
         if self.__stopped:
             self.__init_runners()
@@ -74,7 +78,8 @@ class PluginController(object):
             logger.error('The PluginController is already running')
 
     def stop(self):
-        for runner_name in self.__runners.keys():
+        # type: () -> None
+        for runner_name in list(self.__runners.keys()):
             self.__destroy_plugin_runner(runner_name)
         self.__stopped = True
 
@@ -424,7 +429,7 @@ class PluginController(object):
 
     def __get_cherrypy_mounts(self):
         mounts = []
-        cors_enabled = self.__config_controller.get('cors_enabled', False)
+        cors_enabled = Config.get('cors_enabled', False)
         for runner in self.__iter_running_runners():
             mounts.append({'root': runner.get_webservice(self.__webinterface),
                            'script_name': '/plugins/{0}'.format(runner.name),

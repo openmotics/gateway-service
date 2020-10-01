@@ -46,7 +46,6 @@ if False:  # MYPY:
     from power.power_store import PowerStore
     from power.power_controller import PowerController, P1Controller
     from bus.om_bus_client import MessageClient
-    from gateway.config import ConfigurationController
     from gateway.observer import Observer
     from gateway.watchdog import Watchdog
 
@@ -77,10 +76,9 @@ class GatewayApi(object):
     def __init__(self,
                  master_controller=INJECTED, power_store=INJECTED, power_communicator=INJECTED,
                  power_controller=INJECTED, p1_controller=INJECTED, message_client=INJECTED,
-                 observer=INJECTED, configuration_controller=INJECTED):
-        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer, ConfigurationController) -> None
+                 observer=INJECTED):
+        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer) -> None
         self.__master_controller = master_controller  # type: MasterController
-        self.__config_controller = configuration_controller
         self.__power_store = power_store
         self.__power_communicator = power_communicator
         self.__p1_controller = p1_controller
@@ -182,20 +180,6 @@ class GatewayApi(object):
 
     def flash_leds(self, led_type, led_id):
         return self.__master_controller.flash_leds(led_type, led_id)
-
-    # Output functions
-
-    def set_output_status(self, output_id, is_on, dimmer=None, timer=None):  # type: (int, bool, Optional[int], Optional[int]) -> None
-        """
-        Set the status, dimmer and timer of an output.
-        :param output_id: The id of the output to set
-        :param is_on: Whether the output should be on
-        :param dimmer: The dimmer value to set, None if unchanged
-        :param timer: The timer value to set, None if unchanged
-        """
-        # TODO: work with output controller
-        # TODO: implement output controller and let her handle routing to either master or e.g. plugin based outputs
-        self.__master_controller.set_output(output_id=output_id, state=is_on, dimmer=dimmer, timer=timer)
 
     # Input functions
 
