@@ -89,15 +89,19 @@ class InputMapper(object):
     def classic_actions_to_core_input_configuration(action, basic_actions):
         # type: (Optional[int], List[int]) -> Dict[str, Any]
         data = {'input_link': {'output_id': 1023,
+                               'dimming_up': True,
                                'enable_press_and_release': True,
                                'enable_1s_press': True,
                                'enable_2s_press': True,
+                               'not_used': True,
                                'enable_double_press': True}}  # type: Dict[str, Any]
         if action is None or action == 255:
             return data
-        data['input_link'].update({'enable_press_and_release': False,
+        data['input_link'].update({'dimming_up': False,
+                                   'enable_press_and_release': False,
                                    'enable_1s_press': False,
                                    'enable_2s_press': False,
+                                   'not_used': False,
                                    'enable_double_press': False})
         if action < 240:  # 240 means "execute the list of basic actions"
             data['input_link']['output_id'] = action

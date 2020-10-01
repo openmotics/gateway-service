@@ -18,6 +18,7 @@ Memory models
 Important notes and/or limitations:
 * Each (sub)class must have a unique name (needed for caching purposes)
 * Don't forget to update memory_types.pyi
+* Make sure to add any new models to the models unit test in master_core_tests/memory_models_test.py
 """
 from __future__ import absolute_import
 from master.core.memory_file import MemoryTypes
@@ -32,7 +33,7 @@ from master.core.memory_types import (MemoryModelDefinition, GlobalMemoryModelDe
 class GlobalConfiguration(GlobalMemoryModelDefinition):
     hardware_detection = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 0))  # 0, 0
     number_of_output_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1))  # 0, 1
-    number_of_input_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 2))  # 0, 1
+    number_of_input_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 2))  # 0, 2
     number_of_sensor_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 3))  # 0, 3
     scan_time_rs485_sensor_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 4))  # 0, 4
     number_of_can_inputs = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 5))  # 0, 5
@@ -82,7 +83,7 @@ class OutputConfiguration(MemoryModelDefinition):
 
     id = IdField(limits=lambda f: (0, f * 8 - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)))
     module = MemoryRelation(OutputModuleConfiguration, id_spec=lambda id: id // 8)
-    timer_value = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 7 + id % 8))  # 1-80, 7-22
+    timer_value = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 7 + id % 8 * 2))  # 1-80, 7-22
     timer_type = TimerType(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 23 + id % 8)))  # 1-80, 23-30
     output_type = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 31 + id % 8))  # 1-80, 31-38
     min_output_level = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 39 + id % 8))  # 1-80, 39-46
@@ -118,6 +119,7 @@ class InputConfiguration(MemoryModelDefinition):
         dimming_up = CompositeBitField(bit=11)
         enable_1s_press = CompositeBitField(bit=12)
         enable_2s_press = CompositeBitField(bit=13)
+        not_used = CompositeBitField(bit=14)  # This bit field is not used by the firmware, yet still needed
         enable_double_press = CompositeBitField(bit=15)
 
     id = IdField(limits=lambda f: (0, f * 8 - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 2)))
@@ -166,7 +168,7 @@ class SensorConfiguration(MemoryModelDefinition):
     brightness_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 40 + (id % 8) * 2))  # 239-254, 40-55
     aqi_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 56 + (id % 8) * 2))  # 239-254, 56-71
     dali_mapping = _DALISensorComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 72 + (id % 8))))  # 239-254, 72-79
-    name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 128 + id * 16), length=16)  # 239-254, 128-255
+    name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 128 + (id % 8) * 16), length=16)  # 239-254, 128-255
 
 
 class ShutterConfiguration(MemoryModelDefinition):
@@ -192,7 +194,7 @@ class ShutterConfiguration(MemoryModelDefinition):
         group_14 = CompositeBitField(bit=14)
         group_15 = CompositeBitField(bit=15)
 
-    id = IdField(limits=lambda f: (0, f * 4 - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)))
+    id = IdField(limits=lambda f: (0, min(256, f * 4) - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)))
     outputs = _OutputMappingComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (391, id)))  # 391, 0-255
     timer_up = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (393 + id // 128, id % 128 * 2))  # 393-394, 0-255
     timer_down = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (395 + id // 128, id % 128 * 2))  # 395-396, 0-255
@@ -244,12 +246,12 @@ class UCanModuleConfiguration(MemoryModelDefinition):
 class ExtraSensorConfiguration(MemoryModelDefinition):
     id = IdField(limits=(0, 63))
     grouaction_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (471, id * 2))  # 471, 0-255
-    name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (476 + id // 16, (id % 16) * 16), length=16)  # 476-479, 0-255
+    name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (472 + id // 16, (id % 16) * 16), length=16)  # 472-479, 0-255
 
 
 class ValidationBitConfiguration(MemoryModelDefinition):
     id = IdField(limits=(0, 255))
-    grouaction_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (480 + id // 127, (id % 127) * 2))  # 480-481, 0-255
+    grouaction_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (480 + id // 128, (id % 128) * 2))  # 480-481, 0-255
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (482 + id // 16, (id % 16) * 16), length=16)  # 482-497, 0-255
 
 
