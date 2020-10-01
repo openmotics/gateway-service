@@ -652,7 +652,7 @@ class WebInterface(object):
         :param dimmer: The dimmer value to set, None if unchanged
         :param timer: The timer value to set, None if unchanged
         """
-        self._gateway_api.set_output_status(id, is_on, dimmer, timer)
+        self._output_controller.set_output_status(id, is_on, dimmer, timer)
         return {}
 
     @openmotics_api(auth=True)
