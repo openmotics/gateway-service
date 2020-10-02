@@ -31,7 +31,6 @@ class ConfigMigrator(BaseMigrator):
         super(ConfigMigrator, cls).migrate()
         cls._insert_defaults()
 
-
     @classmethod
     def _migrate(cls):
         # type: () -> None
@@ -53,7 +52,8 @@ class ConfigMigrator(BaseMigrator):
                     )
                     config.save()
                 else:
-                    Config.set(setting, row[2])
+                    config.data = row[2]
+                    config.save()
             os.rename(old_sqlite_db, '{0}.bak'.format(old_sqlite_db))
 
     @staticmethod

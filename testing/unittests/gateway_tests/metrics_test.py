@@ -39,6 +39,7 @@ logger = logging.getLogger('test')
 
 MODELS = [Config]
 
+
 class MetricsTest(unittest.TestCase):
     intervals = {}
 
@@ -52,20 +53,16 @@ class MetricsTest(unittest.TestCase):
         self.test_db.drop_tables(MODELS)
         self.test_db.close()
 
-
     @classmethod
     def setUpClass(cls):
         SetTestMode()
         fakesleep.monkey_patch()
         fakesleep.reset(seconds=0)
-        cls._db_filename = tempfile.mktemp()
-        cls.test_db = SqliteDatabase(cls._db_filename)
+        cls.test_db = SqliteDatabase(':memory:')
 
     @classmethod
     def tearDownClass(cls):
         fakesleep.monkey_restore()
-        if os.path.exists(cls._db_filename):
-            os.remove(cls._db_filename)
 
     @staticmethod
     def _set_cloud_interval(self, metric_type, interval):
@@ -89,12 +86,14 @@ class MetricsTest(unittest.TestCase):
 
     def test_base_validation(self):
         MetricsTest.intervals = {}
-        _ = MetricsTest._get_controller(intervals=['energy'])
+        controller = MetricsTest._get_controller(intervals=['energy'])
+        controller._refresh_cloud_interval()
         self.assertEqual(MetricsTest.intervals.get('energy'), 300)
 
     def test_set_cloud_interval(self):
         MetricsTest.intervals = {}
         metrics_controller = MetricsTest._get_controller(intervals=['energy'])
+        metrics_controller._refresh_cloud_interval()
         self.assertEqual(MetricsTest.intervals.get('energy'), 300)
         metrics_controller.set_cloud_interval('energy', 900)
         self.assertEqual(MetricsTest.intervals.get('energy'), 900)
