@@ -82,14 +82,15 @@ class PluginIPCReader(object):
     It uses a stream of msgpack encoded dict values.
     """
 
-    def __init__(self, stream, logger, command_receiver=None):
-        # type: (IO[bytes], Callable[[str,Exception],None], Callable[[Dict[str,Any]],None]) -> None
+    def __init__(self, stream, logger, command_receiver=None, name=None):
+        # type: (IO[bytes], Callable[[str,Exception],None], Callable[[Dict[str,Any]],None],Optional[str]) -> None
         self._command_queue = Queue()
         self._unpacker = msgpack.Unpacker(stream, read_size=1, raw=False)  # type: msgpack.Unpacker[Dict[str,Any]]
         self._read_thread = None  # type: Optional[Thread]
         self._logger = logger
         self._running = False
         self._command_receiver = command_receiver
+        self._name = name
 
     def start(self):
         # type: () -> None
@@ -116,7 +117,7 @@ class PluginIPCReader(object):
                 else:
                     self._command_queue.put(command)
             except StopIteration as ex:
-                self._logger('PluginIPCReader stopped', ex)
+                self._logger('PluginIPCReader %s stopped' % self._name, ex)
                 self._running = False
             except Exception as ex:
                 self._logger('Unexpected read exception', ex)

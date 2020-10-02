@@ -229,6 +229,7 @@ class PluginRuntime(object):
         return data
 
     def _handle_stop(self):
+
         def delayed_stop():
             time.sleep(2)
             os._exit(0)
@@ -237,7 +238,6 @@ class PluginRuntime(object):
         stop_thread.daemon = True
         stop_thread.start()
 
-        self._reader.stop()
         self._stopped = True
 
     def _handle_input_status(self, data):
