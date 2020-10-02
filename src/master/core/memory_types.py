@@ -656,11 +656,12 @@ class CompositeNumberField(CompositeField):
         current_value = self._decompose(current_composition)
         if value == current_value:
             return current_composition
-        if self._max_value is not None and not (0 <= value <= self._max_value):
-            raise ValueError('Value out of limits: 0 <= value <= {0}'.format(self._max_value))
-        value = (((value + self._value_offset) // self._value_factor) << self._start_bit) & self._mask
+        processed_value = (value + self._value_offset) // self._value_factor
+        if self._max_value is not None and not (0 <= processed_value <= self._max_value):
+            raise ValueError('Value `{0}` (original `{1}`) out of limits: 0 <= value <= {2}'.format(processed_value, value, self._max_value))
+        composing_value = (processed_value << self._start_bit) & self._mask
         current_composition = current_composition & ~self._mask & (2 ** composition_width - 1)
-        return current_composition | value
+        return current_composition | composing_value
 
 
 class CompositeBitField(CompositeNumberField):
