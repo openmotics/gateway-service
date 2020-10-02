@@ -203,7 +203,7 @@ class ShutterConfiguration(MemoryModelDefinition):
 
     @property
     def output_set(self):
-        return ['01', '23', '45', '67'][self.outputs.output_0 // 2 % 4]
+        return ['01', '23', '45', '67'][self.outputs.output_0 % 8 // 2]
 
 
 class CanControlModuleConfiguration(MemoryModelDefinition):

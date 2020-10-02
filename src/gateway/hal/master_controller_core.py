@@ -444,7 +444,7 @@ class MasterCoreController(MasterController):
         shutter_dto = ShutterMapper.orm_to_dto(shutter)
         # Load information that is set on the Output(Module)Configuration
         if shutter.outputs.output_0 == 255 * 2:
-            shutter_dto.up_down_config = 0
+            shutter_dto.up_down_config = 1
         else:
             output_module = OutputConfiguration(shutter.outputs.output_0).module
             if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
@@ -472,20 +472,22 @@ class MasterCoreController(MasterController):
             output_module = OutputConfiguration(shutter_dto.id * 2).module
             # Configure shutter
             shutter = ShutterMapper.dto_to_orm(shutter_dto, fields)
-            if shutter.timer_down is not None and shutter.timer_up is not None:
+            if shutter.timer_down not in [0, 65535] and shutter.timer_up not in [0, 65535]:
                 # Shutter is "configured"
                 shutter.outputs.output_0 = shutter.id * 2
+                output_set = shutter.output_set
                 self._output_shutter_map[shutter.outputs.output_0] = shutter.id
                 self._output_shutter_map[shutter.outputs.output_1] = shutter.id
                 is_configured = True
             else:
+                output_set = shutter.output_set  # Previous outputs need to be restored
                 self._output_shutter_map.pop(shutter.outputs.output_0, None)
                 self._output_shutter_map.pop(shutter.outputs.output_1, None)
                 shutter.outputs.output_0 = 255 * 2
                 is_configured = False
             shutter.save()
             # Mark related Outputs as "occupied by shutter"
-            setattr(output_module.shutter_config, 'are_{0}_outputs'.format(shutter.output_set), not is_configured)
+            setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_configured)
             setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
             output_module.save()
 
