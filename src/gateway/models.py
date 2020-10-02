@@ -30,7 +30,7 @@ from playhouse.signals import Model, post_save
 import constants
 
 if False:  # MYPY
-    from typing import Dict, List
+    from typing import Dict, List, Optional, Any
 
 logger = logging.getLogger('openmotics')
 
@@ -188,6 +188,7 @@ class User(BaseModel):
     password = CharField()
     accepted_terms = IntegerField(default=0)
 
+
 class Config(BaseModel):
     id = AutoField()
     setting = CharField(unique=True)
@@ -230,6 +231,7 @@ class Config(BaseModel):
         Config.delete().where(
             Config.setting == key.lower()
         ).execute()
+
 
 class Plugin(BaseModel):
     id = AutoField()
