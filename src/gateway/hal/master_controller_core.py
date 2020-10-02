@@ -472,7 +472,7 @@ class MasterCoreController(MasterController):
             output_module = OutputConfiguration(shutter_dto.id * 2).module
             # Configure shutter
             shutter = ShutterMapper.dto_to_orm(shutter_dto, fields)
-            if shutter.timer_down not in [0, None] and shutter.timer_up not in [0, None]:
+            if shutter.timer_down not in [0, 65535] and shutter.timer_up not in [0, 65535]:
                 # Shutter is "configured"
                 shutter.outputs.output_0 = shutter.id * 2
                 output_set = shutter.output_set
