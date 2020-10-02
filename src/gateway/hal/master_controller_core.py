@@ -444,7 +444,7 @@ class MasterCoreController(MasterController):
         shutter_dto = ShutterMapper.orm_to_dto(shutter)
         # Load information that is set on the Output(Module)Configuration
         if shutter.outputs.output_0 == 255 * 2:
-            shutter_dto.up_down_config = 0
+            shutter_dto.up_down_config = 1
         else:
             output_module = OutputConfiguration(shutter.outputs.output_0).module
             if getattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set)):
