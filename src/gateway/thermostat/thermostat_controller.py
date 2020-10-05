@@ -15,7 +15,7 @@
 
 if False:  # MYPY
     from bus.om_bus_client import MessageClient
-    from gateway.dto import ThermostatDTO
+    from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO
     from gateway.events import GatewayEvent
     from gateway.output_controller import OutputController
     from typing import Any, Callable, Dict, List, Tuple, Optional
@@ -47,7 +47,8 @@ class ThermostatController(object):
     ################################
     # TODO: Implement all v1 APIs
 
-    def set_current_setpoint(self, thermostat_number, heating_temperature, cooling_temperature):
+    def set_current_setpoint(self, thermostat_number, temperature=None, heating_temperature=None, cooling_temperature=None):
+        # type: (int, Optional[float], Optional[float], Optional[float]) -> None
         raise NotImplementedError()
 
     def get_current_preset(self, thermostat_number):
@@ -83,17 +84,6 @@ class ThermostatController(object):
         :param setpoint: Requested setpoint (integer 0-5)
         :type setpoint: int | None
         :returns: dict with 'status'
-        """
-        raise NotImplementedError()
-
-    def v0_set_current_setpoint(self, thermostat, temperature):
-        # type: (int, float) -> Dict[str,Any]
-        """ Set the current setpoint of a thermostat.
-        :param thermostat: The id of the thermostat to set
-        :type thermostat: Integer [0, 32]
-        :param temperature: The temperature to set in degrees Celcius
-        :type temperature: float
-        :returns: dict with 'thermostat', 'config' and 'temp'
         """
         raise NotImplementedError()
 
@@ -155,8 +145,8 @@ class ThermostatController(object):
         """
         raise NotImplementedError()
 
-    def v0_get_thermostat_status(self):
-        # type: () -> Dict[str,Any]
+    def get_thermostat_status(self):
+        # type: () -> ThermostatGroupStatusDTO
         """ Returns thermostat information """
         raise NotImplementedError()
 

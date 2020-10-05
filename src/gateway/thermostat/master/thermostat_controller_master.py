@@ -18,7 +18,7 @@ import time
 
 from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import ThermostatDTO
+from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO, ThermostatStatusDTO
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.observer import Observer
@@ -121,9 +121,6 @@ class ThermostatControllerMaster(ThermostatController):
         raise NotImplementedError()
 
     def set_current_preset(self, thermostat_number, preset_name):
-        raise NotImplementedError()
-
-    def set_current_setpoint(self, thermostat_number, heating_temperature, cooling_temperature):
         raise NotImplementedError()
 
     ################################
@@ -486,21 +483,19 @@ class ThermostatControllerMaster(ThermostatController):
         if thermostat not in range(0, 32):
             raise ValueError('Thermostat not in [0,32]: %d' % thermostat)
 
-    def v0_set_current_setpoint(self, thermostat, temperature):
-        # type: (int, float) -> Dict[str,Any]
-        """ Set the current setpoint of a thermostat.
-        :param thermostat: The id of the thermostat to set
-        :type thermostat: Integer [0, 32]
-        :param temperature: The temperature to set in degrees Celcius
-        :type temperature: float
-        :returns: dict with 'thermostat', 'config' and 'temp'
-        """
-        self.__check_thermostat(thermostat)
-        self._master_controller.write_thermostat_setpoint(thermostat, temperature)
+    def set_current_setpoint(self, thermostat_number, temperature=None, heating_temperature=None, cooling_temperature=None):
+        # type: (int, Optional[float], Optional[float], Optional[float]) -> None
+        """ Set the current setpoint of a thermostat. """
+        if temperature is None:
+            temperature = heating_temperature
+        if temperature is None:
+            temperature = cooling_temperature
+
+        self.__check_thermostat(thermostat_number)
+        self._master_controller.write_thermostat_setpoint(thermostat_number, temperature)
 
         self.invalidate_cache(Observer.Types.THERMOSTATS)
         self.increase_interval(Observer.Types.THERMOSTATS, interval=2, window=10)
-        return {'status': 'OK'}
 
     def _monitor(self):
         # type: () -> None
@@ -582,8 +577,27 @@ class ThermostatControllerMaster(ThermostatController):
                                              'status': thermostats})
         self._thermostats_last_updated = time.time()
 
-    def v0_get_thermostat_status(self):
-        # type: () -> Dict[str,Any]
+    def get_thermostat_status(self):
+        # type: () -> ThermostatGroupStatusDTO
         """ Returns thermostat information """
         self._refresh_thermostats()  # Always return the latest information
+        master_status = self._thermostat_status.get_thermostats()
+        return ThermostatGroupStatusDTO(id=0,
+                                        on=master_status['thermostats_on'],
+                                        automatic=master_status['automatic'],
+                                        setpoint=master_status['setpoint'],
+                                        cooling=master_status['cooling'],
+                                        statusses=[ThermostatStatusDTO(id=thermostat['id'],
+                                                                       actual_temperature=thermostat['act'],
+                                                                       setpoint_temperature=thermostat['csetp'],
+                                                                       outside_temperature=thermostat['outside'],
+                                                                       mode=thermostat['mode'],
+                                                                       automatic=thermostat['automatic'],
+                                                                       setpoint=thermostat['setpoint'],
+                                                                       name=thermostat['name'],
+                                                                       sensor_id=thermostat['sensor_nr'],
+                                                                       airco=thermostat['airco'],
+                                                                       output_0_level=thermostat['output0'],
+                                                                       output_1_level=thermostat['output1'])
+                                                   for thermostat in master_status['status']])
         return self._thermostat_status.get_thermostats()

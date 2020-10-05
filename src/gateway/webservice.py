@@ -44,7 +44,8 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     ModuleSerializer, OutputSerializer, OutputStateSerializer, \
     PulseCounterSerializer, RoomSerializer, ScheduleSerializer, \
     SensorSerializer, ShutterGroupSerializer, ShutterSerializer, \
-    ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer
+    ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer, \
+    ThermostatGroupStatusSerializer
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO
 from gateway.enums import ShutterEnums, UserEnums
 from gateway.exceptions import UnsupportedException
@@ -786,31 +787,15 @@ class WebInterface(object):
     # Thermostats
 
     @openmotics_api(auth=True)
-    def get_thermostat_status(self):
-        """
-        Get the status of the thermostats.
-
-        :returns: global status information about the thermostats: 'thermostats_on', \
-            'automatic' and 'setpoint' and 'status': a list with status information for all \
-            thermostats, each element in the list is a dict with the following keys: \
-            'id', 'act', 'csetp', 'output0', 'output1', 'outside', 'mode'.
-        :rtype: dict
-        """
-        return self._thermostat_controller.v0_get_thermostat_status()
+    def get_thermostat_status(self):  # type: () -> Dict[str, Any]
+        """ Get the status of the thermostats. """
+        return ThermostatGroupStatusSerializer.serialize(thermostat_group_status_dto=self._thermostat_controller.get_thermostat_status())
 
     @openmotics_api(auth=True, check=types(thermostat=int, temperature=float))
-    def set_current_setpoint(self, thermostat, temperature):
-        """
-        Set the current setpoint of a thermostat.
-
-        :param thermostat: The id of the thermostat to set
-        :type thermostat: int
-        :param temperature: The temperature to set in degrees Celcius
-        :type temperature: float
-        :return: 'status': 'OK'.
-        :rtype: dict
-        """
-        return self._thermostat_controller.v0_set_current_setpoint(thermostat, temperature)
+    def set_current_setpoint(self, thermostat, temperature):  # type: (int, float) -> Dict[str, str]
+        """ Set the current setpoint of a thermostat. """
+        self._thermostat_controller.set_current_setpoint(thermostat, temperature)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(thermostat_on=bool, automatic=bool, setpoint=int, cooling_mode=bool, cooling_on=bool))
     def set_thermostat_mode(self, thermostat_on, automatic=None, setpoint=None, cooling_mode=False, cooling_on=False):

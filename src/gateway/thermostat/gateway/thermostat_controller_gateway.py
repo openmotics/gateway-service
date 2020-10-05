@@ -14,16 +14,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import datetime
-import time
 import logging
 import constants
-from threading import Thread
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from playhouse.signals import post_save
 from ioc import Injectable, Inject, Singleton, INJECTED
 from bus.om_bus_events import OMBusEvents
+from gateway.daemon_thread import DaemonThread
 from gateway.events import GatewayEvent
-from gateway.dto import ThermostatDTO
+from gateway.dto import ThermostatDTO, ThermostatStatusDTO, ThermostatGroupStatusDTO
 from gateway.models import Output, Preset, Thermostat, ThermostatGroup, OutputToThermostatGroup, Pump
 from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
 from gateway.thermostat.thermostat_controller import ThermostatController
@@ -32,7 +31,10 @@ from gateway.mappers import ThermostatMapper
 from apscheduler.schedulers.background import BackgroundScheduler
 
 if False:  # MYPY
-    from typing import List, Tuple
+    from typing import List, Tuple, Dict, Optional
+    from gateway.gateway_api import GatewayApi
+    from bus.om_bus_client import MessageClient
+    from gateway.output_controller import OutputController
 
 logger = logging.getLogger('openmotics')
 
@@ -46,14 +48,16 @@ class ThermostatControllerGateway(ThermostatController):
     SYNC_CONFIG_INTERVAL = 900
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, message_client=INJECTED, observer=INJECTED):
-        super(ThermostatControllerGateway, self).__init__(message_client, observer)
+    def __init__(self, gateway_api=INJECTED, message_client=INJECTED, output_controller=INJECTED):
+        # type: (GatewayApi, MessageClient, OutputController) -> None
+        super(ThermostatControllerGateway, self).__init__(message_client=message_client,
+                                                          output_controller=output_controller)
         self._gateway_api = gateway_api
         self._running = False
-        self._pid_loop_thread = None
-        self._update_pumps_thread = None
-        self._periodic_sync_thread = None
-        self.thermostat_pids = {}
+        self._pid_loop_thread = None  # type: Optional[DaemonThread]
+        self._update_pumps_thread = None  # type: Optional[DaemonThread]
+        self._periodic_sync_thread = None  # type: Optional[DaemonThread]
+        self.thermostat_pids = {}  # type: Dict[int, ThermostatPid]
         self._pump_valve_controller = PumpValveController()
 
         timezone = gateway_api.get_timezone()
@@ -70,16 +74,19 @@ class ThermostatControllerGateway(ThermostatController):
             self._running = True
 
             self.refresh_config_from_db()
-            self._pid_loop_thread = Thread(target=self._pid_tick)
-            self._pid_loop_thread.daemon = True
+            self._pid_loop_thread = DaemonThread(name='Thermostat PID',
+                                                 target=self._pid_tick,
+                                                 interval=self.THERMOSTAT_PID_UPDATE_INTERVAL)
             self._pid_loop_thread.start()
 
-            self._update_pumps_thread = Thread(target=self._update_pumps)
-            self._update_pumps_thread.daemon = True
+            self._update_pumps_thread = DaemonThread(name='Thermostat pumps',
+                                                     target=self._update_pumps,
+                                                     interval=self.PUMP_UPDATE_INTERVAL)
             self._update_pumps_thread.start()
 
-            self._periodic_sync_thread = Thread(target=self._periodic_sync)
-            self._periodic_sync_thread.daemon = True
+            self._periodic_sync_thread = DaemonThread(name='Thermostat sync',
+                                                      target=self._periodic_sync,
+                                                      interval=self.SYNC_CONFIG_INTERVAL)
             self._periodic_sync_thread.start()
 
             self._scheduler.start()
@@ -92,18 +99,19 @@ class ThermostatControllerGateway(ThermostatController):
             logger.warning('Stopping an already stopped GatewayThermostatController.')
         self._running = False
         self._scheduler.shutdown(wait=False)
-        self._pid_loop_thread.join()
-        self._update_pumps_thread.join()
-        self._periodic_sync_thread.join()
+        if self._pid_loop_thread is not None:
+            self._pid_loop_thread.stop()
+        if self._update_pumps_thread is not None:
+            self._update_pumps_thread.stop()
+        if self._periodic_sync_thread is not None:
+            self._periodic_sync_thread.stop()
 
     def _pid_tick(self):
-        while self._running:
-            for thermostat_number, thermostat_pid in self.thermostat_pids.items():
-                try:
-                    thermostat_pid.tick()
-                except Exception:
-                    logger.exception('There was a problem with calculating thermostat PID {}'.format(thermostat_pid))
-            time.sleep(self.THERMOSTAT_PID_UPDATE_INTERVAL)
+        for thermostat_number, thermostat_pid in self.thermostat_pids.items():
+            try:
+                thermostat_pid.tick()
+            except Exception:
+                logger.exception('There was a problem with calculating thermostat PID {}'.format(thermostat_pid))
 
     def refresh_config_from_db(self):
         self.refresh_thermostats_from_db()
@@ -126,20 +134,16 @@ class ThermostatControllerGateway(ThermostatController):
             logger.info('- {}'.format(job))
 
     def _update_pumps(self):
-        while self._running:
-            try:
-                time.sleep(self.PUMP_UPDATE_INTERVAL)
-                self._pump_valve_controller.steer_pumps()
-            except Exception:
-                logger.exception('Could not update pumps.')
+        try:
+            self._pump_valve_controller.steer_pumps()
+        except Exception:
+            logger.exception('Could not update pumps.')
 
     def _periodic_sync(self):
-        while self._running:
-            try:
-                time.sleep(self.SYNC_CONFIG_INTERVAL)
-                self.refresh_config_from_db()
-            except Exception:
-                logger.exception('Could not get thermostat config.')
+        try:
+            self.refresh_config_from_db()
+        except Exception:
+            logger.exception('Could not get thermostat config.')
 
     def _sync_scheduler(self):
         self._scheduler.remove_all_jobs()
@@ -173,27 +177,29 @@ class ThermostatControllerGateway(ThermostatController):
                                                 args=args,
                                                 name='T{}: {} ({}) {}'.format(thermostat_number, new_setpoint, schedule.mode, seconds_of_day))
 
-    ################################
-    # v1 APIs
-    ################################
-
-    def set_current_setpoint(self, thermostat_number, heating_temperature=None, cooling_temperature=None):
-        if heating_temperature is None and cooling_temperature is None:
+    def set_current_setpoint(self, thermostat_number, temperature=None, heating_temperature=None, cooling_temperature=None):
+        if temperature is None and heating_temperature is None and cooling_temperature is None:
             return
 
         thermostat = Thermostat.get(number=thermostat_number)
-        # when setting a setpoint manually, switch to manual preset except for when we are in scheduled mode
+        # When setting a setpoint manually, switch to manual preset except for when we are in scheduled mode
         # scheduled mode will override the setpoint when the next edge in the schedule is triggered
         active_preset = thermostat.active_preset
         if active_preset.name not in ['SCHEDULE', 'MANUAL']:
             active_preset = thermostat.get_preset('MANUAL')
             thermostat.active_preset = active_preset
 
+        if heating_temperature is None:
+            heating_temperature = temperature
         if heating_temperature is not None:
             active_preset.heating_setpoint = float(heating_temperature)
+
+        if cooling_temperature is None:
+            cooling_temperature = temperature
         if cooling_temperature is not None:
             active_preset.cooling_setpoint = float(cooling_temperature)
         active_preset.save()
+
         thermostat_pid = self.thermostat_pids.get(thermostat_number)
         thermostat_pid.update_thermostat(thermostat)
         thermostat_pid.tick()
@@ -215,38 +221,20 @@ class ThermostatControllerGateway(ThermostatController):
     @classmethod
     @Inject
     def set_setpoint_from_scheduler(cls, thermostat_number, heating_temperature=None, cooling_temperature=None, thermostat_controller=INJECTED):
+        # type: (int, Optional[float], Optional[float], ThermostatControllerGateway) -> None
         logger.info('Setting setpoint from scheduler for thermostat {}: H{} C{}'.format(thermostat_number, heating_temperature, cooling_temperature))
         thermostat = Thermostat.get(number=thermostat_number)
         active_preset = thermostat.active_preset
 
-        # only update when not in preset mode like away, party, ...
+        # Only update when not in preset mode like away, party, ...
         if active_preset.name == 'SCHEDULE':
-            thermostat_controller.set_current_setpoint(thermostat_number, heating_temperature, cooling_temperature)
+            thermostat_controller.set_current_setpoint(thermostat_number=thermostat_number,
+                                                       heating_temperature=heating_temperature,
+                                                       cooling_temperature=cooling_temperature)
         else:
             logger.info('Thermostat is currently in preset mode, skipping update setpoint from scheduler.')
 
-    ################################
-    # v0 compatible APIs
-    ################################
-
-    def v0_get_thermostat_status(self):
-        """{'thermostats_on': True,
-         'automatic': True,
-         'setpoint': 0,
-         'cooling': True,
-         'status': [{'id': 0,
-                     'act': 25.4,
-                     'csetp': 23.0,
-                     'outside': 35.0,
-                     'mode': 198,
-                     'automatic': True,
-                     'setpoint': 0,
-                     'name': 'Living',
-                     'sensor_nr': 15,
-                     'airco': 115,
-                     'output0': 32,
-                     'output1': 0}]}"""
-
+    def get_thermostat_status(self):
         def get_output_level(output_number):
             if output_number is None:
                 return 0  # we are returning 0 if outputs are not configured
@@ -260,42 +248,37 @@ class ThermostatControllerGateway(ThermostatController):
                 return output_level
 
         global_thermostat = ThermostatGroup.get(number=0)
-        if global_thermostat is not None:
-            return_data = {'thermostats_on': global_thermostat.on,
-                           'automatic': True,  # TODO: If any thermnostat is automatic
-                           'setpoint': 0,      # can be ignored
-                           'cooling': str(global_thermostat.mode).lower() == 'cooling'}
-            status = []
-
-            for thermostat in global_thermostat.thermostats:
-                output_numbers = thermostat.v0_get_output_numbers()
-                active_preset = thermostat.active_preset
-                if global_thermostat.mode == 'cooling':
-                    csetp = active_preset.cooling_setpoint
-                else:
-                    csetp = active_preset.heating_setpoint
-
-                v0_setpoint = active_preset.get_v0_setpoint_id()
-
-                data = {'id': thermostat.number,
-                        'act': self._gateway_api.get_sensor_temperature_status(thermostat.sensor),
-                        'csetp': csetp,
-                        'outside': self._gateway_api.get_sensor_temperature_status(global_thermostat.sensor),
-                        'mode': 0,  # TODO: Check if still used
-                        'automatic': active_preset.name == 'SCHEDULE',
-                        'setpoint': v0_setpoint,  # ---> 'AWAY': 3, 'VACATION': 4, ...
-                        'name': thermostat.mode,
-                        'sensor_nr': thermostat.sensor,
-                        'airco': 0,  # TODO: Check if still used
-                        'output0': get_output_level(output_numbers[0]),
-                        'output1': get_output_level(output_numbers[1])
-                        }
-                status.append(data)
-
-            return_data['status'] = status
-            return return_data
-        else:
+        if global_thermostat is None:
             raise RuntimeError('Global thermostat not found!')
+        group_status = ThermostatGroupStatusDTO(id=0,
+                                                on=global_thermostat.on,
+                                                automatic=True,  # TODO: If any thermnostat is automatic
+                                                setpoint=0,  # Can be ignored
+                                                cooling=global_thermostat.mode == 'cooling')  # TODO: Use enum
+
+        for thermostat in global_thermostat.thermostats:
+            output_numbers = thermostat.v0_get_output_numbers()
+            active_preset = thermostat.active_preset
+            if global_thermostat.mode == 'cooling':
+                setpoint_temperature = active_preset.cooling_setpoint
+            else:
+                setpoint_temperature = active_preset.heating_setpoint
+
+            setpoint = active_preset.get_v0_setpoint_id()
+            group_status.statusses.append(ThermostatStatusDTO(id=thermostat.number,
+                                                              actual_temperature=self._gateway_api.get_sensor_temperature_status(thermostat.sensor),
+                                                              setpoint_temperature=setpoint_temperature,
+                                                              outside_temperature=self._gateway_api.get_sensor_temperature_status(global_thermostat.sensor),
+                                                              mode=0,  # TODO: Check if still used
+                                                              automatic=active_preset.name == 'SCHEDULE',  # TODO: Use enum
+                                                              setpoint=setpoint,
+                                                              name=thermostat.name,
+                                                              sensor_id=thermostat.sensor,
+                                                              airco=0,  # TODO: Check if still used
+                                                              output_0_level=get_output_level(output_numbers[0]),
+                                                              output_1_level=get_output_level(output_numbers[1])))
+
+        return group_status
 
     def v0_set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
         mode = 'cooling' if cooling_mode else 'heating'
@@ -313,10 +296,6 @@ class ThermostatControllerGateway(ThermostatController):
                     thermostat.active_preset = thermostat.get_preset('SCHEDULE')
                 thermostat_pid.update_thermostat(thermostat)
                 thermostat_pid.tick()
-        return {'status': 'OK'}
-
-    def v0_set_current_setpoint(self, thermostat_number, temperature):
-        self.set_current_setpoint(thermostat_number, heating_temperature=temperature, cooling_temperature=temperature)
         return {'status': 'OK'}
 
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO

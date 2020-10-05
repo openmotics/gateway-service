@@ -18,10 +18,11 @@ Heating thermostat (de)serializer
 """
 from toolbox import Toolbox
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
+from gateway.dto import ThermostatDTO, ThermostatScheduleDTO, \
+    ThermostatGroupStatusDTO
 
 if False:  # MYPY
-    from typing import Dict, Optional, List, Tuple
+    from typing import Dict, Optional, List, Tuple, Any
 
 
 class ThermostatSerializer(object):
@@ -98,3 +99,25 @@ class ThermostatSerializer(object):
                                               temp_day_2=api_data[field][6])
             setattr(heating_thermostat_dto, field, field_dto)
         return heating_thermostat_dto, loaded_fields
+
+
+class ThermostatGroupStatusSerializer(object):
+    @staticmethod
+    def serialize(thermostat_group_status_dto):  # type: (ThermostatGroupStatusDTO) -> Dict[str, Any]
+        return {'thermostats_on': thermostat_group_status_dto.on,
+                'automatic': thermostat_group_status_dto.automatic,
+                'setpoint': thermostat_group_status_dto.setpoint,
+                'cooling': thermostat_group_status_dto.cooling,
+                'status': [{'id': status.id,
+                            'act': status.actual_temperature,
+                            'csetp': status.setpoint_temperature,
+                            'outside': status.outside_temperature,
+                            'mode': status.mode,
+                            'automatic': status.automatic,
+                            'setpoint': status.setpoint,
+                            'name': status.name,
+                            'sensor_nr': status.sensor_id,
+                            'airco': status.airco,
+                            'output0': status.output_0_level,
+                            'output1': status.output_1_level}
+                           for status in thermostat_group_status_dto.statusses]}
