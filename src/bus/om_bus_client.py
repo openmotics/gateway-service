@@ -82,7 +82,7 @@ class MessageClient(object):
         while not self._stop:
             try:
                 assert self.client, 'Client not defined'
-                msg = self.client.recv_bytes()
+                msg = self.client.recv_bytes().decode()
                 self._process_message(msg)
             except EOFError:
                 logger.error('Client connection closed unexpectedly')
@@ -100,7 +100,7 @@ class MessageClient(object):
         payload = {'type': msg_type, 'source': self.client_name, 'destination': destination, 'data': data}
         msg = json.dumps(payload)
         if self.client is not None and self.client.closed is False and self._connected:
-            self.client.send_bytes(msg)
+            self.client.send_bytes(msg.encode())
         else:
             logger.error('Unable to send payload. Client still connected?')
 

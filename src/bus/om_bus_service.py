@@ -52,7 +52,7 @@ class MessageService(object):
 
     def _send(self, conn, msg):
         payload = json.dumps(msg)
-        conn.send_bytes(payload)
+        conn.send_bytes(payload.encode())
 
     def _verify_client(self, conn, msg):
         should_be = self.connections.get(conn, None)
@@ -79,7 +79,7 @@ class MessageService(object):
     def _receiver(self, conn):
         while not conn.closed:
             try:
-                payload = conn.recv_bytes()
+                payload = conn.recv_bytes().decode()
                 msg = json.loads(payload)
                 self._process_message(conn, msg)
             except IOError as io_error:
