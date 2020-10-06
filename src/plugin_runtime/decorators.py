@@ -107,7 +107,7 @@ def ventilation_status(method=None, version=1):
     Please use a separate thread to perform complex actions on shutten status messages.
     """
     if method is not None:
-        method.output_status = {'version': 1}
+        method.ventilation_status = {'version': 1}
         return method
 
     def wrapper(_method):
@@ -115,6 +115,43 @@ def ventilation_status(method=None, version=1):
         return _method
     return wrapper
 
+
+def thermostat_status(method=None, version=1):
+    """
+    Decorator to indicate that the method should receive thermostat status messages.
+    The receiving method should accept one parameter, the list of thermostat states.
+    Each time a thermostat status is changed, the method will be called.
+
+    Important! This method should not block, as this will result in an unresponsive system.
+    Please use a separate thread to perform complex actions on shutten status messages.
+    """
+    if method is not None:
+        method.thermostat_status = {'version': 1}
+        return method
+
+    def wrapper(_method):
+        _method.thermostat_status = {'version': version}
+        return _method
+    return wrapper
+
+
+def thermostat_group_status(method=None, version=1):
+    """
+    Decorator to indicate that the method should receive thermostat status messages.
+    The receiving method should accept one parameter, the list of thermostat states.
+    Each time a thermostat status is changed, the method will be called.
+
+    Important! This method should not block, as this will result in an unresponsive system.
+    Please use a separate thread to perform complex actions on shutten status messages.
+    """
+    if method is not None:
+        method.thermostat_group_status = {'version': 1}
+        return method
+
+    def wrapper(_method):
+        _method.thermostat_group_status = {'version': version}
+        return _method
+    return wrapper
 
 def receive_events(method=None, version=1):
     """

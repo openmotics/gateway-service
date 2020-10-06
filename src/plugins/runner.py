@@ -221,6 +221,22 @@ class PluginRunner(object):
         else:
             self.logger('Ventilation status version {} not supported.'.format(action_version))
 
+    def process_thermostat_status(self, data, action_version=1):
+        if action_version in [1]:
+            event_json = data.serialize()
+            payload = {'event': event_json}
+            self._do_async(action='thermostat_status', payload=payload, should_filter=True, action_version=action_version)
+        else:
+            self.logger('Thermostat status version {} not supported.'.format(action_version))
+
+    def process_thermostat_group_status(self, data, action_version=1):
+        if action_version in [1]:
+            event_json = data.serialize()
+            payload = {'event': event_json}
+            self._do_async(action='thermostat_group_status', payload=payload, should_filter=True, action_version=action_version)
+        else:
+            self.logger('Thermostat group status version {} not supported.'.format(action_version))
+
     def process_event(self, code):
         self._do_async('receive_events', {'code': code}, should_filter=True)
 
