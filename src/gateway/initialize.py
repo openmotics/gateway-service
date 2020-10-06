@@ -14,8 +14,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import absolute_import
-
-
 from platform_utils import Platform, System
 System.import_libs()
 
@@ -28,7 +26,7 @@ from threading import Lock
 
 from peewee_migrate import Router
 from serial import Serial
-from six.moves.configparser import ConfigParser, NoOptionError
+from six.moves.configparser import ConfigParser
 from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
@@ -198,11 +196,7 @@ def setup_target_platform(target_platform, message_client_name):
                              'password': config.get('OpenMotics', 'cloud_pass')})
 
     # Energy Controller
-    try:
-        power_serial_port = config.get('OpenMotics', 'power_serial')
-    except NoOptionError:
-        power_serial_port = None
-
+    power_serial_port = config.get('OpenMotics', 'power_serial')
     if power_serial_port:
         Injectable.value(power_db=constants.get_power_database_file())
         Injectable.value(power_store=PowerStore())
