@@ -46,7 +46,7 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     SensorSerializer, ShutterGroupSerializer, ShutterSerializer, \
     ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer, \
     ThermostatGroupStatusSerializer
-from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO
+from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO
 from gateway.enums import ShutterEnums, UserEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import CommunicationFailure
@@ -1230,7 +1230,13 @@ class WebInterface(object):
         :param id: The id of the thermostat_configuration
         :param fields: The field of the thermostat_configuration to get, None if all
         """
-        return {'config': ThermostatSerializer.serialize(thermostat_dto=self._thermostat_controller.load_heating_thermostat(id),
+        try:
+            thermostat_dto = self._thermostat_controller.load_heating_thermostat(id)
+        except DoesNotExist:
+            if id >= 32:
+                raise
+            thermostat_dto = ThermostatDTO(id=id)
+        return {'config': ThermostatSerializer.serialize(thermostat_dto=thermostat_dto,
                                                          fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
@@ -1239,8 +1245,13 @@ class WebInterface(object):
         Get all thermostat_configurations.
         :param fields: The field of the thermostat_configuration to get, None if all
         """
+        thermostat_dtos = {thermostat.id: thermostat
+                           for thermostat in self._thermostat_controller.load_heating_thermostats()}
+        all_dtos = []
+        for thermostat_id in set(list(thermostat_dtos.keys()) + list(range(32))):
+            all_dtos.append(thermostat_dtos.get(thermostat_id, ThermostatDTO(id=thermostat_id)))
         return {'config': [ThermostatSerializer.serialize(thermostat_dto=thermostat, fields=fields)
-                           for thermostat in self._thermostat_controller.load_heating_thermostats()]}
+                           for thermostat in all_dtos]}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_thermostat_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
@@ -1350,7 +1361,13 @@ class WebInterface(object):
         :param id: The id of the cooling_configuration
         :param fields: The field of the cooling_configuration to get, None if all
         """
-        return {'config': ThermostatSerializer.serialize(thermostat_dto=self._thermostat_controller.load_cooling_thermostat(id),
+        try:
+            thermostat_dto = self._thermostat_controller.load_cooling_thermostat(id)
+        except DoesNotExist:
+            if id >= 32:
+                raise
+            thermostat_dto = ThermostatDTO(id=id)
+        return {'config': ThermostatSerializer.serialize(thermostat_dto=thermostat_dto,
                                                          fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
@@ -1359,8 +1376,13 @@ class WebInterface(object):
         Get all cooling_configurations.
         :param fields: The field of the cooling_configuration to get, None if all
         """
+        thermostat_dtos = {thermostat.id: thermostat
+                           for thermostat in self._thermostat_controller.load_cooling_thermostats()}
+        all_dtos = []
+        for thermostat_id in set(list(thermostat_dtos.keys()) + list(range(32))):
+            all_dtos.append(thermostat_dtos.get(thermostat_id, ThermostatDTO(id=thermostat_id)))
         return {'config': [ThermostatSerializer.serialize(thermostat_dto=thermostat, fields=fields)
-                           for thermostat in self._thermostat_controller.load_cooling_thermostats()]}
+                           for thermostat in all_dtos]}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_cooling_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
