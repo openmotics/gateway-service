@@ -30,6 +30,8 @@ class PluginRuntime(object):
     SUPPORTED_DECORATOR_VERSIONS = {'input_status': [1, 2],
                                     'output_status': [1, 2],
                                     'shutter_status': [1, 2, 3],
+                                    'thermostat_status': [1],
+                                    'thermostat_group_status': [1],
                                     'ventilation_status': [1],
                                     'receive_events': [1],
                                     'background_task': [1],
@@ -43,6 +45,8 @@ class PluginRuntime(object):
         self._decorated_methods = {'input_status': [],
                                    'output_status': [],
                                    'shutter_status': [],
+                                   'thermostat_status': [],
+                                   'thermostat_group_status': [],
                                    'ventilation_status': [],
                                    'receive_events': [],
                                    'background_task': [],
@@ -179,6 +183,10 @@ class PluginRuntime(object):
                         ret = self._handle_output_status(command['event'], data_type='event')
                 elif action == 'ventilation_status':
                     ret = self._handle_ventilation_status(command['event'])
+                elif action == 'thermostat_status':
+                    ret = self._handle_thermostat_status(command['event'])
+                elif action == 'thermostat_group_status':
+                    ret = self._handle_thermostat_group_status(command['event'])
                 elif action == 'shutter_status':
                     # v1 = state as list, v2 = state as dict, v3 = event
                     if action_version == 1:
@@ -275,6 +283,16 @@ class PluginRuntime(object):
         event = GatewayEvent.deserialize(data)
         for receiver in self._decorated_methods['ventilation_status']:
             self._writer.with_catch('ventilation status', receiver, [event.data])
+
+    def _handle_thermostat_status(self, data):
+        event = GatewayEvent.deserialize(data)
+        for receiver in self._decorated_methods['thermostat_status']:
+            self._writer.with_catch('thermostat status', receiver, [event.data])
+
+    def _handle_thermostat_group_status(self, data):
+        event = GatewayEvent.deserialize(data)
+        for receiver in self._decorated_methods['thermostat_group_status']:
+            self._writer.with_catch('thermostat group status', receiver, [event.data])
 
     def _handle_shutter_status(self, data, data_type='status'):
         event = GatewayEvent.deserialize(data) if data_type == 'event' else None
