@@ -366,21 +366,9 @@ class ThermostatControllerMaster(ThermostatController):
         """
         self._master_controller.set_pump_group_configurations(config)
 
-    def v0_set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
-        # type: (bool, bool, bool, Optional[bool], Optional[int]) -> Dict[str,Any]
-        """ Set the mode of the thermostats.
-        :param thermostat_on: Whether the thermostats are on
-        :type thermostat_on: boolean
-        :param cooling_mode: Cooling mode (True) of Heating mode (False)
-        :type cooling_mode: boolean | None
-        :param cooling_on: Turns cooling ON when set to true.
-        :type cooling_on: boolean | None
-        :param automatic: Indicates whether the thermostat system should be set to automatic
-        :type automatic: boolean | None
-        :param setpoint: Requested setpoint (integer 0-5)
-        :type setpoint: int | None
-        :returns: dict with 'status'
-        """
+    def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
+        # type: (bool, bool, bool, Optional[bool], Optional[int]) -> None
+        """ Set the mode of the thermostats. """
         _ = thermostat_on  # Still accept `thermostat_on` for backwards compatibility
 
         # Figure out whether the system should be on or off
@@ -426,19 +414,10 @@ class ThermostatControllerMaster(ThermostatController):
 
         self.invalidate_cache(Observer.Types.THERMOSTATS)
         self.increase_interval(Observer.Types.THERMOSTATS, interval=2, window=10)
-        return {'status': 'OK'}
 
-    def v0_set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
-        # type: (int, bool, int) -> Dict[str,Any]
-        """ Set the setpoint/mode for a certain thermostat.
-        :param thermostat_id: The id of the thermostat.
-        :type thermostat_id: Integer [0, 31]
-        :param automatic: Automatic mode (True) or Manual mode (False)
-        :type automatic: boolean
-        :param setpoint: The current setpoint
-        :type setpoint: Integer [0, 5]
-        :returns: dict with 'status'
-        """
+    def set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
+        # type: (int, bool, int) -> None
+        """ Set the setpoint/mode for a certain thermostat. """
         if thermostat_id < 0 or thermostat_id > 31:
             raise ValueError('Thermostat_id not in [0, 31]: %d' % thermostat_id)
 
@@ -453,7 +432,6 @@ class ThermostatControllerMaster(ThermostatController):
 
         self.invalidate_cache(Observer.Types.THERMOSTATS)
         self.increase_interval(Observer.Types.THERMOSTATS, interval=2, window=10)
-        return {'status': 'OK'}
 
     def v0_set_airco_status(self, thermostat_id, airco_on):
         # type: (int, bool) -> Dict[str,Any]

@@ -498,16 +498,11 @@ class Preset(BaseModel):
     thermostat = ForeignKeyField(Thermostat, on_delete='CASCADE')
 
     def get_v0_setpoint_id(self):
-        mapping = {'MANUAL': 1,
-                   'SCHEDULE': 2,
-                   'AWAY': 3,
+        # MANUAL does not exist in v0, that's just a temporarily overwritten preset or automatic schedule
+        mapping = {'AWAY': 3,
                    'VACATION': 4,
                    'PARTY': 5}
-        name = str(self.name)
-        v0_setpoint = mapping.get(name)
-        if v0_setpoint is None:
-            raise ValueError('Preset name {} not compatible with v0_setpoint. Should be one of {}.'.format(name, list(mapping.keys())))
-        return v0_setpoint
+        return mapping.get(self.name, 0)
 
     @classmethod
     def get_by_thermostat_and_v0_setpoint(cls, thermostat, v0_setpoint):

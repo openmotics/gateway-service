@@ -21,6 +21,7 @@ from playhouse.signals import post_save
 from ioc import Injectable, Inject, Singleton, INJECTED
 from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread
+from gateway.enums import ThermostatMode
 from gateway.events import GatewayEvent
 from gateway.dto import ThermostatDTO, ThermostatStatusDTO, ThermostatGroupStatusDTO
 from gateway.models import Output, Preset, Thermostat, ThermostatGroup, OutputToThermostatGroup, Pump
@@ -31,7 +32,7 @@ from gateway.mappers import ThermostatMapper
 from apscheduler.schedulers.background import BackgroundScheduler
 
 if False:  # MYPY
-    from typing import List, Tuple, Dict, Optional
+    from typing import List, Tuple, Dict, Optional, Literal
     from gateway.gateway_api import GatewayApi
     from bus.om_bus_client import MessageClient
     from gateway.output_controller import OutputController
@@ -252,36 +253,41 @@ class ThermostatControllerGateway(ThermostatController):
             raise RuntimeError('Global thermostat not found!')
         group_status = ThermostatGroupStatusDTO(id=0,
                                                 on=global_thermostat.on,
-                                                automatic=True,  # TODO: If any thermnostat is automatic
-                                                setpoint=0,  # Can be ignored
-                                                cooling=global_thermostat.mode == 'cooling')  # TODO: Use enum
+                                                automatic=True,  # Default, will be updated below
+                                                setpoint=0,  # Default, will be updated below
+                                                cooling=global_thermostat.mode == ThermostatMode.COOLING)
 
         for thermostat in global_thermostat.thermostats:
             output_numbers = thermostat.v0_get_output_numbers()
             active_preset = thermostat.active_preset
-            if global_thermostat.mode == 'cooling':
+            if global_thermostat.mode == ThermostatMode.COOLING:
                 setpoint_temperature = active_preset.cooling_setpoint
             else:
                 setpoint_temperature = active_preset.heating_setpoint
 
-            setpoint = active_preset.get_v0_setpoint_id()
             group_status.statusses.append(ThermostatStatusDTO(id=thermostat.number,
                                                               actual_temperature=self._gateway_api.get_sensor_temperature_status(thermostat.sensor),
                                                               setpoint_temperature=setpoint_temperature,
                                                               outside_temperature=self._gateway_api.get_sensor_temperature_status(global_thermostat.sensor),
-                                                              mode=0,  # TODO: Check if still used
+                                                              mode=active_preset.get_v0_setpoint_id(),
                                                               automatic=active_preset.name == 'SCHEDULE',  # TODO: Use enum
-                                                              setpoint=setpoint,
+                                                              setpoint=active_preset.get_v0_setpoint_id(),
                                                               name=thermostat.name,
                                                               sensor_id=thermostat.sensor,
                                                               airco=0,  # TODO: Check if still used
                                                               output_0_level=get_output_level(output_numbers[0]),
                                                               output_1_level=get_output_level(output_numbers[1])))
 
+        # Update global references
+        group_status.automatic = all(status.automatic for status in group_status.statusses)
+        used_setpoints = set(status.setpoint for status in group_status.statusses)
+        group_status.setpoint = next(iter(used_setpoints)) if len(used_setpoints) == 1 else 0
+
         return group_status
 
-    def v0_set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
-        mode = 'cooling' if cooling_mode else 'heating'
+    def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
+        # type: (bool, bool, bool, Optional[bool], Optional[int]) -> None
+        mode = ThermostatMode.COOLING if cooling_mode else ThermostatMode.HEATING  # type: Literal['cooling', 'heating']
         global_thermosat = ThermostatGroup.v0_get_global()
         global_thermosat.on = thermostat_on
         global_thermosat.mode = mode
@@ -296,7 +302,6 @@ class ThermostatControllerGateway(ThermostatController):
                     thermostat.active_preset = thermostat.get_preset('SCHEDULE')
                 thermostat_pid.update_thermostat(thermostat)
                 thermostat_pid.tick()
-        return {'status': 'OK'}
 
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         # TODO: Implement the new v1 config format
@@ -331,6 +336,7 @@ class ThermostatControllerGateway(ThermostatController):
             self.refresh_set_configuration(thermostat)
 
     def v0_set_per_thermostat_mode(self, thermostat_number, automatic, setpoint):
+        # type: (int, bool, int) -> None
         thermostat_pid = self.thermostat_pids.get(thermostat_number)
         if thermostat_pid is not None:
             thermostat = thermostat_pid.thermostat
@@ -339,7 +345,6 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat.save()
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
-        return {'status': 'OK'}
 
     def v0_get_global_thermostat_configuration(self, fields=None):
         # TODO: Implement this with sqlite as backing

@@ -804,25 +804,9 @@ class WebInterface(object):
         can be in cooling or heating (cooling_mode), cooling can be turned on or off (cooling_on).
         The automatic and setpoint parameters are here for backwards compatibility and will be
         applied to all thermostats. To control the automatic and setpoint parameters per thermostat
-        use the v0_set_per_thermostat_mode call instead.
-
-        :param thermostat_on: Whether the thermostats are on
-        :type thermostat_on: bool
-        :param automatic: Automatic mode (True) or Manual mode (False).  This parameter is here for
-            backwards compatibility, use v0_set_per_thermostat_mode instead.
-        :type automatic: bool or None
-        :param setpoint: The current setpoint.  This parameter is here for backwards compatibility,
-            use v0_set_per_thermostat_mode instead.
-        :type setpoint: int or None
-        :param cooling_mode: Cooling mode (True) of Heating mode (False)
-        :type cooling_mode: bool or None
-        :param cooling_on: Turns cooling ON when set to true.
-        :param cooling_on: bool or None
-        :return: 'status': 'OK'.
-        :rtype: dict
+        use the set_per_thermostat_mode call instead.
         """
-        self._thermostat_controller.v0_set_thermostat_mode(thermostat_on, cooling_mode, cooling_on, automatic, setpoint)
-
+        self._thermostat_controller.set_thermostat_mode(thermostat_on, cooling_mode, cooling_on, automatic, setpoint)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(thermostat_id=int, automatic=bool, setpoint=int))
@@ -830,15 +814,9 @@ class WebInterface(object):
         """
         Set the thermostat mode of a given thermostat. Thermostats can be set to automatic or
         manual, in case of manual a setpoint (0 to 5) can be provided.
-
-        :param thermostat_id: The thermostat id
-        :type thermostat_id: int
-        :param automatic: Automatic mode (True) or Manual mode (False).
-        :type automatic: bool
-        :param setpoint: The current setpoint.
-        :type setpoint: int
         """
-        return self._thermostat_controller.v0_set_per_thermostat_mode(thermostat_id, automatic, setpoint)
+        return self._thermostat_controller.set_per_thermostat_mode(thermostat_id, automatic, setpoint)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True)
     def get_airco_status(self):

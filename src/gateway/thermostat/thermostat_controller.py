@@ -70,21 +70,9 @@ class ThermostatController(object):
     def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
         raise NotImplementedError()
 
-    def v0_set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
-        # type: (bool, bool, bool, Optional[bool], Optional[int]) -> Dict[str,Any]
-        """ Set the mode of the thermostats.
-        :param thermostat_on: Whether the thermostats are on
-        :type thermostat_on: boolean
-        :param cooling_mode: Cooling mode (True) of Heating mode (False)
-        :type cooling_mode: boolean | None
-        :param cooling_on: Turns cooling ON when set to true.
-        :type cooling_on: boolean | None
-        :param automatic: Indicates whether the thermostat system should be set to automatic
-        :type automatic: boolean | None
-        :param setpoint: Requested setpoint (integer 0-5)
-        :type setpoint: int | None
-        :returns: dict with 'status'
-        """
+    def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
+        # type: (bool, bool, bool, Optional[bool], Optional[int]) -> None
+        """ Set the mode of the thermostats. """
         raise NotImplementedError()
 
     def v0_get_pump_group_configuration(self, pump_group_id, fields=None):
@@ -111,17 +99,9 @@ class ThermostatController(object):
         """
         raise NotImplementedError()
 
-    def v0_set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
-        # type: (int, bool, int) -> Dict[str,Any]
-        """ Set the setpoint/mode for a certain thermostat.
-        :param thermostat_id: The id of the thermostat.
-        :type thermostat_id: Integer [0, 31]
-        :param automatic: Automatic mode (True) or Manual mode (False)
-        :type automatic: boolean
-        :param setpoint: The current setpoint
-        :type setpoint: Integer [0, 5]
-        :returns: dict with 'status'
-        """
+    def set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
+        # type: (int, bool, int) -> None
+        """ Set the setpoint/mode for a certain thermostat. """
         raise NotImplementedError()
 
     def v0_get_global_thermostat_configuration(self, fields=None):
