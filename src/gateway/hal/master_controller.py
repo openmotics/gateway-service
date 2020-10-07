@@ -18,7 +18,8 @@ Module for communicating with the Master
 from __future__ import absolute_import
 
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
-    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO
+    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO, \
+    ThermostatGroupDTO
 from gateway.hal.master_event import MasterEvent
 
 if False:  # MYPY
@@ -286,12 +287,12 @@ class MasterController(object):
         # type: (List[Dict[str,Any]]) -> None
         raise NotImplementedError()
 
-    def get_global_thermostat_configuration(self, fields=None):
-        # type: (Optional[List[str]]) -> Dict[str,Any]
+    def load_thermostat_group(self):
+        # type: () -> ThermostatGroupDTO
         raise NotImplementedError()
 
-    def set_global_thermostat_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
+    def save_thermostat_group(self, thermostat_group):
+        # type: (Tuple[ThermostatGroupDTO, List[str]]) -> None
         raise NotImplementedError()
 
     def get_pump_group_configuration(self, pump_group_id, fields=None):

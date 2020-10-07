@@ -45,7 +45,7 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     PulseCounterSerializer, RoomSerializer, ScheduleSerializer, \
     SensorSerializer, ShutterGroupSerializer, ShutterSerializer, \
     ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer, \
-    ThermostatGroupStatusSerializer
+    ThermostatGroupStatusSerializer, ThermostatGroupSerializer
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO
 from gateway.enums import ShutterEnums, UserEnums
 from gateway.exceptions import UnsupportedException
@@ -1762,23 +1762,17 @@ class WebInterface(object):
     def get_global_thermostat_configuration(self, fields=None):
         """
         Get the global_thermostat_configuration.
-
-        :param fields: The field of the global_thermostat_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': global_thermostat_configuration dict: contains 'outside_sensor' (Byte), 'pump_delay' (Byte), 'switch_to_cooling_output_0' (Byte), 'switch_to_cooling_output_1' (Byte), 'switch_to_cooling_output_2' (Byte), 'switch_to_cooling_output_3' (Byte), 'switch_to_cooling_value_0' (Byte), 'switch_to_cooling_value_1' (Byte), 'switch_to_cooling_value_2' (Byte), 'switch_to_cooling_value_3' (Byte), 'switch_to_heating_output_0' (Byte), 'switch_to_heating_output_1' (Byte), 'switch_to_heating_output_2' (Byte), 'switch_to_heating_output_3' (Byte), 'switch_to_heating_value_0' (Byte), 'switch_to_heating_value_1' (Byte), 'switch_to_heating_value_2' (Byte), 'switch_to_heating_value_3' (Byte), 'threshold_temp' (Temp)
-        :rtype: str
+        :param fields: The field of the cooling_configuration to get, None if all
         """
-        return {'config': self._thermostat_controller.v0_get_global_thermostat_configuration(fields)}
+        thermostat_group_dto = self._thermostat_controller.load_thermostat_group()
+        return {'config': ThermostatGroupSerializer.serialize(thermostat_group_dto=thermostat_group_dto,
+                                                              fields=fields)}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_global_thermostat_configuration(self, config):
-        """
-        Set the global_thermostat_configuration.
-
-        :param config: The global_thermostat_configuration to set: global_thermostat_configuration dict: contains 'outside_sensor' (Byte), 'pump_delay' (Byte), 'switch_to_cooling_output_0' (Byte), 'switch_to_cooling_output_1' (Byte), 'switch_to_cooling_output_2' (Byte), 'switch_to_cooling_output_3' (Byte), 'switch_to_cooling_value_0' (Byte), 'switch_to_cooling_value_1' (Byte), 'switch_to_cooling_value_2' (Byte), 'switch_to_cooling_value_3' (Byte), 'switch_to_heating_output_0' (Byte), 'switch_to_heating_output_1' (Byte), 'switch_to_heating_output_2' (Byte), 'switch_to_heating_output_3' (Byte), 'switch_to_heating_value_0' (Byte), 'switch_to_heating_value_1' (Byte), 'switch_to_heating_value_2' (Byte), 'switch_to_heating_value_3' (Byte), 'threshold_temp' (Temp)
-        :type config: dict
-        """
-        self._thermostat_controller.v0_set_global_thermostat_configuration(config)
+        """ Set the global_thermostat_configuration. """
+        data = ThermostatGroupSerializer.deserialize(config)
+        self._thermostat_controller.save_thermostat_group(data)
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))

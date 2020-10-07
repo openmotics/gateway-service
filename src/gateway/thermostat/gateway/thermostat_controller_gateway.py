@@ -23,7 +23,8 @@ from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread
 from gateway.enums import ThermostatMode
 from gateway.events import GatewayEvent
-from gateway.dto import ThermostatDTO, ThermostatStatusDTO, ThermostatGroupStatusDTO
+from gateway.dto import ThermostatDTO, ThermostatGroupDTO, \
+    ThermostatStatusDTO, ThermostatGroupStatusDTO
 from gateway.models import Output, Preset, Thermostat, ThermostatGroup, OutputToThermostatGroup, Pump
 from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
 from gateway.thermostat.thermostat_controller import ThermostatController
@@ -346,61 +347,75 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
 
-    def v0_get_global_thermostat_configuration(self, fields=None):
-        # TODO: Implement this with sqlite as backing
-        global_thermostat_group = ThermostatGroup.v0_get_global()
-        outside_sensor = global_thermostat_group.sensor
-        config = {'outside_sensor': 255 if outside_sensor is None else outside_sensor,
-                  'pump_delay': 255,
-                  'threshold_temp': global_thermostat_group.threshold_temp}
-
-        cooling_outputs = global_thermostat_group.v0_switch_to_cooling_outputs
-        n = len(cooling_outputs)
-        for i in range(n):
-            cooling_output = cooling_outputs[n]
-            config['switch_to_cooling_output_{}'.format(i)] = cooling_output[0]
-            config['switch_to_cooling_value_{}'.format(i)] = cooling_output[1]
-        for i in range(n, 4-n):
-            config['switch_to_cooling_output_{}'.format(i)] = 255
-            config['switch_to_cooling_value_{}'.format(i)] = 255
-
-        heating_outputs = global_thermostat_group.v0_switch_to_heating_outputs
-        n = len(heating_outputs)
-        for i in range(n):
-            heating_output = heating_outputs[n]
-            config['switch_to_heating_output_{}'.format(i)] = heating_output[0]
-            config['switch_to_heating_value_{}'.format(i)] = heating_output[1]
-        for i in range(n, 4-n):
-            config['switch_to_heating_output_{}'.format(i)] = 255
-            config['switch_to_heating_value_{}'.format(i)] = 255
-
-        return config
-
-    def v0_set_global_thermostat_configuration(self, config):
-        # update thermostat group configuration
+    def load_thermostat_group(self):
+        # type: () -> ThermostatGroupDTO
         thermostat_group = ThermostatGroup.get(number=0)
-        thermostat_group.sensor = int(config['outside_sensor'])
-        thermostat_group.threshold_temp = float(config['threshold_temp'])
-        thermostat_group.save()
-
-        # link configuration outputs to global thermostat config
-        for mode in ['cooling', 'heating']:
-            for i in range(4):
-                full_key = 'switch_to_{}_output_{}'.format(mode, i)
-                output_number = config.get(full_key)
-                output = Output.get_or_create(number=output_number)
-
-                output_to_thermostatgroup = OutputToThermostatGroup.get_or_create(output=output, thermostat_group=thermostat_group)
-                output_to_thermostatgroup.index = i
-                output_to_thermostatgroup.mode = mode
-                output_to_thermostatgroup.save()
-
-        # set valve delay for all valve_numbers in this group
-        valve_delay = int(config['pump_delay'])
+        pump_delay = None
         for thermostat in thermostat_group.thermostats:
             for valve in thermostat.valve_numbers:
-                valve.delay = valve_delay
-                valve.save()
+                pump_delay = valve.delay
+                break
+        thermostat_group_dto = ThermostatGroupDTO(id=0,
+                                                  outside_sensor_id=thermostat_group.sensor,
+                                                  threshold_temperature=thermostat_group.threshold_temp,
+                                                  pump_delay=pump_delay)
+        for link in OutputToThermostatGroup.select()\
+                .where(OutputToThermostatGroup.thermostat_group == thermostat_group):
+            if link.index > 3 or link.output is None:
+                continue
+            field = 'switch_to_{0}_{1}'.format(link.mode, link.index)
+            setattr(thermostat_group_dto, field, (link.output.number, link.value))
+        return thermostat_group_dto
+
+    def save_thermostat_group(self, thermostat_group):
+        # type: (Tuple[ThermostatGroupDTO, List[str]]) -> None
+        thermostat_group_dto, fields = thermostat_group
+
+        # Update thermostat group configuration
+        orm_object = ThermostatGroup.get(number=0)
+        if 'outside_sensor_id' in fields:
+            orm_object.sensor = thermostat_group_dto.outside_sensor_id
+        if 'threshold_temperature' in fields:
+            orm_object.threshold_temp = thermostat_group_dto.threshold_temperature
+        orm_object.save()
+
+        # Link configuration outputs to global thermostat config
+        for mode in ['cooling', 'heating']:
+            links = {link.index: link
+                     for link in OutputToThermostatGroup
+                         .select()
+                         .where(OutputToThermostatGroup.thermostat_group == orm_object)
+                         .where(OutputToThermostatGroup.mode == mode)}
+            for i in range(4):
+                field = 'switch_to_{0}_{1}'.format(mode, i)
+                if field not in fields:
+                    continue
+
+                link = links.get(i)
+                data = getattr(thermostat_group_dto, field)
+                if data is None:
+                    if link is not None:
+                        link.delete()
+                else:
+                    output_number, value = data
+                    output = Output.get(number=output_number)
+                    if link is None:
+                        OutputToThermostatGroup.create(output=output,
+                                                       thermostat_group=orm_object,
+                                                       mode=mode,
+                                                       index=i,
+                                                       value=value)
+                    else:
+                        link.output = output
+                        link.value = value
+                        link.save()
+
+        if 'pump_delay' in fields:
+            # Set valve delay for all valve_numbers in this group
+            for thermostat in orm_object.thermostats:
+                for valve in thermostat.valve_numbers:
+                    valve.delay = thermostat_group_dto.pump_delay
+                    valve.save()
 
     def v0_get_pump_group_configuration(self, pump_number, fields=None):
         pump = Pump.get(number=pump_number)

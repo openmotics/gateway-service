@@ -21,7 +21,7 @@ from gateway.dto.base import BaseDTO
 from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
 
 if False:
-    from typing import Optional, List
+    from typing import Optional, List, Tuple
 
 
 class ThermostatDTO(BaseDTO):
@@ -91,6 +91,40 @@ class ThermostatDTO(BaseDTO):
                 self.auto_fri == other.auto_fri and
                 self.auto_sat == other.auto_sat and
                 self.auto_sun == other.auto_sun)
+
+
+class ThermostatGroupDTO(BaseDTO):
+    def __init__(self, id, outside_sensor_id=None, pump_delay=None, threshold_temperature=None,
+                 switch_to_heating_0=None, switch_to_heating_1=None, switch_to_heating_2=None, switch_to_heating_3=None,
+                 switch_to_cooling_0=None, switch_to_cooling_1=None, switch_to_cooling_2=None, switch_to_cooling_3=None):
+        self.id = id  # type: int
+        self.outside_sensor_id = outside_sensor_id  # type: Optional[int]
+        self.pump_delay = pump_delay  # type: Optional[int]
+        self.threshold_temperature = threshold_temperature  # type: Optional[float]
+        self.switch_to_heating_0 = switch_to_heating_0  # type: Optional[Tuple[int, int]]
+        self.switch_to_heating_1 = switch_to_heating_1  # type: Optional[Tuple[int, int]]
+        self.switch_to_heating_2 = switch_to_heating_2  # type: Optional[Tuple[int, int]]
+        self.switch_to_heating_3 = switch_to_heating_3  # type: Optional[Tuple[int, int]]
+        self.switch_to_cooling_0 = switch_to_cooling_0  # type: Optional[Tuple[int, int]]
+        self.switch_to_cooling_1 = switch_to_cooling_1  # type: Optional[Tuple[int, int]]
+        self.switch_to_cooling_2 = switch_to_cooling_2  # type: Optional[Tuple[int, int]]
+        self.switch_to_cooling_3 = switch_to_cooling_3  # type: Optional[Tuple[int, int]]
+
+    def __eq__(self, other):
+        if not isinstance(other, ThermostatGroupDTO):
+            return False
+        return (self.id == other.id and
+                self.outside_sensor_id == other.outside_sensor_id and
+                self.pump_delay == other.pump_delay and
+                self.threshold_temperature == other.threshold_temperature and
+                self.switch_to_heating_0 == other.switch_to_heating_0 and
+                self.switch_to_heating_1 == other.switch_to_heating_1 and
+                self.switch_to_heating_2 == other.switch_to_heating_2 and
+                self.switch_to_heating_3 == other.switch_to_heating_3 and
+                self.switch_to_cooling_0 == other.switch_to_cooling_0 and
+                self.switch_to_cooling_1 == other.switch_to_cooling_1 and
+                self.switch_to_cooling_2 == other.switch_to_cooling_2 and
+                self.switch_to_cooling_3 == other.switch_to_cooling_3)
 
 
 class ThermostatStatusDTO(BaseDTO):

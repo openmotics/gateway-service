@@ -26,8 +26,9 @@ from threading import Thread, Timer
 from peewee import DoesNotExist
 
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
-    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO
+    SensorDTO, ShutterDTO, ShutterGroupDTO, ModuleDTO
 from gateway.enums import ShutterEnums
+from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
 from gateway.hal.master_controller import CommunicationFailure, \
@@ -530,23 +531,29 @@ class MasterCoreController(MasterController):
 
     # Thermostats
 
-    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
-        raise NotImplementedError()
+    def load_heating_thermostat(self, thermostat_id):
+        raise UnsupportedException()
 
-    def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
-        raise NotImplementedError()
+    def load_heating_thermostats(self):
+        raise UnsupportedException()
 
-    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
-        raise NotImplementedError()
+    def save_heating_thermostats(self, thermostats):
+        raise UnsupportedException()
 
-    def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
-        raise NotImplementedError()
+    def load_cooling_thermostat(self, thermostat_id):
+        raise UnsupportedException()
 
-    def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
-        raise NotImplementedError()
+    def load_cooling_thermostats(self):
+        raise UnsupportedException()
 
-    def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
-        raise NotImplementedError()
+    def save_cooling_thermostats(self, thermostats):
+        raise UnsupportedException()
+
+    def load_thermostat_group(self):
+        raise UnsupportedException()
+
+    def save_thermostat_group(self, thermostat_group):
+        raise UnsupportedException()
 
     # Can Led functions
 

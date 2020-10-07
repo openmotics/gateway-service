@@ -18,7 +18,8 @@ import time
 
 from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO, ThermostatStatusDTO
+from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO, ThermostatStatusDTO, \
+    ThermostatGroupDTO
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.observer import Observer
@@ -300,26 +301,15 @@ class ThermostatControllerMaster(ThermostatController):
         """
         self._master_controller.set_rtd10_cooling_configurations(config)
 
-    def v0_get_global_thermostat_configuration(self, fields=None):
-        # type: (Optional[List[str]]) -> Dict[str,Any]
-        """
-        Get the global_thermostat_configuration.
+    def load_thermostat_group(self):
+        # type: () -> ThermostatGroupDTO
+        """ Get the thermostat group. """
+        return self._master_controller.load_thermostat_group()
 
-        :param fields: The field of the global_thermostat_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: global_thermostat_configuration dict: contains 'outside_sensor' (Byte), 'pump_delay' (Byte), 'switch_to_cooling_output_0' (Byte), 'switch_to_cooling_output_1' (Byte), 'switch_to_cooling_output_2' (Byte), 'switch_to_cooling_output_3' (Byte), 'switch_to_cooling_value_0' (Byte), 'switch_to_cooling_value_1' (Byte), 'switch_to_cooling_value_2' (Byte), 'switch_to_cooling_value_3' (Byte), 'switch_to_heating_output_0' (Byte), 'switch_to_heating_output_1' (Byte), 'switch_to_heating_output_2' (Byte), 'switch_to_heating_output_3' (Byte), 'switch_to_heating_value_0' (Byte), 'switch_to_heating_value_1' (Byte), 'switch_to_heating_value_2' (Byte), 'switch_to_heating_value_3' (Byte), 'threshold_temp' (Temp)
-        """
-        return self._master_controller.get_global_thermostat_configuration(fields=fields)
-
-    def v0_set_global_thermostat_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set the global_thermostat_configuration.
-
-        :param config: The global_thermostat_configuration to set
-        :type config: global_thermostat_configuration dict: contains 'outside_sensor' (Byte), 'pump_delay' (Byte), 'switch_to_cooling_output_0' (Byte), 'switch_to_cooling_output_1' (Byte), 'switch_to_cooling_output_2' (Byte), 'switch_to_cooling_output_3' (Byte), 'switch_to_cooling_value_0' (Byte), 'switch_to_cooling_value_1' (Byte), 'switch_to_cooling_value_2' (Byte), 'switch_to_cooling_value_3' (Byte), 'switch_to_heating_output_0' (Byte), 'switch_to_heating_output_1' (Byte), 'switch_to_heating_output_2' (Byte), 'switch_to_heating_output_3' (Byte), 'switch_to_heating_value_0' (Byte), 'switch_to_heating_value_1' (Byte), 'switch_to_heating_value_2' (Byte), 'switch_to_heating_value_3' (Byte), 'threshold_temp' (Temp)
-        """
-        self._master_controller.set_global_thermostat_configuration(config)
+    def save_thermostat_group(self, thermostat_group):
+        # type: (Tuple[ThermostatGroupDTO, List[str]]) -> None
+        """ Set the thermostat group. """
+        self._master_controller.save_thermostat_group(thermostat_group)
         self.invalidate_cache(Observer.Types.THERMOSTATS)
 
     def v0_get_pump_group_configuration(self, pump_group_id, fields=None):
@@ -377,14 +367,14 @@ class ThermostatControllerMaster(ThermostatController):
             set_on = True
         if cooling_mode is False:
             # Heating means threshold based
-            global_config = self.v0_get_global_thermostat_configuration()
-            outside_sensor = global_config['outside_sensor']
+            thermostat_group = self.load_thermostat_group()
+            outside_sensor = Toolbox.denonify(thermostat_group.outside_sensor_id, 255)
             current_temperatures = self._master_controller.get_sensors_temperature()[:32]
             if len(current_temperatures) < 32:
                 current_temperatures += [None] * (32 - len(current_temperatures))
             if len(current_temperatures) > outside_sensor:
                 current_temperature = current_temperatures[outside_sensor]
-                set_on = global_config['threshold_temp'] > current_temperature
+                set_on = thermostat_group.threshold_temperature > current_temperature
             else:
                 set_on = True
 

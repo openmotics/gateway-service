@@ -29,12 +29,13 @@ import six
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
-    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO
+    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO, \
+    ThermostatGroupDTO
 from gateway.enums import ShutterEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
     OutputMapper, PulseCounterMapper, SensorMapper, ShutterGroupMapper, \
-    ShutterMapper, ThermostatMapper
+    ShutterMapper, ThermostatMapper, ThermostatGroupMapper
 from gateway.hal.master_controller import CommunicationFailure, \
     MasterController
 from gateway.hal.master_event import MasterEvent
@@ -852,17 +853,20 @@ class MasterClassicController(MasterController):
         self._eeprom_controller.write_batch([RTD10CoolingConfiguration.deserialize(o) for o in config])
 
     @communication_enabled
-    def get_global_thermostat_configuration(self, fields=None):
-        # type: (Optional[List[str]]) -> Dict[str,Any]
-        return self._eeprom_controller.read(GlobalThermostatConfiguration, fields=fields).serialize()
+    def load_thermostat_group(self):
+        # type: () -> ThermostatGroupDTO
+        classic_object = self._eeprom_controller.read(GlobalThermostatConfiguration).serialize()
+        return ThermostatGroupMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def set_global_thermostat_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        if 'outside_sensor' in config:
-            if config['outside_sensor'] == 255:
-                config['threshold_temp'] = 50  # Works around a master issue where the thermostat would be turned off in case there is no outside sensor.
-        self._eeprom_controller.write(GlobalThermostatConfiguration.deserialize(config))
+    def save_thermostat_group(self, thermostat_group):
+        # type: (Tuple[ThermostatGroupDTO, List[str]]) -> None
+        thermostat_group_dto, fields = thermostat_group
+        if thermostat_group_dto.outside_sensor_id is None:
+            # Works around a master issue where the thermostat would be turned off in case there is no outside sensor.
+            thermostat_group_dto.threshold_temperature = 50
+        classic_object = ThermostatGroupMapper.dto_to_orm(thermostat_group_dto, fields)
+        self._eeprom_controller.write(classic_object)
 
     @communication_enabled
     def get_pump_group_configuration(self, pump_group_id, fields=None):

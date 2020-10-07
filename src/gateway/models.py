@@ -285,8 +285,10 @@ class ThermostatGroup(BaseModel):
 
 
 class OutputToThermostatGroup(BaseModel):
-    """ Outputs on a thermostat group are sometimes used for setting the pumpgroup in a certain state
-        the index var is 0-4 of the output in setting this config """
+    """
+    Outputs on a thermostat group are sometimes used for setting the pumpgroup in a certain state
+    the index var is 0-4 of the output in setting this config
+    """
     output = ForeignKeyField(Output, on_delete='CASCADE')
     thermostat_group = ForeignKeyField(ThermostatGroup, on_delete='CASCADE')
     index = IntegerField()   # the index of this output in the config 0-3

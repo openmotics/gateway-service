@@ -15,7 +15,8 @@
 
 if False:  # MYPY
     from bus.om_bus_client import MessageClient
-    from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO
+    from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO, \
+        ThermostatGroupDTO
     from gateway.events import GatewayEvent
     from gateway.output_controller import OutputController
     from typing import Any, Callable, Dict, List, Tuple, Optional
@@ -104,30 +105,16 @@ class ThermostatController(object):
         """ Set the setpoint/mode for a certain thermostat. """
         raise NotImplementedError()
 
-    def v0_get_global_thermostat_configuration(self, fields=None):
-        # type: (Optional[List[str]]) -> Dict[str,Any]
-        """
-        Get the global_thermostat_configuration.
-
-        :param fields: The field of the global_thermostat_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: global_thermostat_configuration dict: contains 'outside_sensor' (Byte), 'pump_delay' (Byte), 'switch_to_cooling_output_0' (Byte), 'switch_to_cooling_output_1' (Byte), 'switch_to_cooling_output_2' (Byte), 'switch_to_cooling_output_3' (Byte), 'switch_to_cooling_value_0' (Byte), 'switch_to_cooling_value_1' (Byte), 'switch_to_cooling_value_2' (Byte), 'switch_to_cooling_value_3' (Byte), 'switch_to_heating_output_0' (Byte), 'switch_to_heating_output_1' (Byte), 'switch_to_heating_output_2' (Byte), 'switch_to_heating_output_3' (Byte), 'switch_to_heating_value_0' (Byte), 'switch_to_heating_value_1' (Byte), 'switch_to_heating_value_2' (Byte), 'switch_to_heating_value_3' (Byte), 'threshold_temp' (Temp)
-        """
+    def load_thermostat_group(self):
+        # type: () -> ThermostatGroupDTO
         raise NotImplementedError()
 
-    def v0_set_global_thermostat_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set the global_thermostat_configuration.
-
-        :param config: The global_thermostat_configuration to set
-        :type config: global_thermostat_configuration dict: contains 'outside_sensor' (Byte), 'pump_delay' (Byte), 'switch_to_cooling_output_0' (Byte), 'switch_to_cooling_output_1' (Byte), 'switch_to_cooling_output_2' (Byte), 'switch_to_cooling_output_3' (Byte), 'switch_to_cooling_value_0' (Byte), 'switch_to_cooling_value_1' (Byte), 'switch_to_cooling_value_2' (Byte), 'switch_to_cooling_value_3' (Byte), 'switch_to_heating_output_0' (Byte), 'switch_to_heating_output_1' (Byte), 'switch_to_heating_output_2' (Byte), 'switch_to_heating_output_3' (Byte), 'switch_to_heating_value_0' (Byte), 'switch_to_heating_value_1' (Byte), 'switch_to_heating_value_2' (Byte), 'switch_to_heating_value_3' (Byte), 'threshold_temp' (Temp)
-        """
+    def save_thermostat_group(self, thermostat_group):
+        # type: (Tuple[ThermostatGroupDTO, List[str]]) -> None
         raise NotImplementedError()
 
     def get_thermostat_status(self):
         # type: () -> ThermostatGroupStatusDTO
-        """ Returns thermostat information """
         raise NotImplementedError()
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
