@@ -386,7 +386,7 @@ class ThermostatControllerGateway(ThermostatController):
         if 'outside_sensor_id' in fields:
             orm_object.sensor = thermostat_group_dto.outside_sensor_id
         if 'threshold_temperature' in fields:
-            orm_object.threshold_temp = thermostat_group_dto.threshold_temperature
+            orm_object.threshold_temperature = thermostat_group_dto.threshold_temperature
         orm_object.save()
 
         # Link configuration outputs to global thermostat config

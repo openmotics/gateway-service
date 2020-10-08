@@ -85,7 +85,7 @@ class ThermostatGroupMapper(object):
         data = orm_object.serialize()
         kwargs = {}
         for dto_field, orm_field in {'outside_sensor_id': 'outside_sensor',
-                                     'threshold_temperature': 'threshold_temp',
+                                     'threshold_temperature': 'threshold_temperature',
                                      'pump_delay': 'pump_delay'}.items():
             kwargs[dto_field] = Toolbox.nonify(data[orm_field], ThermostatGroupMapper.BYTE_MAX)
         for mode in ['heating', 'cooling']:
@@ -103,7 +103,7 @@ class ThermostatGroupMapper(object):
     def dto_to_orm(thermostat_group_dto, fields):  # type: (ThermostatGroupDTO, List[str]) -> EepromModel
         data = {}  # type: Dict[str, Any]
         for dto_field, orm_field in {'outside_sensor_id': 'outside_sensor',
-                                     'threshold_temperature': 'threshold_temp',
+                                     'threshold_temperature': 'threshold_temperature',
                                      'pump_delay': 'pump_delay'}.items():
             if dto_field in fields:
                 data[orm_field] = Toolbox.denonify(getattr(thermostat_group_dto, dto_field), ThermostatGroupMapper.BYTE_MAX)
