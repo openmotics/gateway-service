@@ -24,7 +24,7 @@ from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
 from gateway.models import Thermostat, DaySchedule, ValveToThermostat, Output, Valve, Preset
 
 if False:  # MYPY
-    from typing import List, Optional, Dict
+    from typing import List, Optional, Dict, Any
 
 logger = logging.getLogger("openmotics")
 
@@ -105,7 +105,7 @@ class ThermostatMapper(object):
         # ^    ^    ^     ^    ^
         # So to parse a classic format out of it, at least 5 of the markers are required
         index = 0
-        kwargs = {}
+        kwargs = {}  # type: Dict[str, Any]
         for timestamp in sorted(schedule.keys(), key=lambda t: int(t)):
             temperature = schedule[timestamp]
             timestamp_int = int(timestamp)

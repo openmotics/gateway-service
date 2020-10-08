@@ -147,6 +147,9 @@ class Sensor(BaseModel):
     room: Optional[RoomForeignKeyField]
 
 
+class SensorForeignKeyField(Sensor, ForeignKeyField): ...
+
+
 class PulseCounter(BaseModel):
     id: MixedPrimaryKeyField
     number: MixedIntegerField
@@ -190,16 +193,19 @@ class Schedule(BaseModel):
     arguments: Optional[str]
     status: Literal['ACTIVE', 'COMPLETED']
 
+
 class User(BaseModel):
     id: MixedPrimaryKeyField
     username: MixedTextField
     password: MixedTextField
     accepted_terms: MixedIntegerField
 
+
 class Config(BaseModel):
     id: MixedPrimaryKeyField
     setting: MixedTextField
     data: MixedTextField
+
 
 class Plugin(BaseModel):
     id: MixedPrimaryKeyField
@@ -208,6 +214,7 @@ class Plugin(BaseModel):
 
 
 class PluginForeignKeyField(Plugin, ForeignKeyField): ...
+
 
 class Ventilation(BaseModel):
     id: MixedPrimaryKeyField
@@ -219,33 +226,30 @@ class Ventilation(BaseModel):
     vendor: MixedTextField
     amount_of_levels: MixedIntegerField
 
+
 class ThermostatGroup(BaseModel):
+    class Modes(object):
+        HEATING: Literal['heating']
+        COOLING: Literal['cooling']
+
     id: MixedPrimaryKeyField
     number: MixedIntegerField
     name: MixedCharField
     on: bool
-    threshold_temp: Optional[MixedIntegerField]
-    sensor: Optional[MixedIntegerField]
+    threshold_temperature: Optional[MixedFloatField]
+    sensor: Optional[SensorForeignKeyField]
     mode: Literal['heating', 'cooling']
-
-    @staticmethod
-    def v0_get_global() -> ThermostatGroup: ...
-
-    @property
-    def v0_switch_to_heating_outputs(self) -> List[Tuple[int, int]]: ...
-
-    @property
-    def v0_switch_to_cooling_outputs(self) -> List[Tuple[int, int]]: ...
 
 
 class ThermostatGroupForeignKeyField(ThermostatGroup, ForeignKeyField): ...
 
 
 class OutputToThermostatGroup(BaseModel):
+    id: MixedPrimaryKeyField
     output: OutputForeignKeyField
     thermostat_group: ThermostatGroupForeignKeyField
     index: MixedIntegerField
-    mode: Literal['heating', 'cooling']
+    mode: MixedCharField
     value: MixedIntegerField
 
 
@@ -253,7 +257,7 @@ class Pump(BaseModel):
     id: MixedPrimaryKeyField
     number: MixedIntegerField
     name: MixedCharField
-    output: OutputForeignKeyField
+    output: Optional[OutputForeignKeyField]
 
     @property
     def valves(self) -> List[Valve]: ...
@@ -264,7 +268,7 @@ class Pump(BaseModel):
     @property
     def cooling_valves(self) -> List[Valve]: ...
 
-    def __valves(self, mode: Literal['heating', 'cooling']) -> Set[Valve]: ...
+    def _valves(self, mode: str) -> List[Valve]: ...
 
 
 class PumpForeignKeyField(Pump, ForeignKeyField): ...
@@ -285,15 +289,20 @@ class ValveForeignKeyField(Valve, ForeignKeyField): ...
 
 
 class PumpToValve(BaseModel):
+    id: MixedPrimaryKeyField
     pump: PumpForeignKeyField
     valve: ValveForeignKeyField
 
 
 class Thermostat(BaseModel):
+    class ValveConfigs(object):
+        CASCADE: Literal['cascade']
+        EQUAL: Literal['equal']
+
     id: MixedPrimaryKeyField
     number: MixedIntegerField
     name: MixedCharField
-    sensor: MixedIntegerField
+    sensor: Optional[SensorForeignKeyField]
     pid_heating_p: MixedFloatField
     pid_heating_i: MixedFloatField
     pid_heating_d: MixedFloatField
@@ -301,12 +310,12 @@ class Thermostat(BaseModel):
     pid_cooling_i: MixedFloatField
     pid_cooling_d: MixedFloatField
     automatic: bool
-    room: RoomForeignKeyField
+    room: Optional[RoomForeignKeyField]
     start: MixedIntegerField
-    valve_config: Literal['cascade', 'equal']
+    valve_config: MixedCharField
     thermostat_group: ThermostatGroupForeignKeyField
 
-    def get_preset(self, name: str) -> Preset: ...
+    def get_preset(self, preset_type: str) -> Preset: ...
 
     @property
     def setpoint(self) -> float: ...
@@ -315,17 +324,10 @@ class Thermostat(BaseModel):
     def active_preset(self) -> Preset: ...
 
     @active_preset.setter
-    def active_preset(self, new_preset: Preset) -> None: ...
-
-    def deactivate_all_presets(self) -> None: ...
-
-    @property
-    def mode(self) -> Literal['heating', 'cooling']: ...
+    def active_preset(self, value: Preset) -> None: ...
 
     @property
     def valves(self) -> List[Valve]: ...
-
-    def _valves(self, mode: Literal['cooling', 'heating']) -> List[Valve]: ...
 
     @property
     def active_valves(self) -> List[Valve]: ...
@@ -336,14 +338,11 @@ class Thermostat(BaseModel):
     @property
     def cooling_valves(self) -> List[Valve]: ...
 
-    @property
-    def presets(self) -> List[Preset]: ...
+    def _valves(self, mode: str) -> List[Valve]: ...
 
     def heating_schedules(self) -> List[DaySchedule]: ...
 
     def cooling_schedules(self) -> List[DaySchedule]: ...
-
-    def v0_get_output_numbers(self, mode: Optional[Literal['cooling', 'heating']]) -> Tuple[Optional[Output], Optional[Output]]: ...
 
 
 class ThermostatForeignKeyField(Thermostat, ForeignKeyField): ...
@@ -352,40 +351,40 @@ class ThermostatForeignKeyField(Thermostat, ForeignKeyField): ...
 class ValveToThermostat(BaseModel):
     valve: ValveForeignKeyField
     thermostat: ThermostatForeignKeyField
-    mode: Literal['heating', 'cooling']
+    mode: MixedCharField
     priority: MixedIntegerField
 
 
 class Preset(BaseModel):
+    class Types(object):
+        MANUAL: Literal['manual']
+        SCHEDULE: Literal['schedule']
+        AWAY: Literal['away']
+        VACATION: Literal['vacation']
+        PARTY: Literal['party']
+
+    TYPE_TO_SETPOINT: Dict[str, int]
+    SETPOINT_TO_TYPE: Dict[int, str]
+
     id: MixedPrimaryKeyField
-    name: MixedCharField
+    type: MixedCharField
     heating_setpoint: MixedFloatField
     cooling_setpoint: MixedFloatField
     active: bool
     thermostat: ThermostatForeignKeyField
-
-    def get_v0_setpoint_id(self) -> int: ...
-
-    @classmethod
-    def get_by_thermostat_and_v0_setpoint(cls, thermostat: Thermostat, v0_setpoint: int) -> Preset: ...
 
 
 class DaySchedule(BaseModel):
     id: MixedPrimaryKeyField
     index: MixedIntegerField
     content: MixedTextField
-    mode: Literal['heating', 'cooling']
+    mode: MixedCharField
     thermostat: ThermostatForeignKeyField
 
     @property
-    def schedule_data(self) -> Dict[int, str]: ...
+    def schedule_data(self) -> Dict[int, float]: ...
 
     @schedule_data.setter
-    def schedule_data(self, content: Dict[int, str]) -> None: ...
-
-    @classmethod
-    def _schedule_data_from_v0(cls, v0_schedule: List[Any]) -> Dict[int, float]: ...
-
-    def update_schedule_from_v0(self, v0_schedule: List[Any]) -> None: ...
+    def schedule_data(self, value: Dict[int, float]) -> None: ...
 
     def get_scheduled_temperature(self, seconds_in_day: int) -> float: ...

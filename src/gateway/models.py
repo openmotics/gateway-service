@@ -15,14 +15,12 @@
 
 from __future__ import absolute_import
 
-import datetime
 import inspect
 import json
 import logging
 import sys
-import time
 
-from peewee import AutoField, BooleanField, CharField, CompositeKey, \
+from peewee import AutoField, BooleanField, CharField, \
     DoesNotExist, FloatField, ForeignKeyField, IntegerField, SqliteDatabase, \
     TextField
 from playhouse.signals import Model, post_save
@@ -257,53 +255,38 @@ class Ventilation(BaseModel):
 
 
 class ThermostatGroup(BaseModel):
+    class Modes(object):
+        HEATING = 'heating'
+        COOLING = 'cooling'
+
     id = AutoField()
     number = IntegerField(unique=True)
     name = CharField()
     on = BooleanField(default=True)
-    threshold_temp = IntegerField(null=True, default=None)
-    sensor = IntegerField(null=True, default=None)
-    mode = CharField(default='heating')  # heating or cooling # TODO: add support for 'both'
-
-    @staticmethod
-    def v0_get_global():
-        return ThermostatGroup.get(number=0)
-
-    @property
-    def v0_switch_to_heating_outputs(self):
-        return [(link.output.number, link.value) for link in OutputToThermostatGroup.select()
-                                                                                    .where(OutputToThermostatGroup.thermostat_group == self.id)
-                                                                                    .where(OutputToThermostatGroup.mode == 'heating')
-                                                                                    .order_by(OutputToThermostatGroup.index)]
-
-    @property
-    def v0_switch_to_cooling_outputs(self):
-        return [(link.output.number, link.value) for link in OutputToThermostatGroup.select()
-                                                                                    .where(OutputToThermostatGroup.thermostat_group == self.id)
-                                                                                    .where(OutputToThermostatGroup.mode == 'cooling')
-                                                                                    .order_by(OutputToThermostatGroup.index)]
+    threshold_temperature = FloatField(null=True, default=None)
+    sensor = ForeignKeyField(Sensor, null=True, backref='thermostat_groups', on_delete='SET NULL')
+    mode = CharField(default=Modes.HEATING)  # Options: 'heating' or 'cooling'
 
 
 class OutputToThermostatGroup(BaseModel):
-    """
-    Outputs on a thermostat group are sometimes used for setting the pumpgroup in a certain state
-    the index var is 0-4 of the output in setting this config
-    """
+    id = AutoField()
     output = ForeignKeyField(Output, on_delete='CASCADE')
     thermostat_group = ForeignKeyField(ThermostatGroup, on_delete='CASCADE')
-    index = IntegerField()   # the index of this output in the config 0-3
-    mode = CharField()       # the mode this config is used for e.g. cooling or heating
-    value = IntegerField()   # the value that needs to be set on the output when in this mode (0-100)
+    index = IntegerField()  # The index of this output in the config 0-3
+    mode = CharField()  # The mode this config is used for. Options: 'heating' or 'cooling'
+    value = IntegerField()  # The value that needs to be set on the output when in this mode (0-100)
 
     class Meta:
-        primary_key = CompositeKey('output', 'thermostat_group')
+        indexes = (
+            (('output_id', 'thermostat_group_id', 'mode'), True),
+        )
 
 
 class Pump(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
     name = CharField()
-    output = ForeignKeyField(Output, backref='valve', on_delete='SET NULL', unique=True)
+    output = ForeignKeyField(Output, null=True, backref='pumps', on_delete='SET NULL', unique=True)
 
     @property
     def valves(self):
@@ -313,19 +296,21 @@ class Pump(BaseModel):
 
     @property
     def heating_valves(self):
-        return self.__valves(mode='heating')
+        return self._valves(mode=ThermostatGroup.Modes.HEATING)
 
     @property
     def cooling_valves(self):
-        return self.__valves(mode='cooling')
+        return self._valves(mode=ThermostatGroup.Modes.COOLING)
 
-    def __valves(self, mode):
-        valves = [valve for valve in Valve.select(Valve, ValveToThermostat.mode, ValveToThermostat.priority)
-                                          .join(ValveToThermostat)
-                                          .where(ValveToThermostat.mode == mode)
-                                          .order_by(ValveToThermostat.priority)]
-
-        return set([valve for valve in valves if self.number in valve.pumps])
+    def _valves(self, mode):
+        return [valve for valve in Valve.select(Valve, ValveToThermostat.mode, ValveToThermostat.priority)
+                                        .distinct()
+                                        .join(ValveToThermostat)
+                                        .join(PumpToValve)
+                                        .join(Pump)
+                                        .where((ValveToThermostat.mode == mode) &
+                                               (Pump.number == self.number))
+                                        .order_by(ValveToThermostat.priority)]
 
 
 class Valve(BaseModel):
@@ -333,7 +318,7 @@ class Valve(BaseModel):
     number = IntegerField(unique=True)
     name = CharField()
     delay = IntegerField(default=60)
-    output = ForeignKeyField(Output, backref='valve', on_delete='SET NULL', unique=True)
+    output = ForeignKeyField(Output, backref='valves', on_delete='CASCADE', unique=True)
 
     @property
     def pumps(self):
@@ -343,48 +328,44 @@ class Valve(BaseModel):
 
 
 class PumpToValve(BaseModel):
-    """ Outputs on a thermostat group are sometimes used for setting the pumpgroup in a certain state
-        the index var is 0-4 of the output in setting this config """
+    id = AutoField()
     pump = ForeignKeyField(Pump, on_delete='CASCADE')
     valve = ForeignKeyField(Valve, on_delete='CASCADE')
 
     class Meta:
-        primary_key = CompositeKey('pump', 'valve')
+        indexes = (
+            (('pump_id', 'valve_id'), True),
+        )
 
 
 class Thermostat(BaseModel):
+    class ValveConfigs(object):
+        CASCADE = 'cascade'
+        EQUAL = 'equal'
+
     id = AutoField()
     number = IntegerField(unique=True)
     name = CharField(default='Thermostat')
-    sensor = IntegerField()
-
+    sensor = ForeignKeyField(Sensor, null=True, backref='thermostats', on_delete='SET NULL')
     pid_heating_p = FloatField(default=120)
     pid_heating_i = FloatField(default=0)
     pid_heating_d = FloatField(default=0)
     pid_cooling_p = FloatField(default=120)
     pid_cooling_i = FloatField(default=0)
     pid_cooling_d = FloatField(default=0)
-
     automatic = BooleanField(default=True)
-    room = IntegerField()  # TODO: Migrate to ForeignKey
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='thermostats')
     start = IntegerField()
+    valve_config = CharField(default=ValveConfigs.CASCADE)  # Options: 'cascade' or 'equal'
+    thermostat_group = ForeignKeyField(ThermostatGroup, backref='thermostats', on_delete='CASCADE')
 
-    valve_config = CharField(default='cascade')  # options: cascade, equal
-
-    thermostat_group = ForeignKeyField(ThermostatGroup, backref='thermostats', on_delete='CASCADE', default=1)
-
-    def get_preset(self, name):
-        presets = [preset for preset in Preset.select()
-                                              .where(Preset.name == name)
-                                              .where(Preset.thermostat == self.id)]
-        if len(presets) > 0:
-            return presets[0]
-        else:
-            raise ValueError('Preset with name {} not found.'.format(name))
+    def get_preset(self, preset_type):
+        return Preset.get((Preset.type == preset_type) &
+                          (Preset.thermostat_id == self.id))
 
     @property
     def setpoint(self):
-        return self.active_preset.heating_setpoint if self.mode == 'heating' else self.active_preset.cooling_setpoint
+        return self.active_preset.heating_setpoint if self.mode == ThermostatGroup.Modes.HEATING else self.active_preset.cooling_setpoint
 
     @property
     def active_preset(self):
@@ -396,40 +377,22 @@ class Thermostat(BaseModel):
         return preset
 
     @active_preset.setter
-    def active_preset(self, new_preset):
-        if new_preset is not None and new_preset.thermostat == self:
-            if new_preset != self.active_preset:
-                if self.active_preset is not None:
-                    current_active_preset = self.active_preset
-                    current_active_preset.active = False
-                    current_active_preset.save()
-                new_preset.active = True
-                new_preset.save()
-        else:
-            raise ValueError('Not a valid preset {}.'.format(new_preset))
-
-    def deactivate_all_presets(self):
-        with Database.get_db().atomic():
-            for preset in Preset.select().where(Preset.thermostat == self.id):
-                preset.active = False
-                preset.save()
-
-    @property
-    def mode(self):
-        return self.thermostat_group.mode
+    def active_preset(self, value):
+        if value is None or value.thermostat_id != self.id:
+            raise ValueError('The given Preset does not belong to this Thermostat')
+        if value != self.active_preset:
+            if self.active_preset is not None:
+                current_active_preset = self.active_preset
+                current_active_preset.active = False
+                current_active_preset.save()
+            value.active = True
+            value.save()
 
     @property
     def valves(self):
         return [valve for valve in Valve.select(Valve)
                                         .join(ValveToThermostat)
-                                        .where(ValveToThermostat.thermostat == self.id)
-                                        .order_by(ValveToThermostat.priority)]
-
-    def _valves(self, mode):
-        return [valve for valve in Valve.select(Valve, ValveToThermostat.mode, ValveToThermostat.priority)
-                                        .join(ValveToThermostat)
-                                        .where(ValveToThermostat.thermostat == self.id)
-                                        .where(ValveToThermostat.mode == mode)
+                                        .where(ValveToThermostat.thermostat_id == self.id)
                                         .order_by(ValveToThermostat.priority)]
 
     @property
@@ -438,90 +401,75 @@ class Thermostat(BaseModel):
 
     @property
     def heating_valves(self):
-        return self._valves(mode='heating')
+        return self._valves(mode=ThermostatGroup.Modes.HEATING)
 
     @property
     def cooling_valves(self):
-        return self._valves(mode='cooling')
+        return self._valves(mode=ThermostatGroup.Modes.COOLING)
 
-    @property
-    def presets(self):
-        return [preset for preset in Preset.select().where(Preset.thermostat == self.id)]
+    def _valves(self, mode):
+        return [valve for valve in Valve.select(Valve, ValveToThermostat.mode, ValveToThermostat.priority)
+                                        .join(ValveToThermostat)
+                                        .where(ValveToThermostat.thermostat_id == self.id)
+                                        .where(ValveToThermostat.mode == mode)
+                                        .order_by(ValveToThermostat.priority)]
 
     def heating_schedules(self):
         # type: () -> List[DaySchedule]
-        return [x for x in
+        return [schedule for schedule in
                 DaySchedule.select()
-                    .where(DaySchedule.thermostat == self.id)
-                    .where(DaySchedule.mode == 'heating')
-                    .order_by(DaySchedule.index)]
+                           .where((DaySchedule.thermostat == self.id) &
+                                  (DaySchedule.mode == ThermostatGroup.Modes.HEATING))
+                           .order_by(DaySchedule.index)]
 
     def cooling_schedules(self):
         # type: () -> List[DaySchedule]
         return [x for x in
                 DaySchedule.select()
-                    .where(DaySchedule.thermostat == self.id)
-                    .where(DaySchedule.mode == 'cooling')
-                    .order_by(DaySchedule.index)]
-
-    def v0_get_output_numbers(self, mode=None):
-        # TODO: Remove, will be replaced by mappers
-
-        if mode is None:
-            mode = self.thermostat_group.mode
-        valves = self.cooling_valves if mode == 'cooling' else self.heating_valves
-        db_outputs = [valve.output.number for valve in valves]
-        number_of_outputs = len(db_outputs)
-
-        if number_of_outputs > 2:
-            logger.warning('Only 2 outputs are supported in the old format. Total: {} outputs.'.format(number_of_outputs))
-
-        output0 = db_outputs[0] if number_of_outputs > 0 else None
-        output1 = db_outputs[1] if number_of_outputs > 1 else None
-        return [output0, output1]
+                           .where((DaySchedule.thermostat == self.id) &
+                                  (DaySchedule.mode == ThermostatGroup.Modes.COOLING))
+                           .order_by(DaySchedule.index)]
 
 
 class ValveToThermostat(BaseModel):
     valve = ForeignKeyField(Valve, on_delete='CASCADE')
     thermostat = ForeignKeyField(Thermostat, on_delete='CASCADE')
-    mode = CharField(default='heating')
+    mode = CharField(default=ThermostatGroup.Modes.HEATING)
     priority = IntegerField(default=0)
 
     class Meta:
-        table_name = 'valve_to_thermostat'
+        indexes = (
+            (('valve_id', 'thermostat_id', 'mode'), True),
+        )
 
 
 class Preset(BaseModel):
+    class Types(object):
+        MANUAL = 'manual'
+        SCHEDULE = 'schedule'
+        AWAY = 'away'
+        VACATION = 'vacation'
+        PARTY = 'party'
+
+    TYPE_TO_SETPOINT = {Types.AWAY: 3,
+                        Types.VACATION: 4,
+                        Types.PARTY: 5}
+    SETPOINT_TO_TYPE = {setpoint: preset_type
+                        for preset_type, setpoint in TYPE_TO_SETPOINT.items()}
+
     id = AutoField()
-    name = CharField()
+    type = CharField()  # Options: see Preset.Types
     heating_setpoint = FloatField(default=14.0)
     cooling_setpoint = FloatField(default=30.0)
     active = BooleanField(default=False)
-    thermostat = ForeignKeyField(Thermostat, on_delete='CASCADE')
-
-    def get_v0_setpoint_id(self):
-        # MANUAL does not exist in v0, that's just a temporarily overwritten preset or automatic schedule
-        mapping = {'AWAY': 3,
-                   'VACATION': 4,
-                   'PARTY': 5}
-        return mapping.get(self.name, 0)
-
-    @classmethod
-    def get_by_thermostat_and_v0_setpoint(cls, thermostat, v0_setpoint):
-        mapping = {3: 'AWAY',
-                   4: 'VACATION',
-                   5: 'PARTY'}
-        name = mapping.get(v0_setpoint)
-        if name is None:
-            raise ValueError('Preset v0_setpoint {} unknown'.format(v0_setpoint))
-        return Preset.get(name=name, thermostat=thermostat)
+    thermostat = ForeignKeyField(Thermostat, backref='presets', on_delete='CASCADE')
 
 
 class DaySchedule(BaseModel):
     id = AutoField()
     index = IntegerField()
     content = TextField()
-    mode = CharField(default='heating')
+    mode = CharField(default=ThermostatGroup.Modes.HEATING)
     thermostat = ForeignKeyField(Thermostat, backref='day_schedules', on_delete='CASCADE')
 
     @property
@@ -529,27 +477,8 @@ class DaySchedule(BaseModel):
         return json.loads(self.content)
 
     @schedule_data.setter
-    def schedule_data(self, content):
-        self.content = json.dumps(content)
-
-    @classmethod
-    def _schedule_data_from_v0(cls, v0_schedule):
-        def get_seconds(hour_timestamp):
-            x = time.strptime(hour_timestamp, '%H:%M')
-            return int(datetime.timedelta(hours=x.tm_hour, minutes=x.tm_min, seconds=x.tm_sec).total_seconds())
-        # e.g. [17, u'06:30', u'08:30', 20, u'17:00', u'23:30', 21]
-        temp_n, start_d1, stop_d1, temp_d1, start_d2, stop_d2, temp_d2 = v0_schedule
-
-        data = {0: temp_n,
-                get_seconds(start_d1): temp_d1,
-                get_seconds(stop_d1): temp_n,
-                get_seconds(start_d2): temp_d2,
-                get_seconds(stop_d2): temp_n}
-        return data
-
-    def update_schedule_from_v0(self, v0_schedule):
-        data = DaySchedule._schedule_data_from_v0(v0_schedule)
-        self.schedule_data = data
+    def schedule_data(self, value):
+        self.content = json.dumps(value)
 
     def get_scheduled_temperature(self, seconds_in_day):
         seconds_in_day = seconds_in_day % 86400

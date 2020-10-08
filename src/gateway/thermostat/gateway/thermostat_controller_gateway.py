@@ -259,7 +259,16 @@ class ThermostatControllerGateway(ThermostatController):
                                                 cooling=global_thermostat.mode == ThermostatMode.COOLING)
 
         for thermostat in global_thermostat.thermostats:
-            output_numbers = thermostat.v0_get_output_numbers()
+            valves = thermostat.cooling_valves if global_thermostat.mode == 'cooling' else thermostat.heating_valves
+            db_outputs = [valve.output.number for valve in valves]
+
+            number_of_outputs = len(db_outputs)
+            if number_of_outputs > 2:
+                logger.warning('Only 2 outputs are supported in the old format. Total: {0} outputs.'.format(number_of_outputs))
+
+            output0 = db_outputs[0] if number_of_outputs > 0 else None
+            output1 = db_outputs[1] if number_of_outputs > 1 else None
+
             active_preset = thermostat.active_preset
             if global_thermostat.mode == ThermostatMode.COOLING:
                 setpoint_temperature = active_preset.cooling_setpoint
@@ -270,14 +279,14 @@ class ThermostatControllerGateway(ThermostatController):
                                                               actual_temperature=self._gateway_api.get_sensor_temperature_status(thermostat.sensor),
                                                               setpoint_temperature=setpoint_temperature,
                                                               outside_temperature=self._gateway_api.get_sensor_temperature_status(global_thermostat.sensor),
-                                                              mode=active_preset.get_v0_setpoint_id(),
-                                                              automatic=active_preset.name == 'SCHEDULE',  # TODO: Use enum
-                                                              setpoint=active_preset.get_v0_setpoint_id(),
+                                                              mode=0,  # TODO: Need to be fixed
+                                                              automatic=active_preset.name == Preset.Types.SCHEDULE,
+                                                              setpoint=Preset.TYPE_TO_SETPOINT.get(active_preset.type, 0),
                                                               name=thermostat.name,
                                                               sensor_id=thermostat.sensor,
                                                               airco=0,  # TODO: Check if still used
-                                                              output_0_level=get_output_level(output_numbers[0]),
-                                                              output_1_level=get_output_level(output_numbers[1])))
+                                                              output_0_level=get_output_level(output0),
+                                                              output_1_level=get_output_level(output1)))
 
         # Update global references
         group_status.automatic = all(status.automatic for status in group_status.statusses)
@@ -289,7 +298,7 @@ class ThermostatControllerGateway(ThermostatController):
     def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
         # type: (bool, bool, bool, Optional[bool], Optional[int]) -> None
         mode = ThermostatMode.COOLING if cooling_mode else ThermostatMode.HEATING  # type: Literal['cooling', 'heating']
-        global_thermosat = ThermostatGroup.v0_get_global()
+        global_thermosat = ThermostatGroup.get(number=0)
         global_thermosat.on = thermostat_on
         global_thermosat.mode = mode
         global_thermosat.save()
@@ -298,9 +307,10 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat = Thermostat.get(number=thermostat_number)
             if thermostat is not None:
                 if automatic is False and setpoint is not None and 3 <= setpoint <= 5:
-                    thermostat.active_preset = Preset.get_by_thermostat_and_v0_setpoint(thermostat=thermostat, v0_setpoint=setpoint)
+                    preset = thermostat.get_preset(preset_type=Preset.SETPOINT_TO_TYPE.get(setpoint, Preset.Types.SCHEDULE))
+                    thermostat.active_preset = preset
                 else:
-                    thermostat.active_preset = thermostat.get_preset('SCHEDULE')
+                    thermostat.active_preset = thermostat.get_preset(preset_type=Preset.Types.SCHEDULE)
                 thermostat_pid.update_thermostat(thermostat)
                 thermostat_pid.tick()
 
