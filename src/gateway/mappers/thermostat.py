@@ -21,7 +21,8 @@ import time
 import datetime
 from peewee import DoesNotExist
 from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
-from gateway.models import Thermostat, DaySchedule, ValveToThermostat, Output, Valve, Preset
+from gateway.models import Thermostat, DaySchedule, ValveToThermostat, \
+    Output, Valve, Preset, Sensor, Room
 
 if False:  # MYPY
     from typing import List, Optional, Dict, Any
@@ -35,12 +36,12 @@ class ThermostatMapper(object):
     def orm_to_dto(orm_object, mode):  # type: (Thermostat, str) -> ThermostatDTO
         dto = ThermostatDTO(id=orm_object.number,
                             name=orm_object.name,
-                            sensor=orm_object.sensor,
+                            sensor=orm_object.sensor.number if orm_object.sensor is not None else None,
                             pid_p=getattr(orm_object, 'pid_{0}_p'.format(mode)),
                             pid_i=getattr(orm_object, 'pid_{0}_i'.format(mode)),
                             pid_d=getattr(orm_object, 'pid_{0}_d'.format(mode)),
                             permanent_manual=orm_object.automatic,
-                            room=orm_object.room)
+                            room=orm_object.room.number if orm_object.room is not None else None)
 
         # Outputs
         db_outputs = [valve.output.number for valve in getattr(orm_object, '{0}_valves'.format(mode))]
@@ -55,11 +56,11 @@ class ThermostatMapper(object):
         # Presets
         for preset in orm_object.presets:
             setpoint = getattr(preset, '{0}_setpoint'.format(mode))
-            if preset.name == 'AWAY':
+            if preset.type == Preset.Types.AWAY:
                 dto.setp3 = setpoint
-            elif preset.name == 'VACATION':
+            elif preset.type == Preset.Types.VACATION:
                 dto.setp4 = setpoint
-            elif preset.name == 'PARTY':
+            elif preset.type == Preset.Types.PARTY:
                 dto.setp5 = setpoint
 
         # Schedules
@@ -128,6 +129,12 @@ class ThermostatMapper(object):
     def dto_to_orm(thermostat_dto, fields, mode):  # type: (ThermostatDTO, List[str], str) -> Thermostat
         # TODO: A mapper should not alter the database, but instead give an in-memory
         #       structure back to the caller to process
+        objects = {}  # type: Dict[str, Dict[int, Any]]
+
+        def _load_object(orm_type, number):
+            if number is None:
+                return None
+            return objects.setdefault(orm_type.__name__, {}).setdefault(number, orm_type.get(number=number))
 
         # We don't get a start date, calculate last monday night to map the schedules
         now = int(time.time())
@@ -140,8 +147,8 @@ class ThermostatMapper(object):
         except Thermostat.DoesNotExist:
             thermostat = Thermostat(number=thermostat_dto.id)
         for orm_field, (dto_field, mapping) in {'name': ('name', None),
-                                                'sensor': ('sensor', int),
-                                                'room': ('room', int),
+                                                'sensor': ('sensor', lambda n: _load_object(Sensor, n)),
+                                                'room': ('room', lambda n: _load_object(Room, n)),
                                                 'pid_{0}_p'.format(mode): ('pid_p', float),
                                                 'pid_{0}_i'.format(mode): ('pid_i', float),
                                                 'pid_{0}_d'.format(mode): ('pid_d', float)}.items():

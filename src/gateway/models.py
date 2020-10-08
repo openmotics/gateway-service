@@ -410,8 +410,8 @@ class Thermostat(BaseModel):
     def _valves(self, mode):
         return [valve for valve in Valve.select(Valve, ValveToThermostat.mode, ValveToThermostat.priority)
                                         .join(ValveToThermostat)
-                                        .where(ValveToThermostat.thermostat_id == self.id)
-                                        .where(ValveToThermostat.mode == mode)
+                                        .where((ValveToThermostat.thermostat_id == self.id) &
+                                               (ValveToThermostat.mode == mode))
                                         .order_by(ValveToThermostat.priority)]
 
     def heating_schedules(self):
@@ -495,11 +495,12 @@ class DaySchedule(BaseModel):
 def on_thermostat_save_handler(model_class, instance, created):
     _ = model_class
     if created:
-        for preset_name in ['MANUAL', 'SCHEDULE', 'AWAY', 'VACATION', 'PARTY']:
+        for preset_type in [Preset.Types.MANUAL, Preset.Types.SCHEDULE, Preset.Types.AWAY,
+                            Preset.Types.VACATION, Preset.Types.PARTY]:
             try:
-                preset = Preset.get(name=preset_name, thermostat=instance)
+                preset = Preset.get(type=preset_type, thermostat=instance)
             except DoesNotExist:
-                preset = Preset(name=preset_name, thermostat=instance)
-            if preset_name == 'SCHEDULE':
+                preset = Preset(type=preset_type, thermostat=instance)
+            if preset_type == Preset.Types.SCHEDULE:
                 preset.active = True
             preset.save()

@@ -19,6 +19,9 @@ from simple_pid import PID
 from ioc import Inject, INJECTED
 from serial_utils import CommunicationTimedOutException
 
+if False:  # MYPY
+    from typing import Optional
+
 logger = logging.getLogger('openmotics')
 
 
@@ -78,13 +81,13 @@ class ThermostatPid(object):
     def update_thermostat(self, thermostat):
         with self._thermostat_change_lock:
             # cache these values to avoid DB lookups on every tick
-            self._mode = thermostat.mode
+            self._mode = thermostat.thermostat_group.mode
             self._active_preset = thermostat.active_preset
 
             self._heating_valve_numbers = [valve.number for valve in thermostat.heating_valves]
             self._cooling_valve_numbers = [valve.number for valve in thermostat.cooling_valves]
 
-            if thermostat.mode == 'heating':
+            if thermostat.thermostat_group.mode == 'heating':
                 pid_p = thermostat.pid_heating_p if thermostat.pid_heating_p is not None else self.DEFAULT_KP
                 pid_i = thermostat.pid_heating_i if thermostat.pid_heating_i is not None else self.DEFAULT_KI
                 pid_d = thermostat.pid_heating_d if thermostat.pid_heating_d is not None else self.DEFAULT_KD
@@ -118,7 +121,7 @@ class ThermostatPid(object):
     def report_state_change(self):
         # TODO: Only invoke callback if change occurred
         for callback in self._report_state_callbacks:
-            callback(self.number, self._active_preset.name, self.setpoint, self.current_temperature,
+            callback(self.number, self._active_preset.type, self.setpoint, self.current_temperature,
                      self.get_active_valves_percentage(), self.thermostat.room)
 
     def tick(self):
@@ -127,10 +130,12 @@ class ThermostatPid(object):
             self.switch_off()
         else:
             logger.info('_pid_tick - thermostat {}: preset {} with setpoint {}'.format(self.thermostat.number,
-                                                                                       self._active_preset.name,
+                                                                                       self._active_preset.type,
                                                                                        self._pid.setpoint))
             try:
-                current_temperature = self._gateway_api.get_sensor_temperature_status(self.thermostat.sensor)
+                current_temperature = None  # type: Optional[float]
+                if self.thermostat.sensor is not None:
+                    current_temperature = self._gateway_api.get_sensor_temperature_status(self.thermostat.sensor.number)
                 if current_temperature is not None:
                     self._current_temperature = current_temperature
                 else:

@@ -187,8 +187,8 @@ class ThermostatControllerGateway(ThermostatController):
         # When setting a setpoint manually, switch to manual preset except for when we are in scheduled mode
         # scheduled mode will override the setpoint when the next edge in the schedule is triggered
         active_preset = thermostat.active_preset
-        if active_preset.name not in ['SCHEDULE', 'MANUAL']:
-            active_preset = thermostat.get_preset('MANUAL')
+        if active_preset.type not in [Preset.Types.SCHEDULE, Preset.Types.MANUAL]:
+            active_preset = thermostat.get_preset(Preset.Types.MANUAL)
             thermostat.active_preset = active_preset
 
         if heating_temperature is None:
@@ -229,7 +229,7 @@ class ThermostatControllerGateway(ThermostatController):
         active_preset = thermostat.active_preset
 
         # Only update when not in preset mode like away, party, ...
-        if active_preset.name == 'SCHEDULE':
+        if active_preset.type == Preset.Types.SCHEDULE:
             thermostat_controller.set_current_setpoint(thermostat_number=thermostat_number,
                                                        heating_temperature=heating_temperature,
                                                        cooling_temperature=cooling_temperature)
@@ -280,7 +280,7 @@ class ThermostatControllerGateway(ThermostatController):
                                                               setpoint_temperature=setpoint_temperature,
                                                               outside_temperature=self._gateway_api.get_sensor_temperature_status(global_thermostat.sensor),
                                                               mode=0,  # TODO: Need to be fixed
-                                                              automatic=active_preset.name == Preset.Types.SCHEDULE,
+                                                              automatic=active_preset.type == Preset.Types.SCHEDULE,
                                                               setpoint=Preset.TYPE_TO_SETPOINT.get(active_preset.type, 0),
                                                               name=thermostat.name,
                                                               sensor_id=thermostat.sensor,
@@ -394,8 +394,8 @@ class ThermostatControllerGateway(ThermostatController):
             links = {link.index: link
                      for link in OutputToThermostatGroup
                          .select()
-                         .where(OutputToThermostatGroup.thermostat_group == orm_object)
-                         .where(OutputToThermostatGroup.mode == mode)}
+                         .where((OutputToThermostatGroup.thermostat_group == orm_object) &
+                                (OutputToThermostatGroup.mode == mode))}
             for i in range(4):
                 field = 'switch_to_{0}_{1}'.format(mode, i)
                 if field not in fields:
