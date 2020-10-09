@@ -210,9 +210,9 @@ class ThermostatControllerGateway(ThermostatController):
         thermostat = Thermostat.get(number=thermostat_number)
         return thermostat.active_preset
 
-    def set_current_preset(self, thermostat_number, preset_name):
+    def set_current_preset(self, thermostat_number, preset_type):
         thermostat = Thermostat.get(number=thermostat_number)
-        preset = thermostat.get_preset(preset_name)
+        preset = thermostat.get_preset(preset_type)
         thermostat.active_preset = preset
         thermostat.save()
 
@@ -241,12 +241,12 @@ class ThermostatControllerGateway(ThermostatController):
             if output_number is None:
                 return 0  # we are returning 0 if outputs are not configured
             else:
-                output = self._gateway_api.get_output_status(output_number)
-                if output.get('dimmer') is None:
-                    status_ = output.get('status')
+                output = self._output_controller.get_output_status(output_number)
+                if output.dimmer is None:
+                    status_ = output.status
                     output_level = 0 if status_ is None else int(status_) * 100
                 else:
-                    output_level = output.get('dimmer')
+                    output_level = output.dimmer
                 return output_level
 
         global_thermostat = ThermostatGroup.get(number=0)
@@ -362,12 +362,12 @@ class ThermostatControllerGateway(ThermostatController):
         thermostat_group = ThermostatGroup.get(number=0)
         pump_delay = None
         for thermostat in thermostat_group.thermostats:
-            for valve in thermostat.valve_numbers:
+            for valve in thermostat.valves:
                 pump_delay = valve.delay
                 break
         thermostat_group_dto = ThermostatGroupDTO(id=0,
                                                   outside_sensor_id=thermostat_group.sensor,
-                                                  threshold_temperature=thermostat_group.threshold_temp,
+                                                  threshold_temperature=thermostat_group.threshold_temperature,
                                                   pump_delay=pump_delay)
         for link in OutputToThermostatGroup.select()\
                 .where(OutputToThermostatGroup.thermostat_group == thermostat_group):
@@ -546,8 +546,8 @@ class ThermostatControllerGateway(ThermostatController):
                                         'status': {'preset': active_preset,
                                                    'current_setpoint': current_setpoint,
                                                    'actual_temperature': actual_temperature,
-                                                   'output_0': percentages[0],
-                                                   'output_1': percentages[1]},
+                                                   'output_0': percentages[0] if len(percentages) >= 1 else 255,
+                                                   'output_1': percentages[1] if len(percentages) >= 2 else 255},
                                         'location': location}))
 
     def v0_event_thermostat_group_changed(self, thermostat_group):

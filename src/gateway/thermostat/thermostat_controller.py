@@ -55,7 +55,7 @@ class ThermostatController(object):
     def get_current_preset(self, thermostat_number):
         raise NotImplementedError()
 
-    def set_current_preset(self, thermostat_number, preset_name):
+    def set_current_preset(self, thermostat_number, preset_type):
         raise NotImplementedError()
 
     ################################

@@ -397,7 +397,7 @@ class Thermostat(BaseModel):
 
     @property
     def active_valves(self):
-        return self._valves(mode=self.mode)
+        return self._valves(mode=self.thermostat_group.mode)
 
     @property
     def heating_valves(self):

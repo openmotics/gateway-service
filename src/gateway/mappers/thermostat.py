@@ -22,7 +22,7 @@ import datetime
 from peewee import DoesNotExist
 from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
 from gateway.models import Thermostat, DaySchedule, ValveToThermostat, \
-    Output, Valve, Preset, Sensor, Room
+    Output, Valve, Preset, Sensor, Room, ThermostatGroup
 
 if False:  # MYPY
     from typing import List, Optional, Dict, Any
@@ -64,9 +64,8 @@ class ThermostatMapper(object):
                 dto.setp5 = setpoint
 
         # Schedules
-        day_schedules = sorted(getattr(orm_object, '{0}_schedules'.format(mode))(),
-                               key=lambda s: s.index,
-                               reverse=False)
+        day_schedules = {schedule.index: schedule
+                         for schedule in getattr(orm_object, '{0}_schedules'.format(mode))()}
         start_day_of_week = (orm_object.start / 86400 - 4) % 7  # 0: Monday, 1: Tuesday, ...
         for day_index, key in [(0, 'auto_mon'),
                                (1, 'auto_tue'),
@@ -76,7 +75,8 @@ class ThermostatMapper(object):
                                (5, 'auto_sat'),
                                (6, 'auto_sun')]:
             index = int((7 - start_day_of_week + day_index) % 7)
-            setattr(dto, key, ThermostatMapper._schedule_orm_to_dto(day_schedules[index]))
+            if index in day_schedules:
+                setattr(dto, key, ThermostatMapper._schedule_orm_to_dto(day_schedules[index]))
 
         # TODO: Map missing [pid_int, setp0, setp1, setp2]
         return dto
@@ -90,14 +90,13 @@ class ThermostatMapper(object):
             return None
         if amount_of_entries < 5:
             logger.warning('Not enough data to map day schedule. Returning best effort data.')
-            first_value = schedule[list(schedule.keys())[0]]
-            return ThermostatScheduleDTO(temp_night=first_value,
-                                         start_day_1='42:30',
-                                         end_day_1='42:30',
-                                         temp_day_1=first_value,
-                                         start_day_2='42:30',
-                                         end_day_2='42:30',
-                                         temp_day_2=first_value)
+            return ThermostatScheduleDTO(temp_night=16.0,
+                                         start_day_1='07:00',
+                                         end_day_1='09:00',
+                                         temp_day_1=20,
+                                         start_day_2='16:00',
+                                         end_day_2='22:00',
+                                         temp_day_2=20)
 
         # Parsing day/night, assuming following (classic) schedule:
         #      ______     ______
@@ -145,7 +144,9 @@ class ThermostatMapper(object):
         try:
             thermostat = Thermostat.get(number=thermostat_dto.id)
         except Thermostat.DoesNotExist:
+            thermostat_group = ThermostatGroup.get(number=0)
             thermostat = Thermostat(number=thermostat_dto.id)
+            thermostat.thermostat_group = thermostat_group
         for orm_field, (dto_field, mapping) in {'name': ('name', None),
                                                 'sensor': ('sensor', lambda n: _load_object(Sensor, n)),
                                                 'room': ('room', lambda n: _load_object(Room, n)),
@@ -155,6 +156,8 @@ class ThermostatMapper(object):
             if dto_field not in fields:
                 continue
             value = getattr(thermostat_dto, dto_field)
+            if value is None:
+                continue
             if mapping is not None:
                 value = mapping(value)
             setattr(thermostat, orm_field, value)
@@ -221,18 +224,18 @@ class ThermostatMapper(object):
             day_schedule.save()
 
         # Presets
-        for field, preset_name in [('setp3', 'AWAY'),
-                                   ('setp4', 'VACATION'),
-                                   ('setp5', 'PARTY')]:
+        for field, preset_type in [('setp3', Preset.Types.AWAY),
+                                   ('setp4', Preset.Types.VACATION),
+                                   ('setp5', Preset.Types.PARTY)]:
             if field not in fields:
                 continue
             dto_data = getattr(thermostat_dto, field)
             if dto_data is None:
                 continue
             try:
-                preset = Preset.get(name=preset_name, thermostat=thermostat)
+                preset = Preset.get(type=preset_type, thermostat=thermostat)
             except DoesNotExist:
-                preset = Preset(name=preset_name, thermostat=thermostat)
+                preset = Preset(type=preset_type, thermostat=thermostat)
             setattr(preset, '{0}_setpoint'.format(mode), float(dto_data))
             preset.active = False
             preset.save()
