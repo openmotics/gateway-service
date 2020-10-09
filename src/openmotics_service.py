@@ -53,6 +53,7 @@ if False:  # MYPY
     from gateway.webservice import WebInterface, WebService
     from gateway.watchdog import Watchdog
     from gateway.module_controller import ModuleController
+    from gateway.user_controller import UserController
     from gateway.hal.master_controller import MasterController
     from gateway.hal.frontpanel_controller import FrontpanelController
     from plugins.base import PluginController
@@ -159,6 +160,7 @@ class OpenmoticsService(object):
                 group_action_controller=INJECTED,  # type: GroupActionController
                 frontpanel_controller=INJECTED,  # type: FrontpanelController
                 module_controller=INJECTED,  # type: ModuleController
+                user_controller=INJECTED,  # type: UserController
                 ventilation_controller=INJECTED  # type: VentilationController
             ):
         """ Main function. """
@@ -191,6 +193,7 @@ class OpenmoticsService(object):
         if passthrough_service:
             passthrough_service.start()
         scheduling_controller.start()
+        user_controller.start()
         module_controller.start()
         thermostat_controller.start()
         ventilation_controller.start()
@@ -228,6 +231,7 @@ class OpenmoticsService(object):
             maintenance_controller.stop()
             metrics_collector.stop()
             metrics_controller.stop()
+            user_controller.stop()
             ventilation_controller.start()
             thermostat_controller.stop()
             plugin_controller.stop()
