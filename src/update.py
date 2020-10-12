@@ -204,8 +204,9 @@ def check_gateway_health(timeout=60):
         except Exception:
             pass
         time.sleep(10)
-    logger.error('health check failed {}'.format(pending))
-    raise ServiceUnavailableException('Gateway health check failed')
+    message = 'health check failed {}'.format(pending)
+    logger.error(message)
+    raise ServiceUnavailableException(message)
 
 
 def is_up_to_date(name, new_version):
@@ -497,7 +498,7 @@ def update(version, expected_md5):
             exitcode = EXIT_CODES['failed']
             logger.error('Exceptions:')
             for error in errors:
-                if type(error, ServiceUnavailableException):
+                if isinstance(error, ServiceUnavailableException):
                     exitcode = EXIT_CODES['failed_service_unavailable']
                 logger.error('- {0}'.format(error))
             raise SystemExit(exitcode)
