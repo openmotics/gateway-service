@@ -379,6 +379,12 @@ class PluginController(object):
         if event.type == GatewayEvent.Types.VENTILATION_CHANGE:
             for runner in self.__iter_running_runners():
                 runner.process_ventilation_status(data=event)
+        if event.type == GatewayEvent.Types.THERMOSTAT_CHANGE:
+            for runner in self.__iter_running_runners():
+                runner.process_thermostat_status(data=event)
+        if event.type == GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE:
+            for runner in self.__iter_running_runners():
+                runner.process_thermostat_group_status(data=event)
 
     def process_event(self, code):
         """ Should be called when an event is triggered, notifies all plugins. """
