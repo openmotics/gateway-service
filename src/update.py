@@ -76,7 +76,7 @@ MODULE_TYPES = {'can': 'c',
                 'ucan': 'uc'}
 
 EXIT_CODES = {'failed': 1,
-              'failed_aquire_update_lock': 2
+              'failed_aquire_update_lock': 2,
               'failed_preprepare_update': 3,
               'failed_service_unavailable': 4}
 
