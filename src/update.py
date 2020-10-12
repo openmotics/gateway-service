@@ -205,7 +205,7 @@ def check_gateway_health(timeout=60):
             pass
         time.sleep(10)
     logger.error('health check failed {}'.format(pending))
-    raise ServiceUnavailableException('Gateway services failed to start')
+    raise ServiceUnavailableException('Gateway health check failed')
 
 
 def is_up_to_date(name, new_version):
