@@ -240,14 +240,17 @@ class ThermostatControllerGateway(ThermostatController):
         def get_output_level(output_number):
             if output_number is None:
                 return 0  # we are returning 0 if outputs are not configured
-            else:
+            try:
                 output = self._output_controller.get_output_status(output_number)
-                if output.dimmer is None:
-                    status_ = output.status
-                    output_level = 0 if status_ is None else int(status_) * 100
-                else:
-                    output_level = output.dimmer
-                return output_level
+            except ValueError:
+                logger.info('Output {0} state not yet available'.format(output_number))
+                return 0  # Output state is not yet cached (during startup)
+            if output.dimmer is None:
+                status_ = output.status
+                output_level = 0 if status_ is None else int(status_) * 100
+            else:
+                output_level = output.dimmer
+            return output_level
 
         global_thermostat = ThermostatGroup.get(number=0)
         if global_thermostat is None:

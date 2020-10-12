@@ -16,47 +16,51 @@
 import logging
 from ioc import INJECTED, Inject
 
+if False:  # MYPY
+    from typing import Optional
+    from gateway.models import Pump
+    from gateway.output_controller import OutputController
+
 logger = logging.getLogger('openmotics')
 
 
 @Inject
 class PumpDriver(object):
-
-    def __init__(self, pump, gateway_api=INJECTED):
-        """ Create a pump object
-        :param pump: the pump object
-        :type pump: gateway.thermostat.gateway.models.Pump
-        :param gateway_api: Gateway API Controller
-        :type gateway_api: gateway.gateway_api.GatewayApi
-        """
+    def __init__(self, pump, output_controller=INJECTED):  # type: (Pump, OutputController) -> None
         self._pump = pump
-        self._gateway_api = gateway_api
-        self._state = None
+        self._output_controller = output_controller
+        self._state = None  # type: Optional[bool]
         self._error = False
 
     def _set_state(self, active):
         output_number = self._pump.output.number
         dimmer = 100 if active else 0
-        self._gateway_api.set_output_status(output_number, active, dimmer=dimmer)
+        self._output_controller.set_output_status(output_id=output_number,
+                                                  is_on=active,
+                                                  dimmer=dimmer)
         self._state = active
 
     def turn_on(self):
-        logger.info('turning on pump {}'.format(self._pump.number))
+        if self._state is True:
+            return
+        logger.info('Turning on pump {0}'.format(self._pump.number))
         try:
             self._set_state(True)
             self._error = False
         except Exception:
-            logger.error('There was a problem turning on pump {}'.format(self._pump.number))
+            logger.error('There was a problem turning on pump {0}'.format(self._pump.number))
             self._error = True
             raise
 
     def turn_off(self):
-        logger.info('turning off pump {}'.format(self._pump.number))
+        if self._state is False:
+            return
+        logger.info('Turning off pump {0}'.format(self._pump.number))
         try:
             self._set_state(False)
             self._error = False
         except Exception:
-            logger.error('There was a problem turning off pump {}'.format(self._pump.number))
+            logger.error('There was a problem turning off pump {0}'.format(self._pump.number))
             self._error = True
             raise
 
@@ -75,5 +79,4 @@ class PumpDriver(object):
     def __eq__(self, other):
         if not isinstance(other, PumpDriver):
             return False
-
         return self._pump.number == other.number

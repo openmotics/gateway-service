@@ -22,7 +22,7 @@ from gateway.thermostat.gateway.pump_driver import PumpDriver
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from gateway.gateway_api import GatewayApi
+    from typing import Dict, List
     from gateway.output_controller import OutputController
 
 logger = logging.getLogger('openmotics')
@@ -31,16 +31,14 @@ logger = logging.getLogger('openmotics')
 @Inject
 class ValveDriver(object):
 
-    def __init__(self, valve, gateway_api=INJECTED, output_controller=INJECTED):  # type: (Valve, GatewayApi, OutputController) -> None
-        """ Create a valve object """
-        self._gateway_api = gateway_api
+    def __init__(self, valve, output_controller=INJECTED):  # type: (Valve, OutputController) -> None
         self._output_controller = output_controller
         self._valve = valve
         self._percentage = 0
-
         self._current_percentage = 0
         self._desired_percentage = 0
         self._time_state_changed = None
+        self._pump_drivers = {}  # type: Dict[int, PumpDriver]
         self._state_change_lock = Lock()
 
     @property
@@ -52,8 +50,15 @@ class ValveDriver(object):
         return self._current_percentage
 
     @property
-    def pump_drivers(self):
-        return [PumpDriver(pump, self._gateway_api) for pump in self._valve.pumps]
+    def pump_drivers(self):  # type: () -> List[PumpDriver]
+        drivers = []
+        pump_ids = []
+        for pump in self._valve.pumps:
+            drivers.append(self._pump_drivers.setdefault(pump.id, PumpDriver(pump)))
+            pump_ids.append(pump.id)
+        for pump_id in list(self._pump_drivers.keys()):
+            self._pump_drivers.pop(pump_id)
+        return list(self._pump_drivers.values())
 
     def is_open(self):
         _now_open = self._current_percentage > 0
@@ -75,26 +80,18 @@ class ValveDriver(object):
         with self._state_change_lock:
             if self._current_percentage != self._desired_percentage:
                 output_nr = self._valve.output.number
-                logger.info('Valve (output: {}) changing from {}% --> {}%'.format(output_nr,
-                                                                                  self._current_percentage,
-                                                                                  self._desired_percentage))
+                logger.info('Valve (output: {0}) changing from {1}% --> {2}%'.format(output_nr,
+                                                                                     self._current_percentage,
+                                                                                     self._desired_percentage))
                 output_status = self._desired_percentage > 0
-
-                self._gateway_api.set_output_status(self._valve.output.number, output_status, dimmer=self._desired_percentage)
-                try:
-                    dimmable_output = self._output_controller.load_output(output_nr).module_type in ['d', 'D']
-                except Exception:
-                    dimmable_output = False
-                if not dimmable_output:
-                    # TODO: Implement PWM logic
-                    logger.info('Valve (output: {}) using ON/OFF approximation - desired: {}%'.format(output_nr, self._desired_percentage))
+                self._output_controller.set_output_status(output_id=self._valve.output.number,
+                                                          is_on=output_status,
+                                                          dimmer=self._desired_percentage)
                 self._current_percentage = self._desired_percentage
                 self._time_state_changed = time.time()
 
     def set(self, percentage):
-        _percentage = int(percentage)
-        logger.info('setting valve {} percentage to {}%'.format(self._valve.output.number, _percentage))
-        self._desired_percentage = _percentage
+        self._desired_percentage = int(percentage)
 
     def will_open(self):
         return self._desired_percentage > 0 and self._current_percentage == 0

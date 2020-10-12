@@ -26,10 +26,6 @@ logger = logging.getLogger('openmotics')
 class PumpValveController(object):
 
     def __init__(self):
-        """ Create a ValveController object
-        :param gateway_api: Gateway API Controller
-        :type gateway_api: gateway.gateway_api.GatewayApi
-        """
         self._valve_drivers = {}
         self._config_change_lock = Lock()
 
