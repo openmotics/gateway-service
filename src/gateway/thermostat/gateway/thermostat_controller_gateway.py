@@ -23,6 +23,7 @@ from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread
 from gateway.enums import ThermostatMode
 from gateway.events import GatewayEvent
+from gateway.exceptions import UnsupportedException
 from gateway.dto import ThermostatDTO, ThermostatGroupDTO, \
     ThermostatStatusDTO, ThermostatGroupStatusDTO
 from gateway.models import Output, Preset, Thermostat, ThermostatGroup, OutputToThermostatGroup, Pump
@@ -33,7 +34,7 @@ from gateway.mappers import ThermostatMapper
 from apscheduler.schedulers.background import BackgroundScheduler
 
 if False:  # MYPY
-    from typing import List, Tuple, Dict, Optional, Literal
+    from typing import List, Tuple, Dict, Optional, Literal, Any
     from gateway.gateway_api import GatewayApi
     from bus.om_bus_client import MessageClient
     from gateway.output_controller import OutputController
@@ -70,7 +71,7 @@ class ThermostatControllerGateway(ThermostatController):
         jobstores = {'default': SQLAlchemyJobStore(url='sqlite:///{})'.format(db_filename))}
         self._scheduler = BackgroundScheduler(jobstores=jobstores, timezone=timezone)
 
-    def start(self):
+    def start(self):  # type: () -> None
         logger.info('Starting gateway thermostatcontroller...')
         if not self._running:
             self._running = True
@@ -96,7 +97,7 @@ class ThermostatControllerGateway(ThermostatController):
         else:
             raise RuntimeError('GatewayThermostatController already running. Please stop it first.')
 
-    def stop(self):
+    def stop(self):  # type: () -> None
         if not self._running:
             logger.warning('Stopping an already stopped GatewayThermostatController.')
         self._running = False
@@ -108,18 +109,18 @@ class ThermostatControllerGateway(ThermostatController):
         if self._periodic_sync_thread is not None:
             self._periodic_sync_thread.stop()
 
-    def _pid_tick(self):
+    def _pid_tick(self):  # type: () -> None
         for thermostat_number, thermostat_pid in self.thermostat_pids.items():
             try:
                 thermostat_pid.tick()
             except Exception:
                 logger.exception('There was a problem with calculating thermostat PID {}'.format(thermostat_pid))
 
-    def refresh_config_from_db(self):
+    def refresh_config_from_db(self):  # type: () -> None
         self.refresh_thermostats_from_db()
         self._pump_valve_controller.refresh_from_db()
 
-    def refresh_thermostats_from_db(self):
+    def refresh_thermostats_from_db(self):  # type: () -> None
         for thermostat in Thermostat.select():
             thermostat_pid = self.thermostat_pids.get(thermostat.number)
             if thermostat_pid is None:
@@ -130,27 +131,22 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat_pid.tick()
             # TODO: Delete stale/removed thermostats
 
-    def log_scheduler_jobs(self):
-        logger.info('Scheduled jobs:')
-        for job in self._scheduler.get_jobs():
-            logger.info('- {}'.format(job))
-
-    def _update_pumps(self):
+    def _update_pumps(self):  # type: () -> None
         try:
             self._pump_valve_controller.steer_pumps()
         except Exception:
             logger.exception('Could not update pumps.')
 
-    def _periodic_sync(self):
+    def _periodic_sync(self):  # type: () -> None
         try:
             self.refresh_config_from_db()
         except Exception:
             logger.exception('Could not get thermostat config.')
 
-    def _sync_scheduler(self):
+    def _sync_scheduler(self):  # type: () -> None
         self._scheduler.remove_all_jobs()
         for thermostat_number, thermostat_pid in self.thermostat_pids.items():
-            start_date = datetime.datetime.utcfromtimestamp(thermostat_pid.thermostat.start)
+            start_date = datetime.datetime.utcfromtimestamp(float(thermostat_pid.thermostat.start))
             day_schedules = thermostat_pid.thermostat.day_schedules
             schedule_length = len(day_schedules)
             for schedule in day_schedules:
@@ -180,6 +176,7 @@ class ThermostatControllerGateway(ThermostatController):
                                                 name='T{}: {} ({}) {}'.format(thermostat_number, new_setpoint, schedule.mode, seconds_of_day))
 
     def set_current_setpoint(self, thermostat_number, temperature=None, heating_temperature=None, cooling_temperature=None):
+        # type: (int, Optional[float], Optional[float], Optional[float]) -> None
         if temperature is None and heating_temperature is None and cooling_temperature is None:
             return
 
@@ -202,21 +199,21 @@ class ThermostatControllerGateway(ThermostatController):
             active_preset.cooling_setpoint = float(cooling_temperature)
         active_preset.save()
 
-        thermostat_pid = self.thermostat_pids.get(thermostat_number)
+        thermostat_pid = self.thermostat_pids[thermostat_number]
         thermostat_pid.update_thermostat(thermostat)
         thermostat_pid.tick()
 
-    def get_current_preset(self, thermostat_number):
+    def get_current_preset(self, thermostat_number):  # type: (int) -> Preset
         thermostat = Thermostat.get(number=thermostat_number)
         return thermostat.active_preset
 
-    def set_current_preset(self, thermostat_number, preset_type):
+    def set_current_preset(self, thermostat_number, preset_type):  # type: (int, Preset) -> None
         thermostat = Thermostat.get(number=thermostat_number)
         preset = thermostat.get_preset(preset_type)
         thermostat.active_preset = preset
         thermostat.save()
 
-        thermostat_pid = self.thermostat_pids.get(thermostat_number)
+        thermostat_pid = self.thermostat_pids[thermostat_number]
         thermostat_pid.update_thermostat(thermostat)
         thermostat_pid.tick()
 
@@ -236,7 +233,7 @@ class ThermostatControllerGateway(ThermostatController):
         else:
             logger.info('Thermostat is currently in preset mode, skipping update setpoint from scheduler.')
 
-    def get_thermostat_status(self):
+    def get_thermostat_status(self):  # type: () -> ThermostatGroupStatusDTO
         def get_output_level(output_number):
             if output_number is None:
                 return 0  # we are returning 0 if outputs are not configured
@@ -350,13 +347,18 @@ class ThermostatControllerGateway(ThermostatController):
             self.refresh_set_configuration(thermostat)
 
     def v0_set_per_thermostat_mode(self, thermostat_number, automatic, setpoint):
-        # type: (int, bool, int) -> None
+        # type: (int, bool, float) -> None
         thermostat_pid = self.thermostat_pids.get(thermostat_number)
         if thermostat_pid is not None:
             thermostat = thermostat_pid.thermostat
             thermostat.automatic = automatic
-            thermostat.setpoint = setpoint
             thermostat.save()
+            preset = thermostat.active_preset
+            if thermostat.thermostat_group.mode == ThermostatGroup.Modes.HEATING:
+                preset.heating_setpoint = setpoint
+            else:
+                preset.cooling_setpoint = setpoint
+            preset.save()
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
 
@@ -431,6 +433,7 @@ class ThermostatControllerGateway(ThermostatController):
                     valve.save()
 
     def v0_get_pump_group_configuration(self, pump_number, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str, Any]
         pump = Pump.get(number=pump_number)
         pump_config = {'id': pump.number,
                        'outputs': ','.join([valve.output.number for valve in pump.heating_valves]),
@@ -439,6 +442,7 @@ class ThermostatControllerGateway(ThermostatController):
         return pump_config
 
     def v0_get_pump_group_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str, Any]]
         pump_config_list = []
         for pump in Pump.select():
             pump_config = {'id': pump.number,
@@ -449,12 +453,17 @@ class ThermostatControllerGateway(ThermostatController):
         return pump_config_list
 
     def v0_set_pump_group_configuration(self, config):
+        # type: (Dict[str, Any]) -> None
+        # TODO: Implement
         raise NotImplementedError()
 
     def v0_set_pump_group_configurations(self, config):
+        # type: (List[Dict[str, Any]]) -> None
+        # TODO: Implement
         raise NotImplementedError()
 
     def v0_get_cooling_pump_group_configuration(self, pump_number, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str, Any]
         pump = Pump.get(number=pump_number)
         pump_config = {'id': pump.number,
                        'outputs': ','.join([valve.output.number for valve in pump.cooling_valves]),
@@ -463,6 +472,7 @@ class ThermostatControllerGateway(ThermostatController):
         return pump_config
 
     def v0_get_cooling_pump_group_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str, Any]]
         pump_config_list = []
         for pump in Pump.select():
             pump_config = {'id': pump.number,
@@ -473,12 +483,17 @@ class ThermostatControllerGateway(ThermostatController):
         return pump_config_list
 
     def v0_set_cooling_pump_group_configuration(self, config):
+        # type: (Dict[str, Any]) -> None
+        # TODO: Implement
         raise NotImplementedError()
 
     def v0_set_cooling_pump_group_configurations(self, config):
+        # type: (List[Dict[str, Any]]) -> None
+        # TODO: Implement
         raise NotImplementedError()
 
     def v0_get_global_rtd10_configuration(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str, Any]
         data = {}  # TODO: Implement
         for i in range(16, 25):
             data.update({'output_value_heating_{0}'.format(i): 0,
@@ -486,39 +501,6 @@ class ThermostatControllerGateway(ThermostatController):
                          'output_value_cooling_{0}'.format(i): 0,
                          'output_value_cooling_{0}_5'.format(i): 0})
         return data
-
-    def v0_set_global_rtd10_configuration(self, config):
-        raise NotImplementedError()
-
-    def v0_get_rtd10_heating_configuration(self, heating_id, fields=None):
-        raise NotImplementedError()
-
-    def v0_get_rtd10_heating_configurations(self, fields=None):
-        return []
-
-    def v0_set_rtd10_heating_configuration(self, config):
-        raise NotImplementedError()
-
-    def v0_set_rtd10_heating_configurations(self, config):
-        raise NotImplementedError()
-
-    def v0_get_rtd10_cooling_configuration(self, cooling_id, fields=None):
-        raise NotImplementedError()
-
-    def v0_get_rtd10_cooling_configurations(self, fields=None):
-        return []
-
-    def v0_set_rtd10_cooling_configuration(self, config):
-        raise NotImplementedError()
-
-    def v0_set_rtd10_cooling_configurations(self, config):
-        raise NotImplementedError()
-
-    def v0_set_airco_status(self, thermostat_id, airco_on):
-        raise NotImplementedError()
-
-    def v0_get_airco_status(self):
-        raise NotImplementedError()
 
     def refresh_set_configuration(self, thermostat):  # type: (Thermostat) -> None
         thermostat_pid = self.thermostat_pids.get(thermostat.number)
@@ -531,14 +513,7 @@ class ThermostatControllerGateway(ThermostatController):
         thermostat_pid.tick()
 
     def v0_event_thermostat_changed(self, thermostat_number, active_preset, current_setpoint, actual_temperature, percentages, room):
-        """
-        :type thermostat_number: int
-        :type active_preset: str
-        :type current_setpoint: float
-        :type actual_temperature: float
-        :type percentages: list
-        :type room: int
-        """
+        # type: (int, str, float, float, List[float], int) -> None
         logger.debug('v0_event_thermostat_changed: {}'.format(thermostat_number))
         if self._message_client is not None:
             self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': thermostat_number})
@@ -554,9 +529,7 @@ class ThermostatControllerGateway(ThermostatController):
                                         'location': location}))
 
     def v0_event_thermostat_group_changed(self, thermostat_group):
-        """
-        :type thermostat_group: models.ThermostatGroup
-        """
+        # type: (ThermostatGroup) -> None
         logger.debug('v0_event_thermostat_group_changed: {}'.format(thermostat_group))
         if self._message_client is not None:
             self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
@@ -566,6 +539,41 @@ class ThermostatControllerGateway(ThermostatController):
                                         'status': {'state': 'ON' if thermostat_group.on else 'OFF',
                                                    'mode': 'COOLING' if thermostat_group.mode == 'cooling' else 'HEATING'},
                                         'location': {}}))
+
+    # Obsolete unsupported calls
+
+    def v0_set_global_rtd10_configuration(self, config):
+        raise UnsupportedException()
+
+    def v0_get_rtd10_heating_configuration(self, heating_id, fields=None):
+        raise UnsupportedException()
+
+    def v0_get_rtd10_heating_configurations(self, fields=None):
+        return []  # Should have been UnsupportedException, but curent UIs need an answer
+
+    def v0_set_rtd10_heating_configuration(self, config):
+        raise UnsupportedException()
+
+    def v0_set_rtd10_heating_configurations(self, config):
+        raise UnsupportedException()
+
+    def v0_get_rtd10_cooling_configuration(self, cooling_id, fields=None):
+        raise UnsupportedException()
+
+    def v0_get_rtd10_cooling_configurations(self, fields=None):
+        return []  # Should have been UnsupportedException, but curent UIs need an answer
+
+    def v0_set_rtd10_cooling_configuration(self, config):
+        raise UnsupportedException()
+
+    def v0_set_rtd10_cooling_configurations(self, config):
+        raise UnsupportedException()
+
+    def v0_set_airco_status(self, thermostat_id, airco_on):
+        raise UnsupportedException()
+
+    def v0_get_airco_status(self):
+        raise UnsupportedException()
 
 
 @post_save(sender=ThermostatGroup)

@@ -17,7 +17,7 @@ import logging
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import Optional
+    from typing import Optional, Any
     from gateway.models import Pump
     from gateway.output_controller import OutputController
 
@@ -32,7 +32,10 @@ class PumpDriver(object):
         self._state = None  # type: Optional[bool]
         self._error = False
 
-    def _set_state(self, active):
+    def _set_state(self, active):  # type: (bool) -> None
+        if self._pump.output is None:
+            logger.warning('Cannot set state on Pump {0} since it has no output'.format(self._pump.number))
+            return
         output_number = self._pump.output.number
         dimmer = 100 if active else 0
         self._output_controller.set_output_status(output_id=output_number,
@@ -40,7 +43,7 @@ class PumpDriver(object):
                                                   dimmer=dimmer)
         self._state = active
 
-    def turn_on(self):
+    def turn_on(self):  # type: () -> None
         if self._state is True:
             return
         logger.info('Turning on pump {0}'.format(self._pump.number))
@@ -52,7 +55,7 @@ class PumpDriver(object):
             self._error = True
             raise
 
-    def turn_off(self):
+    def turn_off(self):  # type: () -> None
         if self._state is False:
             return
         logger.info('Turning off pump {0}'.format(self._pump.number))
@@ -65,18 +68,18 @@ class PumpDriver(object):
             raise
 
     @property
-    def state(self):
+    def state(self):  # type: () -> Optional[bool]
         return self._state
 
     @property
-    def error(self):
+    def error(self):  # type: () -> bool
         return self._error
 
     @property
-    def number(self):
+    def number(self):  # type: () -> int
         return self._pump.number
 
-    def __eq__(self, other):
+    def __eq__(self, other):  # type: (Any) -> bool
         if not isinstance(other, PumpDriver):
             return False
         return self._pump.number == other.number

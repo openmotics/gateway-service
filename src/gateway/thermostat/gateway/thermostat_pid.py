@@ -18,10 +18,12 @@ from threading import Lock
 from simple_pid import PID
 from ioc import Inject, INJECTED
 from serial_utils import CommunicationTimedOutException
-from gateway.models import ThermostatGroup
+from gateway.models import ThermostatGroup, Thermostat
 
 if False:  # MYPY
-    from typing import Optional
+    from typing import Optional, List, Callable
+    from gateway.gateway_api import GatewayApi
+    from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
 
 logger = logging.getLogger('openmotics')
 
@@ -34,17 +36,20 @@ class ThermostatPid(object):
     DEFAULT_KD = 2.0
 
     def __init__(self, thermostat, pump_valve_controller, gateway_api=INJECTED):
+        # type: (Thermostat, PumpValveController, GatewayApi) -> None
         self._gateway_api = gateway_api
         self._pump_valve_controller = pump_valve_controller
         self._thermostat_change_lock = Lock()
-        self._heating_valve_numbers = []
-        self._cooling_valve_numbers = []
-        self._report_state_callbacks = []
-        self._pid = None
-        self._thermostat = None
-        self._mode = None
-        self._active_preset = None
-        self._current_temperature = None
+        self._heating_valve_numbers = []  # type: List[int]
+        self._cooling_valve_numbers = []  # type: List[int]
+        self._report_state_callbacks = []  # type: List[Callable[[int, str, float, float, List[float], int], None]]
+        self._thermostat = thermostat
+        self._mode = thermostat.thermostat_group.mode
+        self._active_preset = thermostat.active_preset
+        self._pid = PID(Kp=ThermostatPid.DEFAULT_KP,
+                        Ki=ThermostatPid.DEFAULT_KI,
+                        Kd=ThermostatPid.DEFAULT_KD)
+        self._current_temperature = None  # type: Optional[float]
         self._errors = 0
         self._current_steering_power = None  # type: Optional[int]
         self._current_enabled = None  # type: Optional[bool]
@@ -53,14 +58,10 @@ class ThermostatPid(object):
         self.update_thermostat(thermostat)
 
     @property
-    def enabled(self):
+    def enabled(self):  # type: () -> bool
         # 1. PID loop is initialized
         # 2. Sensor is valid
         # 3. Outputs configured (heating or cooling)
-        if self._mode is None or self._pid is None:
-            return False
-        if self._active_preset is None:
-            return False
         if self._thermostat.sensor == 255:
             return False
         if len(self._heating_valve_numbers) == 0 and len(self._cooling_valve_numbers) == 0:
@@ -72,20 +73,21 @@ class ThermostatPid(object):
         return True
 
     @property
-    def valve_numbers(self):
+    def valve_numbers(self):  # type: () -> List[int]
         return self.heating_valve_numbers + self.cooling_valve_numbers
 
     @property
-    def heating_valve_numbers(self):
+    def heating_valve_numbers(self):  # type: () -> List[int]
         return self._heating_valve_numbers
 
     @property
-    def cooling_valve_numbers(self):
+    def cooling_valve_numbers(self):  # type: () -> List[int]
         return self._cooling_valve_numbers
 
-    def update_thermostat(self, thermostat):
+    def update_thermostat(self, thermostat):  # type: (Thermostat) -> None
         with self._thermostat_change_lock:
             # cache these values to avoid DB lookups on every tick
+            self._thermostat = thermostat
             self._mode = thermostat.thermostat_group.mode
             self._active_preset = thermostat.active_preset
 
@@ -103,33 +105,27 @@ class ThermostatPid(object):
                 pid_d = thermostat.pid_cooling_d if thermostat.pid_cooling_d is not None else self.DEFAULT_KD
                 setpoint = self._active_preset.cooling_setpoint if self._active_preset is not None else 30.0
 
-            if self._pid is None:
-                self._pid = PID(pid_p, pid_i, pid_d, setpoint=setpoint)
-            else:
-                self._pid.tunings = (pid_p, pid_i, pid_d)
-                self._pid.setpoint = setpoint
+            self._pid.tunings = (pid_p, pid_i, pid_d)
+            self._pid.setpoint = setpoint
             self._pid.output_limits = (-100, 100)
-            self._thermostat = thermostat
             self._errors = 0
 
     @property
-    def thermostat(self):
+    def thermostat(self):  # type: () -> Thermostat
         return self._thermostat
 
     def subscribe_state_changes(self, callback):
-        """
-        Subscribes a callback to generic events
-        :param callback: the callback to call
-        """
+        # type: (Callable[[int, str, float, float, List[float], int], None]) -> None
         self._report_state_callbacks.append(callback)
 
-    def report_state_change(self):
+    def report_state_change(self):  # type: () -> None
         # TODO: Only invoke callback if change occurred
+        room_number = 255 if self.thermostat.room is None else self.thermostat.room.number
         for callback in self._report_state_callbacks:
             callback(self.number, self._active_preset.type, self.setpoint, self.current_temperature,
-                     self.get_active_valves_percentage(), self.thermostat.room)
+                     self.get_active_valves_percentage(), room_number)
 
-    def tick(self):
+    def tick(self):  # type: () -> None
         if self.enabled != self._current_enabled:
             logger.info('Thermostat {0}: {1}abled in {2} mode'.format(self.thermostat.number, 'En' if self.enabled else 'Dis', self._mode))
             self._current_enabled = self.enabled
@@ -167,34 +163,34 @@ class ThermostatPid(object):
             # Heating needed while in cooling mode OR cooling needed while in heating mode
             # -> no active airon required, rely on losses/gains of system to reach equilibrium
             if ((self._mode == ThermostatGroup.Modes.COOLING and output_power > 0) or
-                (self._mode == ThermostatGroup.Modes.HEATING and output_power < 0)):
+                    (self._mode == ThermostatGroup.Modes.HEATING and output_power < 0)):
                 output_power = 0
             self.steer(output_power)
             self.report_state_change()
-        except CommunicationTimedOutException as ex:
+        except CommunicationTimedOutException:
             logger.error('Thermostat {0}: Error in PID tick'.format(self.thermostat.number))
             self._errors += 1
 
-    def get_active_valves_percentage(self):
+    def get_active_valves_percentage(self):  # type: () -> List[float]
         return [self._pump_valve_controller.get_valve_driver(valve.number).percentage for valve in self.thermostat.active_valves]
 
     @property
-    def errors(self):
+    def errors(self):  # type: () -> int
         return self._errors
 
     @property
-    def number(self):
+    def number(self):  # type: () -> int
         return self.thermostat.number
 
     @property
-    def setpoint(self):
+    def setpoint(self):  # type: () -> float
         return self._pid.setpoint
 
     @property
-    def current_temperature(self):
+    def current_temperature(self):  # tyep: () -> float
         return self._current_temperature
 
-    def steer(self, power):
+    def steer(self, power):  # type: (int) -> None
         if self._current_steering_power != power:
             logger.info('Thermostat {0}: Steer to {1} '.format(self.thermostat.number, power))
             self._current_steering_power = power
@@ -212,29 +208,29 @@ class ThermostatPid(object):
         # Effectively steer pumps and valves according to needs
         self._pump_valve_controller.steer()
 
-    def switch_off(self):
+    def switch_off(self):  # type: () -> None
         self.steer(0)
 
     @property
-    def kp(self):
-        return self._pid.kp
+    def kp(self):  # type: () -> float
+        return self._pid.Kp
 
     @kp.setter
-    def kp(self, kp):
-        self._pid.kp = kp
+    def kp(self, kp):  # type: (float) -> None
+        self._pid.Kp = kp
 
     @property
-    def ki(self):
-        return self._pid.ki
+    def ki(self):  # type: () -> float
+        return self._pid.Ki
 
     @ki.setter
-    def ki(self, ki):
-        self._pid.ki = ki
+    def ki(self, ki):  # type: (float) -> None
+        self._pid.Ki = ki
 
     @property
-    def kd(self):
-        return self._pid.kd
+    def kd(self):  # type: () -> float
+        return self._pid.Kd
 
     @kd.setter
-    def kd(self, kd):
-        self._pid.kd = kd
+    def kd(self, kd):  # type: (float) -> None
+        self._pid.Kd = kd

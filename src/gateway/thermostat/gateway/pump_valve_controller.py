@@ -19,17 +19,19 @@ from ioc import Inject
 from gateway.models import Valve
 from gateway.thermostat.gateway.valve_driver import ValveDriver
 
+if False:  # MYPY
+    from typing import List, Dict
+
 logger = logging.getLogger('openmotics')
 
 
 @Inject
 class PumpValveController(object):
-
-    def __init__(self):
-        self._valve_drivers = {}
+    def __init__(self):  # type: () -> None
+        self._valve_drivers = {}  # type: Dict[int, ValveDriver]
         self._config_change_lock = Lock()
 
-    def refresh_from_db(self):
+    def refresh_from_db(self):  # type: () -> None
         with self._config_change_lock:
             existing_driver_numbers = set(self._valve_drivers.keys())
             new_driver_numbers = set()
@@ -49,6 +51,7 @@ class PumpValveController(object):
 
     @staticmethod
     def _open_valves_cascade(total_percentage, valve_drivers):
+        # type: (float, List[ValveDriver]) -> None
         n_valves = len(valve_drivers)
         percentage_per_valve = 100.0 / n_valves
         n_valves_fully_open = int(total_percentage / percentage_per_valve)
@@ -63,14 +66,17 @@ class PumpValveController(object):
 
     @staticmethod
     def _open_valves_equal(percentage, valve_drivers):
+        # type: (float, List[ValveDriver]) -> None
         for valve_driver in valve_drivers:
             valve_driver.set(percentage)
 
     def set_valves(self, percentage, valve_numbers, mode='cascade'):
+        # type: (float, List[int], str) -> None
         if len(valve_numbers) > 0:
             self.prepare_valves_for_transition(percentage, valve_numbers, mode=mode)
 
     def prepare_valves_for_transition(self, percentage, valve_numbers, mode='cascade'):
+        # type: (float, List[int], str) -> None
         if len(valve_numbers) > 0:
             valve_drivers = [self.get_valve_driver(valve_number) for valve_number in valve_numbers]
             if mode == 'cascade':
@@ -78,12 +84,12 @@ class PumpValveController(object):
             else:
                 self._open_valves_equal(percentage, valve_drivers)
 
-    def steer(self):
+    def steer(self):  # type: () -> None
         self.prepare_pumps_for_transition()
         self.steer_valves()
         self.steer_pumps()
 
-    def prepare_pumps_for_transition(self):
+    def prepare_pumps_for_transition(self):  # type: () -> None
         active_pump_drivers = set()
         potential_inactive_pump_drivers = set()
         for valve_number, valve_driver in self._valve_drivers.items():
@@ -98,11 +104,11 @@ class PumpValveController(object):
         for pump_driver in inactive_pump_drivers:
             pump_driver.turn_off()
 
-    def steer_valves(self):
+    def steer_valves(self):  # type: () -> None
         for valve_number, valve_driver in self._valve_drivers.items():
             valve_driver.steer_output()
 
-    def steer_pumps(self):
+    def steer_pumps(self):  # type: () -> None
         active_pump_drivers = set()
         potential_inactive_pump_drivers = set()
         for valve_number, valve_driver in self._valve_drivers.items():
@@ -119,7 +125,7 @@ class PumpValveController(object):
         for pump_driver in active_pump_drivers:
             pump_driver.turn_on()
 
-    def get_valve_driver(self, valve_number):
+    def get_valve_driver(self, valve_number):  # type: (int) -> ValveDriver
         valve_driver = self._valve_drivers.get(valve_number)
         if valve_driver is None:
             valve = Valve.get(number=valve_number)

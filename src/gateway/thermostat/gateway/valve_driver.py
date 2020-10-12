@@ -22,7 +22,7 @@ from gateway.thermostat.gateway.pump_driver import PumpDriver
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import Dict, List
+    from typing import Dict, List, Optional, Any
     from gateway.output_controller import OutputController
 
 logger = logging.getLogger('openmotics')
@@ -37,16 +37,16 @@ class ValveDriver(object):
         self._percentage = 0
         self._current_percentage = 0
         self._desired_percentage = 0
-        self._time_state_changed = None
+        self._time_state_changed = None  # type: Optional[float]
         self._pump_drivers = {}  # type: Dict[int, PumpDriver]
         self._state_change_lock = Lock()
 
     @property
-    def number(self):
+    def number(self):  # type: () -> int
         return self._valve.number
 
     @property
-    def percentage(self):
+    def percentage(self):  # type: () -> int
         return self._current_percentage
 
     @property
@@ -60,23 +60,23 @@ class ValveDriver(object):
             self._pump_drivers.pop(pump_id)
         return list(self._pump_drivers.values())
 
-    def is_open(self):
-        _now_open = self._current_percentage > 0
-        return _now_open if not self.in_transition() else False
+    def is_open(self):  # type: () -> bool
+        now_open = self._current_percentage > 0
+        return now_open if not self.in_transition() else False
 
-    def in_transition(self):
+    def in_transition(self):  # type: () -> bool
         with self._state_change_lock:
             now = time.time()
             if self._time_state_changed is not None:
-                return self._time_state_changed + self._valve.delay > now
+                return self._time_state_changed + float(self._valve.delay) > now
             else:
                 return False
 
-    def update_valve(self, valve):
+    def update_valve(self, valve):  # type: (Valve) -> None
         with self._state_change_lock:
             self._valve = valve
 
-    def steer_output(self):
+    def steer_output(self):  # type: () -> None
         with self._state_change_lock:
             if self._current_percentage != self._desired_percentage:
                 output_nr = self._valve.output.number
@@ -90,24 +90,23 @@ class ValveDriver(object):
                 self._current_percentage = self._desired_percentage
                 self._time_state_changed = time.time()
 
-    def set(self, percentage):
+    def set(self, percentage):  # type: (float) -> None
         self._desired_percentage = int(percentage)
 
-    def will_open(self):
+    def will_open(self):  # type: () -> bool
         return self._desired_percentage > 0 and self._current_percentage == 0
 
-    def will_close(self):
+    def will_close(self):  # type: () -> bool
         return self._desired_percentage == 0 and self._current_percentage > 0
 
-    def open(self):
+    def open(self):  # type: () -> None
         self.set(100)
 
-    def close(self):
+    def close(self):  # type: () -> None
         self.set(0)
 
-    def __eq__(self, other):
+    def __eq__(self, other):  # type: (Any) -> bool
         if not isinstance(other, Valve):
             # don't attempt to compare against unrelated types
             return NotImplemented
-
         return self._valve.number == other.number

@@ -368,8 +368,8 @@ class Preset(BaseModel):
 
     id: MixedPrimaryKeyField
     type: MixedCharField
-    heating_setpoint: MixedFloatField
-    cooling_setpoint: MixedFloatField
+    heating_setpoint: float
+    cooling_setpoint: float
     active: bool
     thermostat: ThermostatForeignKeyField
 
