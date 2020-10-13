@@ -34,7 +34,7 @@ from toolbox import Empty, Queue
 logger = logging.getLogger('openmotics')
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Optional, TypeVar, Union, Tuple
+    from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, Tuple
     from serial import Serial
     from master.classic.master_command import Result
     T_co = TypeVar('T_co', covariant=True)
@@ -87,6 +87,7 @@ class MasterCommunicator(object):
 
         self.__read_thread = None  # type: Optional[Thread]
 
+        self.__timeout_callbacks = []  # type: List[Callable[[],None]]
         self.__communication_stats = {'calls_succeeded': [],
                                       'calls_timedout': [],
                                       'bytes_written': 0,
@@ -115,6 +116,10 @@ class MasterCommunicator(object):
         if self.__read_thread:
             self.__read_thread.join()
             self.__read_thread = None
+
+    def subscribe_timeout(self, callback):
+        # type: (Callable[[],None]) -> None
+        self.__timeout_callbacks.append(callback)
 
     def update_mode_start(self):
         # type: () -> None
@@ -264,6 +269,8 @@ class MasterCommunicator(object):
                     # call, so this call can timeout while it's expected. We don't take those into account.
                     self.__communication_stats['calls_timedout'].append(time.time())
                     self.__communication_stats['calls_timedout'] = self.__communication_stats['calls_timedout'][-50:]
+                for callback in self.__timeout_callbacks:
+                    callback()
                 raise
 
     @staticmethod

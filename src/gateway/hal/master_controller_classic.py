@@ -22,6 +22,7 @@ import logging
 import re
 import subprocess
 import time
+import warnings
 from datetime import datetime
 from threading import Lock, Timer
 
@@ -51,6 +52,7 @@ from master.classic.eeprom_models import CanLedConfiguration, \
 from master.classic.inputs import InputStatus
 from master.classic.master_communicator import BackgroundConsumer, \
     MasterCommunicator, MasterUnavailable
+from master.classic.master_heartbeat import MasterHeartbeat
 from master.classic.slave_updater import bootload_modules
 from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
@@ -91,7 +93,6 @@ class MasterClassicController(MasterController):
                                                     target=self._synchronize,
                                                     interval=30, delay=10)
         self._master_version = None
-        self._master_online = False
         self._communication_enabled = True
         self._input_interval = 300
         self._input_last_updated = 0.0
@@ -146,18 +147,15 @@ class MasterClassicController(MasterController):
                 self._refresh_shutter_states()
         except CommunicationTimedOutException:
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
-            self._master_online = False
             raise DaemonThreadWait
         except CommunicationFailure:
             # This is an expected situation
-            self._master_online = False
             raise DaemonThreadWait
 
     def _get_master_version(self):
         # type: () -> None
         initialize = self._master_version is None
         self._master_version = self.get_firmware_version()
-        self._master_online = True
         if initialize:
             self._register_version_depending_background_consumers()
 
@@ -342,11 +340,15 @@ class MasterClassicController(MasterController):
     def start(self):
         # type: () -> None
         super(MasterClassicController, self).start()
+        self._heartbeat = MasterHeartbeat()
+        self._heartbeat.start()
+        self._master_communicator.subscribe_timeout(self._heartbeat.set_offline)
         self._synchronization_thread.start()
 
     def stop(self):
         # type: () -> None
         self._synchronization_thread.stop()
+        self._heartbeat.stop()
         super(MasterClassicController, self).stop()
 
     def set_plugin_controller(self, plugin_controller):
@@ -363,7 +365,7 @@ class MasterClassicController(MasterController):
 
     def get_master_online(self):
         # type: () -> bool
-        return self._master_online
+        return self._heartbeat.is_online()
 
     @communication_enabled
     def get_firmware_version(self):
@@ -1168,7 +1170,6 @@ class MasterClassicController(MasterController):
         """
         Perform a cold reset on the master. Turns the power off, waits 5 seconds and turns the power back on.
         """
-        self._master_online = False
         MasterClassicController._set_master_power(False)
         time.sleep(5)
         MasterClassicController._set_master_power(True)
@@ -1186,7 +1187,6 @@ class MasterClassicController(MasterController):
         # type: (str, Serial) -> None
         try:
             self._communication_enabled = False
-            self._master_online = False
             self._master_communicator.update_mode_start()
 
             port = controller_serial.port  # type: ignore
