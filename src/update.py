@@ -15,7 +15,6 @@
 """ The update modules provides the update functionality. """
 
 from __future__ import absolute_import
-
 from platform_utils import Platform, System
 System.import_libs()
 
@@ -28,12 +27,10 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime
-
 import requests
+from datetime import datetime
 from six.moves.configparser import ConfigParser, NoOptionError
 from six.moves.urllib.parse import urlparse, urlunparse
-
 import constants
 
 logging.basicConfig(level=logging.INFO, filemode='w', format='%(message)s', filename=constants.get_update_output_file())
@@ -75,6 +72,11 @@ MODULE_TYPES = {'can': 'c',
                 'dimmer_gen3': 'd3',
                 'temperature_gen3': 't3',
                 'ucan': 'uc'}
+
+EXIT_CODES = {'failed_generic': 1,
+              'failed_aquire_update_lock': 2,
+              'failed_preprepare_update': 3,
+              'failed_health_check': 4}
 
 
 def cmd(command, **kwargs):
@@ -199,8 +201,9 @@ def check_gateway_health(timeout=60):
         except Exception:
             pass
         time.sleep(10)
-    logger.error('health check failed {}'.format(pending))
-    raise Exception('Gateway services failed to start')
+    message = 'health check failed {}'.format(pending)
+    logger.error(message)
+    raise SystemExit(EXIT_CODES['failed_health_check'])
 
 
 def is_up_to_date(name, new_version):
@@ -399,7 +402,7 @@ def update(version, expected_md5):
                 version_mapping[data['type']] = data['version']
     except Exception:
         logger.exception('failed to preprepare update')
-        raise SystemExit(1)
+        raise SystemExit(EXIT_CODES['failed_preprepare_update'])
 
     errors = []
     services_running = True
@@ -492,7 +495,7 @@ def update(version, expected_md5):
             logger.error('Exceptions:')
             for error in errors:
                 logger.error('- {0}'.format(error))
-            raise SystemExit(1)
+            raise errors[0]
 
         config.set('OpenMotics', 'version', version)
         temp_file = constants.get_config_file() + '.update'
@@ -523,17 +526,18 @@ def main():
     lockfile = constants.get_update_lockfile()
     with open(lockfile, 'wc') as wfd:
         try:
-            fcntl.flock(wfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except Exception:
-            logger.exception('failed to aquire update lock')
-            logger.error('FAILED')
-            logger.error('exit 1')
-            raise SystemExit(1)
-        try:
+            try:
+                fcntl.flock(wfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except Exception:
+                logger.exception('failed to aquire update lock')
+                raise SystemExit(EXIT_CODES['failed_aquire_update_lock'])
             update(version, expected_md5)
-        except SystemExit:
+        except SystemExit as sex:
             logger.error('FAILED')
-            logger.error('exit 1')
+            logger.error('exit {}'.format(sex.code))
+        except Exception:
+            logger.error('FAILED')
+            logger.error('exit {}'.format(EXIT_CODES['failed_generic']))
         finally:
             fcntl.flock(wfd, fcntl.LOCK_UN)
             os.unlink(lockfile)
