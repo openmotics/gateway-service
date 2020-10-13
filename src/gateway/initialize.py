@@ -14,7 +14,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import absolute_import
-
 from platform_utils import Platform, System
 System.import_libs()
 
@@ -76,14 +75,13 @@ def initialize(message_client_name):
 @contextmanager
 def lock_file(file):
     # type: (str) -> Any
-    with open(file, 'a') as wfd:
-        fcntl.flock(wfd, fcntl.LOCK_EX)
+    with open(file, 'a+') as fd:
+        fcntl.flock(fd, fcntl.LOCK_EX)
         try:
-            with open(file, 'r') as rfd:
-                yield rfd
+            yield fd
             os.unlink(file)
         except Exception:
-            fcntl.flock(wfd, fcntl.LOCK_UN)
+            fcntl.flock(fd, fcntl.LOCK_UN)
             raise
 
 

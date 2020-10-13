@@ -899,7 +899,7 @@ class MasterCoreController(MasterController):
 
         global_configuration = GlobalConfiguration()
         number_of_modules = _default_if_255(getattr(global_configuration, 'number_of_{0}_modules'.format(module_type_name)), 0)
-        addresses = []  # type: List[Optional[int]]
+        addresses = []  # type: List[int]
         for module_id in range(number_of_modules):
             module_info = configuration_type(module_id)
             device_type = module_info.device_type
@@ -908,7 +908,9 @@ class MasterCoreController(MasterController):
                 address = parts[0] * 256 * 256 + parts[1] * 256 + parts[2]
                 if address >= 256:
                     addresses.append(address)
-        next_address = next(i for i, e in enumerate(sorted(addresses) + [None], 256) if i != e)
+        addresses_and_none = [a for a in sorted(addresses)]  # type: List[Optional[int]]  # Iterate through the sorted list to work around List invariance
+        addresses_and_none.append(None)
+        next_address = next(i for i, e in enumerate(addresses_and_none, 256) if i != e)
         new_address = bytearray([ord(module_type)]) + struct.pack('>I', next_address)[-3:]
         self._master_communicator.do_basic_action(action_type={'output': 201,
                                                                'input': 202,
