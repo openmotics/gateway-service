@@ -53,13 +53,18 @@ def software_update(toolbox_session):
                              files={'update_data': open(update, 'rb')})
             logger.info('waiting for update to complete...')
             time.sleep(120)
-            toolbox.health_check(timeout=120)
+            toolbox.health_check(timeout=480)
         finally:
-            toolbox.health_check(timeout=120)
+            toolbox.health_check()
             toolbox.dut.login()
             logger.debug('update output')
+            since = time.time()
+            while since > time.time() - 120:
+                output = toolbox.dut.get('/get_update_output')['output']
+                logger.info(output)
+                if 'exit 0' in output:
+                    break
             output = toolbox.dut.get('/get_update_output')['output']
-            logger.info(output)
             assert 'exit 0' in output
             assert 'DONE' in output
 
