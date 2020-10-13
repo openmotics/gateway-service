@@ -29,10 +29,8 @@ import sys
 import time
 import requests
 from datetime import datetime
-from gateway.exceptions import ServiceUnavailableException
 from six.moves.configparser import ConfigParser, NoOptionError
 from six.moves.urllib.parse import urlparse, urlunparse
-
 import constants
 
 logging.basicConfig(level=logging.INFO, filemode='w', format='%(message)s', filename=constants.get_update_output_file())
