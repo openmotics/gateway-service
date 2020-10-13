@@ -73,7 +73,7 @@ MODULE_TYPES = {'can': 'c',
                 'temperature_gen3': 't3',
                 'ucan': 'uc'}
 
-EXIT_CODES = {'failed': 1,
+EXIT_CODES = {'failed_generic': 1,
               'failed_aquire_update_lock': 2,
               'failed_preprepare_update': 3,
               'failed_health_check': 4}
@@ -492,13 +492,13 @@ def update(version, expected_md5):
         cmd('rm -v -rf {}/*'.format(update_dir), shell=True)
 
         if errors:
-            exitcode = EXIT_CODES['failed']
+            exitcode = None
             logger.error('Exceptions:')
             for error in errors:
-                if isinstance(error, SystemExit):
+                if isinstance(error, SystemExit) and not exitcode:
                     exitcode = error.code
                 logger.error('- {0}'.format(error))
-            raise SystemExit(exitcode)
+            raise SystemExit(exitcode or EXIT_CODES['failed_generic'])
 
         config.set('OpenMotics', 'version', version)
         temp_file = constants.get_config_file() + '.update'
@@ -538,6 +538,9 @@ def main():
         except SystemExit as sex:
             logger.error('FAILED')
             logger.error('exit {}'.format(sex.code))
+        except Exception:
+            logger.error('FAILED')
+            logger.error('exit {}'.format(EXIT_CODES['failed_generic']))
         finally:
             fcntl.flock(wfd, fcntl.LOCK_UN)
             os.unlink(lockfile)
