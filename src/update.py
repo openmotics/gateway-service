@@ -78,8 +78,7 @@ MODULE_TYPES = {'can': 'c',
 EXIT_CODES = {'failed': 1,
               'failed_aquire_update_lock': 2,
               'failed_preprepare_update': 3,
-              'failed_service_unavailable': 4}
-
+              'failed_health_check': 4}
 
 
 def cmd(command, **kwargs):
@@ -206,7 +205,7 @@ def check_gateway_health(timeout=60):
         time.sleep(10)
     message = 'health check failed {}'.format(pending)
     logger.error(message)
-    raise ServiceUnavailableException(message)
+    raise SystemExit(EXIT_CODES['failed_health_check'])
 
 
 def is_up_to_date(name, new_version):
@@ -498,8 +497,8 @@ def update(version, expected_md5):
             exitcode = EXIT_CODES['failed']
             logger.error('Exceptions:')
             for error in errors:
-                if isinstance(error, ServiceUnavailableException):
-                    exitcode = EXIT_CODES['failed_service_unavailable']
+                if isinstance(error, SystemExit):
+                    exitcode = error.code
                 logger.error('- {0}'.format(error))
             raise SystemExit(exitcode)
 
