@@ -492,13 +492,10 @@ def update(version, expected_md5):
         cmd('rm -v -rf {}/*'.format(update_dir), shell=True)
 
         if errors:
-            exitcode = None
             logger.error('Exceptions:')
             for error in errors:
-                if isinstance(error, SystemExit) and not exitcode:
-                    exitcode = error.code
                 logger.error('- {0}'.format(error))
-            raise SystemExit(exitcode or EXIT_CODES['failed_generic'])
+            raise errors[0]
 
         config.set('OpenMotics', 'version', version)
         temp_file = constants.get_config_file() + '.update'
