@@ -85,8 +85,7 @@ class MasterCommunicator(object):
 
         self.__running = False
 
-        self.__read_thread = Thread(target=self.__read, name='MasterCommunicator read thread')
-        self.__read_thread.daemon = True
+        self.__read_thread = None  # type: Optional[Thread]
 
         self.__communication_stats = {'calls_succeeded': [],
                                       'calls_timedout': [],
@@ -102,6 +101,10 @@ class MasterCommunicator(object):
         if self.__init_master:
             self._flush_serial_input()
 
+        if not self.__read_thread:
+            self.__read_thread = Thread(target=self.__read, name='MasterCommunicator read thread')
+            self.__read_thread.daemon = True
+
         if not self.__running:
             self.__running = True
             self.__read_thread.start()
@@ -109,7 +112,9 @@ class MasterCommunicator(object):
     def stop(self):
         # type: () -> None
         self.__running = False
-        self.__read_thread.join()
+        if self.__read_thread:
+            self.__read_thread.join()
+            self.__read_thread = None
 
     def update_mode_start(self):
         # type: () -> None
