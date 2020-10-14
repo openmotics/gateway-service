@@ -418,7 +418,10 @@ class MasterCommunicator(object):
                     bytes_consumed, result, done = read_state.current_consumer.consume(_data, read_state.partial_result)
                 except ValueError as value_error:
                     logger.error('Could not consume/decode message from the master: {0}'.format(value_error))
-                    return bytearray()
+                    # Consumer failed, reset.
+                    self.current_consumer = None
+                    self.partial_result = None
+                    return _data
 
                 if done:
                     assert self.current_consumer
