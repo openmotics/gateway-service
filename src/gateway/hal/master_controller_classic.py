@@ -1173,6 +1173,14 @@ class MasterClassicController(MasterController):
         time.sleep(5)
         MasterClassicController._set_master_power(True)
 
+    @communication_enabled
+    def raw_action(self, action, size, data=None):
+        # type: (str, int, Optional[bytearray]) -> Dict[str,Any]
+        """
+        Send a raw action to the master.
+        """
+        return self._master_communicator.do_raw_action(action, size, data=data)
+
     @Inject
     def update_master(self, hex_filename, controller_serial=INJECTED):
         # type: (str, Serial) -> None

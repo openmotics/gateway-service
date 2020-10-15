@@ -512,6 +512,18 @@ class WebInterface(object):
         """
         return self._gateway_api.reset_master()
 
+    @openmotics_api(auth=True, plugin_exposed=False, check=types(action=str, size=int, data='json'))
+    def raw_master_action(self, action, size=None, data=None):
+        # type: (str, int, Optional[List[int]]) -> Dict[str,Any]
+        """
+        Send a raw action to the master.
+
+            POST /raw_master_action action=ST size=13
+            {"literal":"","data":[16,16,15,2,0,0,0,0,76,3,143,95,4],"success":true}
+        """
+        input_data = data if data is None else bytearray(data)
+        return self._gateway_api.raw_master_action(action, size, input_data)
+
     @openmotics_api(auth=True)
     def module_discover_start(self):  # type: () -> Dict[str, str]
         """ Start the module discover mode on the master. """

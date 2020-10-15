@@ -373,6 +373,10 @@ class MasterController(object):
     def cold_reset(self):
         raise NotImplementedError()
 
+    def raw_action(self, action, size=None, data=None):
+        # type: (str, int, Optional[bytearray]) -> Dict[str,Any]
+        raise NotImplementedError()
+
     def update_master(self, hex_filename):
         # type: (str) -> None
         raise NotImplementedError()

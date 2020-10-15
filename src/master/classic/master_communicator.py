@@ -27,7 +27,7 @@ from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_controller import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import master_api
-from master.classic.master_command import Field, printable
+from master.classic.master_command import Field, MasterCommandSpec, printable
 from serial_utils import CommunicationTimedOutException
 from toolbox import Empty, Queue
 
@@ -36,7 +36,7 @@ logger = logging.getLogger('openmotics')
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, TypeVar, Union, Tuple
     from serial import Serial
-    from master.classic.master_command import MasterCommandSpec, Result
+    from master.classic.master_command import Result
     T_co = TypeVar('T_co', covariant=True)
 
 
@@ -199,6 +199,14 @@ class MasterCommunicator(object):
         :type consumer: Consumer or BackgroundConsumer.
         """
         self.__consumers.append(consumer)
+
+    def do_raw_action(self, action, size, output_size=None, data=None, timeout=2):
+        # type: (str, int, Optional[int], Optional[bytearray], Union[T_co, int]) -> Union[T_co, Dict[str, Any]]
+        input_field = Field.padding(13) if data is None else Field.bytes('data', len(data))
+        command = MasterCommandSpec(action,
+                                    [input_field],
+                                    [Field.bytes('data', size), Field.lit('\r\n')])
+        return self.do_command(command, fields={'data': data}, timeout=timeout)
 
     def do_basic_action(self, action_type, action_number, timeout=2):
         # type: (int, int, Union[T_co, int]) -> Union[T_co, Dict[str,Any]]
