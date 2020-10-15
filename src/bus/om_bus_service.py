@@ -24,13 +24,16 @@ from multiprocessing.connection import Listener
 from threading import Thread
 from signal import signal, SIGTERM
 
+if False:  # MYPY
+    from typing import Any, Callable, Dict, List, Optional
+
 logger = logging.getLogger('openmotics')
 
 
 class MessageService(object):
-
-    def __init__(self, ip='localhost', port=10000, authkey='openmotics'):
-        self.connections = {}
+    def __init__(self, ip='localhost', port=10000, authkey=b'openmotics'):
+        # type: (str, int, bytes) -> None
+        self.connections = {}  # type: Dict[str,None]
         self.address = (ip, port)  # family is deduced to be 'AF_INET'
         self.authkey = authkey
         self.listener = Listener(self.address, authkey=self.authkey)
@@ -49,7 +52,7 @@ class MessageService(object):
 
     def _send(self, conn, msg):
         payload = json.dumps(msg)
-        conn.send_bytes(payload)
+        conn.send_bytes(payload.encode())
 
     def _verify_client(self, conn, msg):
         should_be = self.connections.get(conn, None)
@@ -76,7 +79,7 @@ class MessageService(object):
     def _receiver(self, conn):
         while not conn.closed:
             try:
-                payload = conn.recv_bytes()
+                payload = conn.recv_bytes().decode()
                 msg = json.loads(payload)
                 self._process_message(conn, msg)
             except IOError as io_error:
@@ -84,7 +87,7 @@ class MessageService(object):
                 self._close(conn)
             except ValueError:
                 logger.exception('Error decoding payload from client {0}'.format(self.connections.get(conn, None)))
-            except EOFError as e:
+            except EOFError:
                 self._close(conn)
             except Exception:
                 logger.exception('Unknown error in receiver')
@@ -109,7 +112,7 @@ class MessageService(object):
                 receiver.start()
             except IOError as io_error:
                 logger.error('IOError in accepting connection: {0}'.format(io_error))
-            except Exception as e:
+            except Exception:
                 logger.exception('Error in message service. Restarting...')
                 self.listener.close()
                 time.sleep(1)
