@@ -59,8 +59,10 @@ from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Optional, Tuple
+    from typing import Any, Dict, List, Literal, Optional, Tuple
     from serial import Serial
+
+    HEALTH = Literal['success', 'unstable', 'failure']
 
 logger = logging.getLogger("openmotics")
 
@@ -83,6 +85,7 @@ class MasterClassicController(MasterController):
         self._master_communicator = master_communicator  # type: MasterCommunicator
         self._eeprom_controller = eeprom_controller
         self._pubsub = pubsub
+        self._heartbeat = MasterHeartbeat()
         self._plugin_controller = None  # type: Optional[Any]
 
         self._input_status = InputStatus(on_input_change=self._input_changed)
@@ -340,9 +343,7 @@ class MasterClassicController(MasterController):
     def start(self):
         # type: () -> None
         super(MasterClassicController, self).start()
-        self._heartbeat = MasterHeartbeat()
         self._heartbeat.start()
-        self._master_communicator.subscribe_timeout(self._heartbeat.set_offline)
         self._synchronization_thread.start()
 
     def stop(self):
@@ -366,6 +367,10 @@ class MasterClassicController(MasterController):
     def get_master_online(self):
         # type: () -> bool
         return self._heartbeat.is_online()
+
+    def get_communicator_health(self):
+        # type: () -> HEALTH
+        return self._heartbeat.get_communicator_health()
 
     @communication_enabled
     def get_firmware_version(self):

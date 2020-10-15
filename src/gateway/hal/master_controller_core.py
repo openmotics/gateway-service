@@ -18,15 +18,13 @@ Module for communicating with the Master
 from __future__ import absolute_import
 
 import logging
-import time
 import struct
+import time
 from datetime import datetime
 from threading import Thread, Timer
 
-from peewee import DoesNotExist
-
-from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
-    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO
+from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
+    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO
 from gateway.enums import ShutterEnums
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
@@ -42,19 +40,20 @@ from master.core.errors import Error
 from master.core.events import Event as MasterCoreEvent
 from master.core.group_action import GroupActionController
 from master.core.memory_file import MemoryFile, MemoryTypes
-from master.core.memory_models import GlobalConfiguration, \
-    InputConfiguration, InputModuleConfiguration, OutputConfiguration, \
-    OutputModuleConfiguration, SensorConfiguration, \
-    SensorModuleConfiguration, ShutterConfiguration, \
-    CanControlModuleConfiguration
+from master.core.memory_models import CanControlModuleConfiguration, \
+    GlobalConfiguration, InputConfiguration, InputModuleConfiguration, \
+    OutputConfiguration, OutputModuleConfiguration, SensorConfiguration, \
+    SensorModuleConfiguration, ShutterConfiguration
 from master.core.slave_communicator import SlaveCommunicator
-from master.core.system_value import Temperature, Humidity
+from master.core.system_value import Humidity, Temperature
 from master.core.ucan_communicator import UCANCommunicator
-from serial_utils import CommunicationTimedOutException
+from peewee import DoesNotExist
+from serial_utils import CommunicationStatus, CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Tuple, Optional, Type, Union
+    from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union
     from gateway.dto import OutputStateDTO
+    HEALTH = Literal['success', 'unstable', 'failure']
 
 logger = logging.getLogger("openmotics")
 
@@ -311,6 +310,37 @@ class MasterCoreController(MasterController):
     def get_master_online(self):
         # type: () -> bool
         return self._master_online
+
+    def get_communicator_health(self):
+        # type: () -> HEALTH
+        stats = self._master_communicator.get_communication_statistics()
+        calls_timedout = [call for call in stats['calls_timedout']]
+        calls_succeeded = [call for call in stats['calls_succeeded']]
+        all_calls = sorted(calls_timedout + calls_succeeded)
+        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
+        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
+
+        if len(calls_timedout) == 0:
+            # If there are no timeouts at all
+            return CommunicationStatus.SUCCESS
+        elif len(all_calls) <= 10:
+            # Not enough calls made to have a decent view on what's going on
+            logger.warning('Observed master communication failures, but not enough calls')
+            return CommunicationStatus.UNSTABLE
+        elif not any(t in calls_timedout for t in all_calls[-10:]):
+            logger.warning('Observed master communication failures, but recent calls recovered')
+            # The last X calls are successfull
+            return CommunicationStatus.UNSTABLE
+        elif len(calls_last_x_minutes) <= 5:
+            logger.warning('Observed master communication failures, but not recent enough')
+            # Not enough recent calls
+            return CommunicationStatus.UNSTABLE
+        elif ratio < 0.25:
+            # Less than 25% of the calls fail, let's assume everything is just "fine"
+            logger.warning('Observed master communication failures, but there\'s only a failure ratio of {:.2f}%'.format(ratio * 100))
+            return CommunicationStatus.UNSTABLE
+        else:
+            return CommunicationStatus.FAILURE
 
     def get_firmware_version(self):
         version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']

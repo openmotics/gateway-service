@@ -22,7 +22,9 @@ from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
 from gateway.hal.master_event import MasterEvent
 
 if False:  # MYPY
-    from typing import Any, Callable, Dict, List, Optional, Tuple
+    from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
+
+    HEALTH = Literal['success', 'unstable', 'failure']
 
 
 class CommunicationFailure(Exception):
@@ -53,6 +55,10 @@ class MasterController(object):
 
     def get_communication_statistics(self):
         return self._master_communicator.get_communication_statistics()
+
+    def get_communicator_health(self):
+        # type: () -> HEALTH
+        raise NotImplementedError()
 
     def get_debug_buffer(self):
         return self._master_communicator.get_debug_buffer()

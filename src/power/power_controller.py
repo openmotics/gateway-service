@@ -19,6 +19,8 @@ calls to the PowerCommunicator.
 
 from __future__ import absolute_import
 
+import logging
+
 from gateway.dto import ModuleDTO
 from gateway.events import GatewayEvent
 from gateway.hal.master_event import MasterEvent
@@ -32,6 +34,8 @@ if False:  # MYPY
     from typing import Any, Dict, List, Optional, Tuple
     from power.power_communicator import PowerCommunicator
     from power.power_store import PowerStore
+
+logger = logging.getLogger('openmotics')
 
 
 class PowerController(object):
@@ -51,6 +55,10 @@ class PowerController(object):
             # TODO add controller / orm sync for power modules.
             gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'powermodule'})
             self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
+
+    def get_communication_statistics(self):
+        # type: () -> Dict[str,Any]
+        return self._power_communicator.get_communication_statistics()
 
     def get_module_current(self, module, phase=None):
         # type: (Dict[str,Any], Optional[int]) -> Tuple[Any, ...]
