@@ -376,7 +376,8 @@ class MasterController(object):
     def reset(self):
         raise NotImplementedError()
 
-    def cold_reset(self):
+    def cold_reset(self, power_on=True):
+        # type: (bool) -> None
         raise NotImplementedError()
 
     def raw_action(self, action, size=None, data=None):

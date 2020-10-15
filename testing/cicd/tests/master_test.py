@@ -15,15 +15,24 @@
 from __future__ import absolute_import
 
 import logging
+import time
 
 import pytest
 
 logger = logging.getLogger('openmotics')
 
 
-@pytest.mark.slow
-def test_communication_recovery(toolbox):
-    toolbox.health_check()
+@pytest.fixture
+def master_communication(toolbox):
+    try:
+        yield
+    except Exception:
+        toolbox.dut.get('/reset_master')
+    finally:
+        toolbox.health_check(timeout=360)
+
+
+def test_communication_recovery(toolbox, master_communication):
     data = toolbox.dut.get('/get_status', success=False)
     assert data['success'], data
 
@@ -33,8 +42,20 @@ def test_communication_recovery(toolbox):
     toolbox.dut.get('/raw_master_action', {'action': 'ST', 'size': 14}, success=False)
     toolbox.dut.get('/raw_master_action', {'action': 'ST', 'size': 15}, success=False)
 
-    # data = toolbox.dut.get('/health_check')['health']
-    # assert not data['master']['state'], data
-
     toolbox.health_check(timeout=120)
+    toolbox.dut.get('/get_status')
+
+
+@pytest.mark.slow
+def test_offline_recovery(toolbox, master_communication):
+    data = toolbox.dut.get('/get_status', success=False)
+    assert data['success'], data
+
+    toolbox.dut.get('/reset_master', {'power_on': False})
+
+    time.sleep(40)
+    data = toolbox.dut.get('/health_check')['health']
+    assert not data['master']['state'], data
+
+    toolbox.health_check(timeout=360)
     toolbox.dut.get('/get_status')

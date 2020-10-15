@@ -1170,14 +1170,15 @@ class MasterClassicController(MasterController):
         data = chr(255) * (256 * 256)
         self.restore(data)
 
-    def cold_reset(self):
-        # type: () -> None
+    def cold_reset(self, power_on=True):
+        # type: (bool) -> None
         """
         Perform a cold reset on the master. Turns the power off, waits 5 seconds and turns the power back on.
         """
         MasterClassicController._set_master_power(False)
-        time.sleep(5)
-        MasterClassicController._set_master_power(True)
+        if power_on:
+            time.sleep(5)
+            MasterClassicController._set_master_power(True)
 
     @communication_enabled
     def raw_action(self, action, size, data=None):

@@ -134,9 +134,9 @@ class GatewayApi(object):
         config.read(constants.get_config_file())
         return str(config.get('OpenMotics', 'version'))
 
-    def reset_master(self):
-        # type: () -> Dict[str,Any]
-        self.__master_controller.cold_reset()
+    def reset_master(self, power_on=True):
+        # type: (bool) -> Dict[str,Any]
+        self.__master_controller.cold_reset(power_on=power_on)
         return {}
 
     def raw_master_action(self, action, size, data=None):

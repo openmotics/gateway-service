@@ -979,8 +979,8 @@ class MasterCoreController(MasterController):
         # type: () -> None
         self._master_communicator.do_basic_action(action_type=254, action=0, timeout=None)
 
-    def cold_reset(self):
-        # type: () -> Dict[str,Any]
+    def cold_reset(self, power_on=True):
+        # type: (bool) -> None
         _ = self  # Must be an instance method
         gpio_direction = open('/sys/class/gpio/gpio49/direction', 'w')
         gpio_direction.write('out')
@@ -993,10 +993,9 @@ class MasterCoreController(MasterController):
             gpio_file.close()
 
         power(False)
-        time.sleep(5)
-        power(True)
-
-        return {'status': 'OK'}
+        if power_on:
+            time.sleep(5)
+            power(True)
 
     def update_master(self, hex_filename):
         # type: (str) -> None

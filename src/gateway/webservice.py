@@ -502,15 +502,15 @@ class WebInterface(object):
         port = self._maintenance_controller.open_maintenace_socket()
         return {'port': port}
 
-    @openmotics_api(auth=True)
-    def reset_master(self):
+    @openmotics_api(auth=True, check=types(power_on=bool))
+    def reset_master(self, power_on=True):
         """
         Perform a cold reset on the master.
 
         :returns: 'status': 'OK'.
         :rtype: dict
         """
-        return self._gateway_api.reset_master()
+        return self._gateway_api.reset_master(power_on=power_on)
 
     @openmotics_api(auth=True, plugin_exposed=False, check=types(action=str, size=int, data='json'))
     def raw_master_action(self, action, size=None, data=None):
