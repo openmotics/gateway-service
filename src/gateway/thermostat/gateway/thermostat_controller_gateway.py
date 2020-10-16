@@ -283,7 +283,7 @@ class ThermostatControllerGateway(ThermostatController):
                                                               automatic=active_preset.type == Preset.Types.SCHEDULE,
                                                               setpoint=Preset.TYPE_TO_SETPOINT.get(active_preset.type, 0),
                                                               name=thermostat.name,
-                                                              sensor_id=thermostat.sensor,
+                                                              sensor_id=thermostat.sensor.number,
                                                               airco=0,  # TODO: Check if still used
                                                               output_0_level=get_output_level(output0),
                                                               output_1_level=get_output_level(output1)))
