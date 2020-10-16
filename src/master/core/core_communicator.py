@@ -20,6 +20,7 @@ Module to communicate with the Core.
 from __future__ import absolute_import
 import logging
 import time
+import select
 import struct
 from threading import Thread, Lock
 from six.moves.queue import Queue, Empty
@@ -269,42 +270,53 @@ class CoreCommunicator(object):
 
         """
         data = bytearray()
-        wait_for_length = None
+        message_length = None
+        header_fields = None
         header_length = len(CoreCommunicator.START_OF_REPLY) + 1 + 2 + 2  # RTR + CID (1 byte) + command (2 bytes) + length (2 bytes)
         footer_length = 1 + 1 + len(CoreCommunicator.END_OF_REPLY)  # 'C' + checksum (1 byte) + \r\n
+        need_more_data = False
 
         while not self._stop:
             try:
-                # Read what's now on the buffer
+                # Wait for data if more data is expected
+                if need_more_data:
+                    readers, _, _ = select.select([self._serial], [], [], 1)
+                    if not readers:
+                        continue
+                    need_more_data = False
+
+                # Read what's now on the serial port
                 num_bytes = self._serial.inWaiting()
                 if num_bytes > 0:
                     data += self._serial.read(num_bytes)
+                    # Update counters
+                    self._serial_bytes_read += num_bytes
+                    self._communication_stats['bytes_read'] += num_bytes
 
-                # Update counters
-                self._serial_bytes_read += num_bytes
-                self._communication_stats['bytes_read'] += num_bytes
-
-                # Wait for a speicific number of bytes, or the header length
-                if (wait_for_length is None and len(data) < header_length) or (wait_for_length is not None and len(data) < wait_for_length):
+                # Wait for the full message, or the header length
+                min_length = message_length or header_length
+                if len(data) < min_length:
+                    need_more_data = True
                     continue
 
-                # Check if the data contains the START_OF_REPLY
-                if CoreCommunicator.START_OF_REPLY not in data:
-                    continue
+                if message_length is None:
+                    # Check if the data contains the START_OF_REPLY
+                    if CoreCommunicator.START_OF_REPLY not in data:
+                        need_more_data = True
+                        continue
 
-                if wait_for_length is None:
-                    # Flush everything before the START_OF_REPLY
-                    data = CoreCommunicator.START_OF_REPLY + data.split(CoreCommunicator.START_OF_REPLY, 1)[-1]
-                    if len(data) < header_length:
-                        continue  # Not enough data
+                    # Align with START_OF_REPLY
+                    if not data.startswith(CoreCommunicator.START_OF_REPLY):
+                        data = CoreCommunicator.START_OF_REPLY + data.split(CoreCommunicator.START_OF_REPLY, 1)[-1]
+                        if len(data) < header_length:
+                            continue
 
-                header_fields = CoreCommunicator._parse_header(data)
-                message_length = header_fields['length'] + header_length + footer_length
+                    header_fields = CoreCommunicator._parse_header(data)
+                    message_length = header_fields['length'] + header_length + footer_length
 
-                # If not all data is present, wait for more data
-                if len(data) < message_length:
-                    wait_for_length = message_length
-                    continue
+                    # If not all data is present, wait for more data
+                    if len(data) < message_length:
+                        continue
 
                 message = data[:message_length]  # type: bytearray
                 data = data[message_length:]
@@ -323,7 +335,7 @@ class CoreCommunicator(object):
                 if not correct_boundaries:
                     logger.info('Unexpected boundaries: {0}'.format(printable(message)))
                     # Reset, so we'll wait for the next RTR
-                    wait_for_length = None
+                    message_length = None
                     data = message[3:] + data  # Strip the START_OF_REPLY, and restore full data
                     continue
 
@@ -335,7 +347,7 @@ class CoreCommunicator(object):
                 if crc != expected_crc:
                     logger.info('Unexpected CRC ({0} vs expected {1}): {2}'.format(crc, expected_crc, printable(checked_payload)))
                     # Reset, so we'll wait for the next RTR
-                    wait_for_length = None
+                    message_length = None
                     data = message[3:] + data  # Strip the START_OF_REPLY, and restore full data
                     continue
 
@@ -351,11 +363,11 @@ class CoreCommunicator(object):
                 self.discard_cid(header_fields['cid'])
 
                 # Message processed, cleaning up
-                wait_for_length = None
+                message_length = None
             except Exception:
                 logger.exception('Unexpected exception at Core read thread')
                 data = bytearray()
-                wait_for_length = None
+                message_length = None
 
     @staticmethod
     def _parse_header(data):  # type: (bytearray) -> Dict[str, Union[int, bytearray]]
