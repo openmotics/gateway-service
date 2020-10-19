@@ -125,7 +125,7 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat_pid = self.thermostat_pids.get(thermostat.number)
             if thermostat_pid is None:
                 thermostat_pid = ThermostatPid(thermostat, self._pump_valve_controller)
-                thermostat_pid.subscribe_state_changes(self.v0_event_thermostat_changed)
+                thermostat_pid.subscribe_state_changes(self._thermostat_changed)
                 self.thermostat_pids[thermostat.number] = thermostat_pid
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
@@ -512,9 +512,8 @@ class ThermostatControllerGateway(ThermostatController):
         self._sync_scheduler()
         thermostat_pid.tick()
 
-    def v0_event_thermostat_changed(self, thermostat_number, active_preset, current_setpoint, actual_temperature, percentages, room):
+    def _thermostat_changed(self, thermostat_number, active_preset, current_setpoint, actual_temperature, percentages, room):
         # type: (int, str, float, float, List[float], int) -> None
-        logger.debug('v0_event_thermostat_changed: {}'.format(thermostat_number))
         if self._message_client is not None:
             self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': thermostat_number})
         location = {'room_id': room}
@@ -528,9 +527,8 @@ class ThermostatControllerGateway(ThermostatController):
                                                    'output_1': percentages[1] if len(percentages) >= 2 else 255},
                                         'location': location}))
 
-    def v0_event_thermostat_group_changed(self, thermostat_group):
+    def _thermostat_group_changed(self, thermostat_group):
         # type: (ThermostatGroup) -> None
-        logger.debug('v0_event_thermostat_group_changed: {}'.format(thermostat_group))
         if self._message_client is not None:
             self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
         for callback in self._event_subscriptions:
@@ -579,6 +577,7 @@ class ThermostatControllerGateway(ThermostatController):
 @post_save(sender=ThermostatGroup)
 @Inject
 def on_thermostat_group_change_handler(model_class, instance, created, thermostat_controller=INJECTED):
+    logger.info('GROUP CHANGE!!!')
     _ = model_class
     if not created:
-        thermostat_controller.v0_event_thermostat_group_changed(instance)
+        thermostat_controller._thermostat_group_changed(instance)

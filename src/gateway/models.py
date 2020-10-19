@@ -371,7 +371,7 @@ class Thermostat(BaseModel):
     def active_preset(self):
         preset = Preset.get_or_none(thermostat=self.id, active=True)
         if preset is None:
-            preset = self.get_preset('SCHEDULE')
+            preset = self.get_preset(Preset.Types.SCHEDULE)
             preset.active = True
             preset.save()
         return preset
