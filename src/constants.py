@@ -46,7 +46,7 @@ def get_gateway_database_file():
 
 def get_thermostats_scheduler_database_file():
     """ Get the filename of the gateway database file. This file is in sqlite format. """
-    return "/opt/openmotics/etc/thermostat-scheduler.db'"
+    return "/opt/openmotics/etc/thermostat-scheduler.db"
 
 
 def get_eeprom_extension_database_file():
