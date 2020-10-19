@@ -174,8 +174,6 @@ def migrate(migrator, database, fake=False, **kwargs):
     migrator.create_model(Preset)
     migrator.create_model(DaySchedule)
 
-    ThermostatGroup.get_or_create(number=0, name='Default', on=True, mode=ThermostatGroup.Modes.HEATING)
-
 
 def rollback(migrator, database, fake=False, **kwargs):
     # type: (Migrator, Database, bool, Dict[Any, Any]) -> None
