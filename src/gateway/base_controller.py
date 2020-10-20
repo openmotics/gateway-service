@@ -56,13 +56,12 @@ class BaseController(object):
         self._sync_orm_interval = sync_interval
         self._sync_running = False
 
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, self._handle_master_event)
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MAINTENANCE, self._handle_master_event)
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
         if master_event.type in [MasterEvent.Types.EEPROM_CHANGE,
-                                 MasterEvent.Types.MAINTENANCE_EXIT,
                                  MasterEvent.Types.MODULE_DISCOVERY]:
             self.request_sync_orm()
 
