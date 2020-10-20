@@ -997,6 +997,8 @@ class MasterCoreController(MasterController):
             time.sleep(5)
             power(True)
 
+        self._master_communicator.reset_communication_statistics()
+
     def update_master(self, hex_filename):
         # type: (str) -> None
         CoreUpdater.update(hex_filename=hex_filename)

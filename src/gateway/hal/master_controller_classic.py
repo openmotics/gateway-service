@@ -1179,6 +1179,7 @@ class MasterClassicController(MasterController):
         if power_on:
             time.sleep(5)
             MasterClassicController._set_master_power(True)
+        self._master_communicator.reset_communication_statistics()
 
     @communication_enabled
     def raw_action(self, action, size, data=None):
@@ -1294,9 +1295,12 @@ class MasterClassicController(MasterController):
         return dict()
 
     @communication_enabled
-    def power_cycle_bus(self):
+    @Inject
+    def power_cycle_bus(self, power_communicator=INJECTED):
         """ Turns the power of both bussed off for 5 seconds """
         self._master_communicator.do_basic_action(master_api.BA_POWER_CYCLE_BUS, 0)
+        if power_communicator:
+            power_communicator.reset_communication_statistics()  # TODO cleanup, use an event instead?
 
     @communication_enabled
     def restore(self, data):

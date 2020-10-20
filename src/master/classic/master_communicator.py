@@ -152,6 +152,12 @@ class MasterCommunicator(object):
     def get_communication_statistics(self):
         return self.__communication_stats
 
+    def reset_communication_statistics(self):
+        self.__communication_stats = {'calls_succeeded': [],
+                                      'calls_timedout': [],
+                                      'bytes_written': 0,
+                                      'bytes_read': 0}
+
     def get_debug_buffer(self):
         return self.__debug_buffer
 

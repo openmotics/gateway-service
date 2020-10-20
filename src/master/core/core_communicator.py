@@ -91,6 +91,12 @@ class CoreCommunicator(object):
     def get_communication_statistics(self):
         return self._communication_stats
 
+    def reset_communication_statistics(self):
+        self._communication_stats = {'calls_succeeded': [],
+                                     'calls_timedout': [],
+                                     'bytes_written': 0,
+                                     'bytes_read': 0}
+
     def get_debug_buffer(self):
         return self._debug_buffer
 

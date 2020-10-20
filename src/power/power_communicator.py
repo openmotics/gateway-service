@@ -105,6 +105,13 @@ class PowerCommunicator(object):
         ret.update(self.__communication_stats_bytes)
         return ret
 
+    def reset_communication_statistics(self):
+        # type: () -> None
+        self.__communication_stats_calls = {'calls_succeeded': [],
+                                            'calls_timedout': []}
+        self.__communication_stats_bytes = {'bytes_written': 0,
+                                            'bytes_read': 0}
+
     def get_communicator_health(self):
         # type: () -> HEALTH
         stats = self.get_communication_statistics()
