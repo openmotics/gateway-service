@@ -41,6 +41,7 @@ class PulseCounterControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
+        SetUpTestInjections(pubsub=Mock())
         cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):  # pylint: disable=C0103

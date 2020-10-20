@@ -71,9 +71,6 @@ class MasterController(object):
 
     # TODO: Currently the objects returned here are classic-format dicts. This needs to be changed to intermediate transport objects
 
-    def invalidate_caches(self):
-        raise NotImplementedError()
-
     def get_master_online(self):
         # type: () -> bool
         raise NotImplementedError()

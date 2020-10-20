@@ -17,16 +17,21 @@ Tests for the eeprom_controller module.
 """
 
 from __future__ import absolute_import
-import unittest
-import xmlrunner
+
 import os
-from ioc import SetTestMode, SetUpTestInjections
-from master.classic.eeprom_controller import EepromController, EepromFile, EepromModel, EepromAddress, \
-                                     EepromData, EepromId, EepromString, EepromByte, EepromWord, \
-                                     CompositeDataType, EepromActions, EepromSignedTemp, \
-                                     EepromIBool, EextByte, EextString
-from master.classic.eeprom_extension import EepromExtension
+import unittest
+
+import mock
+
 import master.classic.master_api as master_api
+from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
+from ioc import INJECTED, Inject, SetTestMode, SetUpTestInjections
+from master.classic.eeprom_controller import CompositeDataType, \
+    EepromActions, EepromAddress, EepromByte, EepromController, EepromData, \
+    EepromFile, EepromIBool, EepromId, EepromModel, EepromSignedTemp, \
+    EepromString, EepromWord, EextByte, EextString
+from master.classic.eeprom_extension import EepromExtension
 
 
 class Model1(EepromModel):
@@ -117,9 +122,15 @@ EEPROM_DB_FILE = 'test.db'
 def get_eeprom_controller_dummy(banks):
     """ Create a dummy EepromController, banks is passed to get_eeprom_file_dummy. """
     SetUpTestInjections(eeprom_file=get_eeprom_file_dummy(banks),
-                        eeprom_db=EEPROM_DB_FILE)
+                        eeprom_db=EEPROM_DB_FILE,
+                        pubsub=PubSub())
     SetUpTestInjections(eeprom_extension=EepromExtension())
     return EepromController()
+
+
+@Inject
+def get_pubsub(pubsub=INJECTED):
+    return pubsub
 
 
 class EepromControllerTest(unittest.TestCase):
@@ -425,6 +436,38 @@ class EepromControllerTest(unittest.TestCase):
             self.assertEqual(i, models[i].id)
             self.assertEqual('Room {0}'.format(i), models[i].name)
             self.assertEqual(i // 2, models[i].floor)
+
+    def test_maintenance_events(self):
+        """ Test read. """
+        controller = get_eeprom_controller_dummy({0: bytearray([0] * 256),
+                                                  1: bytearray([0] * 2) + bytearray(b'hello') + bytearray([0] * 249)})
+        model = controller.read(Model1, 0)
+        self.assertEqual(0, model.id)
+        self.assertEqual('hello' + '\x00' * 95, model.name)
+
+        with mock.patch.object(controller, 'invalidate_cache') as invalidate_cache:
+            master_event = MasterEvent(MasterEvent.Types.MAINTENANCE_EXIT, {})
+            get_pubsub().publish_master_event(PubSub.MasterTopics.MAINTENANCE, master_event)
+            invalidate_cache.assert_called()
+
+    def test_eeprom_events(self):
+        """ Test read. """
+        controller = get_eeprom_controller_dummy({0: bytearray([0] * 256),
+                                                  1: bytearray([0] * 2) + bytearray(b'hello') + bytearray([0] * 249)})
+        model = controller.read(Model1, 0)
+        self.assertEqual(0, model.id)
+        self.assertEqual('hello' + '\x00' * 95, model.name)
+
+        events = []
+
+        def handle_events(master_event):
+            events.append(master_event)
+
+        get_pubsub().subscribe_master_events(PubSub.MasterTopics.EEPROM, handle_events)
+        controller.invalidate_cache()
+        self.assertEqual([
+            MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        ], events)
 
 
 class MasterCommunicator(object):
@@ -1091,7 +1134,3 @@ class EepromIBoolTest(unittest.TestCase):
         temp = EepromIBool((0, 0))
         self.assertEqual(bytearray([0]), temp.encode(True))
         self.assertEqual(bytearray([255]), temp.encode(False))
-
-
-if __name__ == '__main__':
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

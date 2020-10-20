@@ -28,6 +28,7 @@ import sqlite3
 import subprocess
 import tempfile
 import threading
+import warnings
 
 from six.moves.configparser import ConfigParser
 
@@ -115,10 +116,10 @@ class GatewayApi(object):
         except Exception:
             return 'UTC'
 
-    def maintenance_mode_stopped(self):
-        # type: () -> None
+    def maintenance_mode_stopped(self, master_event):
+        # type: (None) -> None
         """ Called when maintenance mode is stopped """
-        self.__master_controller.invalidate_caches()
+        warnings.warn('FIXME move this out of the gateway api', RuntimeWarning)
         if self.__message_client is not None:
             self.__message_client.send_event(OMBusEvents.DIRTY_EEPROM, None)
 

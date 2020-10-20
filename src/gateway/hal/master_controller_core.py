@@ -33,6 +33,7 @@ from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
 from gateway.hal.master_controller import CommunicationFailure, \
     MasterController
 from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
@@ -61,13 +62,14 @@ logger = logging.getLogger("openmotics")
 class MasterCoreController(MasterController):
 
     @Inject
-    def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, slave_communicator=INJECTED, memory_files=INJECTED):
-        # type: (CoreCommunicator, UCANCommunicator, SlaveCommunicator, Dict[str,MemoryFile]) -> None
+    def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, slave_communicator=INJECTED, memory_files=INJECTED, pubsub=INJECTED):
+        # type: (CoreCommunicator, UCANCommunicator, SlaveCommunicator, Dict[str,MemoryFile], PubSub) -> None
         super(MasterCoreController, self).__init__(master_communicator)
-        self._master_communicator = master_communicator  # type: CoreCommunicator
-        self._ucan_communicator = ucan_communicator  # type: UCANCommunicator
-        self._slave_communicator = slave_communicator  # type: SlaveCommunicator
+        self._master_communicator = master_communicator
+        self._ucan_communicator = ucan_communicator
+        self._slave_communicator = slave_communicator
         self._memory_files = memory_files  # type: Dict[str, MemoryFile]
+        self._pubsub = pubsub
         self._synchronization_thread = Thread(target=self._synchronize, name='CoreMasterSynchronization')
         self._master_online = False
         self._discover_mode_timer = None  # type: Optional[Timer]
@@ -82,7 +84,7 @@ class MasterCoreController(MasterController):
         self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
 
-        self._memory_files[MemoryTypes.EEPROM].subscribe_eeprom_change(self._handle_eeprom_change)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_eeprom_event)
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
@@ -101,13 +103,14 @@ class MasterCoreController(MasterController):
     # Private stuff #
     #################
 
-    def _handle_eeprom_change(self):
-        self._output_shutter_map = {}
-        self._shutters_last_updated = 0.0
-        self._sensor_last_updated = 0.0
-        self._input_last_updated = 0.0
-        self._output_last_updated = 0.0
-        self._publish_event(MasterEvent(event_type=MasterEvent.Types.EEPROM_CHANGE, data=None))
+    def _handle_eeprom_event(self, master_event):
+        # type: (MasterEvent) -> None
+        if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
+            self._output_shutter_map = {}
+            self._shutters_last_updated = 0.0
+            self._sensor_last_updated = 0.0
+            self._input_last_updated = 0.0
+            self._output_last_updated = 0.0
 
     def _handle_event(self, data):
         # type: (Dict[str, Any]) -> None
@@ -300,10 +303,6 @@ class MasterCoreController(MasterController):
     ##############
     # Public API #
     ##############
-
-    def invalidate_caches(self):
-        # type: () -> None
-        self._input_last_updated = 0
 
     def get_master_online(self):
         # type: () -> bool

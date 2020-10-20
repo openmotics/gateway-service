@@ -33,6 +33,7 @@ from gateway.migrations.inputs import InputMigrator
 from gateway.migrations.schedules import ScheduleMigrator
 from gateway.migrations.users import UserMigrator
 from gateway.migrations.config import ConfigMigrator
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
@@ -85,6 +86,7 @@ class OpenmoticsService(object):
                 web_interface=INJECTED,  # type: WebInterface
                 scheduling_controller=INJECTED,  # type: SchedulingController
                 observer=INJECTED,  # type: Observer
+                pubsub=INJECTED,  # type: PubSub
                 gateway_api=INJECTED,  # type: GatewayApi
                 metrics_collector=INJECTED,  # type: MetricsCollector
                 plugin_controller=INJECTED,  # type: PluginController
@@ -99,7 +101,8 @@ class OpenmoticsService(object):
             ):
 
         # TODO: Fix circular dependencies
-        # TODO: Introduce some kind of generic event/message bus
+
+        pubsub.subscribe_master_events(PubSub.MasterTopics.MAINTENANCE, gateway_api.maintenance_mode_stopped)  # FIXME: replace this
 
         thermostat_controller.subscribe_events(web_interface.send_event_websocket)
         thermostat_controller.subscribe_events(event_sender.enqueue_event)
@@ -119,7 +122,6 @@ class OpenmoticsService(object):
         plugin_controller.set_webservice(web_service)
         plugin_controller.set_metrics_controller(metrics_controller)
         plugin_controller.set_metrics_collector(metrics_collector)
-        maintenance_controller.subscribe_maintenance_stopped(gateway_api.maintenance_mode_stopped)
         output_controller.subscribe_events(metrics_collector.process_observer_event)
         output_controller.subscribe_events(plugin_controller.process_observer_event)
         output_controller.subscribe_events(web_interface.send_event_websocket)

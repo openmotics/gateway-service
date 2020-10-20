@@ -27,7 +27,8 @@ import master.classic.master_communicator
 from gateway.dto import InputDTO, OutputDTO
 from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.hal.master_event import MasterEvent
-from ioc import Scope, SetTestMode, SetUpTestInjections
+from gateway.pubsub import PubSub
+from ioc import INJECTED, Inject, Scope, SetTestMode, SetUpTestInjections
 from master.classic.eeprom_controller import EepromController
 from master.classic.eeprom_models import InputConfiguration
 from master.classic.inputs import InputStatus
@@ -231,6 +232,14 @@ class MasterClassicControllerTest(unittest.TestCase):
             time.sleep(0.2)
             stop.assert_called_with()
 
+    def test_master_eeprom_event(self):
+        controller = get_classic_controller_dummy()
+        controller._input_last_updated = 1603178386.0
+        pubsub = get_pubsub()
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
+        assert controller._input_last_updated == 0.0
+
 
 @Scope
 def get_classic_controller_dummy(inputs=None):
@@ -241,8 +250,14 @@ def get_classic_controller_dummy(inputs=None):
     eeprom_mock.read_all.return_value = inputs
     SetUpTestInjections(configuration_controller=mock.Mock(),
                         master_communicator=communicator_mock,
-                        eeprom_controller=eeprom_mock)
+                        eeprom_controller=eeprom_mock,
+                        pubsub=PubSub())
 
     controller = MasterClassicController()
     controller._master_version = (3, 143, 102)
     return controller
+
+
+@Inject
+def get_pubsub(pubsub=INJECTED):
+    return pubsub

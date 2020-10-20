@@ -11,13 +11,14 @@ import gateway.hal.master_controller_core
 from gateway.dto import InputDTO, OutputStateDTO
 from gateway.hal.master_controller_core import MasterCoreController
 from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
 from ioc import SetTestMode, SetUpTestInjections
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.memory_file import MemoryFile, MemoryTypes
 from master.core.memory_models import InputConfiguration, \
-    OutputConfiguration, ShutterConfiguration, OutputModuleConfiguration, \
-    InputModuleConfiguration, SensorModuleConfiguration
+    InputModuleConfiguration, OutputConfiguration, OutputModuleConfiguration, \
+    SensorModuleConfiguration, ShutterConfiguration
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.ucan_communicator import UCANCommunicator
 
@@ -54,7 +55,9 @@ class MasterCoreControllerTest(unittest.TestCase):
 
         self.communicator = mock.Mock(CoreCommunicator)
         self.communicator.do_command = _do_command
-        SetUpTestInjections(master_communicator=self.communicator)
+        self.pubsub = PubSub()
+        SetUpTestInjections(master_communicator=self.communicator,
+                            pubsub=self.pubsub)
 
         eeprom_file = MemoryFile(MemoryTypes.EEPROM)
         eeprom_file._cache = self.memory
@@ -270,6 +273,12 @@ class MasterCoreControllerTest(unittest.TestCase):
                           'inputs': ['I', 'i', 'J', 'T'],
                           'outputs': ['P', 'P', 'P', 'o', 'O'],
                           'shutters': []}, self.controller.get_modules())
+
+    def test_master_eeprom_event(self):
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        self.controller._output_last_updated = 1603178386.0
+        self.pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
+        assert self.controller._output_last_updated == 0
 
 
 class MasterInputState(unittest.TestCase):
