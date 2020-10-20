@@ -154,8 +154,6 @@ class GatewayApi(object):
     def module_discover_stop(self):  # type: () -> None
         """ Stop the module discover mode on the master. """
         self.__master_controller.module_discover_stop()
-        if self.__message_client is not None:
-            self.__message_client.send_event(OMBusEvents.DIRTY_EEPROM, None)
 
     def module_discover_status(self):  # type: () -> bool
         """ Gets the status of the module discover mode on the master. """

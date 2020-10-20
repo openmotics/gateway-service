@@ -369,7 +369,6 @@ class VPNService(object):
         self._vpn_open = False
         self._debug_data = {'energy': {},
                             'master': {}}  # type: Dict[str,Dict[float,Any]]
-        self._eeprom_events = deque()  # type: Deque[bool]
         self._gateway = Gateway()
         self._vpn_controller = VpnController()
         self._cloud = Cloud(config.get('OpenMotics', 'vpn_check_url') % config.get('OpenMotics', 'uuid'))
@@ -489,18 +488,6 @@ class VPNService(object):
 
     def _event_receiver(self, event, payload):
         _ = payload
-        if event == OMBusEvents.DIRTY_EEPROM:
-            self._eeprom_events.appendleft(True)
-
-    @staticmethod
-    def _unload_queue(queue):
-        events = []
-        try:
-            while True:
-                events.append(queue.pop())
-        except IndexError:
-            pass
-        return events
 
     def _set_vpn(self, should_open):
         is_running = VpnController.check_vpn()
@@ -538,11 +525,6 @@ class VPNService(object):
                     continue
 
                 call_data = {'events': {}}  # type: Dict[str,Dict[str,Any]]
-
-                # Events  # TODO: Replace this by websocket events in the future
-                dirty_events = VPNService._unload_queue(self._eeprom_events)
-                if dirty_events:
-                    call_data['events']['DIRTY_EEPROM'] = True
 
                 # Collect data to be send to the Cloud
                 for collector_name in self._collectors:
