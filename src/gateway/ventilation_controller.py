@@ -26,6 +26,7 @@ from gateway.dto.base import BaseDTO
 from gateway.events import GatewayEvent
 from gateway.mappers import VentilationMapper
 from gateway.models import Plugin, Ventilation
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MYPY
@@ -39,9 +40,9 @@ logger = logging.getLogger(__name__)
 class VentilationController(object):
 
     @Inject
-    def __init__(self, message_client=INJECTED):
-        # type: (MessageClient) -> None
-        self._event_subscriptions = []  # type: List[Callable[[GatewayEvent],None]]
+    def __init__(self, pubsub=INJECTED):
+        # type: (PubSub) -> None
+        self._pubsub = pubsub
         self._status = {}  # type: Dict[int, VentilationStatusDTO]
 
     def start(self):
@@ -52,18 +53,14 @@ class VentilationController(object):
         # type: () -> None
         pass
 
-    def subscribe_events(self, callback):
-        # type: (Callable[[GatewayEvent],None]) -> None
-        self._event_subscriptions.append(callback)
-
     def _publish_events(self, state_dto):
         # type: (VentilationStatusDTO) -> None
         event_data = {'id': state_dto.id,
                       'mode': state_dto.mode,
                       'level': state_dto.level,
                       'timer': state_dto.timer}
-        for callback in self._event_subscriptions:
-            callback(GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE, event_data))
+        gateway_event = GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE, event_data)
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     def load_ventilations(self):
         # type: () -> List[VentilationDTO]

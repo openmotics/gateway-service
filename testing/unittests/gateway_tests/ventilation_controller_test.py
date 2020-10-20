@@ -24,6 +24,7 @@ from gateway.dto import VentilationDTO, VentilationSourceDTO, \
     VentilationStatusDTO
 from gateway.events import GatewayEvent
 from gateway.models import Plugin, Ventilation
+from gateway.pubsub import PubSub
 from gateway.ventilation_controller import VentilationController
 from ioc import SetTestMode, SetUpTestInjections
 
@@ -34,7 +35,8 @@ class VentilationControllerTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
-        SetUpTestInjections(message_client=mock.Mock(MessageClient))
+        self.pubsub = PubSub()
+        SetUpTestInjections(pubsub=self.pubsub)
         self.controller = VentilationController()
 
     def test_set_status(self):
@@ -207,8 +209,10 @@ class VentilationControllerTest(unittest.TestCase):
 
     def test_ventilation_change_events(self):
         plugin = Plugin(id=2, name='dummy', version='0.0.1')
+
         def get_ventilation(id):
             return Ventilation(id=id, amount_of_levels=4, source='plugin', plugin=plugin)
+
         with mock.patch.object(Select, 'count', return_value=1), \
              mock.patch.object(Ventilation, 'get', side_effect=get_ventilation), \
              mock.patch.object(Ventilation, 'select',
@@ -220,7 +224,7 @@ class VentilationControllerTest(unittest.TestCase):
 
             def callback(event):
                 events.append(event)
-            self.controller.subscribe_events(callback)
+            self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, callback)
 
             self.controller.set_status(VentilationStatusDTO(42, 'manual', level=0))
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0))

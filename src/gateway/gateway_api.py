@@ -116,13 +116,6 @@ class GatewayApi(object):
         except Exception:
             return 'UTC'
 
-    def maintenance_mode_stopped(self, master_event):
-        # type: (None) -> None
-        """ Called when maintenance mode is stopped """
-        warnings.warn('FIXME move this out of the gateway api', RuntimeWarning)
-        if self.__message_client is not None:
-            self.__message_client.send_event(OMBusEvents.DIRTY_EEPROM, None)
-
     def get_status(self):
         # TODO: implement gateway status too (e.g. plugin status)
         return self.__master_controller.get_status()

@@ -359,7 +359,8 @@ class ShutterControllerTest(unittest.TestCase):
 
         def shutter_callback(event):
             calls.setdefault(event.data['id'], []).append(event.data['status']['state'])
-        controller.subscribe_events(shutter_callback)
+
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, shutter_callback)
 
         def validate(_shutter_id, _entry):
             self.assertEqual(controller._actual_positions.get(_shutter_id), _entry[0])

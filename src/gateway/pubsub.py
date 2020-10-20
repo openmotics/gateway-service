@@ -23,6 +23,7 @@ if False:  # MYPY
     from typing import Callable, Dict, List, Literal
     from gateway.events import GatewayEvent
     from gateway.hal.master_event import MasterEvent
+    GATEWAY_TOPIC = Literal['state']
     MASTER_TOPIC = Literal['eeprom', 'maintenance', 'master']
 
 logger = logging.getLogger('openmotics')
@@ -37,8 +38,12 @@ class PubSub(object):
         MAINTENANCE = 'maintenance'  # type: MASTER_TOPIC
         MASTER = 'master'  # type: MASTER_TOPIC
 
+    class GatewayTopics:
+        STATE = 'state'  # type: GATEWAY_TOPIC
+
     def __init__(self):
         # type: () -> None
+        self._gateway_topics = defaultdict(list)  # type: Dict[GATEWAY_TOPIC,List[Callable[[GatewayEvent],None]]]
         self._master_topics = defaultdict(list)  # type: Dict[MASTER_TOPIC,List[Callable[[MasterEvent],None]]]
 
     def subscribe_master_events(self, topic, callback):
@@ -52,3 +57,15 @@ class PubSub(object):
             logger.warning('Received master event %s on topic %s without subscribers', master_event.type, topic)
         for callback in callbacks:
             callback(master_event)
+
+    def subscribe_gateway_events(self, topic, callback):
+        # type: (GATEWAY_TOPIC, Callable[[GatewayEvent],None]) -> None
+        self._gateway_topics[topic].append(callback)
+
+    def publish_gateway_event(self, topic, gateway_event):
+        # type: (GATEWAY_TOPIC, GatewayEvent) -> None
+        callbacks = self._gateway_topics[topic]
+        if not callbacks:
+            logger.warning('Received gateway event %s on topic %s without subscribers', gateway_event.type, topic)
+        for callback in callbacks:
+            callback(gateway_event)

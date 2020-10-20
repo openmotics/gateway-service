@@ -19,6 +19,7 @@ from __future__ import absolute_import
 
 import copy
 import logging
+import warnings
 from threading import Lock
 
 from bus.om_bus_client import MessageClient
@@ -30,12 +31,13 @@ from gateway.events import GatewayEvent
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
 from gateway.models import Output, Room
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Any, Callable, Dict, List, Optional, Tuple
+    from typing import Any, Dict, List, Optional, Tuple
     from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger('openmotics')
@@ -48,12 +50,10 @@ class OutputController(BaseController):
     SYNC_STRUCTURES = [SyncStructure(Output, 'output')]
 
     @Inject
-    def __init__(self, master_controller=INJECTED, message_client=INJECTED):
-        # type: (MasterController, MessageClient) -> None
+    def __init__(self, master_controller=INJECTED):
+        # type: (MasterController) -> None
         super(OutputController, self).__init__(master_controller)
-        self._message_client = message_client
         self._cache = OutputStateCache()
-        self._event_subscriptions = []  # type: List[Callable[[GatewayEvent],None]]
         self._sync_state_thread = None  # type: Optional[DaemonThread]
 
     def start(self):
@@ -70,10 +70,6 @@ class OutputController(BaseController):
         if self._sync_state_thread:
             self._sync_state_thread.stop()
             self._sync_state_thread = None
-
-    def subscribe_events(self, callback):
-        # type: (Callable[[GatewayEvent],None]) -> None
-        self._event_subscriptions.append(callback)
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
@@ -113,10 +109,8 @@ class OutputController(BaseController):
         event_data = {'id': output_dto.id,
                       'status': event_status,
                       'location': {'room_id': Toolbox.denonify(output_dto.room, 255)}}
-        if self._message_client is not None:
-            self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': output_dto.id})
-        for callback in self._event_subscriptions:
-            callback(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, event_data))
+        gateway_event = GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, event_data)
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     def get_output_status(self, output_id):
         # type: (int) -> OutputStateDTO
