@@ -901,7 +901,7 @@ class WebInterface(object):
     def set_ventilation_configuration(self, config):
         # type: (Dict[str,Any]) -> Dict[str, Any]
         ventilation_dto, fields = VentilationSerializer.deserialize(config)
-        ventilation_dto = self._ventilation_controller.save_ventilation(ventilation_dto, fields)
+        self._ventilation_controller.save_ventilation(ventilation_dto, fields)
         fields.append('id')
         return {'config': VentilationSerializer.serialize(ventilation_dto, fields)}
 
