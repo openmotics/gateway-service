@@ -23,7 +23,7 @@ if False:  # MYPY
     from typing import Callable, Dict, List, Literal
     from gateway.events import GatewayEvent
     from gateway.hal.master_event import MasterEvent
-    MASTER_TOPIC = Literal['eeprom', 'maintenance']
+    MASTER_TOPIC = Literal['eeprom', 'maintenance', 'master']
 
 logger = logging.getLogger('openmotics')
 
@@ -35,6 +35,7 @@ class PubSub(object):
     class MasterTopics:
         EEPROM = 'eeprom'  # type: MASTER_TOPIC
         MAINTENANCE = 'maintenance'  # type: MASTER_TOPIC
+        MASTER = 'master'  # type: MASTER_TOPIC
 
     def __init__(self):
         # type: () -> None

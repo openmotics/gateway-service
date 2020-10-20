@@ -103,6 +103,10 @@ class MasterCoreController(MasterController):
     # Private stuff #
     #################
 
+    def _publish_event(self, master_event):
+        # type: (MasterEvent) -> None
+        self._pubsub.publish_master_event(PubSub.MasterTopics.MASTER, master_event)
+
     def _handle_eeprom_event(self, master_event):
         # type: (MasterEvent) -> None
         if master_event.type == MasterEvent.Types.EEPROM_CHANGE:

@@ -81,7 +81,7 @@ class MasterCoreControllerTest(unittest.TestCase):
         def _on_event(master_event):
             events.append(master_event)
 
-        self.controller.subscribe_event(_on_event)
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
 
         events = []
         self.controller._handle_event({'type': 0, 'device_nr': 0, 'action': 0, 'data': bytearray([255, 0, 0, 0])})
@@ -95,7 +95,8 @@ class MasterCoreControllerTest(unittest.TestCase):
         def _on_event(master_event):
             events.append(master_event)
 
-        self.controller.subscribe_event(_on_event)
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
+
         self.controller._output_states = {0: OutputStateDTO(id=0, status=False),
                                           10: OutputStateDTO(id=10, status=False),
                                           11: OutputStateDTO(id=11, status=False)}
@@ -136,7 +137,8 @@ class MasterCoreControllerTest(unittest.TestCase):
         def _on_event(master_event):
             events.append(master_event)
 
-        self.controller.subscribe_event(_on_event)
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
+
         output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
                          {'device_nr': 1, 'status': False, 'dimmer': 0},
                          {'device_nr': 10, 'status': False, 'dimmer': 0},
@@ -230,7 +232,8 @@ class MasterCoreControllerTest(unittest.TestCase):
         with mock.patch.object(gateway.hal.master_controller_core, 'BackgroundConsumer',
                                side_effect=new_consumer) as new_consumer:
             controller = MasterCoreController()
-        controller.subscribe_event(subscriber.callback)
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, subscriber.callback)
+
         new_consumer.assert_called()
         event_data = {'type': 1, 'action': 1, 'device_nr': 2,
                       'data': {}}

@@ -19,7 +19,6 @@ from __future__ import absolute_import
 
 import logging
 import time
-import warnings
 
 from gateway.daemon_thread import DaemonThread
 from gateway.hal.master_controller import MasterController
@@ -31,7 +30,6 @@ from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
     from typing import Optional, Callable, Type, List
-    from gateway.hal.master_event import MasterEvent
     from gateway.maintenance_controller import MaintenanceController
 
 logger = logging.getLogger("openmotics")
@@ -49,17 +47,17 @@ class BaseController(object):
     SYNC_STRUCTURES = None  # type: Optional[List[SyncStructure]]
 
     @Inject
-    def __init__(self, master_controller, maintenance_controller=INJECTED, sync_interval=900):
-        # type: (MasterController, MaintenanceController, float) -> None
+    def __init__(self, master_controller, maintenance_controller=INJECTED, pubsub=INJECTED, sync_interval=900):
+        # type: (MasterController, MaintenanceController, PubSub, float) -> None
         self._master_controller = master_controller
         self._maintenance_controller = maintenance_controller
+        self._pubsub = pubsub
         self._sync_orm_thread = None  # type: Optional[DaemonThread]
-        self._master_controller.subscribe_event(self._handle_master_event)
-        warnings.warn('FIXME inject pubsub instance', RuntimeWarning)
-        if False:
-            self._pubsub.subscribe_master_events(PubSub.MasterTopics.MAINTENANCE, self._handle_master_event)
         self._sync_orm_interval = sync_interval
         self._sync_running = False
+
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, self._handle_master_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MAINTENANCE, self._handle_master_event)
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None

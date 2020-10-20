@@ -33,7 +33,6 @@ class MasterController(object):
 
     def __init__(self, master_communicator):
         self._master_communicator = master_communicator
-        self._event_callbacks = []  # type: List[Callable[[MasterEvent], None]]
 
     #######################
     # Internal management #
@@ -47,17 +46,6 @@ class MasterController(object):
 
     def set_plugin_controller(self, plugin_controller):
         raise NotImplementedError()
-
-    #################
-    # Subscriptions #
-    #################
-
-    def subscribe_event(self, callback):  # type: (Callable[[MasterEvent], None]) -> None
-        self._event_callbacks.append(callback)
-
-    def _publish_event(self, master_event):  # type: (MasterEvent) -> None
-        for callback in self._event_callbacks:
-            callback(master_event)
 
     ##############
     # Public API #

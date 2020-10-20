@@ -319,6 +319,10 @@ class MasterClassicController(MasterController):
                 event_data['dimmer'] = dimmer
             self._publish_event(MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data))
 
+    def _publish_event(self, master_event):
+        # type: (MasterEvent) -> None
+        self._pubsub.publish_master_event(PubSub.MasterTopics.MASTER, master_event)
+
     def _invalidate_caches(self):
         # type: () -> None
         self._eeprom_controller.invalidate_cache()  # Eeprom can be changed in maintenance mode.
