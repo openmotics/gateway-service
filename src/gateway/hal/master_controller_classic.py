@@ -325,8 +325,6 @@ class MasterClassicController(MasterController):
 
     def _invalidate_caches(self):
         # type: () -> None
-        self._eeprom_controller.invalidate_cache()  # Eeprom can be changed in maintenance mode.
-        self._eeprom_controller.dirty = True
         self._input_last_updated = 0.0
         self._shutters_last_updated = 0.0
         self._synchronization_thread.request_single_run()
