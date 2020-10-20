@@ -56,7 +56,10 @@ class PubSub(object):
         if not callbacks:
             logger.warning('Received master event %s on topic %s without subscribers', master_event.type, topic)
         for callback in callbacks:
-            callback(master_event)
+            try:
+                callback(master_event)
+            except Exception:
+                logger.exception('Failed to call handle %s for topic %s', callback, topic)
 
     def subscribe_gateway_events(self, topic, callback):
         # type: (GATEWAY_TOPIC, Callable[[GatewayEvent],None]) -> None
@@ -68,4 +71,7 @@ class PubSub(object):
         if not callbacks:
             logger.warning('Received gateway event %s on topic %s without subscribers', gateway_event.type, topic)
         for callback in callbacks:
-            callback(gateway_event)
+            try:
+                callback(gateway_event)
+            except Exception:
+                logger.exception('Failed to call handle %s for topic %s', callback, topic)
