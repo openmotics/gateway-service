@@ -69,6 +69,12 @@ class Observer(object):
         if gateway_event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             if self._message_client:
                 self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': gateway_event.data['id']})
+        elif gateway_event.type == GatewayEvent.Types.THERMOSTAT_CHANGE:
+            if self._message_client is not None:
+                self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': gateway_event.data['id']})
+        elif gateway_event.type == GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE:
+            if self._message_client is not None:
+                self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
 
     # Inputs
 

@@ -65,7 +65,8 @@ class GatewayEvent(object):
 
     def __eq__(self, other):
         # type: (Any) -> bool
-        return self.type == other.type \
+        return isinstance(other, GatewayEvent) \
+            and self.type == other.type \
             and self.data == other.data
 
     def __repr__(self):

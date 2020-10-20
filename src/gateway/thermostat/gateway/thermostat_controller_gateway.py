@@ -14,31 +14,35 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import datetime
-import time
 import logging
-import constants
+import time
 from threading import Thread
+
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from playhouse.signals import post_save
-from ioc import Injectable, Inject, Singleton, INJECTED
-from bus.om_bus_events import OMBusEvents
-from gateway.events import GatewayEvent
-from gateway.dto import ThermostatDTO
-from gateway.models import Output, Preset, Thermostat, ThermostatGroup, OutputToThermostatGroup, Pump
-from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
-from gateway.thermostat.thermostat_controller import ThermostatController
-from gateway.thermostat.gateway.thermostat_pid import ThermostatPid
-from gateway.mappers import ThermostatMapper
 from apscheduler.schedulers.background import BackgroundScheduler
+from playhouse.signals import post_save
+
+import constants
+from gateway.dto import ThermostatDTO
+from gateway.events import GatewayEvent
+from gateway.mappers import ThermostatMapper
+from gateway.models import Output, OutputToThermostatGroup, Preset, Pump, \
+    Thermostat, ThermostatGroup
+from gateway.pubsub import PubSub
+from gateway.thermostat.gateway.pump_valve_controller import \
+    PumpValveController
+from gateway.thermostat.gateway.thermostat_pid import ThermostatPid
+from gateway.thermostat.thermostat_controller import ThermostatController
+from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import List, Tuple
+    from typing import Dict, List, Tuple
+    from gateway.gateway_api import GatewayApi
+    from gateway.output_controller import OutputController
 
 logger = logging.getLogger('openmotics')
 
 
-@Injectable.named('thermostat_controller')
-@Singleton
 class ThermostatControllerGateway(ThermostatController):
 
     THERMOSTAT_PID_UPDATE_INTERVAL = 60
@@ -46,14 +50,16 @@ class ThermostatControllerGateway(ThermostatController):
     SYNC_CONFIG_INTERVAL = 900
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, message_client=INJECTED, observer=INJECTED):
-        super(ThermostatControllerGateway, self).__init__(message_client, observer)
+    def __init__(self, gateway_api=INJECTED, output_controller=INJECTED, pubsub=INJECTED):
+        # type: (GatewayApi, OutputController, PubSub) -> None
+        super(ThermostatControllerGateway, self).__init__(output_controller)
         self._gateway_api = gateway_api
+        self._pubsub = pubsub
         self._running = False
         self._pid_loop_thread = None
         self._update_pumps_thread = None
         self._periodic_sync_thread = None
-        self.thermostat_pids = {}
+        self.thermostat_pids = {}  # type: Dict[int,ThermostatPid]
         self._pump_valve_controller = PumpValveController()
 
         timezone = gateway_api.get_timezone()
@@ -519,41 +525,28 @@ class ThermostatControllerGateway(ThermostatController):
         thermostat_pid.tick()
 
     def v0_event_thermostat_changed(self, thermostat_number, active_preset, current_setpoint, actual_temperature, percentages, room):
-        """
-        :type thermostat_number: int
-        :type active_preset: str
-        :type current_setpoint: float
-        :type actual_temperature: float
-        :type percentages: list
-        :type room: int
-        """
+        # type: (int, str, float, float, List[int], int) -> None
         logger.debug('v0_event_thermostat_changed: {}'.format(thermostat_number))
-        if self._message_client is not None:
-            self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': thermostat_number})
         location = {'room_id': room}
-        for callback in self._event_subscriptions:
-            callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_CHANGE,
-                                  data={'id': thermostat_number,
-                                        'status': {'preset': active_preset,
-                                                   'current_setpoint': current_setpoint,
-                                                   'actual_temperature': actual_temperature,
-                                                   'output_0': percentages[0],
-                                                   'output_1': percentages[1]},
-                                        'location': location}))
+        gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE,
+                                     {'id': thermostat_number,
+                                      'status': {'preset': active_preset,
+                                                 'current_setpoint': current_setpoint,
+                                                 'actual_temperature': actual_temperature,
+                                                 'output_0': percentages[0],
+                                                 'output_1': percentages[1]},
+                                      'location': location})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     def v0_event_thermostat_group_changed(self, thermostat_group):
-        """
-        :type thermostat_group: models.ThermostatGroup
-        """
+        # type: (ThermostatGroup) -> None
         logger.debug('v0_event_thermostat_group_changed: {}'.format(thermostat_group))
-        if self._message_client is not None:
-            self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
-        for callback in self._event_subscriptions:
-            callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
-                                  data={'id': 0,
-                                        'status': {'state': 'ON' if thermostat_group.on else 'OFF',
-                                                   'mode': 'COOLING' if thermostat_group.mode == 'cooling' else 'HEATING'},
-                                        'location': {}}))
+        gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
+                                     {'id': 0,
+                                      'status': {'state': 'ON' if thermostat_group.on else 'OFF',
+                                                 'mode': 'COOLING' if thermostat_group.mode == 'cooling' else 'HEATING'},
+                                      'location': {}})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
 
 @post_save(sender=ThermostatGroup)
