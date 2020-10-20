@@ -51,6 +51,7 @@ class ThermostatSerializer(object):
             field = 'auto_{0}'.format(day)
             dto_data = getattr(thermostat_dto, field)  # type: ThermostatScheduleDTO
             if dto_data is None:
+                # TODO: Remove once UI can handle "no schedule"
                 dto_data = ThermostatScheduleDTO(temp_night=16, temp_day_1=20, temp_day_2=20,
                                                  start_day_1="07:00", end_day_1="09:00",
                                                  start_day_2="16:00", end_day_2="22:00")

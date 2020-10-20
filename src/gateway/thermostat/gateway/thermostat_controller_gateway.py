@@ -291,7 +291,7 @@ class ThermostatControllerGateway(ThermostatController):
         # Update global references
         group_status.automatic = all(status.automatic for status in group_status.statusses)
         used_setpoints = set(status.setpoint for status in group_status.statusses)
-        group_status.setpoint = next(iter(used_setpoints)) if len(used_setpoints) == 1 else 0
+        group_status.setpoint = next(iter(used_setpoints)) if len(used_setpoints) == 1 else 0  # 0 is a fallback
 
         return group_status
 
@@ -523,8 +523,8 @@ class ThermostatControllerGateway(ThermostatController):
                                         'status': {'preset': active_preset,
                                                    'current_setpoint': current_setpoint,
                                                    'actual_temperature': actual_temperature,
-                                                   'output_0': percentages[0] if len(percentages) >= 1 else 255,
-                                                   'output_1': percentages[1] if len(percentages) >= 2 else 255},
+                                                   'output_0': percentages[0] if len(percentages) >= 1 else None,
+                                                   'output_1': percentages[1] if len(percentages) >= 2 else None},
                                         'location': location}))
 
     def _thermostat_group_changed(self, thermostat_group):
@@ -577,7 +577,6 @@ class ThermostatControllerGateway(ThermostatController):
 @post_save(sender=ThermostatGroup)
 @Inject
 def on_thermostat_group_change_handler(model_class, instance, created, thermostat_controller=INJECTED):
-    logger.info('GROUP CHANGE!!!')
     _ = model_class
     if not created:
         thermostat_controller._thermostat_group_changed(instance)
