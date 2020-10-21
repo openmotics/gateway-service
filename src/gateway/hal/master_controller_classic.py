@@ -107,6 +107,7 @@ class MasterClassicController(MasterController):
         self._module_log = []  # type: List[Dict[str, Any]]
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_eeprom_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MAINTENANCE, self._handle_maintenance_event)
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.output_list(), 0, self._on_master_output_event, True)
@@ -284,6 +285,11 @@ class MasterClassicController(MasterController):
         if write:
             self._master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0})
         self.set_status_leds(True)
+
+    def _handle_maintenance_event(self, master_event):
+        # type: (MasterEvent) -> None
+        if master_event.type == MasterEvent.Types.MAINTENANCE_EXIT:
+            self._eeprom_controller.invalidate_cache()
 
     def _handle_eeprom_event(self, master_event):
         # type: (MasterEvent) -> None

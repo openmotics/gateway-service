@@ -53,13 +53,7 @@ class EepromController(object):
         self._eeprom_file = eeprom_file
         self._eeprom_extension = eeprom_extension
         self._pubsub = pubsub
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MAINTENANCE, self._handle_master_event)
         self.dirty = True
-
-    def _handle_master_event(self, master_event):
-        # type: (MasterEvent) -> None
-        if master_event.type == MasterEvent.Types.MAINTENANCE_EXIT:
-            self.invalidate_cache()
 
     def invalidate_cache(self):
         # type: () -> None
@@ -146,10 +140,11 @@ class EepromFile(object):
     BATCH_SIZE = 10
 
     @Inject
-    def __init__(self, master_communicator=INJECTED):
-        # type: (MasterCommunicator) -> None
+    def __init__(self, master_communicator=INJECTED, pubsub=INJECTED):
+        # type: (MasterCommunicator, PubSub) -> None
         """ Create an EepromFile. """
         self._master_communicator = master_communicator
+        self._pubsub = pubsub
         self._bank_cache = {}  # type: Dict[int, bytearray]
 
     def invalidate_cache(self):
@@ -163,6 +158,8 @@ class EepromFile(object):
         """
         logger.info('EEPROM - Activate')
         self._master_communicator.do_command(activate_eeprom(), {'eep': 0})
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
 
     def read(self, addresses):
         # type: (List[EepromAddress]) -> Dict[EepromAddress, EepromData]
