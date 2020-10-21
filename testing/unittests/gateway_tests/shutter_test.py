@@ -16,20 +16,23 @@
 Tests for the shutters module.
 """
 from __future__ import absolute_import
+
 import copy
-import fakesleep
 import time
 import unittest
-import xmlrunner
-from peewee import SqliteDatabase
-from mock import Mock
 
-from ioc import SetTestMode, SetUpTestInjections
-from gateway.enums import ShutterEnums
-from gateway.shutter_controller import ShutterController
+import xmlrunner
+from mock import Mock
+from peewee import SqliteDatabase
+
+import fakesleep
 from gateway.dto import ShutterDTO
+from gateway.enums import ShutterEnums
 from gateway.hal.master_controller_classic import MasterClassicController
-from gateway.models import Shutter, Room, Floor
+from gateway.models import Floor, Room, Shutter
+from gateway.pubsub import PubSub
+from gateway.shutter_controller import ShutterController
+from ioc import SetTestMode, SetUpTestInjections
 
 MODELS = [Shutter, Room, Floor]
 
@@ -68,6 +71,9 @@ class ShutterControllerTest(unittest.TestCase):
         self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
+
+        self.pubsub = PubSub()
+        SetUpTestInjections(pubsub=self.pubsub)
 
     def tearDown(self):
         self.test_db.drop_tables(MODELS)
@@ -353,7 +359,8 @@ class ShutterControllerTest(unittest.TestCase):
 
         def shutter_callback(event):
             calls.setdefault(event.data['id'], []).append(event.data['status']['state'])
-        controller.subscribe_events(shutter_callback)
+
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, shutter_callback)
 
         def validate(_shutter_id, _entry):
             self.assertEqual(controller._actual_positions.get(_shutter_id), _entry[0])

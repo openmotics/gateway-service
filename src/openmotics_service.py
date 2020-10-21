@@ -33,6 +33,7 @@ from gateway.migrations.inputs import InputMigrator
 from gateway.migrations.schedules import ScheduleMigrator
 from gateway.migrations.users import UserMigrator
 from gateway.migrations.config import ConfigMigrator
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
@@ -86,6 +87,7 @@ class OpenmoticsService(object):
                 web_interface=INJECTED,  # type: WebInterface
                 scheduling_controller=INJECTED,  # type: SchedulingController
                 observer=INJECTED,  # type: Observer
+                pubsub=INJECTED,  # type: PubSub
                 gateway_api=INJECTED,  # type: GatewayApi
                 metrics_collector=INJECTED,  # type: MetricsCollector
                 plugin_controller=INJECTED,  # type: PluginController
@@ -100,13 +102,13 @@ class OpenmoticsService(object):
             ):
 
         # TODO: Fix circular dependencies
-        # TODO: Introduce some kind of generic event/message bus
 
-        thermostat_controller.subscribe_events(web_interface.send_event_websocket)
-        thermostat_controller.subscribe_events(event_sender.enqueue_event)
-        thermostat_controller.subscribe_events(plugin_controller.process_observer_event)
-        ventilation_controller.subscribe_events(plugin_controller.process_observer_event)
-        ventilation_controller.subscribe_events(event_sender.enqueue_event)
+        # Forward state change events to consumers.
+        pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, event_sender.enqueue_event)
+        pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, metrics_collector.process_observer_event)
+        pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, plugin_controller.process_observer_event)
+        pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, web_interface.send_event_websocket)
+
         message_client.add_event_handler(metrics_controller.event_receiver)
         message_client.add_event_handler(frontpanel_controller.event_receiver)
         web_interface.set_plugin_controller(plugin_controller)
@@ -120,20 +122,6 @@ class OpenmoticsService(object):
         plugin_controller.set_webservice(web_service)
         plugin_controller.set_metrics_controller(metrics_controller)
         plugin_controller.set_metrics_collector(metrics_collector)
-        maintenance_controller.subscribe_maintenance_stopped(gateway_api.maintenance_mode_stopped)
-        output_controller.subscribe_events(metrics_collector.process_observer_event)
-        output_controller.subscribe_events(plugin_controller.process_observer_event)
-        output_controller.subscribe_events(web_interface.send_event_websocket)
-        output_controller.subscribe_events(event_sender.enqueue_event)
-        # TODO: remove observer inputs
-        observer.subscribe_events(metrics_collector.process_observer_event)
-        observer.subscribe_events(plugin_controller.process_observer_event)
-        observer.subscribe_events(web_interface.send_event_websocket)
-        observer.subscribe_events(event_sender.enqueue_event)
-        shutter_controller.subscribe_events(metrics_collector.process_observer_event)
-        shutter_controller.subscribe_events(plugin_controller.process_observer_event)
-        shutter_controller.subscribe_events(web_interface.send_event_websocket)
-        shutter_controller.subscribe_events(event_sender.enqueue_event)
 
     @staticmethod
     @Inject

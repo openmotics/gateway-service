@@ -27,7 +27,8 @@ import master.classic.master_communicator
 from gateway.dto import InputDTO, OutputDTO
 from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.hal.master_event import MasterEvent
-from ioc import Scope, SetTestMode, SetUpTestInjections
+from gateway.pubsub import PubSub
+from ioc import INJECTED, Inject, Scope, SetTestMode, SetUpTestInjections
 from master.classic.eeprom_controller import EepromController
 from master.classic.eeprom_models import InputConfiguration
 from master.classic.inputs import InputStatus
@@ -111,9 +112,10 @@ class MasterClassicControllerTest(unittest.TestCase):
         with mock.patch.object(gateway.hal.master_controller_classic, 'BackgroundConsumer',
                                side_effect=new_consumer) as new_consumer:
             controller = get_classic_controller_dummy()
+            pubsub = get_pubsub()
             controller._register_version_depending_background_consumers()
             controller._input_config = {1: InputDTO(id=1)}  # TODO: cleanup
-            controller.subscribe_event(subscriber.callback)
+            pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, subscriber.callback)
             new_consumer.assert_called()
             consumer_list[-2].deliver({'input': 1})
             expected_event = MasterEvent.deserialize({'type': 'INPUT_CHANGE',
@@ -141,7 +143,8 @@ class MasterClassicControllerTest(unittest.TestCase):
             events.append(master_event)
 
         classic = get_classic_controller_dummy()
-        classic.subscribe_event(_on_event)
+        pubsub = get_pubsub()
+        pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
         classic._output_config = {0: OutputDTO(id=0),
                                   1: OutputDTO(id=1),
                                   2: OutputDTO(id=2, room=3)}
@@ -171,6 +174,7 @@ class MasterClassicControllerTest(unittest.TestCase):
         classic = get_classic_controller_dummy()
         classic._master_communicator.do_command = _do_command
         classic._master_version = (0, 0, 0)
+        pubsub = get_pubsub()
 
         bits = classic.load_validation_bits()
         self.assertIsNone(bits)
@@ -189,7 +193,7 @@ class MasterClassicControllerTest(unittest.TestCase):
             if master_event.type == MasterEvent.Types.OUTPUT_STATUS:
                 events.append(master_event.data)
 
-        classic.subscribe_event(_on_event)
+        pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
         classic._validation_bits = ValidationBitStatus(on_validation_bit_change=classic._validation_bit_changed)
         classic._output_config = {0: OutputDTO(0, lock_bit_id=5)}
 
@@ -207,13 +211,14 @@ class MasterClassicControllerTest(unittest.TestCase):
 
         with mock.patch.object(MasterClassicController, '_synchronize') as synchronize:
             controller = get_classic_controller_dummy([])
+            pubsub = get_pubsub()
             try:
                 controller.start()
                 controller.module_discover_start(30)
                 time.sleep(0.2)
                 assert len(synchronize.call_args_list) == 1
 
-                controller.subscribe_event(subscriber.callback)
+                pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, subscriber.callback)
                 controller.module_discover_stop()
                 time.sleep(0.2)
                 assert len(synchronize.call_args_list) == 2
@@ -231,6 +236,14 @@ class MasterClassicControllerTest(unittest.TestCase):
             time.sleep(0.2)
             stop.assert_called_with()
 
+    def test_master_eeprom_event(self):
+        controller = get_classic_controller_dummy()
+        controller._input_last_updated = 1603178386.0
+        pubsub = get_pubsub()
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
+        assert controller._input_last_updated == 0.0
+
 
 @Scope
 def get_classic_controller_dummy(inputs=None):
@@ -241,8 +254,14 @@ def get_classic_controller_dummy(inputs=None):
     eeprom_mock.read_all.return_value = inputs
     SetUpTestInjections(configuration_controller=mock.Mock(),
                         master_communicator=communicator_mock,
-                        eeprom_controller=eeprom_mock)
+                        eeprom_controller=eeprom_mock,
+                        pubsub=PubSub())
 
     controller = MasterClassicController()
     controller._master_version = (3, 143, 102)
     return controller
+
+
+@Inject
+def get_pubsub(pubsub=INJECTED):
+    return pubsub

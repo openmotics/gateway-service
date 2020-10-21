@@ -18,6 +18,7 @@ import unittest
 import mock
 from gateway.hal.master_controller import MasterController
 from gateway.models import Input
+from gateway.pubsub import PubSub
 from gateway.dto import InputDTO
 from gateway.input_controller import InputController
 from ioc import SetTestMode, SetUpTestInjections
@@ -29,9 +30,11 @@ class InputControllerTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
+        self.pubsub = PubSub()
         self.master_controller = mock.Mock(MasterController)
         SetUpTestInjections(master_controller=self.master_controller,
-                            maintenance_controller=mock.Mock())
+                            maintenance_controller=mock.Mock(),
+                            pubsub=self.pubsub)
         self.controller = InputController()
 
     def test_full_loaded_inputs(self):
@@ -46,4 +49,3 @@ class InputControllerTest(unittest.TestCase):
             self.assertEqual(2, len(dtos))
             self.assertIn(InputDTO(id=1, name='one', event_enabled=False), dtos)
             self.assertIn(InputDTO(id=2, name='two', event_enabled=True), dtos)
-

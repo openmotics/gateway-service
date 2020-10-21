@@ -22,25 +22,15 @@ if False:  # MYPY
 
 
 class ThermostatController(object):
-    def __init__(self, message_client, output_controller):
-        # type: (Optional[MessageClient], OutputController) -> None
-        self._message_client = message_client
+    def __init__(self, output_controller):
+        # type: (OutputController) -> None
         self._output_controller = output_controller
-
-        self._event_subscriptions = []  # type: List[Callable[[GatewayEvent], None]]
 
     def start(self):  # type: () -> None
         raise NotImplementedError()
 
     def stop(self):  # type: () -> None
         raise NotImplementedError()
-
-    def subscribe_events(self, callback):  # type: (Callable[[GatewayEvent], None]) -> None
-        """
-        Subscribes a callback to generic events
-        :param callback: the callback to call
-        """
-        self._event_subscriptions.append(callback)
 
     ################################
     # v1 APIs

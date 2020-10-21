@@ -15,15 +15,19 @@
 """
 Contains controller from reading and writing to the Master EEPROM.
 """
-
 from __future__ import absolute_import
+
 import copy
 import inspect
-import types
 import logging
+import types
 from threading import Lock
-from ioc import Injectable, Inject, INJECTED, Singleton
-from .master_api import eeprom_list, write_eeprom, activate_eeprom
+
+from ioc import INJECTED, Inject, Injectable, Singleton
+from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
+from master.classic.master_api import activate_eeprom, eeprom_list, \
+    write_eeprom
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Iterable, Type, TypeVar, Set, Union, Tuple, Callable
@@ -40,20 +44,30 @@ class EepromController(object):
     """ The controller takes EepromModels and reads or writes them from and to an EepromFile. """
 
     @Inject
-    def __init__(self, eeprom_file=INJECTED, eeprom_extension=INJECTED):
-        # type: (EepromFile, EepromExtension) -> None
+    def __init__(self, eeprom_file=INJECTED, eeprom_extension=INJECTED, pubsub=INJECTED):
+        # type: (EepromFile, EepromExtension, PubSub) -> None
         """
         Constructor takes the eeprom_file (for reading and writes from the eeprom) and the
         eeprom_extension (for reading the extensions from sqlite).
         """
         self._eeprom_file = eeprom_file
         self._eeprom_extension = eeprom_extension
+        self._pubsub = pubsub
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MAINTENANCE, self._handle_master_event)
         self.dirty = True
+
+    def _handle_master_event(self, master_event):
+        # type: (MasterEvent) -> None
+        if master_event.type == MasterEvent.Types.MAINTENANCE_EXIT:
+            self.invalidate_cache()
 
     def invalidate_cache(self):
         # type: () -> None
         """ Invalidate the cache, this should happen when maintenance mode was used. """
         self._eeprom_file.invalidate_cache()
+        self.dirty = True
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
 
     def read(self, eeprom_model, id=None, fields=None):
         # type: (Type[M], Optional[int], Optional[List[str]]) -> M

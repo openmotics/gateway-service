@@ -16,9 +16,13 @@
 Contains a memory representation
 """
 from __future__ import absolute_import
+
 import copy
 import logging
-from ioc import Inject, INJECTED
+
+from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
+from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.events import Event
@@ -45,7 +49,8 @@ class MemoryFile(object):
              MemoryTypes.FRAM: (128, 256)}
 
     @Inject
-    def __init__(self, memory_type, master_communicator=INJECTED):  # type: (str, CoreCommunicator) -> None
+    def __init__(self, memory_type, master_communicator=INJECTED, pubsub=INJECTED):
+        # type: (str, CoreCommunicator, PubSub) -> None
         """
         Initializes the MemoryFile instance, reprensenting one of the supported memory types.
         It provides caching for EEPROM, and direct write/read through for FRAM
@@ -54,6 +59,7 @@ class MemoryFile(object):
             raise RuntimeError('Could not inject argument: core_communicator')
 
         self._core_communicator = master_communicator
+        self._pubsub = pubsub
         self.type = memory_type
         self._cache = {}  # type: Dict[int, bytearray]
         self._eeprom_change_callback = None  # type: Optional[Callable[[], None]]
@@ -66,9 +72,6 @@ class MemoryFile(object):
                 BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
             )
 
-    def subscribe_eeprom_change(self, callback):  # type: (Callable[[], None]) -> None
-        self._eeprom_change_callback = callback
-
     def _handle_event(self, data):  # type: (Dict[str, Any]) -> None
         core_event = Event(data)
         if core_event.type == Event.Types.SYSTEM and core_event.data['type'] == Event.SystemEventTypes.EEPROM_ACTIVATE:
@@ -80,8 +83,8 @@ class MemoryFile(object):
                 # EEPROM might have been changed, so clear caches
                 self.invalidate_cache()
                 logger.info('Cache cleared: EEPROM_ACTIVATE')
-            if self._eeprom_change_callback is not None:
-                self._eeprom_change_callback()
+            master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+            self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
 
     def read(self, addresses):  # type: (List[MemoryAddress]) -> Dict[MemoryAddress, bytearray]
         data = {}

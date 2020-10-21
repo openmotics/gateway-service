@@ -28,6 +28,7 @@ import sqlite3
 import subprocess
 import tempfile
 import threading
+import warnings
 
 from six.moves.configparser import ConfigParser
 
@@ -114,13 +115,6 @@ class GatewayApi(object):
             return path[20:]
         except Exception:
             return 'UTC'
-
-    def maintenance_mode_stopped(self):
-        # type: () -> None
-        """ Called when maintenance mode is stopped """
-        self.__master_controller.invalidate_caches()
-        if self.__message_client is not None:
-            self.__message_client.send_event(OMBusEvents.DIRTY_EEPROM, None)
 
     def get_status(self):
         # TODO: implement gateway status too (e.g. plugin status)
