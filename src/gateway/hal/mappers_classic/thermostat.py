@@ -24,8 +24,7 @@ from master.classic.eeprom_models import ThermostatConfiguration, GlobalThermost
 
 if False:  # MYPY
     from typing import List, Dict, Any, Optional, Tuple
-import logging
-logger = logging.getLogger("openmotics")
+
 
 class ThermostatMapper(object):
     BYTE_MAX = 255
@@ -102,7 +101,6 @@ class ThermostatGroupMapper(object):
 
     @staticmethod
     def dto_to_orm(thermostat_group_dto, fields):  # type: (ThermostatGroupDTO, List[str]) -> EepromModel
-        logger.info(str(thermostat_group_dto.__dict__))
         data = {}  # type: Dict[str, Any]
         for dto_field, orm_field in {'outside_sensor_id': 'outside_sensor',
                                      'threshold_temperature': 'threshold_temp',
@@ -118,5 +116,4 @@ class ThermostatGroupMapper(object):
                     dto_value = getattr(thermostat_group_dto, field)  # type: Optional[Tuple[int, int]]
                     data[output] = Toolbox.denonify(None if dto_value is None else dto_value[0], ThermostatGroupMapper.BYTE_MAX)
                     data[value] = Toolbox.denonify(None if dto_value is None else dto_value[1], ThermostatGroupMapper.BYTE_MAX)
-        logger.info(str(data))
         return GlobalThermostatConfiguration.deserialize(data)
