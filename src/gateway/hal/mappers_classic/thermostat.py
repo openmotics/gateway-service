@@ -24,7 +24,8 @@ from master.classic.eeprom_models import ThermostatConfiguration, GlobalThermost
 
 if False:  # MYPY
     from typing import List, Dict, Any, Optional, Tuple
-
+import logging
+logger = logging.getLogger("openmotics")
 
 class ThermostatMapper(object):
     BYTE_MAX = 255
@@ -85,7 +86,7 @@ class ThermostatGroupMapper(object):
         data = orm_object.serialize()
         kwargs = {}
         for dto_field, orm_field in {'outside_sensor_id': 'outside_sensor',
-                                     'threshold_temperature': 'threshold_temperature',
+                                     'threshold_temperature': 'threshold_temp',
                                      'pump_delay': 'pump_delay'}.items():
             kwargs[dto_field] = Toolbox.nonify(data[orm_field], ThermostatGroupMapper.BYTE_MAX)
         for mode in ['heating', 'cooling']:
@@ -95,15 +96,16 @@ class ThermostatGroupMapper(object):
                 dto_field = 'switch_to_{0}_{1}'.format(mode, i)
                 output = Toolbox.nonify(data[output_field], ThermostatGroupMapper.BYTE_MAX)
                 value = Toolbox.nonify(data[value_field], ThermostatGroupMapper.BYTE_MAX)
-                if output is not None and value is not None:
+                if output is not None:
                     kwargs[dto_field] = [output, value]
         return ThermostatGroupDTO(id=0, **kwargs)
 
     @staticmethod
     def dto_to_orm(thermostat_group_dto, fields):  # type: (ThermostatGroupDTO, List[str]) -> EepromModel
+        logger.info(str(thermostat_group_dto.__dict__))
         data = {}  # type: Dict[str, Any]
         for dto_field, orm_field in {'outside_sensor_id': 'outside_sensor',
-                                     'threshold_temperature': 'threshold_temperature',
+                                     'threshold_temperature': 'threshold_temp',
                                      'pump_delay': 'pump_delay'}.items():
             if dto_field in fields:
                 data[orm_field] = Toolbox.denonify(getattr(thermostat_group_dto, dto_field), ThermostatGroupMapper.BYTE_MAX)
@@ -116,4 +118,5 @@ class ThermostatGroupMapper(object):
                     dto_value = getattr(thermostat_group_dto, field)  # type: Optional[Tuple[int, int]]
                     data[output] = Toolbox.denonify(None if dto_value is None else dto_value[0], ThermostatGroupMapper.BYTE_MAX)
                     data[value] = Toolbox.denonify(None if dto_value is None else dto_value[1], ThermostatGroupMapper.BYTE_MAX)
+        logger.info(str(data))
         return GlobalThermostatConfiguration.deserialize(data)

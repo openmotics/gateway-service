@@ -855,7 +855,7 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def load_thermostat_group(self):
         # type: () -> ThermostatGroupDTO
-        classic_object = self._eeprom_controller.read(GlobalThermostatConfiguration).serialize()
+        classic_object = self._eeprom_controller.read(GlobalThermostatConfiguration)
         return ThermostatGroupMapper.orm_to_dto(classic_object)
 
     @communication_enabled
