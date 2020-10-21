@@ -95,7 +95,8 @@ def apply_migrations():
     logger.info('Applying migrations')
     # Run all unapplied migrations
     db = Database.get_db()
-    router = Router(db, migrate_dir='/opt/openmotics/python/gateway/migrations/orm')
+    gateway_src = os.path.abspath(os.path.join(__file__, '..'))
+    router = Router(db, migrate_dir=os.path.join(gateway_src, 'migrations/orm'))
     router.run()
 
 
