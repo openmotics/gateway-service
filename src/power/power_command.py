@@ -20,6 +20,7 @@ class is used to create the power_api.
 from __future__ import absolute_import
 
 import struct
+import sys
 
 if False:  # MYPY
     from typing import Any, Callable, Optional, Tuple, Union
@@ -168,6 +169,8 @@ class PowerCommand(object):
         Parse the output using the output_format.
         :param data: string containing the data.
         """
+        if sys.version_info[:3] <= (2, 7, 3):
+            data = str(data)
         if self.output_format is None:
             return struct.unpack('%dB' % len(data), data)
         else:
