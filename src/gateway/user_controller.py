@@ -46,6 +46,8 @@ class UserController(object):
         self._token_timeout = token_timeout
         self._tokens = {}  # type: Dict[str, Tuple[str, float]]
 
+    def start(self):
+        # type: () -> None
         # Create the user for the cloud
         cloud_user_dto = UserDTO(
             username=self._config['username'].lower(),
@@ -53,6 +55,10 @@ class UserController(object):
         )
         cloud_user_dto.set_password(self._config['password'])
         self.save_users(users=[(cloud_user_dto, ['username', 'password', 'accepted_terms'])])
+
+    def stop(self):
+        # type: () -> None
+        pass
 
     def save_user(self, user_dto, fields):
         # type: (UserDTO, List[str]) -> None
