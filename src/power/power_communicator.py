@@ -24,6 +24,8 @@ from threading import RLock, Thread
 from six.moves.queue import Empty
 
 from gateway.hal.master_controller import CommunicationFailure
+from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from power import power_api
 from power.power_command import PowerCommand
@@ -43,9 +45,9 @@ class PowerCommunicator(object):
     """ Uses a serial port to communicate with the power modules. """
 
     @Inject
-    def __init__(self, power_serial=INJECTED, power_store=INJECTED, verbose=False, time_keeper_period=60,
+    def __init__(self, power_serial=INJECTED, power_store=INJECTED, pubsub=INJECTED, verbose=False, time_keeper_period=60,
                  address_mode_timeout=300):
-        # type: (RS485, PowerStore, bool, int, int) -> None
+        # type: (RS485, PowerStore, PubSub, bool, int, int) -> None
         """ Default constructor.
 
         :param power_serial: Serial port to communicate with
@@ -61,6 +63,7 @@ class PowerCommunicator(object):
         self.__address_thread = None  # type: Optional[Thread]
         self.__address_mode_timeout = address_mode_timeout
         self.__power_store = power_store
+        self.__pubsub = pubsub
 
         self.__last_success = 0  # type: float
 
@@ -321,6 +324,8 @@ class PowerCommunicator(object):
         if self.__address_thread:
             self.__address_thread.join()
         self.__address_thread = None
+        master_event = MasterEvent(MasterEvent.Types.POWER_ADDRESS_EXIT, {})
+        self.__pubsub.publish_master_event(PubSub.MasterTopics.POWER, master_event)
 
     def in_address_mode(self):
         # type: () -> bool

@@ -24,6 +24,9 @@ import unittest
 
 import mock
 
+from gateway.events import GatewayEvent
+from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
 from ioc import SetTestMode, SetUpTestInjections
 from power.power_api import P1_CONCENTRATOR, POWER_MODULE, PowerCommand
 from power.power_controller import P1Controller, PowerController
@@ -35,6 +38,8 @@ class PowerControllerTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
+        self.pubsub = PubSub()
+        SetUpTestInjections(pubsub=self.pubsub)
         self.power_communicator = mock.Mock()
         SetUpTestInjections(power_communicator=self.power_communicator,
                             power_store=mock.Mock())
@@ -87,6 +92,20 @@ class PowerControllerTest(unittest.TestCase):
             assert cmd.call_args_list == [
                 mock.call('11.0', PowerCommand('G', 'ENI', '', '8L', module_type=bytearray(b'E')))
             ]
+
+    def test_config_event(self):
+        events = []
+
+        def handle_events(gateway_event):
+            events.append(gateway_event)
+
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_events)
+        master_event = MasterEvent(MasterEvent.Types.POWER_ADDRESS_EXIT, {})
+        self.pubsub.publish_master_event(PubSub.MasterTopics.POWER, master_event)
+
+        assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'powermodule'}) in events
+        assert len(events) == 1
+
 
 class P1ControllerTest(unittest.TestCase):
     @classmethod
