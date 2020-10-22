@@ -28,6 +28,9 @@ class GatewayEvent(object):
     GatewayEvent object
 
     Data formats:
+    * CONFIG_CHANGE
+      {'type': str}  # Resource type, output, input, ...
+
     * OUTPUT_CHANGE
       {'id': int,                     # Output ID
        'status': {'on': bool,         # On/off
@@ -42,6 +45,7 @@ class GatewayEvent(object):
     """
 
     class Types(object):
+        CONFIG_CHANGE = 'CONFIG_CHANGE'
         INPUT_CHANGE = 'INPUT_CHANGE'
         OUTPUT_CHANGE = 'OUTPUT_CHANGE'
         SHUTTER_CHANGE = 'SHUTTER_CHANGE'

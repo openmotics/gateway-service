@@ -113,13 +113,9 @@ class WebInterfaceTest(unittest.TestCase):
 
     def test_set_ventilation_configuration(self):
         with mock.patch.object(self.ventilation_controller, 'save_ventilation',
-                               return_value=VentilationDTO(id=1, name='test', amount_of_levels=4,
-                                                           device_vendor='example',
-                                                           device_type='0A',
-                                                           device_serial='device-00001',
-                                                           external_id='device-00001',
-                                                           source=VentilationSourceDTO(id=2, type='plugin', name='dummy'))) as save:
-            config = {'source': {'type': 'plugin', 'name': 'dummy'},
+                               return_value=None) as save:
+            config = {'id': 1,
+                      'source': {'type': 'plugin', 'name': 'dummy'},
                       'external_id': 'device-00001',
                       'name': 'test',
                       'device': {'vendor': 'example',

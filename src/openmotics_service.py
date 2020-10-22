@@ -103,6 +103,9 @@ class OpenmoticsService(object):
 
         # TODO: Fix circular dependencies
 
+        # Forward config change events to consumers.
+        pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, event_sender.enqueue_event)
+
         # Forward state change events to consumers.
         pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, event_sender.enqueue_event)
         pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, metrics_collector.process_observer_event)

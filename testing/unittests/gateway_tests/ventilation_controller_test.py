@@ -133,7 +133,7 @@ class VentilationControllerTest(unittest.TestCase):
         with mock.patch.object(Plugin, 'get',
                                return_value=plugin), \
              mock.patch.object(Ventilation, 'get_or_none', return_value=None) as get_or_none, \
-             mock.patch.object(Ventilation, 'save', return_value=None) as save:
+             mock.patch.object(Ventilation, 'save', return_value=1) as save:
             ventilation_dto = VentilationDTO(None,
                                              external_id='device-000001',
                                              source=VentilationSourceDTO(id=2,
@@ -144,7 +144,7 @@ class VentilationControllerTest(unittest.TestCase):
                                              device_vendor='example',
                                              device_type='model-0',
                                              device_serial='device-000001')
-            ventilation_dto = self.controller.save_ventilation(ventilation_dto, [])
+            self.controller.save_ventilation(ventilation_dto, [])
             get_or_none.assert_called_with(source='plugin', plugin=plugin, external_id='device-000001')
             save.assert_called()
 
@@ -163,7 +163,7 @@ class VentilationControllerTest(unittest.TestCase):
                                                         device_vendor='example',
                                                         device_serial='device-000001',
                                                         plugin=plugin)) as get_or_none, \
-             mock.patch.object(Ventilation, 'save', return_value=None) as save:
+             mock.patch.object(Ventilation, 'save', return_value=1) as save:
             ventilation_dto = VentilationDTO(None,
                                              external_id='device-000001',
                                              source=VentilationSourceDTO(id=2,
@@ -174,7 +174,7 @@ class VentilationControllerTest(unittest.TestCase):
                                              device_vendor='example',
                                              device_type='model-0',
                                              device_serial='device-000001')
-            ventilation_dto = self.controller.save_ventilation(ventilation_dto, [])
+            self.controller.save_ventilation(ventilation_dto, [])
             get_or_none.assert_called_with(source='plugin', plugin=plugin, external_id='device-000001')
             save.assert_called()
 
@@ -192,7 +192,7 @@ class VentilationControllerTest(unittest.TestCase):
                                                         device_vendor='example',
                                                         device_serial='device-000001',
                                                         plugin=plugin)) as get_or_none, \
-             mock.patch.object(Ventilation, 'save', return_value=None) as save:
+             mock.patch.object(Ventilation, 'save', return_value=1) as save:
             ventilation_dto = VentilationDTO(id=42,
                                              external_id='device-000001',
                                              source=VentilationSourceDTO(id=2,
@@ -203,9 +203,50 @@ class VentilationControllerTest(unittest.TestCase):
                                              device_vendor='example',
                                              device_type='model-0',
                                              device_serial='device-000001')
-            ventilation_dto = self.controller.save_ventilation(ventilation_dto, [])
+            self.controller.save_ventilation(ventilation_dto, [])
             get_or_none.assert_called_with(id=42, source='plugin', plugin=plugin, external_id='device-000001')
             save.assert_called()
+
+    def test_ventilation_config_events(self):
+        plugin = Plugin(id=2, name='dummy', version='0.0.1')
+        with mock.patch.object(Plugin, 'get', return_value=plugin), \
+                mock.patch.object(Ventilation, 'get_or_none',
+                                  return_value=Ventilation(id=42,
+                                                           source='plugin',
+                                                           source_id=2,
+                                                           external_id='device-000001',
+                                                           name='foo',
+                                                           amount_of_levels=4,
+                                                           device_type='model-0',
+                                                           device_vendor='example',
+                                                           device_serial='device-000001',
+                                                           plugin=plugin)), \
+                mock.patch.object(Ventilation, 'save', side_effect=(0, 1)):
+
+            events = []
+
+            def callback(event):
+                events.append(event)
+
+            self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, callback)
+
+            ventilation_dto = VentilationDTO(id=42,
+                                             external_id='device-000001',
+                                             source=VentilationSourceDTO(id=2,
+                                                                         name='dummy',
+                                                                         type='plugin'),
+                                             name='foo',
+                                             amount_of_levels=4,
+                                             device_vendor='example',
+                                             device_type='model-0',
+                                             device_serial='device-000001')
+            self.controller.save_ventilation(ventilation_dto, [])
+            assert len(events) == 0, events  # No change
+
+            ventilation_dto.name = 'bar'
+            self.controller.save_ventilation(ventilation_dto, [])
+            assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'ventilation'}) in events
+            assert len(events) == 1, events
 
     def test_ventilation_change_events(self):
         plugin = Plugin(id=2, name='dummy', version='0.0.1')

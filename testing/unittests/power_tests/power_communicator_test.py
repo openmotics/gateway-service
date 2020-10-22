@@ -25,6 +25,8 @@ import xmlrunner
 from pytest import mark
 
 import power.power_api as power_api
+from gateway.pubsub import PubSub
+from gateway.hal.master_event import MasterEvent
 from ioc import SetTestMode, SetUpTestInjections
 from power.power_communicator import InAddressModeException, PowerCommunicator
 from power.power_store import PowerStore
@@ -40,6 +42,8 @@ class PowerCommunicatorTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
+        self.pubsub = PubSub()
+        SetUpTestInjections(pubsub=self.pubsub)
         self.power_data = []  # type: list
         SetUpTestInjections(power_db=':memory:')
         self.serial = RS485(SerialMock(self.power_data))
@@ -133,6 +137,13 @@ class PowerCommunicatorTest(unittest.TestCase):
     @mark.slow
     def test_address_mode(self):
         """ Test the address mode. """
+        events = []
+
+        def handle_events(master_event):
+            events.append(master_event)
+
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.POWER, handle_events)
+
         sad = power_api.set_addressmode(power_api.POWER_MODULE)
         sad_p1c = power_api.set_addressmode(power_api.P1_CONCENTRATOR)
 
@@ -157,7 +168,11 @@ class PowerCommunicatorTest(unittest.TestCase):
         self.communicator.start_address_mode()
         self.assertTrue(self.communicator.in_address_mode())
         time.sleep(0.5)
+        assert [] == events
+
         self.communicator.stop_address_mode()
+        assert MasterEvent(MasterEvent.Types.POWER_ADDRESS_EXIT, {}) in events
+        assert len(events) == 1
 
         self.assertEqual(self.store.get_free_address(), 4)
         self.assertFalse(self.communicator.in_address_mode())

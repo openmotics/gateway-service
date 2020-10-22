@@ -17,6 +17,7 @@ from __future__ import absolute_import
 import unittest
 
 import mock
+from peewee import SqliteDatabase
 
 from bus.om_bus_client import MessageClient
 from gateway.dto import OutputDTO, OutputStateDTO
@@ -29,13 +30,19 @@ from gateway.output_controller import OutputController, OutputStateCache
 from gateway.pubsub import PubSub
 from ioc import SetTestMode, SetUpTestInjections
 
+MODELS = [Output]
+
 
 class OutputControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
+        cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):
+        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        self.test_db.connect()
+        self.test_db.create_tables(MODELS)
         self.master_controller = mock.Mock(MasterController)
         self.pubsub = PubSub()
         SetUpTestInjections(maintenance_controller=mock.Mock(MaintenanceController),
@@ -43,6 +50,25 @@ class OutputControllerTest(unittest.TestCase):
                             message_client=mock.Mock(MessageClient),
                             pubsub=self.pubsub)
         self.controller = OutputController()
+
+    def tearDown(self):
+        self.test_db.drop_tables(MODELS)
+        self.test_db.close()
+
+    def test_orm_sync(self):
+        events = []
+
+        def handle_event(gateway_event):
+            events.append(gateway_event)
+
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
+
+        output_dto = OutputDTO(id=42)
+        with mock.patch.object(self.master_controller, 'load_outputs', return_value=[output_dto]):
+            self.controller.run_sync_orm()
+            assert Output.select().where(Output.number == output_dto.id).count() == 1
+            assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'output'}) in events
+            assert len(events) == 1
 
     def test_output_sync_change(self):
         events = []

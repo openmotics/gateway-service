@@ -121,9 +121,9 @@ EEPROM_DB_FILE = 'test.db'
 
 def get_eeprom_controller_dummy(banks):
     """ Create a dummy EepromController, banks is passed to get_eeprom_file_dummy. """
+    SetUpTestInjections(pubsub=PubSub())
     SetUpTestInjections(eeprom_file=get_eeprom_file_dummy(banks),
-                        eeprom_db=EEPROM_DB_FILE,
-                        pubsub=PubSub())
+                        eeprom_db=EEPROM_DB_FILE)
     SetUpTestInjections(eeprom_extension=EepromExtension())
     return EepromController()
 
@@ -437,19 +437,6 @@ class EepromControllerTest(unittest.TestCase):
             self.assertEqual('Room {0}'.format(i), models[i].name)
             self.assertEqual(i // 2, models[i].floor)
 
-    def test_maintenance_events(self):
-        """ Test read. """
-        controller = get_eeprom_controller_dummy({0: bytearray([0] * 256),
-                                                  1: bytearray([0] * 2) + bytearray(b'hello') + bytearray([0] * 249)})
-        model = controller.read(Model1, 0)
-        self.assertEqual(0, model.id)
-        self.assertEqual('hello' + '\x00' * 95, model.name)
-
-        with mock.patch.object(controller, 'invalidate_cache') as invalidate_cache:
-            master_event = MasterEvent(MasterEvent.Types.MAINTENANCE_EXIT, {})
-            get_pubsub().publish_master_event(PubSub.MasterTopics.MAINTENANCE, master_event)
-            invalidate_cache.assert_called()
-
     def test_eeprom_events(self):
         """ Test read. """
         controller = get_eeprom_controller_dummy({0: bytearray([0] * 256),
@@ -466,6 +453,11 @@ class EepromControllerTest(unittest.TestCase):
         get_pubsub().subscribe_master_events(PubSub.MasterTopics.EEPROM, handle_events)
         controller.invalidate_cache()
         self.assertEqual([
+            MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        ], events)
+        controller.activate()
+        self.assertEqual([
+            MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {}),
             MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
         ], events)
 
