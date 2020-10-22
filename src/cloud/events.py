@@ -60,12 +60,7 @@ class EventSender(object):
             self._queue.appendleft(event)
 
     def _is_enabled(self, event):
-        if event.type in [GatewayEvent.Types.OUTPUT_CHANGE,
-                          GatewayEvent.Types.SHUTTER_CHANGE,
-                          GatewayEvent.Types.THERMOSTAT_CHANGE,
-                          GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE]:
-            return True
-        elif event.type == GatewayEvent.Types.INPUT_CHANGE:
+        if event.type == GatewayEvent.Types.INPUT_CHANGE:
             input_id = event.data['id']
             # TODO: Below entry needs to be cached. But caching needs invalidation, so lets fix this
             #       when we have decent cache invalidation events to subscribe on
@@ -75,7 +70,7 @@ class EventSender(object):
                 return False
             return input_.event_enabled
         else:
-            return False
+            return True
 
     def _send_events_loop(self):
         # type: () -> None

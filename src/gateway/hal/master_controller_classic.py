@@ -22,6 +22,7 @@ import logging
 import re
 import subprocess
 import time
+import warnings
 from datetime import datetime
 from threading import Lock, Timer
 
@@ -52,14 +53,17 @@ from master.classic.eeprom_models import CanLedConfiguration, \
 from master.classic.inputs import InputStatus
 from master.classic.master_communicator import BackgroundConsumer, \
     MasterCommunicator, MasterUnavailable
+from master.classic.master_heartbeat import MasterHeartbeat
 from master.classic.slave_updater import bootload_modules
 from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Optional, Tuple
+    from typing import Any, Dict, List, Literal, Optional, Tuple
     from serial import Serial
+
+    HEALTH = Literal['success', 'unstable', 'failure']
 
 logger = logging.getLogger("openmotics")
 
@@ -82,6 +86,7 @@ class MasterClassicController(MasterController):
         self._master_communicator = master_communicator  # type: MasterCommunicator
         self._eeprom_controller = eeprom_controller
         self._pubsub = pubsub
+        self._heartbeat = MasterHeartbeat()
         self._plugin_controller = None  # type: Optional[Any]
 
         self._input_status = InputStatus(on_input_change=self._input_changed)
@@ -92,7 +97,6 @@ class MasterClassicController(MasterController):
                                                     target=self._synchronize,
                                                     interval=30, delay=10)
         self._master_version = None
-        self._master_online = False
         self._communication_enabled = True
         self._input_interval = 300
         self._input_last_updated = 0.0
@@ -108,6 +112,7 @@ class MasterClassicController(MasterController):
         self._module_log = []  # type: List[Dict[str, Any]]
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_eeprom_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MAINTENANCE, self._handle_maintenance_event)
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.output_list(), 0, self._on_master_output_event, True)
@@ -146,18 +151,15 @@ class MasterClassicController(MasterController):
                 self._refresh_shutter_states()
         except CommunicationTimedOutException:
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
-            self._master_online = False
             raise DaemonThreadWait
         except CommunicationFailure:
             # This is an expected situation
-            self._master_online = False
             raise DaemonThreadWait
 
     def _get_master_version(self):
         # type: () -> None
         initialize = self._master_version is None
         self._master_version = self.get_firmware_version()
-        self._master_online = True
         if initialize:
             self._register_version_depending_background_consumers()
 
@@ -286,6 +288,11 @@ class MasterClassicController(MasterController):
             self._master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0})
         self.set_status_leds(True)
 
+    def _handle_maintenance_event(self, master_event):
+        # type: (MasterEvent) -> None
+        if master_event.type == MasterEvent.Types.MAINTENANCE_EXIT:
+            self._eeprom_controller.invalidate_cache()
+
     def _handle_eeprom_event(self, master_event):
         # type: (MasterEvent) -> None
         if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
@@ -337,11 +344,13 @@ class MasterClassicController(MasterController):
     def start(self):
         # type: () -> None
         super(MasterClassicController, self).start()
+        self._heartbeat.start()
         self._synchronization_thread.start()
 
     def stop(self):
         # type: () -> None
         self._synchronization_thread.stop()
+        self._heartbeat.stop()
         super(MasterClassicController, self).stop()
 
     def set_plugin_controller(self, plugin_controller):
@@ -358,7 +367,11 @@ class MasterClassicController(MasterController):
 
     def get_master_online(self):
         # type: () -> bool
-        return self._master_online
+        return self._heartbeat.is_online()
+
+    def get_communicator_health(self):
+        # type: () -> HEALTH
+        return self._heartbeat.get_communicator_health()
 
     @communication_enabled
     def get_firmware_version(self):
@@ -548,7 +561,10 @@ class MasterClassicController(MasterController):
         self._publish_event(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
 
     def _is_output_locked(self, output_id):
-        output_dto = self._output_config[output_id]
+        # TODO remove self._output_config cache, this belongs in the output controller.
+        output_dto = self._output_config.get(output_id)
+        if output_dto is None:
+            output_dto = self.load_output(output_id)
         if output_dto.lock_bit_id is not None:
             value = self._validation_bits.get_validation_bit(output_dto.lock_bit_id)
             locked = value
@@ -1161,22 +1177,30 @@ class MasterClassicController(MasterController):
         data = chr(255) * (256 * 256)
         self.restore(data)
 
-    def cold_reset(self):
-        # type: () -> None
+    def cold_reset(self, power_on=True):
+        # type: (bool) -> None
         """
         Perform a cold reset on the master. Turns the power off, waits 5 seconds and turns the power back on.
         """
-        self._master_online = False
         MasterClassicController._set_master_power(False)
-        time.sleep(5)
-        MasterClassicController._set_master_power(True)
+        if power_on:
+            time.sleep(5)
+            MasterClassicController._set_master_power(True)
+        self._master_communicator.reset_communication_statistics()
+
+    @communication_enabled
+    def raw_action(self, action, size, data=None):
+        # type: (str, int, Optional[bytearray]) -> Dict[str,Any]
+        """
+        Send a raw action to the master.
+        """
+        return self._master_communicator.do_raw_action(action, size, data=data)
 
     @Inject
     def update_master(self, hex_filename, controller_serial=INJECTED):
         # type: (str, Serial) -> None
         try:
             self._communication_enabled = False
-            self._master_online = False
             self._master_communicator.update_mode_start()
 
             port = controller_serial.port  # type: ignore
@@ -1278,9 +1302,12 @@ class MasterClassicController(MasterController):
         return dict()
 
     @communication_enabled
-    def power_cycle_bus(self):
+    @Inject
+    def power_cycle_bus(self, power_communicator=INJECTED):
         """ Turns the power of both bussed off for 5 seconds """
         self._master_communicator.do_basic_action(master_api.BA_POWER_CYCLE_BUS, 0)
+        if power_communicator:
+            power_communicator.reset_communication_statistics()  # TODO cleanup, use an event instead?
 
     @communication_enabled
     def restore(self, data):
@@ -1403,7 +1430,7 @@ class MasterClassicController(MasterController):
 
     def _broadcast_module_discovery(self):
         # type: () -> None
-        self._invalidate_caches()
+        self._eeprom_controller.invalidate_cache()
         self._publish_event(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
 
     # Error functions

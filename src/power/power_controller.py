@@ -19,10 +19,15 @@ calls to the PowerCommunicator.
 
 from __future__ import absolute_import
 
+import logging
+
+from gateway.dto import ModuleDTO
+from gateway.events import GatewayEvent
+from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from power import power_api
 from power.power_api import NUM_PORTS, P1_CONCENTRATOR
-from gateway.dto import ModuleDTO
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
@@ -30,15 +35,30 @@ if False:  # MYPY
     from power.power_communicator import PowerCommunicator
     from power.power_store import PowerStore
 
+logger = logging.getLogger('openmotics')
+
 
 class PowerController(object):
     """ The PowerController abstracts calls to the communicator. """
 
     @Inject
-    def __init__(self, power_communicator=INJECTED, power_store=INJECTED):
-        # type: (PowerCommunicator, PowerStore) -> None
+    def __init__(self, power_communicator=INJECTED, power_store=INJECTED, pubsub=INJECTED):
+        # type: (PowerCommunicator, PowerStore, PubSub) -> None
         self._power_communicator = power_communicator
         self._power_store = power_store
+        self._pubsub = pubsub
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.POWER, self._handle_power_event)
+
+    def _handle_power_event(self, master_event):
+        # type: (MasterEvent) -> None
+        if master_event.type == MasterEvent.Types.POWER_ADDRESS_EXIT:
+            # TODO add controller / orm sync for power modules.
+            gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'powermodule'})
+            self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
+
+    def get_communication_statistics(self):
+        # type: () -> Dict[str,Any]
+        return self._power_communicator.get_communication_statistics()
 
     def get_module_current(self, module, phase=None):
         # type: (Dict[str,Any], Optional[int]) -> Tuple[Any, ...]

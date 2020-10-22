@@ -24,17 +24,22 @@ from threading import RLock, Thread
 from six.moves.queue import Empty
 
 from gateway.hal.master_controller import CommunicationFailure
+from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from power import power_api
 from power.power_command import PowerCommand
 from power.time_keeper import TimeKeeper
-from serial_utils import CommunicationTimedOutException, printable
+from serial_utils import CommunicationStatus, CommunicationTimedOutException, \
+    printable
 
 if False:  # MYPY:
-    from typing import Any, Dict, List, Optional, Tuple, Union
+    from typing import Any, Dict, List, Literal, Optional, Tuple, Union
     from serial_utils import RS485
     from power.power_store import PowerStore
     DataType = Union[float, int, str]
+
+    HEALTH = Literal['success', 'unstable', 'failure']
 
 logger = logging.getLogger("openmotics")
 
@@ -43,9 +48,9 @@ class PowerCommunicator(object):
     """ Uses a serial port to communicate with the power modules. """
 
     @Inject
-    def __init__(self, power_serial=INJECTED, power_store=INJECTED, verbose=False, time_keeper_period=60,
+    def __init__(self, power_serial=INJECTED, power_store=INJECTED, pubsub=INJECTED, verbose=False, time_keeper_period=60,
                  address_mode_timeout=300):
-        # type: (RS485, PowerStore, bool, int, int) -> None
+        # type: (RS485, PowerStore, PubSub, bool, int, int) -> None
         """ Default constructor.
 
         :param power_serial: Serial port to communicate with
@@ -61,6 +66,7 @@ class PowerCommunicator(object):
         self.__address_thread = None  # type: Optional[Thread]
         self.__address_mode_timeout = address_mode_timeout
         self.__power_store = power_store
+        self.__pubsub = pubsub
 
         self.__last_success = 0  # type: float
 
@@ -98,6 +104,46 @@ class PowerCommunicator(object):
         ret.update(self.__communication_stats_calls)
         ret.update(self.__communication_stats_bytes)
         return ret
+
+    def reset_communication_statistics(self):
+        # type: () -> None
+        self.__communication_stats_calls = {'calls_succeeded': [],
+                                            'calls_timedout': []}
+        self.__communication_stats_bytes = {'bytes_written': 0,
+                                            'bytes_read': 0}
+
+    def get_communicator_health(self):
+        # type: () -> HEALTH
+        stats = self.get_communication_statistics()
+        calls_timedout = [call for call in stats['calls_timedout']]
+        calls_succeeded = [call for call in stats['calls_succeeded']]
+
+        if len(calls_timedout) == 0:
+            # If there are no timeouts at all
+            return CommunicationStatus.SUCCESS
+
+        all_calls = sorted(calls_timedout + calls_succeeded)
+        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
+        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
+
+        if len(all_calls) <= 10:
+            # Not enough calls made to have a decent view on what's going on
+            logger.warning('Observed energy communication failures, but not enough calls')
+            return CommunicationStatus.UNSTABLE
+        elif not any(t in calls_timedout for t in all_calls[-10:]):
+            logger.warning('Observed energy communication failures, but recent calls recovered')
+            # The last X calls are successfull
+            return CommunicationStatus.UNSTABLE
+        elif len(calls_last_x_minutes) <= 5:
+            logger.warning('Observed energy communication failures, but not recent enough')
+            # Not enough recent calls
+            return CommunicationStatus.UNSTABLE
+        elif ratio < 0.25:
+            # Less than 25% of the calls fail, let's assume everything is just "fine"
+            logger.warning('Observed energy communication failures, but there\'s only a failure ratio of {:.2f}%'.format(ratio * 100))
+            return CommunicationStatus.UNSTABLE
+        else:
+            return CommunicationStatus.FAILURE
 
     def get_debug_buffer(self):
         # type: () -> Dict[str, Dict[Any, Any]]
@@ -321,6 +367,8 @@ class PowerCommunicator(object):
         if self.__address_thread:
             self.__address_thread.join()
         self.__address_thread = None
+        master_event = MasterEvent(MasterEvent.Types.POWER_ADDRESS_EXIT, {})
+        self.__pubsub.publish_master_event(PubSub.MasterTopics.POWER, master_event)
 
     def in_address_mode(self):
         # type: () -> bool

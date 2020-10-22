@@ -26,6 +26,7 @@ from six.moves.queue import Queue
 from gateway.hal.master_controller import CommunicationFailure
 
 if False:  # MYPY
+    from typing import Literal
     from serial import Serial
 
 
@@ -35,6 +36,12 @@ class CommunicationTimedOutException(CommunicationFailure):
         if not message:
             message = self.__class__.__name__
         super(CommunicationTimedOutException, self).__init__(message)
+
+
+class CommunicationStatus:
+    SUCCESS = 'success'  # type: Literal['success', 'unstable', 'failure']
+    UNSTABLE = 'unstable'  # type: Literal['success', 'unstable', 'failure']
+    FAILURE = 'failure'  # type: Literal['success', 'unstable', 'failure']
 
 
 def printable(data):

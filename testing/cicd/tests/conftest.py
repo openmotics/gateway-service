@@ -107,5 +107,8 @@ def firmware_updates(toolbox_session):
 def toolbox(toolbox_session, software_update, firmware_updates):
     toolbox = toolbox_session
     toolbox.tester.get('/plugins/syslog_receiver/reset', success=False)
-    yield toolbox
-    toolbox.print_logs()
+    toolbox.health_check(timeout=360)
+    try:
+        yield toolbox
+    finally:
+        toolbox.print_logs()

@@ -503,15 +503,27 @@ class WebInterface(object):
         port = self._maintenance_controller.open_maintenace_socket()
         return {'port': port}
 
-    @openmotics_api(auth=True)
-    def reset_master(self):
+    @openmotics_api(auth=True, check=types(power_on=bool))
+    def reset_master(self, power_on=True):
         """
         Perform a cold reset on the master.
 
         :returns: 'status': 'OK'.
         :rtype: dict
         """
-        return self._gateway_api.reset_master()
+        return self._gateway_api.reset_master(power_on=power_on)
+
+    @openmotics_api(auth=True, plugin_exposed=False, check=types(action=str, size=int, data='json'))
+    def raw_master_action(self, action, size=None, data=None):
+        # type: (str, int, Optional[List[int]]) -> Dict[str,Any]
+        """
+        Send a raw action to the master.
+
+            POST /raw_master_action action=ST size=13
+            {"literal":"","data":[16,16,15,2,0,0,0,0,76,3,143,95,4],"success":true}
+        """
+        input_data = data if data is None else bytearray(data)
+        return self._gateway_api.raw_master_action(action, size, input_data)
 
     @openmotics_api(auth=True)
     def module_discover_start(self):  # type: () -> Dict[str, str]
@@ -864,7 +876,7 @@ class WebInterface(object):
     def set_ventilation_configuration(self, config):
         # type: (Dict[str,Any]) -> Dict[str, Any]
         ventilation_dto, fields = VentilationSerializer.deserialize(config)
-        ventilation_dto = self._ventilation_controller.save_ventilation(ventilation_dto, fields)
+        self._ventilation_controller.save_ventilation(ventilation_dto, fields)
         fields.append('id')
         return {'config': VentilationSerializer.serialize(ventilation_dto, fields)}
 

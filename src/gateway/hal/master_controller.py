@@ -23,7 +23,9 @@ from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
 from gateway.hal.master_event import MasterEvent
 
 if False:  # MYPY
-    from typing import Any, Callable, Dict, List, Optional, Tuple
+    from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
+
+    HEALTH = Literal['success', 'unstable', 'failure']
 
 
 class CommunicationFailure(Exception):
@@ -54,6 +56,10 @@ class MasterController(object):
 
     def get_communication_statistics(self):
         return self._master_communicator.get_communication_statistics()
+
+    def get_communicator_health(self):
+        # type: () -> HEALTH
+        raise NotImplementedError()
 
     def get_debug_buffer(self):
         return self._master_communicator.get_debug_buffer()
@@ -371,7 +377,12 @@ class MasterController(object):
     def reset(self):
         raise NotImplementedError()
 
-    def cold_reset(self):
+    def cold_reset(self, power_on=True):
+        # type: (bool) -> None
+        raise NotImplementedError()
+
+    def raw_action(self, action, size=None, data=None):
+        # type: (str, int, Optional[bytearray]) -> Dict[str,Any]
         raise NotImplementedError()
 
     def update_master(self, hex_filename):

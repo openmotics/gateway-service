@@ -21,7 +21,6 @@ from __future__ import absolute_import
 import logging
 
 from bus.om_bus_client import MessageClient
-from bus.om_bus_events import OMBusEvents
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
@@ -47,34 +46,15 @@ class Observer(object):
         self._pubsub = pubsub  # type: PubSub
         self._message_client = message_client  # type: Optional[MessageClient]
 
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, self._handle_master_event)
-        self._pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, self._handle_gateway_event)
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
-        if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
-            # TODO still needed with config events?
-            if self._message_client is not None:
-                self._message_client.send_event(OMBusEvents.DIRTY_EEPROM, {})
-        elif master_event.type == MasterEvent.Types.INPUT_CHANGE:
+        if master_event.type == MasterEvent.Types.INPUT_CHANGE:
             # TODO move to InputController
             gateway_event = GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE,
                                          data=master_event.data)
             self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
-
-    def _handle_gateway_event(self, gateway_event):
-        # type: (GatewayEvent) -> None
-        # Only for outputs?
-        if gateway_event.type == GatewayEvent.Types.OUTPUT_CHANGE:
-            if self._message_client:
-                self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': gateway_event.data['id']})
-        elif gateway_event.type == GatewayEvent.Types.THERMOSTAT_CHANGE:
-            if self._message_client is not None:
-                self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': gateway_event.data['id']})
-        elif gateway_event.type == GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE:
-            if self._message_client is not None:
-                self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
 
     # Inputs
 
