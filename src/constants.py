@@ -121,6 +121,17 @@ def get_plugin_configfiles():
     return os.path.join(OPENMOTICS_PREFIX, 'etc/pi_*')
 
 
+def get_static_dir():
+    """ Get the directory where the static frontend assets are stored. """
+    return os.path.join(OPENMOTICS_PREFIX, 'static')
+
+
+def get_terms_dir():
+    """ Get the directory where plugin data is stored. """
+    python_root = os.path.abspath(os.path.join(__file__, '..'))
+    return os.path.join(python_root, 'terms')
+
+
 def get_plugin_dir():
     """ Get the directory where plugin data is stored. """
     python_root = os.path.abspath(os.path.join(__file__, '..'))
