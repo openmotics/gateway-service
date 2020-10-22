@@ -27,16 +27,16 @@ from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_controller import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import master_api
-from master.classic.master_command import Field, printable
+from master.classic.master_command import Field, MasterCommandSpec, printable
 from serial_utils import CommunicationTimedOutException
 from toolbox import Empty, Queue
 
 logger = logging.getLogger('openmotics')
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Optional, TypeVar, Union, Tuple
+    from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, Tuple
     from serial import Serial
-    from master.classic.master_command import MasterCommandSpec, Result
+    from master.classic.master_command import Result
     T_co = TypeVar('T_co', covariant=True)
 
 
@@ -85,8 +85,7 @@ class MasterCommunicator(object):
 
         self.__running = False
 
-        self.__read_thread = Thread(target=self.__read, name='MasterCommunicator read thread')
-        self.__read_thread.daemon = True
+        self.__read_thread = None  # type: Optional[Thread]
 
         self.__communication_stats = {'calls_succeeded': [],
                                       'calls_timedout': [],
@@ -102,6 +101,10 @@ class MasterCommunicator(object):
         if self.__init_master:
             self._flush_serial_input()
 
+        if not self.__read_thread:
+            self.__read_thread = Thread(target=self.__read, name='MasterCommunicator read thread')
+            self.__read_thread.daemon = True
+
         if not self.__running:
             self.__running = True
             self.__read_thread.start()
@@ -109,7 +112,9 @@ class MasterCommunicator(object):
     def stop(self):
         # type: () -> None
         self.__running = False
-        self.__read_thread.join()
+        if self.__read_thread:
+            self.__read_thread.join()
+            self.__read_thread = None
 
     def update_mode_start(self):
         # type: () -> None
@@ -146,6 +151,12 @@ class MasterCommunicator(object):
 
     def get_communication_statistics(self):
         return self.__communication_stats
+
+    def reset_communication_statistics(self):
+        self.__communication_stats = {'calls_succeeded': [],
+                                      'calls_timedout': [],
+                                      'bytes_written': 0,
+                                      'bytes_read': 0}
 
     def get_debug_buffer(self):
         return self.__debug_buffer
@@ -194,6 +205,14 @@ class MasterCommunicator(object):
         :type consumer: Consumer or BackgroundConsumer.
         """
         self.__consumers.append(consumer)
+
+    def do_raw_action(self, action, size, output_size=None, data=None, timeout=2):
+        # type: (str, int, Optional[int], Optional[bytearray], Union[T_co, int]) -> Union[T_co, Dict[str, Any]]
+        input_field = Field.padding(13) if data is None else Field.bytes('data', len(data))
+        command = MasterCommandSpec(action,
+                                    [input_field],
+                                    [Field.bytes('data', size), Field.lit('\r\n')])
+        return self.do_command(command, fields={'data': data}, timeout=timeout)
 
     def do_basic_action(self, action_type, action_number, timeout=2):
         # type: (int, int, Union[T_co, int]) -> Union[T_co, Dict[str,Any]]
