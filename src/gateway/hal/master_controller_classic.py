@@ -1426,7 +1426,7 @@ class MasterClassicController(MasterController):
 
     def _broadcast_module_discovery(self):
         # type: () -> None
-        self._invalidate_caches()
+        self._eeprom_controller.invalidate_cache()
         self._publish_event(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
 
     # Error functions
