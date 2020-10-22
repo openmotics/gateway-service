@@ -15,13 +15,20 @@
 """
 The maintenance module contains the MaintenanceCommunicator class.
 """
-
 from __future__ import absolute_import
-import time
+
 import logging
-from threading import Timer, Thread
-from ioc import Inject, INJECTED
+import time
+from threading import Thread, Timer
+
+from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import MaintenanceCommunicator
+from gateway.pubsub import PubSub
+from ioc import INJECTED, Inject
+
+if False:  # MYPY
+    from typing import Callable, Optional
+    from master.classic.master_communicator import MasterCommunicator
 
 logger = logging.getLogger('openmotics')
 
@@ -34,7 +41,8 @@ class MaintenanceClassicCommunicator(MaintenanceCommunicator):
     MAINTENANCE_TIMEOUT = 600
 
     @Inject
-    def __init__(self, master_communicator=INJECTED):
+    def __init__(self, master_communicator=INJECTED, pubsub=INJECTED):
+        # type: (MasterCommunicator, PubSub) -> None
         """
         Construct a MaintenanceCommunicator.
 
@@ -42,31 +50,32 @@ class MaintenanceClassicCommunicator(MaintenanceCommunicator):
         :type master_communicator: master.master_communicator.MasterCommunicator
         """
         self._master_communicator = master_communicator
-        self._receiver_callback = None
-        self._deactivated_callback = None
+        self._pubsub = pubsub
         self._deactivated_sent = False
-        self._last_maintenance_send_time = 0
-        self._maintenance_timeout_timer = None
-        self._last_maintenance_send_time = 0
-        self._read_data_thread = None
+        self._last_maintenance_send_time = 0.0
         self._stopped = False
+        self._maintenance_timeout_timer = None  # type: Optional[Timer]
+        self._read_data_thread = None  # type: Optional[Thread]
+        self._receiver_callback = None  # type: Optional[Callable[[str],None]]
 
     def start(self):
-        pass  # Classis doesn't have a permanent running maintenance
+        # type: () -> None
+        pass  # Classic doesn't have a permanent running maintenance
 
     def stop(self):
-        pass  # Classis doesn't have a permanent running maintenance
+        # type: () -> None
+        pass  # Classic doesn't have a permanent running maintenance
 
     def set_receiver(self, callback):
+        # type: (Callable[[str],None]) -> None
         self._receiver_callback = callback
 
-    def set_deactivated(self, callback):
-        self._deactivated_callback = callback
-
     def is_active(self):
+        # type: () -> bool
         return self._master_communicator.in_maintenance_mode()
 
     def activate(self):
+        # type: () -> None
         """
         Activates maintenance mode, If no data is send for too long, maintenance mode will be closed automatically.
         """
@@ -82,6 +91,7 @@ class MaintenanceClassicCommunicator(MaintenanceCommunicator):
         self._deactivated_sent = False
 
     def deactivate(self, join=True):
+        # type: (bool) -> None
         logger.info('Deactivating maintenance mode')
         self._stopped = True
         if join and self._read_data_thread is not None:
@@ -93,11 +103,13 @@ class MaintenanceClassicCommunicator(MaintenanceCommunicator):
             self._maintenance_timeout_timer.cancel()
             self._maintenance_timeout_timer = None
 
-        if self._deactivated_callback is not None and self._deactivated_sent is False:
-            self._deactivated_callback()
+        if self._deactivated_sent is False:
+            master_event = MasterEvent(MasterEvent.Types.MAINTENANCE_EXIT, {})
+            self._pubsub.publish_master_event(PubSub.MasterTopics.MAINTENANCE, master_event)
             self._deactivated_sent = True
 
     def _check_maintenance_timeout(self):
+        # type: () -> None
         """
         Checks if the maintenance if the timeout is exceeded, and closes maintenance mode
         if required.
@@ -116,10 +128,13 @@ class MaintenanceClassicCommunicator(MaintenanceCommunicator):
             self.deactivate()
 
     def write(self, message):
+        # type: (str) -> None
         self._last_maintenance_send_time = time.time()
-        self._master_communicator.send_maintenance_data(bytearray(b'{0}\r\n'.format(message.strip())))
+        data = '{0}\r\n'.format(message.strip()).encode()
+        self._master_communicator.send_maintenance_data(bytearray(data))
 
     def _read_data(self):
+        # type: () -> None
         """ Reads from the serial port and writes to the socket. """
         buffer = ''
         while not self._stopped:

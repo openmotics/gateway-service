@@ -16,18 +16,20 @@
 Base Controller
 """
 from __future__ import absolute_import
+
 import logging
 import time
+
+from gateway.daemon_thread import DaemonThread
+from gateway.hal.master_controller import MasterController
+from gateway.hal.master_event import MasterEvent
+from gateway.models import BaseModel
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from serial_utils import CommunicationTimedOutException
-from gateway.daemon_thread import DaemonThread
-from gateway.hal.master_event import MasterEvent
-from gateway.hal.master_controller import MasterController
-from gateway.models import BaseModel
 
 if False:  # MYPY
     from typing import Optional, Callable, Type, List
-    from gateway.hal.master_event import MasterEvent
     from gateway.maintenance_controller import MaintenanceController
 
 logger = logging.getLogger("openmotics")
@@ -45,17 +47,22 @@ class BaseController(object):
     SYNC_STRUCTURES = None  # type: Optional[List[SyncStructure]]
 
     @Inject
-    def __init__(self, master_controller, maintenance_controller=INJECTED, sync_interval=900):
-        self._master_controller = master_controller  # type: MasterController
-        self._maintenance_controller = maintenance_controller  # type: MaintenanceController
+    def __init__(self, master_controller, maintenance_controller=INJECTED, pubsub=INJECTED, sync_interval=900):
+        # type: (MasterController, MaintenanceController, PubSub, float) -> None
+        self._master_controller = master_controller
+        self._maintenance_controller = maintenance_controller
+        self._pubsub = pubsub
         self._sync_orm_thread = None  # type: Optional[DaemonThread]
-        self._master_controller.subscribe_event(self._handle_master_event)
-        self._maintenance_controller.subscribe_maintenance_stopped(self.request_sync_orm)
         self._sync_orm_interval = sync_interval
         self._sync_running = False
 
-    def _handle_master_event(self, master_event):  # type: (MasterEvent) -> None
-        if master_event.type in [MasterEvent.Types.EEPROM_CHANGE, MasterEvent.Types.MODULE_DISCOVERY]:
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, self._handle_master_event)
+
+    def _handle_master_event(self, master_event):
+        # type: (MasterEvent) -> None
+        if master_event.type in [MasterEvent.Types.EEPROM_CHANGE,
+                                 MasterEvent.Types.MODULE_DISCOVERY]:
             self.request_sync_orm()
 
     def start(self):

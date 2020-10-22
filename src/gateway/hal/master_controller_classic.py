@@ -23,13 +23,13 @@ import re
 import subprocess
 import time
 from datetime import datetime
-from threading import Timer, Lock
+from threading import Lock, Timer
 
 import six
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
-    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO, \
+from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
+    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, \
     ThermostatGroupDTO
 from gateway.enums import ShutterEnums
 from gateway.exceptions import UnsupportedException
@@ -39,6 +39,7 @@ from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
 from gateway.hal.master_controller import CommunicationFailure, \
     MasterController
 from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from master.classic import eeprom_models, master_api
 from master.classic.eeprom_controller import EepromAddress, EepromController
@@ -75,13 +76,12 @@ def communication_enabled(f):
 class MasterClassicController(MasterController):
 
     @Inject
-    def __init__(self,
-                 master_communicator=INJECTED,
-                 eeprom_controller=INJECTED):
-        # type: (MasterCommunicator, EepromController) -> None
+    def __init__(self, master_communicator=INJECTED, eeprom_controller=INJECTED, pubsub=INJECTED):
+        # type: (MasterCommunicator, EepromController, PubSub) -> None
         super(MasterClassicController, self).__init__(master_communicator)
         self._master_communicator = master_communicator  # type: MasterCommunicator
         self._eeprom_controller = eeprom_controller
+        self._pubsub = pubsub
         self._plugin_controller = None  # type: Optional[Any]
 
         self._input_status = InputStatus(on_input_change=self._input_changed)
@@ -106,6 +106,8 @@ class MasterClassicController(MasterController):
 
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._module_log = []  # type: List[Dict[str, Any]]
+
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_eeprom_event)
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.output_list(), 0, self._on_master_output_event, True)
@@ -284,6 +286,11 @@ class MasterClassicController(MasterController):
             self._master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0})
         self.set_status_leds(True)
 
+    def _handle_eeprom_event(self, master_event):
+        # type: (MasterEvent) -> None
+        if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
+            self._invalidate_caches()
+
     def _on_master_event(self, event_data):  # type: (Dict[str, Any]) -> None
         """ Handle an event triggered by the master. """
         event_type = event_data.get('event_type', 0)
@@ -313,6 +320,16 @@ class MasterClassicController(MasterController):
                 event_data['dimmer'] = dimmer
             self._publish_event(MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data))
 
+    def _publish_event(self, master_event):
+        # type: (MasterEvent) -> None
+        self._pubsub.publish_master_event(PubSub.MasterTopics.MASTER, master_event)
+
+    def _invalidate_caches(self):
+        # type: () -> None
+        self._input_last_updated = 0.0
+        self._shutters_last_updated = 0.0
+        self._synchronization_thread.request_single_run()
+
     #######################
     # Internal management #
     #######################
@@ -338,14 +355,6 @@ class MasterClassicController(MasterController):
     ##############
     # Public API #
     ##############
-
-    def invalidate_caches(self):
-        # type: () -> None
-        self._eeprom_controller.invalidate_cache()  # Eeprom can be changed in maintenance mode.
-        self._eeprom_controller.dirty = True
-        self._input_last_updated = 0.0
-        self._shutters_last_updated = 0.0
-        self._synchronization_thread.request_single_run()
 
     def get_master_online(self):
         # type: () -> bool
@@ -1394,7 +1403,7 @@ class MasterClassicController(MasterController):
 
     def _broadcast_module_discovery(self):
         # type: () -> None
-        self.invalidate_caches()
+        self._invalidate_caches()
         self._publish_event(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
 
     # Error functions

@@ -37,9 +37,6 @@ class MaintenanceCommunicator(object):
     def set_receiver(self, callback):
         raise NotImplementedError()
 
-    def set_deactivated(self, callback):
-        raise NotImplementedError()
-
     def is_active(self):
         raise NotImplementedError()
 

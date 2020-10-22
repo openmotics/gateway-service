@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import absolute_import
+
 from platform_utils import Platform, System
 System.import_libs()
 
@@ -34,6 +35,10 @@ from bus.om_bus_client import MessageClient
 from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.hal.master_controller_core import MasterCoreController
 from gateway.models import Database, Feature
+from gateway.thermostat.gateway.thermostat_controller_gateway import \
+    ThermostatControllerGateway
+from gateway.thermostat.master.thermostat_controller_master import \
+    ThermostatControllerMaster
 from ioc import INJECTED, Inject, Injectable
 from master.classic.maintenance import MaintenanceClassicCommunicator
 from master.classic.master_communicator import MasterCommunicator
@@ -161,14 +166,9 @@ def setup_target_platform(target_platform, message_client_name):
          pulse_counter_controller, metrics_caching, watchdog, output_controller,
          room_controller, sensor_controller, group_action_controller, module_controller, ventilation_controller)
 
-    thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
-    thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled
-    if target_platform == Platform.Type.CORE_PLUS or thermostats_gateway_enabled:
-        from gateway.thermostat.gateway import thermostat_controller_gateway
-        _ = thermostat_controller_gateway
-    else:
-        from gateway.thermostat.master import thermostat_controller_master
-        _ = thermostat_controller_master
+    # Webserver / Presentation layer
+    Injectable.value(ssl_private_key=constants.get_ssl_private_key_file())
+    Injectable.value(ssl_certificate=constants.get_ssl_certificate_file())
 
     # IPC
     message_client = None
@@ -193,6 +193,10 @@ def setup_target_platform(target_platform, message_client_name):
     Injectable.value(token_timeout=3600)
     Injectable.value(config={'username': config.get('OpenMotics', 'cloud_user'),
                              'password': config.get('OpenMotics', 'cloud_pass')})
+
+    # Metrics Controller
+    Injectable.value(metrics_db=constants.get_metrics_database_file())
+    Injectable.value(metrics_db_lock=metrics_lock)
 
     # Energy Controller
     power_serial_port = config.get('OpenMotics', 'power_serial')
@@ -257,13 +261,13 @@ def setup_target_platform(target_platform, message_client_name):
         from gateway.hal import frontpanel_controller_classic
         _ = frontpanel_controller_classic
 
-    # Metrics Controller
-    Injectable.value(metrics_db=constants.get_metrics_database_file())
-    Injectable.value(metrics_db_lock=metrics_lock)
-
-    # Webserver / Presentation layer
-    Injectable.value(ssl_private_key=constants.get_ssl_private_key_file())
-    Injectable.value(ssl_certificate=constants.get_ssl_certificate_file())
+    # Thermostats
+    thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
+    thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled
+    if target_platform == Platform.Type.CORE_PLUS or thermostats_gateway_enabled:
+        Injectable.value(thermostat_controller=ThermostatControllerGateway())
+    else:
+        Injectable.value(thermostat_controller=ThermostatControllerMaster())
 
 
 def setup_minimal_master_platform(port):

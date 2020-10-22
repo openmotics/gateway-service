@@ -26,6 +26,7 @@ from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_controller import MaintenanceController
 from gateway.models import Output, Room
 from gateway.output_controller import OutputController, OutputStateCache
+from gateway.pubsub import PubSub
 from ioc import SetTestMode, SetUpTestInjections
 
 
@@ -36,9 +37,11 @@ class OutputControllerTest(unittest.TestCase):
 
     def setUp(self):
         self.master_controller = mock.Mock(MasterController)
+        self.pubsub = PubSub()
         SetUpTestInjections(maintenance_controller=mock.Mock(MaintenanceController),
                             master_controller=self.master_controller,
-                            message_client=mock.Mock(MessageClient))
+                            message_client=mock.Mock(MessageClient),
+                            pubsub=self.pubsub)
         self.controller = OutputController()
 
     def test_output_sync_change(self):
@@ -47,10 +50,10 @@ class OutputControllerTest(unittest.TestCase):
         def on_change(gateway_event):
             events.append(gateway_event)
 
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, on_change)
+
         outputs = {2: OutputDTO(id=2),
                    40: OutputDTO(id=40, module_type='D')}
-
-        self.controller.subscribe_events(on_change)
         with mock.patch.object(Output, 'select',
                                return_value=[Output(id=0, number=2),
                                              Output(id=1, number=40, room=Room(id=2, number=3))]), \
@@ -81,7 +84,8 @@ class OutputControllerTest(unittest.TestCase):
         def on_change(gateway_event):
             events.append(gateway_event)
 
-        self.controller.subscribe_events(on_change)
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, on_change)
+
         self.controller._cache.update_outputs([OutputDTO(id=2),
                                                OutputDTO(id=40, module_type='D', room=3)])
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': False}))

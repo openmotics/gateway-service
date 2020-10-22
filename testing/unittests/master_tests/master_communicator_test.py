@@ -121,8 +121,32 @@ class MasterCommunicatorTest(unittest.TestCase):
             thread.join(2)
             assert not thread.is_alive()
 
+    @mark.skip
+    def test_misalignment(self):
+        action = master_api.basic_action()
+        fields = {'action_type': 1, 'action_number': 2}
+
+        pty = DummyPty([action.create_input(1, fields),
+                        action.create_input(2, fields)])
+        SetUpTestInjections(controller_serial=pty)
+
+        comm = MasterCommunicator(init_master=False)
+        comm.start()
+
+        data = action.create_output(1, {'resp': 'OK'})
+        # Only send partial data.
+        pty.master_reply(data[:-4])
+        pty.master_reply(b'\r\n')
+        with self.assertRaises(CommunicationTimedOutException):
+            comm.do_command(action, fields)
+
+        # Next message processed correctly.
+        pty.master_reply(action.create_output(2, {'resp': 'OK'}))
+        output = comm.do_command(action, fields)
+        self.assertEqual('OK', output['resp'])
+
     def test_passthrough(self):
-        pty = DummyPty(['data from passthrough'])
+        pty = DummyPty([b'data from passthrough'])
         SetUpTestInjections(controller_serial=pty)
 
         comm = MasterCommunicator(init_master=False)

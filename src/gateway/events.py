@@ -15,12 +15,12 @@
 """
 The events module contains various event classes
 """
-
 from __future__ import absolute_import
+
 import ujson as json
 
 if False:  # MYPY
-    from typing import Any
+    from typing import Any, Dict
 
 
 class GatewayEvent(object):
@@ -53,17 +53,20 @@ class GatewayEvent(object):
         PONG = 'PONG'
 
     def __init__(self, event_type, data):
+        # type: (str, Dict[str,Any]) -> None
         self.type = event_type
         self.data = data
 
     def serialize(self):
+        # type: () -> Dict[str,Any]
         return {'type': self.type,
                 'data': self.data,
                 '_version': 1.0}  # Add version so that event processing code can handle multiple formats
 
     def __eq__(self, other):
         # type: (Any) -> bool
-        return self.type == other.type \
+        return isinstance(other, GatewayEvent) \
+            and self.type == other.type \
             and self.data == other.data
 
     def __repr__(self):
@@ -71,9 +74,11 @@ class GatewayEvent(object):
         return '<GatewayEvent {} {}>'.format(self.type, self.data)
 
     def __str__(self):
+        # type: () -> str
         return json.dumps(self.serialize())
 
     @staticmethod
     def deserialize(data):
+        # type: (Dict[str,Any]) -> GatewayEvent
         return GatewayEvent(event_type=data['type'],
                             data=data['data'])

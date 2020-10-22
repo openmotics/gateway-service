@@ -16,38 +16,38 @@
 import logging
 import time
 
-from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO, ThermostatStatusDTO, \
     ThermostatGroupDTO
 from gateway.events import GatewayEvent
+from gateway.hal.master_event import MasterEvent
 from gateway.hal.master_controller import CommunicationFailure
-from gateway.observer import Observer
+from gateway.pubsub import PubSub
 from gateway.thermostat.master.thermostat_status_master import \
     ThermostatStatusMaster
 from gateway.thermostat.thermostat_controller import ThermostatController
-from ioc import INJECTED, Inject, Injectable, Singleton
+from ioc import INJECTED, Inject
 from master.classic.master_communicator import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Any, List, Dict, Optional, Tuple
-    from bus.om_bus_client import MessageClient
     from gateway.dto import OutputStateDTO
     from gateway.hal.master_controller_classic import MasterClassicController
     from gateway.output_controller import OutputController
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('openmotics')
+
+THERMOSTATS = 'THERMOSTATS'
 
 
-@Injectable.named('thermostat_controller')
-@Singleton
 class ThermostatControllerMaster(ThermostatController):
     @Inject
-    def __init__(self, message_client=INJECTED, output_controller=INJECTED, master_controller=INJECTED):
-        # type: (Optional[MessageClient], OutputController, MasterClassicController) -> None
-        super(ThermostatControllerMaster, self).__init__(message_client, output_controller)
+    def __init__(self, output_controller=INJECTED, master_controller=INJECTED, pubsub=INJECTED):
+        # type: (OutputController, MasterClassicController, PubSub) -> None
+        super(ThermostatControllerMaster, self).__init__(output_controller)
         self._master_controller = master_controller  # classic only
+        self._pubsub = pubsub
 
         self._monitor_thread = DaemonThread(name='ThermostatControllerMaster monitor',
                                             target=self._monitor,
@@ -61,6 +61,8 @@ class ThermostatControllerMaster(ThermostatController):
         self._thermostats_restore = 0
         self._thermostats_config = {}  # type: Dict[int, ThermostatDTO]
 
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
+
     def start(self):
         # type: () -> None
         self._monitor_thread.start()
@@ -69,30 +71,33 @@ class ThermostatControllerMaster(ThermostatController):
         # type: () -> None
         self._monitor_thread.stop()
 
+    def _handle_master_event(self, master_event):
+        # type: (MasterEvent) -> None
+        if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
+            self.invalidate_cache(THERMOSTATS)
+
     def _thermostat_changed(self, thermostat_id, status):
+        # type: (int, Dict[str,Any]) -> None
         """ Executed by the Thermostat Status tracker when an output changed state """
-        if self._message_client is not None:
-            self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': thermostat_id})
         location = {'room_id': Toolbox.denonify(self._thermostats_config[thermostat_id].room, 255)}
-        for callback in self._event_subscriptions:
-            callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_CHANGE,
-                                  data={'id': thermostat_id,
-                                        'status': {'preset': status['preset'],
-                                                   'current_setpoint': status['current_setpoint'],
-                                                   'actual_temperature': status['actual_temperature'],
-                                                   'output_0': status['output_0'],
-                                                   'output_1': status['output_1']},
-                                        'location': location}))
+        gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE,
+                                     {'id': thermostat_id,
+                                      'status': {'preset': status['preset'],
+                                                 'current_setpoint': status['current_setpoint'],
+                                                 'actual_temperature': status['actual_temperature'],
+                                                 'output_0': status['output_0'],
+                                                 'output_1': status['output_1']},
+                                      'location': location})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     def _thermostat_group_changed(self, status):
-        if self._message_client is not None:
-            self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
-        for callback in self._event_subscriptions:
-            callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
-                                  data={'id': 0,
-                                        'status': {'state': status['state'],
-                                                   'mode': status['mode']},
-                                        'location': {}}))
+        # type: (Dict[str,Any]) -> None
+        gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
+                                     {'id': 0,
+                                      'status': {'state': status['state'],
+                                                 'mode': status['mode']},
+                                      'location': {}})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     @staticmethod
     def check_basic_action(ret_dict):
@@ -102,7 +107,7 @@ class ThermostatControllerMaster(ThermostatController):
 
     def increase_interval(self, object_type, interval, window):
         """ Increases a certain interval to a new setting for a given amount of time """
-        if object_type == Observer.Types.THERMOSTATS:
+        if object_type == THERMOSTATS:
             self._thermostats_interval = interval
             self._thermostats_restore = time.time() + window
 
@@ -111,7 +116,7 @@ class ThermostatControllerMaster(ThermostatController):
         Triggered when an external service knows certain settings might be changed in the background.
         For example: maintenance mode or module discovery
         """
-        if object_type is None or object_type == Observer.Types.THERMOSTATS:
+        if object_type is None or object_type == THERMOSTATS:
             self._thermostats_last_updated = 0
 
     ################################
@@ -136,7 +141,7 @@ class ThermostatControllerMaster(ThermostatController):
 
     def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
         self._master_controller.save_heating_thermostats(thermostats)
-        self.invalidate_cache(Observer.Types.THERMOSTATS)
+        self.invalidate_cache(THERMOSTATS)
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         return self._master_controller.load_cooling_thermostat(thermostat_id)
@@ -146,7 +151,7 @@ class ThermostatControllerMaster(ThermostatController):
 
     def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
         self._master_controller.save_cooling_thermostats(thermostats)
-        self.invalidate_cache(Observer.Types.THERMOSTATS)
+        self.invalidate_cache(THERMOSTATS)
 
     def v0_get_cooling_pump_group_configuration(self, pump_group_id, fields=None):
         # type: (int, Optional[List[str]]) -> Dict[str,Any]
@@ -310,7 +315,7 @@ class ThermostatControllerMaster(ThermostatController):
         # type: (Tuple[ThermostatGroupDTO, List[str]]) -> None
         """ Set the thermostat group. """
         self._master_controller.save_thermostat_group(thermostat_group)
-        self.invalidate_cache(Observer.Types.THERMOSTATS)
+        self.invalidate_cache(THERMOSTATS)
 
     def v0_get_pump_group_configuration(self, pump_group_id, fields=None):
         # type: (int, Optional[List[str]]) -> Dict[str,Any]
@@ -402,8 +407,8 @@ class ThermostatControllerMaster(ThermostatController):
         if automatic is False and setpoint is not None and 3 <= setpoint <= 5:
             self._master_controller.set_thermostat_all_setpoints(setpoint)
 
-        self.invalidate_cache(Observer.Types.THERMOSTATS)
-        self.increase_interval(Observer.Types.THERMOSTATS, interval=2, window=10)
+        self.invalidate_cache(THERMOSTATS)
+        self.increase_interval(THERMOSTATS, interval=2, window=10)
 
     def set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
         # type: (int, bool, int) -> None
@@ -420,8 +425,8 @@ class ThermostatControllerMaster(ThermostatController):
             self._master_controller.set_thermostat_tenant_manual(thermostat_id)
             self._master_controller.set_thermostat_setpoint(thermostat_id, setpoint)
 
-        self.invalidate_cache(Observer.Types.THERMOSTATS)
-        self.increase_interval(Observer.Types.THERMOSTATS, interval=2, window=10)
+        self.invalidate_cache(THERMOSTATS)
+        self.increase_interval(THERMOSTATS, interval=2, window=10)
 
     def v0_set_airco_status(self, thermostat_id, airco_on):
         # type: (int, bool) -> Dict[str,Any]
@@ -462,8 +467,8 @@ class ThermostatControllerMaster(ThermostatController):
         self.__check_thermostat(thermostat_number)
         self._master_controller.write_thermostat_setpoint(thermostat_number, temperature)
 
-        self.invalidate_cache(Observer.Types.THERMOSTATS)
-        self.increase_interval(Observer.Types.THERMOSTATS, interval=2, window=10)
+        self.invalidate_cache(THERMOSTATS)
+        self.increase_interval(THERMOSTATS, interval=2, window=10)
 
     def _monitor(self):
         # type: () -> None

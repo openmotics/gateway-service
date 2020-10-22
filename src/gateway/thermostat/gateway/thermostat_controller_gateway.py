@@ -15,35 +15,36 @@
 
 import datetime
 import logging
-import constants
+
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.schedulers.background import BackgroundScheduler
 from playhouse.signals import post_save
-from ioc import Injectable, Inject, Singleton, INJECTED
-from bus.om_bus_events import OMBusEvents
+
+import constants
 from gateway.daemon_thread import DaemonThread
+from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO, \
+    ThermostatStatusDTO, ThermostatGroupDTO
 from gateway.enums import ThermostatMode
 from gateway.events import GatewayEvent
 from gateway.exceptions import UnsupportedException
-from gateway.dto import ThermostatDTO, ThermostatGroupDTO, \
-    ThermostatStatusDTO, ThermostatGroupStatusDTO
-from gateway.models import Output, Preset, Thermostat, ThermostatGroup, OutputToThermostatGroup, Pump
-from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
-from gateway.thermostat.thermostat_controller import ThermostatController
-from gateway.thermostat.gateway.thermostat_pid import ThermostatPid
 from gateway.mappers import ThermostatMapper
-from apscheduler.schedulers.background import BackgroundScheduler
+from gateway.models import Output, OutputToThermostatGroup, Preset, Pump, \
+    Thermostat, ThermostatGroup
+from gateway.pubsub import PubSub
+from gateway.thermostat.gateway.pump_valve_controller import \
+    PumpValveController
+from gateway.thermostat.gateway.thermostat_pid import ThermostatPid
+from gateway.thermostat.thermostat_controller import ThermostatController
+from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import List, Tuple, Dict, Optional, Literal, Any
+    from typing import Dict, List, Tuple, Optional, Any, Literal
     from gateway.gateway_api import GatewayApi
-    from bus.om_bus_client import MessageClient
     from gateway.output_controller import OutputController
 
 logger = logging.getLogger('openmotics')
 
 
-@Injectable.named('thermostat_controller')
-@Singleton
 class ThermostatControllerGateway(ThermostatController):
 
     THERMOSTAT_PID_UPDATE_INTERVAL = 60
@@ -51,11 +52,11 @@ class ThermostatControllerGateway(ThermostatController):
     SYNC_CONFIG_INTERVAL = 900
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, message_client=INJECTED, output_controller=INJECTED):
-        # type: (GatewayApi, MessageClient, OutputController) -> None
-        super(ThermostatControllerGateway, self).__init__(message_client=message_client,
-                                                          output_controller=output_controller)
+    def __init__(self, gateway_api=INJECTED, output_controller=INJECTED, pubsub=INJECTED):
+        # type: (GatewayApi, OutputController, PubSub) -> None
+        super(ThermostatControllerGateway, self).__init__(output_controller)
         self._gateway_api = gateway_api
+        self._pubsub = pubsub
         self._running = False
         self._pid_loop_thread = None  # type: Optional[DaemonThread]
         self._update_pumps_thread = None  # type: Optional[DaemonThread]
@@ -514,29 +515,25 @@ class ThermostatControllerGateway(ThermostatController):
 
     def _thermostat_changed(self, thermostat_number, active_preset, current_setpoint, actual_temperature, percentages, room):
         # type: (int, str, float, float, List[float], int) -> None
-        if self._message_client is not None:
-            self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': thermostat_number})
         location = {'room_id': room}
-        for callback in self._event_subscriptions:
-            callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_CHANGE,
-                                  data={'id': thermostat_number,
-                                        'status': {'preset': active_preset,
-                                                   'current_setpoint': current_setpoint,
-                                                   'actual_temperature': actual_temperature,
-                                                   'output_0': percentages[0] if len(percentages) >= 1 else None,
-                                                   'output_1': percentages[1] if len(percentages) >= 2 else None},
-                                        'location': location}))
+        gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE,
+                                     {'id': thermostat_number,
+                                      'status': {'preset': active_preset,
+                                                 'current_setpoint': current_setpoint,
+                                                 'actual_temperature': actual_temperature,
+                                                 'output_0': percentages[0] if len(percentages) >= 1 else None,
+                                                 'output_1': percentages[1] if len(percentages) >= 2 else None},
+                                      'location': location})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     def _thermostat_group_changed(self, thermostat_group):
         # type: (ThermostatGroup) -> None
-        if self._message_client is not None:
-            self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
-        for callback in self._event_subscriptions:
-            callback(GatewayEvent(event_type=GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
-                                  data={'id': 0,
-                                        'status': {'state': 'ON' if thermostat_group.on else 'OFF',
-                                                   'mode': 'COOLING' if thermostat_group.mode == 'cooling' else 'HEATING'},
-                                        'location': {}}))
+        gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
+                                     {'id': 0,
+                                      'status': {'state': 'ON' if thermostat_group.on else 'OFF',
+                                                 'mode': 'COOLING' if thermostat_group.mode == 'cooling' else 'HEATING'},
+                                      'location': {}})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     # Obsolete unsupported calls
 

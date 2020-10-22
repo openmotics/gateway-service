@@ -25,6 +25,7 @@ from bus.om_bus_events import OMBusEvents
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MYPY
@@ -40,35 +41,40 @@ class Observer(object):
     The Observer gets various (change) events and will also monitor certain datasets to manually detect changes
     """
 
-    class Types(object):
-        THERMOSTATS = 'THERMOSTATS'
-
     @Inject
-    def __init__(self, master_controller=INJECTED, message_client=INJECTED):
+    def __init__(self, master_controller=INJECTED, pubsub=INJECTED, message_client=INJECTED):
         self._master_controller = master_controller  # type: MasterController
+        self._pubsub = pubsub  # type: PubSub
         self._message_client = message_client  # type: Optional[MessageClient]
 
-        self._event_subscriptions = []
-        self._master_controller.subscribe_event(self._master_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, self._handle_master_event)
+        self._pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, self._handle_gateway_event)
 
-    def subscribe_events(self, callback):
-        """
-        Subscribes a callback to generic events
-        :param callback: the callback to call
-        """
-        self._event_subscriptions.append(callback)
+    def _handle_master_event(self, master_event):
+        # type: (MasterEvent) -> None
+        if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
+            # TODO still needed with config events?
+            if self._message_client is not None:
+                self._message_client.send_event(OMBusEvents.DIRTY_EEPROM, {})
+        elif master_event.type == MasterEvent.Types.INPUT_CHANGE:
+            # TODO move to InputController
+            gateway_event = GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE,
+                                         data=master_event.data)
+            self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
-    # Handle master "events"
-
-    def _master_event(self, master_event):
-        """
-        Triggers when the MasterController generates events
-        :type master_event: gateway.hal.master_controller.MasterEvent
-        """
-        if master_event.type == MasterEvent.Types.INPUT_CHANGE:
-            for callback in self._event_subscriptions:
-                callback(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE,
-                                      data=master_event.data))
+    def _handle_gateway_event(self, gateway_event):
+        # type: (GatewayEvent) -> None
+        # Only for outputs?
+        if gateway_event.type == GatewayEvent.Types.OUTPUT_CHANGE:
+            if self._message_client:
+                self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': gateway_event.data['id']})
+        elif gateway_event.type == GatewayEvent.Types.THERMOSTAT_CHANGE:
+            if self._message_client is not None:
+                self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': gateway_event.data['id']})
+        elif gateway_event.type == GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE:
+            if self._message_client is not None:
+                self._message_client.send_event(OMBusEvents.THERMOSTAT_CHANGE, {'id': None})
 
     # Inputs
 

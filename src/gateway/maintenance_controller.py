@@ -43,8 +43,6 @@ class MaintenanceController(object):
         self._certificate_filename = ssl_certificate
         self._maintenance_communicator = maintenance_communicator
         self._maintenance_communicator.set_receiver(self._received_data)
-        self._maintenance_communicator.set_deactivated(self._deactivated)
-        self._maintenance_stopped_callbacks = []
         self._connection = None
         self._server_thread = None
 
@@ -78,10 +76,6 @@ class MaintenanceController(object):
         if self._maintenance_communicator.is_active():
             self._maintenance_communicator.deactivate()
 
-    def _deactivated(self):
-        for callback in self._maintenance_stopped_callbacks:
-            callback()
-
     #################
     # Subscriptions #
     #################
@@ -95,9 +89,6 @@ class MaintenanceController(object):
         if not self._consumers:
             logger.info('Stopping maintenance mode due to no consumers.')
             self._deactivate()
-
-    def subscribe_maintenance_stopped(self, callback):
-        self._maintenance_stopped_callbacks.append(callback)
 
     ##########
     # Socket #
