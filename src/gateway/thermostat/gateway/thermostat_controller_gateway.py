@@ -38,7 +38,7 @@ from gateway.thermostat.thermostat_controller import ThermostatController
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import Dict, List, Tuple, Optional, Any, Literal
+    from typing import Any, Dict, List, Literal, Tuple, Optional
     from gateway.gateway_api import GatewayApi
     from gateway.output_controller import OutputController
 
