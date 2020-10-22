@@ -212,16 +212,20 @@ class MasterClassicControllerTest(unittest.TestCase):
         with mock.patch.object(MasterClassicController, '_synchronize') as synchronize:
             controller = get_classic_controller_dummy([])
             pubsub = get_pubsub()
+
+            invalidate = controller._eeprom_controller.invalidate_cache.call_args_list
+
             try:
                 controller.start()
                 controller.module_discover_start(30)
                 time.sleep(0.2)
                 assert len(synchronize.call_args_list) == 1
+                assert len(invalidate) == 0
 
                 pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, subscriber.callback)
                 controller.module_discover_stop()
                 time.sleep(0.2)
-                assert len(synchronize.call_args_list) == 2
+                assert len(invalidate) == 1
 
                 assert len(subscriber.callback.call_args_list) == 1
                 event = subscriber.callback.call_args_list[0][0][0]

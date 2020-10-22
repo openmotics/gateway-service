@@ -560,7 +560,10 @@ class MasterClassicController(MasterController):
         self._publish_event(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
 
     def _is_output_locked(self, output_id):
-        output_dto = self._output_config[output_id]
+        # TODO remove self._output_config cache, this belongs in the output controller.
+        output_dto = self._output_config.get(output_id)
+        if output_dto is None:
+            output_dto = self.load_output(output_id)
         if output_dto.lock_bit_id is not None:
             value = self._validation_bits.get_validation_bit(output_dto.lock_bit_id)
             locked = value
@@ -1423,7 +1426,7 @@ class MasterClassicController(MasterController):
 
     def _broadcast_module_discovery(self):
         # type: () -> None
-        self._invalidate_caches()
+        self._eeprom_controller.invalidate_cache()
         self._publish_event(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
 
     # Error functions
