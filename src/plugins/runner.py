@@ -174,7 +174,8 @@ class PluginRunner(object):
             if self._reader:
                 self._reader.stop()
             self._process_running = False
-            self._async_command_queue.put(None)  # Triggers an abort on the read thread
+            if self._async_command_queue is not None:
+                self._async_command_queue.put(None)  # Triggers an abort on the read thread
 
             if self._proc and self._proc.poll() is None:
                 self.logger('[Runner] Terminating process')
@@ -428,7 +429,7 @@ class RunnerWatchdog(object):
             self._thread.stop()
 
     def start(self):
-        # type: () -> None
+        # type: () -> bool
         success = self._run()  # Initial sync run
         self._thread = DaemonThread(target=self._run,
                                     name='Watchdog for plugin {0}'.format(self._plugin_runner.name),
@@ -436,7 +437,7 @@ class RunnerWatchdog(object):
         self._thread.start()
         return success
 
-    def _run(self):
+    def _run(self):  # type: () -> bool
         try:
             score = self._plugin_runner.error_score()
             if score > self._threshold:
