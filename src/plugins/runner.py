@@ -12,13 +12,14 @@ import six
 import ujson as json
 from six.moves.queue import Empty, Full, Queue
 
+from gateway.daemon_thread import DaemonThread
 from toolbox import PluginIPCReader, PluginIPCWriter
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Optional
+    from typing import Any, Dict, Callable, List, Optional
     from gateway.webservice import WebInterface
 
-logger = logging.getLogger('openmotics')
+logger_ = logging.getLogger('openmotics')
 
 
 class Service(object):
@@ -54,9 +55,12 @@ class Service(object):
             return json.dumps({"success": False, "msg": str(ex)})
 
 
-
 class PluginRunner(object):
-    def __init__(self, name, runtime_path, plugin_path, logger, command_timeout=5.0):
+    class State(object):
+        RUNNING = 'RUNNING'
+        STOPPED = 'STOPPED'
+
+    def __init__(self, name, runtime_path, plugin_path, logger, command_timeout=5.0, state_callback=None):
         self.runtime_path = runtime_path
         self.plugin_path = plugin_path
         self.command_timeout = command_timeout
@@ -70,6 +74,7 @@ class PluginRunner(object):
         self._response_queue = Queue()  # type: Queue[Dict[str,Any]]
         self._writer = None  # type: Optional[PluginIPCWriter]
         self._reader = None  # type: Optional[PluginIPCReader]
+        self._state_callback = state_callback  # type: Optional[Callable[[str, str], None]]
 
         self.name = name
         self.version = None
@@ -81,7 +86,7 @@ class PluginRunner(object):
         self._metric_receivers = []
 
         self._async_command_thread = None
-        self._async_command_queue = None  # type: Optional[Queue[Dict[str,Any]]]
+        self._async_command_queue = None  # type: Optional[Queue[Optional[Dict[str, Any]]]]
 
         self._commands_executed = 0
         self._commands_failed = 0
@@ -137,12 +142,14 @@ class PluginRunner(object):
         self._async_command_thread.start()
 
         self._running = True
+        if self._state_callback is not None:
+            self._state_callback(self.name, PluginRunner.State.RUNNING)
         self.logger('[Runner] Started')
 
     def logger(self, message):
         # type: (str) -> None
         self._logger(message)
-        logger.info('Plugin {0} - {1}'.format(self.name, message))
+        logger_.info('Plugin {0} - {1}'.format(self.name, message))
 
     def get_webservice(self, webinterface):
         # type: (WebInterface) -> Service
@@ -167,6 +174,7 @@ class PluginRunner(object):
             if self._reader:
                 self._reader.stop()
             self._process_running = False
+            self._async_command_queue.put(None)  # Triggers an abort on the read thread
 
             if self._proc and self._proc.poll() is None:
                 self.logger('[Runner] Terminating process')
@@ -182,6 +190,9 @@ class PluginRunner(object):
                         self._proc.kill()
                     except Exception as exception:
                         self.logger('[Runner] Exception during killing plugin: {0}'.format(exception))
+
+            if self._state_callback is not None:
+                self._state_callback(self.name, PluginRunner.State.STOPPED)
             self.logger('[Runner] Stopped')
 
     def process_input_status(self, input_event):
@@ -331,6 +342,8 @@ class PluginRunner(object):
                 # Give it a timeout in order to check whether the plugin is not stopped.
                 assert self._async_command_queue, 'Command Queue not defined'
                 command = self._async_command_queue.get(block=True, timeout=10)
+                if command is None:
+                    continue  # Used to exit this thread
                 self._do_command(command['action'], payload=command['payload'], action_version=command['action_version'])
             except Empty:
                 self._do_async('ping', {})
@@ -407,36 +420,32 @@ class RunnerWatchdog(object):
         self._plugin_runner = plugin_runner
         self._threshold = threshold
         self._check_interval = check_interval
-        self._stopped = False
+        self._thread = None  # type: Optional[DaemonThread]
 
     def stop(self):
         # type: () -> None
-        self._stopped = True
+        if self._thread is not None:
+            self._thread.stop()
 
     def start(self):
         # type: () -> None
-        self._stopped = False
-        thread = Thread(target=self.run, name='RunnerWatchdog for {0}'.format(self._plugin_runner.plugin_path))
-        thread.daemon = True
-        thread.start()
+        success = self._run()  # Initial sync run
+        self._thread = DaemonThread(target=self._run,
+                                    name='Watchdog for plugin {0}'.format(self._plugin_runner.name),
+                                    interval=self._check_interval)
+        self._thread.start()
+        return success
 
-    def run(self):
-        self._plugin_runner.logger('[Watchdog] Started')
-        while not self._stopped:
-            try:
-                score = self._plugin_runner.error_score()
-                if score > self._threshold:
-                    self._plugin_runner.logger('[Watchdog] Stopping unhealthy runner')
-                    self._plugin_runner.stop()
-                if not self._plugin_runner.is_running():
-                    self._plugin_runner.logger('[Watchdog] Starting stopped runner')
-                    self._plugin_runner.start()
-            except Exception as e:
-                self._plugin_runner.logger('[Watchdog] Exception in watchdog: {0}'.format(e))
-
-            for _ in range(self._check_interval):
-                # Small sleep cycles, to be able to finish the thread quickly
-                time.sleep(1)
-                if self._stopped:
-                    break
-        self._plugin_runner.logger('[Watchdog] Stopped')
+    def _run(self):
+        try:
+            score = self._plugin_runner.error_score()
+            if score > self._threshold:
+                self._plugin_runner.logger('[Watchdog] Stopping unhealthy runner')
+                self._plugin_runner.stop()
+            if not self._plugin_runner.is_running():
+                self._plugin_runner.logger('[Watchdog] Starting stopped runner')
+                self._plugin_runner.start()
+            return True
+        except Exception as e:
+            self._plugin_runner.logger('[Watchdog] Exception in watchdog: {0}'.format(e))
+            return False

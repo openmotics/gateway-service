@@ -150,8 +150,11 @@ class PluginIPCWriter(object):
 
     def write(self, response):
         # type: (Dict[str,Any]) -> None
-        self._stream.write(self._packer.pack(response))
-        self._stream.flush()
+        try:
+            self._stream.write(self._packer.pack(response))
+            self._stream.flush()
+        except IOError:
+            pass  # Ignore exceptions if the stream is not available (nothing that can be done anyway)
 
 
 class Toolbox(object):
