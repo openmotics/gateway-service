@@ -15,15 +15,18 @@
 from __future__ import absolute_import
 
 import unittest
+
 import mock
 from peewee import SqliteDatabase
-from gateway.hal.master_controller import MasterController
-from gateway.dto import ModuleDTO
+
 from gateway.api.serializers import ModuleSerializer
+from gateway.dto import ModuleDTO
+from gateway.hal.master_controller import MasterController
 from gateway.models import Module
 from gateway.module_controller import ModuleController
-from power.power_controller import PowerController
+from gateway.pubsub import PubSub
 from ioc import SetTestMode, SetUpTestInjections
+from power.power_controller import PowerController
 
 MODELS = [Module]
 
@@ -38,6 +41,8 @@ class ModuleControllerTest(unittest.TestCase):
         self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
+        self.pubsub = PubSub()
+        SetUpTestInjections(pubsub=self.pubsub)
         self.master_controller = mock.Mock(MasterController)
         self.power_controller = mock.Mock(PowerController)
         SetUpTestInjections(master_controller=self.master_controller,
