@@ -95,7 +95,8 @@ def apply_migrations():
     logger.info('Applying migrations')
     # Run all unapplied migrations
     db = Database.get_db()
-    router = Router(db, migrate_dir='/opt/openmotics/python/gateway/migrations/orm')
+    gateway_src = os.path.abspath(os.path.join(__file__, '..'))
+    router = Router(db, migrate_dir=os.path.join(gateway_src, 'migrations/orm'))
     router.run()
 
 
@@ -159,12 +160,12 @@ def setup_target_platform(target_platform, message_client_name):
     from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
                          maintenance_controller, user_controller, pulse_counter_controller,
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
-                         group_action_controller, module_controller, ventilation_controller)
+                         shutter_controller, group_action_controller, module_controller, ventilation_controller)
     from cloud import events
     _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
          maintenance_controller, base, events, user_controller,
-         pulse_counter_controller, metrics_caching, watchdog, output_controller,
-         room_controller, sensor_controller, group_action_controller, module_controller, ventilation_controller)
+         pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
+         sensor_controller, shutter_controller, group_action_controller, module_controller, ventilation_controller)
 
     # Webserver / Presentation layer
     Injectable.value(ssl_private_key=constants.get_ssl_private_key_file())

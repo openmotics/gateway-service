@@ -227,8 +227,6 @@ class System(object):
         operating_system = System.get_operating_system().get('ID')
         if operating_system in (System.OS.ANGSTROM, System.OS.DEBIAN):
             sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
-        else:
-            logger.warning('could not configure imports for unknown platform, skipped')
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:

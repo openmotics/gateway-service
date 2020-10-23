@@ -1,7 +1,12 @@
 from __future__ import absolute_import
+
 import logging
 import os
+
 import six
+
+import constants 
+from plugin_runtime.decorators import *  # Import for backwards compatibility
 
 try:
     import ujson as json
@@ -9,7 +14,6 @@ except ImportError:
     # This is the case when the plugin runtime is unittested
     import json  # type: ignore
 
-from .decorators import *  # Import for backwards compatibility
 
 logger = logging.getLogger("openmotics")
 
@@ -40,7 +44,9 @@ class OMPluginBase(object):
 
     def __get_config_path(self):
         """ Get the path for the plugin configuration file based on the plugin name. """
-        return '/opt/openmotics/etc/pi_{0}.conf'.format(self.__class__.name)
+        plugin_config_dir = constants.get_plugin_config_dir()
+        config_file = 'pi_{0}.conf'.format(self.__class__.name)
+        return os.path.join(plugin_config_dir, config_file)
 
     def read_config(self, default_config=None):
         """ Read the configuration file for the plugin: the configuration file contains json
