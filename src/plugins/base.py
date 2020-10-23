@@ -25,9 +25,9 @@ from threading import Lock, Timer
 
 import six
 
+import constants
 from gateway.events import GatewayEvent
 from gateway.models import Config, Plugin
-from gateway.shutter_controller import ShutterController
 from ioc import INJECTED, Inject, Injectable, Singleton
 from plugins.runner import PluginRunner, RunnerWatchdog
 
@@ -51,16 +51,16 @@ class PluginController(object):
     def __init__(self,
                  web_interface=INJECTED, output_controller=INJECTED,
                  shutter_controller=INJECTED,
-                 runtime_path='/opt/openmotics/python/plugin_runtime',
-                 plugins_path='/opt/openmotics/python/plugins',
-                 plugin_config_path='/opt/openmotics/etc'):
+                 runtime_path=None,
+                 plugins_path=None,
+                 plugin_config_path=None):
         # type: (WebInterface, OutputController, ShutterController, str, str, str) -> None
         self._webinterface = web_interface
         self._output_controller = output_controller
         self._shuttercontroller = shutter_controller
-        self._runtime_path = runtime_path
-        self._plugins_path = plugins_path
-        self._plugin_config_path = plugin_config_path
+        self._runtime_path = runtime_path or constants.get_plugin_runtime_dir()
+        self._plugins_path = plugins_path or constants.get_plugin_dir()
+        self._plugin_config_path = constants.get_plugin_config_dir()
 
         self._stopped = True
         self._logs = {}  # type: Dict[str, List[str]]

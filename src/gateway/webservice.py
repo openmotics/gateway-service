@@ -407,7 +407,8 @@ class WebInterface(object):
         :returns: Contents of index.html
         :rtype: str
         """
-        return serve_file('/opt/openmotics/static/index.html', content_type='text/html')
+        static_dir = constants.get_static_dir()
+        return serve_file(os.path.join(static_dir, 'index.html'), content_type='text/html')
 
     @openmotics_api(check=types(accept_terms=bool, timeout=int), plugin_exposed=False)
     def login(self, username, password, accept_terms=None, timeout=None):
@@ -2353,7 +2354,7 @@ class WebInterface(object):
     def install_plugin(self, md5, package_data):
         """
         Install a new plugin. The package_data should include a __init__.py file and
-        will be installed in /opt/openmotics/python/plugins/<name>.
+        will be installed in $OPENMOTICS_PREFIX/python/plugins/<name>.
 
         :param md5: md5 sum of the package_data.
         :type md5: String
@@ -2526,9 +2527,9 @@ class WebService(object):
             cherrypy.tools.websocket = OMSocketTool()
 
             config = {'/terms': {'tools.staticdir.on': True,
-                                 'tools.staticdir.dir': '/opt/openmotics/python/terms'},
+                                 'tools.staticdir.dir': constants.get_terms_dir()},
                       '/static': {'tools.staticdir.on': True,
-                                  'tools.staticdir.dir': '/opt/openmotics/static'},
+                                  'tools.staticdir.dir': constants.get_static_dir()},
                       '/ws_metrics': {'tools.websocket.on': True,
                                       'tools.websocket.handler_cls': MetricsSocket},
                       '/ws_events': {'tools.websocket.on': True,
