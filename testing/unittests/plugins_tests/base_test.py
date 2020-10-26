@@ -205,6 +205,13 @@ class P2(OMPluginBase):
         def _call():
             called['called'] += 1
 
+        def _wait_for_called(amount, timeout=1):
+            end = time.time() + timeout
+            while time.time() < end:
+                if called['called'] == amount:
+                    break
+            self.assertEqual(amount, called['called'])
+
         controller = None
         try:
             PluginControllerTest._create_plugin('P1', """
@@ -220,11 +227,9 @@ class P1(OMPluginBase):
             controller.start()
             self.assertIsNotNone(controller._dependencies_timer)
             self.assertEquals(0, called['called'])
-            time.sleep(0.25)
-            self.assertEquals(1, called['called'])
+            _wait_for_called(1)
             controller.stop_plugin('P1')
-            time.sleep(0.25)
-            self.assertEquals(2, called['called'])
+            _wait_for_called(2)
         finally:
             if controller is not None:
                 controller.stop()
