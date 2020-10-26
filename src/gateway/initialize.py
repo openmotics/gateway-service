@@ -283,6 +283,15 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(thermostat_controller=ThermostatControllerMaster())
 
 
+def setup_minimal_vpn_platform(message_client_name):
+    # type: (str) -> None
+    # IPC
+    message_client = None
+    if message_client_name is not None:
+        message_client = MessageClient(message_client_name)
+    Injectable.value(message_client=message_client)
+
+
 def setup_minimal_master_platform(port):
     # type: (str) -> None
     config = ConfigParser()
