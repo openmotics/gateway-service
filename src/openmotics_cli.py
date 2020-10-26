@@ -20,40 +20,9 @@ import os
 import sys
 import constants
 import gateway
-import gateway.initialize
 from ioc import INJECTED, Inject
 
 logger = logging.getLogger('openmotics')
-
-
-def cmd_get_realtime_power(args):
-    _ = args
-    gateway.initialize.setup_platform(message_client_name='openmotics_cli')
-
-    @Inject
-    def f(gateway_api=INJECTED):
-        return gateway_api.get_realtime_power()
-    print(f())
-
-
-def cmd_get_realtime_p1(args):
-    _ = args
-    gateway.initialize.setup_platform(message_client_name='openmotics_cli')
-
-    @Inject
-    def f(gateway_api=INJECTED):
-        return gateway_api.get_realtime_p1()
-    print(f())
-
-
-def cmd_get_total_energy(args):
-    _ = args
-    gateway.initialize.setup_platform(message_client_name='openmotics_cli')
-
-    @Inject
-    def f(gateway_api=INJECTED):
-        return gateway_api.get_total_energy()
-    print(f())
 
 
 def cmd_factory_reset(args):
@@ -65,24 +34,70 @@ def cmd_factory_reset(args):
         fd.write('factory_reset')
 
 
+def cmd_shell(args):
+    import IPython
+    from gateway.initialize import setup_platform
+    setup_platform(None)
+
+    @Inject
+    def f(cloud_api_client=INJECTED,
+          event_sender=INJECTED,
+          gateway_api=INJECTED,
+          group_action_controller=INJECTED,
+          input_controller=INJECTED,
+          maintenance_controller=INJECTED,
+          master_controller=INJECTED,
+          message_client=INJECTED,
+          metrics_cache_controller=INJECTED,
+          metrics_controller=INJECTED,
+          module_controller=INJECTED,
+          observer=INJECTED,
+          output_controller=INJECTED,
+          plugin_controller=INJECTED,
+          power_controller=INJECTED,
+          pubsub=INJECTED,
+          pulse_counter_controller=INJECTED,
+          room_controller=INJECTED,
+          scheduling_controller=INJECTED,
+          sensor_controller=INJECTED,
+          shutter_controller=INJECTED,
+          thermostat_controller=INJECTED,
+          user_controller=INJECTED,
+          ventilation_controller=INJECTED,
+          watchdog=INJECTED,
+          web_interface=INJECTED,
+          web_service=INJECTED):
+        # Imports for convenience
+        from gateway.events import GatewayEvent
+        from gateway.hal.master_event import MasterEvent
+        from gateway.pubsub import PubSub
+        IPython.embed(header='''
+        Interact with injected controllers using eg. master_controller
+
+            In[1]: master_controller.start()
+            In[2]: master_controller.get_status()
+            Out[3]:
+            {'date': '00/00/0',
+             'hw_version': 4,
+             'mode': 76,
+             'time': '12:55',
+             'version': '3.143.103'}
+        ''')
+    f()
+
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--version', action='version', version=gateway.__version__)
 subparsers = parser.add_subparsers()
-
-controller_parser = subparsers.add_parser('controller')
-controller_subparsers = controller_parser.add_subparsers()
-realtime_power_parser = controller_subparsers.add_parser('realtime-power')
-realtime_power_parser.set_defaults(func=cmd_get_realtime_power)
-realtime_p1_parser = controller_subparsers.add_parser('realtime-p1')
-realtime_p1_parser.set_defaults(func=cmd_get_realtime_p1)
-total_energy_parser = controller_subparsers.add_parser('total-energy')
-total_energy_parser.set_defaults(func=cmd_get_total_energy)
 
 operator_parser = subparsers.add_parser('operator')
 operator_subparsers = operator_parser.add_subparsers()
 factory_reset_parser = operator_subparsers.add_parser('factory-reset')
 factory_reset_parser.set_defaults(func=cmd_factory_reset)
 factory_reset_parser.add_argument('--force', action='store_true')
+shell_parser = operator_subparsers.add_parser('shell')
+shell_parser.set_defaults(func=cmd_shell)
 
 
 def main():
