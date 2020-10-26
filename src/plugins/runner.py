@@ -12,7 +12,6 @@ import six
 import ujson as json
 from six.moves.queue import Empty, Full, Queue
 
-from gateway.daemon_thread import DaemonThread
 from toolbox import PluginIPCReader, PluginIPCWriter
 
 if False:  # MYPY
@@ -383,7 +382,8 @@ class PluginRunner(object):
                 metadata = ''
                 if action == 'request':
                     metadata = ' {0}'.format(payload['method'])
-                self.logger('[Runner] No response within {0}s ({1}{2})'.format(timeout, action, metadata))
+                if self._running:
+                    self.logger('[Runner] No response within {0}s ({1}{2})'.format(timeout, action, metadata))
                 self._commands_failed += 1
                 raise Exception('Plugin did not respond')
 
@@ -421,23 +421,36 @@ class RunnerWatchdog(object):
         self._plugin_runner = plugin_runner
         self._threshold = threshold
         self._check_interval = check_interval
-        self._thread = None  # type: Optional[DaemonThread]
+        self._stopped = False
+        self._thread = None  # type: Optional[Thread]
 
     def stop(self):
         # type: () -> None
+        self._stopped = True
         if self._thread is not None:
-            self._thread.stop()
+            self._thread.join()
 
     def start(self):
         # type: () -> bool
+        self._stopped = False
         success = self._run()  # Initial sync run
-        self._thread = DaemonThread(target=self._run,
-                                    name='Watchdog for plugin {0}'.format(self._plugin_runner.name),
-                                    interval=self._check_interval)
+        self._thread = Thread(target=self.run, name='Watchdog for plugin {0}'.format(self._plugin_runner.name))
+        self._thread.daemon = True
         self._thread.start()
         return success
 
-    def _run(self):  # type: () -> bool
+    def run(self):
+        self._plugin_runner.logger('[Watchdog] Started')
+        while not self._stopped:
+            self._run()
+            for _ in range(self._check_interval * 2):
+                # Small sleep cycles, to be able to finish the thread quickly
+                time.sleep(0.5)
+                if self._stopped:
+                    break
+        self._plugin_runner.logger('[Watchdog] Stopped')
+
+    def _run(self):
         try:
             score = self._plugin_runner.error_score()
             if score > self._threshold:
