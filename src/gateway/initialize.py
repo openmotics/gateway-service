@@ -222,7 +222,7 @@ def setup_target_platform(target_platform, message_client_name):
     # Master Controller
     controller_serial_port = config.get('OpenMotics', 'controller_serial')
     Injectable.value(controller_serial=Serial(controller_serial_port, 115200))
-    if target_platform == Platform.Type.CORE_PLUS:
+    if target_platform in Platform.CoreTypes:
         # FIXME don't create singleton for optional controller?
         from master.core import ucan_communicator, slave_communicator
         _ = ucan_communicator, slave_communicator
@@ -255,7 +255,7 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(maintenance_communicator=MaintenanceClassicCommunicator())
         Injectable.value(master_controller=MasterClassicController())
 
-    if target_platform == Platform.Type.CORE_PLUS:
+    if target_platform in Platform.CoreTypes:
         from gateway.hal import frontpanel_controller_core
         _ = frontpanel_controller_core
     else:
@@ -265,7 +265,7 @@ def setup_target_platform(target_platform, message_client_name):
     # Thermostats
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
     thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled
-    if target_platform == Platform.Type.CORE_PLUS or thermostats_gateway_enabled:
+    if target_platform in Platform.CoreTypes or thermostats_gateway_enabled:
         Injectable.value(thermostat_controller=ThermostatControllerGateway())
     else:
         Injectable.value(thermostat_controller=ThermostatControllerMaster())
@@ -279,7 +279,7 @@ def setup_minimal_master_platform(port):
     platform = Platform.get_platform()
     Injectable.value(controller_serial=Serial(port, 115200))
 
-    if platform == Platform.Type.CORE_PLUS:
+    if platform in Platform.CoreTypes:
         from master.core import ucan_communicator
         _ = ucan_communicator
         core_cli_serial_port = config.get('OpenMotics', 'cli_serial')

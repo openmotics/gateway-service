@@ -35,7 +35,7 @@ class InputMigrator(BaseMigrator):
     @Inject
     def _migrate(cls, master_controller=INJECTED):  # type: (MasterClassicController) -> None
         # Core(+) platforms never had non-ORM rooms
-        if Platform.get_platform() != Platform.Type.CLASSIC:
+        if Platform.get_platform() in Platform.CoreTypes:
             return
 
         # Import legacy code

@@ -169,7 +169,7 @@ def main():
         master_cold_reset()
         return
     elif args.update:
-        if platform == Platform.Type.CORE_PLUS:
+        if platform in Platform.CoreTypes:
             firmware = args.master_firmware_core
             if not firmware:
                 print('error: --master-firmware-core is required to update')
