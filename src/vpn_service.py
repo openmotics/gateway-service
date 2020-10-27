@@ -290,13 +290,6 @@ class Gateway(object):
         _ = self  # Needs to be an instance method
         return System.get_ip_address()
 
-    def get_system_info(self):
-        """ Returns some system information """
-        _ = self  # Needs to be an instance method
-        return {'platform': Platform.get_platform(),
-                'operating_system': System.get_operating_system(),
-                'hardware': Hardware.get_board_type()}
-
 
 class DataCollector(object):
     """ Defines a function to retrieve data, the period between two collections """
@@ -362,8 +355,7 @@ class VPNService(object):
                             'outputs_status': DataCollector(self._gateway.get_outputs_status),
                             'shutters': DataCollector(self._gateway.get_shutters_status),
                             'errors': DataCollector(self._gateway.get_errors, 600),
-                            'local_ip': DataCollector(self._gateway.get_local_ip_address, 1800),
-                            'system': DataCollector(self._gateway.get_system_info, 24 * 60 * 60)}
+                            'local_ip': DataCollector(self._gateway.get_local_ip_address, 1800)}
 
     @staticmethod
     def ping(target, verbose=True):
