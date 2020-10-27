@@ -243,8 +243,11 @@ class Platform(object):
     class Type(object):
         CLASSIC = 'CLASSIC'
         CORE_PLUS = 'CORE_PLUS'
+        CORE = 'CORE'
 
-    Types = [Type.CLASSIC, Type.CORE_PLUS]
+    ClassicTypes = [Type.CLASSIC]
+    CoreTypes = [Type.CORE, Type.CORE_PLUS]
+    Types = ClassicTypes + CoreTypes
 
     @staticmethod
     def get_platform():

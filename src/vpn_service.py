@@ -29,7 +29,6 @@ import os
 import subprocess
 import time
 import traceback
-from collections import deque
 from threading import Thread
 
 import requests
@@ -214,30 +213,6 @@ class Gateway(object):
                 logger.error('Exception during Gateway call: {0} {1}'.format(message, uri))
             return
 
-    def get_real_time_power(self):
-        """ Get the real time power measurements. """
-        data = self.do_call("get_realtime_power?token=None")
-        if data is not None and data['success']:
-            del data['success']
-            return data
-        return
-
-    def get_pulse_counter_diff(self):
-        """ Get the pulse counter differences. """
-        data = self.do_call("get_pulse_counter_status?token=None")
-        if data is not None and data['success']:
-            counters = data['counters']
-
-            if self.__last_pulse_counters is None:
-                ret = [0 for _ in range(0, 24)]
-            else:
-                ret = [Gateway.__counter_diff(counters[i], self.__last_pulse_counters[i])
-                       for i in range(0, 24)]
-
-            self.__last_pulse_counters = counters
-            return ret
-        return
-
     @staticmethod
     def __counter_diff(current, previous):
         """ Calculate the diff between two counter values. """
@@ -379,8 +354,6 @@ class VPNService(object):
                             # don't re-use 'outputs' key as it will cause backwards compatibility changes on the cloud
                             'outputs_status': DataCollector(self._gateway.get_outputs_status),
                             'shutters': DataCollector(self._gateway.get_shutters_status),
-                            'pulses': DataCollector(self._gateway.get_pulse_counter_diff, 60),
-                            'power': DataCollector(self._gateway.get_real_time_power),
                             'errors': DataCollector(self._gateway.get_errors, 600),
                             'local_ip': DataCollector(self._gateway.get_local_ip_address, 1800)}
 

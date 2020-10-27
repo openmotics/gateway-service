@@ -145,7 +145,7 @@ def get_metadata_url(config, version):
 
 
 def get_master_type():
-    if Platform.get_platform() == Platform.Type.CORE_PLUS:
+    if Platform.get_platform() in Platform.CoreTypes:
         return 'master_coreplus'
     else:
         return 'master_classic'
