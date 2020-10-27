@@ -162,8 +162,8 @@ def params_handler(**kwargs):
     except Exception:
         response.headers['Content-Type'] = 'application/json'
         response.status = 406  # No Acceptable
-        response.body = json.dumps({'success': False,
-                                    'msg': 'invalid_body'})
+        contents = json.dumps({'success': False, 'msg': 'invalid_body'})
+        response.body = contents.encode()
         request.handler = None
         return
     try:
@@ -171,8 +171,8 @@ def params_handler(**kwargs):
     except ValueError:
         response.headers['Content-Type'] = 'application/json'
         response.status = 406  # No Acceptable
-        response.body = json.dumps({'success': False,
-                                    'msg': 'invalid_parameters'})
+        contents = json.dumps({'success': False, 'msg': 'invalid_parameters'})
+        response.body = contents.encode()
         request.handler = None
 
 
@@ -215,7 +215,8 @@ def authentication_handler(pass_token=False):
     except Exception:
         cherrypy.response.headers['Content-Type'] = 'application/json'
         cherrypy.response.status = 401  # Unauthorized
-        cherrypy.response.body = '"invalid_token"'
+        contents = json.dumps({'success': False, 'msg': 'invalid_token'})
+        cherrypy.response.body = contents.encode()
         request.handler = None
 
 
@@ -268,7 +269,7 @@ def _openmotics_api(f, *args, **kwargs):
     if hasattr(f, 'deprecated') and f.deprecated is not None:
         cherrypy.response.headers['Warning'] = 'Warning: 299 - "Deprecated, replaced by: {0}"'.format(f.deprecated)
     cherrypy.response.status = status
-    return contents
+    return contents.encode()
 
 
 def openmotics_api(auth=False, check=None, pass_token=False, plugin_exposed=True, deprecated=None):
@@ -2505,11 +2506,13 @@ class WebService(object):
     name = 'web'
 
     @Inject
-    def __init__(self, web_interface=INJECTED, verbose=False):
-        # type: (WebInterface, bool) -> None
+    def __init__(self, web_interface=INJECTED, http_port=INJECTED, https_port=INJECTED, verbose=False):
+        # type: (WebInterface, int, int, bool) -> None
         self._webinterface = web_interface
-        self._https_server = None  # type: Optional[cherrypy._cpserver.Server]
+        self._http_port = http_port
+        self._https_port = https_port
         self._http_server = None  # type: Optional[cherrypy._cpserver.Server]
+        self._https_server = None  # type: Optional[cherrypy._cpserver.Server]
         if not verbose:
             logging.getLogger("cherrypy").propagate = False
 
@@ -2532,6 +2535,8 @@ class WebService(object):
             OMPlugin(cherrypy.engine).subscribe()
             cherrypy.tools.websocket = OMSocketTool()
 
+            cherrypy.config.update({'server.socket_port': self._http_port})
+
             config = {'/terms': {'tools.staticdir.on': True,
                                  'tools.staticdir.dir': constants.get_terms_dir()},
                       '/static': {'tools.staticdir.on': True,
@@ -2552,16 +2557,16 @@ class WebService(object):
             cherrypy.server.unsubscribe()
 
             self._https_server = cherrypy._cpserver.Server()
-            self._https_server.socket_port = 443
+            self._https_server.socket_port = self._https_port
             self._https_server._socket_host = '0.0.0.0'
             self._https_server.socket_timeout = 60
-            System.setup_cherrypy_ssl(self._https_server,
-                                      private_key_filename=constants.get_ssl_private_key_file(),
-                                      certificate_filename=constants.get_ssl_certificate_file())
+            self._https_server.ssl_certificate = constants.get_ssl_certificate_file()
+            self._https_server.ssl_private_key = constants.get_ssl_private_key_file()
+            System.setup_cherrypy_ssl(self._https_server)
             self._https_server.subscribe()
 
             self._http_server = cherrypy._cpserver.Server()
-            self._http_server.socket_port = 80
+            self._http_server.socket_port = self._http_port
             if Config.get('enable_http', False):
                 # This is added for development purposes.
                 # Do NOT enable unless you know what you're doing and understand the risks.
