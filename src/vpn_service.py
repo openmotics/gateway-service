@@ -20,7 +20,7 @@ thermostats to the cloud, to keep the status information in the cloud in sync.
 
 from __future__ import absolute_import
 
-from platform_utils import System, Platform, Hardware
+from platform_utils import System
 System.import_libs()
 
 import glob
