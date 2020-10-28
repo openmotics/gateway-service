@@ -153,7 +153,7 @@ class Gateway(object):
     def do_call(self, uri):
         """ Do a call to the webservice, returns a dict parsed from the json returned by the webserver. """
         try:
-            request = requests.get('http://{0}/{1}'.format(self._host, uri), timeout=5.0)
+            request = requests.get('http://{0}/{1}'.format(self._host, uri), timeout=10.0)
             return json.loads(request.text)
         except Exception as ex:
             message = str(ex)
@@ -304,6 +304,7 @@ class TaskExecutor(object):
         self._message_client = message_client
         self._vpn_controller = VpnController()
         self._tasks = deque()
+        self._previous_amount_of_tasks = 0
         self._executor = DaemonThread(name='task executor',
                                       target=self._execute_tasks,
                                       interval=300)
@@ -327,7 +328,10 @@ class TaskExecutor(object):
             except IndexError:
                 return
 
-            logger.info('Processing tasks...')
+            amount_of_tasks = len(task_data)
+            if self._previous_amount_of_tasks != amount_of_tasks:
+                logger.info('Processing {0} tasks...'.format(amount_of_tasks))
+
             if 'configuration' in task_data:
                 self._process_configuration_data(task_data['configuration'])
             if 'intervals' in task_data:
@@ -342,7 +346,10 @@ class TaskExecutor(object):
                         logger.error('Could not send event {0}({1}): {2}'.format(event[0], event[1], ex))
             if 'connectivity' in task_data:
                 self._check_connectivity(task_data['connectivity'])
-            logger.info('Processing tasks... Done')
+
+            if self._previous_amount_of_tasks != amount_of_tasks:
+                logger.info('Processing {0} tasks... Done'.format(amount_of_tasks))
+                self._previous_amount_of_tasks = amount_of_tasks
 
     def _process_configuration_data(self, configuration):
         try:
