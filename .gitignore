@@ -7,6 +7,9 @@ coverage.xml
 .vscode/
 testing/gw-unit-reports
 testing/gw-unit-reports-3
+etc/
+src/terms/
+static/
 venv/
 .mypy_cache/
 .dmypy.json
