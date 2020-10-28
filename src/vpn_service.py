@@ -73,10 +73,12 @@ class VpnController(object):
 
     def __init__(self):
         self.vpn_connected = False
-        vpn_connected = DaemonThread(name='vpn controller',
-                                     target=self._vpn_connected,
-                                     interval=5)
-        vpn_connected.start()
+        self._vpn_tester = DaemonThread(name='vpn controller',
+                                        target=self._vpn_connected,
+                                        interval=5)
+
+    def start(self):
+        self._vpn_tester.start()
 
     @staticmethod
     def start_vpn():
@@ -118,10 +120,12 @@ class VpnController(object):
 class Cloud(object):
     """ Connects to the cloud """
 
-    def __init__(self):
-        config = ConfigParser()
-        config.read(constants.get_config_file())
-        self._url = config.get('OpenMotics', 'vpn_check_url') % config.get('OpenMotics', 'uuid')
+    def __init__(self, url=None):
+        self._url = url
+        if self._url is None:
+            config = ConfigParser()
+            config.read(constants.get_config_file())
+            self._url = config.get('OpenMotics', 'vpn_check_url') % config.get('OpenMotics', 'uuid')
 
     def call_home(self, extra_data):
         """ Call home reporting our state, and optionally get new settings or other stuff """
@@ -234,6 +238,8 @@ class DataCollector(object):
         self._collector_thread = DaemonThread(name='{0} collector'.format(name),
                                               target=self._collect,
                                               interval=interval)
+
+    def start(self):
         self._collector_thread.start()
 
     def _collect(self):
@@ -293,7 +299,7 @@ class TaskExecutor(object):
     @Inject
     def __init__(self, message_client=INJECTED):
         self._configuration = {}
-        self._interval = {}
+        self._intervals = {}
         self._vpn_open = False
         self._message_client = message_client
         self._vpn_controller = VpnController()
@@ -301,6 +307,9 @@ class TaskExecutor(object):
         self._executor = DaemonThread(name='task executor',
                                       target=self._execute_tasks,
                                       interval=300)
+
+    def start(self):
+        self._vpn_controller.start()
         self._executor.start()
 
     def set_new_tasks(self, task_data):
@@ -458,8 +467,8 @@ class TaskExecutor(object):
 
 class HeartbeatService(object):
     @Inject
-    def __init__(self, message_client=INJECTED):
-        # type: (MessageClient) -> None
+    def __init__(self, url=None, message_client=INJECTED):
+        # type: (Optional[str], MessageClient) -> None
         config = ConfigParser()
         config.read(constants.get_config_file())
 
@@ -473,7 +482,7 @@ class HeartbeatService(object):
         self._sleep_time = 0.0
         self._previous_sleep_time = 0.0
         self._gateway = Gateway()
-        self._cloud = Cloud()
+        self._cloud = Cloud(url=url)
         self._task_executor = TaskExecutor()
 
         # Obsolete keys (do not use them, as they are still processed for legacy gateways):
@@ -495,58 +504,23 @@ class HeartbeatService(object):
 
     def start(self):
         # type: () -> None
+        self._task_executor.start()
+        self._debug_collector.start()
+        for collector in self._collectors.values():
+            collector.start()
+
+    def run_heartbeat(self):
+        # type: () -> None
         while True:
             self._last_cycle = time.time()
             try:
                 start_time = time.time()
 
-                # Check whether connection to the Cloud is enabled/disabled
-                self._cloud_enabled = Config.get('cloud_enabled')
-                if self._cloud_enabled is False:
-                    self._sleep_time = DEFAULT_SLEEP_TIME
-                    task_data = {'open_vpn': False,
-                                 'events': [(OMBusEvents.VPN_OPEN, False),
-                                            (OMBusEvents.CLOUD_REACHABLE, False)]}
-                    self._task_executor.set_new_tasks(task_data=task_data)
-                    time.sleep(self._sleep_time)
-                    continue
+                self._beat()
 
-                # Load collected data from async collectors
-                call_data = {}  # type: Dict[str, Dict[str, Any]]
-                for collector_key in self._collectors:
-                    collector = self._collectors[collector_key]
-                    data = collector.data
-                    if data is not None:
-                        call_data[collector_key] = data
-
-                # Load debug data
-                debug_data = self._debug_collector.data
-                debug_references = None  # type: Optional[List[float]]
-                if debug_data is not None:
-                    call_data['debug'], debug_references = debug_data
-
-                # Send data to the cloud and load response
-                response = self._cloud.call_home(call_data)
-                call_home_successful = response.get('success', False)
-
-                if call_home_successful:
-                    self._last_successful_heartbeat = time.time()
-                    self._debug_collector.clear(debug_references)
-
-                # Gather tasks to be executed
-                task_data = {'events': [(OMBusEvents.CLOUD_REACHABLE, call_home_successful)],
-                             'open_vpn': response.get('open_vpn', True),
-                             'connectivity': self._last_successful_heartbeat}
-                for entry in ['configuration', 'intervals']:
-                    if entry in response:
-                        task_data[entry] = response[entry]
-                self._task_executor.set_new_tasks(task_data=task_data)
-
-                # Getting some sleep
                 exec_time = time.time() - start_time
                 if exec_time > 2:
                     logger.warning('Heartbeat took more than 2s to complete: {0:.2f}s'.format(exec_time))
-                self._sleep_time = response.get('sleep_time', DEFAULT_SLEEP_TIME)
                 if self._previous_sleep_time != self._sleep_time:
                     logger.info('Set sleep interval to {0}s'.format(self._sleep_time))
                     self._previous_sleep_time = self._sleep_time
@@ -554,6 +528,49 @@ class HeartbeatService(object):
             except Exception as ex:
                 logger.error("Error during vpn check loop: {0}".format(ex))
                 time.sleep(5)
+
+    def _beat(self):
+        # Check whether connection to the Cloud is enabled/disabled
+        self._cloud_enabled = Config.get('cloud_enabled')
+        if self._cloud_enabled is False:
+            self._sleep_time = DEFAULT_SLEEP_TIME
+            task_data = {'open_vpn': False,
+                         'events': [(OMBusEvents.VPN_OPEN, False),
+                                    (OMBusEvents.CLOUD_REACHABLE, False)]}
+            self._task_executor.set_new_tasks(task_data=task_data)
+            return
+
+        # Load collected data from async collectors
+        call_data = {}  # type: Dict[str, Dict[str, Any]]
+        for collector_key in self._collectors:
+            collector = self._collectors[collector_key]
+            data = collector.data
+            if data is not None:
+                call_data[collector_key] = data
+
+        # Load debug data
+        debug_data = self._debug_collector.data
+        debug_references = None  # type: Optional[List[float]]
+        if debug_data is not None:
+            call_data['debug'], debug_references = debug_data
+
+        # Send data to the cloud and load response
+        response = self._cloud.call_home(call_data)
+        call_home_successful = response.get('success', False)
+        self._sleep_time = response.get('sleep_time', DEFAULT_SLEEP_TIME)
+
+        if call_home_successful:
+            self._last_successful_heartbeat = time.time()
+            self._debug_collector.clear(debug_references)
+
+        # Gather tasks to be executed
+        task_data = {'events': [(OMBusEvents.CLOUD_REACHABLE, call_home_successful)],
+                     'open_vpn': response.get('open_vpn', True),
+                     'connectivity': self._last_successful_heartbeat}
+        for entry in ['configuration', 'intervals']:
+            if entry in response:
+                task_data[entry] = response[entry]
+        self._task_executor.set_new_tasks(task_data=task_data)
 
 
 if __name__ == '__main__':
@@ -563,3 +580,4 @@ if __name__ == '__main__':
     logger.info('Starting VPN service')
     heartbeat_service = HeartbeatService()
     heartbeat_service.start()
+    heartbeat_service.run_heartbeat()
