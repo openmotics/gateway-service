@@ -263,7 +263,8 @@ class DebugDumpDataCollector(DataCollector):
         self._timestamps_to_clear = []  # type: List[float]
 
     def clear(self, references):  # type: (Optional[List[float]]) -> None
-        self._timestamps_to_clear = references if references is not None else []
+        if references is not None:
+            self._timestamps_to_clear = references
 
     def _collect_debug_dumps(self):  # type: () -> Tuple[Dict[str, Dict[float, Dict]], List[float]]
         raw_dumps = self._get_debug_dumps()
@@ -522,12 +523,10 @@ class HeartbeatService(object):
             self._last_cycle = time.time()
             try:
                 start_time = time.time()
-
-                self._beat()
-
-                exec_time = time.time() - start_time
-                if exec_time > 2:
-                    logger.warning('Heartbeat took more than 2s to complete: {0:.2f}s'.format(exec_time))
+                call_home_duration = self._beat()
+                beat_time = time.time() - start_time
+                if beat_time > 2:
+                    logger.warning('Heartbeat took {0:.2f}s to complete, of which the call home took {1:.2f}s'.format(beat_time, call_home_duration))
                 if self._previous_sleep_time != self._sleep_time:
                     logger.info('Set sleep interval to {0}s'.format(self._sleep_time))
                     self._previous_sleep_time = self._sleep_time
@@ -536,7 +535,7 @@ class HeartbeatService(object):
                 logger.error("Error during vpn check loop: {0}".format(ex))
                 time.sleep(5)
 
-    def _beat(self):
+    def _beat(self):  # type: () -> float
         # Check whether connection to the Cloud is enabled/disabled
         self._cloud_enabled = Config.get('cloud_enabled')
         if self._cloud_enabled is False:
@@ -545,7 +544,7 @@ class HeartbeatService(object):
                          'events': [(OMBusEvents.VPN_OPEN, False),
                                     (OMBusEvents.CLOUD_REACHABLE, False)]}
             self._task_executor.set_new_tasks(task_data=task_data)
-            return
+            return 0.0
 
         # Load collected data from async collectors
         call_data = {}  # type: Dict[str, Dict[str, Any]]
@@ -562,7 +561,9 @@ class HeartbeatService(object):
             call_data['debug'], debug_references = debug_data
 
         # Send data to the cloud and load response
+        call_home_start = time.time()
         response = self._cloud.call_home(call_data)
+        call_home_duration = time.time() - call_home_start
         call_home_successful = response.get('success', False)
         self._sleep_time = response.get('sleep_time', DEFAULT_SLEEP_TIME)
 
@@ -578,6 +579,7 @@ class HeartbeatService(object):
             if entry in response:
                 task_data[entry] = response[entry]
         self._task_executor.set_new_tasks(task_data=task_data)
+        return call_home_duration
 
 
 if __name__ == '__main__':
