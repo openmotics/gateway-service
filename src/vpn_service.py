@@ -131,7 +131,7 @@ class Cloud(object):
         """ Call home reporting our state, and optionally get new settings or other stuff """
         try:
             request = requests.post(self._url,
-                                    data={'extra_data': json.dumps(extra_data)},
+                                    data={'extra_data': json.dumps(extra_data, sort_keys=True)},
                                     timeout=10.0)
             response = json.loads(request.text)
             data = {'success': True}
@@ -353,7 +353,7 @@ class TaskExecutor(object):
 
     def _process_configuration_data(self, configuration):
         try:
-            configuration_changed = cmp(self._configuration, configuration) != 0
+            configuration_changed = self._configuration != configuration
             if configuration_changed:
                 for setting, value in configuration.items():
                     Config.set(setting, value)
@@ -364,7 +364,7 @@ class TaskExecutor(object):
 
     def _process_interval_data(self, intervals):
         try:
-            intervals_changed = cmp(self._intervals, intervals) != 0
+            intervals_changed = self._intervals != intervals
             if intervals_changed and self._message_client is not None:
                 self._message_client.send_event(OMBusEvents.METRICS_INTERVAL_CHANGE, intervals)
                 logger.info('Intervals changed: {0}'.format(intervals))

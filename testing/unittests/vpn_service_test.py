@@ -59,7 +59,7 @@ class VPNServiceTest(TestCase):
                                   ({'sleep_time': 0, 'foo': 'bar'}, {'sleep_time': 0})]:
             with mock.patch.object(requests, 'post', return_value=type('Response', (), {'text': json.dumps(response)})) as post:
                 cloud_response = cloud.call_home(payload)
-                post.assert_called_once_with(url, data={'extra_data': json.dumps(payload)}, timeout=10.0)
+                post.assert_called_once_with(url, data={'extra_data': json.dumps(payload, sort_keys=True)}, timeout=10.0)
                 expected_response = response
                 expected_response['success'] = True
                 self.assertEqual(expected_response, cloud_response)
@@ -360,7 +360,8 @@ class VPNServiceTest(TestCase):
                                                                                  'thermostats': 'thermostats collector',
                                                                                  'outputs_status': 'outputs_status collector',
                                                                                  'shutters': 'shutters collector',
-                                                                                 'debug': {}})},
+                                                                                 'debug': {}},
+                                                                                sort_keys=True)},
                                                  timeout=10.0)
                     debug_collector.clear.assert_called_once_with([123])
 
