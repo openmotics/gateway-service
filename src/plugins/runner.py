@@ -47,11 +47,13 @@ class Service(object):
     @cherrypy.expose
     def index(self, method, *args, **kwargs):
         try:
-            return self.runner.request(method, args=args, kwargs=kwargs)
+            contents = self.runner.request(method, args=args, kwargs=kwargs)
+            return contents.encode()
         except Exception as ex:
             cherrypy.response.headers["Content-Type"] = "application/json"
             cherrypy.response.status = 500
-            return json.dumps({"success": False, "msg": str(ex)})
+            contents = json.dumps({"success": False, "msg": str(ex)})
+            return contents.encode()
 
 
 class PluginRunner(object):
