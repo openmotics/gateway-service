@@ -32,6 +32,7 @@ import six
 import ujson as json
 from collections import deque
 from six.moves.configparser import ConfigParser
+from threading import Lock
 
 import constants
 from bus.om_bus_client import MessageClient
@@ -42,7 +43,7 @@ from gateway.models import Config
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import Any, Dict, Optional, List
+    from typing import Any, Dict, Optional, List, Tuple
 
 REBOOT_TIMEOUT = 900
 CHECK_CONNECTIVITY_TIMEOUT = 60
@@ -225,16 +226,10 @@ class Gateway(object):
 
 
 class DataCollector(object):
-    """ Defines a function to retrieve data, the period between two collections """
-
     def __init__(self, name, collector, interval=5):
-        """
-        Create a collector with a function to call and a period.
-        If the period is 0, the collector will be executed on each call.
-        """
         self._data = None
+        self._data_lock = Lock()
         self._interval = interval
-        self._collection_timestamp = 0.0
         self._collector_function = collector
         self._collector_thread = DaemonThread(name='{0} collector'.format(name),
                                               target=self._collect,
@@ -242,19 +237,16 @@ class DataCollector(object):
         self._collector_thread.start()
 
     def _collect(self):
-        self._data = self._collector_function()
-        self._collection_timestamp = time.time()
+        data = self._collector_function()
+        with self._data_lock:
+            self._data = data
 
     @property
     def data(self):
-        if self._collection_timestamp < time.time() - (2 * self._interval):
-            return None  # Data too old
-        return self._data
-
-    def clear(self):
-        self._data = None
-        self._collection_timestamp = 0.0
-        self._collector_thread.request_single_run()
+        with self._data_lock:
+            data = self._data
+            self._data = None
+        return data
 
 
 class DebugDumpDataCollector(DataCollector):
@@ -262,62 +254,38 @@ class DebugDumpDataCollector(DataCollector):
         super(DebugDumpDataCollector, self).__init__(name='debug dumps',
                                                      collector=self._collect_debug_dumps,
                                                      interval=60)
-        self._debug_data = {'energy': {},
-                            'master': {}}  # type: Dict[str, Dict[float, Any]]
-        self._timestamps_to_clear = {'energy': [],
-                                     'master': []}  # type: Dict[str, List[float]]
+        self._timestamps_to_clear = []  # type: List[float]
 
-    def clear(self):
-        for dump_type in self._debug_data.keys():
-            self._timestamps_to_clear[dump_type] = list(self._debug_data[dump_type].keys())
-        super(DebugDumpDataCollector, self).clear()
+    def clear(self, references):  # type: (Optional[List[float]]) -> None
+        self._timestamps_to_clear = references if references is not None else []
 
-    def _collect_debug_dumps(self):
-        raw_dumps = {}
-        raw_dumps.update(self._get_debug_dumps('energy'))
-        raw_dumps.update(self._get_debug_dumps('master'))
-
+    def _collect_debug_dumps(self):  # type: () -> Tuple[Dict[str, Dict[float, Dict]], List[float]]
+        raw_dumps = self._get_debug_dumps()
         data = {'dumps': {},
                 'dump_info': {k: v.get('info', {})
-                              for k, v in raw_dumps.items()}}
+                              for k, v in raw_dumps.items()}}  # type: Dict[str, Dict[float, Dict]]
         if Config.get('cloud_support', False):
             # Include full dumps when support is enabled
             data['dumps'] = raw_dumps
-        return data
+        return data, list(raw_dumps.keys())
 
-    def _get_debug_dumps(self, dump_type):  # type: (str) -> Dict[float,Dict[str,Any]]
-        # Load current data
-        debug_data = self._debug_data[dump_type]
-
-        # Clear old dumps
-        for timestamp in self._timestamps_to_clear[dump_type]:
-            entry = debug_data.pop(timestamp, None)
-            if entry is not None:
-                filename = entry['filename']
+    def _get_debug_dumps(self):  # type: () -> Dict[float, Dict]
+        debug_data = {}
+        for filename in glob.glob('/tmp/debug_*.json'):
+            timestamp = os.path.getmtime(filename)
+            if timestamp in self._timestamps_to_clear:
+                # Remove if requested
                 try:
                     os.remove(filename)
                 except Exception as ex:
                     logger.error('Could not remove debug file {0}: {1}'.format(filename, ex))
-
-        # Load remaining dumps
-        found_timestamps = []
-        for filename in glob.glob('/tmp/debug_{0}_*.json'.format(dump_type)):
-            timestamp = os.path.getmtime(filename)
-            if timestamp not in debug_data:
-                debug_data[timestamp] = {'data': {}, 'filename': filename}
+            elif timestamp not in debug_data:
+                # Load if not yet loaded
                 with open(filename, 'r') as debug_file:
                     try:
-                        debug_data[timestamp]['data'].update(json.load(debug_file))
+                        debug_data[timestamp] = json.load(debug_file)
                     except ValueError as ex:
                         logger.warning('Error parsing crash dump: {0}'.format(ex))
-            found_timestamps.append(timestamp)
-
-        # Make sure there are no leftovers
-        for timestamp in debug_data.keys():
-            if timestamp not in found_timestamps:
-                del debug_data[timestamp]
-
-        # Return data
         return debug_data
 
 
@@ -515,8 +483,8 @@ class HeartbeatService(object):
                             'outputs_status': DataCollector('outputs_status', self._gateway.get_outputs_status),
                             'shutters': DataCollector('shutters', self._gateway.get_shutters_status),
                             'errors': DataCollector('errors', self._gateway.get_errors, 600),
-                            'local_ip': DataCollector('ip address', System.get_ip_address, 1800),
-                            'debug': DebugDumpDataCollector()}
+                            'local_ip': DataCollector('ip address', System.get_ip_address, 1800)}
+        self._debug_collector = DebugDumpDataCollector()
 
     def _check_state(self):
         return {'cloud_disabled': not self._cloud_enabled,
@@ -551,13 +519,19 @@ class HeartbeatService(object):
                     if data is not None:
                         call_data[collector_key] = data
 
+                # Load debug data
+                debug_data = self._debug_collector.data
+                debug_references = None  # type: Optional[List[float]]
+                if debug_data is not None:
+                    call_data['debug'], debug_references = debug_data
+
                 # Send data to the cloud and load response
                 response = self._cloud.call_home(call_data)
                 call_home_successful = response.get('success', False)
 
                 if call_home_successful:
                     self._last_successful_heartbeat = time.time()
-                    self._collectors['debug'].clear()
+                    self._debug_collector.clear(debug_references)
 
                 # Gather tasks to be executed
                 task_data = {'events': [(OMBusEvents.CLOUD_REACHABLE, call_home_successful)],
