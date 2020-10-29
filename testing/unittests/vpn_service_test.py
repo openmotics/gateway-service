@@ -358,7 +358,6 @@ class VPNServiceTest(TestCase):
                                                                                  'errors': 'errors collector',
                                                                                  'local_ip': 'ip address collector',
                                                                                  'thermostats': 'thermostats collector',
-                                                                                 'outputs_status': 'outputs_status collector',
                                                                                  'shutters': 'shutters collector',
                                                                                  'debug': {}},
                                                                                 sort_keys=True)},
