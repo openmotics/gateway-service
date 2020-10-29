@@ -27,20 +27,23 @@ import logging
 import os
 import subprocess
 import time
+from collections import deque
+from threading import Lock
+
 import requests
 import six
 import ujson as json
-from collections import deque
 from six.moves.configparser import ConfigParser
-from threading import Lock
 
 import constants
 from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
 from gateway.daemon_thread import DaemonThread
-from gateway.initialize import initialize
+from gateway.initialize import setup_minimal_vpn_platform
 from gateway.models import Config
 from ioc import INJECTED, Inject
+
+
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple
@@ -584,7 +587,7 @@ class HeartbeatService(object):
 
 if __name__ == '__main__':
     setup_logger()
-    initialize(message_client_name='vpn_service')
+    setup_minimal_vpn_platform(message_client_name='vpn_service')
 
     logger.info('Starting VPN service')
     heartbeat_service = HeartbeatService()

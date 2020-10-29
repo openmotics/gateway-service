@@ -233,7 +233,7 @@ def setup_target_platform(target_platform, message_client_name):
 
     # Master Controller
     controller_serial_port = config.get('OpenMotics', 'controller_serial')
-    Injectable.value(controller_serial=Serial(controller_serial_port, 115200))
+    Injectable.value(controller_serial=Serial(controller_serial_port, 115200, exclusive=True))
     if target_platform in Platform.CoreTypes:
         # FIXME don't create singleton for optional controller?
         from master.core import ucan_communicator, slave_communicator
@@ -281,6 +281,15 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(thermostat_controller=ThermostatControllerGateway())
     else:
         Injectable.value(thermostat_controller=ThermostatControllerMaster())
+
+
+def setup_minimal_vpn_platform(message_client_name):
+    # type: (str) -> None
+    # IPC
+    message_client = None
+    if message_client_name is not None:
+        message_client = MessageClient(message_client_name)
+    Injectable.value(message_client=message_client)
 
 
 def setup_minimal_master_platform(port):
