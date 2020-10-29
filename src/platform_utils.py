@@ -248,7 +248,6 @@ class Platform(object):
     AnyTypes = [Type.DUMMY]
     ClassicTypes = [Type.CLASSIC]
     CoreTypes = [Type.CORE, Type.CORE_PLUS]
-    MasterTypes = ClassicTypes + CoreTypes
     Types = AnyTypes + ClassicTypes + CoreTypes
 
     @staticmethod

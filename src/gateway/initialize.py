@@ -191,15 +191,19 @@ def setup_target_platform(target_platform, message_client_name):
     Injectable.value(message_client=message_client)
 
     # Cloud API
-    parsed_url = urlparse(config.get('OpenMotics', 'vpn_check_url'))
     Injectable.value(gateway_uuid=config.get('OpenMotics', 'uuid'))
+
+    try:
+        parsed_url = urlparse(config.get('OpenMotics', 'vpn_check_url'))
+    except NoOptionError:
+        parsed_url = urlparse('')
     Injectable.value(cloud_endpoint=parsed_url.hostname)
     Injectable.value(cloud_port=parsed_url.port)
     Injectable.value(cloud_ssl=parsed_url.scheme == 'https')
     Injectable.value(cloud_api_version=0)
 
     cloud_url = urlunparse((parsed_url.scheme, parsed_url.netloc, '', '', '', ''))
-    Injectable.value(cloud_url=cloud_url)
+    Injectable.value(cloud_url=cloud_url or None)
 
     # User Controller
     Injectable.value(user_db=config_database_file)
@@ -213,7 +217,10 @@ def setup_target_platform(target_platform, message_client_name):
     Injectable.value(metrics_db_lock=metrics_lock)
 
     # Energy Controller
-    power_serial_port = config.get('OpenMotics', 'power_serial')
+    try:
+        power_serial_port = config.get('OpenMotics', 'power_serial')
+    except NoOptionError:
+        power_serial_port = ''
     if power_serial_port:
         Injectable.value(power_db=constants.get_power_database_file())
         Injectable.value(power_store=PowerStore())
@@ -233,10 +240,13 @@ def setup_target_platform(target_platform, message_client_name):
     Injectable.value(pulse_db=constants.get_pulse_counter_database_file())
 
     # Master Controller
-    if target_platform in Platform.MasterTypes:
+    try:
         controller_serial_port = config.get('OpenMotics', 'controller_serial')
-        Injectable.value(controller_serial=Serial(controller_serial_port, 115200, exclusive=True))
+    except NoOptionError:
+        controller_serial_port = ''
 
+    if controller_serial_port:
+        Injectable.value(controller_serial=Serial(controller_serial_port, 115200, exclusive=True))
     if target_platform == Platform.Type.DUMMY:
         Injectable.value(maintenance_communicator=None)
         Injectable.value(passthrough_service=None)
