@@ -166,19 +166,6 @@ class Gateway(object):
                 logger.error('Exception during Gateway call {0}: {1}'.format(uri, message))
             return
 
-    def get_outputs_status(self):
-        data = self.do_call('get_output_status?token=None')
-        if data is None or data['success'] is False:
-            return None
-        ret = []
-        for output in data['status']:
-            parsed_data = {}
-            for k in output.keys():
-                if k in ['id', 'status', 'dimmer', 'locked']:
-                    parsed_data[k] = output[k]
-            ret.append(parsed_data)
-        return ret
-
     def get_inputs_status(self):
         """ Get the inputs status. """
         data = self.do_call('get_input_status?token=None')
@@ -500,7 +487,6 @@ class HeartbeatService(object):
         # `outputs`, `update`, `energy`, `pulse_totals`
         self._collectors = {'thermostats': DataCollector('thermostats', self._gateway.get_thermostats, 60),
                             'inputs': DataCollector('inputs', self._gateway.get_inputs_status),
-                            'outputs_status': DataCollector('outputs_status', self._gateway.get_outputs_status),
                             'shutters': DataCollector('shutters', self._gateway.get_shutters_status),
                             'errors': DataCollector('errors', self._gateway.get_errors, 600),
                             'local_ip': DataCollector('ip address', System.get_ip_address, 1800)}

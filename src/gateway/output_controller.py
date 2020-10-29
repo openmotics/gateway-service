@@ -82,18 +82,19 @@ class OutputController(BaseController):
 
     def _handle_output_status(self, change_data):
         # type: (Dict[str,Any]) -> None
-        changed = self._cache.handle_change(change_data['id'], change_data)
-        if changed:
-            self._publish_output_change(changed)
+        changed, output_dto = self._cache.handle_change(change_data['id'], change_data)
+        if changed and output_dto is not None:
+            self._publish_output_change(output_dto)
 
     def _sync_state(self):
         try:
             self.load_outputs()
             for state_data in self._master_controller.load_output_status():
                 if 'id' in state_data:
-                    changed = self._cache.handle_change(state_data['id'], state_data)
-                    if changed:
-                        self._publish_output_change(changed)
+                    _, output_dto = self._cache.handle_change(state_data['id'], state_data)
+                    if output_dto is not None:
+                        # Always send events on the background sync
+                        self._publish_output_change(output_dto)
         except CommunicationTimedOutException:
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
             raise DaemonThreadWait
@@ -197,7 +198,7 @@ class OutputStateCache(object):
             self._loaded = True
 
     def handle_change(self, output_id, change_data):
-        # type: (int, Dict[str,Any]) -> Optional[OutputDTO]
+        # type: (int, Dict[str,Any]) -> Tuple[bool, Optional[OutputDTO]]
         """
         Cache output state and detect changes.
         The classic master will send multiple status events when an output changes,
@@ -205,10 +206,10 @@ class OutputStateCache(object):
         """
         with self._lock:
             if not self._loaded:
-                return None
+                return False, None
             if output_id not in self._cache:
                 logger.warning('Received change for unknown output {0}: {1}'.format(output_id, change_data))
-                return None
+                return False, None
             changed = False
             state = self._cache[output_id].state
             if 'status' in change_data:
@@ -225,7 +226,4 @@ class OutputStateCache(object):
                 locked = bool(change_data['locked'])
                 changed |= state.locked != locked
                 state.locked = locked
-            if changed:
-                return self._cache[output_id]
-            else:
-                return None
+            return changed, self._cache[output_id]
