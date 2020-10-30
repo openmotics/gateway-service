@@ -9,7 +9,7 @@ It is the glue between the OpenMotics Master (microcontroller) and the rest of t
 ## Git workflow
 
 We use [git-flow](https://github.com/petervanderdoes/gitflow-avh) which implements [Vincent Driessen](http://nvie.com/posts/a-successful-git-branching-model/)'s
-branching model. This means our default branch is ```develop```, and ```master``` contains production releases.
+branching model. This means our default branch is `develop`, and `master` contains production releases.
 
 When working on this repository, we advice to use following git-flow config:
 
@@ -36,6 +36,21 @@ git config gitflow.prefix.hotfix hotfix/
 git config gitflow.prefix.support support/
 git config gitflow.prefix.versiontag v
 ```
+
+## Running locally
+
+Some parts of the code can be run locally using a dummy master implementation.
+
+The openmotics service loads a config file from `./etc` or `$OPENMOTICS_PREFIX/etc`,
+where settings like the platform and ports can be overridden.
+
+```sh
+mkdir -p etc static
+cp example/openmotics.conf etc
+python openmotics_service.py
+```
+
+Extracting a frontend build to `./static` also gives access to the local protal interface.
 
 ## Built With
 
