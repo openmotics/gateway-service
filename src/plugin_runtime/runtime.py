@@ -11,13 +11,15 @@ sys.path.insert(0, '/opt/openmotics/python')
 from platform_utils import System
 System.import_libs()
 
+import constants
 import six
-from toolbox import PluginIPCReader, PluginIPCWriter, Toolbox
 from gateway.events import GatewayEvent
 from plugin_runtime import base
-from plugin_runtime.utils import get_plugin_class, check_plugin, get_special_methods
 from plugin_runtime.interfaces import has_interface
+from plugin_runtime.utils import get_plugin_class, check_plugin, get_special_methods
 from plugin_runtime.web import WebInterfaceDispatcher
+from six.moves.configparser import ConfigParser, NoSectionError, NoOptionError
+from toolbox import PluginIPCReader, PluginIPCWriter, Toolbox
 
 logger = logging.getLogger('openmotics')
 
@@ -65,7 +67,13 @@ class PluginRuntime(object):
         self._reader = PluginIPCReader(os.fdopen(sys.stdin.fileno(), 'rb', 0),
                                        self._writer.log_exception)
 
-        self._webinterface = WebInterfaceDispatcher(self._writer.log)
+        config = ConfigParser()
+        config.read(constants.get_config_file())
+        try:
+            http_port = int(config.get('OpenMotics', 'http_port'))
+        except (NoSectionError, NoOptionError):
+            http_port = 80
+        self._webinterface = WebInterfaceDispatcher(self._writer.log, port=http_port)
 
     def _init_plugin(self):
         # type: () -> None
