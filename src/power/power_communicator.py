@@ -123,14 +123,15 @@ class PowerCommunicator(object):
             return CommunicationStatus.SUCCESS
 
         all_calls = sorted(calls_timedout + calls_succeeded)
-        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
-        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
-
         if len(all_calls) <= 10:
             # Not enough calls made to have a decent view on what's going on
             logger.warning('Observed energy communication failures, but not enough calls')
             return CommunicationStatus.UNSTABLE
-        elif not any(t in calls_timedout for t in all_calls[-10:]):
+
+        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
+        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
+
+        if not any(t in calls_timedout for t in all_calls[-10:]):
             logger.warning('Observed energy communication failures, but recent calls recovered')
             # The last X calls are successfull
             return CommunicationStatus.UNSTABLE
