@@ -19,7 +19,6 @@ RUN apk upgrade --no-cache && apk add --no-cache \
 RUN pip3 install --upgrade pip
 COPY requirements-py3.txt /requirements-py3.txt
 RUN pip3 install -r /requirements-py3.txt
-
 ADD src /opt/openmotics/python
 ADD etc /opt/openmotics/etc
 ADD static /opt/openmotics/static
