@@ -27,13 +27,16 @@ from threading import Lock
 
 from peewee_migrate import Router
 from serial import Serial
-from six.moves.configparser import ConfigParser
+from six.moves.configparser import ConfigParser, NoOptionError
 from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
 from bus.om_bus_client import MessageClient
+from gateway.hal.frontpanel_controller_classic import FrontpanelClassicController
+from gateway.hal.frontpanel_controller_core import FrontpanelCoreController
 from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.hal.master_controller_core import MasterCoreController
+from gateway.hal.master_controller_dummy import MasterDummyController
 from gateway.models import Database, Feature
 from gateway.thermostat.gateway.thermostat_controller_gateway import \
     ThermostatControllerGateway
@@ -95,7 +98,8 @@ def apply_migrations():
     logger.info('Applying migrations')
     # Run all unapplied migrations
     db = Database.get_db()
-    router = Router(db, migrate_dir='/opt/openmotics/python/gateway/migrations/orm')
+    gateway_src = os.path.abspath(os.path.join(__file__, '..'))
+    router = Router(db, migrate_dir=os.path.join(gateway_src, 'migrations/orm'))
     router.run()
 
 
@@ -148,6 +152,20 @@ def setup_target_platform(target_platform, message_client_name):
 
     config_database_file = constants.get_config_database_file()
 
+    # Webserver / Presentation layer
+    try:
+        https_port = int(config.get('OpenMotics', 'https_port'))
+    except NoOptionError:
+        https_port = 443
+    try:
+        http_port = int(config.get('OpenMotics', 'http_port'))
+    except NoOptionError:
+        http_port = 80
+    Injectable.value(https_port=https_port)
+    Injectable.value(http_port=http_port)
+    Injectable.value(ssl_private_key=constants.get_ssl_private_key_file())
+    Injectable.value(ssl_certificate=constants.get_ssl_certificate_file())
+
     # TODO: Clean up dependencies more to reduce complexity
 
     # IOC announcements
@@ -159,16 +177,12 @@ def setup_target_platform(target_platform, message_client_name):
     from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
                          maintenance_controller, user_controller, pulse_counter_controller,
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
-                         group_action_controller, module_controller, ventilation_controller)
+                         shutter_controller, group_action_controller, module_controller, ventilation_controller)
     from cloud import events
     _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
          maintenance_controller, base, events, user_controller,
-         pulse_counter_controller, metrics_caching, watchdog, output_controller,
-         room_controller, sensor_controller, group_action_controller, module_controller, ventilation_controller)
-
-    # Webserver / Presentation layer
-    Injectable.value(ssl_private_key=constants.get_ssl_private_key_file())
-    Injectable.value(ssl_certificate=constants.get_ssl_certificate_file())
+         pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
+         sensor_controller, shutter_controller, group_action_controller, module_controller, ventilation_controller)
 
     # IPC
     message_client = None
@@ -177,15 +191,19 @@ def setup_target_platform(target_platform, message_client_name):
     Injectable.value(message_client=message_client)
 
     # Cloud API
-    parsed_url = urlparse(config.get('OpenMotics', 'vpn_check_url'))
     Injectable.value(gateway_uuid=config.get('OpenMotics', 'uuid'))
+
+    try:
+        parsed_url = urlparse(config.get('OpenMotics', 'vpn_check_url'))
+    except NoOptionError:
+        parsed_url = urlparse('')
     Injectable.value(cloud_endpoint=parsed_url.hostname)
     Injectable.value(cloud_port=parsed_url.port)
     Injectable.value(cloud_ssl=parsed_url.scheme == 'https')
     Injectable.value(cloud_api_version=0)
 
     cloud_url = urlunparse((parsed_url.scheme, parsed_url.netloc, '', '', '', ''))
-    Injectable.value(cloud_url=cloud_url)
+    Injectable.value(cloud_url=cloud_url or None)
 
     # User Controller
     Injectable.value(user_db=config_database_file)
@@ -199,7 +217,10 @@ def setup_target_platform(target_platform, message_client_name):
     Injectable.value(metrics_db_lock=metrics_lock)
 
     # Energy Controller
-    power_serial_port = config.get('OpenMotics', 'power_serial')
+    try:
+        power_serial_port = config.get('OpenMotics', 'power_serial')
+    except NoOptionError:
+        power_serial_port = ''
     if power_serial_port:
         Injectable.value(power_db=constants.get_power_database_file())
         Injectable.value(power_store=PowerStore())
@@ -219,9 +240,18 @@ def setup_target_platform(target_platform, message_client_name):
     Injectable.value(pulse_db=constants.get_pulse_counter_database_file())
 
     # Master Controller
-    controller_serial_port = config.get('OpenMotics', 'controller_serial')
-    Injectable.value(controller_serial=Serial(controller_serial_port, 115200))
-    if target_platform == Platform.Type.CORE_PLUS:
+    try:
+        controller_serial_port = config.get('OpenMotics', 'controller_serial')
+    except NoOptionError:
+        controller_serial_port = ''
+
+    if controller_serial_port:
+        Injectable.value(controller_serial=Serial(controller_serial_port, 115200, exclusive=True))
+    if target_platform == Platform.Type.DUMMY:
+        Injectable.value(maintenance_communicator=None)
+        Injectable.value(passthrough_service=None)
+        Injectable.value(master_controller=MasterDummyController())
+    elif target_platform in Platform.CoreTypes:
         # FIXME don't create singleton for optional controller?
         from master.core import ucan_communicator, slave_communicator
         _ = ucan_communicator, slave_communicator
@@ -236,7 +266,7 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
                                        MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
         Injectable.value(master_controller=MasterCoreController())
-    else:
+    elif target_platform in Platform.ClassicTypes:
         # FIXME don't create singleton for optional controller?
         from master.classic import eeprom_extension
         _ = eeprom_extension
@@ -253,21 +283,34 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(master_communicator=MasterCommunicator())
         Injectable.value(maintenance_communicator=MaintenanceClassicCommunicator())
         Injectable.value(master_controller=MasterClassicController())
-
-    if target_platform == Platform.Type.CORE_PLUS:
-        from gateway.hal import frontpanel_controller_core
-        _ = frontpanel_controller_core
     else:
-        from gateway.hal import frontpanel_controller_classic
-        _ = frontpanel_controller_classic
+        logger.warning('Unhandled master implementation for %s', target_platform)
+
+    if target_platform == Platform.Type.DUMMY:
+        Injectable.value(frontpanel_controller=None)
+    elif target_platform in Platform.CoreTypes:
+        Injectable.value(frontpanel_controller=FrontpanelCoreController())
+    elif target_platform in Platform.ClassicTypes:
+        Injectable.value(frontpanel_controller=FrontpanelClassicController())
+    else:
+        logger.warning('Unhandled frontpanel implementation for %s', target_platform)
 
     # Thermostats
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
     thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled
-    if target_platform == Platform.Type.CORE_PLUS or thermostats_gateway_enabled:
+    if target_platform in Platform.CoreTypes or thermostats_gateway_enabled:
         Injectable.value(thermostat_controller=ThermostatControllerGateway())
     else:
         Injectable.value(thermostat_controller=ThermostatControllerMaster())
+
+
+def setup_minimal_vpn_platform(message_client_name):
+    # type: (str) -> None
+    # IPC
+    message_client = None
+    if message_client_name is not None:
+        message_client = MessageClient(message_client_name)
+    Injectable.value(message_client=message_client)
 
 
 def setup_minimal_master_platform(port):
@@ -278,7 +321,10 @@ def setup_minimal_master_platform(port):
     platform = Platform.get_platform()
     Injectable.value(controller_serial=Serial(port, 115200))
 
-    if platform == Platform.Type.CORE_PLUS:
+    if platform == Platform.Type.DUMMY:
+        Injectable.value(maintenance_communicator=None)
+        Injectable.value(master_controller=MasterDummyController())
+    elif platform in Platform.CoreTypes:
         from master.core import ucan_communicator
         _ = ucan_communicator
         core_cli_serial_port = config.get('OpenMotics', 'cli_serial')
@@ -288,13 +334,15 @@ def setup_minimal_master_platform(port):
         Injectable.value(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
                                        MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
         Injectable.value(master_controller=MasterCoreController())
-    else:
+    elif platform in Platform.ClassicTypes:
         Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
         from master.classic import eeprom_extension
         _ = eeprom_extension
         Injectable.value(master_communicator=MasterCommunicator())
         Injectable.value(maintenance_communicator=None)
         Injectable.value(master_controller=MasterClassicController())
+    else:
+        logger.warning('Unhandled master implementation for %s', platform)
 
 
 def setup_minimal_power_platform():

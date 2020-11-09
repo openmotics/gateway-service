@@ -21,17 +21,18 @@ import os
 import pkgutil
 import traceback
 from datetime import datetime
+from threading import Lock, Timer
 
 import six
 
+import constants
 from gateway.events import GatewayEvent
 from gateway.models import Config, Plugin
-from gateway.shutter_controller import ShutterController
 from ioc import INJECTED, Inject, Injectable, Singleton
 from plugins.runner import PluginRunner, RunnerWatchdog
 
 if False:  # MYPY
-    from typing import Dict, List
+    from typing import Dict, List, Optional
     from gateway.output_controller import OutputController
     from gateway.shutter_controller import ShutterController
     from gateway.webservice import WebInterface
@@ -44,102 +45,122 @@ logger = logging.getLogger('openmotics')
 class PluginController(object):
     """ The controller keeps track of all plugins in the system. """
 
+    DEPENDENCIES_TIMER = 30.0
+
     @Inject
     def __init__(self,
                  web_interface=INJECTED, output_controller=INJECTED,
                  shutter_controller=INJECTED,
-                 runtime_path='/opt/openmotics/python/plugin_runtime',
-                 plugins_path='/opt/openmotics/python/plugins',
-                 plugin_config_path='/opt/openmotics/etc'):
+                 runtime_path=None,
+                 plugins_path=None,
+                 plugin_config_path=None):
         # type: (WebInterface, OutputController, ShutterController, str, str, str) -> None
-        self.__webinterface = web_interface
-        self.__output_controller = output_controller
-        self.__shuttercontroller = shutter_controller
-        self.__runtime_path = runtime_path
-        self.__plugins_path = plugins_path
-        self.__plugin_config_path = plugin_config_path
+        self._webinterface = web_interface
+        self._output_controller = output_controller
+        self._shuttercontroller = shutter_controller
+        self._runtime_path = runtime_path or constants.get_plugin_runtime_dir()
+        self._plugins_path = plugins_path or constants.get_plugin_dir()
+        self._plugin_config_path = constants.get_plugin_config_dir()
 
-        self.__stopped = True
-        self.__logs = {}  # type: Dict[str,List[str]]
-        self.__runners = {}  # type: Dict[str,PluginRunner]
-        self.__runner_watchdogs = {}  # type: Dict[str,RunnerWatchdog]
+        self._stopped = True
+        self._logs = {}  # type: Dict[str, List[str]]
+        self._runners = {}  # type: Dict[str, PluginRunner]
+        self._runner_watchdogs = {}  # type: Dict[str, RunnerWatchdog]
+        self._dependencies_timer = None  # type: Optional[Timer]
+        self._dependencies_lock = Lock()
 
-        self.__metrics_controller = None
-        self.__metrics_collector = None
-        self.__web_service = None
+        self._metrics_controller = None
+        self._metrics_collector = None
+        self._web_service = None
 
     def start(self):
         # type: () -> None
         """ Start the plugins and expose them via the webinterface. """
-        if self.__stopped:
-            self.__init_runners()
-            self.__update_dependencies()
-        else:
+        if not self._stopped:
             logger.error('The PluginController is already running')
+            return
+
+        # TODO query the orm instead, used now to initialize already installed plugins.
+        objects = pkgutil.iter_modules([self._plugins_path])  # (module_loader, name, ispkg)
+        package_names = [o[1] for o in objects if o[2]]
+
+        self._runners = {}
+        self._runner_watchdogs = {}
+        runners = []
+        for package_name in package_names:
+            runner = self._init_plugin_runner(package_name)
+            if runner is not None:
+                runners.append(runner)
+        for runner in runners:
+            self._start_plugin_runner(runner, runner.name)
 
     def stop(self):
         # type: () -> None
-        for runner_name in list(self.__runners.keys()):
-            self.__destroy_plugin_runner(runner_name)
-        self.__stopped = True
+        for runner_name in list(self._runners.keys()):
+            self._destroy_plugin_runner(runner_name)
+        self._stopped = True
 
     def set_metrics_controller(self, metrics_controller):
         """ Sets the metrics controller """
-        self.__metrics_controller = metrics_controller
+        self._metrics_controller = metrics_controller
 
     def set_metrics_collector(self, metrics_collector):
         """ Sets the metrics collector """
-        self.__metrics_collector = metrics_collector
+        self._metrics_collector = metrics_collector
 
     def set_webservice(self, web_service):
         """ Sets the web service """
-        self.__web_service = web_service
+        self._web_service = web_service
 
-    def __init_runners(self):
-        """ Scan the plugins package for installed plugins in the form of subpackages. """
-        # TODO query the orm instead, used now to initialize already installed plugins.
-        objects = pkgutil.iter_modules([self.__plugins_path])  # (module_loader, name, ispkg)
-        package_names = [o[1] for o in objects if o[2]]
+    def _runner_state_changed(self, runner_name, state):
+        runner = self._runners.get(runner_name)
+        if runner is None:
+            return
+        if state == PluginRunner.State.RUNNING:
+            PluginController._update_orm(runner.name, runner.version)
+        with self._dependencies_lock:
+            if self._dependencies_timer is not None:
+                self._dependencies_timer.cancel()
+            self._dependencies_timer = Timer(PluginController.DEPENDENCIES_TIMER, self._update_dependencies)
+            self._dependencies_timer.start()
 
-        self.__runners = {}
-        self.__runner_watchdogs = {}
-        # First initialize all plugin runners, then start them.
-        for package_name in package_names:
-            self.__init_plugin_runner(package_name)
-        for package_name in package_names:
-            runner = self.__runners.get(package_name)
-            if runner is not None:
-                self.__start_plugin_runner(runner, package_name, False)
-
-    def __init_plugin_runner(self, plugin_name):
+    def _init_plugin_runner(self, plugin_name):
         """ Initializes a single plugin runner """
         try:
-            if plugin_name in self.__runners.keys():
+            if plugin_name in self._runners.keys():
                 self.log(plugin_name, '[Runner] Could not init plugin', 'Multiple plugins with the same name found')
                 return
-            _logger = self.get_logger(plugin_name)
-            plugin_path = os.path.join(self.__plugins_path, plugin_name)
-            runner = PluginRunner(plugin_name, self.__runtime_path, plugin_path, _logger)
-            self.__runners[runner.name] = runner
-            self.__runner_watchdogs[runner.name] = RunnerWatchdog(runner)
+            plugin_path = os.path.join(self._plugins_path, plugin_name)
+            runner = PluginRunner(name=plugin_name,
+                                  runtime_path=self._runtime_path,
+                                  plugin_path=plugin_path,
+                                  logger=self.get_logger(plugin_name),
+                                  state_callback=self._runner_state_changed)
+            self._runners[runner.name] = runner
+            self._runner_watchdogs[runner.name] = RunnerWatchdog(runner)
             return runner
         except Exception as exception:
             self.log(plugin_name, '[Runner] Could not initialize plugin', exception)
 
-    def __start_plugin_runner(self, runner, runner_name, update_dependencies):
+    def _start_plugin_runner(self, runner, runner_name):
+        # type: (PluginRunner, str) -> None
         """ Starts a single plugin runner """
+        watchdog = None
         try:
             logger.info('Plugin {0}: {1}'.format(runner_name, 'Starting...'))
-            runner.start()
-            watchdog = self.__runner_watchdogs.get(runner_name)
+            watchdog = self._runner_watchdogs.get(runner_name)
             if watchdog is not None:
-                watchdog.start()
-            if update_dependencies:
-                self.__update_dependencies()
-            self._update_orm(runner.name, runner.version)
-            logger.info('Plugin {0}: {1}'.format(runner_name, 'Starting... Done'))
+                success = watchdog.start()  # The plugin will be started by the watchdog
+                if success:
+                    PluginController._update_orm(runner.name, runner.version)
+                    logger.info('Plugin {0}: {1}'.format(runner_name, 'Starting... Done'))
+                else:
+                    logger.error('Plugin {0}: {1}'.format(runner_name, 'Starting... Failed'))
         except Exception as exception:
+            logger.exception('Plugin {0}: {1}'.format(runner_name, 'Starting... Failed'))
             try:
+                if watchdog is not None:
+                    watchdog.stop()
                 runner.stop()
             except Exception:
                 pass  # Try as best as possible to stop the plugin
@@ -147,60 +168,63 @@ class PluginController(object):
 
     def start_plugin(self, plugin_name):
         """ Request to start a runner """
-        runner = self.__runners.get(plugin_name)
+        runner = self._runners.get(plugin_name)
         if runner is None:
             return False
         if not runner.is_running():
-            self.__start_plugin_runner(runner, plugin_name, True)
+            self._start_plugin_runner(runner, plugin_name)
         return runner.is_running()
 
-    def __stop_plugin_runner(self, runner_name, update_dependencies):
+    def _stop_plugin_runner(self, runner_name):
         """ Stops a single plugin runner """
-        runner = self.__runners.get(runner_name)
+        runner = self._runners.get(runner_name)
         if runner is None:
             return
         try:
             logger.info('Plugin {0}: {1}'.format(runner.name, 'Stopping...'))
-            watchdog = self.__runner_watchdogs.get(runner_name)
+            watchdog = self._runner_watchdogs.get(runner_name)
             if watchdog is not None:
                 watchdog.stop()
             runner.stop()
-            if update_dependencies:
-                self.__update_dependencies()
             logger.info('Plugin {0}: {1}'.format(runner.name, 'Stopping... Done'))
         except Exception as exception:
             self.log(runner.name, '[Runner] Could not stop plugin', exception)
 
     def stop_plugin(self, plugin_name):
         """ Request to stop a runner """
-        runner = self.__runners.get(plugin_name)
+        runner = self._runners.get(plugin_name)
         if runner is None:
             return False
-        self.__stop_plugin_runner(runner.name, True)
+        self._stop_plugin_runner(runner.name)
         return runner.is_running()
 
-    def __destroy_plugin_runner(self, runner_name):
+    def _destroy_plugin_runner(self, runner_name):
         """ Removes a runner """
-        self.__stop_plugin_runner(runner_name, False)
-        self.__logs.pop(runner_name, None)
-        self.__runners.pop(runner_name, None)
-        self.__runner_watchdogs.pop(runner_name, None)
+        self._stop_plugin_runner(runner_name)
 
-    def __update_dependencies(self):
+        self._logs.pop(runner_name, None)
+        self._runners.pop(runner_name, None)
+        self._runner_watchdogs.pop(runner_name, None)
+
+    def _update_dependencies(self):
         """ When a runner is added/removed, this call updates all code that needs to know about plugins """
-        if self.__webinterface is not None and self.__web_service is not None:
-            self.__web_service.update_tree(self.__get_cherrypy_mounts())
-        if self.__metrics_collector is not None:
-            self.__metrics_collector.set_plugin_intervals(self.__get_metric_receivers())
-        if self.__metrics_controller is not None:
-            self.__metrics_controller.set_plugin_definitions(self.__get_metric_definitions())
+        if self._webinterface is not None and self._web_service is not None:
+            self._web_service.update_tree(self._get_cherrypy_mounts())
+        if self._metrics_collector is not None:
+            self._metrics_collector.set_plugin_intervals(self._get_metric_receivers())
+        if self._metrics_controller is not None:
+            self._metrics_controller.set_plugin_definitions(self._get_metric_definitions())
 
-    def _update_orm(self, name, version):
+    @staticmethod
+    def _update_orm(name, version):
         # type: (str, str) -> None
-        plugin, _ = Plugin.get_or_create(name=name, defaults={'version': version})
-        if plugin.version != version:
-            plugin.version = version
-            plugin.save()
+        try:
+            plugin, _ = Plugin.get_or_create(name=name, defaults={'version': version})
+            if plugin.version != version:
+                plugin.version = version
+                plugin.save()
+        except Exception as ex:
+            logger.error('Could not store Plugin version: {0}'.format(ex))
 
     def get_plugins(self):
         # type: () -> List[PluginRunner]
@@ -209,20 +233,20 @@ class PluginController(object):
         """
         plugins = []
         for plugin_orm in list(Plugin.select()):
-            plugin = self.__runners.get(plugin_orm.name)
+            plugin = self._runners.get(plugin_orm.name)
             if plugin:
                 plugins.append(plugin)
             else:
                 logger.warning('missing runner for plugin {}'.format(plugin_orm.name))
         return plugins
 
-    def __get_plugin(self, name):
+    def _get_plugin(self, name):
         """
         Get a plugin by name, None if it the plugin is not installed.
 
         :rtype: plugins.runner.PluginRunner
         """
-        return self.__runners.get(name)
+        return self._runners.get(name)
 
     def install_plugin(self, md5, package_data):
         """ Install a new plugin. """
@@ -259,11 +283,14 @@ class PluginController(object):
 
             # Check if the package contains a valid plugin
             _logger = self.get_logger('new_package')
-            runner = PluginRunner(None, self.__runtime_path, '{0}/new_package'.format(tmp_dir), _logger)
+            runner = PluginRunner(name=None,
+                                  runtime_path=self._runtime_path,
+                                  plugin_path='{0}/new_package'.format(tmp_dir),
+                                  logger=_logger)
             runner.start()
             runner.stop()
             name, version = runner.name, runner.version
-            self.__logs.pop('new_pacakge', None)
+            self._logs.pop('new_pacakge', None)
 
             def parse_version(version_string):
                 """ Parse the version from a string "x.y.z" to a tuple(x, y, z). """
@@ -272,21 +299,21 @@ class PluginController(object):
                 return tuple([int(x) for x in version_string.split('.')])
 
             # Check if a newer version of the package is already installed
-            installed_plugin = self.__get_plugin(name)
+            installed_plugin = self._get_plugin(name)
             if installed_plugin is not None:
                 if parse_version(version) <= parse_version(installed_plugin.version):
                     raise Exception('A newer version of plugins {0} is already installed (current version = {1}, to installed = {2}).'.format(name, installed_plugin.version, version))
                 else:
                     # Remove the old version of the plugin
-                    self.__destroy_plugin_runner(name)
-                    retcode = call('cd {0}; rm -R {1}'.format(self.__plugins_path, name),
+                    self._destroy_plugin_runner(name)
+                    retcode = call('cd {0}; rm -R {1}'.format(self._plugins_path, name),
                                    shell=True)
                     if retcode != 0:
                         raise Exception('The old version of the plugin could not be removed.')
 
             # Check if the package directory exists, this can only be the case if a previous
-            # install failed or if the plugin has gone corrupt: remove it !
-            plugin_path = '{0}/{1}'.format(self.__plugins_path, name)
+            # install failed or if the plugin has gone corrupt: remove it!
+            plugin_path = '{0}/{1}'.format(self._plugins_path, name)
             if os.path.exists(plugin_path):
                 rmtree(plugin_path)
 
@@ -295,11 +322,10 @@ class PluginController(object):
             if retcode != 0:
                 raise Exception('The package could not be installed.')
 
-            runner = self.__init_plugin_runner(name)
+            runner = self._init_plugin_runner(name)
             if runner is None:
                 raise Exception('Could not initialize plugin.')
-            self.__start_plugin_runner(runner, name, True)
-            self.__update_dependencies()
+            self._start_plugin_runner(runner, name)
 
             return 'Plugin successfully installed'
         finally:
@@ -313,11 +339,11 @@ class PluginController(object):
         """
         from shutil import rmtree
 
-        plugin = self.__get_plugin(name)
+        plugin = self._get_plugin(name)
 
         # Check if the plugin in installed
         if plugin is None:
-            Plugin.delete().where(name==name).execute()
+            Plugin.delete().where(Plugin.name == name).execute()
             raise Exception('Plugin \'{0}\' is not installed.'.format(name))
 
         # Execute the on_remove callbacks
@@ -327,79 +353,79 @@ class PluginController(object):
             logger.error('Exception while removing plugin \'{0}\': {1}'.format(name, exception))
 
         # Stop the plugin process
-        self.__destroy_plugin_runner(name)
-        self.__update_dependencies()
+        self._destroy_plugin_runner(name)
+        self._update_dependencies()
 
         # Remove the plugin package
-        plugin_path = '{0}/{1}'.format(self.__plugins_path, name)
+        plugin_path = '{0}/{1}'.format(self._plugins_path, name)
         try:
             rmtree(plugin_path)
         except Exception as exception:
             raise Exception('Error while removing package for plugin \'{0}\': {1}'.format(name, exception))
 
         # Remove the plugin configuration
-        conf_file = '{0}/pi_{1}.conf'.format(self.__plugin_config_path, name)
+        conf_file = '{0}/pi_{1}.conf'.format(self._plugin_config_path, name)
         if os.path.exists(conf_file):
             os.remove(conf_file)
 
         # Finally remove database entry.
-        Plugin.delete().where(name==name).execute()
+        Plugin.delete().where(Plugin.name == name).execute()
 
         return {'msg': 'Plugin successfully removed'}
 
-    def __iter_running_runners(self):
+    def _iter_running_runners(self):
         """
         :rtype: list of plugins.runner.PluginRunner
         """
-        for runner_name in list(self.__runners.keys()):
-            runner = self.__runners.get(runner_name)
+        for runner_name in list(self._runners.keys()):
+            runner = self._runners.get(runner_name)
             if runner is not None and runner.is_running():
                 yield runner
 
     def process_observer_event(self, event):
         if event.type == GatewayEvent.Types.INPUT_CHANGE:
             # Should be called when the input status changes, notifies all plugins.
-            for runner in self.__iter_running_runners():
+            for runner in self._iter_running_runners():
                 runner.process_input_status(event)
         if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             # TODO: deprecate old versions that use state and move to events
-            states = [(state.id, state.dimmer) for state in self.__output_controller.get_output_statuses() if state.status]
-            for runner in self.__iter_running_runners():
+            states = [(state.id, state.dimmer) for state in self._output_controller.get_output_statuses() if state.status]
+            for runner in self._iter_running_runners():
                 runner.process_output_status(data=states, action_version=1)  # send states as action version 1
                 runner.process_output_status(data=event, action_version=2)   # send event as action version 2
         if event.type == GatewayEvent.Types.SHUTTER_CHANGE:
             # TODO: deprecate old versions that use state and move to events
-            states = self.__shuttercontroller.get_states()
+            states = self._shuttercontroller.get_states()
             status = states['status']
             details = states['detail']
-            for runner in self.__iter_running_runners():
+            for runner in self._iter_running_runners():
                 runner.process_shutter_status(data=status, action_version=1)  # send states as action version 1
                 runner.process_shutter_status(data=(status, details), action_version=2)  # send event as action version 2
                 runner.process_shutter_status(data=event, action_version=3)  # send event as action version 3
         if event.type == GatewayEvent.Types.VENTILATION_CHANGE:
-            for runner in self.__iter_running_runners():
+            for runner in self._iter_running_runners():
                 runner.process_ventilation_status(data=event)
         if event.type == GatewayEvent.Types.THERMOSTAT_CHANGE:
-            for runner in self.__iter_running_runners():
+            for runner in self._iter_running_runners():
                 runner.process_thermostat_status(data=event)
         if event.type == GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE:
-            for runner in self.__iter_running_runners():
+            for runner in self._iter_running_runners():
                 runner.process_thermostat_group_status(data=event)
 
     def process_event(self, code):
         """ Should be called when an event is triggered, notifies all plugins. """
-        for runner in self.__iter_running_runners():
+        for runner in self._iter_running_runners():
             runner.process_event(code)
 
     def _request(self, name, method, args=None, kwargs=None):
         """ Allows to execute a programmatorical http request to the plugin """
-        runner = self.__runners.get(name)
+        runner = self._runners.get(name)
         if runner is not None:
             return runner.request(method, args=args, kwargs=kwargs)
 
     def collect_metrics(self):
         """ Collects all metrics from all plugins """
-        for runner in self.__iter_running_runners():
+        for runner in self._iter_running_runners():
             for metric in runner.collect_metrics():
                 if metric is None:
                     continue
@@ -417,12 +443,12 @@ class PluginController(object):
                 rates[rate_key] = 0
             rate_keys.append(rate_key)
         # Distribute
-        for runner in self.__iter_running_runners():
+        for runner in self._iter_running_runners():
             for receiver in runner.get_metric_receivers():
                 receiver_metrics = []
                 try:
-                    sources = self.__metrics_controller.get_filter('source', receiver['source'])
-                    metric_types = self.__metrics_controller.get_filter('metric_type', receiver['metric_type'])
+                    sources = self._metrics_controller.get_filter('source', receiver['source'])
+                    metric_types = self._metrics_controller.get_filter('metric_type', receiver['metric_type'])
                     for index, metric in enumerate(metrics):
                         if metric['source'] in sources and metric['type'] in metric_types:
                             receiver_metrics.append(metric)
@@ -433,56 +459,53 @@ class PluginController(object):
                     self.log(runner.name, 'Exception while distributing metrics', ex, traceback.format_exc())
         return rates
 
-    def __get_cherrypy_mounts(self):
+    def _get_cherrypy_mounts(self):
         mounts = []
         cors_enabled = Config.get('cors_enabled', False)
-        for runner in self.__iter_running_runners():
-            mounts.append({'root': runner.get_webservice(self.__webinterface),
+        for runner in self._iter_running_runners():
+            mounts.append({'root': runner.get_webservice(self._webinterface),
                            'script_name': '/plugins/{0}'.format(runner.name),
                            'config': {'/': {'tools.sessions.on': False,
                                             'tools.trailing_slash.on': False,
                                             'tools.cors.on': cors_enabled}}})
         return mounts
 
-    def __get_metric_receivers(self):
+    def _get_metric_receivers(self):
         receivers = []
-        for runner in self.__iter_running_runners():
+        for runner in self._iter_running_runners():
             receivers.extend(runner.get_metric_receivers())
         return receivers
 
-    def __get_metric_definitions(self):
+    def _get_metric_definitions(self):
         """ Loads all metric definitions of all plugins """
         definitions = {}
-        for runner in self.__iter_running_runners():
+        for runner in self._iter_running_runners():
             definitions[runner.name] = runner.get_metric_definitions()
         return definitions
 
     def log(self, plugin, msg, exception, stacktrace=None):
         """ Append an exception to the log for the plugins. This log can be retrieved using get_logs. """
-        if plugin not in self.__logs:
-            self.__logs[plugin] = []
-
+        logs = self._logs.setdefault(plugin, [])
         logger.error('Plugin {0}: {1} ({2})'.format(plugin, msg, exception))
         if stacktrace is None:
-            self.__logs[plugin].append('{0} - {1}: {2}'.format(datetime.now(), msg, exception))
+            logs.append('{0} - {1}: {2}'.format(datetime.now(), msg, exception))
         else:
-            self.__logs[plugin].append('{0} - {1}: {2}\n{3}'.format(datetime.now(), msg, exception, stacktrace))
-        if len(self.__logs[plugin]) > 100:
-            self.__logs[plugin].pop(0)
+            logs.append('{0} - {1}: {2}\n{3}'.format(datetime.now(), msg, exception, stacktrace))
+        if len(logs) > 100:
+            logs.pop(0)
 
     def get_logger(self, plugin_name):
         """ Get a logger for a plugin. """
-        if plugin_name not in self.__logs:
-            self.__logs[plugin_name] = []
+        logs = self._logs.setdefault(plugin_name, [])
 
         def log(msg):
             """ Log function for the given plugin."""
-            self.__logs[plugin_name].append('{0} - {1}'.format(datetime.now(), msg))
-            if len(self.__logs[plugin_name]) > 100:
-                self.__logs[plugin_name].pop(0)
+            logs.append('{0} - {1}'.format(datetime.now(), msg))
+            if len(logs) > 100:
+                logs.pop(0)
 
         return log
 
     def get_logs(self):
         """ Get the logs for all plugins. Returns a dict where the keys are the plugin names and the value is a string. """
-        return dict((plugin, '\n'.join(entries)) for plugin, entries in six.iteritems(self.__logs))
+        return dict((plugin, '\n'.join(entries)) for plugin, entries in six.iteritems(self._logs))

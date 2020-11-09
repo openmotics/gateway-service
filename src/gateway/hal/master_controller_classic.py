@@ -367,7 +367,8 @@ class MasterClassicController(MasterController):
 
     def get_master_online(self):
         # type: () -> bool
-        return self._heartbeat.is_online()
+        return self._time_last_updated > time.time() - 900 \
+            and self._heartbeat.is_online()
 
     def get_communicator_health(self):
         # type: () -> HEALTH

@@ -25,6 +25,7 @@ import shutil
 import tempfile
 import time
 import unittest
+import logging
 from subprocess import call
 
 from mock import Mock
@@ -54,15 +55,28 @@ class PluginControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        cls.test_db = SqliteDatabase(':memory:')
-        cls.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
-        cls.test_db.create_tables(MODELS)
         cls.PLUGINS_PATH = tempfile.mkdtemp()
         cls.PLUGIN_CONFIG_PATH = tempfile.mkdtemp()
+        logger = logging.getLogger('openmotics')
+        logger.setLevel(logging.DEBUG)
+        logger.propagate = False
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        logger.addHandler(handler)
+
+    def setUp(self):
+        self.test_db = SqliteDatabase(':memory:')
+        self.test_db.bind(MODELS)
+        self.test_db.connect()
+        self.test_db.create_tables(MODELS)
+
+    def tearDown(self):
+        self.test_db.drop_tables(MODELS)
+        self.test_db.close()
 
     @classmethod
     def tearDownClass(cls):
-        cls.test_db.close()
         try:
             if cls.PLUGINS_PATH is not None:
                 shutil.rmtree(cls.PLUGINS_PATH)
@@ -99,6 +113,7 @@ class PluginControllerTest(unittest.TestCase):
                             configuration_controller=None,
                             output_controller=output_controller)
         from plugins.base import PluginController
+        PluginController.DEPENDENCIES_TIMER = 0.25
         controller = PluginController(runtime_path=PluginControllerTest.RUNTIME_PATH,
                                       plugins_path=PluginControllerTest.PLUGINS_PATH,
                                       plugin_config_path=PluginControllerTest.PLUGIN_CONFIG_PATH)
@@ -140,6 +155,8 @@ class P1(OMPluginBase):
             plugin_list = controller.get_plugins()
             self.assertEqual(1, len(plugin_list))
             self.assertEqual('P1', plugin_list[0].name)
+            plugin = Plugin.get(name='P1')
+            self.assertEqual('1.0.0', plugin.version)
         finally:
             if controller is not None:
                 controller.stop()
@@ -179,6 +196,44 @@ class P2(OMPluginBase):
                 controller.stop()
             PluginControllerTest._destroy_plugin('P1')
             PluginControllerTest._destroy_plugin('P2')
+
+    @mark.slow
+    def test_dependencies_callback(self):
+        """ Test getting one plugin in the plugins package. """
+        called = {'called': 0}
+
+        def _call():
+            called['called'] += 1
+
+        def _wait_for_called(amount, timeout=1):
+            end = time.time() + timeout
+            while time.time() < end:
+                if called['called'] == amount:
+                    break
+            self.assertEqual(amount, called['called'])
+
+        controller = None
+        try:
+            PluginControllerTest._create_plugin('P1', """
+from plugins.base import *
+
+class P1(OMPluginBase):
+    name = 'P1'
+    version = '1.0.0'
+    interfaces = []
+""")
+            controller = PluginControllerTest._get_controller()
+            controller._update_dependencies = _call
+            controller.start()
+            self.assertIsNotNone(controller._dependencies_timer)
+            self.assertEquals(0, called['called'])
+            _wait_for_called(1)
+            controller.stop_plugin('P1')
+            _wait_for_called(2)
+        finally:
+            if controller is not None:
+                controller.stop()
+            PluginControllerTest._destroy_plugin('P1')
 
     @mark.slow
     def test_get_special_methods(self):
@@ -277,7 +332,7 @@ class P1(OMPluginBase):
             self.assertEqual(response['bg_running'], True)
             self.assertEqual(response['input_data'], [1, None])  # only rising edges should be triggered
             self.assertEqual(response['output_data'],  [[1, 5]])
-            self.assertEqual(response['output_data_version_2'],output_event)
+            self.assertEqual(response['output_data_version_2'], output_event)
             self.assertEqual(response['event_data'], 1)
         finally:
             if controller is not None:
@@ -380,7 +435,7 @@ class ShutterPlugin(OMPluginBase):
                                       'desired_position': None,
                                       'last_change': 1596787761.147892}}
             shutter_controller.get_states = lambda: {'status': shutter_status,
-                                                     'detail':detail_for_shutter}
+                                                     'detail': detail_for_shutter}
             controller = PluginControllerTest._get_controller(shutter_controller=shutter_controller)
             controller.start()
 
@@ -433,11 +488,15 @@ class Test(OMPluginBase):
         self.assertEqual(result, 'Plugin successfully installed')
         controller.start_plugin('Test')
         self.assertEqual([r.name for r in controller.get_plugins()], ['Test'])
+        plugin = Plugin.get(name='Test')
+        self.assertEqual('0.0.1', plugin.version)
 
         # Update to version 2
         result = controller.install_plugin(test_2_md5, test_2_data)
         self.assertEqual(result, 'Plugin successfully installed')
         self.assertEqual([r.name for r in controller.get_plugins()], ['Test'])
+        plugin = Plugin.get(name='Test')
+        self.assertEqual('0.0.2', plugin.version)
 
     @mark.slow
     def test_plugin_metric_reference(self):

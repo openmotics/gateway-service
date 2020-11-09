@@ -39,7 +39,7 @@ class MasterHeartbeat(object):
     def __init__(self, master_communicator=INJECTED):
         # type: (MasterCommunicator) -> None
         self._master_communicator = master_communicator
-        self._failures = 0
+        self._failures = -1  # Start "offline"
         self._backoff = 60
         self._last_restart = 0.0
         self._min_threshold = 2
@@ -59,6 +59,9 @@ class MasterHeartbeat(object):
 
     def is_online(self):
         # type: () -> bool
+        if self._failures == -1:
+            self._thread.request_single_run()
+            time.sleep(2)
         return self._failures == 0
 
     def set_offline(self):

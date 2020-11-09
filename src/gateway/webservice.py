@@ -163,8 +163,8 @@ def params_handler(**kwargs):
     except Exception:
         response.headers['Content-Type'] = 'application/json'
         response.status = 406  # No Acceptable
-        response.body = json.dumps({'success': False,
-                                    'msg': 'invalid_body'})
+        contents = json.dumps({'success': False, 'msg': 'invalid_body'})
+        response.body = contents.encode()
         request.handler = None
         return
     try:
@@ -172,8 +172,8 @@ def params_handler(**kwargs):
     except ValueError:
         response.headers['Content-Type'] = 'application/json'
         response.status = 406  # No Acceptable
-        response.body = json.dumps({'success': False,
-                                    'msg': 'invalid_parameters'})
+        contents = json.dumps({'success': False, 'msg': 'invalid_parameters'})
+        response.body = contents.encode()
         request.handler = None
 
 
@@ -216,7 +216,8 @@ def authentication_handler(pass_token=False):
     except Exception:
         cherrypy.response.headers['Content-Type'] = 'application/json'
         cherrypy.response.status = 401  # Unauthorized
-        cherrypy.response.body = '"invalid_token"'
+        contents = json.dumps({'success': False, 'msg': 'invalid_token'})
+        cherrypy.response.body = contents.encode()
         request.handler = None
 
 
@@ -269,7 +270,7 @@ def _openmotics_api(f, *args, **kwargs):
     if hasattr(f, 'deprecated') and f.deprecated is not None:
         cherrypy.response.headers['Warning'] = 'Warning: 299 - "Deprecated, replaced by: {0}"'.format(f.deprecated)
     cherrypy.response.status = status
-    return contents
+    return contents.encode()
 
 
 def openmotics_api(auth=False, check=None, pass_token=False, plugin_exposed=True, deprecated=None):
@@ -315,7 +316,7 @@ class WebInterface(object):
         self._sensor_controller = sensor_controller  # type: SensorController
         self._pulse_counter_controller = pulse_counter_controller  # type: PulseCounterController
         self._group_action_controller = group_action_controller  # type: GroupActionController
-        self._frontpanel_controller = frontpanel_controller  # type: FrontpanelController
+        self._frontpanel_controller = frontpanel_controller  # type: Optional[FrontpanelController]
         self._module_controller = module_controller  # type: ModuleController
         self._ventilation_controller = ventilation_controller  # type: VentilationController
 
@@ -331,7 +332,11 @@ class WebInterface(object):
         self._service_state = False
 
     def in_authorized_mode(self):
-        return self._frontpanel_controller.authorized_mode
+        # type: () -> bool
+        if self._frontpanel_controller:
+            return self._frontpanel_controller.authorized_mode
+        else:
+            return False
 
     def set_service_state(self, state):
         self._service_state = state
@@ -408,7 +413,8 @@ class WebInterface(object):
         :returns: Contents of index.html
         :rtype: str
         """
-        return serve_file('/opt/openmotics/static/index.html', content_type='text/html')
+        static_dir = constants.get_static_dir()
+        return serve_file(os.path.join(static_dir, 'index.html'), content_type='text/html')
 
     @openmotics_api(check=types(accept_terms=bool, timeout=int), plugin_exposed=False)
     def login(self, username, password, accept_terms=None, timeout=None):
@@ -611,6 +617,12 @@ class WebInterface(object):
                 features.append(name)
 
         return {'features': features}
+
+    @openmotics_api(auth=True)
+    def get_platform_details(self):  # type: () -> Dict[str, str]
+        return {'platform': Platform.get_platform(),
+                'operating_system': System.get_operating_system().get('ID', 'unknown'),
+                'hardware': Hardware.get_board_type()}
 
     @openmotics_api(auth=True, check=types(type=int, id=int))
     def flash_leds(self, type, id):
@@ -2332,7 +2344,7 @@ class WebInterface(object):
     def install_plugin(self, md5, package_data):
         """
         Install a new plugin. The package_data should include a __init__.py file and
-        will be installed in /opt/openmotics/python/plugins/<name>.
+        will be installed in $OPENMOTICS_PREFIX/python/plugins/<name>.
 
         :param md5: md5 sum of the package_data.
         :type md5: String
@@ -2438,8 +2450,11 @@ class WebInterface(object):
     @openmotics_api(auth=True)
     def indicate(self):
         """ Blinks the Status led on the Gateway to indicate the module """
-        self._frontpanel_controller.indicate()
-        return {}
+        if self._frontpanel_controller:
+            self._frontpanel_controller.indicate()
+            return {}
+        else:
+            raise NotImplementedError()
 
     @cherrypy.expose
     @cherrypy.tools.cors()
@@ -2477,11 +2492,13 @@ class WebService(object):
     name = 'web'
 
     @Inject
-    def __init__(self, web_interface=INJECTED, verbose=False):
-        # type: (WebInterface, bool) -> None
+    def __init__(self, web_interface=INJECTED, http_port=INJECTED, https_port=INJECTED, verbose=False):
+        # type: (WebInterface, int, int, bool) -> None
         self._webinterface = web_interface
-        self._https_server = None  # type: Optional[cherrypy._cpserver.Server]
+        self._http_port = http_port
+        self._https_port = https_port
         self._http_server = None  # type: Optional[cherrypy._cpserver.Server]
+        self._https_server = None  # type: Optional[cherrypy._cpserver.Server]
         if not verbose:
             logging.getLogger("cherrypy").propagate = False
 
@@ -2504,10 +2521,12 @@ class WebService(object):
             OMPlugin(cherrypy.engine).subscribe()
             cherrypy.tools.websocket = OMSocketTool()
 
+            cherrypy.config.update({'server.socket_port': self._http_port})
+
             config = {'/terms': {'tools.staticdir.on': True,
-                                 'tools.staticdir.dir': '/opt/openmotics/python/terms'},
+                                 'tools.staticdir.dir': constants.get_terms_dir()},
                       '/static': {'tools.staticdir.on': True,
-                                  'tools.staticdir.dir': '/opt/openmotics/static'},
+                                  'tools.staticdir.dir': constants.get_static_dir()},
                       '/ws_metrics': {'tools.websocket.on': True,
                                       'tools.websocket.handler_cls': MetricsSocket},
                       '/ws_events': {'tools.websocket.on': True,
@@ -2524,16 +2543,16 @@ class WebService(object):
             cherrypy.server.unsubscribe()
 
             self._https_server = cherrypy._cpserver.Server()
-            self._https_server.socket_port = 443
+            self._https_server.socket_port = self._https_port
             self._https_server._socket_host = '0.0.0.0'
             self._https_server.socket_timeout = 60
-            System.setup_cherrypy_ssl(self._https_server,
-                                      private_key_filename=constants.get_ssl_private_key_file(),
-                                      certificate_filename=constants.get_ssl_certificate_file())
+            self._https_server.ssl_certificate = constants.get_ssl_certificate_file()
+            self._https_server.ssl_private_key = constants.get_ssl_private_key_file()
+            System.setup_cherrypy_ssl(self._https_server)
             self._https_server.subscribe()
 
             self._http_server = cherrypy._cpserver.Server()
-            self._http_server.socket_port = 80
+            self._http_server.socket_port = self._http_port
             if Config.get('enable_http', False):
                 # This is added for development purposes.
                 # Do NOT enable unless you know what you're doing and understand the risks.

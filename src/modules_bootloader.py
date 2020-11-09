@@ -89,7 +89,7 @@ def main():
     communicator = get_communicator()
     communicator.start()
     try:
-        if Platform.get_platform() == Platform.Type.CORE_PLUS:
+        if Platform.get_platform() in Platform.CoreTypes:
             from master.core.slave_updater import SlaveUpdater
 
             update_success = SlaveUpdater.update_all(module_type=module_type,

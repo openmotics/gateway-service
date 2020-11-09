@@ -56,6 +56,11 @@ def printable(data):
     return '{0}    {1}'.format(byte_notation, string_notation)
 
 
+TIOCSRS485 = 0x542F
+SER_RS485_ENABLED = 0b00000001
+SER_RS485_RTS_ON_SEND = 0b00000010
+
+
 class RS485(object):
     """ Replicates the pyserial interface. """
 
@@ -65,8 +70,9 @@ class RS485(object):
         self._serial = serial
         fileno = serial.fileno()
         if fileno is not None:
-            serial_rs485 = struct.pack('hhhhhhhh', 3, 0, 0, 0, 0, 0, 0, 0)
-            fcntl.ioctl(fileno, 0x542F, serial_rs485)
+            flags_rs485 = SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND
+            serial_rs485 = struct.pack('hhhhhhhh', flags_rs485, 0, 0, 0, 0, 0, 0, 0)
+            fcntl.ioctl(fileno, TIOCSRS485, serial_rs485)
 
         self._serial.timeout = None
         self._running = False

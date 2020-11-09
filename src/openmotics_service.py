@@ -113,7 +113,6 @@ class OpenmoticsService(object):
         pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, web_interface.send_event_websocket)
 
         message_client.add_event_handler(metrics_controller.event_receiver)
-        message_client.add_event_handler(frontpanel_controller.event_receiver)
         web_interface.set_plugin_controller(plugin_controller)
         web_interface.set_metrics_collector(metrics_collector)
         web_interface.set_metrics_controller(metrics_controller)
@@ -125,6 +124,9 @@ class OpenmoticsService(object):
         plugin_controller.set_webservice(web_service)
         plugin_controller.set_metrics_controller(metrics_controller)
         plugin_controller.set_metrics_collector(metrics_collector)
+
+        if frontpanel_controller:
+            message_client.add_event_handler(frontpanel_controller.event_receiver)
 
     @staticmethod
     @Inject
@@ -190,7 +192,8 @@ class OpenmoticsService(object):
         ventilation_controller.start()
         metrics_collector.start()
         web_service.start()
-        frontpanel_controller.start()
+        if frontpanel_controller:
+            frontpanel_controller.start()
         event_sender.start()
         watchdog.start()
         plugin_controller.start()
@@ -226,7 +229,8 @@ class OpenmoticsService(object):
             ventilation_controller.start()
             thermostat_controller.stop()
             plugin_controller.stop()
-            frontpanel_controller.stop()
+            if frontpanel_controller:
+                frontpanel_controller.stop()
             event_sender.stop()
             logger.info('Stopping OM core service... Done')
             signal_request['stop'] = True

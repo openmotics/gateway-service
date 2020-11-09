@@ -112,7 +112,7 @@ class Watchdog(object):
         if len(recovery_data) == 0:
             device_reset = 'communication_errors'
         else:
-            backoff = last_device_reset['backoff']
+            backoff = last_device_reset.get('backoff', backoff)
             if last_device_reset is None or last_device_reset['time'] < time.time() - backoff:
                 device_reset = 'communication_errors'
                 backoff = min(1200, backoff * 2)
@@ -120,7 +120,7 @@ class Watchdog(object):
                 if last_service_restart is None:
                     service_restart = 'communication_errors'
                 else:
-                    backoff = last_service_restart['backoff']
+                    backoff = last_service_restart.get('backoff', backoff)
                     if last_service_restart['time'] < time.time() - backoff:
                         service_restart = 'communication_errors'
                         backoff = min(1200, backoff * 2)

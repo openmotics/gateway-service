@@ -102,7 +102,8 @@ class OutputControllerTest(unittest.TestCase):
                                              {'id': 40, 'status': True, 'dimmer': 50}]):
             events = []
             self.controller._sync_state()
-            assert [GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 50, 'locked': False}, 'location': {'room_id': 3}})] == events
+            assert [GatewayEvent('OUTPUT_CHANGE', {'id': 2, 'status': {'on': True, 'locked': False}, 'location': {'room_id': 255}}),
+                    GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 50, 'locked': False}, 'location': {'room_id': 3}})] == events
 
     def test_output_master_change(self):
         events = []
@@ -198,30 +199,36 @@ class OutputStateCacheTest(unittest.TestCase):
                 2: OutputStateDTO(id=2)} == current_state
 
         # Everything is off.
-        assert cache.handle_change(0, {'status': False}) is None
-        assert cache.handle_change(1, {'status': False}) is None
-        assert cache.handle_change(2, {'status': False}) is None
+        assert cache.handle_change(0, {'status': False})[0] is False
+        assert cache.handle_change(1, {'status': False})[0] is False
+        assert cache.handle_change(2, {'status': False})[0] is False
 
         # Turn two outputs on.
-        assert cache.handle_change(0, {'status': False}) is None
-        change = cache.handle_change(2, {'status': True})
-        assert change.state.status is True
-        change = cache.handle_change(1, {'status': True})
-        assert change.state.status is True
+        assert cache.handle_change(0, {'status': False})[0] is False
+        changed, output_dto = cache.handle_change(2, {'status': True})
+        assert output_dto.state.status is True
+        assert changed is True
+        changed, output_dto = cache.handle_change(1, {'status': True})
+        assert output_dto.state.status is True
+        assert changed is True
 
         # Turn one outputs off again.
-        assert cache.handle_change(0, {'status': False}) is None
-        change = cache.handle_change(1, {'status': False})
-        assert change.state.status is False
+        assert cache.handle_change(0, {'status': False})[0] is False
+        changed, output_dto = cache.handle_change(1, {'status': False})
+        assert output_dto.state.status is False
+        assert changed is True
 
         # Change dimmer value.
-        assert cache.handle_change(0, {'dimmer': 0}) is None
-        change = cache.handle_change(1, {'status': True, 'dimmer': 100})
-        assert change.state.dimmer == 100
-        change = cache.handle_change(1, {'dimmer': 50})
-        assert change.state.dimmer is 50
+        assert cache.handle_change(0, {'dimmer': 0})[0] is False
+        changed, output_dto = cache.handle_change(1, {'status': True, 'dimmer': 100})
+        assert output_dto.state.dimmer == 100
+        assert changed is True
+        changed, output_dto = cache.handle_change(1, {'dimmer': 50})
+        assert output_dto.state.dimmer is 50
+        assert changed is True
 
         # Change lock.
-        assert cache.handle_change(0, {'locked': False}) is None
-        change = cache.handle_change(1, {'locked': True})
-        assert change.state.locked is True
+        assert cache.handle_change(0, {'locked': False})[0] is False
+        changed, output_dto = cache.handle_change(1, {'locked': True})
+        assert output_dto.state.locked is True
+        assert changed is True

@@ -25,6 +25,7 @@ from cloud.cloud_api_client import APIException, CloudAPIClient
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.events import GatewayEvent
 from gateway.input_controller import InputController
+from gateway.models import Config
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 logger = logging.getLogger('openmotics')
@@ -55,6 +56,8 @@ class EventSender(object):
         self._events_thread.stop()
 
     def enqueue_event(self, event):
+        if Config.get('cloud_enabled') is False:
+            return
         if self._is_enabled(event):
             event.data['timestamp'] = time.time()
             self._queue.appendleft(event)
