@@ -86,6 +86,7 @@ class PulseCounterController(BaseController):
             if pulse_counter.source == 'master':
                 pulse_counter_dto = self._master_controller.load_pulse_counter(pulse_counter_id=pulse_counter.number)
                 pulse_counter_dto.room = pulse_counter.room.number if pulse_counter.room is not None else None
+                pulse_counter_dto.name = pulse_counter.name  # Use longer ORM name
             else:
                 pulse_counter_dto = PulseCounterMapper.orm_to_dto(pulse_counter)
             pulse_counter_dtos.append(pulse_counter_dto)

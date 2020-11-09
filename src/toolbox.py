@@ -171,3 +171,9 @@ class Toolbox(object):
         if six.PY2:
             return inspect.getargspec(func).args
         return list(inspect.signature(func).parameters.keys())
+
+    @staticmethod
+    def shorten_name(name, maxlength=16):
+        if len(name) <= maxlength:
+            return name
+        return '{0}~{1}'.format(name[:maxlength - 2], name[-1:])
