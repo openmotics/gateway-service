@@ -41,10 +41,7 @@ class PulseCounterMapper(object):
     def dto_to_orm(pulse_counter_dto, fields):  # type: (PulseCounterDTO, List[str]) -> EepromModel
         data = {'id': pulse_counter_dto.id}  # type: Dict[str, Any]
         if 'name' in fields:
-            name = pulse_counter_dto.name
-            if len(name) > 16:
-                name = '{0}~'.format(name[:15])
-            data['name'] = name
+            data['name'] = Toolbox.shorten_name(pulse_counter_dto.name)
         if 'input_id' in fields:
             data['input'] = Toolbox.denonify(pulse_counter_dto.input_id, PulseCounterMapper.BYTE_MAX)
         return PulseCounterConfiguration.deserialize(data)
