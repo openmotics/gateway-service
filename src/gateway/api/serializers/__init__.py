@@ -25,6 +25,6 @@ from gateway.api.serializers.sensor import SensorSerializer
 from gateway.api.serializers.shutter import ShutterSerializer
 from gateway.api.serializers.shutter_group import ShutterGroupSerializer
 from gateway.api.serializers.thermostat import ThermostatSerializer, ThermostatGroupSerializer, \
-    ThermostatGroupStatusSerializer
+    ThermostatGroupStatusSerializer, ThermostatAircoStatusSerializer, PumpGroupSerializer
 from gateway.api.serializers.ventilation import VentilationSerializer, \
     VentilationStatusSerializer

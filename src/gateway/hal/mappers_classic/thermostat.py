@@ -18,12 +18,12 @@ HeatingThermostat Mapper
 """
 from toolbox import Toolbox
 from gateway.dto import ThermostatDTO, ThermostatScheduleDTO, \
-    ThermostatGroupDTO
+    ThermostatGroupDTO, PumpGroupDTO
 from master.classic.eeprom_controller import EepromModel
 from master.classic.eeprom_models import ThermostatConfiguration, GlobalThermostatConfiguration
 
 if False:  # MYPY
-    from typing import List, Dict, Any, Optional, Tuple
+    from typing import List, Dict, Any, Optional, Tuple, Type
 
 
 class ThermostatMapper(object):
@@ -117,3 +117,26 @@ class ThermostatGroupMapper(object):
                     data[output] = Toolbox.denonify(None if dto_value is None else dto_value[0], ThermostatGroupMapper.BYTE_MAX)
                     data[value] = Toolbox.denonify(None if dto_value is None else dto_value[1], ThermostatGroupMapper.BYTE_MAX)
         return GlobalThermostatConfiguration.deserialize(data)
+
+
+class PumpGroupMapper(object):
+    BYTE_MAX = 255
+
+    @staticmethod
+    def orm_to_dto(orm_object):  # type: (EepromModel) -> PumpGroupDTO
+        data = orm_object.serialize()
+        kwargs = {'pump_output_id': Toolbox.nonify(data['output'], PumpGroupMapper.BYTE_MAX),
+                  'valve_output_ids': [int(output_id) for output_id in data['outputs'].split(',')],
+                  'room_id': Toolbox.nonify(data['room'], PumpGroupMapper.BYTE_MAX)}
+        return PumpGroupDTO(id=data['id'], **kwargs)
+
+    @staticmethod
+    def dto_to_orm(model_type, pump_group_dto, fields):  # type: (Type[EepromModel], PumpGroupDTO, List[str]) -> EepromModel
+        data = {'id': pump_group_dto.id}  # type: Dict[str, Any]
+        if 'pump_output_id' in fields:
+            data['output'] = Toolbox.denonify(pump_group_dto.pump_output_id, PumpGroupMapper.BYTE_MAX)
+        if 'valve_output_ids' in fields:
+            data['outputs'] = ','.join(str(output_id) for output_id in pump_group_dto.valve_output_ids)
+        if 'room_id' in fields:
+            data['room'] = Toolbox.denonify(pump_group_dto.room_id, PumpGroupMapper.BYTE_MAX)
+        return model_type.deserialize(data)

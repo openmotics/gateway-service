@@ -18,7 +18,7 @@ import time
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO, ThermostatStatusDTO, \
-    ThermostatGroupDTO
+    ThermostatGroupDTO, ThermostatAircoStatusDTO, PumpGroupDTO
 from gateway.events import GatewayEvent
 from gateway.hal.master_event import MasterEvent
 from gateway.hal.master_controller import CommunicationFailure
@@ -153,49 +153,14 @@ class ThermostatControllerMaster(ThermostatController):
         self._master_controller.save_cooling_thermostats(thermostats)
         self.invalidate_cache(THERMOSTATS)
 
-    def v0_get_cooling_pump_group_configuration(self, pump_group_id, fields=None):
-        # type: (int, Optional[List[str]]) -> Dict[str,Any]
-        """
-        Get a specific cooling_pump_group_configuration defined by its id.
+    def load_cooling_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
+        return self._master_controller.load_cooling_pump_group(pump_group_id)
 
-        :param pump_group_id: The id of the cooling_pump_group_configuration
-        :type pump_group_id: Id
-        :param fields: The field of the cooling_pump_group_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: cooling_pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        return self._master_controller.get_cooling_pump_group_configuration(pump_group_id, fields=fields)
+    def load_cooling_pump_groups(self):  # type: () -> List[PumpGroupDTO]
+        return self._master_controller.load_cooling_pump_groups()
 
-    def v0_get_cooling_pump_group_configurations(self, fields=None):
-        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
-        """
-        Get all cooling_pump_group_configurations.
-
-        :param fields: The field of the cooling_pump_group_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of cooling_pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        return self._master_controller.get_cooling_pump_group_configurations(fields=fields)
-
-    def v0_set_cooling_pump_group_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set one cooling_pump_group_configuration.
-
-        :param config: The cooling_pump_group_configuration to set
-        :type config: cooling_pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        self._master_controller.set_cooling_pump_group_configuration(config)
-
-    def v0_set_cooling_pump_group_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        """
-        Set multiple cooling_pump_group_configurations.
-
-        :param config: The list of cooling_pump_group_configurations to set
-        :type config: list of cooling_pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        self._master_controller.set_cooling_pump_group_configurations(config)
+    def save_cooling_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
+        self._master_controller.save_cooling_pump_groups(pump_groups)
 
     def v0_get_global_rtd10_configuration(self, fields=None):
         # type: (Optional[List[str]]) -> Dict[str,Any]
@@ -308,58 +273,21 @@ class ThermostatControllerMaster(ThermostatController):
 
     def load_thermostat_group(self):
         # type: () -> ThermostatGroupDTO
-        """ Get the thermostat group. """
         return self._master_controller.load_thermostat_group()
 
     def save_thermostat_group(self, thermostat_group):
         # type: (Tuple[ThermostatGroupDTO, List[str]]) -> None
-        """ Set the thermostat group. """
         self._master_controller.save_thermostat_group(thermostat_group)
         self.invalidate_cache(THERMOSTATS)
 
-    def v0_get_pump_group_configuration(self, pump_group_id, fields=None):
-        # type: (int, Optional[List[str]]) -> Dict[str,Any]
-        """
-        Get a specific pump_group_configuration defined by its id.
+    def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
+        return self._master_controller.load_heating_pump_group(pump_group_id)
 
-        :param pump_group_id: The id of the pump_group_configuration
-        :type pump_group_id: Id
-        :param fields: The field of the pump_group_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        return self._master_controller.get_pump_group_configuration(pump_group_id, fields=fields)
+    def load_heating_pump_groups(self):  # type: () -> List[PumpGroupDTO]
+        return self._master_controller.load_heating_pump_groups()
 
-    def v0_get_pump_group_configurations(self, fields=None):
-        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
-        """
-        Get all pump_group_configurations.
-
-        :param fields: The field of the pump_group_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        return self._master_controller.get_pump_group_configurations(fields=fields)
-
-    def v0_set_pump_group_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set one pump_group_configuration.
-
-        :param config: The pump_group_configuration to set
-        :type config: pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        self._master_controller.set_pump_group_configuration(config)
-
-    def v0_set_pump_group_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        """
-        Set multiple pump_group_configurations.
-
-        :param config: The list of pump_group_configurations to set
-        :type config: list of pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        """
-        self._master_controller.set_pump_group_configurations(config)
+    def save_heating_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
+        self._master_controller.save_heating_pump_groups(pump_groups)
 
     def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
         # type: (bool, bool, bool, Optional[bool], Optional[int]) -> None
@@ -428,27 +356,17 @@ class ThermostatControllerMaster(ThermostatController):
         self.invalidate_cache(THERMOSTATS)
         self.increase_interval(THERMOSTATS, interval=2, window=10)
 
-    def v0_set_airco_status(self, thermostat_id, airco_on):
-        # type: (int, bool) -> Dict[str,Any]
-        """ Set the mode of the airco attached to a given thermostat.
-        :param thermostat_id: The thermostat id.
-        :type thermostat_id: Integer [0, 31]
-        :param airco_on: Turns the airco on if True.
-        :type airco_on: boolean.
-        :returns: dict with 'status'.
-        """
+    def set_airco_status(self, thermostat_id, airco_on):
+        # type: (int, bool) -> None
+        """ Set the mode of the airco attached to a given thermostat. """
         if thermostat_id < 0 or thermostat_id > 31:
-            raise ValueError('thermostat_id not in [0, 31]: %d' % thermostat_id)
-        modifier = 0 if airco_on else 100
-        self._master_controller.set_airco_status_bits(modifier + thermostat_id)
-        return {'status': 'OK'}
+            raise ValueError('Thermostat id not in [0, 31]: {0}'.format(thermostat_id))
+        self._master_controller.set_airco_status(thermostat_id, airco_on)
 
-    def v0_get_airco_status(self):
-        # type: () -> Dict[str,Any]
-        """ Get the mode of the airco attached to a all thermostats.
-        :returns: dict with ASB0-ASB31.
-        """
-        return self._master_controller.read_airco_status_bits()
+    def load_airco_status(self):
+        # type: () -> ThermostatAircoStatusDTO
+        """ Get the mode of the airco attached to a all thermostats. """
+        return self._master_controller.load_airco_status()
 
     @staticmethod
     def __check_thermostat(thermostat):
@@ -497,7 +415,7 @@ class ThermostatControllerMaster(ThermostatController):
         try:
             thermostat_info = self._master_controller.get_thermostats()
             thermostat_mode = self._master_controller.get_thermostat_modes()
-            aircos = self._master_controller.read_airco_status_bits()
+            aircos = self._master_controller.load_airco_status()
         except CommunicationFailure:
             return
 
@@ -533,7 +451,7 @@ class ThermostatControllerMaster(ThermostatController):
                               'setpoint': t_setpoint,
                               'name': thermostat_dto.name,
                               'sensor_nr': thermostat_dto.sensor,
-                              'airco': aircos['ASB{0}'.format(thermostat_id)]}
+                              'airco': 1 if aircos.status[thermostat_id] else 0}
                 for output in [0, 1]:
                     output_id = getattr(thermostat_dto, 'output{0}'.format(output))
                     output_state_dto = status.get(output_id)

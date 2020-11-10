@@ -18,7 +18,8 @@ Module for communicating with the Master
 from __future__ import absolute_import
 
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
-    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ThermostatGroupDTO, ModuleDTO
+    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatAircoStatusDTO, \
+    ThermostatDTO, ThermostatGroupDTO, ModuleDTO
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -190,12 +191,12 @@ class MasterController(object):
         # type: () -> Dict[str,Any]
         raise NotImplementedError()
 
-    def read_airco_status_bits(self):
-        # type: () -> Dict[str,Any]
+    def load_airco_status(self):
+        # type: () -> ThermostatAircoStatusDTO
         raise NotImplementedError()
 
-    def set_airco_status_bits(self, status_bits):
-        # type: (int) -> None
+    def set_airco_status(self, thermostat_id, airco_on):
+        # type: (int, bool) -> None
         raise NotImplementedError()
 
     def set_thermostat_tenant_manual(self, thermostat_id):

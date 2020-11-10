@@ -16,7 +16,7 @@
 from gateway.hal.mappers_classic.output import OutputMapper
 from gateway.hal.mappers_classic.shutter import ShutterMapper
 from gateway.hal.mappers_classic.shutter_group import ShutterGroupMapper
-from gateway.hal.mappers_classic.thermostat import ThermostatMapper, ThermostatGroupMapper
+from gateway.hal.mappers_classic.thermostat import ThermostatMapper, ThermostatGroupMapper, PumpGroupMapper
 from gateway.hal.mappers_classic.input import InputMapper
 from gateway.hal.mappers_classic.sensor import SensorMapper
 from gateway.hal.mappers_classic.pulse_counter import PulseCounterMapper

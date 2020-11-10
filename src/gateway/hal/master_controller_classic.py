@@ -22,7 +22,6 @@ import logging
 import re
 import subprocess
 import time
-import warnings
 from datetime import datetime
 from threading import Lock, Timer
 
@@ -31,12 +30,12 @@ import six
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO, \
-    ThermostatGroupDTO
+    ThermostatGroupDTO, ThermostatAircoStatusDTO, PumpGroupDTO
 from gateway.enums import ShutterEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
     OutputMapper, PulseCounterMapper, SensorMapper, ShutterGroupMapper, \
-    ShutterMapper, ThermostatMapper, ThermostatGroupMapper
+    ShutterMapper, ThermostatMapper, ThermostatGroupMapper, PumpGroupMapper
 from gateway.hal.master_controller import CommunicationFailure, \
     MasterController
 from gateway.hal.master_event import MasterEvent
@@ -763,15 +762,16 @@ class MasterClassicController(MasterController):
         return self._master_communicator.do_command(master_api.thermostat_mode_list())
 
     @communication_enabled
-    def read_airco_status_bits(self):
-        # type: () -> Dict[str,Any]
-        return self._master_communicator.do_command(master_api.read_airco_status_bits())
+    def load_airco_status(self):
+        # type: () -> ThermostatAircoStatusDTO
+        data = self._master_communicator.do_command(master_api.read_airco_status_bits())
+        return ThermostatAircoStatusDTO({i: data['ASB{0}'.format(i)] == 1 for i in range(32)})
 
     @communication_enabled
-    def set_airco_status_bits(self, status_bits):
-        # type: (int) -> None
+    def set_airco_status(self, thermostat_id, airco_on):
+        # type: (int, bool) -> None
         self._master_communicator.do_basic_action(
-            master_api.BA_THERMOSTAT_AIRCO_STATUS, status_bits
+            master_api.BA_THERMOSTAT_AIRCO_STATUS, thermostat_id + (0 if airco_on else 100)
         )
 
     @communication_enabled
@@ -809,24 +809,21 @@ class MasterClassicController(MasterController):
         self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
-    def get_cooling_pump_group_configuration(self, pump_group_id, fields=None):
-        # type: (int, Optional[List[str]]) -> Dict[str,Any]
-        return self._eeprom_controller.read(CoolingPumpGroupConfiguration, pump_group_id, fields).serialize()
+    def load_cooling_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
+        classic_object = self._eeprom_controller.read(CoolingPumpGroupConfiguration, pump_group_id)
+        return PumpGroupMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def get_cooling_pump_group_configurations(self, fields=None):
-        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
-        return [o.serialize() for o in self._eeprom_controller.read_all(CoolingPumpGroupConfiguration, fields)]
+    def load_cooling_pump_groups(self):  # type: () -> List[PumpGroupDTO]
+        return [PumpGroupMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(CoolingPumpGroupConfiguration)]
 
     @communication_enabled
-    def set_cooling_pump_group_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(CoolingPumpGroupConfiguration.deserialize(config))
-
-    @communication_enabled
-    def set_cooling_pump_group_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        self._eeprom_controller.write_batch([CoolingPumpGroupConfiguration.deserialize(o) for o in config])
+    def save_cooling_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
+        batch = []
+        for pump_group, fields in pump_groups:
+            batch.append(PumpGroupMapper.dto_to_orm(CoolingPumpGroupConfiguration, pump_group, fields))
+        self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
     def get_global_rtd10_configuration(self, fields=None):
@@ -895,24 +892,21 @@ class MasterClassicController(MasterController):
         self._eeprom_controller.write(classic_object)
 
     @communication_enabled
-    def get_pump_group_configuration(self, pump_group_id, fields=None):
-        # type: (int, Optional[List[str]]) -> Dict[str,Any]
-        return self._eeprom_controller.read(PumpGroupConfiguration, pump_group_id, fields).serialize()
+    def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
+        classic_object = self._eeprom_controller.read(PumpGroupConfiguration, pump_group_id)
+        return PumpGroupMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def get_pump_group_configurations(self, fields=None):
-        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
-        return [o.serialize() for o in self._eeprom_controller.read_all(PumpGroupConfiguration, fields)]
+    def load_heating_pump_groups(self):  # type: () -> List[PumpGroupDTO]
+        return [PumpGroupMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(PumpGroupConfiguration)]
 
     @communication_enabled
-    def set_pump_group_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(PumpGroupConfiguration.deserialize(config))
-
-    @communication_enabled
-    def set_pump_group_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        self._eeprom_controller.write_batch([PumpGroupConfiguration.deserialize(o) for o in config])
+    def save_heating_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
+        batch = []
+        for pump_group, fields in pump_groups:
+            batch.append(PumpGroupMapper.dto_to_orm(PumpGroupConfiguration, pump_group, fields))
+        self._eeprom_controller.write_batch(batch)
 
     # Virtual modules
 

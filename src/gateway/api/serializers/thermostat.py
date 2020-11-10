@@ -18,8 +18,9 @@ Heating thermostat (de)serializer
 """
 from toolbox import Toolbox
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto import ThermostatDTO, ThermostatGroupDTO, \
-    ThermostatScheduleDTO, ThermostatGroupStatusDTO
+from gateway.dto import ThermostatAircoStatusDTO, ThermostatDTO, \
+    ThermostatGroupDTO, ThermostatScheduleDTO, ThermostatGroupStatusDTO, \
+    PumpGroupDTO
 
 if False:  # MYPY
     from typing import Dict, Optional, List, Tuple, Any
@@ -170,3 +171,37 @@ class ThermostatGroupStatusSerializer(object):
                             'output0': status.output_0_level,
                             'output1': status.output_1_level}
                            for status in thermostat_group_status_dto.statusses]}
+
+
+class ThermostatAircoStatusSerializer(object):
+    @staticmethod
+    def serialize(thermostat_airco_status_dto):  # type: (ThermostatAircoStatusDTO) -> Dict[str, Any]
+        return {'ASB{0}'.format(i): 1 if thermostat_airco_status_dto.status[i] else 0
+                for i in range(32)}
+
+
+class PumpGroupSerializer(object):
+    BYTE_MAX = 255
+
+    @staticmethod
+    def serialize(pump_group_dto, fields):  # type: (PumpGroupDTO, Optional[List[str]]) -> Dict
+        data = {'id': pump_group_dto.id,
+                'output': Toolbox.denonify(pump_group_dto.pump_output_id, PumpGroupSerializer.BYTE_MAX),
+                'outputs': ','.join(str(output_id) for output_id in pump_group_dto.valve_output_ids),
+                'room': Toolbox.denonify(pump_group_dto.room_id, PumpGroupSerializer.BYTE_MAX)}
+        return SerializerToolbox.filter_fields(data, fields)
+
+    @staticmethod
+    def deserialize(api_data):  # type: (Dict) -> Tuple[PumpGroupDTO, List[str]]
+        loaded_fields = []
+        pump_group_dto = PumpGroupDTO(id=0)
+        loaded_fields += SerializerToolbox.deserialize(
+            dto=pump_group_dto,  # Referenced
+            api_data=api_data,
+            mapping={'output': ('pump_output_id', PumpGroupSerializer.BYTE_MAX),
+                     'rooom': ('room_id', PumpGroupSerializer.BYTE_MAX)}
+        )
+        if 'outputs' in api_data:
+            loaded_fields.append('valve_output_ids')
+            pump_group_dto.valve_output_ids = [int(output_id) for output_id in api_data['outputs'].split(',')]
+        return pump_group_dto, loaded_fields

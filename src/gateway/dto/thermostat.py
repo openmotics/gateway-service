@@ -21,7 +21,7 @@ from gateway.dto.base import BaseDTO
 from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
 
 if False:
-    from typing import Optional, List, Tuple
+    from typing import Optional, List, Tuple, Dict
 
 
 class ThermostatDTO(BaseDTO):
@@ -180,3 +180,31 @@ class ThermostatGroupStatusDTO(BaseDTO):
                 self.cooling == other.cooling and
                 self.setpoint == other.setpoint and
                 self.statusses == other.statusses)
+
+
+class ThermostatAircoStatusDTO(BaseDTO):
+    def __init__(self, status):
+        # type: (Dict[int, bool]) -> None
+        self.status = status
+
+    def __eq__(self, other):
+        if not isinstance(other, ThermostatAircoStatusDTO):
+            return False
+        return self.status == other.status
+
+
+class PumpGroupDTO(BaseDTO):
+    def __init__(self, id, pump_output_id=None, valve_outputs_ids=None, room_id=None):
+        # type: (int, Optional[int], Optional[List[int]], Optional[int]) -> None
+        self.id = id
+        self.pump_output_id = pump_output_id
+        self.valve_output_ids = valve_outputs_ids if valve_outputs_ids else []  # type: List[int]
+        self.room_id = room_id
+
+    def __eq__(self, other):
+        if not isinstance(other, PumpGroupDTO):
+            return False
+        return (self.id == other.id and
+                self.pump_output_id == other.pump_output_id and
+                self.valve_output_ids == other.valve_output_ids and
+                self.room_id == other.room_id)

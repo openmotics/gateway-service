@@ -26,7 +26,8 @@ from gateway.dto.sensor import SensorDTO
 from gateway.dto.shutter import ShutterDTO
 from gateway.dto.shutter_group import ShutterGroupDTO
 from gateway.dto.thermostat import ThermostatDTO, ThermostatGroupDTO, \
-    ThermostatStatusDTO, ThermostatGroupStatusDTO
+    ThermostatStatusDTO, ThermostatGroupStatusDTO, ThermostatAircoStatusDTO, \
+    PumpGroupDTO
 from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
 from gateway.dto.user import UserDTO
 from gateway.dto.ventilation import VentilationDTO, VentilationSourceDTO, \

@@ -23,7 +23,7 @@ from playhouse.signals import post_save
 import constants
 from gateway.daemon_thread import DaemonThread
 from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO, \
-    ThermostatStatusDTO, ThermostatGroupDTO
+    ThermostatStatusDTO, ThermostatGroupDTO, PumpGroupDTO
 from gateway.enums import ThermostatMode
 from gateway.events import GatewayEvent
 from gateway.exceptions import UnsupportedException
@@ -375,7 +375,7 @@ class ThermostatControllerGateway(ThermostatController):
                                                   outside_sensor_id=thermostat_group.sensor,
                                                   threshold_temperature=thermostat_group.threshold_temperature,
                                                   pump_delay=pump_delay)
-        for link in OutputToThermostatGroup.select()\
+        for link in OutputToThermostatGroup.select() \
                 .where(OutputToThermostatGroup.thermostat_group == thermostat_group):
             if link.index > 3 or link.output is None:
                 continue
@@ -433,63 +433,43 @@ class ThermostatControllerGateway(ThermostatController):
                     valve.delay = thermostat_group_dto.pump_delay
                     valve.save()
 
-    def v0_get_pump_group_configuration(self, pump_number, fields=None):
-        # type: (int, Optional[List[str]]) -> Dict[str, Any]
-        pump = Pump.get(number=pump_number)
-        pump_config = {'id': pump.number,
-                       'outputs': ','.join([valve.output.number for valve in pump.heating_valves]),
-                       'output': pump.output.number,
-                       'room': 255}
-        return pump_config
+    def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
+        pump = Pump.get(number=pump_group_id)
+        return PumpGroupDTO(id=pump_group_id,
+                            pump_output_id=pump.output.number,
+                            valve_outputs_ids=[valve.output.number for valve in pump.heating_valves],
+                            room_id=None)
 
-    def v0_get_pump_group_configurations(self, fields=None):
-        # type: (Optional[List[str]]) -> List[Dict[str, Any]]
-        pump_config_list = []
+    def load_heating_pump_groups(self):  # type: () -> List[PumpGroupDTO]
+        pump_groups = []
         for pump in Pump.select():
-            pump_config = {'id': pump.number,
-                           'outputs': ','.join([valve.number for valve in pump.heating_valves]),
-                           'output': pump.number,
-                           'room': 255}
-            pump_config_list.append(pump_config)
-        return pump_config_list
+            pump_groups.append(PumpGroupDTO(id=pump.number,
+                                            pump_output_id=pump.output.number,
+                                            valve_outputs_ids=[valve.output.number for valve in pump.heating_valves],
+                                            room_id=None))
+        return pump_groups
 
-    def v0_set_pump_group_configuration(self, config):
-        # type: (Dict[str, Any]) -> None
+    def save_heating_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
         # TODO: Implement
         raise NotImplementedError()
 
-    def v0_set_pump_group_configurations(self, config):
-        # type: (List[Dict[str, Any]]) -> None
-        # TODO: Implement
-        raise NotImplementedError()
+    def load_cooling_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
+        pump = Pump.get(number=pump_group_id)
+        return PumpGroupDTO(id=pump_group_id,
+                            pump_output_id=pump.output.number,
+                            valve_outputs_ids=[valve.output.number for valve in pump.cooling_valves],
+                            room_id=None)
 
-    def v0_get_cooling_pump_group_configuration(self, pump_number, fields=None):
-        # type: (int, Optional[List[str]]) -> Dict[str, Any]
-        pump = Pump.get(number=pump_number)
-        pump_config = {'id': pump.number,
-                       'outputs': ','.join([valve.output.number for valve in pump.cooling_valves]),
-                       'output': pump.output.number,
-                       'room': 255}
-        return pump_config
-
-    def v0_get_cooling_pump_group_configurations(self, fields=None):
-        # type: (Optional[List[str]]) -> List[Dict[str, Any]]
-        pump_config_list = []
+    def load_cooling_pump_groups(self):  # type: () -> List[PumpGroupDTO]
+        pump_groups = []
         for pump in Pump.select():
-            pump_config = {'id': pump.number,
-                           'outputs': [valve.number for valve in pump.cooling_valves],
-                           'output': pump.number,
-                           'room': 255}
-            pump_config_list.append(pump_config)
-        return pump_config_list
+            pump_groups.append(PumpGroupDTO(id=pump.number,
+                                            pump_output_id=pump.output.number,
+                                            valve_outputs_ids=[valve.output.number for valve in pump.cooling_valves],
+                                            room_id=None))
+        return pump_groups
 
-    def v0_set_cooling_pump_group_configuration(self, config):
-        # type: (Dict[str, Any]) -> None
-        # TODO: Implement
-        raise NotImplementedError()
-
-    def v0_set_cooling_pump_group_configurations(self, config):
-        # type: (List[Dict[str, Any]]) -> None
+    def save_cooling_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
         # TODO: Implement
         raise NotImplementedError()
 
@@ -564,10 +544,10 @@ class ThermostatControllerGateway(ThermostatController):
     def v0_set_rtd10_cooling_configurations(self, config):
         raise UnsupportedException()
 
-    def v0_set_airco_status(self, thermostat_id, airco_on):
+    def set_airco_status(self, thermostat_id, airco_on):
         raise UnsupportedException()
 
-    def v0_get_airco_status(self):
+    def load_airco_status(self):
         raise UnsupportedException()
 
 

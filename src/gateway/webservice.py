@@ -45,7 +45,8 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     PulseCounterSerializer, RoomSerializer, ScheduleSerializer, \
     SensorSerializer, ShutterGroupSerializer, ShutterSerializer, \
     ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer, \
-    ThermostatGroupStatusSerializer, ThermostatGroupSerializer
+    ThermostatGroupStatusSerializer, ThermostatGroupSerializer, \
+    ThermostatAircoStatusSerializer, PumpGroupSerializer
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO
 from gateway.enums import ShutterEnums, UserEnums
 from gateway.exceptions import UnsupportedException
@@ -844,27 +845,15 @@ class WebInterface(object):
 
     @openmotics_api(auth=True)
     def get_airco_status(self):
-        """
-        Get the mode of the airco attached to a all thermostats.
-
-        :returns: dict with ASB0-ASB31.
-        :rtype: dict
-        """
-        return self._thermostat_controller.v0_get_airco_status()
+        """ Get the mode of the airco attached to a all thermostats. """
+        airco_status_dto = self._thermostat_controller.load_airco_status()
+        return ThermostatAircoStatusSerializer.serialize(airco_status_dto)
 
     @openmotics_api(auth=True, check=types(thermostat_id=int, airco_on=bool))
     def set_airco_status(self, thermostat_id, airco_on):
-        """
-        Set the mode of the airco attached to a given thermostat.
-
-        :param thermostat_id: The thermostat id.
-        :type thermostat_id: int
-        :param airco_on: Turns the airco on if True.
-        :type airco_on: bool
-        :returns: dict with 'status'
-        :rtype: dict
-        """
-        return self._thermostat_controller.v0_set_airco_status(thermostat_id, airco_on)
+        """ Set the mode of the airco attached to a given thermostat. """
+        self._thermostat_controller.set_airco_status(thermostat_id, airco_on)
+        return {'status': 'OK'}
 
     # Ventilation
 
@@ -1329,51 +1318,36 @@ class WebInterface(object):
     # Heating Pump Group
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_pump_group_configuration(self, id, fields=None):
+    def get_pump_group_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
-        Get a specific pump_group_configuration defined by its id.
-
-        :param id: The id of the pump_group_configuration
-        :type id: int
-        :param fields: The field of the pump_group_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        :rtype: dict
+        Get a specific heating pump_group_configuration defined by its id.
+        :param id: The id of the heating pump_group_configuration
+        :param fields: The field of the heating pump_group_configuration to get, None if all
         """
-        return {'config': self._thermostat_controller.v0_get_pump_group_configuration(id, fields)}
+        return {'config': PumpGroupSerializer.serialize(pump_group_dto=self._thermostat_controller.load_heating_pump_group(pump_group_id=id),
+                                                        fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_pump_group_configurations(self, fields=None):
+    def get_pump_group_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
-        Get all pump_group_configurations.
-
-        :param fields: The field of the pump_group_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        :rtype: dict
+        Get all heating pump_group_configurations.
+        :param fields: The field of the heating pump_group_configuration to get, None if all
         """
-        return {'config': self._thermostat_controller.v0_get_pump_group_configurations(fields)}
+        return {'config': [PumpGroupSerializer.serialize(pump_group_dto=pump_group, fields=fields)
+                           for pump_group in self._thermostat_controller.load_heating_pump_groups()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_pump_group_configuration(self, config):
-        """
-        Set one pump_group_configuration.
-
-        :param config: The pump_group_configuration to set: pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        :type config: dict
-        """
-        self._thermostat_controller.v0_set_pump_group_configuration(config)
+    def set_pump_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one heating pump_group_configuration. """
+        data = PumpGroupSerializer.deserialize(config)
+        self._thermostat_controller.save_heating_pump_groups([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_pump_group_configurations(self, config):
-        """
-        Set multiple pump_group_configurations.
-
-        :param config: The list of pump_group_configurations to set: list of pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        :type config: list
-        """
-        self._thermostat_controller.v0_set_pump_group_configurations(config)
+    def set_pump_group_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple heating pump_group_configurations. """
+        data = [PumpGroupSerializer.deserialize(entry) for entry in config]
+        self._thermostat_controller.save_heating_pump_groups(data)
         return {}
 
     # Cooling thermostats
@@ -1425,51 +1399,36 @@ class WebInterface(object):
     # Cooling Pump Groups
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_cooling_pump_group_configuration(self, id, fields=None):
+    def get_cooling_pump_group_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
-        Get a specific cooling_pump_group_configuration defined by its id.
-
-        :param id: The id of the cooling_pump_group_configuration
-        :type id: int
-        :param fields: The field of the cooling_pump_group_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': cooling_pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        :rtype: dict
+        Get a specific cooling pump_group_configuration defined by its id.
+        :param id: The id of the cooling pump_group_configuration
+        :param fields: The field of the cooling pump_group_configuration to get, None if all
         """
-        return {'config': self._thermostat_controller.v0_get_cooling_pump_group_configuration(id, fields)}
+        return {'config': PumpGroupSerializer.serialize(pump_group_dto=self._thermostat_controller.load_cooling_pump_group(pump_group_id=id),
+                                                        fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_cooling_pump_group_configurations(self, fields=None):
+    def get_cooling_pump_group_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
-        Get all cooling_pump_group_configurations.
-
-        :param fields: The field of the cooling_pump_group_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of cooling_pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        :rtype: dict
+        Get all cooling pump_group_configurations.
+        :param fields: The field of the cooling pump_group_configuration to get, None if all
         """
-        return {'config': self._thermostat_controller.v0_get_cooling_pump_group_configurations(fields)}
+        return {'config': [PumpGroupSerializer.serialize(pump_group_dto=pump_group, fields=fields)
+                           for pump_group in self._thermostat_controller.load_cooling_pump_groups()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_cooling_pump_group_configuration(self, config):
-        """
-        Set one cooling_pump_group_configuration.
-
-        :param config: The cooling_pump_group_configuration to set: cooling_pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        :type config: dict
-        """
-        self._thermostat_controller.v0_set_cooling_pump_group_configuration(config)
+    def set_cooling_pump_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one cooling pump_group_configuration. """
+        data = PumpGroupSerializer.deserialize(config)
+        self._thermostat_controller.save_cooling_pump_groups([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_cooling_pump_group_configurations(self, config):
-        """
-        Set multiple cooling_pump_group_configurations.
-
-        :param config: The list of cooling_pump_group_configurations to set: list of cooling_pump_group_configuration dict: contains 'id' (Id), 'outputs' (CSV[32]), 'room' (Byte)
-        :type config: list
-        """
-        self._thermostat_controller.v0_set_cooling_pump_group_configurations(config)
+    def set_cooling_pump_group_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple cooling pump_group_configurations. """
+        data = [PumpGroupSerializer.deserialize(entry) for entry in config]
+        self._thermostat_controller.save_cooling_pump_groups(data)
         return {}
 
     @openmotics_api(auth=True, check=types(fields='json'))
