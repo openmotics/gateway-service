@@ -23,7 +23,8 @@ from playhouse.signals import post_save
 import constants
 from gateway.daemon_thread import DaemonThread
 from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO, \
-    ThermostatStatusDTO, ThermostatGroupDTO, PumpGroupDTO
+    ThermostatStatusDTO, ThermostatGroupDTO, PumpGroupDTO, \
+    GlobalRTD10DTO, RTD10DTO
 from gateway.enums import ThermostatMode
 from gateway.events import GatewayEvent
 from gateway.exceptions import UnsupportedException
@@ -347,7 +348,7 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, 'cooling')
             self.refresh_set_configuration(thermostat)
 
-    def v0_set_per_thermostat_mode(self, thermostat_number, automatic, setpoint):
+    def set_per_thermostat_mode(self, thermostat_number, automatic, setpoint):
         # type: (int, bool, float) -> None
         thermostat_pid = self.thermostat_pids.get(thermostat_number)
         if thermostat_pid is not None:
@@ -473,15 +474,9 @@ class ThermostatControllerGateway(ThermostatController):
         # TODO: Implement
         raise NotImplementedError()
 
-    def v0_get_global_rtd10_configuration(self, fields=None):
-        # type: (Optional[List[str]]) -> Dict[str, Any]
-        data = {}  # TODO: Implement
-        for i in range(16, 25):
-            data.update({'output_value_heating_{0}'.format(i): 0,
-                         'output_value_heating_{0}_5'.format(i): 0,
-                         'output_value_cooling_{0}'.format(i): 0,
-                         'output_value_cooling_{0}_5'.format(i): 0})
-        return data
+    def load_global_rtd10(self):  # type: () -> GlobalRTD10DTO
+        # TODO: Implement
+        return GlobalRTD10DTO()
 
     def refresh_set_configuration(self, thermostat):  # type: (Thermostat) -> None
         thermostat_pid = self.thermostat_pids.get(thermostat.number)
@@ -517,31 +512,25 @@ class ThermostatControllerGateway(ThermostatController):
 
     # Obsolete unsupported calls
 
-    def v0_set_global_rtd10_configuration(self, config):
+    def save_global_rtd10(self, rtd10):  # type: (Tuple[GlobalRTD10DTO, List[str]]) -> None
         raise UnsupportedException()
 
-    def v0_get_rtd10_heating_configuration(self, heating_id, fields=None):
+    def load_heating_rtd10(self, rtd10_id):  # type: (int) -> RTD10DTO
         raise UnsupportedException()
 
-    def v0_get_rtd10_heating_configurations(self, fields=None):
+    def load_heating_rtd10s(self):  # type: () -> List[RTD10DTO]
         return []  # Should have been UnsupportedException, but curent UIs need an answer
 
-    def v0_set_rtd10_heating_configuration(self, config):
+    def save_heating_rtd10s(self, rtd10s):  # type: (List[Tuple[RTD10DTO, List[str]]]) -> None
         raise UnsupportedException()
 
-    def v0_set_rtd10_heating_configurations(self, config):
+    def load_cooling_rtd10(self, rtd10_id):  # type: (int) -> RTD10DTO
         raise UnsupportedException()
 
-    def v0_get_rtd10_cooling_configuration(self, cooling_id, fields=None):
-        raise UnsupportedException()
-
-    def v0_get_rtd10_cooling_configurations(self, fields=None):
+    def load_cooling_rtd10s(self):  # type: () -> List[RTD10DTO]
         return []  # Should have been UnsupportedException, but curent UIs need an answer
 
-    def v0_set_rtd10_cooling_configuration(self, config):
-        raise UnsupportedException()
-
-    def v0_set_rtd10_cooling_configurations(self, config):
+    def save_cooling_rtd10s(self, rtd10s):  # type: (List[Tuple[RTD10DTO, List[str]]]) -> None
         raise UnsupportedException()
 
     def set_airco_status(self, thermostat_id, airco_on):

@@ -18,7 +18,8 @@ import time
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO, ThermostatStatusDTO, \
-    ThermostatGroupDTO, ThermostatAircoStatusDTO, PumpGroupDTO
+    ThermostatGroupDTO, ThermostatAircoStatusDTO, PumpGroupDTO, \
+    GlobalRTD10DTO, RTD10DTO
 from gateway.events import GatewayEvent
 from gateway.hal.master_event import MasterEvent
 from gateway.hal.master_controller import CommunicationFailure
@@ -162,114 +163,29 @@ class ThermostatControllerMaster(ThermostatController):
     def save_cooling_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
         self._master_controller.save_cooling_pump_groups(pump_groups)
 
-    def v0_get_global_rtd10_configuration(self, fields=None):
-        # type: (Optional[List[str]]) -> Dict[str,Any]
-        """
-        Get the global_rtd10_configuration.
+    def load_global_rtd10(self):  # type: () -> GlobalRTD10DTO
+        return self._master_controller.load_global_rtd10()
 
-        :param fields: The field of the global_rtd10_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: global_rtd10_configuration dict: contains 'output_value_cooling_16' (Byte), 'output_value_cooling_16_5' (Byte), 'output_value_cooling_17' (Byte), 'output_value_cooling_17_5' (Byte), 'output_value_cooling_18' (Byte), 'output_value_cooling_18_5' (Byte), 'output_value_cooling_19' (Byte), 'output_value_cooling_19_5' (Byte), 'output_value_cooling_20' (Byte), 'output_value_cooling_20_5' (Byte), 'output_value_cooling_21' (Byte), 'output_value_cooling_21_5' (Byte), 'output_value_cooling_22' (Byte), 'output_value_cooling_22_5' (Byte), 'output_value_cooling_23' (Byte), 'output_value_cooling_23_5' (Byte), 'output_value_cooling_24' (Byte), 'output_value_heating_16' (Byte), 'output_value_heating_16_5' (Byte), 'output_value_heating_17' (Byte), 'output_value_heating_17_5' (Byte), 'output_value_heating_18' (Byte), 'output_value_heating_18_5' (Byte), 'output_value_heating_19' (Byte), 'output_value_heating_19_5' (Byte), 'output_value_heating_20' (Byte), 'output_value_heating_20_5' (Byte), 'output_value_heating_21' (Byte), 'output_value_heating_21_5' (Byte), 'output_value_heating_22' (Byte), 'output_value_heating_22_5' (Byte), 'output_value_heating_23' (Byte), 'output_value_heating_23_5' (Byte), 'output_value_heating_24' (Byte)
-        """
-        return self._master_controller.get_global_rtd10_configuration(fields=fields)
+    def save_global_rtd10(self, global_rtd10):  # type: (Tuple[GlobalRTD10DTO, List[str]]) -> None
+        self._master_controller.save_global_rtd10(global_rtd10)
 
-    def v0_set_global_rtd10_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set the global_rtd10_configuration.
+    def load_heating_rtd10(self, rtd10_id):  # type: (int) -> RTD10DTO
+        return self._master_controller.load_heating_rtd10(rtd10_id)
 
-        :param config: The global_rtd10_configuration to set
-        :type config: global_rtd10_configuration dict: contains 'output_value_cooling_16' (Byte), 'output_value_cooling_16_5' (Byte), 'output_value_cooling_17' (Byte), 'output_value_cooling_17_5' (Byte), 'output_value_cooling_18' (Byte), 'output_value_cooling_18_5' (Byte), 'output_value_cooling_19' (Byte), 'output_value_cooling_19_5' (Byte), 'output_value_cooling_20' (Byte), 'output_value_cooling_20_5' (Byte), 'output_value_cooling_21' (Byte), 'output_value_cooling_21_5' (Byte), 'output_value_cooling_22' (Byte), 'output_value_cooling_22_5' (Byte), 'output_value_cooling_23' (Byte), 'output_value_cooling_23_5' (Byte), 'output_value_cooling_24' (Byte), 'output_value_heating_16' (Byte), 'output_value_heating_16_5' (Byte), 'output_value_heating_17' (Byte), 'output_value_heating_17_5' (Byte), 'output_value_heating_18' (Byte), 'output_value_heating_18_5' (Byte), 'output_value_heating_19' (Byte), 'output_value_heating_19_5' (Byte), 'output_value_heating_20' (Byte), 'output_value_heating_20_5' (Byte), 'output_value_heating_21' (Byte), 'output_value_heating_21_5' (Byte), 'output_value_heating_22' (Byte), 'output_value_heating_22_5' (Byte), 'output_value_heating_23' (Byte), 'output_value_heating_23_5' (Byte), 'output_value_heating_24' (Byte)
-        """
-        self._master_controller.set_global_rtd10_configuration(config)
+    def load_heating_rtd10s(self):  # type: () -> List[RTD10DTO]
+        return self._master_controller.load_heating_rtd10s()
 
-    def v0_get_rtd10_heating_configuration(self, heating_id, fields=None):
-        # type: (int, Optional[List[str]]) -> Dict[str,Any]
-        """
-        Get a specific rtd10_heating_configuration defined by its id.
+    def save_heating_rtd10s(self, rtd10s):  # type: (List[Tuple[RTD10DTO, List[str]]]) -> None
+        self._master_controller.save_heating_rtd10s(rtd10s)
 
-        :param heating_id: The id of the rtd10_heating_configuration
-        :type heating_id: Id
-        :param fields: The field of the rtd10_heating_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: rtd10_heating_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        return self._master_controller.get_rtd10_heating_configuration(heating_id, fields=fields)
+    def load_cooling_rtd10(self, rtd10_id):  # type: (int) -> RTD10DTO
+        return self._master_controller.load_cooling_rtd10(rtd10_id)
 
-    def v0_get_rtd10_heating_configurations(self, fields=None):
-        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
-        """
-        Get all rtd10_heating_configurations.
+    def load_cooling_rtd10s(self):  # type: () -> List[RTD10DTO]
+        return self._master_controller.load_cooling_rtd10s()
 
-        :param fields: The field of the rtd10_heating_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of rtd10_heating_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        return self._master_controller.get_rtd10_heating_configurations(fields=fields)
-
-    def v0_set_rtd10_heating_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set one rtd10_heating_configuration.
-
-        :param config: The rtd10_heating_configuration to set
-        :type config: rtd10_heating_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        self._master_controller.set_rtd10_heating_configuration(config)
-
-    def v0_set_rtd10_heating_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        """
-        Set multiple rtd10_heating_configurations.
-
-        :param config: The list of rtd10_heating_configurations to set
-        :type config: list of rtd10_heating_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        self._master_controller.set_rtd10_heating_configurations(config)
-
-    def v0_get_rtd10_cooling_configuration(self, cooling_id, fields=None):
-        # type: (int, Optional[List[str]]) -> Dict[str,Any]
-        """
-        Get a specific rtd10_cooling_configuration defined by its id.
-
-        :param cooling_id: The id of the rtd10_cooling_configuration
-        :type cooling_id: Id
-        :param fields: The field of the rtd10_cooling_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: rtd10_cooling_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        return self._master_controller.get_rtd10_cooling_configuration(cooling_id, fields=fields)
-
-    def v0_get_rtd10_cooling_configurations(self, fields=None):
-        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
-        """
-        Get all rtd10_cooling_configurations.
-
-        :param fields: The field of the rtd10_cooling_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of rtd10_cooling_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        return self._master_controller.get_rtd10_cooling_configurations(fields=fields)
-
-    def v0_set_rtd10_cooling_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set one rtd10_cooling_configuration.
-
-        :param config: The rtd10_cooling_configuration to set
-        :type config: rtd10_cooling_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        self._master_controller.set_rtd10_cooling_configuration(config)
-
-    def v0_set_rtd10_cooling_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        """
-        Set multiple rtd10_cooling_configurations.
-
-        :param config: The list of rtd10_cooling_configurations to set
-        :type config: list of rtd10_cooling_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        """
-        self._master_controller.set_rtd10_cooling_configurations(config)
+    def save_cooling_rtd10s(self, rtd10s):  # type: (List[Tuple[RTD10DTO, List[str]]]) -> None
+        self._master_controller.save_cooling_rtd10s(rtd10s)
 
     def load_thermostat_group(self):
         # type: () -> ThermostatGroupDTO

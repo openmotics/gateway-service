@@ -46,7 +46,8 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     SensorSerializer, ShutterGroupSerializer, ShutterSerializer, \
     ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer, \
     ThermostatGroupStatusSerializer, ThermostatGroupSerializer, \
-    ThermostatAircoStatusSerializer, PumpGroupSerializer
+    ThermostatAircoStatusSerializer, PumpGroupSerializer, \
+    GlobalRTD10Serializer, RTD10Serializer
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO
 from gateway.enums import ShutterEnums, UserEnums
 from gateway.exceptions import UnsupportedException
@@ -1432,122 +1433,83 @@ class WebInterface(object):
         return {}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_global_rtd10_configuration(self, fields=None):
+    def get_global_rtd10_configuration(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
         Get the global_rtd10_configuration.
-
-        :param fields: The field of the global_rtd10_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': global_rtd10_configuration dict: contains 'output_value_cooling_16' (Byte), 'output_value_cooling_16_5' (Byte), 'output_value_cooling_17' (Byte), 'output_value_cooling_17_5' (Byte), 'output_value_cooling_18' (Byte), 'output_value_cooling_18_5' (Byte), 'output_value_cooling_19' (Byte), 'output_value_cooling_19_5' (Byte), 'output_value_cooling_20' (Byte), 'output_value_cooling_20_5' (Byte), 'output_value_cooling_21' (Byte), 'output_value_cooling_21_5' (Byte), 'output_value_cooling_22' (Byte), 'output_value_cooling_22_5' (Byte), 'output_value_cooling_23' (Byte), 'output_value_cooling_23_5' (Byte), 'output_value_cooling_24' (Byte), 'output_value_heating_16' (Byte), 'output_value_heating_16_5' (Byte), 'output_value_heating_17' (Byte), 'output_value_heating_17_5' (Byte), 'output_value_heating_18' (Byte), 'output_value_heating_18_5' (Byte), 'output_value_heating_19' (Byte), 'output_value_heating_19_5' (Byte), 'output_value_heating_20' (Byte), 'output_value_heating_20_5' (Byte), 'output_value_heating_21' (Byte), 'output_value_heating_21_5' (Byte), 'output_value_heating_22' (Byte), 'output_value_heating_22_5' (Byte), 'output_value_heating_23' (Byte), 'output_value_heating_23_5' (Byte), 'output_value_heating_24' (Byte)
-        :rtype: dict
+        :param fields: The field of the global_rtd10_configuration to get, None if all
         """
-        return {'config': self._thermostat_controller.v0_get_global_rtd10_configuration(fields)}
+        return {'config': GlobalRTD10Serializer.serialize(global_rtd10_dto=self._thermostat_controller.load_global_rtd10(),
+                                                          fields=fields)}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_global_rtd10_configuration(self, config):
-        """
-        Set the global_rtd10_configuration.
-
-        :param config: The global_rtd10_configuration to set: global_rtd10_configuration dict: contains 'output_value_cooling_16' (Byte), 'output_value_cooling_16_5' (Byte), 'output_value_cooling_17' (Byte), 'output_value_cooling_17_5' (Byte), 'output_value_cooling_18' (Byte), 'output_value_cooling_18_5' (Byte), 'output_value_cooling_19' (Byte), 'output_value_cooling_19_5' (Byte), 'output_value_cooling_20' (Byte), 'output_value_cooling_20_5' (Byte), 'output_value_cooling_21' (Byte), 'output_value_cooling_21_5' (Byte), 'output_value_cooling_22' (Byte), 'output_value_cooling_22_5' (Byte), 'output_value_cooling_23' (Byte), 'output_value_cooling_23_5' (Byte), 'output_value_cooling_24' (Byte), 'output_value_heating_16' (Byte), 'output_value_heating_16_5' (Byte), 'output_value_heating_17' (Byte), 'output_value_heating_17_5' (Byte), 'output_value_heating_18' (Byte), 'output_value_heating_18_5' (Byte), 'output_value_heating_19' (Byte), 'output_value_heating_19_5' (Byte), 'output_value_heating_20' (Byte), 'output_value_heating_20_5' (Byte), 'output_value_heating_21' (Byte), 'output_value_heating_21_5' (Byte), 'output_value_heating_22' (Byte), 'output_value_heating_22_5' (Byte), 'output_value_heating_23' (Byte), 'output_value_heating_23_5' (Byte), 'output_value_heating_24' (Byte)
-        :type config: dict
-        """
-        self._thermostat_controller.v0_set_global_rtd10_configuration(config)
+    def set_global_rtd10_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set the global_rtd10_configuration. """
+        data = GlobalRTD10Serializer.deserialize(config)
+        self._thermostat_controller.save_global_rtd10(data)
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_rtd10_heating_configuration(self, id, fields=None):
+    def get_rtd10_heating_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
         Get a specific rtd10_heating_configuration defined by its id.
-
-        :param id: The id of the rtd10_heating_configuration
-        :type id: int
-        :param fields: The field of the rtd10_heating_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': rtd10_heating_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        :rtype: dict
+        :param fields: The field of the rtd10_heating_configuration to get, None if all
         """
-        return {'config': self._thermostat_controller.v0_get_rtd10_heating_configuration(id, fields)}
+        return {'config': RTD10Serializer.serialize(rtd10_dto=self._thermostat_controller.load_heating_rtd10(id),
+                                                    fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_rtd10_heating_configurations(self, fields=None):
+    def get_rtd10_heating_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
         Get all rtd10_heating_configurations.
-
-        :param fields: The field of the rtd10_heating_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of rtd10_heating_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        :rtype: dict
+        :param fields: The field of the rtd10_heating_configuration to get, None if all
         """
-        return {'config': self._thermostat_controller.v0_get_rtd10_heating_configurations(fields)}
+        return {'config': [RTD10Serializer.serialize(rtd10_dto=rtd10_dto, fields=fields)
+                           for rtd10_dto in self._thermostat_controller.load_heating_rtd10s()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_rtd10_heating_configuration(self, config):
-        """
-        Set one rtd10_heating_configuration.
-
-        :param config: The rtd10_heating_configuration to set: rtd10_heating_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        :type config: dict
-        """
-        self._thermostat_controller.v0_set_rtd10_heating_configuration(config)
+    def set_rtd10_heating_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one rtd10_heating_configuration. """
+        data = RTD10Serializer.deserialize(config)
+        self._thermostat_controller.save_heating_rtd10s([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_rtd10_heating_configurations(self, config):
-        """
-        Set multiple rtd10_heating_configurations.
-
-        :param config: The list of rtd10_heating_configurations to set: list of rtd10_heating_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        :type config: list
-        """
-        self._thermostat_controller.v0_set_rtd10_heating_configurations(config)
+    def set_rtd10_heating_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple rtd10_heating_configurations. """
+        data = [RTD10Serializer.deserialize(entry) for entry in config]
+        self._thermostat_controller.save_heating_rtd10s(data)
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_rtd10_cooling_configuration(self, id, fields=None):
+    def get_rtd10_cooling_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
         Get a specific rtd10_cooling_configuration defined by its id.
-
-        :param id: The id of the rtd10_cooling_configuration
-        :type id: int
-        :param fields: The field of the rtd10_cooling_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': rtd10_cooling_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        :rtype: dict
+        :param fields: The field of the rtd10_cooling_configuration to get, None if all
         """
-        return {'config': self._thermostat_controller.v0_get_rtd10_cooling_configuration(id, fields)}
+        return {'config': RTD10Serializer.serialize(rtd10_dto=self._thermostat_controller.load_cooling_rtd10(id),
+                                                    fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_rtd10_cooling_configurations(self, fields=None):
+    def get_rtd10_cooling_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
         Get all rtd10_cooling_configurations.
-
-        :param fields: The field of the rtd10_cooling_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of rtd10_cooling_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        :rtype: dict
+        :param fields: The field of the rtd10_cooling_configuration to get, None if all
         """
-        return {'config': self._thermostat_controller.v0_get_rtd10_cooling_configurations(fields)}
+        return {'config': [RTD10Serializer.serialize(rtd10_dto=rtd10_dto, fields=fields)
+                           for rtd10_dto in self._thermostat_controller.load_cooling_rtd10s()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_rtd10_cooling_configuration(self, config):
-        """
-        Set one rtd10_cooling_configuration.
-
-        :param config: The rtd10_cooling_configuration to set: rtd10_cooling_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        :type config: dict
-        """
-        self._thermostat_controller.v0_set_rtd10_cooling_configuration(config)
+    def set_rtd10_cooling_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one rtd10_cooling_configuration. """
+        data = RTD10Serializer.deserialize(config)
+        self._thermostat_controller.save_cooling_rtd10s([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_rtd10_cooling_configurations(self, config):
-        """
-        Set multiple rtd10_cooling_configurations.
-
-        :param config: The list of rtd10_cooling_configurations to set: list of rtd10_cooling_configuration dict: contains 'id' (Id), 'mode_output' (Byte), 'mode_value' (Byte), 'on_off_output' (Byte), 'poke_angle_output' (Byte), 'poke_angle_value' (Byte), 'room' (Byte), 'temp_setpoint_output' (Byte), 'ventilation_speed_output' (Byte), 'ventilation_speed_value' (Byte)
-        :type config: list
-        """
-        self._thermostat_controller.v0_set_rtd10_cooling_configurations(config)
+    def set_rtd10_cooling_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple rtd10_cooling_configurations. """
+        data = [RTD10Serializer.deserialize(entry) for entry in config]
+        self._thermostat_controller.save_cooling_rtd10s(data)
         return {}
 
     # Group Actions

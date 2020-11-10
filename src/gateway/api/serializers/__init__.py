@@ -19,6 +19,7 @@ from gateway.api.serializers.module import ModuleSerializer
 from gateway.api.serializers.output import OutputSerializer, \
     OutputStateSerializer
 from gateway.api.serializers.pulse_counter import PulseCounterSerializer
+from gateway.api.serializers.rtd10 import GlobalRTD10Serializer, RTD10Serializer
 from gateway.api.serializers.room import RoomSerializer
 from gateway.api.serializers.schedule import ScheduleSerializer
 from gateway.api.serializers.sensor import SensorSerializer

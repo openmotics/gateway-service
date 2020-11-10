@@ -20,4 +20,5 @@ from gateway.hal.mappers_classic.thermostat import ThermostatMapper, ThermostatG
 from gateway.hal.mappers_classic.input import InputMapper
 from gateway.hal.mappers_classic.sensor import SensorMapper
 from gateway.hal.mappers_classic.pulse_counter import PulseCounterMapper
+from gateway.hal.mappers_classic.rtd10 import GlobalRTD10Mapper, RTD10Mapper
 from gateway.hal.mappers_classic.group_action import GroupActionMapper

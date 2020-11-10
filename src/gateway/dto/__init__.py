@@ -21,6 +21,7 @@ from gateway.dto.module import ModuleDTO
 from gateway.dto.output import OutputDTO, OutputStateDTO
 from gateway.dto.pulse_counter import PulseCounterDTO
 from gateway.dto.room import RoomDTO
+from gateway.dto.rtd10 import GlobalRTD10DTO, RTD10DTO
 from gateway.dto.schedule import ScheduleDTO
 from gateway.dto.sensor import SensorDTO
 from gateway.dto.shutter import ShutterDTO
