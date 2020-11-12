@@ -57,13 +57,16 @@ class ValveDriver(object):
             drivers.append(self._pump_drivers.setdefault(pump.id, PumpDriver(pump)))
             pump_ids.append(pump.id)
         for pump_id in list(self._pump_drivers.keys()):
-            self._pump_drivers.pop(pump_id)
+            if pump_id not in pump_ids:
+                self._pump_drivers.pop(pump_id)
         return list(self._pump_drivers.values())
 
+    @property
     def is_open(self):  # type: () -> bool
         now_open = self._current_percentage > 0
-        return now_open if not self.in_transition() else False
+        return now_open if not self.in_transition else False
 
+    @property
     def in_transition(self):  # type: () -> bool
         with self._state_change_lock:
             now = time.time()
@@ -93,9 +96,11 @@ class ValveDriver(object):
     def set(self, percentage):  # type: (float) -> None
         self._desired_percentage = int(percentage)
 
+    @property
     def will_open(self):  # type: () -> bool
         return self._desired_percentage > 0 and self._current_percentage == 0
 
+    @property
     def will_close(self):  # type: () -> bool
         return self._desired_percentage == 0 and self._current_percentage > 0
 

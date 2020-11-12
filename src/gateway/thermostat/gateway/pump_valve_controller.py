@@ -73,11 +73,6 @@ class PumpValveController(object):
     def set_valves(self, percentage, valve_numbers, mode='cascade'):
         # type: (float, List[int], str) -> None
         if len(valve_numbers) > 0:
-            self.prepare_valves_for_transition(percentage, valve_numbers, mode=mode)
-
-    def prepare_valves_for_transition(self, percentage, valve_numbers, mode='cascade'):
-        # type: (float, List[int], str) -> None
-        if len(valve_numbers) > 0:
             valve_drivers = [self.get_valve_driver(valve_number) for valve_number in valve_numbers]
             if mode == 'cascade':
                 self._open_valves_cascade(percentage, valve_drivers)
@@ -93,10 +88,10 @@ class PumpValveController(object):
         active_pump_drivers = set()
         potential_inactive_pump_drivers = set()
         for valve_number, valve_driver in self._valve_drivers.items():
-            if valve_driver.is_open():
+            if valve_driver.is_open:
                 for pump_driver in valve_driver.pump_drivers:
                     active_pump_drivers.add(pump_driver)
-            elif valve_driver.will_close():
+            elif valve_driver.will_close:
                 for pump_driver in valve_driver.pump_drivers:
                     potential_inactive_pump_drivers.add(pump_driver)
 
@@ -112,7 +107,7 @@ class PumpValveController(object):
         active_pump_drivers = set()
         potential_inactive_pump_drivers = set()
         for valve_number, valve_driver in self._valve_drivers.items():
-            if valve_driver.is_open():
+            if valve_driver.is_open:
                 for pump_driver in valve_driver.pump_drivers:
                     active_pump_drivers.add(pump_driver)
             else:
