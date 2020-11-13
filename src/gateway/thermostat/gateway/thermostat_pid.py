@@ -42,7 +42,7 @@ class ThermostatPid(object):
         self._thermostat_change_lock = Lock()
         self._heating_valve_numbers = []  # type: List[int]
         self._cooling_valve_numbers = []  # type: List[int]
-        self._report_state_callbacks = []  # type: List[Callable[[int, str, float, float, List[float], int], None]]
+        self._report_state_callbacks = []  # type: List[Callable[[int, str, float, Optional[float], List[float], int], None]]
         self._thermostat = thermostat
         self._mode = thermostat.thermostat_group.mode
         self._active_preset = thermostat.active_preset
@@ -62,7 +62,7 @@ class ThermostatPid(object):
         # 1. PID loop is initialized
         # 2. Sensor is valid
         # 3. Outputs configured (heating or cooling)
-        if self._thermostat.sensor == 255:
+        if self._thermostat.sensor is None:
             return False
         if len(self._heating_valve_numbers) == 0 and len(self._cooling_valve_numbers) == 0:
             return False
@@ -74,15 +74,7 @@ class ThermostatPid(object):
 
     @property
     def valve_numbers(self):  # type: () -> List[int]
-        return self.heating_valve_numbers + self.cooling_valve_numbers
-
-    @property
-    def heating_valve_numbers(self):  # type: () -> List[int]
-        return self._heating_valve_numbers
-
-    @property
-    def cooling_valve_numbers(self):  # type: () -> List[int]
-        return self._cooling_valve_numbers
+        return self._heating_valve_numbers + self._cooling_valve_numbers
 
     def update_thermostat(self, thermostat):  # type: (Thermostat) -> None
         with self._thermostat_change_lock:
@@ -115,48 +107,48 @@ class ThermostatPid(object):
         return self._thermostat
 
     def subscribe_state_changes(self, callback):
-        # type: (Callable[[int, str, float, float, List[float], int], None]) -> None
+        # type: (Callable[[int, str, float, Optional[float], List[float], int], None]) -> None
         self._report_state_callbacks.append(callback)
 
     def report_state_change(self):  # type: () -> None
         # TODO: Only invoke callback if change occurred
-        room_number = 255 if self.thermostat.room is None else self.thermostat.room.number
+        room_number = 255 if self._thermostat.room is None else self._thermostat.room.number
         for callback in self._report_state_callbacks:
-            callback(self.number, self._active_preset.type, self.setpoint, self.current_temperature,
+            callback(self.number, self._active_preset.type, self.setpoint, self._current_temperature,
                      self.get_active_valves_percentage(), room_number)
 
-    def tick(self):  # type: () -> None
+    def tick(self):  # type: () -> bool
         if self.enabled != self._current_enabled:
-            logger.info('Thermostat {0}: {1}abled in {2} mode'.format(self.thermostat.number, 'En' if self.enabled else 'Dis', self._mode))
+            logger.info('Thermostat {0}: {1}abled in {2} mode'.format(self._thermostat.number, 'En' if self.enabled else 'Dis', self._mode))
             self._current_enabled = self.enabled
 
         if not self.enabled:
             self.switch_off()
-            return
+            return False
 
         if self._current_preset_type != self._active_preset.type or self._current_setpoint != self._pid.setpoint:
             logger.info('Thermostat {0}: Preset {1} with setpoint {2}'
-                        .format(self.thermostat.number, self._active_preset.type, self._pid.setpoint))
+                        .format(self._thermostat.number, self._active_preset.type, self._pid.setpoint))
             self._current_preset_type = self._active_preset.type
             self._current_setpoint = self._pid.setpoint
 
         try:
             current_temperature = None  # type: Optional[float]
-            if self.thermostat.sensor is not None:
-                current_temperature = self._gateway_api.get_sensor_temperature_status(self.thermostat.sensor.number)
+            if self._thermostat.sensor is not None:
+                current_temperature = self._gateway_api.get_sensor_temperature_status(self._thermostat.sensor.number)
             if current_temperature is not None:
                 self._current_temperature = current_temperature
             else:
                 # Keep using old temperature reading and count the errors
                 logger.warning('Thermostat {0}: Could not read current temperature, use last value of {1}'
-                               .format(self.thermostat.number, self._current_temperature))
+                               .format(self._thermostat.number, self._current_temperature))
                 self._errors += 1
 
             if self._current_temperature is not None:
                 output_power = self._pid(self._current_temperature)
             else:
                 logger.error('Thermostat {0}: No known current temperature. Cannot calculate desired output'
-                             .format(self.thermostat.number))
+                             .format(self._thermostat.number))
                 self._errors += 1
                 output_power = 0
 
@@ -167,43 +159,37 @@ class ThermostatPid(object):
                 output_power = 0
             self.steer(output_power)
             self.report_state_change()
+            return True
         except CommunicationTimedOutException:
-            logger.error('Thermostat {0}: Error in PID tick'.format(self.thermostat.number))
+            logger.error('Thermostat {0}: Error in PID tick'.format(self._thermostat.number))
             self._errors += 1
+            return False
 
     def get_active_valves_percentage(self):  # type: () -> List[float]
-        return [self._pump_valve_controller.get_valve_driver(valve.number).percentage for valve in self.thermostat.active_valves]
-
-    @property
-    def errors(self):  # type: () -> int
-        return self._errors
+        return [self._pump_valve_controller.get_valve_driver(valve.number).percentage for valve in self._thermostat.active_valves]
 
     @property
     def number(self):  # type: () -> int
-        return self.thermostat.number
+        return self._thermostat.number
 
     @property
     def setpoint(self):  # type: () -> float
         return self._pid.setpoint
 
-    @property
-    def current_temperature(self):  # tyep: () -> float
-        return self._current_temperature
-
     def steer(self, power):  # type: (int) -> None
         if self._current_steering_power != power:
-            logger.info('Thermostat {0}: Steer to {1} '.format(self.thermostat.number, power))
+            logger.info('Thermostat {0}: Steer to {1} '.format(self._thermostat.number, power))
             self._current_steering_power = power
 
         # Configure valves and set desired opening
         # TODO: Check union to avoid opening same valve_numbers in heating and cooling
         if power > 0:
-            self._pump_valve_controller.set_valves(0, self.cooling_valve_numbers, mode=self.thermostat.valve_config)
-            self._pump_valve_controller.set_valves(power, self.heating_valve_numbers, mode=self.thermostat.valve_config)
+            self._pump_valve_controller.set_valves(0, self._cooling_valve_numbers, mode=self._thermostat.valve_config)
+            self._pump_valve_controller.set_valves(power, self._heating_valve_numbers, mode=self._thermostat.valve_config)
         else:
             power = abs(power)
-            self._pump_valve_controller.set_valves(0, self.heating_valve_numbers, mode=self.thermostat.valve_config)
-            self._pump_valve_controller.set_valves(power, self.cooling_valve_numbers, mode=self.thermostat.valve_config)
+            self._pump_valve_controller.set_valves(0, self._heating_valve_numbers, mode=self._thermostat.valve_config)
+            self._pump_valve_controller.set_valves(power, self._cooling_valve_numbers, mode=self._thermostat.valve_config)
 
         # Effectively steer pumps and valves according to needs
         self._pump_valve_controller.steer()

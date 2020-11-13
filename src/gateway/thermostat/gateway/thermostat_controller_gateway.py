@@ -489,7 +489,7 @@ class ThermostatControllerGateway(ThermostatController):
         thermostat_pid.tick()
 
     def _thermostat_changed(self, thermostat_number, active_preset, current_setpoint, actual_temperature, percentages, room):
-        # type: (int, str, float, float, List[float], int) -> None
+        # type: (int, str, float, Optional[float], List[float], int) -> None
         location = {'room_id': room}
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE,
                                      {'id': thermostat_number,
