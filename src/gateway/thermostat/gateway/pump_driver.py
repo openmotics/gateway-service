@@ -32,6 +32,11 @@ class PumpDriver(object):
         self._state = None  # type: Optional[bool]
         self._error = False
 
+    def update(self, pump):  # type: (Pump) -> None
+        self._pump = pump
+        self._state = None
+        self._error = False
+
     def _set_state(self, active):  # type: (bool) -> None
         if self._pump.output is None:
             logger.warning('Cannot set state on Pump {0} since it has no output'.format(self._pump.number))
@@ -46,7 +51,10 @@ class PumpDriver(object):
     def turn_on(self):  # type: () -> None
         if self._state is True:
             return
-        logger.info('Turning on pump {0}'.format(self._pump.number))
+        if self._state is None:
+            logger.info('Ensuring pump {0} is on'.format(self._pump.number))
+        else:
+            logger.info('Turning on pump {0}'.format(self._pump.number))
         try:
             self._set_state(True)
             self._error = False
@@ -58,7 +66,10 @@ class PumpDriver(object):
     def turn_off(self):  # type: () -> None
         if self._state is False:
             return
-        logger.info('Turning off pump {0}'.format(self._pump.number))
+        if self._state is None:
+            logger.info('Ensuring pump {0} is off'.format(self._pump.number))
+        else:
+            logger.info('Turning off pump {0}'.format(self._pump.number))
         try:
             self._set_state(False)
             self._error = False
@@ -77,6 +88,16 @@ class PumpDriver(object):
 
     @property
     def number(self):  # type: () -> int
+        return self._pump.number
+
+    @property
+    def valve_numbers(self):
+        return [valve.number for valve in self._pump.valves]
+
+    def __str__(self):
+        return 'Pump driver for pump {0} at {1}'.format(self._pump.number, hex(id(self)))
+
+    def __hash__(self):
         return self._pump.number
 
     def __eq__(self, other):  # type: (Any) -> bool

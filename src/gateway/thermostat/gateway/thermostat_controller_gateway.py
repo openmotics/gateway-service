@@ -135,7 +135,7 @@ class ThermostatControllerGateway(ThermostatController):
 
     def _update_pumps(self):  # type: () -> None
         try:
-            self._pump_valve_controller.steer_pumps()
+            self._pump_valve_controller.steer()
         except Exception:
             logger.exception('Could not update pumps.')
 

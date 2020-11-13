@@ -18,11 +18,10 @@ import time
 from threading import Lock
 
 from gateway.models import Valve
-from gateway.thermostat.gateway.pump_driver import PumpDriver
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
-    from typing import Dict, List, Optional, Any
+    from typing import Optional, Any
     from gateway.output_controller import OutputController
 
 logger = logging.getLogger('openmotics')
@@ -38,7 +37,6 @@ class ValveDriver(object):
         self._current_percentage = 0
         self._desired_percentage = 0
         self._time_state_changed = None  # type: Optional[float]
-        self._pump_drivers = {}  # type: Dict[int, PumpDriver]
         self._state_change_lock = Lock()
 
     @property
@@ -48,18 +46,6 @@ class ValveDriver(object):
     @property
     def percentage(self):  # type: () -> int
         return self._current_percentage
-
-    @property
-    def pump_drivers(self):  # type: () -> List[PumpDriver]
-        drivers = []
-        pump_ids = []
-        for pump in self._valve.pumps:
-            drivers.append(self._pump_drivers.setdefault(pump.id, PumpDriver(pump)))
-            pump_ids.append(pump.id)
-        for pump_id in list(self._pump_drivers.keys()):
-            if pump_id not in pump_ids:
-                self._pump_drivers.pop(pump_id)
-        return list(self._pump_drivers.values())
 
     @property
     def is_open(self):  # type: () -> bool
@@ -75,7 +61,7 @@ class ValveDriver(object):
             else:
                 return False
 
-    def update_valve(self, valve):  # type: (Valve) -> None
+    def update(self, valve):  # type: (Valve) -> None
         with self._state_change_lock:
             self._valve = valve
 
@@ -83,9 +69,9 @@ class ValveDriver(object):
         with self._state_change_lock:
             if self._current_percentage != self._desired_percentage:
                 output_nr = self._valve.output.number
-                logger.info('Valve (output: {0}) changing from {1}% --> {2}%'.format(output_nr,
-                                                                                     self._current_percentage,
-                                                                                     self._desired_percentage))
+                logger.info('Valve {0} (output {1}) changing from {2}% to {3}%'.format(
+                    self._valve.number, output_nr, self._current_percentage, self._desired_percentage
+                ))
                 output_status = self._desired_percentage > 0
                 self._output_controller.set_output_status(output_id=self._valve.output.number,
                                                           is_on=output_status,
@@ -109,6 +95,12 @@ class ValveDriver(object):
 
     def close(self):  # type: () -> None
         self.set(0)
+
+    def __str__(self):
+        return 'Valve driver for valve {0} at {1}'.format(self._valve.number, hex(id(self)))
+
+    def __hash__(self):
+        return self._valve.number
 
     def __eq__(self, other):  # type: (Any) -> bool
         if not isinstance(other, Valve):

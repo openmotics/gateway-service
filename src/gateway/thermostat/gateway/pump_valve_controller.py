@@ -16,11 +16,12 @@
 import logging
 from threading import Lock
 from ioc import Inject
-from gateway.models import Valve
+from gateway.models import Valve, Pump
 from gateway.thermostat.gateway.valve_driver import ValveDriver
+from gateway.thermostat.gateway.pump_driver import PumpDriver
 
 if False:  # MYPY
-    from typing import List, Dict
+    from typing import List, Dict, Set
 
 logger = logging.getLogger('openmotics')
 
@@ -29,25 +30,42 @@ logger = logging.getLogger('openmotics')
 class PumpValveController(object):
     def __init__(self):  # type: () -> None
         self._valve_drivers = {}  # type: Dict[int, ValveDriver]
+        self._pump_drivers = {}  # type: Dict[int, PumpDriver]
+        self._pump_drivers_per_valve = {}  # type: Dict[int, Set[PumpDriver]]
         self._config_change_lock = Lock()
 
     def refresh_from_db(self):  # type: () -> None
         with self._config_change_lock:
-            existing_driver_numbers = set(self._valve_drivers.keys())
-            new_driver_numbers = set()
-            for valve in Valve.select():
-                if valve.number in existing_driver_numbers:
-                    self._valve_drivers[valve.number].update_valve(valve)
+            # Collect valve drivers
+            current_numbers = []
+            for item in Valve.select():
+                if item.number in self._valve_drivers:
+                    self._valve_drivers[item.number].update(item)
                 else:
-                    self._valve_drivers[valve.number] = ValveDriver(valve)
-                new_driver_numbers.add(valve.number)
-
-            drivers_to_be_deleted = existing_driver_numbers.difference(new_driver_numbers)
-            for driver_number in drivers_to_be_deleted:
-                valve_driver = self._valve_drivers.get(driver_number)
-                if valve_driver is not None:
-                    valve_driver.close()
-                    del self._valve_drivers[driver_number]
+                    self._valve_drivers[item.number] = ValveDriver(item)
+                current_numbers.append(item.number)
+            for item_number in list(self._valve_drivers.keys()):
+                if item_number not in current_numbers:
+                    del self._valve_drivers[item_number]
+            # Collect pump drivers
+            current_numbers = []
+            pump_drivers_per_valve = {}  # type: Dict[int, Set[PumpDriver]]
+            for item in Pump.select():
+                if item.number in self._pump_drivers:
+                    pump_driver = self._pump_drivers[item.number]
+                    pump_driver.update(item)
+                else:
+                    pump_driver = PumpDriver(item)
+                    self._pump_drivers[item.number] = pump_driver
+                current_numbers.append(item.number)
+                for valve_number in pump_driver.valve_numbers:
+                    if valve_number not in pump_drivers_per_valve:
+                        pump_drivers_per_valve[valve_number] = set()
+                    pump_drivers_per_valve[valve_number].add(pump_driver)
+            for item_number in list(self._pump_drivers.keys()):
+                if item_number not in current_numbers:
+                    del self._pump_drivers[item_number]
+            self._pump_drivers_per_valve = pump_drivers_per_valve
 
     @staticmethod
     def _open_valves_cascade(total_percentage, valve_drivers):
@@ -80,39 +98,35 @@ class PumpValveController(object):
                 self._open_valves_equal(percentage, valve_drivers)
 
     def steer(self):  # type: () -> None
-        self.prepare_pumps_for_transition()
-        self.steer_valves()
-        self.steer_pumps()
+        self._prepare_pumps_for_transition()
+        self._steer_valves()
+        self._steer_pumps()
 
-    def prepare_pumps_for_transition(self):  # type: () -> None
+    def _prepare_pumps_for_transition(self):  # type: () -> None
         active_pump_drivers = set()
         potential_inactive_pump_drivers = set()
         for valve_number, valve_driver in self._valve_drivers.items():
             if valve_driver.is_open:
-                for pump_driver in valve_driver.pump_drivers:
-                    active_pump_drivers.add(pump_driver)
+                active_pump_drivers |= self._pump_drivers_per_valve.get(valve_number, set())
             elif valve_driver.will_close:
-                for pump_driver in valve_driver.pump_drivers:
-                    potential_inactive_pump_drivers.add(pump_driver)
+                potential_inactive_pump_drivers |= self._pump_drivers_per_valve.get(valve_number, set())
 
         inactive_pump_drivers = potential_inactive_pump_drivers.difference(active_pump_drivers)
         for pump_driver in inactive_pump_drivers:
             pump_driver.turn_off()
 
-    def steer_valves(self):  # type: () -> None
+    def _steer_valves(self):  # type: () -> None
         for valve_number, valve_driver in self._valve_drivers.items():
             valve_driver.steer_output()
 
-    def steer_pumps(self):  # type: () -> None
+    def _steer_pumps(self):  # type: () -> None
         active_pump_drivers = set()
         potential_inactive_pump_drivers = set()
         for valve_number, valve_driver in self._valve_drivers.items():
             if valve_driver.is_open:
-                for pump_driver in valve_driver.pump_drivers:
-                    active_pump_drivers.add(pump_driver)
+                active_pump_drivers |= self._pump_drivers_per_valve.get(valve_number, set())
             else:
-                for pump_driver in valve_driver.pump_drivers:
-                    potential_inactive_pump_drivers.add(pump_driver)
+                potential_inactive_pump_drivers |= self._pump_drivers_per_valve.get(valve_number, set())
         inactive_pump_drivers = potential_inactive_pump_drivers.difference(active_pump_drivers)
 
         for pump_driver in inactive_pump_drivers:

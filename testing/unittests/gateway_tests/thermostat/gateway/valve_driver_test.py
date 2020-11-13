@@ -49,9 +49,7 @@ class ValveDriverTest(unittest.TestCase):
         self.test_db.close()
 
     def test_valve_driver(self):
-        pump_output_1 = Output.create(number=0)
         valve_output_1 = Output.create(number=2)
-        pump_1 = Pump.create(number=1, name='pump 1', output=pump_output_1)
         valve_1 = Valve.create(number=1, name='valve 1', delay=30, output=valve_output_1)
 
         SetUpTestInjections(output_controller=mock.Mock(OutputController))
@@ -62,11 +60,6 @@ class ValveDriverTest(unittest.TestCase):
         self.assertEqual(0, driver_1._desired_percentage)
         self.assertFalse(driver_1.is_open)
         self.assertFalse(driver_1.in_transition)
-        self.assertEqual([], driver_1.pump_drivers)
-
-        PumpToValve.create(pump=pump_1, valve=valve_1)
-
-        self.assertEqual(1, len(driver_1.pump_drivers))
 
         driver_1.set(50)
         self.assertEqual(50, driver_1._desired_percentage)
