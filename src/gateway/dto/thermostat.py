@@ -194,11 +194,11 @@ class ThermostatAircoStatusDTO(BaseDTO):
 
 
 class PumpGroupDTO(BaseDTO):
-    def __init__(self, id, pump_output_id=None, valve_outputs_ids=None, room_id=None):
+    def __init__(self, id, pump_output_id=None, valve_output_ids=None, room_id=None):
         # type: (int, Optional[int], Optional[List[int]], Optional[int]) -> None
         self.id = id
         self.pump_output_id = pump_output_id
-        self.valve_output_ids = valve_outputs_ids if valve_outputs_ids else []  # type: List[int]
+        self.valve_output_ids = valve_output_ids if valve_output_ids else []  # type: List[int]
         self.room_id = room_id
 
     def __eq__(self, other):

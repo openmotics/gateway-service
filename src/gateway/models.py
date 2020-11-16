@@ -304,9 +304,9 @@ class Pump(BaseModel):
     def _valves(self, mode):
         return [valve for valve in Valve.select(Valve, ValveToThermostat.mode, ValveToThermostat.priority)
                                         .distinct()
-                                        .join(ValveToThermostat)
-                                        .join(PumpToValve)
-                                        .join(Pump)
+                                        .join_from(Valve, ValveToThermostat)
+                                        .join_from(Valve, PumpToValve)
+                                        .join_from(PumpToValve, Pump)
                                         .where((ValveToThermostat.mode == mode) &
                                                (Pump.id == self.id))
                                         .order_by(ValveToThermostat.priority)]

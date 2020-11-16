@@ -30,7 +30,7 @@ from gateway.events import GatewayEvent
 from gateway.exceptions import UnsupportedException
 from gateway.mappers import ThermostatMapper
 from gateway.models import Output, OutputToThermostatGroup, Preset, Pump, \
-    Thermostat, ThermostatGroup, Valve, PumpToValve, Sensor
+    Thermostat, ThermostatGroup, Valve, PumpToValve, Sensor, ValveToThermostat
 from gateway.pubsub import PubSub
 from gateway.thermostat.gateway.pump_valve_controller import \
     PumpValveController
@@ -321,33 +321,27 @@ class ThermostatControllerGateway(ThermostatController):
                 thermostat_pid.tick()
 
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
-        # TODO: Implement the new v1 config format
         thermostat = Thermostat.get(number=thermostat_id)
         return ThermostatMapper.orm_to_dto(thermostat, 'heating')
 
     def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
-        # TODO: Implement the new v1 config format
         return [ThermostatMapper.orm_to_dto(thermostat, 'heating')
                 for thermostat in Thermostat.select()]
 
     def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
-        # TODO: Implement the new v1 config format
         for thermostat_dto, fields in thermostats:
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, 'heating')
             self.refresh_set_configuration(thermostat)
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
-        # TODO: Implement the new v1 config format
         thermostat = Thermostat.get(number=thermostat_id)
         return ThermostatMapper.orm_to_dto(thermostat, 'cooling')
 
     def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
-        # TODO: Implement the new v1 config format
         return [ThermostatMapper.orm_to_dto(thermostat, 'cooling')
                 for thermostat in Thermostat.select()]
 
     def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
-        # TODO: Implement the new v1 config format
         for thermostat_dto, fields in thermostats:
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, 'cooling')
             self.refresh_set_configuration(thermostat)
@@ -442,7 +436,7 @@ class ThermostatControllerGateway(ThermostatController):
         pump = Pump.get(number=pump_group_id)
         return PumpGroupDTO(id=pump_group_id,
                             pump_output_id=pump.output.number,
-                            valve_outputs_ids=[valve.output.number for valve in pump.heating_valves],
+                            valve_output_ids=[valve.output.number for valve in pump.heating_valves],
                             room_id=None)
 
     def load_heating_pump_groups(self):  # type: () -> List[PumpGroupDTO]
@@ -450,18 +444,18 @@ class ThermostatControllerGateway(ThermostatController):
         for pump in Pump.select():
             pump_groups.append(PumpGroupDTO(id=pump.id,
                                             pump_output_id=pump.output.number,
-                                            valve_outputs_ids=[valve.output.number for valve in pump.heating_valves],
+                                            valve_output_ids=[valve.output.number for valve in pump.heating_valves],
                                             room_id=None))
         return pump_groups
 
     def save_heating_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
-        return self._save_pump_groups(pump_groups)
+        return ThermostatControllerGateway._save_pump_groups(ThermostatGroup.Modes.HEATING, pump_groups)
 
     def load_cooling_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         pump = Pump.get(number=pump_group_id)
         return PumpGroupDTO(id=pump_group_id,
                             pump_output_id=pump.output.number,
-                            valve_outputs_ids=[valve.output.number for valve in pump.cooling_valves],
+                            valve_output_ids=[valve.output.number for valve in pump.cooling_valves],
                             room_id=None)
 
     def load_cooling_pump_groups(self):  # type: () -> List[PumpGroupDTO]
@@ -469,30 +463,34 @@ class ThermostatControllerGateway(ThermostatController):
         for pump in Pump.select():
             pump_groups.append(PumpGroupDTO(id=pump.id,
                                             pump_output_id=pump.output.number,
-                                            valve_outputs_ids=[valve.output.number for valve in pump.cooling_valves],
+                                            valve_output_ids=[valve.output.number for valve in pump.cooling_valves],
                                             room_id=None))
         return pump_groups
 
     def save_cooling_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
-        return self._save_pump_groups(pump_groups)
+        return ThermostatControllerGateway._save_pump_groups(ThermostatGroup.Modes.COOLING, pump_groups)
 
-    def _save_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
+    @staticmethod
+    def _save_pump_groups(mode, pump_groups):  # type: (str, List[Tuple[PumpGroupDTO, List[str]]]) -> None
         for pump_group_dto, fields in pump_groups:
             if 'pump_output_id' in fields and 'valve_output_ids' in fields:
                 valve_output_ids = pump_group_dto.valve_output_ids
-                pump = Pump.get(number=pump_group_dto.id)  # type: Pump
+                pump = Pump.get(id=pump_group_dto.id)  # type: Pump
                 pump.output = Output.get(number=pump_group_dto.pump_output_id)
 
                 links = {pump_to_valve.valve.output.number: pump_to_valve
                          for pump_to_valve
                          in PumpToValve.select(PumpToValve, Pump, Valve, Output)
-                                       .join(Valve)
-                                       .join(Output, on=Valve.output)
-                                       .where(Pump.id == pump.id)}
+                                       .join_from(PumpToValve, Valve)
+                                       .join_from(PumpToValve, Pump)
+                                       .join_from(Valve, Output)
+                                       .join_from(Valve, ValveToThermostat)
+                                       .where((ValveToThermostat.mode == mode) &
+                                              (Pump.id == pump.id))}
                 for output_id in list(links.keys()):
                     if output_id not in valve_output_ids:
                         pump_to_valve = links.pop(output_id)  # type: PumpToValve
-                        pump_to_valve.delete()
+                        pump_to_valve.delete().execute()
                     else:
                         valve_output_ids.remove(output_id)
                 for output_id in valve_output_ids:
@@ -504,7 +502,6 @@ class ThermostatControllerGateway(ThermostatController):
                         valve.save()
                     PumpToValve.create(pump=pump,
                                        valve=valve)
-        raise NotImplementedError()
 
     def load_global_rtd10(self):  # type: () -> GlobalRTD10DTO
         raise UnsupportedException()
