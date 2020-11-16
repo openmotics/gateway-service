@@ -40,8 +40,8 @@ class ValveDriver(object):
         self._state_change_lock = Lock()
 
     @property
-    def number(self):  # type: () -> int
-        return self._valve.number
+    def id(self):  # type: () -> int
+        return self._valve.id
 
     @property
     def percentage(self):  # type: () -> int
@@ -70,7 +70,7 @@ class ValveDriver(object):
             if self._current_percentage != self._desired_percentage:
                 output_nr = self._valve.output.number
                 logger.info('Valve {0} (output {1}) changing from {2}% to {3}%'.format(
-                    self._valve.number, output_nr, self._current_percentage, self._desired_percentage
+                    self._valve.id, output_nr, self._current_percentage, self._desired_percentage
                 ))
                 output_status = self._desired_percentage > 0
                 self._output_controller.set_output_status(output_id=self._valve.output.number,
@@ -97,13 +97,13 @@ class ValveDriver(object):
         self.set(0)
 
     def __str__(self):
-        return 'Valve driver for valve {0} at {1}'.format(self._valve.number, hex(id(self)))
+        return 'Valve driver for valve {0} at {1}'.format(self._valve.id, hex(id(self)))
 
     def __hash__(self):
-        return self._valve.number
+        return self._valve.id
 
     def __eq__(self, other):  # type: (Any) -> bool
         if not isinstance(other, Valve):
             # don't attempt to compare against unrelated types
             return NotImplemented
-        return self._valve.number == other.number
+        return self.id == other.id

@@ -40,8 +40,8 @@ class ThermostatPid(object):
         self._gateway_api = gateway_api
         self._pump_valve_controller = pump_valve_controller
         self._thermostat_change_lock = Lock()
-        self._heating_valve_numbers = []  # type: List[int]
-        self._cooling_valve_numbers = []  # type: List[int]
+        self._heating_valve_ids = []  # type: List[int]
+        self._cooling_valve_ids = []  # type: List[int]
         self._report_state_callbacks = []  # type: List[Callable[[int, str, float, Optional[float], List[float], int], None]]
         self._thermostat = thermostat
         self._mode = thermostat.thermostat_group.mode
@@ -64,7 +64,7 @@ class ThermostatPid(object):
         # 3. Outputs configured (heating or cooling)
         if self._thermostat.sensor is None:
             return False
-        if len(self._heating_valve_numbers) == 0 and len(self._cooling_valve_numbers) == 0:
+        if len(self._heating_valve_ids) == 0 and len(self._cooling_valve_ids) == 0:
             return False
         if not self._thermostat.thermostat_group.on:
             return False
@@ -73,8 +73,8 @@ class ThermostatPid(object):
         return True
 
     @property
-    def valve_numbers(self):  # type: () -> List[int]
-        return self._heating_valve_numbers + self._cooling_valve_numbers
+    def valve_ids(self):  # type: () -> List[int]
+        return self._heating_valve_ids + self._cooling_valve_ids
 
     def update_thermostat(self, thermostat):  # type: (Thermostat) -> None
         with self._thermostat_change_lock:
@@ -83,8 +83,8 @@ class ThermostatPid(object):
             self._mode = thermostat.thermostat_group.mode
             self._active_preset = thermostat.active_preset
 
-            self._heating_valve_numbers = [valve.number for valve in thermostat.heating_valves]
-            self._cooling_valve_numbers = [valve.number for valve in thermostat.cooling_valves]
+            self._heating_valve_ids = [valve.id for valve in thermostat.heating_valves]
+            self._cooling_valve_ids = [valve.id for valve in thermostat.cooling_valves]
 
             if thermostat.thermostat_group.mode == ThermostatGroup.Modes.HEATING:
                 pid_p = thermostat.pid_heating_p if thermostat.pid_heating_p is not None else self.DEFAULT_KP
@@ -166,7 +166,7 @@ class ThermostatPid(object):
             return False
 
     def get_active_valves_percentage(self):  # type: () -> List[float]
-        return [self._pump_valve_controller.get_valve_driver(valve.number).percentage for valve in self._thermostat.active_valves]
+        return [self._pump_valve_controller.get_valve_driver(valve.id).percentage for valve in self._thermostat.active_valves]
 
     @property
     def number(self):  # type: () -> int
@@ -182,14 +182,14 @@ class ThermostatPid(object):
             self._current_steering_power = power
 
         # Configure valves and set desired opening
-        # TODO: Check union to avoid opening same valve_numbers in heating and cooling
+        # TODO: Check union to avoid opening same valves in heating and cooling
         if power > 0:
-            self._pump_valve_controller.set_valves(0, self._cooling_valve_numbers, mode=self._thermostat.valve_config)
-            self._pump_valve_controller.set_valves(power, self._heating_valve_numbers, mode=self._thermostat.valve_config)
+            self._pump_valve_controller.set_valves(0, self._cooling_valve_ids, mode=self._thermostat.valve_config)
+            self._pump_valve_controller.set_valves(power, self._heating_valve_ids, mode=self._thermostat.valve_config)
         else:
             power = abs(power)
-            self._pump_valve_controller.set_valves(0, self._heating_valve_numbers, mode=self._thermostat.valve_config)
-            self._pump_valve_controller.set_valves(power, self._cooling_valve_numbers, mode=self._thermostat.valve_config)
+            self._pump_valve_controller.set_valves(0, self._heating_valve_ids, mode=self._thermostat.valve_config)
+            self._pump_valve_controller.set_valves(power, self._cooling_valve_ids, mode=self._thermostat.valve_config)
 
         # Effectively steer pumps and valves according to needs
         self._pump_valve_controller.steer()

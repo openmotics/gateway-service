@@ -284,22 +284,21 @@ class OutputToThermostatGroup(BaseModel):
 
 class Pump(BaseModel):
     id = AutoField()
-    number = IntegerField(unique=True)
     name = CharField()
     output = ForeignKeyField(Output, null=True, backref='pumps', on_delete='SET NULL', unique=True)
 
     @property
-    def valves(self):
+    def valves(self):  # type: () -> List[Valve]
         return [valve for valve in Valve.select(Valve)
                                         .join(PumpToValve)
                                         .where(PumpToValve.pump == self.id)]
 
     @property
-    def heating_valves(self):
+    def heating_valves(self):  # type: () -> List[Valve]
         return self._valves(mode=ThermostatGroup.Modes.HEATING)
 
     @property
-    def cooling_valves(self):
+    def cooling_valves(self):  # type: () -> List[Valve]
         return self._valves(mode=ThermostatGroup.Modes.COOLING)
 
     def _valves(self, mode):
@@ -309,19 +308,18 @@ class Pump(BaseModel):
                                         .join(PumpToValve)
                                         .join(Pump)
                                         .where((ValveToThermostat.mode == mode) &
-                                               (Pump.number == self.number))
+                                               (Pump.id == self.id))
                                         .order_by(ValveToThermostat.priority)]
 
 
 class Valve(BaseModel):
     id = AutoField()
-    number = IntegerField(unique=True)
     name = CharField()
     delay = IntegerField(default=60)
     output = ForeignKeyField(Output, backref='valves', on_delete='CASCADE', unique=True)
 
     @property
-    def pumps(self):
+    def pumps(self):  # type: () -> List[Pump]
         return [pump for pump in Pump.select(Pump)
                                      .join(PumpToValve)
                                      .where(PumpToValve.valve == self.id)]
@@ -359,7 +357,7 @@ class Thermostat(BaseModel):
     valve_config = CharField(default=ValveConfigs.CASCADE)  # Options: 'cascade' or 'equal'
     thermostat_group = ForeignKeyField(ThermostatGroup, backref='thermostats', on_delete='CASCADE')
 
-    def get_preset(self, preset_type):
+    def get_preset(self, preset_type):  # type: (str) -> Preset
         return Preset.get((Preset.type == preset_type) &
                           (Preset.thermostat_id == self.id))
 
@@ -389,41 +387,39 @@ class Thermostat(BaseModel):
             value.save()
 
     @property
-    def valves(self):
+    def valves(self):  # type: () -> List[Valve]
         return [valve for valve in Valve.select(Valve)
                                         .join(ValveToThermostat)
                                         .where(ValveToThermostat.thermostat_id == self.id)
                                         .order_by(ValveToThermostat.priority)]
 
     @property
-    def active_valves(self):
+    def active_valves(self):  # type: () -> List[Valve]
         return self._valves(mode=self.thermostat_group.mode)
 
     @property
-    def heating_valves(self):
+    def heating_valves(self):  # type: () -> List[Valve]
         return self._valves(mode=ThermostatGroup.Modes.HEATING)
 
     @property
-    def cooling_valves(self):
+    def cooling_valves(self):  # type: () -> List[Valve]
         return self._valves(mode=ThermostatGroup.Modes.COOLING)
 
-    def _valves(self, mode):
+    def _valves(self, mode):  # type: (str) -> List[Valve]
         return [valve for valve in Valve.select(Valve, ValveToThermostat.mode, ValveToThermostat.priority)
                                         .join(ValveToThermostat)
                                         .where((ValveToThermostat.thermostat_id == self.id) &
                                                (ValveToThermostat.mode == mode))
                                         .order_by(ValveToThermostat.priority)]
 
-    def heating_schedules(self):
-        # type: () -> List[DaySchedule]
+    def heating_schedules(self):  # type: () -> List[DaySchedule]
         return [schedule for schedule in
                 DaySchedule.select()
                            .where((DaySchedule.thermostat == self.id) &
                                   (DaySchedule.mode == ThermostatGroup.Modes.HEATING))
                            .order_by(DaySchedule.index)]
 
-    def cooling_schedules(self):
-        # type: () -> List[DaySchedule]
+    def cooling_schedules(self):  # type: () -> List[DaySchedule]
         return [x for x in
                 DaySchedule.select()
                            .where((DaySchedule.thermostat == self.id) &
@@ -473,14 +469,14 @@ class DaySchedule(BaseModel):
     thermostat = ForeignKeyField(Thermostat, backref='day_schedules', on_delete='CASCADE')
 
     @property
-    def schedule_data(self):
+    def schedule_data(self):  # type: () -> Dict[int, float]
         return json.loads(self.content)
 
     @schedule_data.setter
-    def schedule_data(self, value):
+    def schedule_data(self, value):  # type: (Dict[int, float]) -> None
         self.content = json.dumps(value)
 
-    def get_scheduled_temperature(self, seconds_in_day):
+    def get_scheduled_temperature(self, seconds_in_day):  # type: (int) -> float
         seconds_in_day = seconds_in_day % 86400
         data = self.schedule_data
         last_value = data.get(0)

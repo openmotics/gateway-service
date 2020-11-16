@@ -63,7 +63,8 @@ class GatewayThermostatMappingTests(unittest.TestCase):
 
         SetUpTestInjections(gateway_api=gateway_api,
                             message_client=Mock(),
-                            output_controller=Mock())
+                            output_controller=Mock(),
+                            pubsub=Mock())
         thermostat_controller = ThermostatControllerGateway()
         SetUpTestInjections(thermostat_controller=thermostat_controller)
         return thermostat_controller

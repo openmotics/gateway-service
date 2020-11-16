@@ -39,7 +39,7 @@ class PumpDriver(object):
 
     def _set_state(self, active):  # type: (bool) -> None
         if self._pump.output is None:
-            logger.warning('Cannot set state on Pump {0} since it has no output'.format(self._pump.number))
+            logger.warning('Cannot set state on Pump {0} since it has no output'.format(self._pump.id))
             return
         output_number = self._pump.output.number
         dimmer = 100 if active else 0
@@ -52,14 +52,14 @@ class PumpDriver(object):
         if self._state is True:
             return
         if self._state is None:
-            logger.info('Ensuring pump {0} is on'.format(self._pump.number))
+            logger.info('Ensuring pump {0} is on'.format(self._pump.id))
         else:
-            logger.info('Turning on pump {0}'.format(self._pump.number))
+            logger.info('Turning on pump {0}'.format(self._pump.id))
         try:
             self._set_state(True)
             self._error = False
         except Exception:
-            logger.error('There was a problem turning on pump {0}'.format(self._pump.number))
+            logger.error('There was a problem turning on pump {0}'.format(self._pump.id))
             self._error = True
             raise
 
@@ -67,14 +67,14 @@ class PumpDriver(object):
         if self._state is False:
             return
         if self._state is None:
-            logger.info('Ensuring pump {0} is off'.format(self._pump.number))
+            logger.info('Ensuring pump {0} is off'.format(self._pump.id))
         else:
-            logger.info('Turning off pump {0}'.format(self._pump.number))
+            logger.info('Turning off pump {0}'.format(self._pump.id))
         try:
             self._set_state(False)
             self._error = False
         except Exception:
-            logger.error('There was a problem turning off pump {0}'.format(self._pump.number))
+            logger.error('There was a problem turning off pump {0}'.format(self._pump.id))
             self._error = True
             raise
 
@@ -87,20 +87,20 @@ class PumpDriver(object):
         return self._error
 
     @property
-    def number(self):  # type: () -> int
-        return self._pump.number
+    def id(self):  # type: () -> int
+        return self._pump.id
 
     @property
-    def valve_numbers(self):
-        return [valve.number for valve in self._pump.valves]
+    def valve_ids(self):
+        return [valve.id for valve in self._pump.valves]
 
     def __str__(self):
-        return 'Pump driver for pump {0} at {1}'.format(self._pump.number, hex(id(self)))
+        return 'Pump driver for pump {0} at {1}'.format(self._pump.id, hex(id(self)))
 
     def __hash__(self):
-        return self._pump.number
+        return self._pump.id
 
     def __eq__(self, other):  # type: (Any) -> bool
         if not isinstance(other, PumpDriver):
             return False
-        return self._pump.number == other.number
+        return self.id == other.id

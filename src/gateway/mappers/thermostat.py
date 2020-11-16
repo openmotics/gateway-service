@@ -168,13 +168,13 @@ class ThermostatMapper(object):
         # Update/save output configuration
         output_config_present = 'output0' in fields or 'output1' in fields
         if output_config_present:
-            # Unlink all previously linked valve_numbers, we are resetting this with the new outputs we got from the API
+            # Unlink all previously linked valve_ids, we are resetting this with the new outputs we got from the API
             deleted = ValveToThermostat \
                 .delete() \
                 .where(ValveToThermostat.thermostat == thermostat) \
                 .where(ValveToThermostat.mode == mode) \
                 .execute()
-            logger.info('Unlinked {0} valve_numbers from thermostat {1}'.format(deleted, thermostat.name))
+            logger.info('Unlinked {0} valve_ids from thermostat {1}'.format(deleted, thermostat.name))
 
             for field in ['output0', 'output1']:
                 dto_data = getattr(thermostat_dto, field)
@@ -187,9 +187,9 @@ class ThermostatMapper(object):
 
                 # 2. Get or create the valve and link to this output
                 try:
-                    valve = Valve.get(output=output, number=output_number)
+                    valve = Valve.get(output=output)
                 except DoesNotExist:
-                    valve = Valve(output=output, number=output_number)
+                    valve = Valve(output=output)
                 valve.name = 'Valve (output {0})'.format(output_number)
                 valve.save()
 

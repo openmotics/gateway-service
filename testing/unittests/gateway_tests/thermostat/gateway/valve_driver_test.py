@@ -55,7 +55,7 @@ class ValveDriverTest(unittest.TestCase):
         SetUpTestInjections(output_controller=mock.Mock(OutputController))
         driver_1 = ValveDriver(valve_1)
 
-        self.assertEqual(1, driver_1.number)
+        self.assertEqual(valve_1.id, driver_1.id)
         self.assertEqual(0, driver_1.percentage)
         self.assertEqual(0, driver_1._desired_percentage)
         self.assertFalse(driver_1.is_open)

@@ -240,6 +240,9 @@ class ThermostatGroup(BaseModel):
     sensor: Optional[SensorForeignKeyField]
     mode: Literal['heating', 'cooling']
 
+    @property
+    def thermostats(self) -> List[Thermostat]: ...
+
 
 class ThermostatGroupForeignKeyField(ThermostatGroup, ForeignKeyField): ...
 
@@ -255,7 +258,6 @@ class OutputToThermostatGroup(BaseModel):
 
 class Pump(BaseModel):
     id: MixedPrimaryKeyField
-    number: MixedIntegerField
     name: MixedCharField
     output: Optional[OutputForeignKeyField]
 
@@ -276,7 +278,6 @@ class PumpForeignKeyField(Pump, ForeignKeyField): ...
 
 class Valve(BaseModel):
     id: MixedPrimaryKeyField
-    number: MixedIntegerField
     name: MixedCharField
     delay: MixedIntegerField
     output: OutputForeignKeyField

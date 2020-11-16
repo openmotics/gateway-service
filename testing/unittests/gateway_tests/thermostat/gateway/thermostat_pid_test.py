@@ -17,7 +17,6 @@ from __future__ import absolute_import
 import unittest
 import fakesleep
 import mock
-import time
 import logging
 from peewee import SqliteDatabase
 
@@ -104,9 +103,9 @@ class PumpValveControllerTest(unittest.TestCase):
 
     def test_basic(self):
         thermostat_pid = self._get_thermostat_pid()
-        self.assertEqual([1, 2], thermostat_pid.valve_numbers)
-        self.assertEqual([1], thermostat_pid._heating_valve_numbers)
-        self.assertEqual([2], thermostat_pid._cooling_valve_numbers)
+        self.assertEqual([1, 2], thermostat_pid.valve_ids)
+        self.assertEqual([1], thermostat_pid._heating_valve_ids)
+        self.assertEqual([2], thermostat_pid._cooling_valve_ids)
         self.assertEqual(200, thermostat_pid.kp)
         self.assertEqual(100, thermostat_pid.ki)
         self.assertEqual(50, thermostat_pid.kd)
@@ -121,11 +120,11 @@ class PumpValveControllerTest(unittest.TestCase):
         thermostat_pid._thermostat.sensor = sensor
         self.assertTrue(thermostat_pid.enabled)
         # No valves
-        heating_valve_numbers = thermostat_pid._heating_valve_numbers
-        thermostat_pid._heating_valve_numbers = []
-        thermostat_pid._cooling_valve_numbers = []
+        heating_valve_ids = thermostat_pid._heating_valve_ids
+        thermostat_pid._heating_valve_ids = []
+        thermostat_pid._cooling_valve_ids = []
         self.assertFalse(thermostat_pid.enabled)
-        thermostat_pid._heating_valve_numbers = heating_valve_numbers
+        thermostat_pid._heating_valve_ids = heating_valve_ids
         self.assertTrue(thermostat_pid.enabled)
         # The group is turned off
         self._thermostat_group.on = False

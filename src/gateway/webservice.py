@@ -48,7 +48,8 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     ThermostatGroupStatusSerializer, ThermostatGroupSerializer, \
     ThermostatAircoStatusSerializer, PumpGroupSerializer, \
     GlobalRTD10Serializer, RTD10Serializer
-from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO
+from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO, \
+    GlobalRTD10DTO
 from gateway.enums import ShutterEnums, UserEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import CommunicationFailure
@@ -1438,8 +1439,11 @@ class WebInterface(object):
         Get the global_rtd10_configuration.
         :param fields: The field of the global_rtd10_configuration to get, None if all
         """
-        return {'config': GlobalRTD10Serializer.serialize(global_rtd10_dto=self._thermostat_controller.load_global_rtd10(),
-                                                          fields=fields)}
+        try:
+            global_rtd10_dto = self._thermostat_controller.load_global_rtd10()
+        except UnsupportedException:
+            global_rtd10_dto = GlobalRTD10DTO()  # Backwards compatibility
+        return {'config': GlobalRTD10Serializer.serialize(global_rtd10_dto=global_rtd10_dto, fields=fields)}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_global_rtd10_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
@@ -1463,8 +1467,11 @@ class WebInterface(object):
         Get all rtd10_heating_configurations.
         :param fields: The field of the rtd10_heating_configuration to get, None if all
         """
-        return {'config': [RTD10Serializer.serialize(rtd10_dto=rtd10_dto, fields=fields)
-                           for rtd10_dto in self._thermostat_controller.load_heating_rtd10s()]}
+        try:
+            return {'config': [RTD10Serializer.serialize(rtd10_dto=rtd10_dto, fields=fields)
+                               for rtd10_dto in self._thermostat_controller.load_heating_rtd10s()]}
+        except UnsupportedException:
+            return {'config': []}  # Backwards compatibility
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_rtd10_heating_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
@@ -1495,8 +1502,11 @@ class WebInterface(object):
         Get all rtd10_cooling_configurations.
         :param fields: The field of the rtd10_cooling_configuration to get, None if all
         """
-        return {'config': [RTD10Serializer.serialize(rtd10_dto=rtd10_dto, fields=fields)
-                           for rtd10_dto in self._thermostat_controller.load_cooling_rtd10s()]}
+        try:
+            return {'config': [RTD10Serializer.serialize(rtd10_dto=rtd10_dto, fields=fields)
+                               for rtd10_dto in self._thermostat_controller.load_cooling_rtd10s()]}
+        except UnsupportedException:
+            return {'config': []}  # Backwards compatibility
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_rtd10_cooling_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict

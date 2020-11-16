@@ -52,7 +52,7 @@ class PumpDriverTest(unittest.TestCase):
         driver = PumpDriver(pump)
         self.assertIsNone(driver.state)
         self.assertFalse(driver.error)
-        self.assertEqual(1, driver.number)
+        self.assertEqual(pump.id, driver.id)
 
         driver.turn_on()
         self.assertTrue(driver.state)

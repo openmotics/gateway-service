@@ -83,13 +83,11 @@ def migrate(migrator, database, fake=False, **kwargs):
 
     class Pump(BaseModel):
         id = AutoField()
-        number = IntegerField(unique=True)
         name = CharField()
         output = ForeignKeyField(Output, null=True, backref='pumps', on_delete='SET NULL', unique=True)
 
     class Valve(BaseModel):
         id = AutoField()
-        number = IntegerField(unique=True)
         name = CharField()
         delay = IntegerField(default=60)
         output = ForeignKeyField(Output, backref='valves', on_delete='CASCADE', unique=True)
