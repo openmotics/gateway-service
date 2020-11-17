@@ -371,7 +371,7 @@ class ThermostatControllerGateway(ThermostatController):
                 pump_delay = valve.delay
                 break
         thermostat_group_dto = ThermostatGroupDTO(id=0,
-                                                  outside_sensor_id=thermostat_group.sensor,
+                                                  outside_sensor_id=thermostat_group.sensor.number,
                                                   threshold_temperature=thermostat_group.threshold_temperature,
                                                   pump_delay=pump_delay)
         for link in OutputToThermostatGroup.select() \
@@ -410,7 +410,7 @@ class ThermostatControllerGateway(ThermostatController):
                 data = getattr(thermostat_group_dto, field)
                 if data is None:
                     if link is not None:
-                        link.delete()
+                        link.delete_instance()
                 else:
                     output_number, value = data
                     output = Output.get(number=output_number)
@@ -490,7 +490,7 @@ class ThermostatControllerGateway(ThermostatController):
                 for output_id in list(links.keys()):
                     if output_id not in valve_output_ids:
                         pump_to_valve = links.pop(output_id)  # type: PumpToValve
-                        pump_to_valve.delete().execute()
+                        pump_to_valve.delete_instance()
                     else:
                         valve_output_ids.remove(output_id)
                 for output_id in valve_output_ids:

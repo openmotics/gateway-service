@@ -21,15 +21,16 @@ import logging
 from peewee import SqliteDatabase
 
 from gateway.models import Pump, Output, Valve, PumpToValve, Thermostat, \
-    ThermostatGroup, ValveToThermostat, Sensor, Preset
+    ThermostatGroup, ValveToThermostat, Sensor, Preset, OutputToThermostatGroup
 from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatControllerGateway
-from gateway.dto import PumpGroupDTO
+from gateway.dto import PumpGroupDTO, ThermostatGroupDTO
 from gateway.output_controller import OutputController
 from gateway.gateway_api import GatewayApi
 from ioc import SetTestMode, SetUpTestInjections
 
 MODELS = [Pump, Output, Valve, PumpToValve, Thermostat,
-          ThermostatGroup, ValveToThermostat, Sensor, Preset]
+          ThermostatGroup, ValveToThermostat, Sensor, Preset,
+          OutputToThermostatGroup]
 
 
 class ThermostatControllerTest(unittest.TestCase):
@@ -155,3 +156,74 @@ class ThermostatControllerTest(unittest.TestCase):
                                        pump_output_id=pump_output.id,
                                        valve_output_ids=[valve_2_output.id],
                                        room_id=None)], pump_groups)
+
+    def test_thermostat_group_crud(self):
+        thermostat = Thermostat.create(number=1,
+                                       name='thermostat 1',
+                                       sensor=Sensor.create(number=10),
+                                       pid_heating_p=200,
+                                       pid_heating_i=100,
+                                       pid_heating_d=50,
+                                       pid_cooling_p=200,
+                                       pid_cooling_i=100,
+                                       pid_cooling_d=50,
+                                       automatic=True,
+                                       room=None,
+                                       start=0,
+                                       valve_config='equal',
+                                       thermostat_group=self._thermostat_group)
+        Output.create(number=1)
+        Output.create(number=2)
+        Output.create(number=3)
+        valve_output = Output.create(number=4)
+        valve = Valve.create(number=1,
+                             name='valve 1',
+                             output=valve_output)
+        ValveToThermostat.create(thermostat=thermostat,
+                                 valve=valve,
+                                 mode=ThermostatGroup.Modes.HEATING,
+                                 priority=0)
+        thermostat_group = ThermostatGroup.get(number=0)  # type: ThermostatGroup
+        self.assertEqual(10.0, thermostat_group.threshold_temperature)
+        self.assertEqual(0, OutputToThermostatGroup.select()
+                                                   .where(OutputToThermostatGroup.thermostat_group == thermostat_group)
+                                                   .count())
+        self._thermostat_controller.save_thermostat_group((ThermostatGroupDTO(id=0,
+                                                                              outside_sensor_id=1,
+                                                                              pump_delay=30,
+                                                                              threshold_temperature=15,
+                                                                              switch_to_heating_0=(1, 0),
+                                                                              switch_to_heating_1=(2, 100),
+                                                                              switch_to_cooling_0=(1, 100)),
+                                                           ['outside_sensor_id', 'pump_delay', 'threshold_temperature',
+                                                            'switch_to_heating_0', 'switch_to_heating_1',
+                                                            'switch_to_cooling_0']))
+        thermostat_group = ThermostatGroup.get(number=0)
+        self.assertEqual(15.0, thermostat_group.threshold_temperature)
+        links = [{'index': link.index, 'value': link.value, 'mode': link.mode, 'output': link.output_id}
+                 for link in (OutputToThermostatGroup.select()
+                                                     .where(OutputToThermostatGroup.thermostat_group == thermostat_group))]
+        self.assertEqual(3, len(links))
+        self.assertIn({'index': 0, 'value': 0, 'mode': 'heating', 'output': 1}, links)
+        self.assertIn({'index': 1, 'value': 100, 'mode': 'heating', 'output': 2}, links)
+        self.assertIn({'index': 0, 'value': 100, 'mode': 'cooling', 'output': 1}, links)
+
+        new_thermostat_group_dto = ThermostatGroupDTO(id=0,
+                                                      outside_sensor_id=1,
+                                                      pump_delay=60,
+                                                      threshold_temperature=10,
+                                                      switch_to_heating_0=(1, 50),
+                                                      switch_to_cooling_0=(2, 0))
+        self._thermostat_controller.save_thermostat_group((new_thermostat_group_dto,
+                                                           ['outside_sensor_id', 'pump_delay', 'threshold_temperature',
+                                                            'switch_to_heating_0', 'switch_to_heating_1', 'switch_to_cooling_0']))
+        thermostat_group = ThermostatGroup.get(number=0)
+        self.assertEqual(10.0, thermostat_group.threshold_temperature)
+        links = [{'index': link.index, 'value': link.value, 'mode': link.mode, 'output': link.output_id}
+                 for link in (OutputToThermostatGroup.select()
+                                                     .where(OutputToThermostatGroup.thermostat_group == thermostat_group))]
+        self.assertEqual(2, len(links))
+        self.assertIn({'index': 0, 'value': 50, 'mode': 'heating', 'output': 1}, links)
+        self.assertIn({'index': 0, 'value': 0, 'mode': 'cooling', 'output': 2}, links)
+
+        self.assertEqual(new_thermostat_group_dto, self._thermostat_controller.load_thermostat_group())
