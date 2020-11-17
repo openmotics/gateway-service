@@ -213,8 +213,8 @@ class ThermostatControllerGateway(ThermostatController):
         thermostat = Thermostat.get(number=thermostat_number)
         return thermostat.active_preset
 
-    def set_current_preset(self, thermostat_number, preset_type):  # type: (int, Preset) -> None
-        thermostat = Thermostat.get(number=thermostat_number)
+    def set_current_preset(self, thermostat_number, preset_type):  # type: (int, str) -> None
+        thermostat = Thermostat.get(number=thermostat_number)  # type: Thermostat
         preset = thermostat.get_preset(preset_type)
         thermostat.active_preset = preset
         thermostat.save()

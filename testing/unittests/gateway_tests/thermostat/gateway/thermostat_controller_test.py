@@ -23,7 +23,8 @@ from peewee import SqliteDatabase
 from gateway.models import Pump, Output, Valve, PumpToValve, Thermostat, \
     ThermostatGroup, ValveToThermostat, Sensor, Preset, OutputToThermostatGroup
 from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatControllerGateway
-from gateway.dto import PumpGroupDTO, ThermostatGroupDTO
+from gateway.dto import PumpGroupDTO, ThermostatGroupDTO, OutputStateDTO, \
+    ThermostatGroupStatusDTO, ThermostatStatusDTO
 from gateway.output_controller import OutputController
 from gateway.gateway_api import GatewayApi
 from ioc import SetTestMode, SetUpTestInjections
@@ -57,8 +58,11 @@ class ThermostatControllerTest(unittest.TestCase):
         self.test_db.create_tables(MODELS)
         self._gateway_api = mock.Mock(GatewayApi)
         self._gateway_api.get_timezone.return_value = 'Europe/Brussels'
+        self._gateway_api.get_sensor_temperature_status.return_value = 10.0
+        output_controller = mock.Mock(OutputController)
+        output_controller.get_output_status.return_value = OutputStateDTO(id=0, status=False)
         SetUpTestInjections(gateway_api=self._gateway_api,
-                            output_controller=mock.Mock(OutputController),
+                            output_controller=output_controller,
                             pubsub=mock.Mock())
         self._thermostat_controller = ThermostatControllerGateway()
         SetUpTestInjections(thermostat_controller=self._thermostat_controller)
@@ -227,3 +231,85 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertIn({'index': 0, 'value': 0, 'mode': 'cooling', 'output': 2}, links)
 
         self.assertEqual(new_thermostat_group_dto, self._thermostat_controller.load_thermostat_group())
+
+    def test_thermostat_control(self):
+        thermostat = Thermostat.create(number=1,
+                                       name='thermostat 1',
+                                       sensor=Sensor.create(number=10),
+                                       pid_heating_p=200,
+                                       pid_heating_i=100,
+                                       pid_heating_d=50,
+                                       pid_cooling_p=200,
+                                       pid_cooling_i=100,
+                                       pid_cooling_d=50,
+                                       automatic=True,
+                                       room=None,
+                                       start=0,
+                                       valve_config='equal',
+                                       thermostat_group=self._thermostat_group)
+        Output.create(number=1)
+        Output.create(number=2)
+        Output.create(number=3)
+        valve_output = Output.create(number=4)
+        valve = Valve.create(number=1,
+                             name='valve 1',
+                             output=valve_output)
+        ValveToThermostat.create(thermostat=thermostat,
+                                 valve=valve,
+                                 mode=ThermostatGroup.Modes.HEATING,
+                                 priority=0)
+        self._thermostat_controller.refresh_config_from_db()
+
+        expected = ThermostatGroupStatusDTO(id=0,
+                                            on=True,
+                                            setpoint=0,
+                                            cooling=False,
+                                            automatic=True,
+                                            statusses=[ThermostatStatusDTO(id=1,
+                                                                           name='thermostat 1',
+                                                                           automatic=True,
+                                                                           setpoint=0,
+                                                                           sensor_id=10,
+                                                                           actual_temperature=10.0,
+                                                                           setpoint_temperature=14.0,
+                                                                           outside_temperature=10.0,
+                                                                           output_0_level=0,
+                                                                           output_1_level=0,
+                                                                           mode=0,
+                                                                           airco=0)])
+        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+
+        self._thermostat_controller.set_current_setpoint(thermostat_number=1, heating_temperature=15.0)
+        expected.statusses[0].setpoint_temperature = 15.0
+        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+
+        self._thermostat_controller.set_per_thermostat_mode(thermostat_number=1,
+                                                            automatic=True,
+                                                            setpoint=16.0)
+        expected.statusses[0].setpoint_temperature = 16.0
+        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+
+        preset = self._thermostat_controller.get_current_preset(thermostat_number=1)
+        self.assertTrue(preset.active)
+        self.assertEqual(30.0, preset.cooling_setpoint)
+        self.assertEqual(16.0, preset.heating_setpoint)
+        self.assertEqual(Preset.Types.SCHEDULE, preset.type)
+
+        self._thermostat_controller.set_current_preset(thermostat_number=1, preset_type=Preset.Types.PARTY)
+        expected.statusses[0].setpoint_temperature = 14.0
+        expected.statusses[0].setpoint = expected.setpoint = 5  # PARTY = legacy `5` setpoint
+        expected.statusses[0].automatic = expected.automatic = False
+        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+
+        self._thermostat_controller.set_thermostat_mode(thermostat_on=True, cooling_mode=True, cooling_on=True, automatic=False, setpoint=4)
+        expected.statusses[0].setpoint_temperature = 30.0
+        expected.statusses[0].setpoint = expected.setpoint = 4  # VACATION = legacy `4` setpoint
+        expected.cooling = True
+        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+
+        self._thermostat_controller.set_thermostat_mode(thermostat_on=True, cooling_mode=False, cooling_on=True, automatic=True)
+        expected.statusses[0].setpoint_temperature = 16.0
+        expected.statusses[0].setpoint = expected.setpoint = 0  # AUTO = legacy `0/1/2` setpoint
+        expected.statusses[0].automatic = expected.automatic = True
+        expected.cooling = False
+        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
