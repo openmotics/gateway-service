@@ -45,15 +45,16 @@ class MemoryFileTest(unittest.TestCase):
 
         def _do_command(command, fields, timeout=None):
             _ = timeout
-            if command.instruction == 'MR':
+            instruction = ''.join(str(chr(c)) for c in command.instruction)
+            if instruction == 'MR':
                 page = fields['page']
                 start = fields['start']
                 length = fields['length']
-                return {'data': memory.get(page, [255] * 256)[start:start + length]}
-            if command.instruction == 'MW':
+                return {'data': memory.get(page, bytearray([255] * 256))[start:start + length]}
+            if instruction == 'MW':
                 page = fields['page']
                 start = fields['start']
-                page_data = memory.setdefault(page, [255] * 256)
+                page_data = memory.setdefault(page, bytearray([255] * 256))
                 for index, data_byte in enumerate(fields['data']):
                     page_data[start + index] = data_byte
 
@@ -63,16 +64,16 @@ class MemoryFileTest(unittest.TestCase):
 
         memory_file = MemoryFile(MemoryTypes.EEPROM)
 
-        memory[5] = [255] * 256
+        memory[5] = bytearray([255] * 256)
         memory[5][10] = 1
         memory[5][11] = 2
         memory[5][12] = 3
         address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=5, offset=10, length=3)
 
         data = memory_file.read([address])[address]
-        self.assertEqual([1, 2, 3], data)
-        memory_file.write({address: [6, 7, 8]})
-        self.assertEqual([6, 7, 8], memory[5][10:13])
+        self.assertEqual(bytearray([1, 2, 3]), data)
+        memory_file.write({address: bytearray([6, 7, 8])})
+        self.assertEqual(bytearray([6, 7, 8]), memory[5][10:13])
 
 
 if __name__ == "__main__":

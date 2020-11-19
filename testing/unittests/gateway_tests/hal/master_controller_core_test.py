@@ -8,20 +8,17 @@ from six.moves import map
 from six.moves.queue import Queue
 
 import gateway.hal.master_controller_core
-from gateway.config import ConfigurationController
 from gateway.dto import InputDTO, OutputStateDTO
-from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.hal.master_controller_core import MasterCoreController
 from gateway.hal.master_event import MasterEvent
-from ioc import Scope, SetTestMode, SetUpTestInjections
-from master.classic import eeprom_models
-from master.classic.eeprom_controller import EepromController
-from master.classic.master_communicator import MasterCommunicator
+from gateway.pubsub import PubSub
+from ioc import SetTestMode, SetUpTestInjections
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.memory_file import MemoryFile, MemoryTypes
 from master.core.memory_models import InputConfiguration, \
-    OutputConfiguration, ShutterConfiguration
+    InputModuleConfiguration, OutputConfiguration, OutputModuleConfiguration, \
+    SensorModuleConfiguration, ShutterConfiguration
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.ucan_communicator import UCANCommunicator
 
@@ -35,35 +32,48 @@ class MasterCoreControllerTest(unittest.TestCase):
 
     def setUp(self):
         self.memory = {}
+        self.return_data = {}
 
         def _do_command(command, fields, timeout=None):
             _ = timeout
-            if command.instruction == 'MR':
+            instruction = ''.join(str(chr(c)) for c in command.instruction)
+            if instruction == 'MR':
                 page = fields['page']
                 start = fields['start']
                 length = fields['length']
-                return {'data': self.memory.get(page, [255] * 256)[start:start + length]}
-            elif command.instruction == 'MW':
+                return {'data': self.memory.get(page, bytearray([255] * 256))[start:start + length]}
+            elif instruction == 'MW':
                 page = fields['page']
                 start = fields['start']
-                page_data = self.memory.setdefault(page, [255] * 256)
+                page_data = self.memory.setdefault(page, bytearray([255] * 256))
                 for index, data_byte in enumerate(fields['data']):
                     page_data[start + index] = data_byte
+            elif instruction in self.return_data:
+                return self.return_data[instruction]
             else:
-                raise AssertionError('unexpected instruction "{}"'.format(command.instruction))
+                raise AssertionError('unexpected instruction: {0}'.format(instruction))
 
         self.communicator = mock.Mock(CoreCommunicator)
         self.communicator.do_command = _do_command
-        SetUpTestInjections(master_communicator=self.communicator)
+        self.pubsub = PubSub()
+        SetUpTestInjections(master_communicator=self.communicator,
+                            pubsub=self.pubsub)
 
         eeprom_file = MemoryFile(MemoryTypes.EEPROM)
         eeprom_file._cache = self.memory
-        SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
-                            memory_files={MemoryTypes.EEPROM: eeprom_file,
+        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: eeprom_file,
                                           MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)},
                             ucan_communicator=UCANCommunicator(),
                             slave_communicator=SlaveCommunicator())
         self.controller = MasterCoreController()
+
+        # For testing purposes, remove read-only flag from certain properties
+        for field_name in ['device_type', 'address', 'firmware_version']:
+            for model_type in [OutputModuleConfiguration, InputModuleConfiguration, SensorModuleConfiguration]:
+                if hasattr(model_type, '_{0}'.format(field_name)):
+                    getattr(model_type, '_{0}'.format(field_name))._read_only = False
+                else:
+                    getattr(model_type, field_name)._read_only = False
 
     def test_master_output_event(self):
         events = []
@@ -71,13 +81,13 @@ class MasterCoreControllerTest(unittest.TestCase):
         def _on_event(master_event):
             events.append(master_event)
 
-        self.controller.subscribe_event(_on_event)
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
 
         events = []
-        self.controller._handle_event({'type': 0, 'device_nr': 0, 'action': 0, 'data': [None, 0, 0, 0]})
-        self.controller._handle_event({'type': 0, 'device_nr': 2, 'action': 1, 'data': [100, 2, 0xff, 0xfe]})
-        assert [MasterEvent('OUTPUT_STATUS', {'id': 0, 'status': False, 'dimmer': None, 'ctimer': None}),
-                MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': True, 'dimmer': 100, 'ctimer': 65534})] == events
+        self.controller._handle_event({'type': 0, 'device_nr': 0, 'action': 0, 'data': bytearray([255, 0, 0, 0])})
+        self.controller._handle_event({'type': 0, 'device_nr': 2, 'action': 1, 'data': bytearray([100, 2, 0xff, 0xfe])})
+        self.assertEqual([MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'id': 0, 'status': False, 'dimmer': 255, 'ctimer': 0}),
+                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'id': 2, 'status': True, 'dimmer': 100, 'ctimer': 65534})], events)
 
     def test_master_shutter_event(self):
         events = []
@@ -85,7 +95,8 @@ class MasterCoreControllerTest(unittest.TestCase):
         def _on_event(master_event):
             events.append(master_event)
 
-        self.controller.subscribe_event(_on_event)
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
+
         self.controller._output_states = {0: OutputStateDTO(id=0, status=False),
                                           10: OutputStateDTO(id=10, status=False),
                                           11: OutputStateDTO(id=11, status=False)}
@@ -97,27 +108,27 @@ class MasterCoreControllerTest(unittest.TestCase):
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 0, 'data': [None, 0, 0, 0]})
             self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 0, 'data': [None, 0, 0, 0]})
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': False, 'dimmer': None, 'ctimer': None}),
-                    MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': False, 'dimmer': None, 'ctimer': None})] == events
+            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': False, 'dimmer': None, 'ctimer': 0}),
+                    MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': False, 'dimmer': None, 'ctimer': 0})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 1, 'data': [None, 0, 0, 0]})
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': True, 'dimmer': None, 'ctimer': None}),
+            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': True, 'dimmer': None, 'ctimer': 0}),
                     MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_up', 'location': {'room_id': 255}})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 1, 'data': [None, 0, 0, 0]})
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': True, 'dimmer': None, 'ctimer': None}),
+            assert [MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': True, 'dimmer': None, 'ctimer': 0}),
                     MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 0, 'data': [None, 0, 0, 0]})
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': False, 'dimmer': None, 'ctimer': None}),
+            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': False, 'dimmer': None, 'ctimer': 0}),
                     MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_down', 'location': {'room_id': 255}})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 0, 'data': [None, 0, 0, 0]})
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': False, 'dimmer': None, 'ctimer': None}),
+            assert [MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': False, 'dimmer': None, 'ctimer': 0}),
                     MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
     def test_master_shutter_refresh(self):
@@ -126,11 +137,12 @@ class MasterCoreControllerTest(unittest.TestCase):
         def _on_event(master_event):
             events.append(master_event)
 
-        self.controller.subscribe_event(_on_event)
-        output_status = [{'id': 0, 'status': False, 'dimmer': 0},
-                         {'id': 1, 'status': False, 'dimmer': 0},
-                         {'id': 10, 'status': False, 'dimmer': 0},
-                         {'id': 11, 'status': False, 'dimmer': 0}]
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
+
+        output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
+                         {'device_nr': 1, 'status': False, 'dimmer': 0},
+                         {'device_nr': 10, 'status': False, 'dimmer': 0},
+                         {'device_nr': 11, 'status': False, 'dimmer': 0}]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
@@ -138,10 +150,10 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.controller._refresh_shutter_states()
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
-        output_status = [{'id': 0, 'status': False, 'dimmer': 0},
-                         {'id': 1, 'status': True, 'dimmer': 0},
-                         {'id': 10, 'status': True, 'dimmer': 0},
-                         {'id': 11, 'status': False, 'dimmer': 0}]
+        output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
+                         {'device_nr': 1, 'status': True, 'dimmer': 0},
+                         {'device_nr': 10, 'status': True, 'dimmer': 0},
+                         {'device_nr': 11, 'status': False, 'dimmer': 0}]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
@@ -149,10 +161,10 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.controller._refresh_shutter_states()
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_up', 'location': {'room_id': 255}})] == events
 
-        output_status = [{'id': 0, 'status': False, 'dimmer': 0},
-                         {'id': 1, 'status': True, 'dimmer': 0},
-                         {'id': 10, 'status': False, 'dimmer': 0},
-                         {'id': 11, 'status': True, 'dimmer': 0}]
+        output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
+                         {'device_nr': 1, 'status': True, 'dimmer': 0},
+                         {'device_nr': 10, 'status': False, 'dimmer': 0},
+                         {'device_nr': 11, 'status': True, 'dimmer': 0}]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
@@ -167,16 +179,14 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.assertEqual('I', data)
 
     def test_load_input(self):
-        with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=get_core_input_dummy(1)):
-            data = self.controller.load_input(1)
-            self.assertEqual(data.id, 1)
+        data = self.controller.load_input(1)
+        self.assertEqual(data.id, 1)
 
     def test_load_inputs(self):
         input_modules = list(map(get_core_input_dummy, range(1, 17)))
+        self.return_data['GC'] = {'input': 2}
         with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               side_effect=input_modules), \
-             mock.patch.object(self.communicator, 'do_command', return_value={'output': 0, 'input': 2}):
+                               side_effect=input_modules):
             inputs = self.controller.load_inputs()
             self.assertEqual([x.id for x in inputs], list(range(1, 17)))
 
@@ -222,7 +232,8 @@ class MasterCoreControllerTest(unittest.TestCase):
         with mock.patch.object(gateway.hal.master_controller_core, 'BackgroundConsumer',
                                side_effect=new_consumer) as new_consumer:
             controller = MasterCoreController()
-        controller.subscribe_event(subscriber.callback)
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, subscriber.callback)
+
         new_consumer.assert_called()
         event_data = {'type': 1, 'action': 1, 'device_nr': 2,
                       'data': {}}
@@ -266,54 +277,11 @@ class MasterCoreControllerTest(unittest.TestCase):
                           'outputs': ['P', 'P', 'P', 'o', 'O'],
                           'shutters': []}, self.controller.get_modules())
 
-
-class MasterCoreControllerCompatibilityTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        SetTestMode()
-
-    def setUp(self):
-        self.eeprom_controller = mock.Mock(EepromController)
-        self.core_controller = self.create_master_core_controller()
-        self.classic_controller = self.create_master_classic_controller()
-
-    @Scope
-    def create_master_core_controller(self):
-        SetUpTestInjections(master_communicator=mock.Mock(CoreCommunicator))
-        SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
-                            memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
-                                          MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)},
-                            ucan_communicator=UCANCommunicator(),
-                            slave_communicator=SlaveCommunicator())
-        return MasterCoreController()
-
-    @Scope
-    def create_master_classic_controller(self):
-        SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
-                            eeprom_controller=self.eeprom_controller,
-                            master_communicator=mock.Mock(MasterCommunicator))
-        return MasterClassicController()
-
-    def test_load_input(self):
-        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: mock.Mock()})
-        core_input_orm = get_core_input_dummy(1)
-        classic_input_orm = eeprom_models.InputConfiguration.deserialize({'id': 1,
-                                                                          'name': 'foo',
-                                                                          'module_type': 'I',
-                                                                          'action': 255,
-                                                                          'basic_actions': '',
-                                                                          'invert': 255,
-                                                                          'can': ' ',
-                                                                          'event_enabled': False})
-        inputs = [classic_input_orm]
-
-        with mock.patch.object(gateway.hal.master_controller_core, 'InputConfiguration',
-                               return_value=core_input_orm), \
-             mock.patch.object(self.eeprom_controller, 'read', return_value=inputs[0]), \
-             mock.patch.object(self.eeprom_controller, 'read_all', return_value=inputs):
-            core_data = self.core_controller.load_input(1)
-            classic_data = self.classic_controller.load_input(1)
-            self.assertEqual(classic_data, core_data)
+    def test_master_eeprom_event(self):
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        self.controller._output_last_updated = 1603178386.0
+        self.pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
+        assert self.controller._output_last_updated == 0
 
 
 class MasterInputState(unittest.TestCase):
@@ -407,6 +375,7 @@ def get_core_input_dummy(i):
                    'address': '0.0.0.0',
                    'firmware_version': '0.0.1'}
     })
+
 
 def get_core_shutter_dummy(i):
     return ShutterConfiguration.deserialize({

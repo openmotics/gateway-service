@@ -14,14 +14,19 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from gateway.dto.feedback_led import FeedbackLedDTO
+from gateway.dto.floor import FloorDTO
+from gateway.dto.group_action import GroupActionDTO
+from gateway.dto.input import InputDTO
+from gateway.dto.module import ModuleDTO
 from gateway.dto.output import OutputDTO, OutputStateDTO
+from gateway.dto.pulse_counter import PulseCounterDTO
+from gateway.dto.room import RoomDTO
+from gateway.dto.schedule import ScheduleDTO
+from gateway.dto.sensor import SensorDTO
 from gateway.dto.shutter import ShutterDTO
 from gateway.dto.shutter_group import ShutterGroupDTO
 from gateway.dto.thermostat import ThermostatDTO
 from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
-from gateway.dto.floor import FloorDTO
-from gateway.dto.room import RoomDTO
-from gateway.dto.input import InputDTO
-from gateway.dto.sensor import SensorDTO
-from gateway.dto.pulse_counter import PulseCounterDTO
-from gateway.dto.group_action import GroupActionDTO
+from gateway.dto.user import UserDTO
+from gateway.dto.ventilation import VentilationDTO, VentilationSourceDTO, \
+    VentilationStatusDTO

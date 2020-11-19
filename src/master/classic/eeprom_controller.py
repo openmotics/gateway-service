@@ -15,21 +15,27 @@
 """
 Contains controller from reading and writing to the Master EEPROM.
 """
-
 from __future__ import absolute_import
+
+import copy
 import inspect
-import types
 import logging
+import types
 from threading import Lock
-from ioc import Injectable, Inject, INJECTED, Singleton
-from .master_api import eeprom_list, write_eeprom, activate_eeprom
+
+from ioc import INJECTED, Inject, Injectable, Singleton
+from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
+from master.classic.master_api import activate_eeprom, eeprom_list, \
+    write_eeprom
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Optional, Iterable, Type, TypeVar
+    from typing import Any, Dict, List, Optional, Iterable, Type, TypeVar, Set, Union, Tuple, Callable
     from master.classic.eeprom_extension import EepromExtension
+    from master.classic.master_communicator import MasterCommunicator
     M = TypeVar('M', bound='EepromModel')
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('openmotics')
 
 
 @Injectable.named('eeprom_controller')
@@ -38,22 +44,24 @@ class EepromController(object):
     """ The controller takes EepromModels and reads or writes them from and to an EepromFile. """
 
     @Inject
-    def __init__(self, eeprom_file=INJECTED, eeprom_extension=INJECTED):
+    def __init__(self, eeprom_file=INJECTED, eeprom_extension=INJECTED, pubsub=INJECTED):
+        # type: (EepromFile, EepromExtension, PubSub) -> None
         """
         Constructor takes the eeprom_file (for reading and writes from the eeprom) and the
         eeprom_extension (for reading the extensions from sqlite).
-
-        :type eeprom_file: master.eeprom_controller.EepromFile
-        :type eeprom_extension: master.eeprom_extension.EepromExtension
         """
         self._eeprom_file = eeprom_file
         self._eeprom_extension = eeprom_extension
+        self._pubsub = pubsub
         self.dirty = True
 
     def invalidate_cache(self):
         # type: () -> None
         """ Invalidate the cache, this should happen when maintenance mode was used. """
         self._eeprom_file.invalidate_cache()
+        self.dirty = True
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
 
     def read(self, eeprom_model, id=None, fields=None):
         # type: (Type[M], Optional[int], Optional[List[str]]) -> M
@@ -77,9 +85,7 @@ class EepromController(object):
 
     def read_address(self, address):
         # type: (EepromAddress) -> EepromData
-        """
-        Reads a given address (+length) from the eeprom
-        """
+        """ Reads a given address (+length) from the eeprom """
         return self._eeprom_file.read([address])[address]
 
     def read_all(self, eeprom_model, fields=None):
@@ -92,20 +98,12 @@ class EepromController(object):
 
     def write(self, eeprom_model):
         # type: (M) -> None
-        """
-        Write a given EepromModel to the EepromFile.
-
-        :type eeprom_model: master.eeprom_models.EepromModel
-        """
-        return self.write_batch([eeprom_model])
+        """ Write a given EepromModel to the EepromFile. """
+        self.write_batch([eeprom_model])
 
     def write_batch(self, eeprom_models):
         # type: (List[M]) -> None
-        """
-        Write a list of EepromModel instances to the EepromFile.
-
-        :type eeprom_models: list of master.eeprom_models.EepromModel
-        """
+        """ Write a list of EepromModel instances to the EepromFile. """
         # Write to the eeprom
         eeprom_data = []
         for eeprom_model in eeprom_models:
@@ -122,6 +120,17 @@ class EepromController(object):
             self._eeprom_extension.write_data(eext_data)
             self.dirty = True
 
+    def write_address(self, address, data):
+        # type: (EepromAddress, bytearray) -> None
+        """
+        Writes data to a given address (+length)
+        """
+        self._eeprom_file.write([EepromData(address, data)])
+
+    def activate(self):
+        self._eeprom_file.activate()
+        self.dirty = True
+
 
 @Injectable.named('eeprom_file')
 @Singleton
@@ -131,15 +140,12 @@ class EepromFile(object):
     BATCH_SIZE = 10
 
     @Inject
-    def __init__(self, master_communicator=INJECTED):
-        """
-        Create an EepromFile.
-
-        :param master_communicator: communicates with the master.
-        :type master_communicator: master.master_communicator.MasterCommunicator
-        """
+    def __init__(self, master_communicator=INJECTED, pubsub=INJECTED):
+        # type: (MasterCommunicator, PubSub) -> None
+        """ Create an EepromFile. """
         self._master_communicator = master_communicator
-        self._bank_cache = {}
+        self._pubsub = pubsub
+        self._bank_cache = {}  # type: Dict[int, bytearray]
 
     def invalidate_cache(self):
         """ Invalidate the cache, this should happen when maintenance mode was used. """
@@ -150,27 +156,24 @@ class EepromFile(object):
         Activate a change in the Eeprom. The master will read the eeprom
         and adjust the current settings.
         """
-        logger.info("EEPROM - Activate")
+        logger.info('EEPROM - Activate')
         self._master_communicator.do_command(activate_eeprom(), {'eep': 0})
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
 
     def read(self, addresses):
+        # type: (List[EepromAddress]) -> Dict[EepromAddress, EepromData]
         """
         Read data from the Eeprom.
 
         :param addresses: the addresses to read.
-        :type addresses: list of master.eeprom_controller.EepromAddress
-        :rtype: dict[master.eeprom_controller.EepromAddress, master.eeprom_controller.EepromData]
         """
         bank_data = self._read_banks({a.bank for a in addresses})
         return {a: EepromData(a, bank_data[a.bank][a.offset:a.offset + a.length]) for a in addresses}
 
     def _read_banks(self, banks):
-        """
-        Read a number of banks from the Eeprom.
-
-        :param banks: a list of banks (integers).
-        :returns: a dict mapping the bank to the data.
-        """
+        # type: (Set[int]) -> Dict[int, bytearray]
+        """ Read a number of banks from the Eeprom. """
         try:
             return_data = {}
             for bank in banks:
@@ -188,22 +191,17 @@ class EepromFile(object):
             raise
 
     def write(self, data):
-        """
-        Write data to the Eeprom.
-
-        :param data: the data to write.
-        :type data: list of master.eeprom_controller.EepromData
-        """
+        # type: (List[EepromData]) -> bool
+        """ Write data to the Eeprom. """
         wrote_data = False
 
         # Read the data in the banks that we are trying to write
         bank_data = self._read_banks({d.address.bank for d in data})
-        new_bank_data = bank_data.copy()
+        new_bank_data = copy.deepcopy(bank_data)
 
         for data_item in data:
             address = data_item.address
-            data = new_bank_data[address.bank]
-            new_bank_data[address.bank] = data[0:address.offset] + data_item.bytes + data[address.offset + address.length:]
+            new_bank_data[address.bank][address.offset:address.offset + address.length] = data_item.bytes
 
         # Check what changed and write changes in batch
         try:
@@ -235,8 +233,9 @@ class EepromFile(object):
             raise
 
     def _write(self, bank, offset, to_write):
+        # type: (int, int, bytearray) -> None
         """ Write a byte array to a specific location defined by the bank and the offset. """
-        logger.info("EEPROM - Write: B{0} A{1} D[{2}]".format(bank, offset, ' '.join(['%3d' % ord(c) for c in to_write])))
+        logger.info('EEPROM - Write: B{0} A{1} D[{2}]'.format(bank, offset, ' '.join(['%3d' % c for c in to_write])))
         self._master_communicator.do_command(
             write_eeprom(), {'bank': bank, 'address': offset, 'data': to_write}
         )
@@ -246,6 +245,7 @@ class EepromAddress(object):
     """ Represents an address in the Eeprom, has a bank, an offset and a length. """
 
     def __init__(self, bank, offset, length, shared=False, name=None):
+        # type: (int, int, int, bool, Optional[str]) -> None
         self.bank = bank
         self.offset = offset
         self.length = length
@@ -269,18 +269,15 @@ class EepromData(object):
     """ A piece of Eeprom data, has an address and the actual data. """
 
     def __init__(self, address, data):
-        """
-        :type address: master.eeprom_controller.EepromAddress
-        :type data: basestring
-        """
+        # type: (EepromAddress, bytearray) -> None
         if address.length != len(data):
             raise TypeError('Length in the address ({0}) does not match the number of bytes ({1})'.format(address.length, len(data)))
         self.address = address
         self.bytes = data
 
     def __str__(self):
-        hex_data = ' '.join(['%3d' % ord(c) for c in self.bytes])
-        readable = ''.join([c if 32 < ord(c) <= 126 else '.' for c in self.bytes])
+        hex_data = ' '.join(['%3d' % c for c in self.bytes])
+        readable = ''.join([chr(c) if 32 < c <= 126 else '.' for c in self.bytes])
         return '{0}: {1} | {2}'.format(self.address, hex_data, readable)
 
     def __repr__(self):
@@ -293,15 +290,16 @@ class EepromModel(object):
     class of EepromModel with an optional EepromId and EepromDataTypes as class fields.
     """
 
-    cache_fields = {}  # type: Dict[str,Any]
-    cache_addresses = {}  # type: Dict[str,Any]
+    cache_fields = {}  # type: Dict[str, Any]
+    cache_addresses = {}  # type: Dict[str, Any]
     cache_lock = Lock()
 
     def __init__(self, id=None):
+        # type: (Optional[int]) -> None
         self.check_id(id)
         self.id = id
-        self._fields = {'eeprom': [], 'eext': []}
-        self._loaded_fields = []
+        self._fields = {'eeprom': [], 'eext': []}  # type: Dict[str, List[str]]
+        self._loaded_fields = []  # type: List[str]
         address_cache = self.__class__.get_address_cache(self.id)
         for field_name, field_type in self.__class__.get_field_dict(include_eeprom=True).items():
             setattr(self, '_{0}'.format(field_name), EepromDataContainer(field_type, address_cache[field_name]))
@@ -384,6 +382,7 @@ class EepromModel(object):
         return instance
 
     def _deserialize(self, data_dict):
+        # type: (Dict[str, Any]) -> None
         self._loaded_fields = []
         for field_name, value in data_dict.items():
             if field_name == 'id':
@@ -391,7 +390,7 @@ class EepromModel(object):
             self._loaded_fields.append(field_name)
             if not hasattr(self, '_{0}'.format(field_name)):
                 raise TypeError('Field `{0}` is not available'.format(field_name))
-            field = getattr(self, '_{0}'.format(field_name))
+            field = getattr(self, '_{0}'.format(field_name))  # type: EepromDataContainer
             field.deserialize(value, check_writability=False)
 
     def to_dict(self):
@@ -516,7 +515,7 @@ class EepromModel(object):
             if address.length != 1:
                 raise TypeError('Length of max id address in EepromModel {0} is not 1'.format(cls.get_name()))
             eeprom_data = eeprom_file.read([address])
-            amount_of_modules = ord(eeprom_data[address].bytes[0])
+            amount_of_modules = eeprom_data[address].bytes[0]
             if amount_of_modules == 255:
                 amount_of_modules = 0
             return amount_of_modules * eeprom_id.get_multiplier() - 1
@@ -526,13 +525,11 @@ class EepromId(object):
     """ Represents an id in an EepromModel. """
 
     def __init__(self, amount_of_modules, address=None, multiplier=None):
+        # type: (int, Optional[EepromAddress], Optional[int]) -> None
         """
         :param amount_of_modules: The amount of modules
-        :type amount_of_modules: int
         :param address: the EepromAddress where the dynamic maximum for the id is located.
-        :type address: master.eeprom_controller.EepromAddress
         :param multiplier: if an address is provided, the multiplier can be used to multiply the value located at that address.
-        :type multiplier: int
         """
         self._max_id = amount_of_modules - 1
         self._address = address
@@ -565,13 +562,14 @@ class CompositeDataType(object):
     """
 
     def __init__(self, data_types, read_only=False):
-        """ Create a new composite data type using a list of tuples (name, EepromDataType). """
+        # type: (List[Tuple[str, EepromDataType]], bool) -> None
         self.data_types = data_types
         for data_type in self.data_types:
             data_type[1].read_only |= read_only
         self.read_only = read_only
 
     def get_addresses(self, id, field_name):
+        # type: (Optional[int], str) -> Dict[str, EepromAddress]
         """ Get all EepromDataType addresses in the composite data type. """
         return {t[0]: t[1].get_address(id, '{0}.{1}'.format(field_name, t[0])) for t in self.data_types}
 
@@ -587,25 +585,23 @@ class EepromDataContainer(object):
     """
 
     def __init__(self, data_type, address):
-        """
-        :type data_type: master.eeprom_controller.EepromDataType
-        :type address: master.eeprom_controller.EepromAddress or dict[basestring, master.eeprom_controller.EepromAddress]
-        """
+        # type: (Union[EepromDataType, CompositeDataType], Union[EepromAddress, Dict[str, EepromAddress]]) -> None
         if isinstance(data_type, CompositeDataType):
+            if isinstance(address, EepromAddress):
+                raise ValueError('A address map should be provided for CompositeDataTypes')
             self.composed = True
             self.addresses = []
             self._composed_data = {}
             self._composed_fields = []
             self.read_only = data_type.read_only
-            for data_type in data_type.data_types:
-                field_name, field_type = data_type
+            for field_name, field_type in data_type.data_types:
                 self._composed_fields.append(field_name)
                 self._composed_data[field_name] = EepromDataContainer(field_type, address[field_name])
                 self.addresses.append(address[field_name])
         else:
             self.composed = False
             self.address = address
-            self._data = None
+            self._data = None  # type: Optional[EepromData]
             self._data_type = data_type
             self.read_only = data_type.read_only
 
@@ -652,10 +648,9 @@ class EepromDataType(object):
     """
 
     def __init__(self, addr_gen, read_only=False, shared=False):
+        # type: (Union[Tuple[int, int], Callable[[int], Tuple[int, int]]], bool, bool) -> None
         """
         Create an instance of an EepromDataType with an address or an address generator.
-
-        :type addr_gen: Tuple[int, int] or (int) => Tuple[int, int]
         """
         self.read_only = read_only
         self._shared = shared
@@ -680,9 +675,9 @@ class EepromDataType(object):
             raise TypeError('EepromDataType is not writable')
 
     def get_address(self, id, field_name):
+        # type: (Optional[int], str) -> EepromAddress
         """
         Calculate the address for this data type.
-        :rtype: master.eeprom_controller.EepromAddress
         """
         length = self.get_length()
         if id is None:
@@ -700,10 +695,12 @@ class EepromDataType(object):
         raise NotImplementedError()
 
     def decode(self, data):
+        # type: (bytearray) -> Any
         """ Convert a string of bytes to the desired type. To be implemented in the subclass. """
         raise NotImplementedError()
 
     def encode(self, field):
+        # type: (Any) -> bytearray
         """ Convert the field data to a string of bytes. To be implemented in the subclass. """
         raise NotImplementedError()
 
@@ -712,20 +709,22 @@ class EepromDataType(object):
         raise NotImplementedError()
 
 
-def remove_tail(byte_str, delimiter='\xff'):
+def remove_tail(byte_str, delimiter=bytearray([255])):
+    # type: (bytearray, bytearray) -> bytearray
     """ Returns a new string where all instance of the delimiter at the end of the string are removed. """
     while len(byte_str) >= len(delimiter) and byte_str[-len(delimiter):] == delimiter:
         byte_str = byte_str[:-len(delimiter)]
     return byte_str
 
 
-def append_tail(byte_str, length, delimiter='\xff'):
+def append_tail(byte_str, length, delimiter=bytearray([255])):
+    # type: (bytearray, int, bytearray) -> bytearray
     """ Returns a new string with the given length by adding instances of the delimiter at the end
     of the string.
     """
     if len(byte_str) < length:
-        return str(byte_str) + delimiter * ((length - len(byte_str)) // len(delimiter))
-    return str(byte_str)
+        return byte_str + delimiter * ((length - len(byte_str)) // len(delimiter))
+    return byte_str
 
 
 class EepromString(EepromDataType):
@@ -739,13 +738,15 @@ class EepromString(EepromDataType):
         return 'String[{0}]'.format(self._length)
 
     def decode(self, data):
-        dirty = str(remove_tail(data))
-        return ''.join([i if ord(i) < 128 else ' ' for i in dirty])
+        # type: (bytearray) -> str
+        dirty = remove_tail(data)
+        return ''.join(chr(i) if i < 128 else ' ' for i in dirty)
 
     def encode(self, field):
+        # type: (Optional[str]) -> bytearray
         if field is None:
             field = ''
-        return append_tail(field, self._length)
+        return append_tail(bytearray([ord(c) for c in field]), self._length)
 
     def get_length(self):
         return self._length
@@ -761,12 +762,14 @@ class EepromByte(EepromDataType):
         return 'Byte'
 
     def decode(self, data):
-        return ord(data[0])
+        # type: (bytearray) -> int
+        return data[0]
 
     def encode(self, field):
+        # type: (Optional[int]) -> bytearray
         if field is None:
             field = 255
-        return str(chr(field))
+        return bytearray([field])
 
     def get_length(self):
         return 1
@@ -782,12 +785,14 @@ class EepromWord(EepromDataType):
         return 'Word'
 
     def decode(self, data):
-        return ord(data[1]) * 256 + ord(data[0])
+        # type: (bytearray) -> int
+        return data[1] * 256 + data[0]
 
     def encode(self, field):
+        # type: (Optional[int]) -> bytearray
         if field is None:
             field = 65535
-        return ''.join([chr(int(field) % 256), chr(int(field) // 256)])
+        return bytearray([int(field) % 256, int(field) // 256])
 
     def get_length(self):
         return 2
@@ -803,18 +808,20 @@ class EepromTemp(EepromDataType):
         return 'Temp'
 
     def decode(self, data):
-        value = ord(data[0])
+        # type: (bytearray) -> Optional[float]
+        value = data[0]
         if value == 255:
             return None
         return float(value) / 2 - 32
 
     def encode(self, field):
+        # type: (Optional[float]) -> bytearray
         if field is None:
             value = 255
         else:
             value = int((float(field) + 32) * 2)
             value = max(min(value, 255), 0)
-        return str(chr(value))
+        return bytearray([value])
 
     def get_length(self):
         return 1
@@ -830,7 +837,8 @@ class EepromSignedTemp(EepromDataType):
         return 'SignedTemp(-7.5 to 7.5 degrees)'
 
     def decode(self, data):
-        value = ord(data)
+        # type: (bytearray) -> float
+        value = data[0]
         if value == 255:
             return 0.0
         else:
@@ -838,14 +846,15 @@ class EepromSignedTemp(EepromDataType):
             return multiplier * float(value & 15) / 2.0
 
     def encode(self, field):
+        # type: (Optional[float]) -> bytearray
         if field is None or field == 0.0:
-            return str(chr(255))
+            return bytearray([255])
         elif field < -7.5 or field > 7.5:
             raise ValueError('SignedTemp should be in [-7.5, 7.5], was {0}'.format(field))
         else:
             offset = 0 if field > 0 else 128
             value = int(abs(field) * 2)
-            return str(chr(offset + value))
+            return bytearray([offset + value])
 
     def get_length(self):
         return 1
@@ -861,19 +870,21 @@ class EepromTime(EepromDataType):
         return 'Time'
 
     def decode(self, data):
-        value = ord(data[0])
-        hours = value / 6
+        # type: (bytearray) -> str
+        value = data[0]
+        hours = value // 6
         minutes = (value % 6) * 10
-        return "{0:02d}:{1:02d}".format(hours, minutes)
+        return '{0:02d}:{1:02d}'.format(hours, minutes)
 
     def encode(self, field):
+        # type: (Optional[str]) -> bytearray
         if field is None:
-            return str(chr(255))
+            return bytearray([255])
         split = [int(x) for x in field.split(':')]
         if len(split) != 2:
             raise ValueError('Time is not in HH:MM format: {0}'.format(field))
-        field = (split[0] * 6) + (split[1] / 10)
-        return str(chr(field))
+        parsed_value = (split[0] * 6) + (split[1] // 10)
+        return bytearray([parsed_value])
 
     def get_length(self):
         return 1
@@ -891,13 +902,15 @@ class EepromCSV(EepromDataType):
         return 'CSV[{0}]'.format(self._length)
 
     def decode(self, data):
-        return ','.join([str(ord(b)) for b in remove_tail(data, '\xff')])
+        # type: (bytearray) -> str
+        return ','.join([str(b) for b in remove_tail(data)])
 
     def encode(self, field):
-        actions = ''
+        # type: (Optional[str]) -> bytearray
+        actions = bytearray()
         if field is not None and len(field) > 0:
-            actions = ''.join([chr(int(x)) for x in field.split(",")])
-        return append_tail(actions, self._length, '\xff')
+            actions = bytearray([int(x) for x in field.split(',')])
+        return append_tail(actions, self._length)
 
     def get_length(self):
         return self._length
@@ -917,13 +930,15 @@ class EepromActions(EepromDataType):
         return 'Actions[{0}]'.format(self._length)
 
     def decode(self, data):
-        return ','.join([str(ord(b)) for b in remove_tail(data, '\xff\xff')])
+        # type: (bytearray) -> str
+        return ','.join([str(b) for b in remove_tail(data, bytearray(b'\xff\xff'))])
 
     def encode(self, field):
-        actions = ''
+        # type: (Optional[str]) -> bytearray
+        actions = bytearray()
         if field is not None and len(field) > 0:
-            actions = ''.join([chr(int(x)) for x in field.split(',')])
-        return append_tail(actions, 2 * self._length, '\xff\xff')
+            actions = bytearray([int(x) for x in field.split(',')])
+        return append_tail(actions, 2 * self._length, bytearray(b'\xff\xff'))
 
     def get_length(self):
         return 2 * self._length
@@ -939,11 +954,13 @@ class EepromIBool(EepromDataType):
         return 'Boolean'
 
     def decode(self, data):
-        return ord(data[0]) < 255
+        # type: (bytearray) -> bool
+        return data[0] < 255
 
     def encode(self, field):
+        # type: (Optional[bool]) -> bytearray
         value = 0 if field is True else 255
-        return str(chr(value))
+        return bytearray([value])
 
     def get_length(self):
         return 1
@@ -953,6 +970,7 @@ class EepromEnum(EepromDataType):
     """ A enum value that is encoded into a byte. """
 
     def __init__(self, addr_gen, enum_values, read_only=False):
+        # type: (Union[Tuple[int, int], Callable[[int], Tuple[int, int]]], Dict[int, str], bool) -> None
         super(EepromEnum, self).__init__(addr_gen, read_only)
         self._enum_values = enum_values
 
@@ -960,16 +978,18 @@ class EepromEnum(EepromDataType):
         return 'Enum'
 
     def decode(self, data):
-        index = ord(data[0])
+        # type: (bytearray) -> str
+        index = data[0]
         if index in self._enum_values.keys():
             return self._enum_values[index]
         return 'UNKNOWN'
 
     def encode(self, field):
+        # type: (str) -> bytearray
         for key, value in self._enum_values.items():
             if field == value:
-                return str(chr(key))
-        return str(chr(255))
+                return bytearray([key])
+        return bytearray([255])
 
     def get_length(self):
         return 1
@@ -979,21 +999,26 @@ class EextDataContainer(object):
     """ Data container instance """
 
     def __init__(self, data_type):
-        self._data = None
+        # type: (EextDataType) -> None
+        self._data = None  # type: Optional[Any]
         self._data_type = data_type
 
     def load_bytes(self, data):
+        # type: (Any) -> None
         self._data = data
 
     def get_bytes(self):
+        # type: () -> Optional[Any]
         return self._data
 
     def serialize(self):
+        # type: () -> Any
         if self._data is None:
             return self._data_type.default_value()
         return self._data_type.decode(self._data)
 
     def deserialize(self, data, check_writability=True):
+        # type: (Any, bool) -> None
         _ = check_writability
         self._data = self._data_type.encode(data)
 
@@ -1028,9 +1053,11 @@ class EextByte(EextDataType):
         return 255
 
     def decode(self, value):
+        # type: (str) -> int
         return int(value)
 
     def encode(self, value):
+        # type: (Optional[int]) -> str
         if value is None:
             value = self.default_value()
         return str(value)
@@ -1046,9 +1073,11 @@ class EextWord(EextDataType):
         return 65535
 
     def decode(self, value):
+        # type: (str) -> int
         return int(value)
 
     def encode(self, value):
+        # type: (Optional[int]) -> str
         if value is None:
             value = self.default_value()
         return str(value)
@@ -1064,9 +1093,11 @@ class EextString(EextDataType):
         return ''
 
     def decode(self, value):
+        # type (str) -> str
         return value
 
     def encode(self, value):
+        # type: (Optional[str]) -> str
         if value is None:
             value = self.default_value()
         return value
@@ -1082,9 +1113,11 @@ class EextBool(EextDataType):
         return False
 
     def decode(self, value):
+        # type: (str) -> bool
         return value == 'True'
 
     def encode(self, value):
+        # type: (Optional[bool]) -> str
         if value is None:
             value = self.default_value()
         return str(value)

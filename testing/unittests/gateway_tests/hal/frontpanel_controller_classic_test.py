@@ -17,6 +17,7 @@
 from __future__ import absolute_import
 import unittest
 import xmlrunner
+from mock import Mock
 from ioc import Scope, SetTestMode, SetUpTestInjections
 from gateway.hal.frontpanel_controller import FrontpanelController
 
@@ -36,7 +37,7 @@ class FrontpanelControllerClassicTest(unittest.TestCase):
                                     (True, True),
                                     (False, False),
                                     (False, False)]:
-            controller.report_serial_activity(FrontpanelController.SerialPorts.MASTER_API, activity)
+            controller._report_serial_activity(FrontpanelController.SerialPorts.MASTER_API, activity)
             self.assertEqual(led_state, controller._enabled_leds[FrontpanelController.Leds.COMMUNICATION_2])
 
     def test_report_carrier(self):
@@ -75,7 +76,9 @@ class FrontpanelControllerClassicTest(unittest.TestCase):
     @Scope
     def _get_controller():
         from gateway.hal.frontpanel_controller_classic import FrontpanelClassicController
-        SetUpTestInjections(leds_i2c_address=0x0)
+        SetUpTestInjections(leds_i2c_address=0x0,
+                            master_controller=Mock(),
+                            power_communicator=Mock())
         return FrontpanelClassicController()
 
 

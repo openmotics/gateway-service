@@ -28,6 +28,7 @@ import sqlite3
 import subprocess
 import tempfile
 import threading
+import warnings
 
 from six.moves.configparser import ConfigParser
 
@@ -46,7 +47,6 @@ if False:  # MYPY:
     from power.power_store import PowerStore
     from power.power_controller import PowerController, P1Controller
     from bus.om_bus_client import MessageClient
-    from gateway.config import ConfigurationController
     from gateway.observer import Observer
     from gateway.watchdog import Watchdog
 
@@ -77,10 +77,9 @@ class GatewayApi(object):
     def __init__(self,
                  master_controller=INJECTED, power_store=INJECTED, power_communicator=INJECTED,
                  power_controller=INJECTED, p1_controller=INJECTED, message_client=INJECTED,
-                 observer=INJECTED, configuration_controller=INJECTED):
-        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer, ConfigurationController) -> None
+                 observer=INJECTED):
+        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer) -> None
         self.__master_controller = master_controller  # type: MasterController
-        self.__config_controller = configuration_controller
         self.__power_store = power_store
         self.__power_communicator = power_communicator
         self.__p1_controller = p1_controller
@@ -117,16 +116,13 @@ class GatewayApi(object):
         except Exception:
             return 'UTC'
 
-    def maintenance_mode_stopped(self):
-        # type: () -> None
-        """ Called when maintenance mode is stopped """
-        self.__master_controller.invalidate_caches()
-        if self.__message_client is not None:
-            self.__message_client.send_event(OMBusEvents.DIRTY_EEPROM, None)
-
     def get_status(self):
         # TODO: implement gateway status too (e.g. plugin status)
         return self.__master_controller.get_status()
+
+    def get_master_online(self):
+        # type: () -> bool
+        return self.__master_controller.get_master_online()
 
     def get_master_version(self):
         return self.__master_controller.get_firmware_version()
@@ -138,8 +134,20 @@ class GatewayApi(object):
         config.read(constants.get_config_file())
         return str(config.get('OpenMotics', 'version'))
 
-    def reset_master(self):
-        return self.__master_controller.cold_reset()
+    def reset_master(self, power_on=True):
+        # type: (bool) -> Dict[str,Any]
+        self.__master_controller.cold_reset(power_on=power_on)
+        return {}
+
+    def raw_master_action(self, action, size, data=None):
+        # type: (str, int, Optional[bytearray]) -> Dict[str,Any]
+        return self.__master_controller.raw_action(action, size, data=data)
+
+    def update_master_firmware(self, hex_filename):
+        self.__master_controller.update_master(hex_filename)
+
+    def update_slave_firmware(self, module_type, hex_filename):
+        self.__master_controller.update_slave_modules(module_type, hex_filename)
 
     # Master module functions
 
@@ -150,16 +158,14 @@ class GatewayApi(object):
     def module_discover_stop(self):  # type: () -> None
         """ Stop the module discover mode on the master. """
         self.__master_controller.module_discover_stop()
-        if self.__message_client is not None:
-            self.__message_client.send_event(OMBusEvents.DIRTY_EEPROM, None)
 
     def module_discover_status(self):  # type: () -> bool
         """ Gets the status of the module discover mode on the master. """
         return self.__master_controller.module_discover_status()
 
-    def get_module_log(self):  # type: () -> List[Tuple[str, str]]
+    def get_module_log(self):  # type: () -> List[Dict[str, Any]]
         """
-        Get the log messages from the module discovery mode. This returns the current log
+        Get the log statements from the module discovery mode. This returns the current log
         messages and clear the log messages.
         """
         return self.__master_controller.get_module_log()
@@ -168,73 +174,8 @@ class GatewayApi(object):
         # TODO: do we want to include non-master managed "modules" ? e.g. plugin outputs
         return self.__master_controller.get_modules()
 
-    def get_master_modules_information(self):
-        return self.__master_controller.get_modules_information()
-
-    def get_energy_modules_information(self):
-        information = {}
-
-        def get_energy_module_type(version):
-            if version == power_api.ENERGY_MODULE:
-                return 'E'
-            if version == power_api.POWER_MODULE:
-                return 'P'
-            if version == power_api.P1_CONCENTRATOR:
-                return 'C'
-            return 'U'
-
-        # Energy/power modules
-        if self.__power_communicator is not None and self.__power_store is not None:
-            modules = self.__power_store.get_power_modules().values()
-            for module in modules:
-                module_address = module['address']
-                module_version = module['version']
-                raw_version = self.__power_communicator.do_command(module_address, power_api.get_version(module_version))[0]
-                version_info = raw_version.split('\x00', 1)[0].split('_')
-                firmware_version = '{0}.{1}.{2}'.format(version_info[1], version_info[2], version_info[3])
-                information[module_address] = {'type': get_energy_module_type(module['version']),
-                                               'firmware': firmware_version,
-                                               'address': module_address,
-                                               'id': module['id']}
-        return information
-
-    def get_modules_information(self):
-        """ Gets module information """
-        information = {'master': self.get_master_modules_information(),
-                       'energy': self.get_energy_modules_information()}
-        return information
-
     def flash_leds(self, led_type, led_id):
         return self.__master_controller.flash_leds(led_type, led_id)
-
-    # Output functions
-
-    def set_output_status(self, output_id, is_on, dimmer=None, timer=None):  # type: (int, bool, Optional[int], Optional[int]) -> None
-        """
-        Set the status, dimmer and timer of an output.
-        :param output_id: The id of the output to set
-        :param is_on: Whether the output should be on
-        :param dimmer: The dimmer value to set, None if unchanged
-        :param timer: The timer value to set, None if unchanged
-        """
-        # TODO: work with output controller
-        # TODO: implement output controller and let her handle routing to either master or e.g. plugin based outputs
-        self.__master_controller.set_output(output_id=output_id, state=is_on, dimmer=dimmer, timer=timer)
-
-    def set_all_lights_off(self):  # type: () -> None
-        # TODO: work with output controller
-        # TODO: also switch other lights (e.g. from plugins)
-        return self.__master_controller.set_all_lights_off()
-
-    def set_all_lights_floor_off(self, floor):  # type: (int) -> None
-        # TODO: work with output controller
-        # TODO: also switch other lights (e.g. from plugins)
-        return self.__master_controller.set_all_lights_floor_off(floor)
-
-    def set_all_lights_floor_on(self, floor):  # type: (int) -> None
-        # TODO: work with output controller
-        # TODO: also switch other lights (e.g. from plugins)
-        return self.__master_controller.set_all_lights_floor_on(floor)
 
     # Input functions
 
@@ -292,26 +233,11 @@ class GatewayApi(object):
             values += [None] * (32 - len(values))
         return values
 
-    def add_virtual_output_module(self):
-        # type: () -> str
-        # TODO: work with output controller
-        return self.__master_controller.add_virtual_output_module()
-
-    def add_virtual_dim_module(self):
-        # type: () -> str
-        # TODO: work with output controller
-        return self.__master_controller.add_virtual_dim_module()
-
-    def add_virtual_input_module(self):
-        # type: () -> str
-        # TODO: work with input controller
-        return self.__master_controller.add_virtual_input_module()
-
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         # TODO: work with sensor controller
         # TODO: add other sensors too (e.g. from database <-- plugins)
         """ Set the temperature, humidity and brightness value of a virtual sensor. """
-        return self.__master_controller.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
+        self.__master_controller.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
 
     # Basic and group actions
 
@@ -353,7 +279,6 @@ class GatewayApi(object):
                 eeprom_file.write(self.get_master_backup())
 
             for filename, source in {'config.db': constants.get_config_database_file(),
-                                     'scheduled.db': constants.get_scheduling_database_file(),
                                      'power.db': constants.get_power_database_file(),
                                      'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
                                      'metrics.db': constants.get_metrics_database_file(),
@@ -422,7 +347,6 @@ class GatewayApi(object):
 
             for filename, target in {'config.db': constants.get_config_database_file(),
                                      'users.db': constants.get_config_database_file(),
-                                     'scheduled.db': constants.get_scheduling_database_file(),
                                      'power.db': constants.get_power_database_file(),
                                      'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
                                      'metrics.db': constants.get_metrics_database_file(),
@@ -807,8 +731,8 @@ class GatewayApi(object):
                                              power=convert_nan(power[i], default=0.0)))
 
                 output[str(module_id)] = out
-            except CommunicationTimedOutException:
-                logger.error('Communication timeout while fetching realtime power from {0}: CommunicationTimedOutException'.format(module_id))
+            except CommunicationTimedOutException as ex:
+                logger.error('Communication timeout while fetching realtime power from {0}: {1}'.format(module_id, ex))
             except Exception as ex:
                 logger.exception('Got exception while fetching realtime power from {0}: {1}'.format(module_id, ex))
 
@@ -868,8 +792,8 @@ class GatewayApi(object):
                     out.append([day[i], night[i]])
 
                 output[str(module_id)] = out
-            except CommunicationTimedOutException:
-                logger.error('Communication timeout while fetching total energy from {0}: CommunicationTimedOutException'.format(module_id))
+            except CommunicationTimedOutException as ex:
+                logger.error('Communication timeout while fetching total energy from {0}: {1}'.format(module_id, ex))
             except Exception as ex:
                 logger.exception('Got exception while fetching total energy from {0}: {1}'.format(module_id, ex))
 

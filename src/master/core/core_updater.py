@@ -25,6 +25,10 @@ from ioc import Inject, INJECTED
 from master.core.core_communicator import CoreCommunicator
 from master.core.maintenance import MaintenanceCommunicator
 
+if False:  # MYPY
+    from typing import Optional
+    from serial import Serial
+
 logger = logging.getLogger('openmotics')
 
 
@@ -39,14 +43,15 @@ class CoreUpdater(object):
     @staticmethod
     @Inject
     def update(hex_filename, master_communicator=INJECTED, maintenance_communicator=INJECTED, cli_serial=INJECTED):
+        # type: (str, CoreCommunicator, MaintenanceCommunicator, Serial) -> bool
         """ Flashes the content from an Intel HEX file to the Core """
         try:
             # TODO: Check version and skip update if the version is already active
 
             logger.info('Updating Core')
 
-            master_communicator = master_communicator  # type: CoreCommunicator
-            maintenance_communicator = maintenance_communicator  # type: MaintenanceCommunicator
+            master_communicator = master_communicator
+            maintenance_communicator = maintenance_communicator
 
             if master_communicator is not None and maintenance_communicator is not None:
                 maintenance_communicator.stop()
@@ -64,7 +69,7 @@ class CoreUpdater(object):
                 logger.info('Bootloader {0} active'.format(bootloader_version))
             else:
                 logger.info('Bootloader not active, switching to bootloader')
-                cli_serial.write('reset\r\n')
+                cli_serial.write(b'reset\r\n')
                 time.sleep(CoreUpdater.RESET_DELAY)
                 bootloader_version = CoreUpdater._in_bootloader(cli_serial)
                 if bootloader_version is None:
@@ -75,7 +80,7 @@ class CoreUpdater(object):
             logger.info('Flashing...')
             amount_lines = len(hex_lines)
             for index, line in enumerate(hex_lines):
-                cli_serial.write(line)
+                cli_serial.write(bytearray(ord(c) for c in line))
                 response = CoreUpdater._read_line(cli_serial)
                 if response.startswith('nok'):
                     raise RuntimeError('Unexpected NOK while flashing: {0}'.format(response))
@@ -89,7 +94,7 @@ class CoreUpdater(object):
             time.sleep(CoreUpdater.RESET_DELAY)
             if CoreUpdater._in_bootloader(cli_serial):
                 raise RuntimeError('Still in bootloader')
-            cli_serial.write('firmware version\r\n')
+            cli_serial.write(b'firmware version\r\n')
             firmware_version = CoreUpdater._read_line(cli_serial, discard_lines=2)
             logger.info('Application version {0} active'.format(firmware_version))
             cli_serial.flushInput()
@@ -107,9 +112,9 @@ class CoreUpdater(object):
             return False
 
     @staticmethod
-    def _in_bootloader(serial):
+    def _in_bootloader(serial):  # type: (Serial) -> Optional[str]
         serial.flushInput()
-        serial.write('hi\n')
+        serial.write(b'hi\n')
         response = CoreUpdater._read_line(serial)
         serial.flushInput()
         if not response.startswith('hi;ver='):
@@ -117,14 +122,14 @@ class CoreUpdater(object):
         return response.split('=')[-1]
 
     @staticmethod
-    def _read_line(serial, verbose=True, discard_lines=0):
+    def _read_line(serial, verbose=True, discard_lines=0):  # type: (Serial, bool, int) -> str
         timeout = time.time() + CoreUpdater.BOOTLOADER_SERIAL_READ_TIMEOUT
         line = ''
         while time.time() < timeout:
             if serial.inWaiting():
-                char = serial.read(1)
-                line += char
-                if char == '\n':
+                data = bytearray(serial.read(1))
+                line += chr(data[0])
+                if data == bytearray(b'\n'):
                     if line[0] == '#' and verbose:
                         logger.debug('* Debug: {0}'.format(line.strip()))
                         line = ''

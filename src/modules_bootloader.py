@@ -57,11 +57,14 @@ def get_communicator(master_communicator=INJECTED):
 
 def main():
     supported_modules = ['O', 'R', 'D', 'I', 'T', 'C']
+    supported_modules_gen3 = ['O3', 'R3', 'D3', 'I3', 'T3', 'C3']
+    supported_can_modules = ['UC']
+    all_supported_modules = supported_modules + supported_modules_gen3 + supported_can_modules
 
     parser = argparse.ArgumentParser(description='Tool to bootload the slave modules.')
 
-    parser.add_argument('-t', '--type', dest='type', choices=supported_modules + [m.lower() for m in supported_modules], required=True,
-                        help='The type of module to bootload (choices: {0})'.format(', '.join(supported_modules)))
+    parser.add_argument('-t', '--type', dest='type', choices=all_supported_modules + [m.lower() for m in all_supported_modules], required=True,
+                        help='The type of module to bootload (choices: {0})'.format(', '.join(all_supported_modules)))
     parser.add_argument('-f', '--file', dest='file', required=True,
                         help='The filename of the hex file to bootload')
     parser.add_argument('-v', '--version', dest='version', required=False,
@@ -73,6 +76,9 @@ def main():
     module_type = args.type.upper()
     filename = args.file
     version = args.version
+    gen3_firmware = module_type.endswith('3')
+    if gen3_firmware:
+        module_type = module_type[0]
 
     config = ConfigParser()
     config.read(constants.get_config_file())
@@ -83,11 +89,12 @@ def main():
     communicator = get_communicator()
     communicator.start()
     try:
-        if Platform.get_platform() == Platform.Type.CORE_PLUS:
+        if Platform.get_platform() in Platform.CoreTypes:
             from master.core.slave_updater import SlaveUpdater
 
             update_success = SlaveUpdater.update_all(module_type=module_type,
                                                      hex_filename=filename,
+                                                     gen3_firmware=gen3_firmware,
                                                      version=version)
         else:
             from master.classic.slave_updater import bootload_modules
@@ -100,8 +107,14 @@ def main():
                 print('Could not open hex: {0}'.format(ex))
                 return False
 
+            if module_type == 'UC':
+                print('Updating uCAN modules not supported on Classic platform')
+                return True  # Don't fail the update
+
             update_success = bootload_modules(module_type=module_type,
-                                              filename=filename)
+                                              filename=filename,
+                                              gen3_firmware=gen3_firmware,
+                                              version=version)
     finally:
         communicator.stop()
         time.sleep(3)

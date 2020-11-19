@@ -25,17 +25,24 @@ import shutil
 import tempfile
 import time
 import unittest
+import logging
 from subprocess import call
 
 from mock import Mock
+from peewee import SqliteDatabase
 from pytest import mark
 
 import plugin_runtime
 from gateway.dto import OutputStateDTO
+from gateway.enums import ShutterEnums
 from gateway.events import GatewayEvent
+from gateway.models import Plugin
 from gateway.output_controller import OutputController
+from gateway.shutter_controller import ShutterController
 from ioc import SetTestMode, SetUpTestInjections
 from plugin_runtime.base import PluginConfigChecker, PluginException
+
+MODELS = [Plugin]
 
 
 class PluginControllerTest(unittest.TestCase):
@@ -50,6 +57,23 @@ class PluginControllerTest(unittest.TestCase):
         SetTestMode()
         cls.PLUGINS_PATH = tempfile.mkdtemp()
         cls.PLUGIN_CONFIG_PATH = tempfile.mkdtemp()
+        logger = logging.getLogger('openmotics')
+        logger.setLevel(logging.DEBUG)
+        logger.propagate = False
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        logger.addHandler(handler)
+
+    def setUp(self):
+        self.test_db = SqliteDatabase(':memory:')
+        self.test_db.bind(MODELS)
+        self.test_db.connect()
+        self.test_db.create_tables(MODELS)
+
+    def tearDown(self):
+        self.test_db.drop_tables(MODELS)
+        self.test_db.close()
 
     @classmethod
     def tearDownClass(cls):
@@ -83,12 +107,13 @@ class PluginControllerTest(unittest.TestCase):
             shutil.rmtree(path)
 
     @staticmethod
-    def _get_controller(output_controller=None):
-        SetUpTestInjections(shutter_controller=Mock(),
+    def _get_controller(output_controller=None, shutter_controller=None):
+        SetUpTestInjections(shutter_controller=shutter_controller,
                             web_interface=None,
                             configuration_controller=None,
                             output_controller=output_controller)
         from plugins.base import PluginController
+        PluginController.DEPENDENCIES_TIMER = 0.25
         controller = PluginController(runtime_path=PluginControllerTest.RUNTIME_PATH,
                                       plugins_path=PluginControllerTest.PLUGINS_PATH,
                                       plugin_config_path=PluginControllerTest.PLUGIN_CONFIG_PATH)
@@ -103,7 +128,7 @@ class PluginControllerTest(unittest.TestCase):
         try:
             PluginControllerTest._create_plugin(name, code, temp_directory)
             call('cd {0}/{1}; tar -czf ../package.tgz .'.format(temp_directory, name), shell=True)
-            with open('{0}/package.tgz'.format(temp_directory), 'r') as package_file:
+            with open('{0}/package.tgz'.format(temp_directory), 'rb') as package_file:
                 package_data = package_file.read()
             hasher = hashlib.md5()
             hasher.update(package_data)
@@ -130,6 +155,8 @@ class P1(OMPluginBase):
             plugin_list = controller.get_plugins()
             self.assertEqual(1, len(plugin_list))
             self.assertEqual('P1', plugin_list[0].name)
+            plugin = Plugin.get(name='P1')
+            self.assertEqual('1.0.0', plugin.version)
         finally:
             if controller is not None:
                 controller.stop()
@@ -171,6 +198,44 @@ class P2(OMPluginBase):
             PluginControllerTest._destroy_plugin('P2')
 
     @mark.slow
+    def test_dependencies_callback(self):
+        """ Test getting one plugin in the plugins package. """
+        called = {'called': 0}
+
+        def _call():
+            called['called'] += 1
+
+        def _wait_for_called(amount, timeout=1):
+            end = time.time() + timeout
+            while time.time() < end:
+                if called['called'] == amount:
+                    break
+            self.assertEqual(amount, called['called'])
+
+        controller = None
+        try:
+            PluginControllerTest._create_plugin('P1', """
+from plugins.base import *
+
+class P1(OMPluginBase):
+    name = 'P1'
+    version = '1.0.0'
+    interfaces = []
+""")
+            controller = PluginControllerTest._get_controller()
+            controller._update_dependencies = _call
+            controller.start()
+            self.assertIsNotNone(controller._dependencies_timer)
+            self.assertEquals(0, called['called'])
+            _wait_for_called(1)
+            controller.stop_plugin('P1')
+            _wait_for_called(2)
+        finally:
+            if controller is not None:
+                controller.stop()
+            PluginControllerTest._destroy_plugin('P1')
+
+    @mark.slow
     def test_get_special_methods(self):
         """ Test getting special methods on a plugin. """
         controller = None
@@ -190,6 +255,7 @@ class P1(OMPluginBase):
         self._input_data = None
         self._input_data_version_2 = None
         self._output_data = None
+        self._output_data_version_2 = None
         self._event_data = None
 
     @om_expose(auth=True)
@@ -202,6 +268,7 @@ class P1(OMPluginBase):
                 'input_data': self._input_data,
                 'input_data_version_2': self._input_data_version_2,
                 'output_data': self._output_data,
+                'output_data_version_2': self._output_data_version_2,
                 'event_data': self._event_data}
 
     @input_status
@@ -212,13 +279,13 @@ class P1(OMPluginBase):
     def input_version_2(self, input_status_inst):
         self._input_data_version_2 = input_status_inst
         
-    @input_status(version=3)
-    def input_version_3(self, input_status_inst):
-        self._input_data_version_3 = input_status_inst
-
     @output_status
     def output(self, output_status_inst):
         self._output_data = output_status_inst
+        
+    @output_status(version=2)
+    def output_version_2(self, output_status_inst):
+        self._output_data_version_2 = output_status_inst
         
     @receive_events
     def recv_events(self, code):
@@ -249,30 +316,149 @@ class P1(OMPluginBase):
             controller.process_observer_event(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE, data=falling_input_event))
             output_event = {'id': 1,
                             'status': {'on': True,
-                                       'value': 5},
+                                       'value': 5,
+                                       'locked': True},
                             'location': {'room_id': 5}}
             controller.process_observer_event(GatewayEvent(event_type=GatewayEvent.Types.OUTPUT_CHANGE, data=output_event))
             controller.process_event(1)
 
-            keys = ['input_data', 'input_data_version_2', 'output_data', 'event_data']
+            keys = ['input_data', 'input_data_version_2', 'output_data', 'output_data_version_2', 'event_data']
             start = time.time()
             while time.time() - start < 2:
                 response = controller._request('P1', 'get_log')
                 if all(response[key] is not None for key in keys):
                     break
                 time.sleep(0.1)
-            self.assertEqual(response, {'bg_running': True,
-                                        'input_data': [1, None],  # only rising edges should be triggered
-                                        'input_data_version_2': {'input_id': 2, 'status': False},
-                                        'output_data': [[1, 5]],
-                                        'event_data': 1})
-
-            plugin_logs = controller.get_logs().get('P1', '')
-            self.assertTrue('Version 3 is not supported for input status decorators' in plugin_logs)
+            self.assertEqual(response['bg_running'], True)
+            self.assertEqual(response['input_data'], [1, None])  # only rising edges should be triggered
+            self.assertEqual(response['output_data'],  [[1, 5]])
+            self.assertEqual(response['output_data_version_2'], output_event)
+            self.assertEqual(response['event_data'], 1)
         finally:
             if controller is not None:
                 controller.stop()
             PluginControllerTest._destroy_plugin('P1')
+
+    @mark.slow
+    def test_get_unsupported_decorators(self):
+        """ Test getting special methods on a plugin. """
+        controller = None
+        try:
+            PluginControllerTest._create_plugin('UnsupportedPlugin', """
+import time
+from plugins.base import *
+
+class UnsupportedPlugin(OMPluginBase):
+    name = 'UnsupportedPlugin'
+    version = '0.1.0'
+    interfaces = [('webui', '1.0')]
+        
+    def __init__(self, webservice, logger):
+        OMPluginBase.__init__(self, webservice, logger)
+
+    @om_expose(auth=True)
+    def html_index(self):
+        return 'HTML'
+
+    @input_status(version=3)
+    def input_with_unsupported_decorator(self, test_data):
+        pass
+
+    @output_status(version=3)
+    def output_with_unsupported_decorator(self, test_data):
+        pass
+""")
+            output_controller = Mock(OutputController)
+            controller = PluginControllerTest._get_controller(output_controller=output_controller)
+            # the plugin will fail to load, but only log this
+            controller.start()
+            # get the logs and check if we see the output in the logs
+            plugin_logs = controller.get_logs()['UnsupportedPlugin']
+            matches = ['Decorator', 'version', 'is not supported']
+            self.assertTrue(all(match in plugin_logs for match in matches), plugin_logs)
+        finally:
+            if controller is not None:
+                controller.stop()
+            PluginControllerTest._destroy_plugin('UnsupportedPlugin')
+
+    @mark.slow
+    def test_get_shutter_decorators(self):
+        """ Test getting shutter decorators on a plugin. """
+        controller = None
+        try:
+            PluginControllerTest._create_plugin('ShutterPlugin', """
+from plugins.base import *
+
+class ShutterPlugin(OMPluginBase):
+    name = 'ShutterPlugin'
+    version = '0.1.0'
+    interfaces = [('webui', '1.0')]
+        
+    def __init__(self, webservice, logger):
+        OMPluginBase.__init__(self, webservice, logger)
+        self._shutter_data_v1 = None
+        self._shutter_data_v1_detail = None
+        self._shutter_data_v2 = None
+        self._shutter_data_v3 = None
+        
+    @om_expose(auth=True)
+    def html_index(self):
+        return 'HTML'
+
+    @om_expose(auth=False)
+    def get_log(self):
+        return {'shutter_data_v1': self._shutter_data_v1,
+                'shutter_data_v1_detail': self._shutter_data_v1_detail,
+                'shutter_data_v2': self._shutter_data_v2,
+                'shutter_data_v3': self._shutter_data_v3}
+                
+    @shutter_status
+    def shutter_v1(self, test_data):
+        self._shutter_data_v1 = test_data
+        
+    @shutter_status
+    def shutter_v1_detail(self, test_data, detail):
+        self._shutter_data_v1_detail = (test_data, detail)
+        
+    @shutter_status(version=2)
+    def shutter_v2(self, test_data, detail):
+        self._shutter_data_v2 = (test_data, detail)
+        
+    @shutter_status(version=3)
+    def shutter_v3(self, shutter_event):
+        self._shutter_data_v3 = shutter_event
+""")
+            shutter_controller = Mock(ShutterController)
+            shutter_status = [ShutterEnums.State.STOPPED]
+            detail_for_shutter = {1: {'state': ShutterEnums.State.STOPPED,
+                                      'actual_position': None,
+                                      'desired_position': None,
+                                      'last_change': 1596787761.147892}}
+            shutter_controller.get_states = lambda: {'status': shutter_status,
+                                                     'detail': detail_for_shutter}
+            controller = PluginControllerTest._get_controller(shutter_controller=shutter_controller)
+            controller.start()
+
+            shutter_event = GatewayEvent(event_type=GatewayEvent.Types.SHUTTER_CHANGE, data={'some_random_key': 'some_random_value'})
+            controller.process_observer_event(shutter_event)
+
+            keys = ['shutter_data_v1', 'shutter_data_v1_detail', 'shutter_data_v2', 'shutter_data_v3']
+            start = time.time()
+            response = None
+            while time.time() - start < 2:
+                response = controller._request('ShutterPlugin', 'get_log')
+                if all(response[key] is not None for key in keys):
+                    break
+                time.sleep(0.1)
+            self.maxDiff = None
+            self.assertEqual(response['shutter_data_v1'], shutter_status)
+            self.assertEqual(response['shutter_data_v1_detail'], [shutter_status, detail_for_shutter])
+            self.assertEqual(response['shutter_data_v2'], [shutter_status, detail_for_shutter])
+            self.assertEqual(response['shutter_data_v3'], shutter_event.data)
+        finally:
+            if controller is not None:
+                controller.stop()
+            PluginControllerTest._destroy_plugin('ShutterPlugin')
 
     @mark.slow
     def test_update_plugin(self):
@@ -302,11 +488,15 @@ class Test(OMPluginBase):
         self.assertEqual(result, 'Plugin successfully installed')
         controller.start_plugin('Test')
         self.assertEqual([r.name for r in controller.get_plugins()], ['Test'])
+        plugin = Plugin.get(name='Test')
+        self.assertEqual('0.0.1', plugin.version)
 
         # Update to version 2
         result = controller.install_plugin(test_2_md5, test_2_data)
         self.assertEqual(result, 'Plugin successfully installed')
         self.assertEqual([r.name for r in controller.get_plugins()], ['Test'])
+        plugin = Plugin.get(name='Test')
+        self.assertEqual('0.0.2', plugin.version)
 
     @mark.slow
     def test_plugin_metric_reference(self):
@@ -476,6 +666,8 @@ FULL_DESCR = [
 
 class PluginConfigCheckerTest(unittest.TestCase):
     """ Tests for the PluginConfigChecker. """
+
+    maxDiff = None
 
     def test_constructor(self):
         """ Test for the constructor. """
@@ -720,7 +912,7 @@ class PluginConfigCheckerTest(unittest.TestCase):
         found_calls = web._load_webinterface()
 
         ramaining_methods = list(found_calls.keys())
-        for method_info in inspect.getmembers(WebInterface, predicate=lambda m: inspect.ismethod(m)):
+        for method_info in inspect.getmembers(WebInterface, predicate=lambda m: inspect.isfunction(m) or inspect.ismethod(m)):
             method = method_info[1]
             method_name = method.__name__
             call_info = found_calls.get(method_name)

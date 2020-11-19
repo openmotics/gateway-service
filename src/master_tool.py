@@ -111,7 +111,7 @@ def master_factory_reset(master_controller=INJECTED):
 def master_update(firmware, master_controller=INJECTED):
     # type: (str, MasterController) -> None
     try:
-        master_controller.update(hex_filename=firmware)
+        master_controller.update_master(hex_filename=firmware)
         shutil.copy(firmware, '/opt/openmotics/firmware.hex')
     except Exception as ex:
         logger.error('Failed to update master: {0}'.format(ex))
@@ -169,7 +169,7 @@ def main():
         master_cold_reset()
         return
     elif args.update:
-        if platform == Platform.Type.CORE_PLUS:
+        if platform in Platform.CoreTypes:
             firmware = args.master_firmware_core
             if not firmware:
                 print('error: --master-firmware-core is required to update')

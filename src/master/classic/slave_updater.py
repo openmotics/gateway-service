@@ -32,7 +32,7 @@ from master.classic.master_communicator import MasterCommunicator, Communication
 from master.classic.eeprom_controller import EepromFile, EepromAddress
 
 if False:  # MYPY
-    from typing import Tuple, List, Dict, Any, Union
+    from typing import Tuple, List, Dict, Any, Union, Optional
     from master.classic.master_api import MasterCommandSpec
 
 logger = logging.getLogger("openmotics")
@@ -49,17 +49,17 @@ def add_crc(command, command_input):
     """
     crc = 0
 
-    crc += ord(command.action[0])
-    crc += ord(command.action[1])
+    crc += command.action[0]
+    crc += command.action[1]
 
     for field in command.input_fields:
-        if field.name == 'literal' and field.encode(None) == 'C':
+        if field.name == 'literal' and field.encode(None) == bytearray(b'C'):
             break
 
         for byte in field.encode(command_input[field.name]):
-            crc += ord(byte)
+            crc += byte
 
-    command_input['crc0'] = crc / 256
+    command_input['crc0'] = crc // 256
     command_input['crc1'] = crc % 256
 
 
@@ -74,17 +74,17 @@ def check_bl_crc(command, command_output):
     """
     crc = 0
 
-    crc += ord(command.action[0])
-    crc += ord(command.action[1])
+    crc += command.action[0]
+    crc += command.action[1]
 
     for field in command.output_fields:
-        if field.name == 'literal' and field.encode(None) == 'C':
+        if field.name == 'literal' and field.encode(None) == bytearray(b'C'):
             break
 
         for byte in field.encode(command_output[field.name]):
-            crc += ord(byte)
+            crc += byte
 
-    return command_output['crc0'] == (crc / 256) and command_output['crc1'] == (crc % 256)
+    return command_output['crc0'] == (crc // 256) and command_output['crc1'] == (crc % 256)
 
 
 def get_module_addresses(module_type):
@@ -100,32 +100,27 @@ def get_module_addresses(module_type):
     no_modules = eeprom_file.read([base_address])
     modules = []
 
-    no_input_modules = ord(no_modules[base_address].bytes[0])
+    no_input_modules = no_modules[base_address].bytes[0]
     for i in range(no_input_modules):
         address = EepromAddress(2 + i, 252, 1)
-        is_can = eeprom_file.read([address])[address].bytes == 'C'
+        is_can = chr(eeprom_file.read([address])[address].bytes[0]) == 'C'
         address = EepromAddress(2 + i, 0, 4)
         module = eeprom_file.read([address])[address].bytes
-        if not is_can or module[0] == 'C':
+        if not is_can or chr(module[0]) == 'C':
             modules.append(module)
 
-    no_output_modules = ord(no_modules[base_address].bytes[1])
+    no_output_modules = no_modules[base_address].bytes[1]
     for i in range(no_output_modules):
         address = EepromAddress(33 + i, 0, 4)
         modules.append(eeprom_file.read([address])[address].bytes)
 
-    return [module for module in modules if module[0] == module_type]
+    return [module for module in modules if chr(module[0]) == module_type]
 
 
 def pretty_address(address):
     # type: (str) -> str
-    """
-    Create a pretty printed version of an address.
-
-    :param address: address string
-    :returns: string with format 'M.x.y.z' where M is in [O, R, D, I, T, C, o, r, d, i, t, c] and x, y and z are integers.
-    """
-    return '{0}.{1}.{2}.{3}'.format(address[0], ord(address[1]), ord(address[2]), ord(address[3]))
+    """ Create a pretty printed version of an address. """
+    return '{0}.{1}.{2}.{3}'.format(address[0], address[1], address[2], address[3])
 
 
 def calc_crc(ihex, blocks):
@@ -198,8 +193,8 @@ def do_command(cmd, fields, retry=True, success_code=0, master_communicator=INJE
 
 
 @Inject
-def bootload(address, ihex, crc, blocks, master_communicator=INJECTED):
-    # type: (str, intelhex.IntelHex, Tuple[int, int, int, int], int, MasterCommunicator) -> None
+def bootload(address, ihex, crc, blocks, version, gen3_firmware, master_communicator=INJECTED):
+    # type: (bytearray, intelhex.IntelHex, Tuple[int, int, int, int], int, Optional[str], bool, MasterCommunicator) -> None
     """
     Bootload 1 module.
 
@@ -208,16 +203,31 @@ def bootload(address, ihex, crc, blocks, master_communicator=INJECTED):
     :param ihex: The hex file
     :param crc: The crc for the hex file
     :param blocks: The number of blocks to write
+    :param version: Optional version
+    :param gen3_firmware: Specifies whether it's gen3 firmware
     """
+    gen3_module = None  # type: Optional[bool]
     logger.info('Checking the version')
     try:
         result = do_command(cmd=master_api.modules_get_version(),
                             fields={'addr': address},
                             retry=False,
                             success_code=255)
-        logger.info('Current version: v{0}.{1}.{2}'.format(result['f1'], result['f2'], result['f3']))
+        current_version = '{0}.{1}.{2}'.format(result['f1'], result['f2'], result['f3'])
+        gen3_module = result['f1'] >= 6
+        logger.info('Current version: v{0}'.format(current_version))
+        if current_version == version:
+            logger.info('Firmware up-to-date. Skipping')
+            return
     except Exception:
         logger.info('Version call not (yet) implemented or module unavailable')
+
+    if gen3_firmware and (gen3_module is None or gen3_module is False):
+        logger.info('Skip flashing Gen3 firmware on {0} module'.format('unknown' if gen3_module is None else 'Gen2'))
+        return
+    if gen3_module and not gen3_firmware:
+        logger.info('Skip flashing Gen2 firmware on Gen3 module')
+        return
 
     logger.info('Going to bootloader')
     try:
@@ -241,13 +251,13 @@ def bootload(address, ihex, crc, blocks, master_communicator=INJECTED):
 
         logger.info('Writing firmware data')
         for i in range(blocks):
-            bytes_to_send = ''
+            bytes_to_send = bytearray()
             for j in range(64):
                 if i == blocks - 1 and j >= 56:
                     # The first 8 bytes (the jump) is placed at the end of the code.
-                    bytes_to_send += chr(ihex[j - 56])
+                    bytes_to_send.append(ihex[j - 56])
                 else:
-                    bytes_to_send += chr(ihex[i*64 + j])
+                    bytes_to_send.append(ihex[i*64 + j])
 
             logger.debug('* Block {0}'.format(i))
             do_command(cmd=master_api.modules_update_firmware_block(),
@@ -284,13 +294,15 @@ def bootload(address, ihex, crc, blocks, master_communicator=INJECTED):
 
 
 @Inject
-def bootload_modules(module_type, filename):
-    # type: (str, str) -> bool
+def bootload_modules(module_type, filename, gen3_firmware, version):
+    # type: (str, str, bool, Optional[str]) -> bool
     """
     Bootload all modules of the given type with the firmware in the given filename.
 
     :param module_type: Type of the modules (O, R, D, I, T, C)
     :param filename: The filename for the hex file to load
+    :param gen3_firmware: Indicates whether it's a gen3 firmware
+    :param version: The version of the hexfile, if known
     """
 
     logger.info('Loading module addresses...')
@@ -304,7 +316,7 @@ def bootload_modules(module_type, filename):
     for address in addresses:
         logger.info('Bootloading module {0}'.format(pretty_address(address)))
         try:
-            bootload(address, ihex, crc, blocks)
+            bootload(address, ihex, crc, blocks, version, gen3_firmware)
         except Exception:
             update_success = False
             logger.info('Bootloading failed:')

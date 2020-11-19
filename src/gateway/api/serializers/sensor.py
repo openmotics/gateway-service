@@ -32,7 +32,8 @@ class SensorSerializer(object):
     def serialize(sensor_dto, fields):  # type: (SensorDTO, Optional[List[str]]) -> Dict
         data = {'id': sensor_dto.id,
                 'name': sensor_dto.name,
-                'offset': sensor_dto.offset,
+                'offset': Toolbox.denonify(sensor_dto.offset, 0),
+                'room': Toolbox.denonify(sensor_dto.room, SensorSerializer.BYTE_MAX),
                 'virtual': sensor_dto.virtual}
         return SerializerToolbox.filter_fields(data, fields)
 
@@ -44,7 +45,8 @@ class SensorSerializer(object):
             dto=sensor_dto,  # Referenced
             api_data=api_data,
             mapping={'name': ('name', None),
-                     'offset': ('offset', None),
+                     'offset': ('offset', 0),
+                     'room': ('room', SensorSerializer.BYTE_MAX),
                      'virtual': ('virtual', None)}
         )
         return sensor_dto, loaded_fields

@@ -17,8 +17,10 @@ PulseCounter BLL
 """
 from __future__ import absolute_import
 import logging
+import time
 from peewee import fn, DoesNotExist
 from ioc import Injectable, Inject, INJECTED, Singleton
+from serial_utils import CommunicationTimedOutException
 from gateway.base_controller import BaseController
 from gateway.dto import PulseCounterDTO
 from gateway.models import PulseCounter, Room
@@ -39,20 +41,35 @@ class PulseCounterController(BaseController):
         super(PulseCounterController, self).__init__(master_controller)
         self._counts = {}  # type: Dict[int, int]
 
-    def sync_orm(self):
+    def _sync_orm(self):
+        if self._sync_running:
+            logger.info('ORM sync (PulseCounter): Already running')
+            return False
+        self._sync_running = True
+
+        start = time.time()
         logger.info('ORM sync (PulseCounter)')
 
-        for pulse_counter_dto in self._master_controller.load_pulse_counters():
-            pulse_counter_id = pulse_counter_dto.id
-            pulse_counter = PulseCounter.get_or_none(number=pulse_counter_id)
-            if pulse_counter is None:
-                pulse_counter = PulseCounter(number=pulse_counter_id,
-                                             name='PulseCounter {0}'.format(pulse_counter_id),
-                                             source='master',
-                                             persistent=False)
-                pulse_counter.save()
+        try:
+            for pulse_counter_dto in self._master_controller.load_pulse_counters():
+                pulse_counter_id = pulse_counter_dto.id
+                pulse_counter = PulseCounter.get_or_none(number=pulse_counter_id)
+                if pulse_counter is None:
+                    pulse_counter = PulseCounter(number=pulse_counter_id,
+                                                 name='PulseCounter {0}'.format(pulse_counter_id),
+                                                 source='master',
+                                                 persistent=False)
+                    pulse_counter.save()
+            duration = time.time() - start
+            logger.info('ORM sync (PulseCounter): completed after {0:.1f}s'.format(duration))
+        except CommunicationTimedOutException as ex:
+            logger.error('ORM sync (PulseCounter): Failed: {0}'.format(ex))
+        except Exception:
+            logger.exception('ORM sync (PulseCounter): Failed')
+        finally:
+            self._sync_running = False
 
-        logger.info('ORM sync (PulseCounter): completed')
+        return True
 
     def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
         pulse_counter = PulseCounter.get(number=pulse_counter_id)  # type: PulseCounter
@@ -65,10 +82,11 @@ class PulseCounterController(BaseController):
 
     def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
         pulse_counter_dtos = []
-        for pulse_counter in PulseCounter.select():
+        for pulse_counter in list(PulseCounter.select()):
             if pulse_counter.source == 'master':
                 pulse_counter_dto = self._master_controller.load_pulse_counter(pulse_counter_id=pulse_counter.number)
                 pulse_counter_dto.room = pulse_counter.room.number if pulse_counter.room is not None else None
+                pulse_counter_dto.name = pulse_counter.name  # Use longer ORM name
             else:
                 pulse_counter_dto = PulseCounterMapper.orm_to_dto(pulse_counter)
             pulse_counter_dtos.append(pulse_counter_dto)

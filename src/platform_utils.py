@@ -99,23 +99,35 @@ class System(object):
     Abstracts the system related functions
     """
 
+    SYSTEMD_UNIT_MAP = {'openmotics': 'openmotics-api.service',
+                        'vpn_service': 'openmotics-vpn.service'}
+
     class OS(object):
         ANGSTROM = 'angstrom'
         DEBIAN = 'debian'
 
+
     @staticmethod
     def restart_service(service):
         # type: (str) -> None
+        System.run_service_action('restart', service)
+
+    @staticmethod
+    def run_service_action(action, service):
+        # type: (str) -> subprocess.Popen
+        unit_name = System.SYSTEMD_UNIT_MAP.get(service, service)
         try:
-            subprocess.check_output(['systemctl', 'is-enabled', service])
+            subprocess.check_output(['systemctl', 'is-enabled', unit_name])
             is_systemd = True
         except subprocess.CalledProcessError:
             is_systemd = False
 
         if is_systemd:
-            subprocess.Popen(['systemctl', 'restart', '--no-block', service])
+            return subprocess.Popen(['systemctl', action, '--no-pager', unit_name],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         else:
-            subprocess.Popen(['supervisorctl', 'restart', service])
+            return subprocess.Popen(['supervisorctl', action, service],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     @staticmethod
     def get_operating_system():
@@ -153,7 +165,7 @@ class System(object):
 
     @staticmethod
     def _use_pyopenssl():
-        return System.get_operating_system()['ID'] == System.OS.ANGSTROM
+        return System.get_operating_system().get('ID') == System.OS.ANGSTROM
 
     @staticmethod
     def get_ssl_socket(sock, private_key_filename, certificate_filename):
@@ -172,15 +184,14 @@ class System(object):
                                suppress_ragged_eofs=False)
 
     @staticmethod
-    def setup_cherrypy_ssl(https_server, private_key_filename, certificate_filename):
+    def setup_cherrypy_ssl(https_server):
         if System._use_pyopenssl():
             https_server.ssl_module = 'pyopenssl'
         else:
             import ssl
             https_server.ssl_module = 'builtin'
-            https_server.ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
-        https_server.ssl_certificate = certificate_filename
-        https_server.ssl_private_key = private_key_filename
+            if sys.version_info[:3] < (3, 6, 0):
+                https_server.ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
 
     @staticmethod
     def handle_socket_exception(connection, exception, logger):
@@ -215,8 +226,6 @@ class System(object):
         operating_system = System.get_operating_system().get('ID')
         if operating_system in (System.OS.ANGSTROM, System.OS.DEBIAN):
             sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
-        else:
-            logger.warning('could not configure imports for unknown platform, skipped')
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:
@@ -231,10 +240,15 @@ class Platform(object):
     """
 
     class Type(object):
+        DUMMY = 'DUMMY'
         CLASSIC = 'CLASSIC'
         CORE_PLUS = 'CORE_PLUS'
+        CORE = 'CORE'
 
-    Types = [Type.CLASSIC, Type.CORE_PLUS]
+    AnyTypes = [Type.DUMMY]
+    ClassicTypes = [Type.CLASSIC]
+    CoreTypes = [Type.CORE, Type.CORE_PLUS]
+    Types = AnyTypes + ClassicTypes + CoreTypes
 
     @staticmethod
     def get_platform():

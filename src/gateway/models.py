@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import absolute_import
+
 import datetime
 import inspect
 import json
@@ -21,13 +22,15 @@ import logging
 import sys
 import time
 
-import constants
-from peewee import (
-    BooleanField, CharField, CompositeKey, DoesNotExist,
-    FloatField, ForeignKeyField, IntegerField, AutoField,
-    SqliteDatabase, TextField
-)
+from peewee import AutoField, BooleanField, CharField, CompositeKey, \
+    DoesNotExist, FloatField, ForeignKeyField, IntegerField, SqliteDatabase, \
+    TextField
 from playhouse.signals import Model, post_save
+
+import constants
+
+if False:  # MYPY
+    from typing import Dict, List, Optional, Any
 
 logger = logging.getLogger('openmotics')
 
@@ -38,7 +41,8 @@ class Database(object):
     _db = SqliteDatabase(filename, pragmas={'foreign_keys': 1})
 
     # Used to store database metrics (e.g. number of saves)
-    _metrics = {}
+    _metrics = {}  # type: Dict[str,int]
+    _dirty_flag = False
 
     @classmethod
     def get_db(cls):
@@ -48,6 +52,16 @@ class Database(object):
     def incr_metrics(cls, sender, incr=1):
         cls._metrics.setdefault(sender, 0)
         cls._metrics[sender] += incr
+
+    @classmethod
+    def get_dirty_flag(cls):
+        dirty = cls._dirty_flag
+        cls._dirty_flag = False
+        return dirty
+
+    @classmethod
+    def set_dirty(cls):
+        cls._dirty_flag = True
 
     @classmethod
     def get_models(cls):
@@ -65,6 +79,7 @@ class Database(object):
 @post_save()
 def db_metrics_handler(sender, instance, created):
     _, _ = instance, created
+    Database.set_dirty()
     Database.incr_metrics(sender.__name__.lower())
 
 
@@ -101,6 +116,7 @@ class Output(BaseModel):
 class Input(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
+    event_enabled = BooleanField(default=False)
     room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='inputs')
 
 
@@ -134,6 +150,110 @@ class PulseCounter(BaseModel):
 class GroupAction(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
+
+
+class Module(BaseModel):
+    id = AutoField()
+    source = CharField()
+    address = CharField()
+    module_type = CharField(null=True)
+    hardware_type = CharField()
+    firmware_version = CharField(null=True)
+    hardware_version = CharField(null=True)
+    order = IntegerField(null=True)
+    last_online_update = IntegerField(null=True)
+
+
+class DataMigration(BaseModel):
+    id = AutoField()
+    name = CharField()
+    migrated = BooleanField()
+
+
+class Schedule(BaseModel):
+    id = AutoField()
+    name = CharField()
+    start = FloatField()
+    repeat = CharField(null=True)
+    duration = FloatField(null=True)
+    end = FloatField(null=True)
+    action = CharField()
+    arguments = CharField(null=True)
+    status = CharField()
+
+
+class User(BaseModel):
+    id = AutoField()
+    username = CharField(unique=True)
+    password = CharField()
+    accepted_terms = IntegerField(default=0)
+
+
+class Config(BaseModel):
+    id = AutoField()
+    setting = CharField(unique=True)
+    data = CharField()
+
+    @staticmethod
+    def get(key, fallback=None):
+        # type: (str, Optional[Any]) -> Optional[Any]
+        """ Retrieves a setting from the DB, returns the argument 'fallback' when non existing """
+        config_orm = Config.select().where(
+            Config.setting == key.lower()
+        ).first()
+        if config_orm is not None:
+            return json.loads(config_orm.data)
+        return fallback
+
+    @staticmethod
+    def set(key, value):
+        # type: (str, Any) -> None
+        """ Sets a setting in the DB, does overwrite if already existing """
+        config_orm = Config.select().where(
+            Config.setting == key.lower()
+        ).first()
+        if config_orm is not None:
+            # if the key already exists, update the value
+            config_orm.data = json.dumps(value)
+            config_orm.save()
+        else:
+            # create a new setting if it was non existing
+            config_orm = Config(
+                setting=key,
+                data=json.dumps(value)
+            )
+            config_orm.save()
+
+    @staticmethod
+    def remove(key):
+        # type: (str) -> None
+        """ Removes a setting from the DB """
+        Config.delete().where(
+            Config.setting == key.lower()
+        ).execute()
+
+
+class Plugin(BaseModel):
+    id = AutoField()
+    name = CharField(unique=True)
+    version = CharField()
+
+
+class Ventilation(BaseModel):
+    id = AutoField()
+    source = CharField()  # Options: 'gateway' or 'plugin'
+    plugin = ForeignKeyField(Plugin, null=True, on_delete='CASCADE')
+    external_id = CharField()  # eg. serial number
+    name = CharField()
+    amount_of_levels = IntegerField()
+    device_vendor = CharField()
+    device_type = CharField()
+    device_serial = CharField()
+
+    class Meta:
+        indexes = (
+            (('source', 'plugin_id', 'external_id'), True),
+        )
 
 
 class ThermostatGroup(BaseModel):
@@ -287,9 +407,10 @@ class Thermostat(BaseModel):
             raise ValueError('Not a valid preset {}.'.format(new_preset))
 
     def deactivate_all_presets(self):
-        for preset in Preset.select().where(Preset.thermostat == self.id):
-            preset.active = False
-            preset.save()
+        with Database.get_db().atomic():
+            for preset in Preset.select().where(Preset.thermostat == self.id):
+                preset.active = False
+                preset.save()
 
     @property
     def mode(self):
@@ -326,16 +447,20 @@ class Thermostat(BaseModel):
         return [preset for preset in Preset.select().where(Preset.thermostat == self.id)]
 
     def heating_schedules(self):
-        return DaySchedule.select()\
-                          .where(DaySchedule.thermostat == self.id)\
-                          .where(DaySchedule.mode == 'heating')\
-                          .order_by(DaySchedule.index)
+        # type: () -> List[DaySchedule]
+        return [x for x in
+                DaySchedule.select()
+                    .where(DaySchedule.thermostat == self.id)
+                    .where(DaySchedule.mode == 'heating')
+                    .order_by(DaySchedule.index)]
 
     def cooling_schedules(self):
-        return DaySchedule.select()\
-                          .where(DaySchedule.thermostat == self.id)\
-                          .where(DaySchedule.mode == 'cooling')\
-                          .order_by(DaySchedule.index)
+        # type: () -> List[DaySchedule]
+        return [x for x in
+                DaySchedule.select()
+                    .where(DaySchedule.thermostat == self.id)
+                    .where(DaySchedule.mode == 'cooling')
+                    .order_by(DaySchedule.index)]
 
     def v0_get_output_numbers(self, mode=None):
         # TODO: Remove, will be replaced by mappers

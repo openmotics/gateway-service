@@ -70,6 +70,12 @@ class Database(object):
     def get_db(cls) -> SqliteDatabase: ...
 
     @classmethod
+    def get_dirty_flag(cls) -> bool: ...
+
+    @classmethod
+    def set_dirty(cls) -> None: ...
+
+    @classmethod
     def incr_metrics(cls, sender: str, incr=1) -> None: ...
 
     @classmethod
@@ -119,6 +125,7 @@ class OutputForeignKeyField(Output, ForeignKeyField): ...
 class Input(BaseModel):
     id: MixedPrimaryKeyField
     number: MixedIntegerField
+    event_enabled: bool
     room: Optional[RoomForeignKeyField]
 
 
@@ -153,6 +160,64 @@ class GroupAction(BaseModel):
     id: MixedPrimaryKeyField
     number: MixedIntegerField
 
+
+class Module(BaseModel):
+    id: MixedPrimaryKeyField
+    source: Literal['master', 'gateway']
+    address: str
+    module_type: Optional[Literal['sensor', 'input', 'output', 'shutter', 'dim_control', 'can_control', 'open_collector', 'energy', 'power', 'p1_concentrator']]
+    hardware_type: Literal['physical', 'emulated', 'virtual', 'internal']
+    firmware_version: Optional[str]
+    hardware_version: Optional[str]
+    order = Optional[MixedIntegerField]
+    last_online_update = Optional[MixedIntegerField]
+
+
+class DataMigration(BaseModel):
+    id: MixedPrimaryKeyField
+    name: str
+    migrated: bool
+
+
+class Schedule(BaseModel):
+    id: MixedPrimaryKeyField
+    name: str
+    start: MixedFloatField
+    repeat: Optional[str]
+    duration: Optional[MixedFloatField]
+    end: Optional[MixedFloatField]
+    action: Literal['BASIC_ACTION', 'GROUP_ACTION', 'LOCAL_API']
+    arguments: Optional[str]
+    status: Literal['ACTIVE', 'COMPLETED']
+
+class User(BaseModel):
+    id: MixedPrimaryKeyField
+    username: MixedTextField
+    password: MixedTextField
+    accepted_terms: MixedIntegerField
+
+class Config(BaseModel):
+    id: MixedPrimaryKeyField
+    setting: MixedTextField
+    data: MixedTextField
+
+class Plugin(BaseModel):
+    id: MixedPrimaryKeyField
+    name: MixedTextField
+    version: MixedTextField
+
+
+class PluginForeignKeyField(Plugin, ForeignKeyField): ...
+
+class Ventilation(BaseModel):
+    id: MixedPrimaryKeyField
+    source: MixedTextField
+    plugin: PluginForeignKeyField
+    external_id: MixedTextField
+    name: MixedTextField
+    type: MixedTextField
+    vendor: MixedTextField
+    amount_of_levels: MixedIntegerField
 
 class ThermostatGroup(BaseModel):
     id: MixedPrimaryKeyField

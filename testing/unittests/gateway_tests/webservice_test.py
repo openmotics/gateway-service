@@ -20,13 +20,14 @@ import unittest
 import mock
 
 from bus.om_bus_client import MessageClient
-from gateway.config import ConfigurationController
-from gateway.dto import OutputStateDTO
+from gateway.dto import OutputStateDTO, ScheduleDTO, VentilationDTO, \
+    VentilationSourceDTO, VentilationStatusDTO
 from gateway.gateway_api import GatewayApi
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
 from gateway.input_controller import InputController
 from gateway.maintenance_controller import MaintenanceController
+from gateway.module_controller import ModuleController
 from gateway.output_controller import OutputController
 from gateway.pulse_counter_controller import PulseCounterController
 from gateway.room_controller import RoomController
@@ -34,7 +35,8 @@ from gateway.scheduling import SchedulingController
 from gateway.sensor_controller import SensorController
 from gateway.shutter_controller import ShutterController
 from gateway.thermostat.thermostat_controller import ThermostatController
-from gateway.users import UserController
+from gateway.user_controller import UserController
+from gateway.ventilation_controller import VentilationController
 from gateway.webservice import WebInterface
 from ioc import SetTestMode, SetUpTestInjections
 
@@ -46,9 +48,10 @@ class WebInterfaceTest(unittest.TestCase):
 
     def setUp(self):
         self.output_controller = mock.Mock(OutputController)
+        self.scheduling_controller = mock.Mock(SchedulingController)
+        self.ventilation_controller = mock.Mock(VentilationController)
         self.gateway_api = mock.Mock(GatewayApi)
-        SetUpTestInjections(configuration_controller=mock.Mock(ConfigurationController),
-                            frontpanel_controller=mock.Mock(FrontpanelController),
+        SetUpTestInjections(frontpanel_controller=mock.Mock(FrontpanelController),
                             gateway_api=self.gateway_api,
                             group_action_controller=mock.Mock(GroupActionController),
                             input_controller=mock.Mock(InputController),
@@ -57,15 +60,91 @@ class WebInterfaceTest(unittest.TestCase):
                             output_controller=self.output_controller,
                             pulse_counter_controller=mock.Mock(PulseCounterController),
                             room_controller =mock.Mock(RoomController),
-                            scheduling_controller=mock.Mock(SchedulingController),
+                            scheduling_controller=self.scheduling_controller,
                             sensor_controller=mock.Mock(SensorController),
                             shutter_controller=mock.Mock(ShutterController),
                             thermostat_controller=mock.Mock(ThermostatController),
-                            user_controller=mock.Mock(UserController))
+                            user_controller=mock.Mock(UserController),
+                            ventilation_controller=self.ventilation_controller,
+                            module_controller=mock.Mock(ModuleController))
         self.web = WebInterface()
 
     def test_output_status(self):
         with mock.patch.object(self.output_controller, 'get_output_statuses',
                                return_value=[OutputStateDTO(id=0, status=True)]):
             response = self.web.get_output_status()
-            assert [{'id': 0, 'status': 1, 'ctimer': 0, 'dimmer': 0, 'locked': False}] == json.loads(response)['status']
+            self.assertEqual([{'id': 0, 'status': 1, 'ctimer': 0, 'dimmer': 0, 'locked': False}], json.loads(response)['status'])
+
+    def test_schedules(self):
+        with mock.patch.object(self.scheduling_controller, 'load_schedules',
+                               return_value=[ScheduleDTO(id=1, name='test', start=0, action='BASIC_ACTION')]):
+            response = self.web.list_schedules()
+            self.assertEqual([{'arguments': None,
+                               'duration': None,
+                               'end': None,
+                               'id': 1,
+                               'last_executed': None,
+                               'name': 'test',
+                               'next_execution': None,
+                               'repeat': None,
+                               'schedule_type': 'BASIC_ACTION',
+                               'start': 0,
+                               'status': None}], json.loads(response)['schedules'])
+
+    def test_ventilation_configurations(self):
+        with mock.patch.object(self.ventilation_controller, 'load_ventilations',
+                               return_value=[VentilationDTO(id=1, name='test', amount_of_levels=4,
+                                                            device_vendor='example',
+                                                            device_type='0A',
+                                                            device_serial='device-00001',
+                                                            external_id='device-00001',
+                                                            source=VentilationSourceDTO(id=2, type='plugin', name='dummy'))]):
+            response = self.web.get_ventilation_configurations()
+            self.assertEqual([{
+                'id': 1,
+                'name': 'test',
+                'amount_of_levels': 4,
+                'external_id': 'device-00001',
+                'source': {'type': 'plugin', 'name': 'dummy'},
+                'device': {'vendor': 'example',
+                           'type': '0A',
+                           'serial': 'device-00001'}
+            }], json.loads(response)['config'])
+
+    def test_set_ventilation_configuration(self):
+        with mock.patch.object(self.ventilation_controller, 'save_ventilation',
+                               return_value=None) as save:
+            config = {'id': 1,
+                      'source': {'type': 'plugin', 'name': 'dummy'},
+                      'external_id': 'device-00001',
+                      'name': 'test',
+                      'device': {'vendor': 'example',
+                                 'type': '0A',
+                                 'serial': 'device-00001'}}
+            response = self.web.set_ventilation_configuration(config=config)
+            self.assertEqual({
+                'id': 1,
+                'source': {'type': 'plugin', 'name': 'dummy'},
+                'external_id': 'device-00001',
+                'name': 'test',
+                'device': {'vendor': 'example',
+                           'type': '0A',
+                           'serial': 'device-00001'},
+            }, json.loads(response)['config'])
+            save.assert_called()
+
+    def test_set_ventilation_status(self):
+        with mock.patch.object(self.ventilation_controller, 'set_status',
+                               return_value=VentilationStatusDTO(id=1,
+                                                                 mode='manual',
+                                                                 level=2,
+                                                                 remaining_time=60.0)) as set_status:
+            status = {'id': 1, 'mode': 'manual', 'level': 2, 'remaining_time': 60.0}
+            response = self.web.set_ventilation_status(status=status)
+            self.assertEqual({
+                'id': 1,
+                'mode': 'manual',
+                'level': 2,
+                'remaining_time': 60.0
+            }, json.loads(response)['status'])
+            set_status.assert_called()

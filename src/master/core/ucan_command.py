@@ -19,10 +19,11 @@ from __future__ import absolute_import
 import logging
 import math
 from master.core.fields import Field, PaddingField, UInt32Field, StringField
+from master.core.toolbox import Toolbox
 from serial_utils import printable
 
 if False:  # MYPY
-    from typing import Optional, List, Dict
+    from typing import Optional, List, Dict, Any, Iterator, Union, Callable
 
 
 logger = logging.getLogger('openmotics')
@@ -55,8 +56,8 @@ class PalletType(object):
 
 
 class Instruction(object):
-    def __init__(self, instruction, checksum_byte=None):
-        self.instruction = instruction
+    def __init__(self, instruction, checksum_byte=None):  # type: (List[int], Optional[int]) -> None
+        self.instruction = bytearray(instruction)
         self.checksum_byte = checksum_byte
 
 
@@ -65,66 +66,68 @@ class UCANCommandSpec(object):
     Defines payload handling and de(serialization)
     """
 
-    def __init__(self, sid, instruction, identifier, request_fields=None, response_instructions=None, response_fields=None):
-        # type: (int, Optional[Instruction], Field, List[Field], List[Instruction], List[Field]) -> None
+    def __init__(self, sid, identifier, instructions, request_fields=None, response_instructions=None, response_fields=None):
+        # type: (int, Field, Optional[List[Instruction]], Optional[List[List[Field]]], Optional[List[Instruction]], Optional[List[Field]]) -> None
         """
         Create a UCANCommandSpec.
 
         :param sid: SID
-        :param instruction: Instruction object for this command
+        :param instructions: Instruction objects for this command
         :param identifier: The field to be used as extra identifier
         :param request_fields: Fields in this request
         :param response_instructions: List of all the response instruction bytes
         :param response_fields: Fields in the response
         """
         self.sid = sid
-        self.instruction = instruction
+        self.instructions = instructions
         self._identifier = identifier
 
-        self._request_fields = [] if request_fields is None else request_fields
+        self._request_fields = [[]] if request_fields is None else request_fields  # type: List[List[Field]]
         self._response_fields = [] if response_fields is None else response_fields
         self.response_instructions = [] if response_instructions is None else response_instructions
 
+        if not isinstance(self._identifier.length, int):
+            raise RuntimeError('Identifier length should be an integer')
         self.header_length = 2 + self._identifier.length
-        self.headers = []  # type: List[str]
-        self._response_instruction_by_hash = {}  # type: Dict[str, Instruction]
+        self.headers = []  # type: List[int]
+        self._response_instruction_by_hash = {}  # type: Dict[int, Instruction]
 
-    def set_identity(self, identity):
+    def set_identity(self, identity):  # type: (str) -> None
         self.headers = []
         self._response_instruction_by_hash = {}
-        destination_address = self._identifier.encode_bytes(identity)
+        destination_address = self._identifier.encode(identity)
         for instruction in self.response_instructions:
-            hash_value = UCANCommandSpec.hash(instruction.instruction + destination_address)
+            hash_value = Toolbox.hash(instruction.instruction + destination_address)
             self.headers.append(hash_value)
             self._response_instruction_by_hash[hash_value] = instruction
 
-    def create_request_payloads(self, identity, fields):
+    def create_request_payloads(self, identity, fields):  # type: (str, Dict[str, Any]) -> Iterator[bytearray]
         """
         Create the request payloads for the uCAN using this spec and the provided fields.
 
         :param identity: The actual identity
-        :type identity: str
         :param fields: dictionary with values for the fields
-        :type fields: dict
-        :rtype: generator of tuple(int, list)
         """
-        destination_address = self._identifier.encode_bytes(identity)
-        payload = self.instruction.instruction + destination_address
-        for field in self._request_fields:
-            payload += field.encode_bytes(fields.get(field.name))
-        payload.append(UCANCommandSpec.calculate_crc(payload))
-        yield payload
+        if self.instructions is None or len(self.instructions) == 0:
+            raise RuntimeError('Cannot generate payloads for an empty instruction')
+        destination_address = self._identifier.encode(identity)
+        for index, instruction in enumerate(self.instructions):
+            payload = instruction.instruction + destination_address
+            for field in self._request_fields[index]:
+                payload += field.encode(fields.get(field.name))
+            payload.append(UCANCommandSpec.calculate_crc(payload))
+            yield payload
 
-    def consume_response_payload(self, payload):
+    def consume_response_payload(self, payload):  # type: (Union[bytearray, Dict[int, bytearray]]) -> Optional[Dict[str, Any]]
         """
         Consumes the payload bytes
 
         :param payload Payload from the uCAN responses
-        :type payload: list of int
         :returns: Dictionary containing the parsed response
-        :rtype: dict
         """
-        payload_data = []
+        if isinstance(payload, bytearray):
+            raise RuntimeError('An UCANCommandSpec cannot consume bytearray payloads')
+        payload_data = bytearray()
         for response_hash in self.headers:
             # Headers are ordered
             if response_hash not in payload:
@@ -132,6 +135,8 @@ class UCANCommandSpec(object):
                 return None
             response_instruction = self._response_instruction_by_hash[response_hash]
             payload_entry = payload[response_hash]
+            if response_instruction.checksum_byte is None:
+                raise RuntimeError('Unknown checksum byte')
             crc = payload_entry[response_instruction.checksum_byte]
             expected_crc = UCANCommandSpec.calculate_crc(payload_entry[:response_instruction.checksum_byte])
             if crc != expected_crc:
@@ -141,14 +146,16 @@ class UCANCommandSpec(object):
             payload_data += usefull_payload
         return self._parse_payload(payload_data)
 
-    def _parse_payload(self, payload_data):
+    def _parse_payload(self, payload_data):  # type: (bytearray) -> Dict[str, Any]
         result = {}
         payload_length = len(payload_data)
         for field in self._response_fields:
             if isinstance(field, StringField):
-                field_length = payload_data.index(0) + 1
-            else:
+                field_length = list(payload_data).index(0) + 1  # type: Union[int, Callable[[int], int]]
+            elif field.length is not None:
                 field_length = field.length
+            else:
+                continue
             if callable(field_length):
                 field_length = field_length(payload_length)
             if len(payload_data) < field_length:
@@ -156,12 +163,12 @@ class UCANCommandSpec(object):
                 break
             data = payload_data[:field_length]
             if not isinstance(field, PaddingField):
-                result[field.name] = field.decode_bytes(data)
+                result[field.name] = field.decode(data)
             payload_data = payload_data[field_length:]
         return result
 
     @staticmethod
-    def calculate_crc(data):
+    def calculate_crc(data):  # type: (bytearray) -> int
         """
         Calculate the CRC of the data.
 
@@ -174,16 +181,7 @@ class UCANCommandSpec(object):
         return crc % 256
 
     def extract_hash(self, payload):
-        return UCANCommandSpec.hash(payload[0:self.header_length])
-
-    @staticmethod
-    def hash(entries):
-        times = 1
-        result = 0
-        for entry in entries:
-            result += (entry * 256 * times)
-            times += 1
-        return result
+        return Toolbox.hash(payload[0:self.header_length])
 
 
 class UCANPalletCommandSpec(UCANCommandSpec):
@@ -192,7 +190,7 @@ class UCANPalletCommandSpec(UCANCommandSpec):
     """
 
     def __init__(self, identifier, pallet_type, request_fields=None, response_fields=None):
-        # type: (Field, int, List[Field], List[Field]) -> None
+        # type: (Field, int, Optional[List[Field]], Optional[List[Field]]) -> None
         """
         Create a UCANCommandSpec.
 
@@ -202,52 +200,50 @@ class UCANPalletCommandSpec(UCANCommandSpec):
         :param response_fields: Fields in the response
         """
         super(UCANPalletCommandSpec, self).__init__(sid=SID.BOOTLOADER_PALLET,
-                                                    instruction=None,
                                                     identifier=identifier,
-                                                    request_fields=request_fields,
+                                                    instructions=None,
+                                                    request_fields=[request_fields] if request_fields is not None else None,
                                                     response_instructions=[],
                                                     response_fields=response_fields)
         self._pallet_type = pallet_type
+        self._uint32_helper = UInt32Field('')
 
     def set_identity(self, identity):
         _ = identity  # Not used for pallet communications
         pass
 
-    def create_request_payloads(self, identity, fields):
+    def create_request_payloads(self, identity, fields):  # type: (str, Dict[str, Any]) -> Iterator[bytearray]
         """
         Create the request payloads for the uCAN using this spec and the provided fields.
 
         :param identity: The actual identity
-        :type identity: str
         :param fields: dictionary with values for the fields
-        :type fields: dict
-        :rtype: generator of tuple(int, list)
         """
-        destination_address = self._identifier.encode_bytes(identity)
-        source_address = self._identifier.encode_bytes('000.000.000')
-        payload = source_address + destination_address + [self._pallet_type]
-        for field in self._request_fields:
-            payload += field.encode_bytes(fields.get(field.name))
-        payload += UInt32Field.encode_bytes(UCANPalletCommandSpec.calculate_crc(payload))
+        destination_address = self._identifier.encode(identity)
+        source_address = self._identifier.encode('000.000.000')
+        payload = source_address + destination_address + bytearray([self._pallet_type])
+        for field in self._request_fields[0]:
+            payload += field.encode(fields.get(field.name))
+        payload += self._uint32_helper.encode(UCANPalletCommandSpec.calculate_crc(payload))
         segments = int(math.ceil(len(payload) / 7.0))
         first = True
         while len(payload) > 0:
             header = ((1 if first else 0) << 7) + (segments - 1)
-            sub_payload = [header] + payload[:7]
+            sub_payload = bytearray([header]) + payload[:7]
             payload = payload[7:]
             yield sub_payload
             first = False
             segments -= 1
 
-    def consume_response_payload(self, payload):
+    def consume_response_payload(self, payload):  # type: (Union[bytearray, Dict[int, bytearray]]) -> Optional[Dict[str, Any]]
         """
         Consumes the payload bytes
 
         :param payload Payload from the uCAN responses
-        :type payload: list of int
         :returns: Dictionary containing the parsed response
-        :rtype: dict
         """
+        if not isinstance(payload, bytearray):
+            raise RuntimeError('UCANPalletCommandSpec can only consume bytearray payloads')
         crc = UCANPalletCommandSpec.calculate_crc(payload)
         if crc != 0:
             logger.info('Unexpected pallet CRC ({0} != 0): {1}'.format(crc, printable(payload)))
@@ -255,7 +251,7 @@ class UCANPalletCommandSpec(UCANCommandSpec):
         return self._parse_payload(payload[7:-4])
 
     @staticmethod
-    def calculate_crc(data, remainder=0):
+    def calculate_crc(data, remainder=0):  # type: (bytearray, int) -> int
         """
         Calculates the CRC of data. The algorithm is designed to make sure flowing statement is True:
         > crc(data + crc(data)) == 0

@@ -13,16 +13,17 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import time
 import logging
+import time
 from threading import Lock
-from ioc import INJECTED, Inject
+
 from gateway.models import Valve
 from gateway.thermostat.gateway.pump_driver import PumpDriver
-from gateway.output_controller import OutputController
+from ioc import INJECTED, Inject
 
 if False:  # MYPY
     from gateway.gateway_api import GatewayApi
+    from gateway.output_controller import OutputController
 
 logger = logging.getLogger('openmotics')
 

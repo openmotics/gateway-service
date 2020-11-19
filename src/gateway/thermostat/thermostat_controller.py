@@ -13,36 +13,24 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-if False:
+if False:  # MYPY
     from bus.om_bus_client import MessageClient
     from gateway.dto import ThermostatDTO
     from gateway.events import GatewayEvent
-    from gateway.gateway_api import GatewayApi
     from gateway.output_controller import OutputController
-    from typing import Callable, List, Tuple, Optional
+    from typing import Any, Callable, Dict, List, Tuple, Optional
 
 
 class ThermostatController(object):
-
-    def __init__(self, gateway_api, message_client, output_controller):  # type: (GatewayApi, Optional[MessageClient], OutputController) -> None
-        self._gateway_api = gateway_api
-        self._message_client = message_client
+    def __init__(self, output_controller):
+        # type: (OutputController) -> None
         self._output_controller = output_controller
-
-        self._event_subscriptions = []  # type: List[Callable[[GatewayEvent], None]]
 
     def start(self):  # type: () -> None
         raise NotImplementedError()
 
     def stop(self):  # type: () -> None
         raise NotImplementedError()
-
-    def subscribe_events(self, callback):  # type: (Callable[[GatewayEvent], None]) -> None
-        """
-        Subscribes a callback to generic events
-        :param callback: the callback to call
-        """
-        self._event_subscriptions.append(callback)
 
     ################################
     # v1 APIs
@@ -72,6 +60,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
+        # type: (bool, bool, bool, Optional[bool], Optional[int]) -> Dict[str,Any]
         """ Set the mode of the thermostats.
         :param thermostat_on: Whether the thermostats are on
         :type thermostat_on: boolean
@@ -88,6 +77,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_current_setpoint(self, thermostat, temperature):
+        # type: (int, float) -> Dict[str,Any]
         """ Set the current setpoint of a thermostat.
         :param thermostat: The id of the thermostat to set
         :type thermostat: Integer [0, 32]
@@ -98,6 +88,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_get_pump_group_configuration(self, pump_group_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
         """
         Get a specific pump_group_configuration defined by its id.
 
@@ -110,6 +101,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_get_pump_group_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
         """
         Get all pump_group_configurations.
 
@@ -120,6 +112,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
+        # type: (int, bool, int) -> Dict[str,Any]
         """ Set the setpoint/mode for a certain thermostat.
         :param thermostat_id: The id of the thermostat.
         :type thermostat_id: Integer [0, 31]
@@ -132,6 +125,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_get_global_thermostat_configuration(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str,Any]
         """
         Get the global_thermostat_configuration.
 
@@ -142,6 +136,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_global_thermostat_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set the global_thermostat_configuration.
 
@@ -151,6 +146,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_get_thermostat_status(self):
+        # type: () -> Dict[str,Any]
         """ Returns thermostat information """
         raise NotImplementedError()
 
@@ -164,6 +160,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_get_cooling_pump_group_configuration(self, id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
         """
         Get a specific cooling_pump_group_configuration defined by its id.
 
@@ -177,6 +174,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_get_cooling_pump_group_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
         """
         Get all cooling_pump_group_configurations.
 
@@ -188,6 +186,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_pump_group_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one pump_group_configuration.
 
@@ -197,6 +196,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_pump_group_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple pump_group_configurations.
 
@@ -206,6 +206,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_cooling_pump_group_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one cooling_pump_group_configuration.
 
@@ -215,6 +216,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_cooling_pump_group_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple cooling_pump_group_configurations.
 
@@ -223,9 +225,8 @@ class ThermostatController(object):
         """
         raise NotImplementedError()
 
-        return {'config': self._thermostat_controller.v0_get_global_rtd10_configuration(fields)}
-
     def v0_get_global_rtd10_configuration(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str,Any]
         """
         Get the global_rtd10_configuration.
 
@@ -236,6 +237,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_global_rtd10_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set the global_rtd10_configuration.
 
@@ -245,6 +247,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_get_rtd10_heating_configuration(self, heating_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
         """
         Get a specific rtd10_heating_configuration defined by its id.
 
@@ -257,6 +260,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_get_rtd10_heating_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
         """
         Get all rtd10_heating_configurations.
 
@@ -267,6 +271,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_rtd10_heating_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one rtd10_heating_configuration.
 
@@ -276,6 +281,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_rtd10_heating_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple rtd10_heating_configurations.
 
@@ -285,6 +291,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_get_rtd10_cooling_configuration(self, cooling_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str,Any]
         """
         Get a specific rtd10_cooling_configuration defined by its id.
 
@@ -297,6 +304,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_get_rtd10_cooling_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> List[Dict[str,Any]]
         """
         Get all rtd10_cooling_configurations.
 
@@ -307,6 +315,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_rtd10_cooling_configuration(self, config):
+        # type: (Dict[str,Any]) -> None
         """
         Set one rtd10_cooling_configuration.
 
@@ -316,6 +325,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_rtd10_cooling_configurations(self, config):
+        # type: (List[Dict[str,Any]]) -> None
         """
         Set multiple rtd10_cooling_configurations.
 
@@ -325,6 +335,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_set_airco_status(self, thermostat_id, airco_on):
+        # type: (int, bool) -> Dict[str,Any]
         """ Set the mode of the airco attached to a given thermostat.
         :param thermostat_id: The thermostat id.
         :type thermostat_id: Integer [0, 31]
@@ -335,6 +346,7 @@ class ThermostatController(object):
         raise NotImplementedError()
 
     def v0_get_airco_status(self):
+        # type: () -> Dict[str,Any]
         """ Get the mode of the airco attached to a all thermostats.
         :returns: dict with ASB0-ASB31.
         """

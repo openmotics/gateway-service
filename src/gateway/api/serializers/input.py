@@ -35,7 +35,7 @@ class InputSerializer(object):
                 'name': input_dto.name,
                 'action': Toolbox.denonify(input_dto.action, InputSerializer.BYTE_MAX),
                 'basic_actions': ','.join([str(action) for action in input_dto.basic_actions]),
-                'invert': 255 if input_dto.invert else 0,
+                'invert': 0 if input_dto.invert else 255,
                 'room': Toolbox.denonify(input_dto.room, InputSerializer.BYTE_MAX),
                 'can': 'C' if input_dto.can else ' ',
                 'event_enabled': input_dto.event_enabled}

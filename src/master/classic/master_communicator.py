@@ -17,24 +17,31 @@ Module to communicate with the master.
 """
 
 from __future__ import absolute_import
+
 import logging
 import select
 import time
 from threading import Event, Lock, Thread
 
-from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.hal.master_controller import CommunicationFailure
+from gateway.maintenance_controller import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import master_api
-from master.classic.master_command import Field, printable
+from master.classic.master_command import Field, MasterCommandSpec, printable
 from serial_utils import CommunicationTimedOutException
 from toolbox import Empty, Queue
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('openmotics')
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Optional, TypeVar, Union
-    from master.classic.master_command import MasterCommandSpec
-    T_co = TypeVar('T_co', bound=None, covariant=True)
+    from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, Tuple
+    from serial import Serial
+    from master.classic.master_command import Result
+    T_co = TypeVar('T_co', covariant=True)
+
+
+class MasterUnavailable(CommunicationFailure):
+    pass
 
 
 class MasterCommunicator(object):
@@ -45,15 +52,12 @@ class MasterCommunicator(object):
 
     @Inject
     def __init__(self, controller_serial=INJECTED, init_master=True, verbose=False, passthrough_timeout=0.2):
+        # type: (Serial, bool, bool, float) -> None
         """
         :param controller_serial: Serial port to communicate with
-        :type controller_serial: Instance of :class`serial.Serial`
         :param init_master: Send an initialization sequence to the master to make sure we are in CLI mode. This can be turned of for testing.
-        :type init_master: boolean.
         :param verbose: Print all serial communication to stdout.
-        :type verbose: boolean.
         :param passthrough_timeout: The time to wait for an answer on a passthrough message (in sec)
-        :type passthrough_timeout: float.
         """
         self.__init_master = init_master
         self.__verbose = verbose
@@ -67,7 +71,9 @@ class MasterCommunicator(object):
         self.__maintenance_mode = False
         self.__maintenance_queue = Queue()
 
-        self.__consumers = []
+        self.__update_mode = False
+
+        self.__consumers = []  # type: List[Union[Consumer, BackgroundConsumer]]
 
         self.__passthrough_enabled = False
         self.__passthrough_mode = False
@@ -79,51 +85,78 @@ class MasterCommunicator(object):
 
         self.__running = False
 
-        self.__read_thread = Thread(target=self.__read, name="MasterCommunicator read thread")
-        self.__read_thread.daemon = True
+        self.__read_thread = None  # type: Optional[Thread]
 
         self.__communication_stats = {'calls_succeeded': [],
                                       'calls_timedout': [],
                                       'bytes_written': 0,
                                       'bytes_read': 0}  # type: Dict[str,Any]
         self.__debug_buffer = {'read': {},
-                               'write': {}}  # type: Dict[str,Dict[float,str]]
+                               'write': {}}  # type: Dict[str, Dict[float,str]]
         self.__debug_buffer_duration = 300
 
     def start(self):
+        # type: () -> None
         """ Start the MasterComunicator, this starts the background read thread. """
         if self.__init_master:
+            self._flush_serial_input()
 
-            def flush_serial_input():
-                """ Try to read from the serial input and discard the bytes read. """
-                i = 0
-                data = self.__serial.read(1)
-                while len(data) > 0 and i < 100:
-                    data = self.__serial.read(1)
-                    i += 1
-
-            self.__serial.timeout = 1
-            self.__serial.write(" "*18 + "\r\n")
-            flush_serial_input()
-            self.__serial.write("exit\r\n")
-            flush_serial_input()
-            self.__serial.write(" "*10)
-            flush_serial_input()
-            self.__serial.timeout = None  # TODO: make non blocking
+        if not self.__read_thread:
+            self.__read_thread = Thread(target=self.__read, name='MasterCommunicator read thread')
+            self.__read_thread.daemon = True
 
         if not self.__running:
             self.__running = True
             self.__read_thread.start()
 
     def stop(self):
+        # type: () -> None
         self.__running = False
-        self.__read_thread.join()
+        if self.__read_thread:
+            self.__read_thread.join()
+            self.__read_thread = None
+
+    def update_mode_start(self):
+        # type: () -> None
+        if self.__maintenance_mode:
+            raise InMaintenanceModeException()
+        self.__update_mode = True
+
+    def update_mode_stop(self):
+        # type: () -> None
+        self._flush_serial_input()
+        self.__update_mode = False
+
+    def _flush_serial_input(self):
+        # type: () -> None
+        def _flush():
+            """ Try to read from the serial input and discard the bytes read. """
+            i = 0
+            data = self.__serial.read(1)
+            while len(data) > 0 and i < 100:
+                data = self.__serial.read(1)
+                i += 1
+
+        self.__serial.timeout = 1
+        self.__serial.write(bytearray(b' ' * 18 + b'\r\n'))
+        _flush()
+        self.__serial.write(bytearray(b'exit\r\n'))
+        _flush()
+        self.__serial.write(bytearray(b' ' * 10))
+        _flush()
+        self.__serial.timeout = None  # TODO: make non blocking
 
     def enable_passthrough(self):
         self.__passthrough_enabled = True
 
     def get_communication_statistics(self):
         return self.__communication_stats
+
+    def reset_communication_statistics(self):
+        self.__communication_stats = {'calls_succeeded': [],
+                                      'calls_timedout': [],
+                                      'bytes_written': 0,
+                                      'bytes_read': 0}
 
     def get_debug_buffer(self):
         return self.__debug_buffer
@@ -146,6 +179,10 @@ class MasterCommunicator(object):
         :param data: the data to write
         :type data: string
         """
+        # Don't touch the serial during updates.
+        if self.__update_mode:
+            raise MasterUnavailable()
+
         with self.__serial_write_lock:
             if self.__verbose:
                 logger.info('Writing to Master serial:   {0}'.format(printable(data)))
@@ -169,16 +206,20 @@ class MasterCommunicator(object):
         """
         self.__consumers.append(consumer)
 
+    def do_raw_action(self, action, size, output_size=None, data=None, timeout=2):
+        # type: (str, int, Optional[int], Optional[bytearray], Union[T_co, int]) -> Union[T_co, Dict[str, Any]]
+        input_field = Field.padding(13) if data is None else Field.bytes('data', len(data))
+        command = MasterCommandSpec(action,
+                                    [input_field],
+                                    [Field.bytes('data', size), Field.lit('\r\n')])
+        return self.do_command(command, fields={'data': data}, timeout=timeout)
+
     def do_basic_action(self, action_type, action_number, timeout=2):
         # type: (int, int, Union[T_co, int]) -> Union[T_co, Dict[str,Any]]
         """
         Sends a basic action to the master with the given action type and action number
         :param action_type: The action type to execute
-        :type action_type: int
         :param action_number: The action number to execute
-        :type action_number: int
-        :raises: :class`CommunicationTimedOutException` if master did not respond in time
-        :raises: :class`InMaintenanceModeException` if master is in maintenance mode
         :returns: dict containing the output fields of the command
         """
         logger.info('BA: Execute {0} {1}'.format(action_type, action_number))
@@ -190,18 +231,15 @@ class MasterCommunicator(object):
 
     def do_command(self, cmd, fields=None, timeout=2, extended_crc=False):
         # type: (MasterCommandSpec, Optional[Dict[str,Any]], Union[T_co, int], bool) -> Union[T_co, Dict[str, Any]]
-        """ Send a command over the serial port and block until an answer is received.
+        """
+        Send a command over the serial port and block until an answer is received.
         If the master does not respond within the timeout period, a CommunicationTimedOutException
         is raised
 
         :param cmd: specification of the command to execute
-        :type cmd: :class`MasterCommand.MasterCommandSpec`
         :param fields: an instance of one of the available fields
-        :type fields :class`MasterCommand.FieldX`
         :param timeout: maximum allowed time before a CommunicationTimedOutException is raised
-        :type timeout: int
-        :raises: :class`CommunicationTimedOutException` if master did not respond in time
-        :raises: :class`InMaintenanceModeException` if master is in maintenance mode
+        :param extended_crc: indicates whether to include the action in the CRC
         :returns: dict containing the output fields of the command
         """
         if self.__maintenance_mode:
@@ -227,12 +265,16 @@ class MasterCommunicator(object):
                     self.__communication_stats['calls_succeeded'] = self.__communication_stats['calls_succeeded'][-50:]
                     return result
             except CommunicationTimedOutException:
-                self.__communication_stats['calls_timedout'].append(time.time())
-                self.__communication_stats['calls_timedout'] = self.__communication_stats['calls_timedout'][-50:]
+                if cmd.action != bytearray(b'FV'):
+                    # The FV instruction is a direct call to the Slave module. Older versions did not implement this
+                    # call, so this call can timeout while it's expected. We don't take those into account.
+                    self.__communication_stats['calls_timedout'].append(time.time())
+                    self.__communication_stats['calls_timedout'] = self.__communication_stats['calls_timedout'][-50:]
                 raise
 
     @staticmethod
     def __check_crc(cmd, result, extended_crc=False):
+        # type: (MasterCommandSpec, Result, bool) -> bool
         """ Calculate the CRC of the data for a certain master command.
 
         :param cmd: instance of MasterCommandSpec.
@@ -242,21 +284,20 @@ class MasterCommunicator(object):
         """
         crc = 0
         if extended_crc:
-            crc += ord(cmd.action[0])
-            crc += ord(cmd.action[1])
+            crc += cmd.action[0]
+            crc += cmd.action[1]
         for field in cmd.output_fields:
             if Field.is_crc(field):
                 break
             else:
                 for byte in field.encode(result[field.name]):
-                    crc += ord(byte)
-
-        return result['crc'] == [67, (crc / 256), (crc % 256)]
+                    crc += byte
+        return result['crc'] == bytearray([67, (crc // 256), (crc % 256)])
 
     def __passthrough_wait(self):
         """ Waits until the passthrough is done or a timeout is reached. """
         if not self.__passthrough_done.wait(self.__passthrough_timeout):
-            logger.info("Timed out on passthrough message")
+            logger.info('Timed out on passthrough message')
 
         self.__passthrough_mode = False
         self.__command_lock.release()
@@ -291,7 +332,7 @@ class MasterCommunicator(object):
         :returns: string containing unprocessed output
         """
         data = self.__passthrough_queue.get()
-        if data[-4:] == '\r\n\r\n':
+        if data[-4:] == bytearray(b'\r\n\r\n'):
             self.__passthrough_done.set()
         return data
 
@@ -315,7 +356,7 @@ class MasterCommunicator(object):
         :type data: string
          """
         if not self.__maintenance_mode:
-            raise Exception("Not in maintenance mode !")
+            raise Exception('Not in maintenance mode !')
 
         self.__write_to_serial(data)
 
@@ -325,7 +366,7 @@ class MasterCommunicator(object):
         :returns: string containing unprocessed output
         """
         if not self.__maintenance_mode:
-            raise Exception("Not in maintenance mode !")
+            raise Exception('Not in maintenance mode !')
 
         try:
             return self.__maintenance_queue.get(timeout=1)
@@ -335,7 +376,7 @@ class MasterCommunicator(object):
     def stop_maintenance_mode(self):
         """ Stop maintenance mode. """
         if self.__maintenance_mode:
-            self.send_maintenance_data("exit\r\n")
+            self.send_maintenance_data(bytearray(b'exit\r\n'))
         self.__maintenance_mode = False
 
     def in_maintenance_mode(self):
@@ -344,7 +385,7 @@ class MasterCommunicator(object):
 
     def __get_start_bytes(self):
         """ Create a dict that maps the start byte to a list of consumers. """
-        start_bytes = {}  # type: Dict[int,List[Consumer]]
+        start_bytes = {}  # type: Dict[int, List[Union[Consumer, BackgroundConsumer]]]
         for consumer in self.__consumers:
             start_byte = consumer.get_prefix()[0]
             if start_byte in start_bytes:
@@ -354,7 +395,8 @@ class MasterCommunicator(object):
         return start_bytes
 
     def __read(self):
-        """ Code for the background read thread: reads from the serial port, checks if
+        """
+        Code for the background read thread: reads from the serial port, checks if
         consumers for incoming bytes, if not: put in pass through buffer.
         """
         def consumer_done(_consumer):
@@ -368,8 +410,8 @@ class MasterCommunicator(object):
             """" The read state keeps track of the current consumer and the partial result
             for that consumer. """
             def __init__(self):
-                self.current_consumer = None
-                self.partial_result = None
+                self.current_consumer = None  # type: Optional[Union[Consumer, BackgroundConsumer]]
+                self.partial_result = None  # type: Optional[Result]
 
             def should_resume(self):
                 """ Checks whether we should resume consuming data with the current_consumer. """
@@ -385,14 +427,20 @@ class MasterCommunicator(object):
                 self.partial_result = None
 
             def consume(self, _data):
-                """ Consume the bytes in data using the current_consumer, and return the bytes
-                that were not used. """
+                # type: (bytearray) -> bytearray
+                """
+                Consume the bytes in data using the current_consumer, and return the bytes
+                that were not used.
+                """
                 assert read_state.current_consumer
                 try:
                     bytes_consumed, result, done = read_state.current_consumer.consume(_data, read_state.partial_result)
                 except ValueError as value_error:
                     logger.error('Could not consume/decode message from the master: {0}'.format(value_error))
-                    return ''
+                    # Consumer failed, reset.
+                    self.current_consumer = None
+                    self.partial_result = None
+                    return _data
 
                 if done:
                     assert self.current_consumer
@@ -404,12 +452,18 @@ class MasterCommunicator(object):
 
                     return _data[bytes_consumed:]
                 self.partial_result = result
-                return ''
+                return bytearray()
 
         read_state = ReadState()
-        data = ""
+        data = bytearray()
 
         while self.__running:
+
+            # Don't touch the serial during updates.
+            if self.__update_mode:
+                time.sleep(2)
+                continue
+
             # TODO: use a non blocking serial instead?
             readers, _, _ = select.select([self.__serial], [], [], 2)
             if not readers:
@@ -417,7 +471,7 @@ class MasterCommunicator(object):
 
             num_bytes = self.__serial.inWaiting()
             data += self.__serial.read(num_bytes)
-            if data is not None and len(data) > 0:
+            if len(data) > 0:
                 self.__communication_stats['bytes_read'] += num_bytes
 
                 threshold = time.time() - self.__debug_buffer_duration
@@ -435,7 +489,7 @@ class MasterCommunicator(object):
                 # No else here: data might not be empty when current_consumer is done
                 if read_state.should_find_consumer():
                     start_bytes = self.__get_start_bytes()
-                    leftovers = ""  # for unconsumed bytes; these will go to the passthrough.
+                    leftovers = bytearray()  # for unconsumed bytes; these will go to the passthrough.
 
                     while len(data) > 0:
                         if data[0] in start_bytes:
@@ -459,7 +513,7 @@ class MasterCommunicator(object):
                                 # waiting for the next serial.read()
                                 break
 
-                        leftovers += data[0]
+                        leftovers.append(data[0])
                         data = data[1:]
 
                     if len(leftovers) > 0:
@@ -480,20 +534,22 @@ class Consumer(object):
     matches the consumer, the output will unblock the get() caller. """
 
     def __init__(self, cmd, cid):
-        self.cmd = cmd
-        self.cid = cid
+        self.cmd = cmd  # type: MasterCommandSpec
+        self.cid = cid  # type: int
         self.__queue = Queue()
 
     def get_prefix(self):
         """ Get the prefix of the answer from the master. """
-        return self.cmd.output_action + str(chr(self.cid))
+        return self.cmd.output_action + bytearray([self.cid])
 
     def consume(self, data, partial_result):
+        # type: (bytearray, Optional[Result]) -> Tuple[int, Result, bool]
         """ Consume data. """
         return self.cmd.consume_output(data, partial_result)
 
     def get(self, timeout):
-        """ Wait until the master replies or the timeout expires.
+        """
+        Wait until the master replies or the timeout expires.
 
         :param timeout: timeout in seconds
         :raises: :class`CommunicationTimedOutException` if master did not respond in time
@@ -505,17 +561,20 @@ class Consumer(object):
             raise CommunicationTimedOutException()
 
     def deliver(self, output):
+        # type: (Result) -> None
         """ Deliver output to the thread waiting on get(). """
         self.__queue.put(output)
 
 
 class BackgroundConsumer(object):
-    """ A consumer that runs in the background. The BackgroundConsumer does not provide get()
+    """
+    A consumer that runs in the background. The BackgroundConsumer does not provide get()
     but does a callback to a function whenever a message was consumed.
     """
 
     def __init__(self, cmd, cid, callback, send_to_passthrough=False):
-        """ Create a background consumer using a cmd, cid and callback.
+        """
+        Create a background consumer using a cmd, cid and callback.
 
         :param cmd: the MasterCommand to consume.
         :param cid: the communication id.
@@ -525,20 +584,23 @@ class BackgroundConsumer(object):
         self.cmd = cmd
         self.cid = cid
         self.callback = callback
-        self.last_cmd_data = None  # Keep the data of the last command.
+        self.last_cmd_data = None  # type: Optional[bytearray]  # Keep the data of the last command.
         self.send_to_passthrough = send_to_passthrough
 
     def get_prefix(self):
+        # type: () -> bytearray
         """ Get the prefix of the answer from the master. """
-        return self.cmd.output_action + str(chr(self.cid))
+        return bytearray(self.cmd.output_action) + bytearray([self.cid])
 
     def consume(self, data, partial_result):
+        # type: (bytearray, Optional[Result]) -> Tuple[int, Result, bool]
         """ Consume data. """
         (bytes_consumed, last_result, done) = self.cmd.consume_output(data, partial_result)
         self.last_cmd_data = (self.get_prefix() + last_result.actual_bytes) if done else None
         return bytes_consumed, last_result, done
 
     def deliver(self, output):
+        # type: (Result) -> None
         """ Deliver output to the thread waiting on get(). """
         try:
             self.callback(output)

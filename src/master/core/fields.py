@@ -17,9 +17,10 @@ Communication fields
 """
 from __future__ import absolute_import
 import struct
+from master.core.system_value import Humidity, Temperature
 
 if False:  # MYPY
-    from typing import Any, List
+    from typing import Any, Optional, List, Tuple, Union, Callable
 
 
 class Field(object):
@@ -27,43 +28,35 @@ class Field(object):
     Field of a command
     """
 
-    def __init__(self, name, length):  # type: (str, int) -> None
+    def __init__(self, name, length, limits=None):  # type: (str, Optional[Union[int, Callable[[int], int]]], Optional[Tuple[int, int]]) -> None
         self.name = name
         self.length = length
+        if limits is not None:
+            self.limits = limits
+        elif isinstance(length, int):
+            self.limits = (0, 2 ** (8 * length) - 1)
+        else:
+            self.limits = (0, 255)
 
-    def encode(self, value):  # type: (Any) -> str
+    def encode(self, value):  # type: (Any) -> bytearray
         """
         Encodes a high-level value into a byte string
         :param value: The high-level value (e.g. 'foobar', 23475, 15, '10.2.25.6')
-        :return: The byte string (e.g. 'd%_\xf8\xa5?@_1')
-        """
-        value_bytes = self.encode_bytes(value)
-        return ''.join(str(chr(byte)) for byte in value_bytes)
-
-    def encode_bytes(self, value):  # type: (Any) -> List[int]
-        """
-        Encodes a high-level value into a byte array
-        :param value: The high-level value (e.g. 'foobar', 23475, 15, '10.2.25.6')
-        :return: The byte array (e.g. [234, 12, 65, 23, 119])
+        :return: The bytearray (e.g. b'd%_\xf8\xa5?@_1' / [234, 12, 65, 23, 119])
         """
         raise NotImplementedError()
 
-    def decode(self, data):  # type: (str) -> Any
+    def decode(self, data):  # type: (bytearray) -> Any
         """
         Decodes a low-level byte string into a high-level value
-        :param data: Bytes to decode (e.g. 'd%_\xf8\xa5?@_1')
-        :returns: High-level value (e.g. 'foobar', 23475, 15, '10.2.25.6')
-        """
-        data_bytes = [ord(item) for item in data]
-        return self.decode_bytes(data_bytes)
-
-    def decode_bytes(self, data):  # type: (List[int]) -> Any
-        """
-        Decodes a low-level byte array into a high-level value
-        :param data: Bytes to decode (e.g. [234, 12, 65, 23, 119])
+        :param data: Bytearray to decode (e.g. b'd%_\xf8\xa5?@_1' / [234, 12, 65, 23, 119])
         :returns: High-level value (e.g. 'foobar', 23475, 15, '10.2.25.6')
         """
         raise NotImplementedError()
+
+    def _check_limits(self, value):  # type: (Union[float, int]) -> None
+        if value is None or not (self.limits[0] <= value <= self.limits[1]):
+            raise ValueError('Value `{0}` out of limits: {1} <= value <= {2}'.format(value, self.limits[0], self.limits[1]))
 
     def __str__(self):
         return '{0}({1})'.format(self.name, self.length)
@@ -76,12 +69,11 @@ class ByteField(Field):
     def __init__(self, name):
         super(ByteField, self).__init__(name, 1)
 
-    def encode_bytes(self, value):
-        if not (0 <= value <= 255):
-            raise ValueError('Value `{0}` out of limits: 0 <= value <= 255'.format(value))
-        return [value]
+    def encode(self, value):  # type: (int) -> bytearray
+        self._check_limits(value)
+        return bytearray([value])
 
-    def decode_bytes(self, data):
+    def decode(self, data):  # type: (bytearray) -> int
         return data[0]
 
 
@@ -89,170 +81,147 @@ class CharField(Field):
     def __init__(self, name):
         super(CharField, self).__init__(name, 1)
 
-    def encode_bytes(self, value):
+    def encode(self, value):  # type: (str) -> bytearray
         value = str(value)
         if len(value) != 1:
             raise ValueError('Value `{0}` must be a single-character string'.format(value))
-        return [ord(value[0])]
+        return bytearray([ord(value[0])])
 
-    def decode_bytes(self, data):
+    def decode(self, data):  # type: (bytearray) -> str
         return str(chr(data[0]))
 
 
 class TemperatureField(Field):
     def __init__(self, name):
-        super(TemperatureField, self).__init__(name, 1)
+        super(TemperatureField, self).__init__(name, 1, limits=(-32, 95))
 
-    def encode_bytes(self, value):
-        if value is not None and not (-32 <= value <= 95):
-            raise ValueError('Value `{0}` out of limits: -32 <= value <= 95'.format(value))
-        if value is None:
-            return [255]
-        value = int((float(value) + 32) * 2)
-        return [value]
+    def encode(self, value):  # type: (Optional[float]) -> bytearray
+        if value is not None:
+            self._check_limits(value)
+        system_value = Temperature.temperature_to_system_value(value)
+        return bytearray([system_value])
 
-    def decode_bytes(self, data):
-        if data[0] == 255:
-            return None
-        return float(data[0]) / 2 - 32
+    def decode(self, data):  # type: (bytearray) -> Optional[float]
+        return Temperature.system_value_to_temperature(data[0])
 
 
 class HumidityField(Field):
     def __init__(self, name):
-        super(HumidityField, self).__init__(name, 1)
+        super(HumidityField, self).__init__(name, 1, limits=(0, 100))
 
-    def encode_bytes(self, value):
-        if value is not None and not (0 <= value <= 100):
-            raise ValueError('Value `{0}` out of limits: 0 <= value <= 100'.format(value))
-        if value is None:
-            return [255]
-        value = int(float(value) * 2)
-        return [value]
+    def encode(self, value):  # type: (Optional[float]) -> bytearray
+        if value is not None:
+            self._check_limits(value)
+        system_value = Humidity.humidity_to_system_value(value)
+        return bytearray([system_value])
 
-    def decode_bytes(self, data):
-        if data[0] == 255:
-            return None
-        return float(data[0]) / 2
+    def decode(self, data):  # type: (bytearray) -> Optional[float]
+        return Humidity.system_value_to_humidity(data[0])
 
 
 class WordField(Field):
     def __init__(self, name):
         super(WordField, self).__init__(name, 2)
 
-    @classmethod
-    def encode_bytes(cls, value):
-        if not (0 <= value <= 65535):
-            raise ValueError('Value `{0}` out of limits: 0 <= value <= 65535'.format(value))
-        return [value // 256, value % 256]
+    def encode(self, value):  # type: (int) -> bytearray
+        self._check_limits(value)
+        return bytearray(struct.pack('>H', value))
 
-    @classmethod
-    def decode_bytes(cls, data):
-        return data[0] * 256 + data[1]
-
-    @classmethod
-    def decode(cls, data):
-        data_bytes = [ord(item) for item in data]
-        return cls.decode_bytes(data_bytes)
-
-    @classmethod
-    def encode(cls, value):
-        value_bytes = cls.encode_bytes(value)
-        return ''.join(str(chr(byte)) for byte in value_bytes)
+    def decode(self, data):  # type: (bytearray) -> int
+        return struct.unpack('>H', data)[0]
 
 
 class UInt32Field(Field):
     def __init__(self, name):
         super(UInt32Field, self).__init__(name, 4)
 
-    @classmethod
-    def encode(cls, value):
-        limit = 256 ** 4 - 1
-        if not (0 <= value <= limit):
-            raise ValueError('Value `{0}` out of limits: 0 <= value <= {1}'.format(value, limit))
-        return struct.pack('>I', value)
+    def encode(self, value):  # type: (int) -> bytearray
+        self._check_limits(value)
+        return bytearray(struct.pack('>I', value))
 
-    @classmethod
-    def decode(cls, data):
+    def decode(self, data):  # type: (bytearray) -> int
         return struct.unpack('>I', data)[0]
 
-    @classmethod
-    def decode_bytes(cls, data):
-        return cls.decode(''.join(str(chr(byte)) for byte in data))
 
-    @classmethod
-    def encode_bytes(cls, value):
-        value_string = cls.encode(value)
-        return [ord(item) for item in value_string]
+class _ArrayField(Field):
+    def __init__(self, name, length, field):
+        self._field = field(name)
+        self._entry_length = length
+        super_length = None  # type: Optional[Union[int, Callable[[int], int]]]
+        if callable(length):
+            super_length = lambda l: self._field.length * length(l)
+        elif length is not None:
+            super_length = self._field.length * length
+        super(_ArrayField, self).__init__(name, super_length)
 
-
-class ByteArrayField(Field):
-    def __init__(self, name, length):
-        super(ByteArrayField, self).__init__(name, length)
-        self._field = ByteField(name)
-
-    def encode_bytes(self, value):
-        if len(value) != self.length:
-            raise ValueError('Value `{0}` should be an array of {1} items with 0 <= item <= 255'.format(value, self.length))
-        data = []
+    def encode(self, value):  # type: (Any) -> bytearray
+        if len(value) != self._entry_length:
+            raise ValueError('Value `{0}` should be an array of {1} items with {2} <= item <= {3}'.format(value,
+                                                                                                          self._entry_length,
+                                                                                                          self._field.limits[0],
+                                                                                                          self._field.limits[1]))
+        data = bytearray()
         for item in value:
-            data += self._field.encode_bytes(item)
+            data += self._field.encode(item)
         return data
 
-    def decode_bytes(self, data):
+    def decode(self, data):  # type: (bytearray) -> Any
         result = []
-        for i in range(len(data)):
-            result.append(self._field.decode_bytes([data[i]]))
+        for i in range(0, len(data), self._field.length):
+            result.append(self._field.decode(data[i:i + self._field.length]))
         return result
+
+
+class RawByteArrayField(_ArrayField):
+    def __init__(self, name, length):
+        super(RawByteArrayField, self).__init__(name, length, ByteField)
+
+    def encode(self, value):  # type: (bytearray) -> bytearray
+        return super(RawByteArrayField, self).encode(list(value))
+
+    def decode(self, data):  # type: (bytearray) -> bytearray
+        return bytearray(super(RawByteArrayField, self).decode(data))
+
+
+class ByteArrayField(_ArrayField):
+    def __init__(self, name, length, field=None):
+        if field is None:
+            field = ByteField
+        super(ByteArrayField, self).__init__(name, length, field)
+
+    def encode(self, value):  # type: (List[int]) -> bytearray
+        return super(ByteArrayField, self).encode(value)
+
+    def decode(self, data):  # type: (bytearray) -> List[int]
+        return super(ByteArrayField, self).decode(data)
 
 
 class TemperatureArrayField(ByteArrayField):
     def __init__(self, name, length):
-        super(TemperatureArrayField, self).__init__(name, length)
-        self._field = TemperatureField(name)
+        super(TemperatureArrayField, self).__init__(name, length, TemperatureField)
 
 
 class HumidityArrayField(ByteArrayField):
     def __init__(self, name, length):
-        super(HumidityArrayField, self).__init__(name, length)
-        self._field = HumidityField(name)
+        super(HumidityArrayField, self).__init__(name, length, HumidityField)
 
 
-class WordArrayField(Field):
+class WordArrayField(ByteArrayField):
     def __init__(self, name, length):
-        super(WordArrayField, self).__init__(name, length * 2)
-        self._word_length = length
-        self._word_field = WordField(name)
-
-    def encode_bytes(self, value):
-        if len(value) != self._word_length:
-            raise ValueError('Value `{0}` should be an array of {1} items with 0 <= item <= 65535'.format(value, self._word_length))
-        data = []
-        for item in value:
-            data += self._word_field.encode_bytes(item)
-        return data
-
-    def decode_bytes(self, data):
-        result = []
-        for i in range(0, len(data), 2):
-            result.append(self._word_field.decode_bytes(data[i:i + 2]))
-        return result
+        super(WordArrayField, self).__init__(name, length, WordField)
 
 
 class LiteralBytesField(Field):
     def __init__(self, *data):
         super(LiteralBytesField, self).__init__('literal_bytes', len(data))
-        self._byte_field = ByteField(None)
-        self._data = data
+        self._data = bytearray(data)
 
-    def encode_bytes(self, value):
+    def encode(self, value):  # type: (None) -> bytearray
         if value is not None:
-            raise ValueError('LiteralBytesField does no tsupport value encoding')
-        data = []
-        for item in self._data:
-            data += self._byte_field.encode_bytes(item)
-        return data
+            raise ValueError('LiteralBytesField does not support value encoding')
+        return self._data
 
-    def decode_bytes(self, data):
+    def decode(self, data):  # type: (bytearray) -> None
         raise ValueError('LiteralBytesField does not support decoding')
 
 
@@ -260,7 +229,9 @@ class AddressField(Field):
     def __init__(self, name, length=4):
         super(AddressField, self).__init__(name, length)
 
-    def encode_bytes(self, value):
+    def encode(self, value):  # type: (str) -> bytearray
+        if not isinstance(self.length, int):
+            raise RuntimeError('Field length should be an integer')
         example = '.'.join(['ID{0}'.format(i) for i in range(self.length - 1, -1, -1)])
         error_message = 'Value `{0}` should be a string in the format of {1}, where 0 <= IDx <= 255'.format(value, example)
         parts = str(value).split('.')
@@ -269,15 +240,15 @@ class AddressField(Field):
         data = []
         for part in parts:
             try:
-                part = int(part)
+                int_part = int(part)
             except ValueError:
                 raise ValueError(error_message)
-            if not (0 <= part <= 255):
+            if not (0 <= int_part <= 255):
                 raise ValueError(error_message)
-            data.append(part)
-        return data
+            data.append(int_part)
+        return bytearray(data)
 
-    def decode_bytes(self, data):
+    def decode(self, data):  # type: (bytearray) -> str
         return '.'.join('{0:03}'.format(item) for item in data)
 
 
@@ -285,25 +256,20 @@ class StringField(Field):
     def __init__(self, name):
         super(StringField, self).__init__(name, length=None)
 
-    def encode(self, value):
-        return '{0}\x00'.format(value)
+    def encode(self, value):  # type: (str) -> bytearray
+        return bytearray([ord(c) for c in value] + [0])
 
-    def encode_bytes(self, value):
-        value_string = self.encode(value)
-        return [ord(item) for item in value_string]
-
-    def decode(self, data):
-        return data.strip('\x00')
-
-    def decode_bytes(self, data):
-        return self.decode(''.join(str(chr(byte)) for byte in data))
+    def decode(self, data):  # type: (bytearray) -> str
+        return ''.join(str(chr(item)) for item in data).strip('\x00')
 
 
 class VersionField(AddressField):
     def __init__(self, name):
         super(VersionField, self).__init__(name, 3)
 
-    def encode_bytes(self, value):
+    def encode(self, value):  # type: (str) -> bytearray
+        if not isinstance(self.length, int):
+            raise RuntimeError('Field length should be an integer')
         example = '.'.join(['F{0}'.format(i) for i in range(self.length)])
         error_message = 'Value `{0}` should be a string in the format of {1}, where 0 <= Fx <= 255'.format(value, example)
         parts = str(value).split('.')
@@ -312,15 +278,15 @@ class VersionField(AddressField):
         data = []
         for part in parts:
             try:
-                part = int(part)
+                int_part = int(part)
             except ValueError:
                 raise ValueError(error_message)
-            if not (0 <= part <= 255):
+            if not (0 <= int_part <= 255):
                 raise ValueError(error_message)
-            data.append(part)
-        return data
+            data.append(int_part)
+        return bytearray(data)
 
-    def decode_bytes(self, data):
+    def decode(self, data):  # type: (bytearray) -> str
         return '.'.join(str(item) for item in data)
 
 
@@ -328,10 +294,14 @@ class PaddingField(Field):
     def __init__(self, length):
         super(PaddingField, self).__init__('padding', length)
 
-    def encode_bytes(self, value):
+    def encode(self, value):  # type: (Any) -> bytearray
         _ = value
-        return [0] * self.length
+        if not isinstance(self.length, int):
+            raise RuntimeError('Field length should be an integer')
+        return bytearray([0] * self.length)
 
-    def decode_bytes(self, data):
+    def decode(self, data):  # type: (bytearray) -> str
         _ = data
+        if not isinstance(self.length, int):
+            raise RuntimeError('Field length should be an integer')
         return '.' * self.length

@@ -23,18 +23,23 @@ from threading import RLock, Thread
 
 from six.moves.queue import Empty
 
-from ioc import INJECTED, Inject, Injectable, Singleton
+from gateway.hal.master_controller import CommunicationFailure
+from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
+from ioc import INJECTED, Inject
 from power import power_api
-from power.power_command import crc7, crc8
+from power.power_command import PowerCommand
 from power.time_keeper import TimeKeeper
-from serial_utils import CommunicationTimedOutException, printable
+from serial_utils import CommunicationStatus, CommunicationTimedOutException, \
+    printable
 
 if False:  # MYPY:
-    from typing import Any, Dict, List, Optional, Tuple, Union
+    from typing import Any, Dict, List, Literal, Optional, Tuple, Union
     from serial_utils import RS485
-    from power.power_command import PowerCommand
     from power.power_store import PowerStore
     DataType = Union[float, int, str]
+
+    HEALTH = Literal['success', 'unstable', 'failure']
 
 logger = logging.getLogger("openmotics")
 
@@ -43,9 +48,9 @@ class PowerCommunicator(object):
     """ Uses a serial port to communicate with the power modules. """
 
     @Inject
-    def __init__(self, power_serial=INJECTED, power_store=INJECTED, verbose=False, time_keeper_period=60,
+    def __init__(self, power_serial=INJECTED, power_store=INJECTED, pubsub=INJECTED, verbose=False, time_keeper_period=60,
                  address_mode_timeout=300):
-        # type: (RS485, PowerStore, bool, int, int) -> None
+        # type: (RS485, PowerStore, PubSub, bool, int, int) -> None
         """ Default constructor.
 
         :param power_serial: Serial port to communicate with
@@ -61,6 +66,7 @@ class PowerCommunicator(object):
         self.__address_thread = None  # type: Optional[Thread]
         self.__address_mode_timeout = address_mode_timeout
         self.__power_store = power_store
+        self.__pubsub = pubsub
 
         self.__last_success = 0  # type: float
 
@@ -70,10 +76,10 @@ class PowerCommunicator(object):
             self.__time_keeper = None
 
         self.__communication_stats_calls = {'calls_succeeded': [],
-                                      'calls_timedout': []}  # type: Dict[str, List]
+                                            'calls_timedout': []}  # type: Dict[str, List]
 
         self.__communication_stats_bytes = {'bytes_written': 0,
-                                      'bytes_read': 0}  # Dict[str, int]
+                                            'bytes_read': 0}  # type: Dict[str, int]
 
         self.__debug_buffer = {'read': {},
                                'write': {}}  # type: Dict[str,Dict[float,str]]
@@ -99,6 +105,46 @@ class PowerCommunicator(object):
         ret.update(self.__communication_stats_bytes)
         return ret
 
+    def reset_communication_statistics(self):
+        # type: () -> None
+        self.__communication_stats_calls = {'calls_succeeded': [],
+                                            'calls_timedout': []}
+        self.__communication_stats_bytes = {'bytes_written': 0,
+                                            'bytes_read': 0}
+
+    def get_communicator_health(self):
+        # type: () -> HEALTH
+        stats = self.get_communication_statistics()
+        calls_timedout = [call for call in stats['calls_timedout']]
+        calls_succeeded = [call for call in stats['calls_succeeded']]
+
+        if len(calls_timedout) == 0:
+            # If there are no timeouts at all
+            return CommunicationStatus.SUCCESS
+
+        all_calls = sorted(calls_timedout + calls_succeeded)
+        if len(all_calls) <= 10:
+            # Not enough calls made to have a decent view on what's going on
+            logger.warning('Observed energy communication failures, but not enough calls')
+            return CommunicationStatus.UNSTABLE
+
+        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
+        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
+
+        if not any(t in calls_timedout for t in all_calls[-10:]):
+            logger.warning('Observed energy communication failures, but recent calls recovered')
+            # The last X calls are successfull
+            return CommunicationStatus.UNSTABLE
+        elif len(calls_last_x_minutes) <= 5:
+            logger.warning('Observed energy communication failures, but not recent enough')
+            # Not enough recent calls
+            return CommunicationStatus.UNSTABLE
+        elif ratio < 0.25:
+            # Less than 25% of the calls fail, let's assume everything is just "fine"
+            logger.warning('Observed energy communication failures, but there\'s only a failure ratio of {:.2f}%'.format(ratio * 100))
+            return CommunicationStatus.UNSTABLE
+        else:
+            return CommunicationStatus.FAILURE
 
     def get_debug_buffer(self):
         # type: () -> Dict[str, Dict[Any, Any]]
@@ -125,7 +171,7 @@ class PowerCommunicator(object):
             logger.info("%.3f %s power: %s" % (time.time(), action, printable(data)))
 
     def __write_to_serial(self, data):
-        # type: (str) -> None
+        # type: (bytearray) -> None
         """ Write data to the serial port.
 
         :param data: the data to write
@@ -178,7 +224,7 @@ class PowerCommunicator(object):
                         # next in line.
                         header, response_data = self.__read_from_serial()
                         if not _cmd.check_header(header, _address, cid):
-                            if _cmd.is_nack(header, _address, cid) and response_data == "\x02":
+                            if _cmd.is_nack(header, _address, cid) and response_data == bytearray([2]):
                                 raise UnkownCommandException('Unknown command')
                             tries += 1
                             logger.warning("Header did not match command ({0})".format(tries))
@@ -278,7 +324,7 @@ class PowerCommunicator(object):
                 if version is None:
                     logger.warning("Received unexpected message in address mode")
                 else:
-                    (old_address, cid) = (ord(header[:2][1]), header[2:3])
+                    (old_address, cid) = (header[:2][1], header[2:3])
                     # Ask power_controller for new address, and register it.
                     new_address = self.__power_store.get_free_address()
 
@@ -322,6 +368,8 @@ class PowerCommunicator(object):
         if self.__address_thread:
             self.__address_thread.join()
         self.__address_thread = None
+        master_event = MasterEvent(MasterEvent.Types.POWER_ADDRESS_EXIT, {})
+        self.__pubsub.publish_master_event(PubSub.MasterTopics.POWER, master_event)
 
     def in_address_mode(self):
         # type: () -> bool
@@ -329,17 +377,17 @@ class PowerCommunicator(object):
         return self.__address_mode
 
     def __read_from_serial(self):
-        # type: () -> Tuple[str, str]
+        # type: () -> Tuple[bytearray, bytearray]
         """ Read a PowerCommand from the serial port. """
         phase = 0
         index = 0
 
-        header = ""
+        header = bytearray()
         length = 0
-        data = ""
+        data = bytearray()
         crc = 0
 
-        command = ""
+        command = bytearray()
 
         try:
             while phase < 8:
@@ -348,17 +396,17 @@ class PowerCommunicator(object):
                 self.__communication_stats_bytes['bytes_read'] += 1
 
                 if phase == 0:  # Skip non 'R' bytes
-                    if byte == 'R':
+                    if byte == bytearray(b'R'):
                         phase = 1
                     else:
                         phase = 0
                 elif phase == 1:  # Expect 'T'
-                    if byte == 'T':
+                    if byte == bytearray(b'T'):
                         phase = 2
                     else:
                         raise Exception("Unexpected character")
                 elif phase == 2:  # Expect 'R'
-                    if byte == 'R':
+                    if byte == bytearray(b'R'):
                         phase = 3
                         index = 0
                     else:
@@ -382,18 +430,17 @@ class PowerCommunicator(object):
                     crc = ord(byte)
                     phase = 6
                 elif phase == 6:  # Expect '\r'
-                    if byte == '\r':
+                    if byte == bytearray(b'\r'):
                         phase = 7
                     else:
                         raise Exception("Unexpected character")
                 elif phase == 7:  # Expect '\n'
-                    if byte == '\n':
+                    if byte == bytearray(b'\n'):
                         phase = 8
                     else:
                         raise Exception("Unexpected character")
-            crc_match = (crc7(header + data) == crc) if header[0] == 'E' else (crc8(data) == crc)
-            if not crc_match:
-                raise Exception('CRC{0} doesn\'t match'.format('7' if header[0] == 'E' else '8'))
+            if PowerCommand.get_crc(header, data) != crc:
+                raise Exception('CRC doesn\'t match')
         except Empty:
             raise CommunicationTimedOutException('Communication timed out')
         except Exception:
@@ -413,15 +460,11 @@ class PowerCommunicator(object):
         return header, data
 
 
-class InAddressModeException(Exception):
+class InAddressModeException(CommunicationFailure):
     """ Raised when the power communication is in address mode. """
-    def __init__(self, message=None):
-        # type: (Optional[str]) -> None
-        Exception.__init__(self, message)
+    pass
 
 
-class UnkownCommandException(Exception):
+class UnkownCommandException(CommunicationFailure):
     """ Raised when the power module responds with a NACK indicating an unkown command. """
-    def __init__(self, message=None):
-        # type: (Optional[str]) -> None
-        Exception.__init__(self, message)
+    pass

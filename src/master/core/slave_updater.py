@@ -25,10 +25,12 @@ from intelhex import IntelHex
 from master.core.memory_models import (
     GlobalConfiguration,
     InputModuleConfiguration, OutputModuleConfiguration, SensorModuleConfiguration,
-    CanControlModuleConfiguration
+    CanControlModuleConfiguration, UCanModuleConfiguration
 )
 from master.core.slave_communicator import SlaveCommunicator, CommunicationTimedOutException
 from master.core.slave_api import SlaveAPI
+from master.core.ucan_communicator import UCANCommunicator
+from master.core.ucan_updater import UCANUpdater
 
 logger = logging.getLogger('openmotics')
 
@@ -49,36 +51,58 @@ class SlaveUpdater(object):
     BLOCK_SIZE = 64
 
     @staticmethod
-    def update_all(module_type, hex_filename, version):  # type: (str, str, Optional[str]) -> bool
+    def update_all(module_type, hex_filename, gen3_firmware, version):  # type: (str, str, bool, Optional[str]) -> bool
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
         general_configuration = GlobalConfiguration()
-        # All module types: ['O', 'R', 'D', 'I', 'T', 'C']  # TODO: Implement `D`
-        update_map = {'I': (InputModuleConfiguration, general_configuration.number_of_input_modules),
-                      'O': (OutputModuleConfiguration, general_configuration.number_of_output_modules),
-                      'T': (SensorModuleConfiguration, general_configuration.number_of_sensor_modules),
-                      'C': (CanControlModuleConfiguration, general_configuration.number_of_can_control_modules)}
+        executed_update = False
+        success = True
+
+        # Classic master slave modules: ['O', 'R', 'D', 'I', 'T', 'C']
+        update_map = {'I': (InputModuleConfiguration, _default_if_255(general_configuration.number_of_input_modules, 0)),
+                      'O': (OutputModuleConfiguration, _default_if_255(general_configuration.number_of_output_modules, 0)),
+                      'D': (OutputModuleConfiguration, _default_if_255(general_configuration.number_of_output_modules, 0)),
+                      'T': (SensorModuleConfiguration, _default_if_255(general_configuration.number_of_sensor_modules, 0)),
+                      'C': (CanControlModuleConfiguration, _default_if_255(general_configuration.number_of_can_control_modules, 0))}
         if module_type in update_map:
             module_configuration_class, number_of_modules = update_map[module_type]
-            addresses = []
             for module_id in range(number_of_modules):
                 module_configuration = module_configuration_class(module_id)  # type: Union[InputModuleConfiguration, OutputModuleConfiguration, SensorModuleConfiguration, CanControlModuleConfiguration]
                 if module_configuration.device_type == module_type:
-                    addresses.append(module_configuration.address)
+                    executed_update = True
+                    success &= SlaveUpdater.update(address=module_configuration.address,
+                                                   hex_filename=hex_filename,
+                                                   gen3_firmware=gen3_firmware,
+                                                   version=version)
                 else:
-                    logger.warning('Skip updating unsupported module {0}: {1} != {2}'.format(
-                        module_configuration.address, module_type, module_configuration.device_type
+                    logger.info('Skip updating unsupported module {0}: {1} != {2}'.format(
+                        module_configuration.address, module_configuration.device_type, module_type
                     ))
-        else:
-            logger.warning('Skip updating unsupported modules of type: {0}'.format(module_type))
-            return True
 
-        success = True
-        for address in addresses:
-            success &= SlaveUpdater.update(address, hex_filename, version)
+        # MicroCAN (uCAN)
+        if module_type == 'UC':
+            number_of_ucs = _default_if_255(general_configuration.number_of_ucan_modules, 0)
+            if number_of_ucs:
+                ucan_communicator = UCANCommunicator()
+                for module_id in range(number_of_ucs):
+                    ucan_configuration = UCanModuleConfiguration(module_id)
+                    executed_update = True
+                    success &= UCANUpdater.update(cc_address=ucan_configuration.module.address,
+                                                  ucan_address=ucan_configuration.address,
+                                                  ucan_communicator=ucan_communicator,
+                                                  hex_filename=hex_filename,
+                                                  version=version)
+
+        if not executed_update:
+            logger.info('No modules of type {0} were updated'.format(module_type))
+            return True
         return success
 
     @staticmethod
     @Inject
-    def update(address, hex_filename, version, slave_communicator=INJECTED):  # type: (str, str, Optional[str], SlaveCommunicator) -> bool
+    def update(address, hex_filename, gen3_firmware, version, slave_communicator=INJECTED):
+        # type: (str, str, bool, Optional[str], SlaveCommunicator) -> bool
         """ Flashes the content from an Intel HEX file to a slave module """
         try:
             with slave_communicator:
@@ -99,6 +123,14 @@ class SlaveUpdater(object):
 
                 if version == firmware_version:
                     logger.info('{0} - Already up-to-date. Skipping'.format(address))
+                    return True
+
+                gen3_module = int(firmware_version.split('.')[0]) >= 6
+                if gen3_firmware and not gen3_module:
+                    logger.info('{0} - Skip flashing Gen3 firmware on Gen2 module'.format(address))
+                    return True
+                if gen3_module and not gen3_firmware:
+                    logger.info('{0} - Skip flashing Gen2 firmware on Gen3 module'.format(address))
                     return True
 
                 logger.info('{0} - Entering bootloader'.format(address))

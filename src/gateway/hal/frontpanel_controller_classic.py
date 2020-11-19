@@ -16,13 +16,15 @@
 Module for the frontpanel
 """
 from __future__ import absolute_import
+
 import fcntl
 import logging
 import time
-from ioc import Inject, INJECTED, Injectable, Singleton
-from platform_utils import Hardware
-from gateway.hal.frontpanel_controller import FrontpanelController
+
 from gateway.daemon_thread import DaemonThread
+from gateway.hal.frontpanel_controller import FrontpanelController
+from ioc import INJECTED, Inject
+from platform_utils import Hardware
 
 if False:  # MYPY
     from typing import Dict, Optional
@@ -30,8 +32,6 @@ if False:  # MYPY
 logger = logging.getLogger("openmotics")
 
 
-@Injectable.named('frontpanel_controller')
-@Singleton
 class FrontpanelClassicController(FrontpanelController):
 
     IOCTL_I2C_SLAVE = 0x0703
@@ -94,9 +94,9 @@ class FrontpanelClassicController(FrontpanelController):
                 self._button_released = False
                 if self._button_pressed_since is None:
                     self._button_pressed_since = time.time()
-                if time.time() - self._button_pressed_since > FrontpanelClassicController.AUTH_MODE_PRESS_DURATION:
+                if time.time() - self._button_pressed_since > FrontpanelController.AUTH_MODE_PRESS_DURATION:
                     self._authorized_mode = True
-                    self._authorized_mode_timeout = time.time() + FrontpanelClassicController.AUTH_MODE_TIMEOUT
+                    self._authorized_mode_timeout = time.time() + FrontpanelController.AUTH_MODE_TIMEOUT
                     self._button_pressed_since = None
             else:
                 self._button_pressed_since = None
@@ -127,15 +127,22 @@ class FrontpanelClassicController(FrontpanelController):
         self._enabled_leds[led] = not currently_enabled
 
     def _report_carrier(self, carrier):
+        # type: (bool) -> None
         self._enabled_leds[FrontpanelController.Leds.STATUS_RED] = not carrier
 
+    def _report_connectivity(self, connectivity):
+        # type: (bool) -> None
+        pass  # No support for connectivity
+
     def _report_network_activity(self, activity):
+        # type: (bool) -> None
         if activity:
             self._toggle_led(FrontpanelController.Leds.ALIVE)
         else:
             self._enabled_leds[FrontpanelController.Leds.ALIVE] = False
 
-    def report_serial_activity(self, serial_port, activity):
+    def _report_serial_activity(self, serial_port, activity):
+        # type: (str, Optional[bool]) -> None
         led = {FrontpanelController.SerialPorts.ENERGY: FrontpanelController.Leds.COMMUNICATION_1,
                FrontpanelController.SerialPorts.MASTER_API: FrontpanelController.Leds.COMMUNICATION_2}.get(serial_port)
         if led is None:
@@ -146,9 +153,11 @@ class FrontpanelClassicController(FrontpanelController):
             self._enabled_leds[led] = False
 
     def _report_cloud_reachable(self, reachable):
+        # type: (bool) -> None
         self._enabled_leds[FrontpanelController.Leds.CLOUD] = reachable
 
     def _report_vpn_open(self, vpn_open):
+        # type: (bool) -> None
         self._enabled_leds[FrontpanelController.Leds.VPN] = vpn_open
 
     def _write_leds(self):

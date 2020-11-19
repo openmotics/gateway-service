@@ -63,6 +63,16 @@ class Client(object):
 
     def get(self, path, params=None, success=True, use_token=True, timeout=30):
         # type: (str, Dict[str,Any], bool, bool, float) -> Any
+        return self._request(requests.get, path, params=params,
+                             success=success, use_token=use_token, timeout=timeout)
+
+    def post(self, path, data=None, files=None, success=True, use_token=True, timeout=30):
+        # type: (str, Dict[str,Any], Dict[str,Any], bool, bool, float) -> Any
+        return self._request(requests.post, path, data=data, files=files,
+                             success=success, use_token=use_token, timeout=timeout)
+
+    def _request(self, f, path, params=None, data=None, files=None, success=True, use_token=True, timeout=30):
+        # type: (Any, str, Dict[str,Any], Dict[str,Any], Dict[str,Any], bool, bool, float) -> Any
         params = params or {}
         headers = requests.utils.default_headers()
         uri = 'https://{}{}'.format(self._host, path)
@@ -81,7 +91,8 @@ class Client(object):
         since = time.time()
         while since > time.time() - timeout:
             try:
-                response = requests.get(uri, params=params, headers=headers, **self._default_kwargs)
+                response = f(uri, params=params, data=data, files=files,
+                             headers=headers, **self._default_kwargs)
                 assert response.status_code != 404, 'not found {}'.format(path)
                 data = response.json()
                 if success and 'success' in data:
@@ -171,7 +182,7 @@ class Toolbox(object):
     DEBIAN_AUTHORIZED_MODE = 13  # tester_output_1.output_5
     DEBIAN_DISCOVER_INPUT = 14  # tester_output_1.output_6
     DEBIAN_DISCOVER_OUTPUT = 15  # tester_output_1.output_7
-    DEBIAN_DISCOVER_UCAN = 22  # tester_output2.output_6
+    DEBIAN_DISCOVER_CAN_CONTROL = 22  # tester_output2.output_6
     DEBIAN_DISCOVER_ENERGY = 23  # tester_output2.output_7
     DEBIAN_POWER_OUTPUT = 8  # tester_output_1.output_0
     POWER_ENERGY_MODULE = 11  # tester_output_1.output_3
@@ -221,35 +232,38 @@ class Toolbox(object):
             self.authorized_mode_start()
             self.create_or_update_user()
             self.dut.login()
+
         try:
-            self.list_modules('O')
-            self.list_modules('I')
-            # self.list_energy_modules('E')  # TODO: Energy module discovery fails
-            self.list_modules('C', hardware=False)
+            data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
+            assert 'O' in data['outputs']
+            assert 'I' in data['inputs']
+            assert 'C' in data['can_inputs']
         except Exception:
             logger.info('discovering modules...')
-            self.discover_output_module()
-            self.discover_input_module()
-            # self.discover_energy_module()  # TODO: Energy module discovery fails
-            self.discover_can_control()
+            self.discover_modules(output_modules=True,
+                                  input_modules=True,
+                                  can_controls=True,
+                                  ucans=True)
 
         # TODO compare with hardware modules instead.
-        self.list_modules('O')
-        self.list_modules('I')
-        # self.list_energy_modules('E')  # TODO: Energy module discovery fails
-        self.list_modules('C', hardware=False)  # firmware version missing
+        data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
+        assert 'O' in data['outputs']
+        assert 'I' in data['inputs']
+        assert 'C' in data['can_inputs']
 
         # TODO ensure discovery synchonization finished.
         self.ensure_input_exists(INPUT_MODULE_LAYOUT['I'].inputs[7], timeout=300)
         self.ensure_input_exists(INPUT_MODULE_LAYOUT['C'].inputs[5], timeout=300)
 
         try:
-            self.list_modules('o', hardware=False)
+            data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
+            assert 'o' in data['outputs']
         except Exception:
             logger.info('adding virtual modules...')
-            self.dut.get('/add_virtual_output')
-            time.sleep(2)
-        self.list_modules('o', hardware=False)
+            self.add_virtual_modules(module_amounts={'o': 1})
+
+        data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
+        assert 'o' in data['outputs']
 
     def print_logs(self):
         # type: () -> None
@@ -274,7 +288,6 @@ class Toolbox(object):
         for address, info in data['modules']['master'].items():
             if info['type'] != module_type or (not info['firmware'] and hardware):
                 continue
-            info['address'] = address
             modules.append(info)
         assert len(modules) >= min_modules, 'Not enough modules of type \'{}\' available in {}'.format(module_type, data)
         return modules
@@ -306,6 +319,19 @@ class Toolbox(object):
         user_data = {'username': self.dut._auth[0], 'password': self.dut._auth[1]}
         self.dut.get('/create_user', params=user_data, use_token=False, success=success)
 
+    def get_gateway_version(self):
+        # type: () -> str
+        return self.dut.get('/get_version')['gateway']
+
+    def get_firmware_versions(self):
+        # type: () -> Dict[str,str]
+        modules = self.dut.get('/get_modules_information')['modules']['master']
+        versions = {'M': self.dut.get('/get_status')['version']}
+        for data in (x for x in modules.values() if 'firmware' in x):
+            module = 'C' if data.get('is_can', False) else data['type']
+            versions[module] = data['firmware']
+        return versions
+
     def module_discover_start(self):
         # type: () -> None
         logger.debug('start module discover')
@@ -321,52 +347,128 @@ class Toolbox(object):
         logger.debug('stop module discover')
         self.dut.get('/module_discover_stop')
 
-    def discover_output_module(self):
-        # type: () -> None
-        logger.debug('discover output module')
-        self.module_discover_start()
-        self.tester.toggle_output(self.DEBIAN_DISCOVER_OUTPUT)
-        self.assert_modules(1)
-        self.module_discover_stop()
-
-    def discover_input_module(self):
-        # type: () -> None
-        logger.debug('discover input module')
-        self.module_discover_start()
-        self.tester.toggle_output(self.DEBIAN_DISCOVER_INPUT)
-        self.assert_modules(1)
-        self.module_discover_stop()
-
-    def discover_can_control(self):
-        # type: () -> None
-        logger.debug('discover CAN control')
-        # TODO: discover CAN inputs
-        self.module_discover_start()
-        self.tester.toggle_output(self.DEBIAN_DISCOVER_UCAN)
-        self.assert_modules(2, timeout=60)
-        # TODO: wait for inputs to be andvertized, no a way to poll?
-        time.sleep(120)
-        self.module_discover_stop()
-
-    def assert_modules(self, count, timeout=30):
-        # type: (int, float) -> List[List[str]]
+    def discover_modules(self, output_modules=False, input_modules=False, can_controls=False, ucans=False, timeout=120):
+        logger.debug('Discovering modules')
         since = time.time()
-        modules = []
+
+        if ucans:
+            for ucan_input in INPUT_MODULE_LAYOUT['C'].inputs:
+                self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
+            time.sleep(0.5)  # Give a brief moment for the CC to settle
+
+        new_modules = []
+        self.clear_module_discovery_log()
+        self.module_discover_start()
+        try:
+            addresses = []
+            if output_modules:
+                self.tester.toggle_output(self.DEBIAN_DISCOVER_OUTPUT, delay=0.5)
+                new_modules += self.watch_module_discovery_log(module_amounts={'O': 1}, addresses=addresses)
+            if input_modules:
+                self.tester.toggle_output(self.DEBIAN_DISCOVER_INPUT, delay=0.5)
+                new_modules += self.watch_module_discovery_log(module_amounts={'I': 1}, addresses=addresses)
+            if can_controls:
+                self.tester.toggle_output(self.DEBIAN_DISCOVER_CAN_CONTROL, delay=0.5)
+                module_amounts = {'C': 1}
+                if ucans:
+                    module_amounts.update({'I': 1, 'T': 1})
+                new_modules += self.watch_module_discovery_log(module_amounts=module_amounts, addresses=addresses)
+            new_module_addresses = set(module['address'] for module in new_modules)
+        finally:
+            self.module_discover_stop()
+
         while since > time.time() - timeout:
-            modules += self.dut.get('/get_module_log')['log']
-            if len(modules) >= count:
-                logger.debug('discovered {} modules, done'.format(count))
-                return modules
+            data = self.dut.get('/get_modules_information')
+            synced_addresses = set(data['modules']['master'].keys())
+            if new_module_addresses.issubset(synced_addresses):
+                return True
+        raise AssertionError('Did not discover required modules')
+
+    def add_virtual_modules(self, module_amounts, timeout=120):
+        since = time.time()
+        desired_new_outputs = module_amounts.get('o', 0)
+        desired_new_inputs = module_amounts.get('i', 0)
+
+        def _get_current_virtual_modules():
+            virtual_modules = {}
+            data = self.dut.get('/get_modules_information')
+            for entry in data['modules']['master'].values():
+                if entry['is_virtual']:
+                    virtual_modules.setdefault(entry['type'], set()).add(entry['address'])
+            return virtual_modules
+        previous_virtual_modules = _get_current_virtual_modules()
+
+        for _ in range(desired_new_outputs):
+            self.dut.get('/add_virtual_output_module')
+        for _ in range(desired_new_inputs):
+            self.dut.get('/add_virtual_input_module')
+        # TODO: We should/could use the module discover log as well, but adding virtual modules isn't generate events
+
+        while since > time.time() - timeout:
+            current_virtual_modules = _get_current_virtual_modules()
+            new_outputs = len(current_virtual_modules.get('o', set()) - previous_virtual_modules.get('o', set()))
+            new_inputs = len(current_virtual_modules.get('i', set()) - previous_virtual_modules.get('i', set()))
+            if new_outputs == desired_new_outputs and new_inputs == desired_new_inputs:
+                return True
+            time.sleep(5)
+        raise AssertionError('Did not discover required virtual modules')
+
+    def clear_module_discovery_log(self):
+        self.dut.get('/get_module_log')
+
+    def watch_module_discovery_log(self, module_amounts, timeout=10, addresses=None):
+        # type: (Dict[str, int], float, Optional[List[str]]) -> List[Dict[str, Any]]
+
+        def format_module_amounts(amounts):
+            return ', '.join('{}={}'.format(mtype, amount) for mtype, amount in amounts.items())
+
+        since = time.time()
+        all_entries = []
+        desired_entries = []
+        found_module_amounts = {}
+        if addresses is None:
+            addresses = []
+        while since > time.time() - timeout:
+            log = self.dut.get('/get_module_log')['log']
+            # Log format: {'code': '<NEW|EXISTING|DUPLCATE|UNKNOWN>',
+            #              'module_nr': <module number in its category>,
+            #              'category': '<SHUTTER|INTPUT|OUTPUT>',
+            #              'module_type': '<I|O|T|D|i|o|t|d|C>,
+            #              'address': '<module address>'}
+            all_entries += log
+            for entry in log:
+                if entry['code'] in ['DUPLICATE', 'UNKNOWN']:
+                    continue
+                module_type = entry['module_type']
+                if module_type not in module_amounts:
+                    continue
+                address = entry['address']
+                if address not in addresses:
+                    addresses.append(address)
+                    if module_type not in found_module_amounts:
+                        found_module_amounts[module_type] = 0
+                    found_module_amounts[module_type] += 1
+                    desired_entries.append(entry)
+                    logger.debug('Discovered {} module: {} ({})'.format(entry['code'],
+                                                                        entry['module_type'],
+                                                                        entry['address']))
+            if found_module_amounts == module_amounts:
+                logger.debug('Discovered required modules: {}'.format(format_module_amounts(found_module_amounts)))
+                return desired_entries
             time.sleep(2)
-        raise AssertionError('expected {} modules in {}'.format(count, modules))
+        raise AssertionError('Did not discover required modules: {}. Raw log: {}'.format(
+            format_module_amounts(module_amounts), all_entries
+        ))
 
     def discover_energy_module(self):
         # type: () -> None
-        logger.debug('discover Energy module')
-        self.module_discover_start()
-        self.tester.toggle_output(self.DEBIAN_DISCOVER_ENERGY)
-        self.assert_energy_modules(1, timeout=60)
-        self.module_discover_stop()
+        try:
+            logger.debug('discover Energy module')
+            self.dut.get('/start_power_address_mode')
+            self.tester.toggle_output(self.DEBIAN_DISCOVER_ENERGY, 1.0)
+            self.assert_energy_modules(1, timeout=60)
+        finally:
+            self.dut.get('/stop_power_address_mode')
 
     def assert_energy_modules(self, count, timeout=30):
         # type: (int, float) -> List[List[str]]
@@ -436,6 +538,7 @@ class Toolbox(object):
         logger.debug('ensure output {}#{} is {}    outputs={}'.format(output.type, output.output_id, status, state))
         time.sleep(0.2)
         self.set_output(output, status)
+        time.sleep(0.2)
         self.tester.reset()
 
     def set_output(self, output, status):
@@ -452,14 +555,14 @@ class Toolbox(object):
         self.tester.toggle_output(input.tester_output_id)
         logger.debug('toggled {}#{} -> True -> False'.format(input.type, input.input_id))
 
-    def assert_output_changed(self, output, status, between=(0, 30)):
+    def assert_output_changed(self, output, status, between=(0, 5)):
         # type: (Output, bool, Tuple[float,float]) -> None
         hypothesis.note('assert output {}#{} status changed {} -> {}'.format(output.type, output.output_id, not status, status))
         if self.tester.receive_output_event(output.output_id, status, between=between):
             return
         raise AssertionError('expected event {}#{} status={}'.format(output.type, output.output_id, status))
 
-    def assert_output_status(self, output, status, timeout=30):
+    def assert_output_status(self, output, status, timeout=5):
         # type: (Output, bool, float) -> None
         hypothesis.note('assert output {}#{} status is {}'.format(output.type, output.output_id, status))
         since = time.time()

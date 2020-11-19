@@ -15,12 +15,12 @@
 """
 The events module contains various event classes
 """
-
 from __future__ import absolute_import
+
 import ujson as json
 
 if False:  # MYPY
-    from typing import Any
+    from typing import Any, Dict
 
 
 class GatewayEvent(object):
@@ -28,35 +28,49 @@ class GatewayEvent(object):
     GatewayEvent object
 
     Data formats:
+    * CONFIG_CHANGE
+      {'type': str}  # Resource type, output, input, ...
+
     * OUTPUT_CHANGE
       {'id': int,                     # Output ID
        'status': {'on': bool,         # On/off
                   'value': int},      # Optional, dimmer value
        'location': {'room_id': int}}  # Room ID
+
+    * VENTILATION_CHANGE
+      {'id': str,      # Device ID
+       'plugin': str,  # Target Plugin
+       'mode': str,    # Auto/Manual
+       'level': int}
     """
 
     class Types(object):
+        CONFIG_CHANGE = 'CONFIG_CHANGE'
         INPUT_CHANGE = 'INPUT_CHANGE'
         OUTPUT_CHANGE = 'OUTPUT_CHANGE'
         SHUTTER_CHANGE = 'SHUTTER_CHANGE'
         THERMOSTAT_CHANGE = 'THERMOSTAT_CHANGE'
         THERMOSTAT_GROUP_CHANGE = 'THERMOSTAT_GROUP_CHANGE'
+        VENTILATION_CHANGE = 'VENTILATION_CHANGE'
         ACTION = 'ACTION'
         PING = 'PING'
         PONG = 'PONG'
 
     def __init__(self, event_type, data):
+        # type: (str, Dict[str,Any]) -> None
         self.type = event_type
         self.data = data
 
     def serialize(self):
+        # type: () -> Dict[str,Any]
         return {'type': self.type,
                 'data': self.data,
                 '_version': 1.0}  # Add version so that event processing code can handle multiple formats
 
     def __eq__(self, other):
         # type: (Any) -> bool
-        return self.type == other.type \
+        return isinstance(other, GatewayEvent) \
+            and self.type == other.type \
             and self.data == other.data
 
     def __repr__(self):
@@ -64,9 +78,11 @@ class GatewayEvent(object):
         return '<GatewayEvent {} {}>'.format(self.type, self.data)
 
     def __str__(self):
+        # type: () -> str
         return json.dumps(self.serialize())
 
     @staticmethod
     def deserialize(data):
+        # type: (Dict[str,Any]) -> GatewayEvent
         return GatewayEvent(event_type=data['type'],
                             data=data['data'])

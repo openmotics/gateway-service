@@ -21,10 +21,10 @@ from __future__ import absolute_import
 import logging
 
 from bus.om_bus_client import MessageClient
-from bus.om_bus_events import OMBusEvents
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MYPY
@@ -40,35 +40,21 @@ class Observer(object):
     The Observer gets various (change) events and will also monitor certain datasets to manually detect changes
     """
 
-    class Types(object):
-        THERMOSTATS = 'THERMOSTATS'
-
     @Inject
-    def __init__(self, master_controller=INJECTED, message_client=INJECTED):
+    def __init__(self, master_controller=INJECTED, pubsub=INJECTED, message_client=INJECTED):
         self._master_controller = master_controller  # type: MasterController
+        self._pubsub = pubsub  # type: PubSub
         self._message_client = message_client  # type: Optional[MessageClient]
 
-        self._event_subscriptions = []
-        self._master_controller.subscribe_event(self._master_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, self._handle_master_event)
 
-    def subscribe_events(self, callback):
-        """
-        Subscribes a callback to generic events
-        :param callback: the callback to call
-        """
-        self._event_subscriptions.append(callback)
-
-    # Handle master "events"
-
-    def _master_event(self, master_event):
-        """
-        Triggers when the MasterController generates events
-        :type master_event: gateway.hal.master_controller.MasterEvent
-        """
+    def _handle_master_event(self, master_event):
+        # type: (MasterEvent) -> None
         if master_event.type == MasterEvent.Types.INPUT_CHANGE:
-            for callback in self._event_subscriptions:
-                callback(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE,
-                                      data=master_event.data))
+            # TODO move to InputController
+            gateway_event = GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE,
+                                         data=master_event.data)
+            self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     # Inputs
 

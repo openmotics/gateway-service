@@ -26,6 +26,9 @@ from master.core.ucan_command import UCANPalletCommandSpec, SID
 from master.core.ucan_communicator import UCANCommunicator
 from master.core.fields import UInt32Field
 
+if False:  # MYPY
+    from typing import Optional
+
 logger = logging.getLogger('openmotics')
 
 
@@ -46,19 +49,26 @@ class UCANUpdater(object):
     BOOTLOADER_TIMEOUT_RUNTIME = 0  # Currently needed to switch to application mode
 
     @staticmethod
-    def update(cc_address, ucan_address, ucan_communicator, hex_filename):
-        # type: (str, str, UCANCommunicator, str) -> bool
-        """
-        Flashes the content from an Intel HEX file to the specified uCAN
-        :param cc_address: CC address
-        :param ucan_address: uCAN address
-        :param ucan_communicator: uCAN commnicator
-        :param hex_filename: The filename of the hex file to flash
-        """
+    def update(cc_address, ucan_address, ucan_communicator, hex_filename, version):
+        # type: (str, str, UCANCommunicator, str, Optional[str]) -> bool
+        """ Flashes the content from an Intel HEX file to the specified uCAN """
         try:
-            # TODO: Check version and skip update if the version is already active
+            logger.info('Updating uCAN {0} at CC {1} to {2}'.format(ucan_address,
+                                                                    cc_address,
+                                                                    'v{0}'.format(version) if version is not None else 'unknown version'))
 
-            logger.info('Updating uCAN {0} at CC {1}'.format(ucan_address, cc_address))
+            try:
+                response = ucan_communicator.do_command(cc_address, UCANAPI.get_version(), ucan_address, {})
+                if response is None:
+                    raise RuntimeError()
+                current_version = response['firmware_version']
+                logger.info('Current uCAN version: v{0}'.format(current_version))
+            except Exception:
+                raise RuntimeError('Could not load uCAN version')
+
+            if current_version == version:
+                logger.info('uCAN already up-to-date. Skipping')
+                return True
 
             if not os.path.exists(hex_filename):
                 raise RuntimeError('The given path does not point to an existing file')
@@ -86,26 +96,24 @@ class UCANUpdater(object):
 
             logger.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
             logger.info('Flashing...')
+            uint32_helper = UInt32Field('')
             address_blocks = list(range(UCANUpdater.ADDRESS_START, UCANUpdater.ADDRESS_END, UCANUpdater.MAX_FLASH_BYTES))
             total_amount = float(len(address_blocks))
             crc = 0
-            total_payload = []
+            total_payload = bytearray()
             logged_percentage = -1
-            reset_vector = [intel_hex[i] for i in range(4)]
+            reset_vector = bytearray([intel_hex[i] for i in range(4)])
             for index, start_address in enumerate(address_blocks):
-                end_address = min(UCANUpdater.ADDRESS_END, start_address + UCANUpdater.MAX_FLASH_BYTES)
+                end_address = min(UCANUpdater.ADDRESS_END, start_address + UCANUpdater.MAX_FLASH_BYTES) - 1
 
-                payload = []
-                for i in range(start_address, end_address):
-                    payload.append(intel_hex[i])
-
+                payload = intel_hex.tobinarray(start=start_address, end=end_address)
                 crc = UCANPalletCommandSpec.calculate_crc(payload, crc)
                 if start_address == address_blocks[-1]:
                     crc = UCANPalletCommandSpec.calculate_crc(reset_vector, crc)
                     payload += reset_vector
-                    payload += UInt32Field.encode_bytes(crc)
+                    payload += uint32_helper.encode(crc)
 
-                little_start_address = struct.unpack('<I', struct.pack('>I', start_address))[0]  # TODO: Handle endianness in API definition using Field endianness
+                little_start_address = struct.unpack('<I', struct.pack('>I', start_address))[0]
 
                 if payload != [255] * UCANUpdater.MAX_FLASH_BYTES:
                     # Since the uCAN flash area is erased, skip empty blocks
@@ -136,6 +144,15 @@ class UCANUpdater(object):
                 raise RuntimeError('Error resettings uCAN after flashing')
             if response.get('application_mode', 0) != 1:
                 raise RuntimeError('uCAN didn\'t enter application mode after reset')
+
+            try:
+                response = ucan_communicator.do_command(cc_address, UCANAPI.get_version(), ucan_address, {})
+                if response is None:
+                    raise RuntimeError()
+                current_version = response['firmware_version']
+                logger.info('New uCAN version: v{0}'.format(current_version))
+            except Exception:
+                raise RuntimeError('Could not load new uCAN version')
 
             logger.info('Update completed')
             return True

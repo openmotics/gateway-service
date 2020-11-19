@@ -19,6 +19,7 @@ from __future__ import absolute_import
 
 import copy
 import logging
+import warnings
 from threading import Lock
 
 from bus.om_bus_client import MessageClient
@@ -27,15 +28,16 @@ from gateway.base_controller import BaseController, SyncStructure
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import OutputDTO, OutputStateDTO
 from gateway.events import GatewayEvent
+from gateway.hal.master_controller import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
-from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.models import Output, Room
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Any, Callable, Dict, List, Optional, Tuple
+    from typing import Any, Dict, List, Optional, Tuple
     from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger('openmotics')
@@ -48,12 +50,10 @@ class OutputController(BaseController):
     SYNC_STRUCTURES = [SyncStructure(Output, 'output')]
 
     @Inject
-    def __init__(self, master_controller=INJECTED, message_client=INJECTED):
-        # type: (MasterController, MessageClient) -> None
+    def __init__(self, master_controller=INJECTED):
+        # type: (MasterController) -> None
         super(OutputController, self).__init__(master_controller)
-        self._message_client = message_client
         self._cache = OutputStateCache()
-        self._event_subscriptions = []  # type: List[Callable[[GatewayEvent],None]]
         self._sync_state_thread = None  # type: Optional[DaemonThread]
 
     def start(self):
@@ -71,10 +71,6 @@ class OutputController(BaseController):
             self._sync_state_thread.stop()
             self._sync_state_thread = None
 
-    def subscribe_events(self, callback):
-        # type: (Callable[[GatewayEvent],None]) -> None
-        self._event_subscriptions.append(callback)
-
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
         super(OutputController, self)._handle_master_event(master_event)
@@ -86,23 +82,23 @@ class OutputController(BaseController):
 
     def _handle_output_status(self, change_data):
         # type: (Dict[str,Any]) -> None
-        changed = self._cache.handle_change(change_data['id'], change_data)
-        if changed:
-            self._publish_output_change(changed)
+        changed, output_dto = self._cache.handle_change(change_data['id'], change_data)
+        if changed and output_dto is not None:
+            self._publish_output_change(output_dto)
 
     def _sync_state(self):
         try:
             self.load_outputs()
             for state_data in self._master_controller.load_output_status():
                 if 'id' in state_data:
-                    changed = self._cache.handle_change(state_data['id'], state_data)
-                    if changed:
-                        self._publish_output_change(changed)
+                    _, output_dto = self._cache.handle_change(state_data['id'], state_data)
+                    if output_dto is not None:
+                        # Always send events on the background sync
+                        self._publish_output_change(output_dto)
         except CommunicationTimedOutException:
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
-            self._set_master_state(False)
             raise DaemonThreadWait
-        except InMaintenanceModeException:
+        except CommunicationFailure:
             # This is an expected situation
             raise DaemonThreadWait
 
@@ -114,10 +110,8 @@ class OutputController(BaseController):
         event_data = {'id': output_dto.id,
                       'status': event_status,
                       'location': {'room_id': Toolbox.denonify(output_dto.room, 255)}}
-        if self._message_client is not None:
-            self._message_client.send_event(OMBusEvents.OUTPUT_CHANGE, {'id': output_dto.id})
-        for callback in self._event_subscriptions:
-            callback(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, event_data))
+        gateway_event = GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, event_data)
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     def get_output_status(self, output_id):
         # type: (int) -> OutputStateDTO
@@ -140,7 +134,7 @@ class OutputController(BaseController):
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
         output_dtos = []
-        for output in Output.select():
+        for output in list(Output.select()):
             output_dto = self._master_controller.load_output(output_id=output.number)
             output_dto.room = output.room.number if output.room is not None else None
             output_dtos.append(output_dto)
@@ -162,11 +156,28 @@ class OutputController(BaseController):
             outputs_to_save.append((output_dto, fields))
         self._master_controller.save_outputs(outputs_to_save)
 
+    def set_all_lights_off(self):
+        # type: () -> None
+        return self._master_controller.set_all_lights_off()
+
+    def set_all_lights_floor_off(self, floor):
+        # type: (int) -> None
+        return self._master_controller.set_all_lights_floor_off(floor=floor)
+
+    def set_all_lights_floor_on(self, floor):
+        # type: (int) -> None
+        return self._master_controller.set_all_lights_floor_on(floor=floor)
+
+    def set_output_status(self, output_id, is_on, dimmer=None, timer=None):
+        # type: (int, bool, Optional[int], Optional[int]) -> None
+        self._master_controller.set_output(output_id=output_id, state=is_on, dimmer=dimmer, timer=timer)
+
 
 class OutputStateCache(object):
     def __init__(self):
         self._cache = {}  # type: Dict[int,OutputDTO]
         self._lock = Lock()
+        self._loaded = False
 
     def get_state(self):
         # type: () -> Dict[int,OutputStateDTO]
@@ -184,18 +195,21 @@ class OutputStateCache(object):
                     output_dto.state = OutputStateDTO(output_dto.id)
                 new_state[output_dto.id] = output_dto
             self._cache = new_state
+            self._loaded = True
 
     def handle_change(self, output_id, change_data):
-        # type: (int, Dict[str,Any]) -> Optional[OutputDTO]
+        # type: (int, Dict[str,Any]) -> Tuple[bool, Optional[OutputDTO]]
         """
         Cache output state and detect changes.
         The classic master will send multiple status events when an output changes,
         this deduplicates actual changes based on the cached state.
         """
         with self._lock:
+            if not self._loaded:
+                return False, None
             if output_id not in self._cache:
-                logger.warning('Received change for unknown output {} {}'.format(output_id, change_data))
-                return None
+                logger.warning('Received change for unknown output {0}: {1}'.format(output_id, change_data))
+                return False, None
             changed = False
             state = self._cache[output_id].state
             if 'status' in change_data:
@@ -212,7 +226,4 @@ class OutputStateCache(object):
                 locked = bool(change_data['locked'])
                 changed |= state.locked != locked
                 state.locked = locked
-            if changed:
-                return self._cache[output_id]
-            else:
-                return None
+            return changed, self._cache[output_id]

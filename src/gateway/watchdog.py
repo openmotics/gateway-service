@@ -17,6 +17,7 @@ Contains a watchdog that monitors internal service threads
 """
 
 from __future__ import absolute_import
+
 import logging
 import os
 import time
@@ -25,12 +26,18 @@ from subprocess import check_output
 import ujson as json
 
 from gateway.daemon_thread import DaemonThread
+from gateway.models import Config
 from ioc import INJECTED, Inject, Injectable, Singleton
+from serial_utils import CommunicationStatus
 
 if False:  # MYPY
-    from typing import Any, Optional
+    from typing import Callable, Literal, Optional, Union
+    from gateway.hal.master_controller import MasterController
+    from power.power_communicator import PowerCommunicator
 
-logger = logging.getLogger("openmotics")
+    HEALTH = Literal['success', 'unstable', 'failure']
+
+logger = logging.getLogger('openmotics')
 
 
 @Injectable.named('watchdog')
@@ -41,10 +48,10 @@ class Watchdog(object):
     """
 
     @Inject
-    def __init__(self, power_communicator=INJECTED, master_controller=INJECTED, configuration_controller=INJECTED):
+    def __init__(self, power_communicator=INJECTED, master_controller=INJECTED):
+        # type: (Optional[PowerCommunicator], MasterController) -> None
         self._master_controller = master_controller
         self._power_communicator = power_communicator
-        self._config_controller = configuration_controller
         self._watchdog_thread = None  # type: Optional[DaemonThread]
         self.start_time = 0.0
 
@@ -65,82 +72,64 @@ class Watchdog(object):
 
     def _watch(self):
         # type: () -> None
-        # Cleanup legacy
-        self._config_controller.remove('communication_recovery')
-
-        reset_requirement = self._controller_check('master', self._master_controller)
-        if reset_requirement is not None:
-            if reset_requirement == 'device':
-                self._master_controller.cold_reset()
-            time.sleep(15)
-            os._exit(1)
+        self._controller_health('master', self._master_controller, self._master_controller.cold_reset)
         if self._power_communicator:
-            reset_requirement = self._controller_check('energy', self._power_communicator)
-            if reset_requirement is not None:
-                if reset_requirement == 'device':
-                    self._master_controller.power_cycle_bus()
-                time.sleep(15)
-                os._exit(1)
+            self._controller_health('energy', self._power_communicator, self._master_controller.power_cycle_bus)
 
-    def _controller_check(self, name, controller):
-        # type: (str, Any) -> Optional[str]
+    def _controller_health(self, name, controller, device_reset):
+        # type: (str, Union[PowerCommunicator,MasterController], Callable[[],None]) -> None
+        status = controller.get_communicator_health()
+        if status == CommunicationStatus.SUCCESS:
+            Config.remove('communication_recovery_{0}'.format(name))
+            # Cleanup legacy
+            Config.remove('communication_recovery')
+        elif status == CommunicationStatus.UNSTABLE:
+            logger.warning('Observed unstable communication for %s', name)
+        else:
+            reset_action = self._get_reset_action(name, controller)
+            if reset_action is not None:
+                device_reset()
+                if reset_action == 'service':
+                    time.sleep(15)
+                    os._exit(1)
+
+    def _get_reset_action(self, name, controller):
+        # type: (str, Union[MasterController,PowerCommunicator]) -> Optional[str]
         recovery_data_key = 'communication_recovery_{0}'.format(name)
-        recovery_data = self._config_controller.get(recovery_data_key, {})
+        recovery_data = Config.get(recovery_data_key, {})
 
-        calls_timedout = [call for call in controller.get_communication_statistics()['calls_timedout']
-                          if call > self.start_time]
-        calls_succeeded = [call for call in controller.get_communication_statistics()['calls_succeeded']
-                           if call > self.start_time]
-        all_calls = sorted(calls_timedout + calls_succeeded)
-
-        if len(calls_timedout) == 0:
-            # If there are no timeouts at all
-            if len(calls_succeeded) > 30:
-                self._config_controller.remove(recovery_data_key)
-            return None
-        if len(all_calls) <= 10:
-            # Not enough calls made to have a decent view on what's going on
-            return None
-        if not any(t in calls_timedout for t in all_calls[-10:]):
-            # The last X calls are successfull
-            return None
-        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
-        if len(calls_last_x_minutes) <= 5:
-            # Not enough recent calls
-            return None
-        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
-        if ratio < 0.25:
-            # Less than 25% of the calls fail, let's assume everything is just "fine"
-            logger.warning('Noticed communication timeouts for \'{0}\', but there\'s only a failure ratio of {1:.2f}%.'.format(
-                name, ratio * 100
-            ))
-            return None
+        stats = controller.get_communication_statistics()
+        calls_timedout = [call for call in stats['calls_timedout']]
+        calls_succeeded = [call for call in stats['calls_succeeded']]
 
         service_restart = None
         device_reset = None
         backoff = 300
-        # There's no successful communication.
+        max_attempts = 3
+
+        last_device_reset = recovery_data.get('device_reset')
+        last_service_restart = recovery_data.get('service_restart')
         if len(recovery_data) == 0:
-            service_restart = 'communication_errors'
+            device_reset = 'communication_errors'
         else:
-            last_service_restart = recovery_data.get('service_restart')
-            if last_service_restart is None:
-                service_restart = 'communication_errors'
+            backoff = last_device_reset.get('backoff', backoff)
+            if last_device_reset is None or last_device_reset['time'] < time.time() - backoff:
+                device_reset = 'communication_errors'
+                backoff = min(1200, backoff * 2)
             else:
-                backoff = last_service_restart['backoff']
-                if last_service_restart['time'] < time.time() - backoff:
+                if last_service_restart is None:
                     service_restart = 'communication_errors'
-                    backoff = min(1200, backoff * 2)
                 else:
-                    last_device_reset = recovery_data.get('device_reset')
-                    if last_device_reset is None or last_device_reset['time'] < last_service_restart['time']:
-                        device_reset = 'communication_errors'
+                    backoff = last_service_restart.get('backoff', backoff)
+                    if last_service_restart['time'] < time.time() - backoff:
+                        service_restart = 'communication_errors'
+                        backoff = min(1200, backoff * 2)
 
         if service_restart is not None or device_reset is not None:
             # Log debug information
             try:
                 debug_buffer = controller.get_debug_buffer()
-                action = 'service_restart' if service_restart is not None else 'device_reset'
+                action = device_reset or service_restart
                 debug_data = {'type': 'communication_recovery',
                               'info': {'controller': name, 'action': action},
                               'data': {'buffer': debug_buffer,
@@ -156,16 +145,31 @@ class Watchdog(object):
                 logger.exception('Could not store debug file: {0}'.format(ex))
 
         if service_restart is not None:
-            logger.error('Major issues in communication with {0}. Restarting service...'.format(name))
-            recovery_data['service_restart'] = {'reason': service_restart,
-                                                'time': time.time(),
-                                                'backoff': backoff}
-            self._config_controller.set(recovery_data_key, recovery_data)
-            return 'service'
+            last_service_restart = last_service_restart or {}
+            attempts = last_service_restart.get('attempts', 0)
+            if attempts < max_attempts:
+                logger.critical('Major issues in communication with {0}. Restarting service...'.format(name))
+                recovery_data['service_restart'] = {'reason': service_restart,
+                                                    'time': time.time(),
+                                                    'attempts': attempts + 1,
+                                                    'backoff': backoff}
+                Config.set(recovery_data_key, recovery_data)
+                return 'service'
+            else:
+                logger.critical('Unable to recover issues in communication with {0}'.format(name))
+
         if device_reset is not None:
-            logger.error('Major issues in communication with {0}. Resetting {0} & service'.format(name))
-            recovery_data['device_reset'] = {'reason': device_reset,
-                                             'time': time.time()}
-            self._config_controller.set(recovery_data_key, recovery_data)
-            return 'device'
+            last_device_reset = last_device_reset or {}
+            attempts = last_device_reset.get('attempts', 0)
+            if attempts < max_attempts:
+                logger.critical('Major issues in communication with {0}. Resetting {0}'.format(name))
+                recovery_data['device_reset'] = {'reason': device_reset,
+                                                 'time': time.time(),
+                                                 'attempts': attempts + 1,
+                                                 'backoff': backoff}
+                Config.set(recovery_data_key, recovery_data)
+                return 'device'
+            else:
+                logger.critical('Unable to recover issues in communication with {0}'.format(name))
+
         return None

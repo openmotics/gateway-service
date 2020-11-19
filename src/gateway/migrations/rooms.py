@@ -17,6 +17,7 @@ import os
 import logging
 import constants
 from ioc import INJECTED, Inject
+from gateway.migrations.base_migrator import BaseMigrator
 from gateway.models import (
     Feature, Output, Room, Floor, Input, Sensor,
     ShutterGroup, Shutter, PulseCounter
@@ -31,156 +32,139 @@ if False:  # MYPY
 logger = logging.getLogger('openmotics')
 
 
-class RoomsMigrator(object):
+class RoomsMigrator(BaseMigrator):
 
-    @staticmethod
+    MIGRATION_KEY = 'rooms'
+
+    @classmethod
     @Inject
-    def migrate(master_controller=INJECTED):  # type: (MasterClassicController) -> None
-        try:
-            # Check if migration already done
-            feature = Feature.get_or_none(name='orm_rooms')
-            if feature is None:
-                feature = Feature(name='orm_rooms',
-                                  enabled=False)
-            if feature.enabled:
-                return
+    def _migrate(cls, master_controller=INJECTED):  # type: (MasterClassicController) -> None
+        # Core(+) platforms never had non-ORM rooms
+        if Platform.get_platform() in Platform.CoreTypes:
+            return
 
-            # Core(+) platforms never had non-ORM rooms
-            if Platform.get_platform() != Platform.Type.CLASSIC:
-                feature.enabled = True
-                feature.save()
-                return
+        # Import legacy code
+        @Inject
+        def _load_eeprom_extension(eeprom_extension=INJECTED):
+            # type: (EepromExtension) -> EepromExtension
+            return eeprom_extension
 
-            logger.info('Migrating: Rooms...')
+        eext_controller = _load_eeprom_extension()
+        from master.classic.eeprom_models import (
+            OutputConfiguration, InputConfiguration, SensorConfiguration, ShutterConfiguration,
+            ShutterGroupConfiguration, PulseCounterConfiguration
+        )
 
-            # Import legacy code
-            @Inject
-            def _load_eeprom_extension(eeprom_extension=INJECTED):
-                # type: (EepromExtension) -> EepromExtension
-                return eeprom_extension
+        rooms = {}  # type: Dict[int, Room]
+        floors = {}  # type: Dict[int, Floor]
 
-            eext_controller = _load_eeprom_extension()
-            from master.classic.eeprom_models import (
-                OutputConfiguration, InputConfiguration, SensorConfiguration, ShutterConfiguration,
-                ShutterGroupConfiguration, PulseCounterConfiguration
-            )
-
-            rooms = {}  # type: Dict[int, Room]
-            floors = {}  # type: Dict[int, Floor]
-
-            # Rooms and floors
-            logger.info('* Rooms & floors')
-            for room_id in range(100):
-                try:
-                    RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, floors, skip_empty=True)
-                except Exception:
-                    logger.exception('Could not migrate single RoomConfiguration')
-
-            # Main objects
-            for eeprom_model, orm_model, filter_ in [(OutputConfiguration, Output, lambda o: True),
-                                                     (InputConfiguration, Input, lambda i: i.module_type in ['i', 'I']),
-                                                     (SensorConfiguration, Sensor, lambda s: True),
-                                                     (ShutterConfiguration, Shutter, lambda s: True),
-                                                     (ShutterGroupConfiguration, ShutterGroup, lambda s: True)]:
-                logger.info('* {0}s'.format(eeprom_model.__name__))
-                try:
-                    for classic_orm in master_controller._eeprom_controller.read_all(eeprom_model):
-                        try:
-                            object_id = classic_orm.id
-                            if not filter_(classic_orm):
-                                RoomsMigrator._delete_eext_fields(eext_controller, eeprom_model.__name__, object_id, ['room'])
-                                continue
-                            try:
-                                room_id = int(RoomsMigrator._read_eext_fields(eext_controller, eeprom_model.__name__, object_id, ['room']).get('room', 255))
-                            except ValueError:
-                                room_id = 255
-                            object_orm, _ = orm_model.get_or_create(number=object_id)  # type: ignore
-                            if room_id == 255:
-                                object_orm.room = None
-                            else:
-                                object_orm.room = RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, floors)
-                            object_orm.save()
-                            RoomsMigrator._delete_eext_fields(eext_controller, eeprom_model.__name__, object_id, ['room'])
-                        except Exception:
-                            logger.exception('Could not migrate single {0}'.format(eeprom_model.__name__))
-                except Exception:
-                    logger.exception('Could not migrate {0}s'.format(eeprom_model.__name__))
-
-            # PulseCounters
-            pulse_counter = None  # type: Optional[PulseCounter]
-            # - Master
+        # Rooms and floors
+        logger.info('* Rooms & floors')
+        for room_id in range(100):
             try:
-                logger.info('* PulseCounters (master)')
-                for pulse_counter_classic_orm in master_controller._eeprom_controller.read_all(PulseCounterConfiguration):
+                RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, floors, skip_empty=True)
+            except Exception:
+                logger.exception('Could not migrate single RoomConfiguration')
+
+        # Main objects
+        for eeprom_model, orm_model, filter_ in [(OutputConfiguration, Output, lambda o: True),
+                                                 (InputConfiguration, Input, lambda i: i.module_type in ['i', 'I']),
+                                                 (SensorConfiguration, Sensor, lambda s: True),
+                                                 (ShutterConfiguration, Shutter, lambda s: True),
+                                                 (ShutterGroupConfiguration, ShutterGroup, lambda s: True)]:
+            logger.info('* {0}s'.format(eeprom_model.__name__))
+            try:
+                for classic_orm in master_controller._eeprom_controller.read_all(eeprom_model):
                     try:
-                        pulse_counter_id = pulse_counter_classic_orm.id
+                        object_id = classic_orm.id
+                        if object_id is None:
+                            continue
+                        if not filter_(classic_orm):
+                            RoomsMigrator._delete_eext_fields(eext_controller, eeprom_model.__name__, object_id, ['room'])
+                            continue
                         try:
-                            room_id = int(RoomsMigrator._read_eext_fields(eext_controller, 'PulseCounterConfiguration', pulse_counter_id, ['room']).get('room', 255))
+                            room_id = int(RoomsMigrator._read_eext_fields(eext_controller, eeprom_model.__name__, object_id, ['room']).get('room', 255))
                         except ValueError:
                             room_id = 255
+                        object_orm, _ = orm_model.get_or_create(number=object_id)  # type: ignore
+                        if room_id == 255:
+                            object_orm.room = None
+                        else:
+                            object_orm.room = RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, floors)
+                        object_orm.save()
+                        RoomsMigrator._delete_eext_fields(eext_controller, eeprom_model.__name__, object_id, ['room'])
+                    except Exception:
+                        logger.exception('Could not migrate single {0}'.format(eeprom_model.__name__))
+            except Exception:
+                logger.exception('Could not migrate {0}s'.format(eeprom_model.__name__))
+
+        # PulseCounters
+        pulse_counter = None  # type: Optional[PulseCounter]
+        # - Master
+        try:
+            logger.info('* PulseCounters (master)')
+            for pulse_counter_classic_orm in master_controller._eeprom_controller.read_all(PulseCounterConfiguration):
+                try:
+                    pulse_counter_id = pulse_counter_classic_orm.id
+                    try:
+                        room_id = int(RoomsMigrator._read_eext_fields(eext_controller, 'PulseCounterConfiguration', pulse_counter_id, ['room']).get('room', 255))
+                    except ValueError:
+                        room_id = 255
+                    pulse_counter = PulseCounter.get_or_none(number=pulse_counter_id)
+                    if pulse_counter is None:
+                        pulse_counter = PulseCounter(number=pulse_counter_id,
+                                                     name=pulse_counter_classic_orm.name,
+                                                     persistent=False,
+                                                     source=u'master')
+                    else:
+                        pulse_counter.name = pulse_counter_classic_orm.name
+                        pulse_counter.persistent = False
+                        pulse_counter.source = u'master'
+                    if room_id == 255:
+                        pulse_counter.room = None
+                    else:
+                        pulse_counter.room = RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, floors)
+                    pulse_counter.save()
+                    RoomsMigrator._delete_eext_fields(eext_controller, 'PulseCounterConfiguration', pulse_counter_id, ['room'])
+                except Exception:
+                    logger.exception('Could not migrate classic master PulseCounter')
+        except Exception:
+            logger.exception('Could not migrate classic master PulseCounters')
+        # - Old SQLite3
+        old_sqlite_db = constants.get_pulse_counter_database_file()
+        if os.path.exists(old_sqlite_db):
+            try:
+                logger.info('* PulseCounters (gateway)')
+                import sqlite3
+                connection = sqlite3.connect(old_sqlite_db,
+                                             detect_types=sqlite3.PARSE_DECLTYPES,
+                                             check_same_thread=False,
+                                             isolation_level=None)
+                cursor = connection.cursor()
+                for row in cursor.execute('SELECT id, name, room, persistent FROM pulse_counters ORDER BY id ASC;'):
+                    try:
+                        pulse_counter_id = int(row[0])
+                        room_id = int(row[2])
                         pulse_counter = PulseCounter.get_or_none(number=pulse_counter_id)
                         if pulse_counter is None:
                             pulse_counter = PulseCounter(number=pulse_counter_id,
-                                                         name=pulse_counter_classic_orm.name,
-                                                         persistent=False,
-                                                         source=u'master')
+                                                         name=str(row[1]),
+                                                         persistent=row[3] >= 1,
+                                                         source=u'gateway')
                         else:
-                            pulse_counter.name = pulse_counter_classic_orm.name
-                            pulse_counter.persistent = False
-                            pulse_counter.source = u'master'
+                            pulse_counter.name = str(row[1])
+                            pulse_counter.persistent = row[3] >= 1
+                            pulse_counter.source = u'gateway'
                         if room_id == 255:
                             pulse_counter.room = None
                         else:
                             pulse_counter.room = RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, floors)
                         pulse_counter.save()
-                        RoomsMigrator._delete_eext_fields(eext_controller, 'PulseCounterConfiguration', pulse_counter_id, ['room'])
                     except Exception:
-                        logger.exception('Could not migrate classic master PulseCounter')
+                        logger.exception('Could not migratie gateway PulseCounter')
+                os.rename(old_sqlite_db, '{0}.bak'.format(old_sqlite_db))
             except Exception:
-                logger.exception('Could not migrate classic master PulseCounters')
-            # - Old SQLite3
-            old_sqlite_db = constants.get_pulse_counter_database_file()
-            if os.path.exists(old_sqlite_db):
-                try:
-                    logger.info('* PulseCounters (gateway)')
-                    import sqlite3
-                    connection = sqlite3.connect(old_sqlite_db,
-                                                 detect_types=sqlite3.PARSE_DECLTYPES,
-                                                 check_same_thread=False,
-                                                 isolation_level=None)
-                    cursor = connection.cursor()
-                    for row in cursor.execute('SELECT id, name, room, persistent FROM pulse_counters ORDER BY id ASC;'):
-                        try:
-                            pulse_counter_id = int(row[0])
-                            room_id = int(row[2])
-                            pulse_counter = PulseCounter.get_or_none(number=pulse_counter_id)
-                            if pulse_counter is None:
-                                pulse_counter = PulseCounter(number=pulse_counter_id,
-                                                             name=str(row[1]),
-                                                             persistent=row[3] >= 1,
-                                                             source=u'gateway')
-                            else:
-                                pulse_counter.name = str(row[1])
-                                pulse_counter.persistent = row[3] >= 1
-                                pulse_counter.source = u'gateway'
-                            if room_id == 255:
-                                pulse_counter.room = None
-                            else:
-                                pulse_counter.room = RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, floors)
-                            pulse_counter.save()
-                        except Exception:
-                            logger.exception('Could not migratie gateway PulseCounter')
-                    os.rename(old_sqlite_db, '{0}.bak'.format(old_sqlite_db))
-                except Exception:
-                    logger.exception('Could not migrate gateway PulseCounters')
-
-            # Migration complete
-            feature.enabled = True
-            feature.save()
-
-            logger.info('Migrating: Rooms... Done')
-        except Exception:
-            logger.exception('Error migrating rooms')
+                logger.exception('Could not migrate gateway PulseCounters')
 
     @staticmethod
     def _get_or_create_room(eext_controller, room_id, rooms, floors, skip_empty=False):

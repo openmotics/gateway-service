@@ -18,7 +18,7 @@ Memory models MyPy stub
 from typing import List
 
 from master.core.basic_action import BasicAction
-from master.core.memory_types import MemoryModelDefinition, GlobalMemoryModelDefinition, CompositeMemoryModelDefinition
+from master.core.memory_types import MemoryModelDefinition, GlobalMemoryModelDefinition, CompositeMemoryModelDefinition, MemoryEnumDefinition, EnumEntry
 
 
 class GlobalConfiguration(GlobalMemoryModelDefinition):
@@ -54,6 +54,7 @@ class OutputModuleConfiguration(MemoryModelDefinition):
         are_45_outputs: bool
         are_67_outputs: bool
 
+    id: int
     device_type: str
     address: str
     firmware_version: str
@@ -61,13 +62,20 @@ class OutputModuleConfiguration(MemoryModelDefinition):
 
 
 class OutputConfiguration(MemoryModelDefinition):
+    class TimerType(MemoryEnumDefinition):
+        INACTIVE: EnumEntry
+        PER_100_MS: EnumEntry
+        PER_1_S: EnumEntry
+        ABSOLUTE: EnumEntry
+
     class _DALIOutputComposition(CompositeMemoryModelDefinition):
         dali_output_id: int
         dali_group_id: int
 
+    id: int
     module: OutputModuleConfiguration
     timer_value: int
-    timer_type: int
+    timer_type: EnumEntry
     output_type: int
     min_output_level: int
     max_output_level: int
@@ -80,6 +88,7 @@ class OutputConfiguration(MemoryModelDefinition):
 
 
 class InputModuleConfiguration(MemoryModelDefinition):
+    id: int
     device_type: str
     address: str
     firmware_version: str
@@ -95,12 +104,14 @@ class InputConfiguration(MemoryModelDefinition):
 
     class _InputLink(CompositeMemoryModelDefinition):
         output_id: int
-        enable_specific_actions: bool
+        enable_press_and_release: bool
         dimming_up: bool
         enable_1s_press: bool
         enable_2s_press: bool
+        not_used: bool
         enable_double_press: bool
 
+    id: int
     module: InputModuleConfiguration
     input_config: _InputConfigComposition
     dali_mapping: _DALIInputComposition
@@ -112,8 +123,15 @@ class InputConfiguration(MemoryModelDefinition):
     basic_action_2s_press: BasicAction
     basic_action_double_press: BasicAction
 
+    @property
+    def has_direct_output_link(self) -> bool: ...
+
+    @property
+    def in_use(self) -> bool: ...
+
 
 class SensorModuleConfiguration(MemoryModelDefinition):
+    id: int
     device_type: str
     address: str
     firmware_version: str
@@ -124,6 +142,7 @@ class SensorConfiguration(MemoryModelDefinition):
         dali_output_id: int
         dali_group_id: int
 
+    id: int
     module: SensorModuleConfiguration
     temperature_groupaction_follow: int
     humidity_groupaction_follow: int
@@ -156,6 +175,7 @@ class ShutterConfiguration(MemoryModelDefinition):
         group_14: bool
         group_15: bool
 
+    id: int
     outputs: _OutputMappingComposition
     timer_up: int
     timer_down: int
@@ -167,28 +187,65 @@ class ShutterConfiguration(MemoryModelDefinition):
 
 
 class CanControlModuleConfiguration(MemoryModelDefinition):
+    id: int
     device_type: str
     address: str
 
 
+class UCanModuleConfiguration(MemoryModelDefinition):
+    class ModbusSpeed(MemoryEnumDefinition):
+        B4800: EnumEntry
+        B9600: EnumEntry
+        B19200: EnumEntry
+        B38400: EnumEntry
+        B57600: EnumEntry
+        B115200: EnumEntry
+
+    class ModbusModel(MemoryEnumDefinition):
+        OPENMOTICS_COLOR_THERMOSTAT: EnumEntry
+        HEATMISER_THERMOSTAT: EnumEntry
+
+    class _ModbusTypeComposition(CompositeMemoryModelDefinition):
+        ucan_voc: bool
+        ucan_co2: bool
+        ucan_hum: bool
+        ucan_temp: bool
+        ucan_lux: bool
+        ucan_sound: bool
+
+    id: int
+    device_type: str
+    address: str
+    module: CanControlModuleConfiguration
+    modbus_address: int
+    modbus_type: _ModbusTypeComposition
+    modbus_model: ModbusModel
+    modbus_speed: ModbusSpeed
+
+
 class ExtraSensorConfiguration(MemoryModelDefinition):
+    id: int
     grouaction_changed: int
     name: str
 
 
 class ValidationBitConfiguration(MemoryModelDefinition):
+    id: int
     grouaction_changed: int
     name: str
 
 
 class GroupActionAddressConfiguration(MemoryModelDefinition):
+    id: int
     start: int
     end: int
 
 
 class GroupActionConfiguration(MemoryModelDefinition):
+    id: int
     name: str
 
 
 class GroupActionBasicAction(MemoryModelDefinition):
+    id: int
     basic_action: BasicAction

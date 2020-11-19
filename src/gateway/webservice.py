@@ -18,10 +18,13 @@
 from __future__ import absolute_import
 
 import base64
+import hashlib
 import logging
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 
@@ -33,17 +36,21 @@ import ujson as json
 from cherrypy.lib.static import serve_file
 from decorator import decorator
 from peewee import DoesNotExist
+from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
 import gateway
 from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
-    OutputSerializer, OutputStateSerializer, PulseCounterSerializer, \
-    RoomSerializer, SensorSerializer, ShutterGroupSerializer, \
-    ShutterSerializer, ThermostatSerializer
-from gateway.dto import RoomDTO
-from gateway.enums import ShutterEnums
+    ModuleSerializer, OutputSerializer, OutputStateSerializer, \
+    PulseCounterSerializer, RoomSerializer, ScheduleSerializer, \
+    SensorSerializer, ShutterGroupSerializer, ShutterSerializer, \
+    ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer
+from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO
+from gateway.enums import ShutterEnums, UserEnums
+from gateway.exceptions import UnsupportedException
+from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
-from gateway.models import Feature
+from gateway.models import Database, Feature, Config
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -51,25 +58,26 @@ from platform_utils import Hardware, Platform, System
 from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
 
-if False:
-    from typing import Dict, Optional, Any, List, Tuple
+if False:  # MYPY
+    from typing import Dict, Optional, Any, List
     from bus.om_bus_client import MessageClient
-    from gateway.config import ConfigurationController
     from gateway.gateway_api import GatewayApi
+    from gateway.group_action_controller import GroupActionController
+    from gateway.hal.frontpanel_controller import FrontpanelController
+    from gateway.input_controller import InputController
     from gateway.maintenance_controller import MaintenanceController
     from gateway.metrics_collector import MetricsCollector
     from gateway.metrics_controller import MetricsController
+    from gateway.module_controller import ModuleController
+    from gateway.output_controller import OutputController
+    from gateway.pulse_counter_controller import PulseCounterController
+    from gateway.room_controller import RoomController
     from gateway.scheduling import SchedulingController
+    from gateway.sensor_controller import SensorController
     from gateway.shutter_controller import ShutterController
     from gateway.thermostat.thermostat_controller import ThermostatController
-    from gateway.users import UserController
-    from gateway.output_controller import OutputController
-    from gateway.input_controller import InputController
-    from gateway.room_controller import RoomController
-    from gateway.sensor_controller import SensorController
-    from gateway.pulse_counter_controller import PulseCounterController
-    from gateway.group_action_controller import GroupActionController
-    from gateway.hal.frontpanel_controller import FrontpanelController
+    from gateway.user_controller import UserController
+    from gateway.ventilation_controller import VentilationController
     from plugins.base import PluginController
 
 logger = logging.getLogger("openmotics")
@@ -154,8 +162,8 @@ def params_handler(**kwargs):
     except Exception:
         response.headers['Content-Type'] = 'application/json'
         response.status = 406  # No Acceptable
-        response.body = json.dumps({'success': False,
-                                    'msg': 'invalid_body'})
+        contents = json.dumps({'success': False, 'msg': 'invalid_body'})
+        response.body = contents.encode()
         request.handler = None
         return
     try:
@@ -163,8 +171,8 @@ def params_handler(**kwargs):
     except ValueError:
         response.headers['Content-Type'] = 'application/json'
         response.status = 406  # No Acceptable
-        response.body = json.dumps({'success': False,
-                                    'msg': 'invalid_parameters'})
+        contents = json.dumps({'success': False, 'msg': 'invalid_parameters'})
+        response.body = contents.encode()
         request.handler = None
 
 
@@ -207,7 +215,8 @@ def authentication_handler(pass_token=False):
     except Exception:
         cherrypy.response.headers['Content-Type'] = 'application/json'
         cherrypy.response.status = 401  # Unauthorized
-        cherrypy.response.body = '"invalid_token"'
+        contents = json.dumps({'success': False, 'msg': 'invalid_token'})
+        cherrypy.response.body = contents.encode()
         request.handler = None
 
 
@@ -234,10 +243,18 @@ def _openmotics_api(f, *args, **kwargs):
         logger.error('Communication timeout during API call %s', f.__name__)
         status = 200  # OK
         data = {'success': False, 'msg': 'Internal communication timeout'}
+    except CommunicationFailure:
+        logger.error('Communication failure during API call %s', f.__name__)
+        status = 503  # Service Unavailable
+        data = {'success': False, 'msg': 'Internal communication failure'}
     except DoesNotExist:
         logger.error('Could not find the requested object')
         status = 200  # OK
         data = {'success': False, 'msg': 'Object not found'}
+    except UnsupportedException:
+        logger.error('Some features for API call %s are unsupported on this device', f.__name__)
+        status = 200  # OK
+        data = {'success': False, 'msg': 'Unsupported'}
     except Exception as ex:
         logger.exception('Unexpected error during API call %s', f.__name__)
         status = 200  # OK
@@ -252,7 +269,7 @@ def _openmotics_api(f, *args, **kwargs):
     if hasattr(f, 'deprecated') and f.deprecated is not None:
         cherrypy.response.headers['Warning'] = 'Warning: 299 - "Deprecated, replaced by: {0}"'.format(f.deprecated)
     cherrypy.response.status = status
-    return contents
+    return contents.encode()
 
 
 def openmotics_api(auth=False, check=None, pass_token=False, plugin_exposed=True, deprecated=None):
@@ -280,16 +297,15 @@ class WebInterface(object):
 
     @Inject
     def __init__(self, user_controller=INJECTED, gateway_api=INJECTED, maintenance_controller=INJECTED,
-                 message_client=INJECTED, configuration_controller=INJECTED, scheduling_controller=INJECTED,
+                 message_client=INJECTED, scheduling_controller=INJECTED,
                  thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED,
                  room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
-                 frontpanel_controller=INJECTED):
+                 frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
         self._user_controller = user_controller  # type: UserController
-        self._config_controller = configuration_controller  # type: ConfigurationController
         self._scheduling_controller = scheduling_controller  # type: SchedulingController
         self._thermostat_controller = thermostat_controller  # type: ThermostatController
         self._shutter_controller = shutter_controller  # type: ShutterController
@@ -299,7 +315,9 @@ class WebInterface(object):
         self._sensor_controller = sensor_controller  # type: SensorController
         self._pulse_counter_controller = pulse_counter_controller  # type: PulseCounterController
         self._group_action_controller = group_action_controller  # type: GroupActionController
-        self._frontpanel_controller = frontpanel_controller  # type: FrontpanelController
+        self._frontpanel_controller = frontpanel_controller  # type: Optional[FrontpanelController]
+        self._module_controller = module_controller  # type: ModuleController
+        self._ventilation_controller = ventilation_controller  # type: VentilationController
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
@@ -313,7 +331,11 @@ class WebInterface(object):
         self._service_state = False
 
     def in_authorized_mode(self):
-        return self._frontpanel_controller.authorized_mode
+        # type: () -> bool
+        if self._frontpanel_controller:
+            return self._frontpanel_controller.authorized_mode
+        else:
+            return False
 
     def set_service_state(self, state):
         self._service_state = state
@@ -390,7 +412,8 @@ class WebInterface(object):
         :returns: Contents of index.html
         :rtype: str
         """
-        return serve_file('/opt/openmotics/static/index.html', content_type='text/html')
+        static_dir = constants.get_static_dir()
+        return serve_file(os.path.join(static_dir, 'index.html'), content_type='text/html')
 
     @openmotics_api(check=types(accept_terms=bool, timeout=int), plugin_exposed=False)
     def login(self, username, password, accept_terms=None, timeout=None):
@@ -408,11 +431,12 @@ class WebInterface(object):
         :returns: Authentication token
         :rtype: str
         """
-
-        success, data = self._user_controller.login(username, password, accept_terms, timeout)
+        user_dto = UserDTO(username=username)
+        user_dto.set_password(password)
+        success, data = self._user_controller.login(user_dto, accept_terms, timeout)
         if success is True:
             return {'token': data}
-        if data == 'terms_not_accepted':
+        if data == UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED:
             return {'next_step': 'accept_terms'}
         raise cherrypy.HTTPError(401, "invalid_credentials")
 
@@ -439,7 +463,10 @@ class WebInterface(object):
         """
         if not self.in_authorized_mode():
             raise cherrypy.HTTPError(401, "unauthorized")
-        self._user_controller.create_user(username, password, 'admin', True)
+        user_dto = UserDTO(username=username)
+        user_dto.set_password(password)
+        fields = ['username', 'password', 'accepted_terms']
+        self._user_controller.save_user(user_dto, fields)
         return {}
 
     @openmotics_api(plugin_exposed=False)
@@ -452,7 +479,9 @@ class WebInterface(object):
         """
         if not self.in_authorized_mode():
             raise cherrypy.HTTPError(401, "unauthorized")
-        return {'usernames': self._user_controller.get_usernames()}
+        users = self._user_controller.load_users()
+        usernames = [user.username for user in users]
+        return {'usernames': usernames}
 
     @openmotics_api(plugin_exposed=False)
     def remove_user(self, username):
@@ -464,7 +493,8 @@ class WebInterface(object):
         """
         if not self.in_authorized_mode():
             raise cherrypy.HTTPError(401, "unauthorized")
-        self._user_controller.remove_user(username)
+        user_dto = UserDTO(username=username)
+        self._user_controller.remove_user(user_dto)
         return {}
 
     @openmotics_api(auth=True, plugin_exposed=False)
@@ -478,15 +508,27 @@ class WebInterface(object):
         port = self._maintenance_controller.open_maintenace_socket()
         return {'port': port}
 
-    @openmotics_api(auth=True)
-    def reset_master(self):
+    @openmotics_api(auth=True, check=types(power_on=bool))
+    def reset_master(self, power_on=True):
         """
         Perform a cold reset on the master.
 
         :returns: 'status': 'OK'.
         :rtype: dict
         """
-        return self._gateway_api.reset_master()
+        return self._gateway_api.reset_master(power_on=power_on)
+
+    @openmotics_api(auth=True, plugin_exposed=False, check=types(action=str, size=int, data='json'))
+    def raw_master_action(self, action, size=None, data=None):
+        # type: (str, int, Optional[List[int]]) -> Dict[str,Any]
+        """
+        Send a raw action to the master.
+
+            POST /raw_master_action action=ST size=13
+            {"literal":"","data":[16,16,15,2,0,0,0,0,76,3,143,95,4],"success":true}
+        """
+        input_data = data if data is None else bytearray(data)
+        return self._gateway_api.raw_master_action(action, size, input_data)
 
     @openmotics_api(auth=True)
     def module_discover_start(self):  # type: () -> Dict[str, str]
@@ -506,7 +548,7 @@ class WebInterface(object):
         return {'running': self._gateway_api.module_discover_status()}
 
     @openmotics_api(auth=True)
-    def get_module_log(self):  # type: () -> Dict[str, List[Tuple[str, str]]]
+    def get_module_log(self):  # type: () -> Dict[str, List[Dict[str, Any]]]
         """
         Get the log messages from the module discovery mode. This returns the current log
         messages and clear the log messages.
@@ -526,13 +568,23 @@ class WebInterface(object):
         """
         return self._gateway_api.get_modules()
 
-    @openmotics_api(auth=True)
-    def get_modules_information(self):
+    @openmotics_api(auth=True, check=types(address=str, fields='json'))
+    def get_modules_information(self, address=None, fields=None):  # type: (Optional[str], Optional[List[str]]) -> Dict[str, Any]
         """
         Gets an overview of all modules and information
-        :return: Dict containing information per address
+        :param address: Optional address filter
+        :param fields: The field of the module information to get, None if all
         """
-        return {'modules': self._gateway_api.get_modules_information()}
+        return {'modules': {'master': {module_dto.address: ModuleSerializer.serialize(module_dto=module_dto, fields=fields)
+                                       for module_dto in self._module_controller.load_master_modules(address)},
+                            'energy': {module_dto.address: ModuleSerializer.serialize(module_dto=module_dto, fields=fields)
+                                       for module_dto in self._module_controller.load_energy_modules(address)}}}
+
+    @openmotics_api(auth=True, check=types(old_address=str, new_address=str))
+    def replace_module(self, old_address, new_address):  # type: (str, str) -> Dict[str, Any]
+        old_module, new_module = self._module_controller.replace_module(old_address, new_address)
+        return {'old_module': ModuleSerializer.serialize(old_module, fields=None),
+                'new_module': ModuleSerializer.serialize(new_module, fields=None)}
 
     @openmotics_api(auth=True)
     def get_features(self):
@@ -547,6 +599,7 @@ class WebInterface(object):
             'isolated_plugins',  # Plugins run in a separate process, so allow fine-graded control
             'websocket_maintenance',  # Maintenance over websockets
             'shutter_positions',  # Shutter positions
+            'ventilation',
         ]
 
         master_version = self._gateway_api.get_master_version()
@@ -557,11 +610,18 @@ class WebInterface(object):
         if master_version >= (3, 143, 88):
             features.append('input_states')
 
-        thermostats_gateway = Feature.get_or_none(name='thermostats_gateway')
-        if thermostats_gateway is not None and thermostats_gateway.enabled:
-            features.append('thermostats_gateway')
+        for name in ('thermostats_gateway',):
+            feature = Feature.get_or_none(name=name)
+            if feature and feature.enabled:
+                features.append(name)
 
         return {'features': features}
+
+    @openmotics_api(auth=True)
+    def get_platform_details(self):  # type: () -> Dict[str, str]
+        return {'platform': Platform.get_platform(),
+                'operating_system': System.get_operating_system().get('ID', 'unknown'),
+                'hardware': Hardware.get_board_type()}
 
     @openmotics_api(auth=True, check=types(type=int, id=int))
     def flash_leds(self, type, id):
@@ -616,35 +676,26 @@ class WebInterface(object):
         :param dimmer: The dimmer value to set, None if unchanged
         :param timer: The timer value to set, None if unchanged
         """
-        self._gateway_api.set_output_status(id, is_on, dimmer, timer)
+        self._output_controller.set_output_status(id, is_on, dimmer, timer)
         return {}
 
     @openmotics_api(auth=True)
     def set_all_lights_off(self):
-        """
-        Turn all lights off.
-        """
-        return self._gateway_api.set_all_lights_off()
+        """ Turn all lights off. """
+        self._output_controller.set_all_lights_off()
+        return {}
 
     @openmotics_api(auth=True, check=types(floor=int))
     def set_all_lights_floor_off(self, floor):
-        """
-        Turn all lights on a given floor off.
-
-        :param floor: The id of the floor
-        :type floor: int
-        """
-        return self._gateway_api.set_all_lights_floor_off(floor)
+        """ Turn all lights on a given floor off. """
+        self._output_controller.set_all_lights_floor_off(floor)
+        return {}
 
     @openmotics_api(auth=True, check=types(floor=int))
     def set_all_lights_floor_on(self, floor):
-        """
-        Turn all lights on a given floor on.
-
-        :param floor: The id of the floor
-        :type floor: int
-        """
-        return self._gateway_api.set_all_lights_floor_on(floor)
+        """ Turn all lights on a given floor on. """
+        self._output_controller.set_all_lights_floor_on(floor)
+        return {}
 
     @openmotics_api(auth=True)
     def get_last_inputs(self):
@@ -852,33 +903,84 @@ class WebInterface(object):
         """
         return self._thermostat_controller.v0_set_airco_status(thermostat_id, airco_on)
 
-    @openmotics_api(auth=True)
-    def get_sensor_temperature_status(self):
-        """
-        Get the current temperature of all sensors.
+    # Ventilation
 
-        :returns: 'status': list of 32 temperatures, 1 for each sensor.
-        :rtype: dict
+    # methods=['GET']
+    @openmotics_api(auth=True, check=types(fields='json'))
+    def get_ventilation_configurations(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str, Any]
+        ventilation_dtos = self._ventilation_controller.load_ventilations()
+        return {'config': [VentilationSerializer.serialize(ventilation_dto, fields)
+                           for ventilation_dto in ventilation_dtos]}
+
+    # methods=['GET']
+    @openmotics_api(auth=True, check=types(ventilation_id=int, fields='json'))
+    def get_ventilation_configuration(self, ventilation_id, fields=None):
+        # type: (int, Optional[List[str]]) -> Dict[str, Any]
+        ventilation_dto = self._ventilation_controller.load_ventilation(ventilation_id)
+        return {'config': VentilationSerializer.serialize(ventilation_dto, fields)}
+
+    # methods=['POST']
+    @openmotics_api(auth=True, check=types(config='json'))
+    def set_ventilation_configuration(self, config):
+        # type: (Dict[str,Any]) -> Dict[str, Any]
+        ventilation_dto, fields = VentilationSerializer.deserialize(config)
+        self._ventilation_controller.save_ventilation(ventilation_dto, fields)
+        fields.append('id')
+        return {'config': VentilationSerializer.serialize(ventilation_dto, fields)}
+
+    # methods=['GET']
+    @openmotics_api(auth=True, check=types(fields='json'))
+    def get_ventilation_status(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str, Any]
+        status = self._ventilation_controller.get_status()
+        return {'status': [VentilationStatusSerializer.serialize(status_dto, fields)
+                           for status_dto in status]}
+
+    # methods=['PUT']
+    @openmotics_api(auth=True, check=types(status='json'))
+    def set_ventilation_status(self, status):
+        # type: (Dict[str,Any]) -> Dict[str, Any]
+        """
+        Update the current ventilation status, used by plugins to report the current
+        status of devices.
+        """
+        status_dto, fields = VentilationStatusSerializer.deserialize(status)
+        status_dto = self._ventilation_controller.set_status(status_dto)
+        return {'status': VentilationStatusSerializer.serialize(status_dto, fields)}
+
+    # methods=['POST']
+    @openmotics_api(auth=True, check=types(ventilation_id=int))
+    def set_ventilation_mode_auto(self, ventilation_id):
+        # type: (int) -> Dict[str, Any]
+        self._ventilation_controller.set_mode_auto(ventilation_id)
+        return {}
+
+    # methods=['POST']
+    @openmotics_api(auth=True, check=types(ventilation_id=int, level=int, timer=float))
+    def set_ventilation_level(self, ventilation_id, level, timer=None):
+        # type: (int, int, Optional[float]) -> Dict[str, Any]
+        self._ventilation_controller.set_level(ventilation_id, level, timer)
+        return {}
+
+    @openmotics_api(auth=True)
+    def get_sensor_temperature_status(self):  # type: () -> Dict[str, Any]
+        """
+        Get the current temperature of all sensors as a list of N values, one for each sensor
         """
         return {'status': self._gateway_api.get_sensors_temperature_status()}
 
     @openmotics_api(auth=True)
-    def get_sensor_humidity_status(self):
+    def get_sensor_humidity_status(self):  # type: () -> Dict[str, Any]
         """
-        Get the current humidity of all sensors.
-
-        :returns: 'status': List of 32 bytes, 1 for each sensor.
-        :rtype: dict
+        Get the current humidity of all sensors as a list of N values, one for each sensor
         """
         return {'status': self._gateway_api.get_sensors_humidity_status()}
 
     @openmotics_api(auth=True)
-    def get_sensor_brightness_status(self):
+    def get_sensor_brightness_status(self):  # type: () -> Dict[str, Any]
         """
-        Get the current brightness of all sensors.
-
-        :returns: 'status': List of 32 bytes, 1 for each sensor.
-        :rtype: dict
+        Get the current brightness of all sensors as a list of N values, one for each sensor
         """
         return {'status': self._gateway_api.get_sensors_brightness_status()}
 
@@ -888,39 +990,40 @@ class WebInterface(object):
         Set the temperature, humidity and brightness value of a virtual sensor.
 
         :param sensor_id: The id of the sensor.
-        :type sensor_id: int
         :param temperature: The temperature to set in degrees Celcius
-        :type temperature: float
         :param humidity: The humidity to set in percentage
-        :type humidity: float
         :param brightness: The brightness to set in percentage
-        :type brightness: int
-        :returns: dict with 'status'.
-        :rtype: dict
         """
-        return self._gateway_api.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
+        self._gateway_api.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
+        return {}
 
     @openmotics_api(auth=True)
-    def add_virtual_output(self):
-        # type: () -> Dict[str,Any]
-        """
-        Adds a new virtual output module.
-
-        :returns: dict with 'status'.
-        :rtype: dict
-        """
-        return {'status': self._gateway_api.add_virtual_output_module()}
+    def add_virtual_output_module(self):
+        # type: () -> Dict[str, Any]
+        """ Adds a new virtual output module. """
+        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.OUTPUT)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True)
-    def add_virtual_input(self):
-        # type: () -> Dict[str,Any]
-        """
-        Adds a new virtual input module.
+    def add_virtual_input_module(self):
+        # type: () -> Dict[str, Any]
+        """ Adds a new virtual input module. """
+        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.INPUT)
+        return {'status': 'OK'}
 
-        :returns: dict with 'status'.
-        :rtype: dict
-        """
-        return {'status': self._gateway_api.add_virtual_input_module()}
+    @openmotics_api(auth=True)
+    def add_virtual_dim_control_module(self):
+        # type: () -> Dict[str, Any]
+        """ Adds a new virtual dim control module """
+        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.DIM_CONTROL)
+        return {'status': 'OK'}
+
+    @openmotics_api(auth=True)
+    def add_virtual_sensor_module(self):
+        # type: () -> Dict[str, Any]
+        """ Adds a new virtual sensor module """
+        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.SENSOR)
+        return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(action_type=int, action_number=int))
     def do_basic_action(self, action_type, action_number):
@@ -1820,9 +1923,11 @@ class WebInterface(object):
         """
         power_dirty = self._power_dirty
         self._power_dirty = False
+        orm_dirty = Database.get_dirty_flag()
         # eeprom key used here for compatibility
         return {'eeprom': self._gateway_api.get_configuration_dirty_flag(),
-                'power': power_dirty}
+                'power': power_dirty,
+                'orm': orm_dirty}
 
     # Energy modules
 
@@ -2003,7 +2108,7 @@ class WebInterface(object):
                 'platform': str(Platform.get_platform())}
 
     @openmotics_api(auth=True, plugin_exposed=False)
-    def update(self, version, md5, update_data):
+    def update(self, version, md5, update_data=None):
         """
         Perform an update.
 
@@ -2014,15 +2119,14 @@ class WebInterface(object):
         :param update_data: a tgz file containing the update script (update.sh) and data.
         :type update_data: multipart/form-data encoded byte string.
         """
-        update_data = update_data.file.read()
-
         if not os.path.exists(constants.get_update_dir()):
             os.mkdir(constants.get_update_dir())
 
-        with open(constants.get_update_file(), "wb") as update_file:
-            update_file.write(update_data)
-        with open(constants.get_update_output_file(), "w") as output_file:
-            output_file.write('\n')  # Truncate file
+        if update_data:
+            logger.info('using old style update.tgz')
+            update_data = update_data.file.read()
+            with open(constants.get_update_file(), "wb") as update_file:
+                update_file.write(update_data)
 
         subprocess.Popen(constants.get_update_cmd(version, md5), close_fds=True)
 
@@ -2042,6 +2146,88 @@ class WebInterface(object):
 
         return {'output': output,
                 'version': version}
+
+    @openmotics_api(auth=True, plugin_exposed=False)
+    def update_firmware(self, master=None, can=None):
+        if master:
+            temp_file = self._download_firmware('master_classic', master)
+            self._gateway_api.update_master_firmware(temp_file)
+            shutil.move(temp_file, '/opt/openmotics/firmware.hex')
+        if can:
+            temp_file = self._download_firmware('can', can)
+            self._gateway_api.update_slave_firmware('C', temp_file)
+            shutil.move(temp_file, '/opt/openmotics/c_firmware.hex')
+
+        return {}
+
+    @Inject
+    def _get_firmware_url(self, firmware, version, cloud_url=INJECTED, gateway_uuid=INJECTED):
+        # type: (str, str, str, str) -> str
+        uri = urlparse(cloud_url)
+        path = '/portal/firmware_metadata/{0}/{1}/'.format(firmware, version)
+        query = 'uuid={0}'.format(gateway_uuid)
+        return urlunparse((uri.scheme, uri.netloc, path, '', query, ''))
+
+    def _download_firmware(self, firmware, version):
+        # type: (str, str) -> str
+        response = requests.get(self._get_firmware_url(firmware, version))
+        if response.status_code != 200:
+            raise ValueError('failed to retrieve firmware')
+        data = response.json()
+        temp_file = tempfile.mktemp('-firmware.hex')
+        logger.info('downloading {}...'.format(data['url']))
+        response = requests.get(data['url'], stream=True)
+        with open(temp_file, 'wb') as f:
+            shutil.copyfileobj(response.raw, f)
+
+        hasher = hashlib.sha256()
+        with open(temp_file, 'rb') as f:
+            hasher.update(f.read())
+        calculated_hash = hasher.hexdigest()
+        if calculated_hash != data['sha256']:
+            raise ValueError('firmware sha256:%s does not match' % calculated_hash)
+        return temp_file
+
+    @openmotics_api(auth=True, plugin_exposed=False)
+    def update_master_firmware(self, md5, firmware_data):
+        """
+        Perform a master firmware update.
+        """
+        firmware_data = firmware_data.file.read()
+        hasher = hashlib.md5()
+        hasher.update(firmware_data)
+        calculated_md5 = hasher.hexdigest()
+        if md5 != calculated_md5:
+            raise ValueError('firmware md5:%s does not match' % calculated_md5)
+
+        temp_file = '/tmp/{}.hex'.format(md5)
+        with open(temp_file, 'wb') as firmware_file:
+            firmware_file.write(firmware_data)
+        self._gateway_api.update_master_firmware(temp_file)
+        shutil.move(temp_file, '/opt/openmotics/firmware.hex')
+        return {}
+
+    @openmotics_api(auth=True, plugin_exposed=False)
+    def update_slave_firmware(self, type, md5, firmware_data):
+        """
+        Perform a slave firmware update.
+        """
+        if type not in ('C', 'O', 'I', 'D', 'E', 'T'):
+            raise ValueError('invalid slave module type %s' % type)
+
+        firmware_data = firmware_data.file.read()
+        hasher = hashlib.md5()
+        hasher.update(firmware_data)
+        calculated_md5 = hasher.hexdigest()
+        if md5 != calculated_md5:
+            raise ValueError('firmware md5:%s does not match' % calculated_md5)
+
+        temp_file = '/tmp/{}.hex'.format(md5)
+        with open(temp_file, 'wb') as firmware_file:
+            firmware_file.write(firmware_data)
+        self._gateway_api.update_slave_firmware(type, temp_file)
+        shutil.move(temp_file, '/opt/openmotics/{}_firmware.hex'.format(type))
+        return {}
 
     @openmotics_api(auth=True)
     def set_timezone(self, timezone):
@@ -2108,32 +2294,44 @@ class WebInterface(object):
 
     @openmotics_api(auth=True, check=types(name=str, start=int, schedule_type=str, arguments='json', repeat='json', duration=int, end=int))
     def add_schedule(self, name, start, schedule_type, arguments=None, repeat=None, duration=None, end=None):
-        self._scheduling_controller.add_schedule(name, start, schedule_type, arguments, repeat, duration, end)
+        schedule_dto = ScheduleDTO(id=None,
+                                   name=name,
+                                   start=start,
+                                   action=schedule_type,
+                                   repeat=repeat,
+                                   duration=duration,
+                                   end=end,
+                                   arguments=arguments)
+        fields = ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']
+        self._scheduling_controller.save_schedules([(schedule_dto, fields)])
         return {}
 
     @openmotics_api(auth=True, deprecated='list_schedules')
     def list_scheduled_actions(self):
+        # Deprecated API, so manual serialization to old format
         return {'actions': [{'timestamp': schedule.start,
                              'from_now': schedule.start - time.time(),
                              'id': schedule.id,
                              'description': schedule.name,
                              'action': json.dumps({'action': schedule.arguments['name'],
                                                    'params': schedule.arguments['parameters']})}
-                            for schedule in self._scheduling_controller.schedules
-                            if schedule.schedule_type == 'LOCAL_API']}
+                            for schedule in self._scheduling_controller.load_schedules()
+                            if schedule.action == 'LOCAL_API']}
 
     @openmotics_api(auth=True)
     def list_schedules(self):
-        return {'schedules': [schedule.serialize() for schedule in self._scheduling_controller.schedules]}
+        return {'schedules': [ScheduleSerializer.serialize(schedule_dto, fields=None)
+                              for schedule_dto in self._scheduling_controller.load_schedules()]}
 
     @openmotics_api(auth=True, check=types(id=int), deprecated='remove_schedule')
     def remove_scheduled_action(self, id):
-        self._scheduling_controller.remove_schedule(id)
+        self.remove_schedule(schedule_id=id)
         return {}
 
     @openmotics_api(auth=True, check=types(schedule_id=int))
     def remove_schedule(self, schedule_id):
-        self._scheduling_controller.remove_schedule(schedule_id)
+        self._scheduling_controller.remove_schedules([ScheduleDTO(id=schedule_id,  # Only ID is relevant for delete action
+                                                                  name=None, start=None, action=None)])
         return {}
 
     @openmotics_api(auth=True)
@@ -2167,7 +2365,7 @@ class WebInterface(object):
     def install_plugin(self, md5, package_data):
         """
         Install a new plugin. The package_data should include a __init__.py file and
-        will be installed in /opt/openmotics/python/plugins/<name>.
+        will be installed in $OPENMOTICS_PREFIX/python/plugins/<name>.
 
         :param md5: md5 sum of the package_data.
         :type md5: String
@@ -2209,7 +2407,7 @@ class WebInterface(object):
         """
         values = {}
         for setting in settings:
-            value = self._config_controller.get(setting)
+            value = Config.get(setting)
             if value is not None:
                 values[setting] = value
         return {'values': values}
@@ -2222,7 +2420,7 @@ class WebInterface(object):
         if setting not in ['cloud_enabled', 'cloud_metrics_enabled|energy', 'cloud_metrics_enabled|counter',
                            'cloud_support']:
             raise RuntimeError('Setting {0} cannot be set'.format(setting))
-        self._config_controller.set(setting, value)
+        Config.set(setting, value)
         return {}
 
     @openmotics_api(auth=True, check=types(active=bool), plugin_exposed=False)
@@ -2245,11 +2443,11 @@ class WebInterface(object):
 
     @openmotics_api(check=types(confirm=bool), auth=True, plugin_exposed=False)
     def factory_reset(self, username, password, confirm=False):
-        success, _ = self._user_controller.login(username, password)
+        user_dto = UserDTO(username=username)
+        user_dto.set_password(password)
+        success, _ = self._user_controller.login(user_dto)
         if not success:
             raise cherrypy.HTTPError(401, 'invalid_credentials')
-        if self._user_controller.get_role(username) != 'admin':
-            raise cherrypy.HTTPError(401, 'user_unauthorized')
         if not confirm:
             raise cherrypy.HTTPError(401, 'not_confirmed')
         return self._gateway_api.factory_reset()
@@ -2257,7 +2455,8 @@ class WebInterface(object):
     @openmotics_api(auth=False)
     def health_check(self):
         """ Requests the state of the various services and checks the returned value for the global state """
-        health = {'openmotics': {'state': self._service_state}}
+        health = {'openmotics': {'state': self._service_state},
+                  'master': {'state': self._gateway_api.get_master_online()}}
         try:
             state = {}
             if self._message_client is not None:
@@ -2272,8 +2471,11 @@ class WebInterface(object):
     @openmotics_api(auth=True)
     def indicate(self):
         """ Blinks the Status led on the Gateway to indicate the module """
-        self._frontpanel_controller.indicate()
-        return {}
+        if self._frontpanel_controller:
+            self._frontpanel_controller.indicate()
+            return {}
+        else:
+            raise NotImplementedError()
 
     @cherrypy.expose
     @cherrypy.tools.cors()
@@ -2311,12 +2513,13 @@ class WebService(object):
     name = 'web'
 
     @Inject
-    def __init__(self, web_interface=INJECTED, configuration_controller=INJECTED, verbose=False):
-        # type: (WebInterface, ConfigurationController, bool) -> None
+    def __init__(self, web_interface=INJECTED, http_port=INJECTED, https_port=INJECTED, verbose=False):
+        # type: (WebInterface, int, int, bool) -> None
         self._webinterface = web_interface
-        self._config_controller = configuration_controller
-        self._https_server = None  # type: Optional[cherrypy._cpserver.Server]
+        self._http_port = http_port
+        self._https_port = https_port
         self._http_server = None  # type: Optional[cherrypy._cpserver.Server]
+        self._https_server = None  # type: Optional[cherrypy._cpserver.Server]
         if not verbose:
             logging.getLogger("cherrypy").propagate = False
 
@@ -2339,17 +2542,19 @@ class WebService(object):
             OMPlugin(cherrypy.engine).subscribe()
             cherrypy.tools.websocket = OMSocketTool()
 
+            cherrypy.config.update({'server.socket_port': self._http_port})
+
             config = {'/terms': {'tools.staticdir.on': True,
-                                 'tools.staticdir.dir': '/opt/openmotics/python/terms'},
+                                 'tools.staticdir.dir': constants.get_terms_dir()},
                       '/static': {'tools.staticdir.on': True,
-                                  'tools.staticdir.dir': '/opt/openmotics/static'},
+                                  'tools.staticdir.dir': constants.get_static_dir()},
                       '/ws_metrics': {'tools.websocket.on': True,
                                       'tools.websocket.handler_cls': MetricsSocket},
                       '/ws_events': {'tools.websocket.on': True,
                                      'tools.websocket.handler_cls': EventsSocket},
                       '/ws_maintenance': {'tools.websocket.on': True,
                                           'tools.websocket.handler_cls': MaintenanceSocket},
-                      '/': {'tools.cors.on': self._config_controller.get('cors_enabled', False),
+                      '/': {'tools.cors.on': Config.get('cors_enabled', False),
                             'tools.sessions.on': False}}
 
             cherrypy.tree.mount(root=self._webinterface,
@@ -2359,17 +2564,17 @@ class WebService(object):
             cherrypy.server.unsubscribe()
 
             self._https_server = cherrypy._cpserver.Server()
-            self._https_server.socket_port = 443
+            self._https_server.socket_port = self._https_port
             self._https_server._socket_host = '0.0.0.0'
             self._https_server.socket_timeout = 60
-            System.setup_cherrypy_ssl(self._https_server,
-                                      private_key_filename=constants.get_ssl_private_key_file(),
-                                      certificate_filename=constants.get_ssl_certificate_file())
+            self._https_server.ssl_certificate = constants.get_ssl_certificate_file()
+            self._https_server.ssl_private_key = constants.get_ssl_private_key_file()
+            System.setup_cherrypy_ssl(self._https_server)
             self._https_server.subscribe()
 
             self._http_server = cherrypy._cpserver.Server()
-            self._http_server.socket_port = 80
-            if self._config_controller.get('enable_http', False):
+            self._http_server.socket_port = self._http_port
+            if Config.get('enable_http', False):
                 # This is added for development purposes.
                 # Do NOT enable unless you know what you're doing and understand the risks.
                 self._http_server._socket_host = '0.0.0.0'

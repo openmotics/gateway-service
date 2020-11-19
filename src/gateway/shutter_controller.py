@@ -16,20 +16,23 @@
 This module contains logic to handle shutters with their state/position
 """
 from __future__ import absolute_import
+
 import logging
 import time
 from threading import Lock
-from ioc import Injectable, Inject, INJECTED, Singleton
-from toolbox import Toolbox
+
 from gateway.base_controller import BaseController, SyncStructure
-from gateway.hal.master_event import MasterEvent
+from gateway.dto import ShutterDTO, ShutterGroupDTO
 from gateway.enums import ShutterEnums
 from gateway.events import GatewayEvent
-from gateway.dto import ShutterDTO, ShutterGroupDTO
-from gateway.models import ShutterGroup, Shutter, Room
+from gateway.hal.master_event import MasterEvent
+from gateway.models import Room, Shutter, ShutterGroup
+from gateway.pubsub import PubSub
+from ioc import INJECTED, Inject, Injectable, Singleton
+from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import List, Dict, Optional, Tuple, Callable, Any
+    from typing import List, Dict, Optional, Tuple, Any
     from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger('openmotics')
@@ -71,8 +74,6 @@ class ShutterController(BaseController):
         self._directions = {}  # type: Dict[int, str]
         self._states = {}  # type: Dict[int, Tuple[float, str]]
 
-        self._event_subscriptions = []  # type: List[Callable[[GatewayEvent], None]]
-
         self._verbose = verbose
         self._config_lock = Lock()
 
@@ -84,10 +85,12 @@ class ShutterController(BaseController):
 
     def _handle_master_event(self, event):  # type: (MasterEvent) -> None
         super(ShutterController, self)._handle_master_event(event)
-        if event.type == MasterEvent.Types.EEPROM_CHANGE:
-            self.update_config(self.load_shutters())
         if event.type == MasterEvent.Types.SHUTTER_CHANGE:
             self._report_shutter_state(event.data['id'], event.data['status'])
+
+    def _sync_orm(self):
+        super(ShutterController, self)._sync_orm()
+        self.update_config(self.load_shutters())
 
     def update_config(self, config):  # type: (List[ShutterDTO]) -> None
         with self._config_lock:
@@ -102,16 +105,13 @@ class ShutterController(BaseController):
                     self._desired_positions[shutter_id] = None
                     self._directions[shutter_id] = ShutterEnums.Direction.STOP
 
-            for shutter_id in self._shutters.keys():
+            for shutter_id in list(self._shutters.keys()):
                 if shutter_id not in shutter_ids:
                     del self._shutters[shutter_id]
                     del self._states[shutter_id]
                     del self._actual_positions[shutter_id]
                     del self._desired_positions[shutter_id]
                     del self._directions[shutter_id]
-
-    def subscribe_events(self, callback):  # type: (Callable[[GatewayEvent], None]) -> None
-        self._event_subscriptions.append(callback)
 
     # Allow shutter positions to be reported
 
@@ -158,7 +158,7 @@ class ShutterController(BaseController):
 
     def load_shutters(self):  # type: () -> List[ShutterDTO]
         shutter_dtos = []
-        for shutter in Shutter.select():
+        for shutter in list(Shutter.select()):
             shutter_dto = self._master_controller.load_shutter(shutter_id=shutter.number)
             shutter_dto.room = shutter.room.number if shutter.room is not None else None
             shutter_dtos.append(shutter_dto)
@@ -188,7 +188,7 @@ class ShutterController(BaseController):
 
     def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
         shutter_group_dtos = []
-        for shutter_group in ShutterGroup.select():
+        for shutter_group in list(ShutterGroup.select()):
             shutter_group_dto = self._master_controller.load_shutter_group(shutter_group_id=shutter_group.number)
             shutter_group_dto.room = shutter_group.room.number if shutter_group.room is not None else None
             shutter_group_dtos.append(shutter_group_dto)
@@ -358,7 +358,7 @@ class ShutterController(BaseController):
             if force_report:
                 self._log('Shutter {0} force reported new state {1}'.format(shutter_id, new_state))
                 self._states[shutter_id] = (time.time(), new_state)
-                self._send_event(shutter_id, shutter, self._states[shutter_id])
+                self._publish_shutter_change(shutter_id, shutter, self._states[shutter_id])
             else:
                 self._log('Shutter {0} new state {1} ignored since it equals {2}'.format(shutter_id, new_state, current_state))
             return  # State didn't change, nothing to do
@@ -396,7 +396,7 @@ class ShutterController(BaseController):
 
             self._states[shutter_id] = (time.time(), new_state)
 
-        self._send_event(shutter_id, shutter, self._states[shutter_id])
+        self._publish_shutter_change(shutter_id, shutter, self._states[shutter_id])
 
     def get_states(self):  # type: () -> Dict[str, Any]
         all_states = []
@@ -409,10 +409,10 @@ class ShutterController(BaseController):
                                         'last_change': self._states[shutter_id][0]}
                            for shutter_id in self._shutters}}
 
-    def _send_event(self, shutter_id, shutter_data, shutter_state):  # type: (int, ShutterDTO, Tuple[float, str]) -> None
-        for callback in self._event_subscriptions:
-            callback(GatewayEvent(event_type=GatewayEvent.Types.SHUTTER_CHANGE,
-                                  data={'id': shutter_id,
-                                        'status': {'state': shutter_state[1].upper(),
-                                                   'last_change': shutter_state[0]},
-                                        'location': {'room_id': Toolbox.nonify(shutter_data.room, 255)}}))
+    def _publish_shutter_change(self, shutter_id, shutter_data, shutter_state):  # type: (int, ShutterDTO, Tuple[float, str]) -> None
+        gateway_event = GatewayEvent(event_type=GatewayEvent.Types.SHUTTER_CHANGE,
+                                     data={'id': shutter_id,
+                                           'status': {'state': shutter_state[1].upper(),
+                                                      'last_change': shutter_state[0]},
+                                           'location': {'room_id': Toolbox.nonify(shutter_data.room, 255)}})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)

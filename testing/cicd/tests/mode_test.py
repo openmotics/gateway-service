@@ -124,18 +124,15 @@ def test_authorized_mode(toolbox, authorized_mode):
 
 
 @pytest.fixture
-def create_user(request, toolbox):
+def factory_reset(request, toolbox):
     try:
-        toolbox.dut.login(success=False)
-    except Exception:
-        toolbox.authorized_mode_start()
-        toolbox.create_or_update_user()
-        toolbox.dut.login()
-    yield
+        yield
+    finally:
+        toolbox.initialize()
 
 
 @pytest.mark.slow
-def test_factory_reset(toolbox, create_user, authorized_mode):
+def test_factory_reset(toolbox, authorized_mode, factory_reset):
     data = toolbox.factory_reset()
     assert data['factory_reset'] == 'pending'
     time.sleep(60)
@@ -153,23 +150,24 @@ def test_factory_reset(toolbox, create_user, authorized_mode):
     assert 'outputs' in data
     assert data['outputs'] == []
 
-    toolbox.discover_input_module()
+    toolbox.discover_modules(input_modules=True,
+                             output_modules=True)
+    # TODO: Once `can_controls` and `ucans` are also included, the below `firmeware` check
+    #       also needs to be adapted, as emulated modules don't have a firwmare version
+
     data = toolbox.dut.get('/get_modules')
     assert 'inputs' in data
     assert ['I'] == data['inputs']
-
-    toolbox.discover_output_module()
-    data = toolbox.dut.get('/get_modules')
     assert 'outputs' in data
     assert ['O'] == data['outputs']
 
     data = toolbox.dut.get('/get_modules_information')
     modules = list(data['modules']['master'].values())
-    assert set(['I', 'O']) == set(x['type'] for x in modules)
+    assert {'I', 'O'} == set(x['type'] for x in modules)
     assert None not in [x['firmware'] for x in modules]
 
-    toolbox.dut.get('/add_virtual_output')
-    time.sleep(2)
+    toolbox.add_virtual_modules(module_amounts={'o': 1})
+
     data = toolbox.dut.get('/get_modules_information')
     modules = list(data['modules']['master'].values())
-    assert set(['I', 'O', 'o']) == set(x['type'] for x in modules)
+    assert {'I', 'O', 'o'} == set(x['type'] for x in modules)

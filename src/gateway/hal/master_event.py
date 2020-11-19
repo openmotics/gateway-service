@@ -16,10 +16,11 @@
 Module for master events
 """
 from __future__ import absolute_import
+
 import ujson as json
 
 if False:  # MYPY
-    from typing import Any
+    from typing import Any, Dict
 
 
 class MasterEvent(object):
@@ -28,6 +29,8 @@ class MasterEvent(object):
 
     Data formats:
     * EEPROM_CHANGE                   # No payload
+    * MAINTENANCE_EXIT                # No payload
+    * POWER_ADDRESS_EXIT              # No payload
     * MODULE_DISCOVERY                # No payload
     * OUTPUT_STATUS
       {'id': int,                     # Output ID
@@ -41,17 +44,21 @@ class MasterEvent(object):
 
     class Types(object):
         EEPROM_CHANGE = 'EEPROM_CHANGE'
+        MAINTENANCE_EXIT = ' MAINTENANCE_EXIT'
+        POWER_ADDRESS_EXIT = ' POWER_ADDRESS_EXIT'
+        MODULE_DISCOVERY = 'MODULE_DISCOVERY'
         INPUT_CHANGE = 'INPUT_CHANGE'
         OUTPUT_CHANGE = 'OUTPUT_CHANGE'
         OUTPUT_STATUS = 'OUTPUT_STATUS'
         SHUTTER_CHANGE = 'SHUTTER_CHANGE'
-        MODULE_DISCOVERY = 'MODULE_DISCOVERY'
 
     def __init__(self, event_type, data):
+        # type: (str, Dict[str,Any]) -> None
         self.type = event_type
         self.data = data
 
     def serialize(self):
+        # type: () -> Dict[str,Any]
         return {'type': self.type,
                 'data': self.data}
 
@@ -69,5 +76,6 @@ class MasterEvent(object):
 
     @staticmethod
     def deserialize(data):
+        # type: (Dict[str,Any]) -> MasterEvent
         return MasterEvent(event_type=data['type'],
                            data=data['data'])

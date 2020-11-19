@@ -41,6 +41,7 @@ class PulseCounterControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
+        SetUpTestInjections(pubsub=Mock())
         cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):  # pylint: disable=C0103
@@ -157,13 +158,13 @@ class PulseCounterControllerTest(unittest.TestCase):
                          for i in range(26)]
         expected_dtos[1] = PulseCounterDTO(id=1, name='Water', input_id=10, room=1)
         expected_dtos[4] = PulseCounterDTO(id=4, name='Gas', input_id=11, room=2)
-        expected_dtos[25] = PulseCounterDTO(id=25, name='Electricity', input_id=None, room=3)
+        expected_dtos[25] = PulseCounterDTO(id=25, name='Electricity', input_id=None, room=3, persistent=True)
 
         self.assertEqual(expected_dtos, received_dtos)
 
         # Try to set input on virtual pulse counter
         controller.save_pulse_counters([(PulseCounterDTO(id=25, name='Electricity', input_id=22, room=3), ['name', 'input_id'])])
-        self.assertEqual(PulseCounterDTO(id=25, name='Electricity', room=3), controller.load_pulse_counter(25))
+        self.assertEqual(PulseCounterDTO(id=25, name='Electricity', room=3, persistent=True), controller.load_pulse_counter(25))
 
         # Get configuration for existing master pulse counter
         self.assertEqual(PulseCounterDTO(id=1, name='Water', input_id=10, room=1, persistent=False), controller.load_pulse_counter(1))

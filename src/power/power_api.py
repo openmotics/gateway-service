@@ -20,7 +20,7 @@ from __future__ import absolute_import
 
 from collections import namedtuple
 
-from power.power_command import PowerCommand
+from power.power_command import PowerCommand, PowerModuleType
 
 RealtimePower = namedtuple('RealtimePower', ('voltage', 'frequency', 'current', 'power'))
 
@@ -103,7 +103,7 @@ def get_status_p1(version):
     # type: (int) -> PowerCommand
     """ Gets the status from a P1 concentrator """
     if version == P1_CONCENTRATOR:
-        return PowerCommand('G', 'SP\x00', '', 'B', module_type='C')
+        return PowerCommand('G', 'SP\x00', '', 'B', module_type=PowerModuleType.C)
     else:
         raise ValueError("Unknown power api version")
 
@@ -114,7 +114,7 @@ def get_meter_p1(version, type=None):
     if version == P1_CONCENTRATOR:
         if type not in (1, 2):
             raise ValueError('Unknown meter type')
-        return PowerCommand('G', 'M{0}\x00'.format(type), '', '224s', module_type='C')
+        return PowerCommand('G', 'M{0}\x00'.format(type), '', '224s', module_type=PowerModuleType.C)
     else:
         raise ValueError("Unknown power api version")
 
@@ -123,7 +123,7 @@ def get_timestamp_p1(version):
     # type: (int) -> PowerCommand
     """ Gets the timestamp from a P1 concentrator """
     if version == P1_CONCENTRATOR:
-        return PowerCommand('G', 'TS\x00', '', '104s', module_type='C')
+        return PowerCommand('G', 'TS\x00', '', '104s', module_type=PowerModuleType.C)
     else:
         raise ValueError("Unknown power api version")
 
@@ -132,7 +132,7 @@ def get_gas_consumption_p1(version):
     # type: (int) -> PowerCommand
     """ Gets the gas consumption from a P1 concentrator """
     if version == P1_CONCENTRATOR:
-        return PowerCommand('G', 'cG\x00', '', '112s', module_type='C')
+        return PowerCommand('G', 'cG\x00', '', '112s', module_type=PowerModuleType.C)
     else:
         raise ValueError("Unknown power api version")
 
@@ -143,7 +143,7 @@ def get_consumption_tariff_p1(version, type=None):
     if version == P1_CONCENTRATOR:
         if type not in (1, 2):
             raise ValueError('Unknown tariff type')
-        return PowerCommand('G', 'c{0}\x00'.format(type), '', '112s', module_type='C')
+        return PowerCommand('G', 'c{0}\x00'.format(type), '', '112s', module_type=PowerModuleType.C)
     else:
         raise ValueError("Unknown power api version")
 
@@ -154,7 +154,7 @@ def get_injection_tariff_p1(version, type=None):
     if version == P1_CONCENTRATOR:
         if type not in (1, 2):
             raise ValueError('Unknown tariff type')
-        return PowerCommand('G', 'i{0}\x00'.format(type), '', '112s', module_type='C')
+        return PowerCommand('G', 'i{0}\x00'.format(type), '', '112s', module_type=PowerModuleType.C)
     else:
         raise ValueError("Unknown power api version")
 
@@ -163,7 +163,7 @@ def get_tariff_indicator_p1(version):
     # type: (int) -> PowerCommand
     """ Gets the tariff indicator from a P1 concentrator """
     if version == P1_CONCENTRATOR:
-        return PowerCommand('G', 'ti\x00', '', '32s', module_type='C')
+        return PowerCommand('G', 'ti\x00', '', '32s', module_type=PowerModuleType.C)
     else:
         raise ValueError("Unknown power api version")
 
@@ -185,7 +185,7 @@ def get_voltage(version, phase=None):
     if version == P1_CONCENTRATOR:
         if phase is None:
             raise ValueError('A phase is required')
-        return PowerCommand('G', 'V{0}\x00'.format(phase), '', '56s', module_type='C')
+        return PowerCommand('G', 'V{0}\x00'.format(phase), '', '56s', module_type=PowerModuleType.C)
     else:
         raise ValueError("Unknown power api version")
 
@@ -221,7 +221,7 @@ def get_current(version, phase=None):
     if version == P1_CONCENTRATOR:
         if phase is None:
             raise ValueError('A phase is required')
-        return PowerCommand('G', 'C{0}\x00'.format(phase), '', '40s', module_type='C')
+        return PowerCommand('G', 'C{0}\x00'.format(phase), '', '40s', module_type=PowerModuleType.C)
     else:
         raise ValueError("Unknown power api version")
 
@@ -244,7 +244,7 @@ def get_delivered_power(version):
     # type: (int) -> PowerCommand
     """ Gets the delivered power of a P1 concentrator """
     if version == P1_CONCENTRATOR:
-        return PowerCommand('G', 'PD\x00', '', '72s', module_type='C')
+        return PowerCommand('G', 'PD\x00', '', '72s', module_type=PowerModuleType.C)
     else:
         raise ValueError("Unknown power api version")
 
@@ -253,7 +253,7 @@ def get_received_power(version):
     # type: (int) -> PowerCommand
     """ Gets the reveived power of a P1 concentrator """
     if version == P1_CONCENTRATOR:
-        return PowerCommand('G', 'PR\x00', '', '72s', module_type='C')
+        return PowerCommand('G', 'PR\x00', '', '72s', module_type=PowerModuleType.C)
     else:
         raise ValueError("Unknown power api version")
 
@@ -281,7 +281,7 @@ def get_day_energy(version):
     elif version == ENERGY_MODULE:
         return PowerCommand('G', 'EDA', '', '12L')
     elif version == P1_CONCENTRATOR:
-        return PowerCommand('G', 'c1\x00', '', '112s', module_type='C')
+        return PowerCommand('G', 'c1\x00', '', '112s', module_type=PowerModuleType.C)
     else:
         raise ValueError("Unknown power api version")
 
@@ -297,7 +297,7 @@ def get_night_energy(version):
     elif version == ENERGY_MODULE:
         return PowerCommand('G', 'ENI', '', '12L')
     elif version == P1_CONCENTRATOR:
-        return PowerCommand('G', 'c2\x00', '', '112s', module_type='C')
+        return PowerCommand('G', 'c2\x00', '', '112s', module_type=PowerModuleType.C)
     else:
         raise ValueError("Unknown power api version")
 
@@ -465,7 +465,7 @@ def set_addressmode(version):
     # type: (int) -> PowerCommand
     """ Set the address mode of the power module, 1 = address mode, 0 = normal mode """
     if version == P1_CONCENTRATOR:
-        return PowerCommand('S', 'AGT', 'b', '', module_type='C')
+        return PowerCommand('S', 'AGT', 'b', '', module_type=PowerModuleType.C)
     return PowerCommand('S', 'AGT', 'b', '')
 
 
@@ -477,7 +477,7 @@ def want_an_address(version):
     elif version == ENERGY_MODULE:
         return PowerCommand('S', 'WAD', '', '')
     elif version == P1_CONCENTRATOR:
-        return PowerCommand('S', 'WAD', '', '', module_type='C')
+        return PowerCommand('S', 'WAD', '', '', module_type=PowerModuleType.C)
     else:
         raise ValueError('Unknown power api version')
 
@@ -486,7 +486,7 @@ def set_address(version):
     # type: (int) -> PowerCommand
     """ Reply on want_an_address, setting a new address for the power module. """
     if version == P1_CONCENTRATOR:
-        return PowerCommand('S', 'SAD', 'b', '', module_type='C')
+        return PowerCommand('S', 'SAD', 'b', '', module_type=PowerModuleType.C)
     return PowerCommand('S', 'SAD', 'b', '')
 
 
@@ -552,7 +552,7 @@ def bootloader_goto(version):
     # type: (int) -> PowerCommand
     """ Go to bootloader and wait for a number of seconds (b parameter) """
     if version == P1_CONCENTRATOR:
-        return PowerCommand('S', 'RES', 'B', '', module_type='C')
+        return PowerCommand('S', 'RES', 'B', '', module_type=PowerModuleType.C)
     return PowerCommand('S', 'BGT', 'B', '')
 
 
@@ -598,7 +598,7 @@ def get_version(version):
     # type: (int) -> PowerCommand
     """ Get the current version of the power module firmware """
     if version == P1_CONCENTRATOR:
-        return PowerCommand('G', 'FVE', '', '4B', module_type='C')
+        return PowerCommand('G', 'FVE', '', '4B', module_type=PowerModuleType.C)
     return PowerCommand('G', 'FIV', '', '16s')
 
 

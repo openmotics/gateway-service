@@ -17,10 +17,12 @@ The maintenance module contains the MaintenanceService class.
 """
 from __future__ import absolute_import
 
+from gateway.hal.master_controller import CommunicationFailure
+
 
 # TODO: This needs to be moved to a general `master` folder with `classic` and `core` subfolders
 
-class InMaintenanceModeException(Exception):
+class InMaintenanceModeException(CommunicationFailure):
     pass
 
 
@@ -33,9 +35,6 @@ class MaintenanceCommunicator(object):
         raise NotImplementedError()
 
     def set_receiver(self, callback):
-        raise NotImplementedError()
-
-    def set_deactivated(self, callback):
         raise NotImplementedError()
 
     def is_active(self):

@@ -20,9 +20,10 @@ from __future__ import absolute_import
 import unittest
 
 import xmlrunner
-from mock import Mock
+from mock import Mock, patch
 
 from gateway.events import GatewayEvent
+from gateway.models import Config
 from ioc import SetTestMode, SetUpTestInjections
 
 from cloud.events import EventSender
@@ -45,9 +46,12 @@ class EventsTest(unittest.TestCase):
         event_sender = EventSender()  # Don't start, trigger manually
         self.assertEqual(len(event_sender._queue), 0)
         self.assertFalse(event_sender._batch_send_events())
-        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, {'id': 1}))
-        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, {'id': 1}))
-        event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 1}))
+        with patch.object(Config, 'get', return_value=True):
+            event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, {'id': 1}))
+            event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, {'id': 1}))
+            event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 1}))
+        with patch.object(Config, 'get', return_value=False):
+            event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 2}))
         self.assertEqual(len(event_sender._queue), 3)
         self.assertTrue(event_sender._batch_send_events())
         self.assertEqual(len(event_sender._queue), 0)

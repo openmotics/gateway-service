@@ -17,6 +17,7 @@ from __future__ import absolute_import
 import unittest
 
 import mock
+from peewee import SqliteDatabase
 
 from bus.om_bus_client import MessageClient
 from gateway.dto import OutputDTO, OutputStateDTO
@@ -26,20 +27,48 @@ from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_controller import MaintenanceController
 from gateway.models import Output, Room
 from gateway.output_controller import OutputController, OutputStateCache
+from gateway.pubsub import PubSub
 from ioc import SetTestMode, SetUpTestInjections
+
+MODELS = [Output]
 
 
 class OutputControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
+        cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):
+        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        self.test_db.connect()
+        self.test_db.create_tables(MODELS)
         self.master_controller = mock.Mock(MasterController)
+        self.pubsub = PubSub()
         SetUpTestInjections(maintenance_controller=mock.Mock(MaintenanceController),
                             master_controller=self.master_controller,
-                            message_client=mock.Mock(MessageClient))
+                            message_client=mock.Mock(MessageClient),
+                            pubsub=self.pubsub)
         self.controller = OutputController()
+
+    def tearDown(self):
+        self.test_db.drop_tables(MODELS)
+        self.test_db.close()
+
+    def test_orm_sync(self):
+        events = []
+
+        def handle_event(gateway_event):
+            events.append(gateway_event)
+
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
+
+        output_dto = OutputDTO(id=42)
+        with mock.patch.object(self.master_controller, 'load_outputs', return_value=[output_dto]):
+            self.controller.run_sync_orm()
+            assert Output.select().where(Output.number == output_dto.id).count() == 1
+            assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'output'}) in events
+            assert len(events) == 1
 
     def test_output_sync_change(self):
         events = []
@@ -47,10 +76,10 @@ class OutputControllerTest(unittest.TestCase):
         def on_change(gateway_event):
             events.append(gateway_event)
 
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, on_change)
+
         outputs = {2: OutputDTO(id=2),
                    40: OutputDTO(id=40, module_type='D')}
-
-        self.controller.subscribe_events(on_change)
         with mock.patch.object(Output, 'select',
                                return_value=[Output(id=0, number=2),
                                              Output(id=1, number=40, room=Room(id=2, number=3))]), \
@@ -73,7 +102,8 @@ class OutputControllerTest(unittest.TestCase):
                                              {'id': 40, 'status': True, 'dimmer': 50}]):
             events = []
             self.controller._sync_state()
-            assert [GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 50, 'locked': False}, 'location': {'room_id': 3}})] == events
+            assert [GatewayEvent('OUTPUT_CHANGE', {'id': 2, 'status': {'on': True, 'locked': False}, 'location': {'room_id': 255}}),
+                    GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 50, 'locked': False}, 'location': {'room_id': 3}})] == events
 
     def test_output_master_change(self):
         events = []
@@ -81,7 +111,8 @@ class OutputControllerTest(unittest.TestCase):
         def on_change(gateway_event):
             events.append(gateway_event)
 
-        self.controller.subscribe_events(on_change)
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, on_change)
+
         self.controller._cache.update_outputs([OutputDTO(id=2),
                                                OutputDTO(id=40, module_type='D', room=3)])
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': False}))
@@ -141,9 +172,22 @@ class OutputControllerTest(unittest.TestCase):
             assert OutputDTO(id=42, room=3) in outputs
             load.assert_called_with(output_id=42)
 
+    def test_output_actions(self):
+        with mock.patch.object(self.master_controller, 'set_all_lights_off') as call:
+            self.controller.set_all_lights_off()
+            call.assert_called_once()
+        with mock.patch.object(self.master_controller, 'set_all_lights_floor_off') as call:
+            self.controller.set_all_lights_floor_off(1)
+            call.assert_called_once_with(floor=1)
+        with mock.patch.object(self.master_controller, 'set_all_lights_floor_on') as call:
+            self.controller.set_all_lights_floor_on(1)
+            call.assert_called_once_with(floor=1)
+
 
 class OutputStateCacheTest(unittest.TestCase):
     def test_update(self):
+        _ = self
+
         cache = OutputStateCache()
 
         cache.update_outputs([OutputDTO(id=0),
@@ -155,30 +199,36 @@ class OutputStateCacheTest(unittest.TestCase):
                 2: OutputStateDTO(id=2)} == current_state
 
         # Everything is off.
-        assert cache.handle_change(0, {'status': False}) is None
-        assert cache.handle_change(1, {'status': False}) is None
-        assert cache.handle_change(2, {'status': False}) is None
+        assert cache.handle_change(0, {'status': False})[0] is False
+        assert cache.handle_change(1, {'status': False})[0] is False
+        assert cache.handle_change(2, {'status': False})[0] is False
 
         # Turn two outputs on.
-        assert cache.handle_change(0, {'status': False}) is None
-        change = cache.handle_change(2, {'status': True})
-        assert change.state.status == True
-        change = cache.handle_change(1, {'status': True})
-        assert change.state.status == True
+        assert cache.handle_change(0, {'status': False})[0] is False
+        changed, output_dto = cache.handle_change(2, {'status': True})
+        assert output_dto.state.status is True
+        assert changed is True
+        changed, output_dto = cache.handle_change(1, {'status': True})
+        assert output_dto.state.status is True
+        assert changed is True
 
         # Turn one outputs off again.
-        assert cache.handle_change(0, {'status': False}) is None
-        change = cache.handle_change(1, {'status': False})
-        assert change.state.status == False
+        assert cache.handle_change(0, {'status': False})[0] is False
+        changed, output_dto = cache.handle_change(1, {'status': False})
+        assert output_dto.state.status is False
+        assert changed is True
 
         # Change dimmer value.
-        assert cache.handle_change(0, {'dimmer': 0}) is None
-        change = cache.handle_change(1, {'status': True, 'dimmer': 100})
-        assert change.state.dimmer == 100
-        change = cache.handle_change(1, {'dimmer': 50})
-        assert change.state.dimmer == 50
+        assert cache.handle_change(0, {'dimmer': 0})[0] is False
+        changed, output_dto = cache.handle_change(1, {'status': True, 'dimmer': 100})
+        assert output_dto.state.dimmer == 100
+        assert changed is True
+        changed, output_dto = cache.handle_change(1, {'dimmer': 50})
+        assert output_dto.state.dimmer is 50
+        assert changed is True
 
         # Change lock.
-        assert cache.handle_change(0, {'locked': False}) is None
-        change = cache.handle_change(1, {'locked': True})
-        assert change.state.locked == True
+        assert cache.handle_change(0, {'locked': False})[0] is False
+        changed, output_dto = cache.handle_change(1, {'locked': True})
+        assert output_dto.state.locked is True
+        assert changed is True

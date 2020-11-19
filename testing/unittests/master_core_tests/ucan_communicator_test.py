@@ -25,7 +25,7 @@ from master.core.core_communicator import CoreCommunicator
 from master.core.exceptions import BootloadingException
 from master.core.ucan_communicator import UCANCommunicator, SID
 from master.core.ucan_command import UCANCommandSpec, UCANPalletCommandSpec, PalletType, Instruction
-from master.core.fields import AddressField, ByteArrayField, ByteField, UInt32Field, StringField
+from master.core.fields import AddressField, ByteArrayField, ByteField, UInt32Field, StringField, LiteralBytesField
 
 
 class UCANCommunicatorTest(unittest.TestCase):
@@ -40,6 +40,9 @@ class UCANCommunicatorTest(unittest.TestCase):
         handler.setLevel(logging.DEBUG)
         handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
         logger.addHandler(handler)
+
+    def setUp(self):
+        self._uint32_helper = UInt32Field('')
 
     def test_pallet_reconstructing(self):
         received_commands = []
@@ -69,31 +72,31 @@ class UCANCommunicatorTest(unittest.TestCase):
             self.assertEqual(len(received_commands), 2)
             self.assertDictEqual(received_commands[0], {'cc_address': cc_address,
                                                         'nr_can_bytes': 8,
-                                                        'payload': [129, 0, 0, 0, 0, 0, 0, pallet_type],
-                                                        #                +--------------+ = source and destination uCAN address
+                                                        'payload': bytearray([129, 0, 0, 0, 0, 0, 0, pallet_type]),
+                                                        #                          +--------------+ = source and destination uCAN address
                                                         'sid': SID.BOOTLOADER_PALLET})
             self.assertDictEqual(received_commands[1], {'cc_address': cc_address,
                                                         'nr_can_bytes': 7,
-                                                        'payload': [0, 1, 2, 219, 155, 250, 178, 0],
-                                                        #              |  |  +----------------+ = checksum
-                                                        #              |  + = bar
-                                                        #              + = foo
+                                                        'payload': bytearray([0, 1, 2, 219, 155, 250, 178, 0]),
+                                                        #                        |  |  +----------------+ = checksum
+                                                        #                        |  + = bar
+                                                        #                        + = foo
                                                         'sid': SID.BOOTLOADER_PALLET})
 
             # Build fake reply from Core
             consumer = ucan_communicator._consumers[cc_address][0]
-            fixed_payload = [0, 0, 0, 0, 0, 0, pallet_type]
-            variable_payload = list(range(7, 7 + length))  # [7] or [7, 8, 9]
-            crc_payload = UInt32Field.encode_bytes(UCANPalletCommandSpec.calculate_crc(fixed_payload + variable_payload))
+            fixed_payload = bytearray([0, 0, 0, 0, 0, 0, pallet_type])
+            variable_payload = bytearray(list(range(7, 7 + length)))  # [7] or [7, 8, 9]
+            crc_payload = self._uint32_helper.encode(UCANPalletCommandSpec.calculate_crc(fixed_payload + variable_payload))
             ucan_communicator._process_transport_message({'cc_address': cc_address,
                                                           'nr_can_bytes': 8,
                                                           'sid': 1,
-                                                          'payload': [129] + fixed_payload})
+                                                          'payload': bytearray([129]) + fixed_payload})
             ucan_communicator._process_transport_message({'cc_address': cc_address,
                                                           'nr_can_bytes': length + 5,
                                                           'sid': 1,
-                                                          'payload': [0] + variable_payload + crc_payload})
-            self.assertDictEqual(consumer.get(1), {'other': variable_payload})
+                                                          'payload': bytearray([0]) + variable_payload + crc_payload})
+            self.assertDictEqual(consumer.get(1), {'other': list(variable_payload)})
 
     def test_string_parsing(self):
         core_communicator = Mock()
@@ -111,18 +114,18 @@ class UCANCommunicatorTest(unittest.TestCase):
         consumer = ucan_communicator._consumers[cc_address][0]
 
         # Build and validate fake reply from Core
-        payload_segment_1 = [0, 0, 0, 0, 0, 0, PalletType.MCU_ID_REPLY]
-        payload_segment_2 = [ord(x) for x in '{0}\x00'.format(foo)]
-        crc_payload = UInt32Field.encode_bytes(UCANPalletCommandSpec.calculate_crc(payload_segment_1 + payload_segment_2))
+        payload_segment_1 = bytearray([0, 0, 0, 0, 0, 0, PalletType.MCU_ID_REPLY])
+        payload_segment_2 = bytearray([ord(x) for x in '{0}\x00'.format(foo)])
+        crc_payload = self._uint32_helper.encode(UCANPalletCommandSpec.calculate_crc(payload_segment_1 + payload_segment_2))
         payload_segment_2 += crc_payload
         ucan_communicator._process_transport_message({'cc_address': cc_address,
                                                       'nr_can_bytes': 8,
                                                       'sid': 1,
-                                                      'payload': [129] + payload_segment_1})
+                                                      'payload': bytearray([129]) + payload_segment_1})
         ucan_communicator._process_transport_message({'cc_address': cc_address,
                                                       'nr_can_bytes': 8,
                                                       'sid': 1,
-                                                      'payload': [0] + payload_segment_2})
+                                                      'payload': bytearray([0]) + payload_segment_2})
         self.assertDictEqual(consumer.get(1), {'foo': foo})
 
     def test_bootload_lock(self):
@@ -132,7 +135,7 @@ class UCANCommunicatorTest(unittest.TestCase):
         ucan_address = '000.000.000'
 
         command = UCANCommandSpec(sid=SID.NORMAL_COMMAND,
-                                  instruction=Instruction(instruction=[0, 0]),
+                                  instructions=[Instruction(instruction=[0, 0])],
                                   identifier=AddressField('ucan_address', 3))
         ucan_communicator.do_command(cc_address, command, ucan_address, {}, timeout=None)
 
@@ -142,7 +145,7 @@ class UCANCommunicatorTest(unittest.TestCase):
         pallet_consumer = ucan_communicator._consumers[cc_address][-1]  # Load last consumer
 
         command = UCANCommandSpec(sid=SID.NORMAL_COMMAND,
-                                  instruction=Instruction(instruction=[0, 0]),
+                                  instructions=[Instruction(instruction=[0, 0])],
                                   identifier=AddressField('ucan_address', 3))
         with self.assertRaises(BootloadingException):
             ucan_communicator.do_command(cc_address, command, ucan_address, {}, timeout=None)
@@ -158,19 +161,48 @@ class UCANCommunicatorTest(unittest.TestCase):
             pass  #
 
         command = UCANCommandSpec(sid=SID.NORMAL_COMMAND,
-                                  instruction=Instruction(instruction=[0, 0]),
+                                  instructions=[Instruction(instruction=[0, 0])],
                                   identifier=AddressField('ucan_address', 3))
         ucan_communicator.do_command(cc_address, command, ucan_address, {}, timeout=None)
 
     def test_crc(self):
-        payload = [10, 50, 250]
-        total_payload = payload + UInt32Field.encode_bytes(UCANPalletCommandSpec.calculate_crc(payload))
+        payload = bytearray([10, 50, 250])
+        total_payload = payload + self._uint32_helper.encode(UCANPalletCommandSpec.calculate_crc(payload))
         self.assertEqual(0, UCANPalletCommandSpec.calculate_crc(total_payload))
         crc = 0
         for part in payload:
-            crc = UCANPalletCommandSpec.calculate_crc([part], crc)
-        total_payload = payload + UInt32Field.encode_bytes(crc)
+            crc = UCANPalletCommandSpec.calculate_crc(bytearray([part]), crc)
+        total_payload = payload + self._uint32_helper.encode(crc)
         self.assertEqual(0, UCANPalletCommandSpec.calculate_crc(total_payload))
+
+    def test_multi_messages(self):
+        core_communicator = Mock()
+        ucan_communicator = UCANCommunicator(master_communicator=core_communicator, verbose=True)
+        cc_address = '000.000.000.000'
+        ucan_address = '000.000.000'
+
+        command = UCANCommandSpec(sid=SID.NORMAL_COMMAND,
+                                  identifier=AddressField('ucan_address', 3),
+                                  instructions=[Instruction(instruction=[0, 10]), Instruction(instruction=[0, 10])],
+                                  request_fields=[[LiteralBytesField(1)], [LiteralBytesField(2)]],
+                                  response_instructions=[Instruction(instruction=[1, 10], checksum_byte=7),
+                                                         Instruction(instruction=[2, 10], checksum_byte=7)],
+                                  response_fields=[ByteArrayField('foo', 4)])
+        ucan_communicator.do_command(cc_address, command, ucan_address, {}, timeout=None)
+        consumer = ucan_communicator._consumers[cc_address][0]
+
+        # Build and validate fake reply from Core
+        payload_reply_1 = bytearray([1, 10, 0, 0, 0, 20, 21])
+        payload_reply_2 = bytearray([2, 10, 0, 0, 0, 22, 23])
+        ucan_communicator._process_transport_message({'cc_address': cc_address,
+                                                      'nr_can_bytes': 8,
+                                                      'sid': 5,
+                                                      'payload': payload_reply_1 + bytearray([UCANCommandSpec.calculate_crc(payload_reply_1)])})
+        ucan_communicator._process_transport_message({'cc_address': cc_address,
+                                                      'nr_can_bytes': 8,
+                                                      'sid': 5,
+                                                      'payload': payload_reply_2 + bytearray([UCANCommandSpec.calculate_crc(payload_reply_2)])})
+        self.assertDictEqual(consumer.get(1), {'foo': [20, 21, 22, 23]})
 
 
 if __name__ == "__main__":
