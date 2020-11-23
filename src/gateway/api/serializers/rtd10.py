@@ -28,7 +28,7 @@ class GlobalRTD10Serializer(object):
 
     @staticmethod
     def _temp_to_str(temp):
-        return str(temp).replace('.', '_')
+        return str(temp).replace('.', '_').replace('_0', '')
 
     @staticmethod
     def serialize(global_rtd10_dto, fields):  # type: (GlobalRTD10DTO, Optional[List[str]]) -> Dict[str, Any]

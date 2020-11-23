@@ -28,7 +28,7 @@ if False:  # MYPY
 class GlobalRTD10Mapper(object):
     @staticmethod
     def _temp_to_str(temp):
-        return str(temp).replace('.', '_')
+        return str(temp).replace('.', '_').replace('_0', '')
 
     @staticmethod
     def orm_to_dto(orm_object):  # type: (EepromModel) -> GlobalRTD10DTO
