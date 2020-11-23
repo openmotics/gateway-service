@@ -126,7 +126,8 @@ class PumpGroupMapper(object):
     def orm_to_dto(orm_object):  # type: (EepromModel) -> PumpGroupDTO
         data = orm_object.serialize()
         kwargs = {'pump_output_id': Toolbox.nonify(data['output'], PumpGroupMapper.BYTE_MAX),
-                  'valve_output_ids': [int(output_id) for output_id in data['outputs'].split(',')],
+                  'valve_output_ids': ([int(output_id) for output_id in data['outputs'].split(',')]
+                                       if ',' in data['outputs'] else []),
                   'room_id': Toolbox.nonify(data['room'], PumpGroupMapper.BYTE_MAX)}
         return PumpGroupDTO(id=data['id'], **kwargs)
 

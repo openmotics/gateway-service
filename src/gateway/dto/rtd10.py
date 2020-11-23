@@ -25,8 +25,8 @@ if False:
 
 
 class GlobalRTD10DTO(BaseDTO):
-    TEMPERATURES = [16.0, 16.5, 17.0, 17.5, 18.0, 18.5, 19.0, 19.5, 20.0,
-                    20.5, 21.0, 21.5, 22.0, 22.5, 23.0, 23.5, 24.0, 24.5]
+    TEMPERATURES = [16.0, 16.5, 17.0, 17.5, 18.0, 18.5, 19.0, 19.5, 20.0, 20.5,
+                    21.0, 21.5, 22.0, 22.5, 23.0, 23.5, 24.0]
 
     def __init__(self, heating_values=None, cooling_values=None):
         # type: (Optional[Dict[float, int]], Optional[Dict[float, int]]) -> None
