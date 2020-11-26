@@ -10,15 +10,13 @@ pipeline {
     stages {
         stage('Run mypy typechecks') {
             agent {
-                docker {
-                    image 'python:3.8-buster'
+                dockerfile {
+                    filename 'docker/test/Dockerfile'
+                    additionalBuildArgs '--build-arg TAG=3.8-buster'
                 }
             }
             steps {
                 sh '''
-                python3 -m venv venv3
-                . venv3/bin/activate
-                pip install mypy lxml
                 mypy src --junit-xml testing/gw-unit-reports/mypy-report.xml
                 '''
             }
@@ -31,15 +29,13 @@ pipeline {
 
         stage('Run python2 unittests') {
             agent {
-                docker {
-                    image 'python:2.7-stretch'
+                dockerfile {
+                    filename 'docker/test/Dockerfile'
+                    additionalBuildArgs '--build-arg TAG=2.7-stretch'
                 }
             }
             steps {
                 sh '''
-                virtualenv venv
-                . venv/bin/activate
-                pip install -r requirements.txt
                 ./testing/unittests/run.sh
                 '''
             }
@@ -52,15 +48,13 @@ pipeline {
 
         stage('Run python3 unittests') {
             agent {
-                docker {
-                    image 'python:3.8-buster'
+                dockerfile {
+                    filename 'docker/test/Dockerfile'
+                    additionalBuildArgs '--build-arg TAG=3.8-buster'
                 }
             }
             steps {
                 sh '''
-                python3 -m venv venv3
-                . venv3/bin/activate
-                pip install -r requirements-py3.txt
                 ./testing/unittests/run3.sh
                 '''
             }
@@ -73,7 +67,10 @@ pipeline {
 
         stage('Start integration tests') {
             when {
-                branch 'develop'
+                anyOf {
+                    branch 'master'
+                    branch 'develop'
+                }
             }
             steps {
                 script {
