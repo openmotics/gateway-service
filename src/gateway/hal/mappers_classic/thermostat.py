@@ -52,7 +52,7 @@ class ThermostatMapper(object):
                              **kwargs)
 
     @staticmethod
-    def dto_to_orm(thermostat_dto, fields):  # type: (ThermostatDTO, List[str]) -> EepromModel
+    def dto_to_orm(model_type, thermostat_dto, fields):  # type: (Type[EepromModel], ThermostatDTO, List[str]) -> EepromModel
         data = {'id': thermostat_dto.id}  # type: Dict[str, Any]
         for field in ['name', 'permanent_manual'] + ['setp{0}'.format(i) for i in range(6)]:
             if field in fields:
@@ -74,7 +74,7 @@ class ThermostatMapper(object):
                            dto_data.start_day_2,
                            dto_data.end_day_2,
                            dto_data.temp_day_2]
-        return ThermostatConfiguration.deserialize(data)
+        return model_type.deserialize(data)
 
 
 class ThermostatGroupMapper(object):

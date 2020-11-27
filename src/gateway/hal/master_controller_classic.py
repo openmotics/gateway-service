@@ -50,7 +50,7 @@ from master.classic.eeprom_models import CanLedConfiguration, \
     GlobalRTD10Configuration, GlobalThermostatConfiguration, \
     PumpGroupConfiguration, RTD10CoolingConfiguration, \
     RTD10HeatingConfiguration, ScheduledActionConfiguration, \
-    StartupActionConfiguration
+    StartupActionConfiguration, ThermostatConfiguration, CoolingConfiguration
 from master.classic.inputs import InputStatus
 from master.classic.master_communicator import BackgroundConsumer, \
     MasterCommunicator, MasterUnavailable
@@ -790,7 +790,7 @@ class MasterClassicController(MasterController):
     def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
         batch = []
         for thermostat, fields in thermostats:
-            batch.append(ThermostatMapper.dto_to_orm(thermostat, fields))
+            batch.append(ThermostatMapper.dto_to_orm(ThermostatConfiguration, thermostat, fields))
         self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
@@ -807,7 +807,7 @@ class MasterClassicController(MasterController):
     def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
         batch = []
         for thermostat, fields in thermostats:
-            batch.append(ThermostatMapper.dto_to_orm(thermostat, fields))
+            batch.append(ThermostatMapper.dto_to_orm(CoolingConfiguration, thermostat, fields))
         self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
