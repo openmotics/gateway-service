@@ -251,10 +251,15 @@ def _openmotics_api(f, *args, **kwargs):
         logger.error('Communication failure during API call %s', f.__name__)
         status = 503  # Service Unavailable
         data = {'success': False, 'msg': 'Internal communication failure'}
-    except DoesNotExist:
-        logger.error('Could not find the requested object')
+    except DoesNotExist as ex:
+        class_name = ex.__class__.__name__
+        if class_name != 'DoesNotExist' and class_name.endswith('DoesNotExist'):
+            class_name = class_name.replace('DoesNotExist', '')
+        else:
+            class_name = 'Object'
         status = 200  # OK
-        data = {'success': False, 'msg': 'Object not found'}
+        logger.error('Could not find the {0}'.format(class_name))
+        data = {'success': False, 'msg': '{0} not found'.format(class_name)}
     except UnsupportedException:
         logger.error('Some features for API call %s are unsupported on this device', f.__name__)
         status = 200  # OK
