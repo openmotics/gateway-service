@@ -370,12 +370,14 @@ class ThermostatControllerGateway(ThermostatController):
             for valve in thermostat.valves:
                 pump_delay = valve.delay
                 break
+        sensor_number = None if thermostat_group.sensor is None else thermostat_group.sensor.number
         thermostat_group_dto = ThermostatGroupDTO(id=0,
-                                                  outside_sensor_id=thermostat_group.sensor.number,
+                                                  outside_sensor_id=sensor_number,
                                                   threshold_temperature=thermostat_group.threshold_temperature,
                                                   pump_delay=pump_delay)
-        for link in OutputToThermostatGroup.select() \
-                .where(OutputToThermostatGroup.thermostat_group == thermostat_group):
+        for link in OutputToThermostatGroup.select(OutputToThermostatGroup, Output) \
+                                           .join_from(OutputToThermostatGroup, Output) \
+                                           .where(OutputToThermostatGroup.thermostat_group == thermostat_group):
             if link.index > 3 or link.output is None:
                 continue
             field = 'switch_to_{0}_{1}'.format(link.mode, link.index)
