@@ -22,13 +22,14 @@ from mock import Mock
 
 from ioc import SetTestMode, SetUpTestInjections
 from gateway.models import (
-    Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump,
+    Sensor, Feature, Output,
+    ThermostatGroup, OutputToThermostatGroup, Pump,
     Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule
 )
 from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
 from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatControllerGateway
 
-MODELS = [Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump,
+MODELS = [Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump, Sensor,
           Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule]
 
 
@@ -43,11 +44,10 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         handler.setLevel(logging.DEBUG)
         handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
         logger.addHandler(handler)
-
         cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):
-        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        self.test_db.bind(MODELS)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
 
@@ -63,8 +63,8 @@ class GatewayThermostatMappingTests(unittest.TestCase):
 
         SetUpTestInjections(gateway_api=gateway_api,
                             message_client=Mock(),
-                            observer=Mock(),
-                            output_controller=Mock())
+                            output_controller=Mock(),
+                            pubsub=Mock())
         thermostat_controller = ThermostatControllerGateway()
         SetUpTestInjections(thermostat_controller=thermostat_controller)
         return thermostat_controller
@@ -72,11 +72,11 @@ class GatewayThermostatMappingTests(unittest.TestCase):
     def test_load(self):
         controller = GatewayThermostatMappingTests._create_controller()
 
+        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', on=True, mode=ThermostatGroup.Modes.HEATING)
         thermostat = Thermostat(number=10,
-                                sensor=0,
-                                room=0,
                                 start=0,
-                                name='thermostat')
+                                name='thermostat',
+                                thermostat_group=group)
         thermostat.save()
 
         for i in range(7):
@@ -113,11 +113,11 @@ class GatewayThermostatMappingTests(unittest.TestCase):
     def test_orm_to_dto_mapping(self):
         controller = GatewayThermostatMappingTests._create_controller()
 
+        group, _ = ThermostatGroup.get_or_create(number=0, name='Default', on=True, mode=ThermostatGroup.Modes.HEATING)
         thermostat = Thermostat(number=10,
-                                sensor=1,
-                                room=2,
                                 start=0,  # 0 is on a thursday
-                                name='thermostat')
+                                name='thermostat',
+                                thermostat_group=group)
         thermostat.save()
 
         for i in range(7):
@@ -136,11 +136,11 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        setp3=14.0,
                                        setp4=14.0,
                                        setp5=14.0,
-                                       sensor=1,
+                                       sensor=None,
                                        pid_p=120.0,
                                        pid_i=0.0,
                                        pid_d=0.0,
-                                       room=2,
+                                       room=None,
                                        permanent_manual=True), dto)
 
         day_schedule = thermostat.heating_schedules()[0]  # type: DaySchedule
@@ -174,8 +174,6 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                            name='global')
         thermostat_group.save()
         thermostat = Thermostat(number=10,
-                                sensor=1,
-                                room=2,
                                 start=0,  # 0 is on a thursday
                                 name='thermostat',
                                 thermostat_group=thermostat_group)
@@ -191,6 +189,8 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         heating_thermostats = controller.load_heating_thermostats()
         self.assertEqual(1, len(heating_thermostats))
         dto = heating_thermostats[0]  # type: ThermostatDTO
+
+        Sensor.create(number=15)
 
         dto.room = 5  # This field won't be saved
         dto.sensor = 15
@@ -220,7 +220,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        pid_p=120.0,
                                        pid_i=0.0,
                                        pid_d=0.0,
-                                       room=2,  # Unchanged
+                                       room=None,  # Unchanged
                                        output0=5,
                                        permanent_manual=True,
                                        auto_thu=ThermostatScheduleDTO(temp_night=10.0,

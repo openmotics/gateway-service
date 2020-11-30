@@ -21,7 +21,7 @@ from gateway.dto.base import BaseDTO
 from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
 
 if False:
-    from typing import Optional
+    from typing import Optional, List, Tuple, Dict
 
 
 class ThermostatDTO(BaseDTO):
@@ -91,3 +91,120 @@ class ThermostatDTO(BaseDTO):
                 self.auto_fri == other.auto_fri and
                 self.auto_sat == other.auto_sat and
                 self.auto_sun == other.auto_sun)
+
+
+class ThermostatGroupDTO(BaseDTO):
+    def __init__(self, id, outside_sensor_id=None, pump_delay=None, threshold_temperature=None,
+                 switch_to_heating_0=None, switch_to_heating_1=None, switch_to_heating_2=None, switch_to_heating_3=None,
+                 switch_to_cooling_0=None, switch_to_cooling_1=None, switch_to_cooling_2=None, switch_to_cooling_3=None):
+        self.id = id  # type: int
+        self.outside_sensor_id = outside_sensor_id  # type: Optional[int]
+        self.pump_delay = pump_delay  # type: Optional[int]
+        self.threshold_temperature = threshold_temperature  # type: Optional[float]
+        self.switch_to_heating_0 = switch_to_heating_0  # type: Optional[Tuple[int, int]]
+        self.switch_to_heating_1 = switch_to_heating_1  # type: Optional[Tuple[int, int]]
+        self.switch_to_heating_2 = switch_to_heating_2  # type: Optional[Tuple[int, int]]
+        self.switch_to_heating_3 = switch_to_heating_3  # type: Optional[Tuple[int, int]]
+        self.switch_to_cooling_0 = switch_to_cooling_0  # type: Optional[Tuple[int, int]]
+        self.switch_to_cooling_1 = switch_to_cooling_1  # type: Optional[Tuple[int, int]]
+        self.switch_to_cooling_2 = switch_to_cooling_2  # type: Optional[Tuple[int, int]]
+        self.switch_to_cooling_3 = switch_to_cooling_3  # type: Optional[Tuple[int, int]]
+
+    def __eq__(self, other):
+        if not isinstance(other, ThermostatGroupDTO):
+            return False
+        return (self.id == other.id and
+                self.outside_sensor_id == other.outside_sensor_id and
+                self.pump_delay == other.pump_delay and
+                self.threshold_temperature == other.threshold_temperature and
+                self.switch_to_heating_0 == other.switch_to_heating_0 and
+                self.switch_to_heating_1 == other.switch_to_heating_1 and
+                self.switch_to_heating_2 == other.switch_to_heating_2 and
+                self.switch_to_heating_3 == other.switch_to_heating_3 and
+                self.switch_to_cooling_0 == other.switch_to_cooling_0 and
+                self.switch_to_cooling_1 == other.switch_to_cooling_1 and
+                self.switch_to_cooling_2 == other.switch_to_cooling_2 and
+                self.switch_to_cooling_3 == other.switch_to_cooling_3)
+
+
+class ThermostatStatusDTO(BaseDTO):
+    def __init__(self, id, actual_temperature, setpoint_temperature, automatic, setpoint, sensor_id, mode,
+                 outside_temperature=None, name='', airco=None, output_0_level=None, output_1_level=None):
+        # type: (int, float, float, bool, int, int, int, Optional[float], str, Optional[int], Optional[int], Optional[int]) -> None
+        self.id = id
+        self.actual_temperature = actual_temperature
+        self.setpoint_temperature = setpoint_temperature
+        self.automatic = automatic
+        self.setpoint = setpoint
+        self.sensor_id = sensor_id
+        self.mode = mode
+        self.outside_temperature = outside_temperature
+        self.name = name
+        self.airco = airco
+        self.output_0_level = output_0_level
+        self.output_1_level = output_1_level
+
+    def __eq__(self, other):
+        if not isinstance(other, ThermostatStatusDTO):
+            return False
+        return (self.id == other.id and
+                self.actual_temperature == other.actual_temperature and
+                self.setpoint_temperature == other.setpoint_temperature and
+                self.automatic == other.automatic and
+                self.setpoint == other.setpoint and
+                self.sensor_id == other.sensor_id and
+                self.mode == other.mode and
+                self.outside_temperature == other.outside_temperature and
+                self.name == other.name and
+                self.airco == other.airco and
+                self.output_0_level == other.output_0_level and
+                self.output_1_level == other.output_1_level)
+
+
+class ThermostatGroupStatusDTO(BaseDTO):
+    def __init__(self, id, on, automatic, cooling, setpoint=None, statusses=None):
+        # type: (int, bool, bool, bool, Optional[int], Optional[List[ThermostatStatusDTO]]) -> None
+        self.id = id
+        self.on = on
+        self.automatic = automatic
+        self.cooling = cooling
+        self.setpoint = setpoint if setpoint is not None else 0  # type: int
+        self.statusses = statusses if statusses is not None else []  # type: List[ThermostatStatusDTO]
+
+    def __eq__(self, other):
+        if not isinstance(other, ThermostatGroupStatusDTO):
+            return False
+        return (self.id == other.id and
+                self.on == other.on and
+                self.automatic == other.automatic and
+                self.cooling == other.cooling and
+                self.setpoint == other.setpoint and
+                self.statusses == other.statusses)
+
+
+class ThermostatAircoStatusDTO(BaseDTO):
+    def __init__(self, status):
+        # type: (Dict[int, bool]) -> None
+        self.status = status
+
+    def __eq__(self, other):
+        if not isinstance(other, ThermostatAircoStatusDTO):
+            return False
+        return self.status == other.status
+
+
+class PumpGroupDTO(BaseDTO):
+    def __init__(self, id, pump_output_id=None, valve_output_ids=None, room_id=None):
+        # type: (int, Optional[int], Optional[List[int]], Optional[int]) -> None
+        self.id = id
+        self.pump_output_id = pump_output_id
+        self.valve_output_ids = valve_output_ids if valve_output_ids else []  # type: List[int]
+        self.room_id = room_id
+
+    def __eq__(self, other):
+        if not isinstance(other, PumpGroupDTO):
+            return False
+        return (self.id == other.id and
+                self.pump_output_id == other.pump_output_id and
+                self.valve_output_ids == other.valve_output_ids and
+                self.room_id == other.room_id)

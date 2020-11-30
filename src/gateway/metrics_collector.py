@@ -507,30 +507,30 @@ class MetricsCollector(object):
             start = time.time()
             try:
                 now = time.time()
-                thermostats = self._thermostat_controller.v0_get_thermostat_status()
+                thermostats = self._thermostat_controller.get_thermostat_status()
                 self._enqueue_metrics(metric_type=metric_type,
-                                      values={'on': thermostats['thermostats_on'],
-                                              'cooling': thermostats['cooling']},
+                                      values={'on': thermostats.on,
+                                              'cooling': thermostats.cooling},
                                       tags={'id': 'G.0',
                                             'name': 'Global configuration'},
                                       timestamp=now)
-                for thermostat in thermostats['status']:
-                    values = {'setpoint': int(thermostat['setpoint']),
-                              'output0': float(thermostat['output0']),
-                              'output1': float(thermostat['output1']),
-                              'mode': int(thermostat['mode']),
-                              'type': 'tbs' if thermostat['sensor_nr'] == 240 else 'normal',
-                              'automatic': thermostat['automatic'],
-                              'current_setpoint': thermostat['csetp']}
-                    if thermostat['outside'] is not None:
-                        values['outside'] = thermostat['outside']
-                    if thermostat['sensor_nr'] != 240 and thermostat['act'] is not None:
-                        values['temperature'] = thermostat['act']
+                for thermostat in thermostats.statusses:
+                    values = {'setpoint': int(thermostat.setpoint),
+                              'output0': float(thermostat.output_0_level),
+                              'output1': float(thermostat.output_1_level),
+                              'mode': int(thermostat.mode),
+                              'type': 'tbs' if thermostat.sensor_id == 240 else 'normal',
+                              'automatic': thermostat.automatic,
+                              'current_setpoint': thermostat.setpoint_temperature}
+                    if thermostat.outside_temperature is not None:
+                        values['outside'] = thermostat.outside_temperature
+                    if thermostat.sensor_id != 240 and thermostat.actual_temperature is not None:
+                        values['temperature'] = thermostat.actual_temperature
                     self._enqueue_metrics(metric_type=metric_type,
                                           values=values,
-                                          tags={'id': '{0}.{1}'.format('C' if thermostats['cooling'] is True else 'H',
-                                                                       thermostat['id']),
-                                                'name': thermostat['name']},
+                                          tags={'id': '{0}.{1}'.format('C' if thermostats.cooling is True else 'H',
+                                                                       thermostat.id),
+                                                'name': thermostat.name},
                                           timestamp=now)
             except CommunicationFailure as ex:
                 logger.error('Error getting thermostat status: {}'.format(ex))
