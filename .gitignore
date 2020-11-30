@@ -13,3 +13,4 @@ static/
 venv/
 .mypy_cache/
 .dmypy.json
+gw_py3_venv
