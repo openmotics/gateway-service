@@ -17,12 +17,13 @@
 HeatingThermostat Mapper
 """
 from toolbox import Toolbox
-from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
+from gateway.dto import ThermostatDTO, ThermostatScheduleDTO, \
+    ThermostatGroupDTO, PumpGroupDTO
 from master.classic.eeprom_controller import EepromModel
-from master.classic.eeprom_models import ThermostatConfiguration
+from master.classic.eeprom_models import ThermostatConfiguration, GlobalThermostatConfiguration
 
 if False:  # MYPY
-    from typing import List, Dict, Any
+    from typing import List, Dict, Any, Optional, Tuple, Type
 
 
 class ThermostatMapper(object):
@@ -51,7 +52,7 @@ class ThermostatMapper(object):
                              **kwargs)
 
     @staticmethod
-    def dto_to_orm(thermostat_dto, fields):  # type: (ThermostatDTO, List[str]) -> EepromModel
+    def dto_to_orm(model_type, thermostat_dto, fields):  # type: (Type[EepromModel], ThermostatDTO, List[str]) -> EepromModel
         data = {'id': thermostat_dto.id}  # type: Dict[str, Any]
         for field in ['name', 'permanent_manual'] + ['setp{0}'.format(i) for i in range(6)]:
             if field in fields:
@@ -73,4 +74,70 @@ class ThermostatMapper(object):
                            dto_data.start_day_2,
                            dto_data.end_day_2,
                            dto_data.temp_day_2]
-        return ThermostatConfiguration.deserialize(data)
+        return model_type.deserialize(data)
+
+
+class ThermostatGroupMapper(object):
+    BYTE_MAX = 255
+
+    @staticmethod
+    def orm_to_dto(orm_object):  # type: (EepromModel) -> ThermostatGroupDTO
+        data = orm_object.serialize()
+        kwargs = {}
+        for dto_field, orm_field in {'outside_sensor_id': 'outside_sensor',
+                                     'threshold_temperature': 'threshold_temp',
+                                     'pump_delay': 'pump_delay'}.items():
+            kwargs[dto_field] = Toolbox.nonify(data[orm_field], ThermostatGroupMapper.BYTE_MAX)
+        for mode in ['heating', 'cooling']:
+            for i in range(4):
+                output_field = 'switch_to_{0}_output_{1}'.format(mode, i)
+                value_field = 'switch_to_{0}_value_{1}'.format(mode, i)
+                dto_field = 'switch_to_{0}_{1}'.format(mode, i)
+                output = Toolbox.nonify(data[output_field], ThermostatGroupMapper.BYTE_MAX)
+                value = Toolbox.nonify(data[value_field], ThermostatGroupMapper.BYTE_MAX)
+                if output is not None:
+                    kwargs[dto_field] = [output, value]
+        return ThermostatGroupDTO(id=0, **kwargs)
+
+    @staticmethod
+    def dto_to_orm(thermostat_group_dto, fields):  # type: (ThermostatGroupDTO, List[str]) -> EepromModel
+        data = {}  # type: Dict[str, Any]
+        for dto_field, orm_field in {'outside_sensor_id': 'outside_sensor',
+                                     'threshold_temperature': 'threshold_temp',
+                                     'pump_delay': 'pump_delay'}.items():
+            if dto_field in fields:
+                data[orm_field] = Toolbox.denonify(getattr(thermostat_group_dto, dto_field), ThermostatGroupMapper.BYTE_MAX)
+        for mode in ['heating', 'cooling']:
+            for i in range(4):
+                output = 'switch_to_{0}_output_{1}'.format(mode, i)
+                value = 'switch_to_{0}_value_{1}'.format(mode, i)
+                field = 'switch_to_{0}_{1}'.format(mode, i)
+                if field in fields:
+                    dto_value = getattr(thermostat_group_dto, field)  # type: Optional[Tuple[int, int]]
+                    data[output] = Toolbox.denonify(None if dto_value is None else dto_value[0], ThermostatGroupMapper.BYTE_MAX)
+                    data[value] = Toolbox.denonify(None if dto_value is None else dto_value[1], ThermostatGroupMapper.BYTE_MAX)
+        return GlobalThermostatConfiguration.deserialize(data)
+
+
+class PumpGroupMapper(object):
+    BYTE_MAX = 255
+
+    @staticmethod
+    def orm_to_dto(orm_object):  # type: (EepromModel) -> PumpGroupDTO
+        data = orm_object.serialize()
+        kwargs = {'pump_output_id': Toolbox.nonify(data['output'], PumpGroupMapper.BYTE_MAX),
+                  'valve_output_ids': ([int(output_id) for output_id in data['outputs'].split(',')]
+                                       if ',' in data['outputs'] else []),
+                  'room_id': Toolbox.nonify(data['room'], PumpGroupMapper.BYTE_MAX)}
+        return PumpGroupDTO(id=data['id'], **kwargs)
+
+    @staticmethod
+    def dto_to_orm(model_type, pump_group_dto, fields):  # type: (Type[EepromModel], PumpGroupDTO, List[str]) -> EepromModel
+        data = {'id': pump_group_dto.id}  # type: Dict[str, Any]
+        if 'pump_output_id' in fields:
+            data['output'] = Toolbox.denonify(pump_group_dto.pump_output_id, PumpGroupMapper.BYTE_MAX)
+        if 'valve_output_ids' in fields:
+            data['outputs'] = ','.join(str(output_id) for output_id in pump_group_dto.valve_output_ids)
+        if 'room_id' in fields:
+            data['room'] = Toolbox.denonify(pump_group_dto.room_id, PumpGroupMapper.BYTE_MAX)
+        return model_type.deserialize(data)

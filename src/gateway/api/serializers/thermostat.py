@@ -18,10 +18,12 @@ Heating thermostat (de)serializer
 """
 from toolbox import Toolbox
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
+from gateway.dto import ThermostatAircoStatusDTO, ThermostatDTO, \
+    ThermostatGroupDTO, ThermostatScheduleDTO, ThermostatGroupStatusDTO, \
+    PumpGroupDTO
 
 if False:  # MYPY
-    from typing import Dict, Optional, List, Tuple
+    from typing import Dict, Optional, List, Tuple, Any
 
 
 class ThermostatSerializer(object):
@@ -50,7 +52,10 @@ class ThermostatSerializer(object):
             field = 'auto_{0}'.format(day)
             dto_data = getattr(thermostat_dto, field)  # type: ThermostatScheduleDTO
             if dto_data is None:
-                continue
+                # TODO: Remove once UI can handle "no schedule"
+                dto_data = ThermostatScheduleDTO(temp_night=16, temp_day_1=20, temp_day_2=20,
+                                                 start_day_1="07:00", end_day_1="09:00",
+                                                 start_day_2="16:00", end_day_2="22:00")
             data[field] = [dto_data.temp_night,
                            dto_data.start_day_1,
                            dto_data.end_day_1,
@@ -63,9 +68,9 @@ class ThermostatSerializer(object):
     @staticmethod
     def deserialize(api_data):  # type: (Dict) -> Tuple[ThermostatDTO, List[str]]
         loaded_fields = ['id']
-        heating_thermostat_dto = ThermostatDTO(api_data['id'])
+        thermostat_dto = ThermostatDTO(api_data['id'])
         loaded_fields += SerializerToolbox.deserialize(
-            dto=heating_thermostat_dto,  # Referenced
+            dto=thermostat_dto,  # Referenced
             api_data=api_data,
             mapping={'name': ('name', None),
                      'permanent_manual': ('permanent_manual', None),
@@ -96,5 +101,107 @@ class ThermostatSerializer(object):
                                               start_day_2=api_data[field][4],
                                               end_day_2=api_data[field][5],
                                               temp_day_2=api_data[field][6])
-            setattr(heating_thermostat_dto, field, field_dto)
-        return heating_thermostat_dto, loaded_fields
+            setattr(thermostat_dto, field, field_dto)
+        return thermostat_dto, loaded_fields
+
+
+class ThermostatGroupSerializer(object):
+    BYTE_MAX = 255
+
+    @staticmethod
+    def serialize(thermostat_group_dto, fields):  # type: (ThermostatGroupDTO, Optional[List[str]]) -> Dict
+        data = {'id': thermostat_group_dto.id,
+                'outside_sensor': Toolbox.denonify(thermostat_group_dto.outside_sensor_id, ThermostatGroupSerializer.BYTE_MAX),
+                'threshold_temp': Toolbox.denonify(thermostat_group_dto.threshold_temperature, ThermostatGroupSerializer.BYTE_MAX),
+                'pump_delay': Toolbox.denonify(thermostat_group_dto.pump_delay, ThermostatGroupSerializer.BYTE_MAX)}
+        for mode in ['heating', 'cooling']:
+            for i in range(4):
+                output = 'switch_to_{0}_output_{1}'.format(mode, i)
+                value = 'switch_to_{0}_value_{1}'.format(mode, i)
+                field = 'switch_to_{0}_{1}'.format(mode, i)
+                dto_value = getattr(thermostat_group_dto, field)  # type: Optional[Tuple[int, int]]
+                data[output] = Toolbox.denonify(None if dto_value is None else dto_value[0], ThermostatGroupSerializer.BYTE_MAX)
+                data[value] = Toolbox.denonify(None if dto_value is None else dto_value[1], ThermostatGroupSerializer.BYTE_MAX)
+        return SerializerToolbox.filter_fields(data, fields)
+
+    @staticmethod
+    def deserialize(api_data):  # type: (Dict) -> Tuple[ThermostatGroupDTO, List[str]]
+        loaded_fields = []
+        thermostat_group_dto = ThermostatGroupDTO(id=0)
+        loaded_fields += SerializerToolbox.deserialize(
+            dto=thermostat_group_dto,  # Referenced
+            api_data=api_data,
+            mapping={'outside_sensor': ('outside_sensor_id', ThermostatGroupSerializer.BYTE_MAX),
+                     'threshold_temp': ('threshold_temperature', ThermostatGroupSerializer.BYTE_MAX),
+                     'pump_delay': ('pump_delay', ThermostatGroupSerializer.BYTE_MAX)}
+        )
+        for mode in ['heating', 'cooling']:
+            for i in range(4):
+                output_field = 'switch_to_{0}_output_{1}'.format(mode, i)
+                value_field = 'switch_to_{0}_value_{1}'.format(mode, i)
+                dto_field = 'switch_to_{0}_{1}'.format(mode, i)
+                if output_field in api_data and value_field in api_data:
+                    loaded_fields.append(dto_field)
+                    output = Toolbox.nonify(api_data[output_field], ThermostatGroupSerializer.BYTE_MAX)
+                    value = api_data[value_field]
+                    if output is None:
+                        setattr(thermostat_group_dto, dto_field, None)
+                    else:
+                        setattr(thermostat_group_dto, dto_field, [output, value])
+        return thermostat_group_dto, loaded_fields
+
+
+class ThermostatGroupStatusSerializer(object):
+    @staticmethod
+    def serialize(thermostat_group_status_dto):  # type: (ThermostatGroupStatusDTO) -> Dict[str, Any]
+        return {'thermostats_on': thermostat_group_status_dto.on,
+                'automatic': thermostat_group_status_dto.automatic,
+                'setpoint': thermostat_group_status_dto.setpoint,
+                'cooling': thermostat_group_status_dto.cooling,
+                'status': [{'id': status.id,
+                            'act': status.actual_temperature,
+                            'csetp': status.setpoint_temperature,
+                            'outside': status.outside_temperature,
+                            'mode': status.mode,
+                            'automatic': status.automatic,
+                            'setpoint': status.setpoint,
+                            'name': status.name,
+                            'sensor_nr': status.sensor_id,
+                            'airco': status.airco,
+                            'output0': status.output_0_level,
+                            'output1': status.output_1_level}
+                           for status in thermostat_group_status_dto.statusses]}
+
+
+class ThermostatAircoStatusSerializer(object):
+    @staticmethod
+    def serialize(thermostat_airco_status_dto):  # type: (ThermostatAircoStatusDTO) -> Dict[str, Any]
+        return {'ASB{0}'.format(i): 1 if thermostat_airco_status_dto.status[i] else 0
+                for i in range(32)}
+
+
+class PumpGroupSerializer(object):
+    BYTE_MAX = 255
+
+    @staticmethod
+    def serialize(pump_group_dto, fields):  # type: (PumpGroupDTO, Optional[List[str]]) -> Dict
+        data = {'id': pump_group_dto.id,
+                'output': Toolbox.denonify(pump_group_dto.pump_output_id, PumpGroupSerializer.BYTE_MAX),
+                'outputs': ','.join(str(output_id) for output_id in pump_group_dto.valve_output_ids),
+                'room': Toolbox.denonify(pump_group_dto.room_id, PumpGroupSerializer.BYTE_MAX)}
+        return SerializerToolbox.filter_fields(data, fields)
+
+    @staticmethod
+    def deserialize(api_data):  # type: (Dict) -> Tuple[PumpGroupDTO, List[str]]
+        loaded_fields = []
+        pump_group_dto = PumpGroupDTO(id=0)
+        loaded_fields += SerializerToolbox.deserialize(
+            dto=pump_group_dto,  # Referenced
+            api_data=api_data,
+            mapping={'output': ('pump_output_id', PumpGroupSerializer.BYTE_MAX),
+                     'rooom': ('room_id', PumpGroupSerializer.BYTE_MAX)}
+        )
+        if 'outputs' in api_data:
+            loaded_fields.append('valve_output_ids')
+            pump_group_dto.valve_output_ids = [int(output_id) for output_id in api_data['outputs'].split(',')]
+        return pump_group_dto, loaded_fields

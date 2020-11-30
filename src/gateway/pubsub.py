@@ -33,13 +33,13 @@ logger = logging.getLogger('openmotics')
 @Singleton
 class PubSub(object):
 
-    class MasterTopics:
+    class MasterTopics(object):
         EEPROM = 'eeprom'  # type: MASTER_TOPIC
         MAINTENANCE = 'maintenance'  # type: MASTER_TOPIC
         MASTER = 'master'  # type: MASTER_TOPIC
         POWER = 'power'  # type: MASTER_TOPIC
 
-    class GatewayTopics:
+    class GatewayTopics(object):
         CONFIG = 'config'  # type: GATEWAY_TOPIC
         STATE = 'state'  # type: GATEWAY_TOPIC
 
