@@ -44,6 +44,9 @@ from gateway.models import Config
 from ioc import INJECTED, Inject
 
 
+import traceback
+
+
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple
@@ -109,7 +112,7 @@ class VpnController(object):
             # 10.37.0.1 via 10.37.0.5 dev tun0
             result = False
             if routes:
-                vpn_servers = [route.split(' ')[0] for route in routes.split('\n') if '/' not in route]
+                vpn_servers = [route.split(' ')[0] for route in routes.decode().split('\n') if '/' not in route]
                 for vpn_server in vpn_servers:
                     if TaskExecutor._ping(vpn_server, verbose=False):
                         result = True
@@ -118,6 +121,7 @@ class VpnController(object):
         except Exception as ex:
             logger.info('Exception occured during vpn connectivity test: {0}'.format(ex))
             self.vpn_connected = False
+            logger.info(traceback.format_exc())
 
 
 class Cloud(object):

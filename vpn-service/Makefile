@@ -1,4 +1,3 @@
-
 REQUIREMENTS_FILE=../requirements-py3.txt
 VENV_FOLDER=../gw_py3_venv
 
@@ -43,6 +42,9 @@ ${SPEC_FILE}:
 
 run: copy-overlay
 	./dist/${OUTPUT_NAME}/${OUTPUT_NAME}
+
+upload:
+	scp -r ./dist/vpn_service devgw3:/opt/openmotics/pyinstaller-test/no-add-path/dist
 
 venv:
 	pip install virtualenv; \
