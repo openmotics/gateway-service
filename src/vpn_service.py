@@ -156,11 +156,17 @@ class Gateway(object):
 
     def __init__(self, host="127.0.0.1"):
         self._host = host
+        try:
+            config = ConfigParser()
+            config.read(constants.get_config_file())
+            self._port = config.get('OpenMotics', 'http_port')
+        except Exception:
+            self._port = 80
 
     def do_call(self, uri):
         """ Do a call to the webservice, returns a dict parsed from the json returned by the webserver. """
         try:
-            request = requests.get('http://{0}/{1}'.format(self._host, uri), timeout=10.0)
+            request = requests.get('http://{0}:{1}/{2}'.format(self._host, self._port, uri), timeout=10.0)
             return json.loads(request.text)
         except Exception as ex:
             message = str(ex)

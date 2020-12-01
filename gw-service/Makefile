@@ -17,6 +17,7 @@ package: ${SPEC_FILE}
 	pyinstaller \
 		--onedir \
 		${SPEC_FILE}
+	cp -r dist-overlay/* dist/
 
 
 esafe-package:

@@ -75,7 +75,12 @@ def setup_logger():
     handler = logging.StreamHandler()
     handler.setLevel(logging.INFO)
     handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    syslog_handler = logging.handlers.SysLogHandler(address = '/dev/log')
+    syslog_handler.setLevel(logging.INFO)
+    syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+
     logger.addHandler(handler)
+    logger.addHandler(syslog_handler)
 
 
 class OpenmoticsService(object):
@@ -171,11 +176,11 @@ class OpenmoticsService(object):
 
         # Execute data migration(s)
         FeatureMigrator.migrate()
-        RoomsMigrator.migrate()
-        InputMigrator.migrate()
-        ScheduleMigrator.migrate()
-        UserMigrator.migrate()
-        ConfigMigrator.migrate()
+        # RoomsMigrator.migrate()
+        # InputMigrator.migrate()
+        # ScheduleMigrator.migrate()
+        # UserMigrator.migrate()
+        # ConfigMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()
