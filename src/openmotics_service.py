@@ -21,6 +21,7 @@ from platform_utils import System
 System.import_libs()
 
 import logging
+import logging.handlers
 import time
 from signal import SIGTERM, signal
 
