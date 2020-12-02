@@ -72,7 +72,9 @@ class InputControllerTest(unittest.TestCase):
                        2: InputDTO(id=2, name='two')}
         orm_inputs = [Input(id=0, number=1, event_enabled=False),
                       Input(id=1, number=2, event_enabled=True)]
-        with mock.patch.object(Input, 'select', return_value=orm_inputs), \
+        select_mock = mock.Mock()
+        select_mock.join_from.return_value = orm_inputs
+        with mock.patch.object(Input, 'select', return_value=select_mock), \
              mock.patch.object(self.master_controller, 'load_input',
                                side_effect=lambda input_id: master_dtos.get(input_id)):
             dtos = self.controller.load_inputs()

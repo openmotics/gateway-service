@@ -16,6 +16,9 @@
 Generic module that houses various enums
 """
 
+if False:  # MYPY
+    from typing import Literal
+
 
 class ShutterEnums(object):
     class Direction(object):
@@ -38,3 +41,8 @@ class UserEnums(object):
 
     class DeleteErrors(object):
         LAST_ACCOUNT = 'Cannot delete last user account'
+
+
+class ThermostatMode(object):
+    COOLING = 'cooling'  # type: Literal['cooling']
+    HEATING = 'heating'  # type: Literal['heating']
