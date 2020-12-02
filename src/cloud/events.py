@@ -26,9 +26,13 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.events import GatewayEvent
 from gateway.input_controller import InputController
 from gateway.models import Config
+from serial_utils import CommunicationTimedOutException
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 logger = logging.getLogger('openmotics')
+
+if False:  # MYPY
+    from typing import Dict
 
 
 @Injectable.named('event_sender')
@@ -41,7 +45,7 @@ class EventSender(object):
         self._stopped = True
         self._cloud_client = cloud_api_client
         self._input_controller = input_controller
-
+        self._event_enabled_cache = {}  # type: Dict[int, bool]
         self._events_queue = deque()  # type: deque
         self._events_thread = DaemonThread(name='EventSender loop',
                                            target=self._send_events_loop,
@@ -58,22 +62,29 @@ class EventSender(object):
     def enqueue_event(self, event):
         if Config.get('cloud_enabled') is False:
             return
-        if self._is_enabled(event):
+        if event.type == GatewayEvent.Types.CONFIG_CHANGE:
+            if event.data.get('type') == 'input':
+                self._event_enabled_cache = {}
+        if self._should_send_event(event):
             event.data['timestamp'] = time.time()
             self._queue.appendleft(event)
 
-    def _is_enabled(self, event):
-        if event.type == GatewayEvent.Types.INPUT_CHANGE:
-            input_id = event.data['id']
-            # TODO: Below entry needs to be cached. But caching needs invalidation, so lets fix this
-            #       when we have decent cache invalidation events to subscribe on
+    def _should_send_event(self, event):
+        if event.type != GatewayEvent.Types.INPUT_CHANGE:
+            return True
+        input_id = event.data['id']
+        if input_id in self._event_enabled_cache:
+            return self._event_enabled_cache[input_id]
+        try:
             try:
                 input_ = self._input_controller.load_input(input_id)
+                should_send = input_.event_enabled
             except DoesNotExist:
-                return False
-            return input_.event_enabled
-        else:
-            return True
+                should_send = False
+            self._event_enabled_cache[input_id] = should_send
+        except CommunicationTimedOutException:
+            should_send = False
+        return should_send
 
     def _send_events_loop(self):
         # type: () -> None
