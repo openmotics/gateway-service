@@ -174,3 +174,12 @@ class MasterDummyController(MasterController):
     def load_group_actions(self):
         # type: () -> List[GroupActionDTO]
         return []
+
+    def cold_reset(self, power_on=True):  # type: (bool) -> None
+        return None
+
+    def update_master(self, hex_filename):  # type: (str) -> None
+        return None
+
+    def update_slave_modules(self, module_type, hex_filename):  # type: (str, str) -> None
+        return None
