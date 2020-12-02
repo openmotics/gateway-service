@@ -55,6 +55,9 @@ logger = logging.getLogger('openmotics')
 
 def setup_logger():
     """ Setup the OpenMotics logger. """
+    config = ConfigParser()
+    config.read(constants.get_config_file())
+
     logger.setLevel(logging.INFO)
     logger.propagate = False
 
@@ -63,19 +66,33 @@ def setup_logger():
     handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
     logger.addHandler(handler)
 
+    is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
+    if is_pyinstaller_build:
+        syslog_handler = logging.handlers.SysLogHandler(address = '/dev/log')
+        syslog_handler.setLevel(logging.INFO)
+        syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        logger.addHandler(syslog_handler)
+
 
 class VpnController(object):
     """ Contains methods to check the vpn status, start and stop the vpn. """
 
-    vpn_binary = 'openvpn'
-    config_location = '/etc/openvpn/client/'
-    start_cmd = 'cd {} ; {} --suppress-timestamps --nobind --config vpn.conf > /dev/null'.format(config_location, vpn_binary)
-    stop_cmd = 'pkill {} > /dev/null'.format(vpn_binary)
-    check_cmd = 'ps -aux | grep {} | grep -v "grep" > /dev/null'.format(vpn_binary)
-    # vpn_service = System.get_vpn_service()
-    # start_cmd = 'systemctl start {0} > /dev/null'.format(vpn_service)
-    # stop_cmd = 'systemctl stop {0} > /dev/null'.format(vpn_service)
-    # check_cmd = 'systemctl is-active {0} > /dev/null'.format(vpn_service)
+    config = ConfigParser()
+    config.read(constants.get_config_file())
+
+    is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
+
+    if is_pyinstaller_build:
+        vpn_binary = 'openvpn'
+        config_location = '/etc/openvpn/client/'
+        start_cmd = 'cd {} ; {} --suppress-timestamps --nobind --config vpn.conf > /dev/null'.format(config_location, vpn_binary)
+        stop_cmd = 'pkill {} > /dev/null'.format(vpn_binary)
+        check_cmd = 'ps -aux | grep {} | grep -v "grep" > /dev/null'.format(vpn_binary)
+    else:
+        vpn_service = System.get_vpn_service()
+        start_cmd = 'systemctl start {0} > /dev/null'.format(vpn_service)
+        stop_cmd = 'systemctl stop {0} > /dev/null'.format(vpn_service)
+        check_cmd = 'systemctl is-active {0} > /dev/null'.format(vpn_service)
 
     def __init__(self):
         self.vpn_connected = False

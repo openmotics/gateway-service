@@ -1,7 +1,7 @@
 #! /bin/bash
 
-IP=192.168.0.154
-SECRET=DsFeQrLf_R19Aksz
+IP=
+SECRET=
 FILENAME=gw_service.zip
 
 

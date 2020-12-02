@@ -182,9 +182,9 @@ class OpenmoticsService(object):
         sensor_controller.run_sync_orm()
         shutter_controller.run_sync_orm()
 
+        # Execute data migration(s)
         config = ConfigParser()
         config.read(constants.get_config_file())
-        # Execute data migration(s)
         # TODO: Make the master communication work before executing the migrations (needs eeprom use or other)
         is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
         if not is_pyinstaller_build:
