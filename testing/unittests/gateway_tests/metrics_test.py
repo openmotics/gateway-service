@@ -97,7 +97,7 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(MetricsTest.intervals.get('energy'), 300)
         metrics_controller.set_cloud_interval('energy', 900)
         self.assertEqual(MetricsTest.intervals.get('energy'), 900)
-        self.assertEqual(Config.get_entry('cloud_metrics_interval|energy'), 900)
+        self.assertEqual(Config.get_entry('cloud_metrics_interval|energy', 0), 900)
 
     def test_needs_upload(self):
         # 0. the boring stuff
@@ -165,7 +165,7 @@ class MetricsTest(unittest.TestCase):
         self.assertFalse(needs_upload)
 
         # 5. configure source, now test again
-        cnf = Config.get_entry('cloud_metrics_sources')
+        cnf = Config.get_entry('cloud_metrics_sources', [])
         cnf.append('mbus')
         Config.set_entry('cloud_metrics_sources', cnf)
         needs_upload = metrics_controller._needs_upload_to_cloud(metric)

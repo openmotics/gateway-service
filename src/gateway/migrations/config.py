@@ -72,5 +72,5 @@ class ConfigMigrator(BaseMigrator):
                                    'cloud_metrics_min_interval': 300,
                                    'cloud_support': False,
                                    'cors_enabled': False}.items():
-            if Config.get_entry(key) is None:
+            if Config.get_entry(key, None) is None:
                 Config.set_entry(key, default_value)

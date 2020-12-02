@@ -263,7 +263,7 @@ class MetricsController(object):
         if definition is None:
             return False
 
-        if Config.get_entry('cloud_enabled', True) is False:
+        if Config.get_entry('cloud_enabled', False) is False:
             return False
 
         if metric_source == 'OpenMotics':
@@ -271,13 +271,13 @@ class MetricsController(object):
                 return False
 
             # filter openmotics metrics that are not listed in cloud_metrics_types
-            metric_types = Config.get_entry('cloud_metrics_types')
+            metric_types = Config.get_entry('cloud_metrics_types', [])
             if metric_type not in metric_types:
                 return False
 
         else:
             # filter 3rd party (plugin) metrics that are not listed in cloud_metrics_sources
-            metric_sources = Config.get_entry('cloud_metrics_sources')
+            metric_sources = Config.get_entry('cloud_metrics_sources', [])
             # make sure to get the lowercase metric_source
             if metric_source.lower() not in metric_sources:
                 return False
@@ -315,16 +315,16 @@ class MetricsController(object):
         else:
             timestamp = int(metric['timestamp'])
 
-        cloud_batch_size = Config.get_entry('cloud_metrics_batch_size', 0) or 0  # type: int
-        cloud_min_interval = Config.get_entry('cloud_metrics_min_interval')  # type: Optional[int]
+        cloud_batch_size = Config.get_entry('cloud_metrics_batch_size', 0)
+        cloud_min_interval = Config.get_entry('cloud_metrics_min_interval', None)  # type: Optional[int]
         if cloud_min_interval is not None:
             self._cloud_retry_interval = cloud_min_interval
-        endpoint = Config.get_entry('cloud_endpoint')
+        endpoint = Config.get_entry('cloud_endpoint', None)  # type: Optional[str]
         if endpoint is None:
             return
         metrics_endpoint = '{0}/{1}?uuid={2}'.format(
             endpoint if endpoint.startswith('http') else 'https://{0}'.format(endpoint),
-            Config.get_entry('cloud_endpoint_metrics'),
+            Config.get_entry('cloud_endpoint_metrics', ''),
             self._gateway_uuid
         )
 
@@ -403,7 +403,7 @@ class MetricsController(object):
                         self._cloud_retry_interval = 60 * 60
                         new_interval = 2 * 60 * 60
                     self._throttled_down = True
-                    metric_types = Config.get_entry('cloud_metrics_types') or []
+                    metric_types = Config.get_entry('cloud_metrics_types', [])  # type: List[str]
                     for mtype in metric_types:
                         self.set_cloud_interval(mtype, new_interval, save=False)
 

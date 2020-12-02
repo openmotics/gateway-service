@@ -2320,9 +2320,9 @@ class WebInterface(object):
         """
         Gets a given setting
         """
-        values = {}
+        values = {}  # type: Dict[str, Any]
         for setting in settings:
-            value = Config.get_entry(setting)
+            value = Config.get_entry(setting, None)
             if value is not None:
                 values[setting] = value
         return {'values': values}

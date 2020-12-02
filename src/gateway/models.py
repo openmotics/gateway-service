@@ -30,6 +30,7 @@ import constants
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Any
+    T = TypeVar('T')
 
 logger = logging.getLogger('openmotics')
 
@@ -197,8 +198,8 @@ class Config(BaseModel):
     CACHE = {}
 
     @staticmethod
-    def get_entry(key, fallback=None):
-        # type: (str, Optional[Any]) -> Optional[Any]
+    def get_entry(key, fallback):
+        # type: (str, T) -> T
         """ Retrieves a setting from the DB, returns the argument 'fallback' when non existing """
         key = key.lower()
         if key in Config.CACHE:

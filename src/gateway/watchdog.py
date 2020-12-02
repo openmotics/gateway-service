@@ -31,7 +31,7 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from serial_utils import CommunicationStatus
 
 if False:  # MYPY
-    from typing import Callable, Literal, Optional, Union
+    from typing import Callable, Literal, Optional, Union, Dict, Any
     from gateway.hal.master_controller import MasterController
     from power.power_communicator import PowerCommunicator
 
@@ -96,7 +96,7 @@ class Watchdog(object):
     def _get_reset_action(self, name, controller):
         # type: (str, Union[MasterController,PowerCommunicator]) -> Optional[str]
         recovery_data_key = 'communication_recovery_{0}'.format(name)
-        recovery_data = Config.get_entry(recovery_data_key, {})
+        recovery_data = Config.get_entry(recovery_data_key, None)  # type: Optional[Dict[str, Any]]
         if recovery_data is None:  # Make mypy happy
             recovery_data = {}
 

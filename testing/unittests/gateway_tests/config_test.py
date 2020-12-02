@@ -58,34 +58,34 @@ class ConfigControllerTest(unittest.TestCase):
 
     def test_empty(self):
         """ Test an empty database. """
-        res = Config.get_entry('test')
+        res = Config.get_entry('test', None)
         self.assertIsNone(res)
 
         Config.set_entry('test', 'test')
 
-        res = Config.get_entry('test')
+        res = Config.get_entry('test', None)
         self.assertEqual(res, 'test')
 
         Config.remove_entry('test')
 
-        res = Config.get_entry('test')
+        res = Config.get_entry('test', None)
         self.assertIsNone(res)
 
     def test_duplicates(self):
         """test of duplicate settings"""
         Config.set_entry('test', 'test')
 
-        res = Config.get_entry('test')
+        res = Config.get_entry('test', None)
         self.assertEqual(res, 'test')
 
         Config.set_entry('test', 'test2')
 
-        res = Config.get_entry('test')
+        res = Config.get_entry('test', None)
         self.assertEqual(res, 'test2')
 
         Config.remove_entry('test')
 
-        res = Config.get_entry('test')
+        res = Config.get_entry('test', None)
         self.assertIsNone(res)
 
     def test_multiple_types(self):
@@ -94,13 +94,13 @@ class ConfigControllerTest(unittest.TestCase):
         Config.set_entry('int', 37)
         Config.set_entry('bool', True)
 
-        res = Config.get_entry('str')
+        res = Config.get_entry('str', None)
         self.assertEqual(res, 'test')
 
-        res = Config.get_entry('int')
+        res = Config.get_entry('int', None)
         self.assertEqual(res, 37)
 
-        res = Config.get_entry('bool')
+        res = Config.get_entry('bool', None)
         self.assertEqual(res, True)
 
     def test_delete_non_existing(self):
@@ -110,17 +110,17 @@ class ConfigControllerTest(unittest.TestCase):
         Config.set_entry('bool', True)
 
         Config.remove_entry('str')
-        res = Config.get_entry('str')
+        res = Config.get_entry('str', None)
         self.assertIsNone(res)
 
         Config.remove_entry('str')
-        res = Config.get_entry('str')
+        res = Config.get_entry('str', None)
         self.assertIsNone(res)
 
-        res = Config.get_entry('int')
+        res = Config.get_entry('int', None)
         self.assertEqual(res, 37)
 
-        res = Config.get_entry('bool')
+        res = Config.get_entry('bool', None)
         self.assertEqual(res, True)
 
 
