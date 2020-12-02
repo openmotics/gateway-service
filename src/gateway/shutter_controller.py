@@ -20,7 +20,7 @@ from __future__ import absolute_import
 import logging
 import time
 from threading import Lock
-
+from peewee import JOIN
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.dto import ShutterDTO, ShutterGroupDTO
 from gateway.enums import ShutterEnums
@@ -151,14 +151,18 @@ class ShutterController(BaseController):
     # Configure shutters
 
     def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
-        shutter = Shutter.get(number=shutter_id)  # type: Shutter
-        shutter_dto = self._master_controller.load_shutter(shutter_id=shutter.number)
+        shutter = Shutter.select(Room) \
+                         .join_from(Shutter, Room, join_type=JOIN.LEFT_OUTER) \
+                         .where(Shutter.number == shutter_id) \
+                         .get()  # type: Shutter
+        shutter_dto = self._master_controller.load_shutter(shutter_id=shutter_id)  # TODO: Load dict
         shutter_dto.room = shutter.room.number if shutter.room is not None else None
         return shutter_dto
 
     def load_shutters(self):  # type: () -> List[ShutterDTO]
         shutter_dtos = []
-        for shutter in list(Shutter.select()):
+        for shutter in list(Shutter.select(Shutter, Room)
+                                   .join_from(Shutter, Room, join_type=JOIN.LEFT_OUTER)):  # TODO: Load dicts
             shutter_dto = self._master_controller.load_shutter(shutter_id=shutter.number)
             shutter_dto.room = shutter.room.number if shutter.room is not None else None
             shutter_dtos.append(shutter_dto)
@@ -181,14 +185,18 @@ class ShutterController(BaseController):
         self.update_config(self.load_shutters())
 
     def load_shutter_group(self, group_id):  # type: (int) -> ShutterGroupDTO
-        shutter_group = ShutterGroup.get(number=group_id)  # type: ShutterGroup
-        shutter_group_dto = self._master_controller.load_shutter_group(shutter_group_id=shutter_group.number)
+        shutter_group = ShutterGroup.select(Room) \
+                                    .join_from(ShutterGroup, Room, join_type=JOIN.LEFT_OUTER) \
+                                    .where(ShutterGroup.number == group_id) \
+                                    .get()  # type: ShutterGroup
+        shutter_group_dto = self._master_controller.load_shutter_group(shutter_group_id=group_id)  # TODO: Load dict
         shutter_group_dto.room = shutter_group.room.number if shutter_group.room is not None else None
         return shutter_group_dto
 
     def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
         shutter_group_dtos = []
-        for shutter_group in list(ShutterGroup.select()):
+        for shutter_group in list(ShutterGroup.select(ShutterGroup, Room)
+                                              .join_from(ShutterGroup, Room, join_type=JOIN.LEFT_OUTER)):  # TODO: Load dicts
             shutter_group_dto = self._master_controller.load_shutter_group(shutter_group_id=shutter_group.number)
             shutter_group_dto.room = shutter_group.room.number if shutter_group.room is not None else None
             shutter_group_dtos.append(shutter_group_dto)
