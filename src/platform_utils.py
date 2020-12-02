@@ -227,11 +227,12 @@ class System(object):
     def import_libs():
         config = ConfigParser()
         config.read(constants.get_config_file())
-        is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
-        if not is_pyinstaller_build:
-            operating_system = System.get_operating_system().get('ID')
-            if operating_system in (System.OS.ANGSTROM, System.OS.DEBIAN):
-                sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
+        operating_system = System.get_operating_system().get('ID')
+        if config.has_option('OpenMotics', 'build'):
+            is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
+            if not is_pyinstaller_build:
+                if operating_system in (System.OS.ANGSTROM, System.OS.DEBIAN):
+                    sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:

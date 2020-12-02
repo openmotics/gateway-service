@@ -80,7 +80,9 @@ class VpnController(object):
     config = ConfigParser()
     config.read(constants.get_config_file())
 
-    is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
+    is_pyinstaller_build = False
+    if config.has_option('OpenMotics', 'build'):
+        is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
 
     if is_pyinstaller_build:
         vpn_binary = 'openvpn'
