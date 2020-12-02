@@ -142,7 +142,10 @@ class VpnController(object):
             # 10.37.0.1 via 10.37.0.5 dev tun0
             result = False
             if routes:
-                vpn_servers = [route.split(' ')[0] for route in routes.decode().split('\n') if '/' not in route]
+                if not isinstance(routes, str):  # to ensure python 2 and 3 compatibility
+                    routes = routes.decode()
+
+                vpn_servers = [route.split(' ')[0] for route in routes.split('\n') if '/' not in route]
                 for vpn_server in vpn_servers:
                     if TaskExecutor._ping(vpn_server, verbose=False):
                         result = True
