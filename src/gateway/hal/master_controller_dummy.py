@@ -57,10 +57,6 @@ class MasterDummyController(MasterController):
         # type: () -> bool
         return False
 
-    def error_list(self):
-        # type: () -> List[Tuple[str,int]]
-        return []
-
     def get_firmware_version(self):
         # type: () -> Tuple[int, int, int]
         return (0, 0, 0)
