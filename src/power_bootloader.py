@@ -299,6 +299,11 @@ def main():
         return power_store, power_communicator, power_serial
 
     store, communicator, serial = _get_from_ioc()
+
+    if store is None or communicator is None or serial is None:
+        logger.info('Energy bus is disabled or dependencies could not be loaded. Skipping...')
+        return
+
     serial.start()
 
     if args.scan:

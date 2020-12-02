@@ -362,3 +362,4 @@ def setup_minimal_power_platform():
         Injectable.value(power_communicator=None)
         Injectable.value(power_controller=None)
         Injectable.value(p1_controller=None)
+        Injectable.value(power_serial=None)
