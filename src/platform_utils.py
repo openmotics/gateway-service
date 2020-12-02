@@ -24,6 +24,8 @@ import sys
 
 import constants
 
+from six.moves.configparser import ConfigParser
+
 logger = logging.getLogger('openmotics')
 
 
@@ -223,9 +225,13 @@ class System(object):
 
     @staticmethod
     def import_libs():
-        operating_system = System.get_operating_system().get('ID')
-        # if operating_system in (System.OS.ANGSTROM, System.OS.DEBIAN):
-        #     sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
+        config = ConfigParser()
+        config.read(constants.get_config_file())
+        is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
+        if not is_pyinstaller_build:
+            operating_system = System.get_operating_system().get('ID')
+            if operating_system in (System.OS.ANGSTROM, System.OS.DEBIAN):
+                sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:

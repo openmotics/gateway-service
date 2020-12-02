@@ -20,6 +20,7 @@ from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 
+import constants
 import logging
 import logging.handlers
 import time
@@ -36,6 +37,7 @@ from gateway.migrations.users import UserMigrator
 from gateway.migrations.config import ConfigMigrator
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
+from six.moves.configparser import ConfigParser
 
 if False:  # MYPY
     from gateway.output_controller import OutputController
@@ -70,18 +72,23 @@ logger = logging.getLogger("openmotics")
 def setup_logger():
     """ Setup the OpenMotics logger. """
 
+    config = ConfigParser()
+    config.read(constants.get_config_file())
+
     logger.setLevel(logging.INFO)
     logger.propagate = False
 
     handler = logging.StreamHandler()
     handler.setLevel(logging.INFO)
     handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    syslog_handler = logging.handlers.SysLogHandler(address = '/dev/log')
-    syslog_handler.setLevel(logging.INFO)
-    syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-
     logger.addHandler(handler)
-    logger.addHandler(syslog_handler)
+
+    is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
+    if is_pyinstaller_build:
+        syslog_handler = logging.handlers.SysLogHandler(address = '/dev/log')
+        syslog_handler.setLevel(logging.INFO)
+        syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        logger.addHandler(syslog_handler)
 
 
 class OpenmoticsService(object):
@@ -175,13 +182,18 @@ class OpenmoticsService(object):
         sensor_controller.run_sync_orm()
         shutter_controller.run_sync_orm()
 
+        config = ConfigParser()
+        config.read(constants.get_config_file())
         # Execute data migration(s)
-        FeatureMigrator.migrate()
-        # RoomsMigrator.migrate()
-        # InputMigrator.migrate()
-        # ScheduleMigrator.migrate()
-        # UserMigrator.migrate()
-        # ConfigMigrator.migrate()
+        # TODO: Make the master communication work before executing the migrations (needs eeprom use or other)
+        is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
+        if not is_pyinstaller_build:
+            FeatureMigrator.migrate()
+            RoomsMigrator.migrate()
+            InputMigrator.migrate()
+            ScheduleMigrator.migrate()
+            UserMigrator.migrate()
+            ConfigMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()

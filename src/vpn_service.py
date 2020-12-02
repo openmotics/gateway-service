@@ -43,11 +43,6 @@ from gateway.initialize import setup_minimal_vpn_platform
 from gateway.models import Config
 from ioc import INJECTED, Inject
 
-
-import traceback
-
-
-
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple
 
@@ -72,10 +67,15 @@ def setup_logger():
 class VpnController(object):
     """ Contains methods to check the vpn status, start and stop the vpn. """
 
-    vpn_service = System.get_vpn_service()
-    start_cmd = 'systemctl start {0} > /dev/null'.format(vpn_service)
-    stop_cmd = 'systemctl stop {0} > /dev/null'.format(vpn_service)
-    check_cmd = 'systemctl is-active {0} > /dev/null'.format(vpn_service)
+    vpn_binary = 'openvpn'
+    config_location = '/etc/openvpn/client/'
+    start_cmd = 'cd {} ; {} --suppress-timestamps --nobind --config vpn.conf > /dev/null'.format(config_location, vpn_binary)
+    stop_cmd = 'pkill {} > /dev/null'.format(vpn_binary)
+    check_cmd = 'ps -aux | grep {} | grep -v "grep" > /dev/null'.format(vpn_binary)
+    # vpn_service = System.get_vpn_service()
+    # start_cmd = 'systemctl start {0} > /dev/null'.format(vpn_service)
+    # stop_cmd = 'systemctl stop {0} > /dev/null'.format(vpn_service)
+    # check_cmd = 'systemctl is-active {0} > /dev/null'.format(vpn_service)
 
     def __init__(self):
         self.vpn_connected = False
@@ -90,18 +90,29 @@ class VpnController(object):
     def start_vpn():
         """ Start openvpn """
         logger.info('Starting VPN')
-        return subprocess.call(VpnController.start_cmd, shell=True) == 0
+        logger.info(VpnController.start_cmd)
+        # return subprocess.call(VpnController.start_cmd, shell=True) == 0
+        res = subprocess.call(VpnController.start_cmd, shell=True) == 0
+        logger.info("res: {}".format(res))
+        return res
 
     @staticmethod
     def stop_vpn():
         """ Stop openvpn """
         logger.info('Stopping VPN')
-        return subprocess.call(VpnController.stop_cmd, shell=True) == 0
+        logger.info(VpnController.stop_cmd)
+        # return subprocess.call(VpnController.stop_cmd, shell=True) == 0
+        res = subprocess.call(VpnController.stop_cmd, shell=True) == 0
+        logger.info("res: {}".format(res))
+        return res
 
     @staticmethod
     def check_vpn():
         """ Check if openvpn is running """
-        return subprocess.call(VpnController.check_cmd, shell=True) == 0
+        logger.info(VpnController.check_cmd)
+        res = subprocess.call(VpnController.check_cmd, shell=True) == 0
+        logger.info("res: {}".format(res))
+        return res
 
     def _vpn_connected(self):
         """ Checks if the VPN tunnel is connected """
@@ -121,7 +132,6 @@ class VpnController(object):
         except Exception as ex:
             logger.info('Exception occured during vpn connectivity test: {0}'.format(ex))
             self.vpn_connected = False
-            logger.info(traceback.format_exc())
 
 
 class Cloud(object):
@@ -411,6 +421,7 @@ class TaskExecutor(object):
         if target is None:
             return False
 
+        print("Trying to ping to {}".format(target))
         # The popen_timeout has been added as a workaround for the hanging subprocess
         # If NTP date changes the time during a execution of a sub process this hangs forever.
         def popen_timeout(command, timeout):
