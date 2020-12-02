@@ -17,6 +17,7 @@ Sensor BLL
 """
 from __future__ import absolute_import
 import logging
+from peewee import JOIN
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.dto import SensorDTO
@@ -39,14 +40,18 @@ class SensorController(BaseController):
         super(SensorController, self).__init__(master_controller)
 
     def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
-        sensor = Sensor.get(number=sensor_id)  # type: Sensor
-        sensor_dto = self._master_controller.load_sensor(sensor_id=sensor.number)
+        sensor = Sensor.select(Room) \
+                       .join_from(Sensor, Room, join_type=JOIN.LEFT_OUTER) \
+                       .where(Sensor.number == sensor_id) \
+                       .get()  # type: Sensor  # TODO: Load dict
+        sensor_dto = self._master_controller.load_sensor(sensor_id=sensor_id)
         sensor_dto.room = sensor.room.number if sensor.room is not None else None
         return sensor_dto
 
     def load_sensors(self):  # type: () -> List[SensorDTO]
         sensor_dtos = []
-        for sensor_ in list(Sensor.select()):
+        for sensor_ in list(Sensor.select(Sensor, Room)
+                                  .join_from(Sensor, Room, join_type=JOIN.LEFT_OUTER)):  # TODO: Load dicts
             sensor_dto = self._master_controller.load_sensor(sensor_id=sensor_.number)
             sensor_dto.room = sensor_.room.number if sensor_.room is not None else None
             sensor_dtos.append(sensor_dto)
