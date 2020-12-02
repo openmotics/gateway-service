@@ -206,6 +206,15 @@ class Config(BaseModel):
     setting: MixedTextField
     data: MixedTextField
 
+    @staticmethod
+    def get_entry(key: str, fallback: Optional[Any] = None) -> Optional[Any]: ...
+
+    @staticmethod
+    def set_entry(key: str, value: Any) -> None: ...
+
+    @staticmethod
+    def remove_entry(key: str) -> None: ...
+
 
 class Plugin(BaseModel):
     id: MixedPrimaryKeyField

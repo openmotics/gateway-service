@@ -97,7 +97,7 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(MetricsTest.intervals.get('energy'), 300)
         metrics_controller.set_cloud_interval('energy', 900)
         self.assertEqual(MetricsTest.intervals.get('energy'), 900)
-        self.assertEqual(Config.get('cloud_metrics_interval|energy'), 900)
+        self.assertEqual(Config.get_entry('cloud_metrics_interval|energy'), 900)
 
     def test_needs_upload(self):
         # 0. the boring stuff
@@ -112,10 +112,10 @@ class MetricsTest(unittest.TestCase):
         metrics_collector_mock.get_definitions = lambda: []
 
         # 1. baseline config and definitions
-        Config.set('cloud_enabled', True)
-        Config.set('cloud_metrics_types', ['counter', 'energy'])
-        Config.set('cloud_metrics_sources', ['openmotics'])
-        Config.set('cloud_metrics_enabled|energy', True)
+        Config.set_entry('cloud_enabled', True)
+        Config.set_entry('cloud_metrics_types', ['counter', 'energy'])
+        Config.set_entry('cloud_metrics_sources', ['openmotics'])
+        Config.set_entry('cloud_metrics_enabled|energy', True)
 
         definitions = {'OpenMotics': {'counter': Mock(), 'energy': Mock()}}
 
@@ -138,16 +138,16 @@ class MetricsTest(unittest.TestCase):
         self.assertTrue(needs_upload)
 
         # 3. disable energy metric type, now test again
-        Config.set('cloud_metrics_enabled|energy', False)
+        Config.set_entry('cloud_metrics_enabled|energy', False)
         needs_upload = metrics_controller._needs_upload_to_cloud(metric)
         self.assertFalse(needs_upload)
-        Config.set('cloud_metrics_enabled|energy', True)
+        Config.set_entry('cloud_metrics_enabled|energy', True)
 
         # 3. disable energy metric type, now test again
-        Config.set('cloud_metrics_types', ['counter'])
+        Config.set_entry('cloud_metrics_types', ['counter'])
         needs_upload = metrics_controller._needs_upload_to_cloud(metric)
         self.assertFalse(needs_upload)
-        Config.set('cloud_metrics_types', ['counter', 'energy'])
+        Config.set_entry('cloud_metrics_types', ['counter', 'energy'])
 
         # 4. test metric with unconfigured definition
         metric = {'source': 'MBus',
@@ -165,22 +165,22 @@ class MetricsTest(unittest.TestCase):
         self.assertFalse(needs_upload)
 
         # 5. configure source, now test again
-        cnf = Config.get('cloud_metrics_sources')
+        cnf = Config.get_entry('cloud_metrics_sources')
         cnf.append('mbus')
-        Config.set('cloud_metrics_sources', cnf)
+        Config.set_entry('cloud_metrics_sources', cnf)
         needs_upload = metrics_controller._needs_upload_to_cloud(metric)
         self.assertTrue(needs_upload)
 
         # 7. disable cloud, now test again
-        Config.set('cloud_enabled', False)
+        Config.set_entry('cloud_enabled', False)
         needs_upload = metrics_controller._needs_upload_to_cloud(metric)
         self.assertFalse(needs_upload)
 
     def test_metrics_receiver(self):
 
-        Config.set('cloud_endpoint', 'tests.openmotics.com')
-        Config.set('cloud_endpoint_metrics', 'metrics')
-        Config.set('cloud_metrics_interval|foobar', 5)
+        Config.set_entry('cloud_endpoint', 'tests.openmotics.com')
+        Config.set_entry('cloud_endpoint_metrics', 'metrics')
+        Config.set_entry('cloud_metrics_interval|foobar', 5)
 
         # Add interceptors
 
@@ -266,8 +266,8 @@ class MetricsTest(unittest.TestCase):
         logger.info('Send first metrics, but raise exception on "cloud"')
 
         send_metrics = []
-        Config.set('cloud_metrics_batch_size', 0)
-        Config.set('cloud_metrics_min_interval', 0)
+        Config.set_entry('cloud_metrics_batch_size', 0)
+        Config.set_entry('cloud_metrics_min_interval', 0)
 
         time.sleep(10)  # Time moves on inside fakesleep
         metric_1 = send_metric(counter=0, error=True)
@@ -337,8 +337,8 @@ class MetricsTest(unittest.TestCase):
         logger.info('Send another metrics, with increased batch sizes')
 
         send_metrics = []
-        Config.set('cloud_metrics_batch_size', 3)
-        Config.set('cloud_metrics_min_interval', 300)
+        Config.set_entry('cloud_metrics_batch_size', 3)
+        Config.set_entry('cloud_metrics_min_interval', 300)
 
         time.sleep(10)  # Time moves on inside fakesleep
         metric_1 = send_metric(counter=3, error=False)
@@ -405,7 +405,7 @@ class MetricsTest(unittest.TestCase):
         logger.info('Send metric, but raise exception on "cloud"')
 
         send_metrics = []
-        Config.set('cloud_metrics_batch_size', 0)
+        Config.set_entry('cloud_metrics_batch_size', 0)
 
         time.sleep(10)  # Time moves on inside fakesleep
         metric_1 = send_metric(counter=7, error=True)

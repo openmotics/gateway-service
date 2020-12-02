@@ -129,11 +129,11 @@ class MetricsController(object):
         logger.info('Setting cloud interval {0}_{1}'.format(metric_type, interval))
         self._metrics_collector.set_cloud_interval(metric_type, interval)
         if save:
-            Config.set('cloud_metrics_interval|{0}'.format(metric_type), interval)
+            Config.set_entry('cloud_metrics_interval|{0}'.format(metric_type), interval)
 
     def _refresh_cloud_interval(self):
         for metric_type in self._metrics_collector.intervals:
-            interval = Config.get('cloud_metrics_interval|{0}'.format(metric_type), 300)
+            interval = Config.get_entry('cloud_metrics_interval|{0}'.format(metric_type), 300)
             self.set_cloud_interval(metric_type, interval, save=False)
         self._throttled_down = False
 
@@ -263,21 +263,21 @@ class MetricsController(object):
         if definition is None:
             return False
 
-        if Config.get('cloud_enabled', True) is False:
+        if Config.get_entry('cloud_enabled', True) is False:
             return False
 
         if metric_source == 'OpenMotics':
-            if Config.get('cloud_metrics_enabled|{0}'.format(metric_type), True) is False:
+            if Config.get_entry('cloud_metrics_enabled|{0}'.format(metric_type), True) is False:
                 return False
 
             # filter openmotics metrics that are not listed in cloud_metrics_types
-            metric_types = Config.get('cloud_metrics_types')
+            metric_types = Config.get_entry('cloud_metrics_types')
             if metric_type not in metric_types:
                 return False
 
         else:
             # filter 3rd party (plugin) metrics that are not listed in cloud_metrics_sources
-            metric_sources = Config.get('cloud_metrics_sources')
+            metric_sources = Config.get_entry('cloud_metrics_sources')
             # make sure to get the lowercase metric_source
             if metric_source.lower() not in metric_sources:
                 return False
@@ -310,19 +310,19 @@ class MetricsController(object):
 
         if metric_source == 'OpenMotics':
             # round off timestamps for openmotics metrics
-            modulo_interval = Config.get('cloud_metrics_interval|{0}'.format(metric_type), 900)
+            modulo_interval = Config.get_entry('cloud_metrics_interval|{0}'.format(metric_type), 900)
             timestamp = int(metric['timestamp'] - metric['timestamp'] % modulo_interval)
         else:
             timestamp = int(metric['timestamp'])
 
-        cloud_batch_size = Config.get('cloud_metrics_batch_size', 0)  # type: int
-        cloud_min_interval = Config.get('cloud_metrics_min_interval')  # type: Optional[int]
+        cloud_batch_size = Config.get_entry('cloud_metrics_batch_size', 0)  # type: int
+        cloud_min_interval = Config.get_entry('cloud_metrics_min_interval')  # type: Optional[int]
         if cloud_min_interval is not None:
             self._cloud_retry_interval = cloud_min_interval
-        endpoint = Config.get('cloud_endpoint')
+        endpoint = Config.get_entry('cloud_endpoint')
         metrics_endpoint = '{0}/{1}?uuid={2}'.format(
             endpoint if endpoint.startswith('http') else 'https://{0}'.format(endpoint),
-            Config.get('cloud_endpoint_metrics'),
+            Config.get_entry('cloud_endpoint_metrics'),
             self._gateway_uuid
         )
 
@@ -401,7 +401,7 @@ class MetricsController(object):
                         self._cloud_retry_interval = 60 * 60
                         new_interval = 2 * 60 * 60
                     self._throttled_down = True
-                    metric_types = Config.get('cloud_metrics_types')
+                    metric_types = Config.get_entry('cloud_metrics_types')
                     for mtype in metric_types:
                         self.set_cloud_interval(mtype, new_interval, save=False)
 
