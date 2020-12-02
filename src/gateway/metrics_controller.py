@@ -315,11 +315,13 @@ class MetricsController(object):
         else:
             timestamp = int(metric['timestamp'])
 
-        cloud_batch_size = Config.get_entry('cloud_metrics_batch_size', 0)  # type: int
+        cloud_batch_size = Config.get_entry('cloud_metrics_batch_size', 0) or 0  # type: int
         cloud_min_interval = Config.get_entry('cloud_metrics_min_interval')  # type: Optional[int]
         if cloud_min_interval is not None:
             self._cloud_retry_interval = cloud_min_interval
         endpoint = Config.get_entry('cloud_endpoint')
+        if endpoint is None:
+            return
         metrics_endpoint = '{0}/{1}?uuid={2}'.format(
             endpoint if endpoint.startswith('http') else 'https://{0}'.format(endpoint),
             Config.get_entry('cloud_endpoint_metrics'),
@@ -401,7 +403,7 @@ class MetricsController(object):
                         self._cloud_retry_interval = 60 * 60
                         new_interval = 2 * 60 * 60
                     self._throttled_down = True
-                    metric_types = Config.get_entry('cloud_metrics_types')
+                    metric_types = Config.get_entry('cloud_metrics_types') or []
                     for mtype in metric_types:
                         self.set_cloud_interval(mtype, new_interval, save=False)
 

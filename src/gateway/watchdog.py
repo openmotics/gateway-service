@@ -97,6 +97,8 @@ class Watchdog(object):
         # type: (str, Union[MasterController,PowerCommunicator]) -> Optional[str]
         recovery_data_key = 'communication_recovery_{0}'.format(name)
         recovery_data = Config.get_entry(recovery_data_key, {})
+        if recovery_data is None:  # Make mypy happy
+            recovery_data = {}
 
         stats = controller.get_communication_statistics()
         calls_timedout = [call for call in stats['calls_timedout']]
@@ -112,7 +114,7 @@ class Watchdog(object):
         if len(recovery_data) == 0:
             device_reset = 'communication_errors'
         else:
-            backoff = last_device_reset.get('backoff', backoff)
+            backoff = 0 if last_device_reset is None else last_device_reset.get('backoff', backoff)
             if last_device_reset is None or last_device_reset['time'] < time.time() - backoff:
                 device_reset = 'communication_errors'
                 backoff = min(1200, backoff * 2)

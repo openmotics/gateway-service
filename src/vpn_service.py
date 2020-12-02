@@ -526,7 +526,7 @@ class HeartbeatService(object):
 
     def _beat(self):  # type: () -> float
         # Check whether connection to the Cloud is enabled/disabled
-        self._cloud_enabled = Config.get_entry('cloud_enabled')
+        self._cloud_enabled = Config.get_entry('cloud_enabled') or False
         if self._cloud_enabled is False:
             self._sleep_time = DEFAULT_SLEEP_TIME
             task_data = {'open_vpn': False,
