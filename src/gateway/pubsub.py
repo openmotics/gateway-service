@@ -16,7 +16,12 @@ from __future__ import absolute_import
 
 from collections import defaultdict
 import logging
-from toolbox import Queue, Empty
+# Importing the Queue library as uniform naming convention
+import sys
+if sys.version_info.major == 3:
+    from queue import Queue, Empty
+else:
+    from Queue import Queue, Empty # type: ignore  # Needed since MyPy will detect duplicate imported names, but will never happen
 
 from gateway.daemon_thread import DaemonThread
 
@@ -66,6 +71,8 @@ class PubSub(object):
         # type: () -> None
         self.is_running = False
         self._pub_thread.stop()
+        self._master_events.join()
+        self._gateway_events.join()
 
     def _publisher_loop(self):
         while self.is_running:
@@ -75,12 +82,14 @@ class PubSub(object):
                 pass
 
     def _publish_all_events(self):
-        while not self._master_events.qsize() == 0:
+        while not self._master_events.empty():
             topic, master_event = self._master_events.get(block=True, timeout=5)
             self._publish_master_event(topic, master_event)
-        while not self._gateway_events.qsize() == 0:
+            self._master_events.task_done()
+        while not self._gateway_events.empty():
             topic, gateway_event = self._gateway_events.get(block=True, timeout=5)
             self._publish_gateway_event(topic, gateway_event)
+            self._gateway_events.task_done()
 
     def subscribe_master_events(self, topic, callback):
         # type: (MASTER_TOPIC, Callable[[MasterEvent],None]) -> None
