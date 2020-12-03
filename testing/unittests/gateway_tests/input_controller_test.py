@@ -41,7 +41,7 @@ class InputControllerTest(unittest.TestCase):
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
         self.master_controller = mock.Mock(MasterController)
-        self.pubsub = PubSub()
+        self.pubsub = PubSub()  # triggernig manually
         self.master_controller = mock.Mock(MasterController)
         SetUpTestInjections(master_controller=self.master_controller,
                             maintenance_controller=mock.Mock(),
@@ -63,6 +63,7 @@ class InputControllerTest(unittest.TestCase):
         input_dto = InputDTO(id=42)
         with mock.patch.object(self.master_controller, 'load_inputs', return_value=[input_dto]):
             self.controller.run_sync_orm()
+            self.pubsub._publisher_loop()
             assert Input.select().where(Input.number == input_dto.id).count() == 1
             assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'input'}) in events
             assert len(events) == 1

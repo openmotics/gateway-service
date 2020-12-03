@@ -22,7 +22,7 @@ from gateway.daemon_thread import DaemonThread
 from ioc import Injectable, Singleton
 
 if False:  # MYPY
-    from typing import Callable, Dict, List, Literal
+    from typing import Callable, Dict, List, Literal, Tuple
     from gateway.events import GatewayEvent
     from gateway.hal.master_event import MasterEvent
     GATEWAY_TOPIC = Literal['config', 'state']
