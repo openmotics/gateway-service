@@ -58,69 +58,69 @@ class ConfigControllerTest(unittest.TestCase):
 
     def test_empty(self):
         """ Test an empty database. """
-        res = Config.get('test')
+        res = Config.get_entry('test', None)
         self.assertIsNone(res)
 
-        Config.set('test', 'test')
+        Config.set_entry('test', 'test')
 
-        res = Config.get('test')
+        res = Config.get_entry('test', None)
         self.assertEqual(res, 'test')
 
-        Config.remove('test')
+        Config.remove_entry('test')
 
-        res = Config.get('test')
+        res = Config.get_entry('test', None)
         self.assertIsNone(res)
 
     def test_duplicates(self):
         """test of duplicate settings"""
-        Config.set('test', 'test')
+        Config.set_entry('test', 'test')
 
-        res = Config.get('test')
+        res = Config.get_entry('test', None)
         self.assertEqual(res, 'test')
 
-        Config.set('test', 'test2')
+        Config.set_entry('test', 'test2')
 
-        res = Config.get('test')
+        res = Config.get_entry('test', None)
         self.assertEqual(res, 'test2')
 
-        Config.remove('test')
+        Config.remove_entry('test')
 
-        res = Config.get('test')
+        res = Config.get_entry('test', None)
         self.assertIsNone(res)
 
     def test_multiple_types(self):
         """ Test different types """
-        Config.set('str', 'test')
-        Config.set('int', 37)
-        Config.set('bool', True)
+        Config.set_entry('str', 'test')
+        Config.set_entry('int', 37)
+        Config.set_entry('bool', True)
 
-        res = Config.get('str')
+        res = Config.get_entry('str', None)
         self.assertEqual(res, 'test')
 
-        res = Config.get('int')
+        res = Config.get_entry('int', None)
         self.assertEqual(res, 37)
 
-        res = Config.get('bool')
+        res = Config.get_entry('bool', None)
         self.assertEqual(res, True)
 
     def test_delete_non_existing(self):
         """ Test deleting non existing setting """
-        Config.set('str', 'test')
-        Config.set('int', 37)
-        Config.set('bool', True)
+        Config.set_entry('str', 'test')
+        Config.set_entry('int', 37)
+        Config.set_entry('bool', True)
 
-        Config.remove('str')
-        res = Config.get('str')
+        Config.remove_entry('str')
+        res = Config.get_entry('str', None)
         self.assertIsNone(res)
 
-        Config.remove('str')
-        res = Config.get('str')
+        Config.remove_entry('str')
+        res = Config.get_entry('str', None)
         self.assertIsNone(res)
 
-        res = Config.get('int')
+        res = Config.get_entry('int', None)
         self.assertEqual(res, 37)
 
-        res = Config.get('bool')
+        res = Config.get_entry('bool', None)
         self.assertEqual(res, True)
 
 

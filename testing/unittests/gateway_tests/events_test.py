@@ -46,11 +46,11 @@ class EventsTest(unittest.TestCase):
         event_sender = EventSender()  # Don't start, trigger manually
         self.assertEqual(len(event_sender._queue), 0)
         self.assertFalse(event_sender._batch_send_events())
-        with patch.object(Config, 'get', return_value=True):
+        with patch.object(Config, 'get_entry', return_value=True):
             event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, {'id': 1}))
             event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, {'id': 1}))
             event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 1}))
-        with patch.object(Config, 'get', return_value=False):
+        with patch.object(Config, 'get_entry', return_value=False):
             event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 2}))
         self.assertEqual(len(event_sender._queue), 3)
         self.assertTrue(event_sender._batch_send_events())

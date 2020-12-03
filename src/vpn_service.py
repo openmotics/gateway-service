@@ -261,7 +261,7 @@ class DebugDumpDataCollector(DataCollector):
         data = {'dumps': {},
                 'dump_info': {k: v.get('info', {})
                               for k, v in raw_dumps.items()}}  # type: Dict[str, Dict[float, Dict]]
-        if Config.get('cloud_support', False):
+        if Config.get_entry('cloud_support', False):
             # Include full dumps when support is enabled
             data['dumps'] = raw_dumps
         return data, list(raw_dumps.keys())
@@ -347,7 +347,7 @@ class TaskExecutor(object):
             configuration_changed = self._configuration != configuration
             if configuration_changed:
                 for setting, value in configuration.items():
-                    Config.set(setting, value)
+                    Config.set_entry(setting, value)
                 logger.info('Configuration changed: {0}'.format(configuration))
             self._configuration = configuration
         except Exception:
@@ -526,7 +526,7 @@ class HeartbeatService(object):
 
     def _beat(self):  # type: () -> float
         # Check whether connection to the Cloud is enabled/disabled
-        self._cloud_enabled = Config.get('cloud_enabled')
+        self._cloud_enabled = Config.get_entry('cloud_enabled', False)
         if self._cloud_enabled is False:
             self._sleep_time = DEFAULT_SLEEP_TIME
             task_data = {'open_vpn': False,
