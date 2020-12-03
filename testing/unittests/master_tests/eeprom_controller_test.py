@@ -452,12 +452,12 @@ class EepromControllerTest(unittest.TestCase):
 
         get_pubsub().subscribe_master_events(PubSub.MasterTopics.EEPROM, handle_events)
         controller.invalidate_cache()
-        get_pubsub()._publisher_loop()
+        get_pubsub()._publish_all_events()
         self.assertEqual([
             MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
         ], events)
         controller.activate()
-        get_pubsub()._publisher_loop()
+        get_pubsub()._publish_all_events()
         self.assertEqual([
             MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {}),
             MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})

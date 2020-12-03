@@ -241,12 +241,12 @@ class VentilationControllerTest(unittest.TestCase):
                                              device_type='model-0',
                                              device_serial='device-000001')
             self.controller.save_ventilation(ventilation_dto, [])
-            self.pubsub._publisher_loop()
+            self.pubsub._publish_all_events()
             assert len(events) == 0, events  # No change
 
             ventilation_dto.name = 'bar'
             self.controller.save_ventilation(ventilation_dto, [])
-            self.pubsub._publisher_loop()
+            self.pubsub._publish_all_events()
             assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'ventilation'}) in events
             assert len(events) == 1, events
 
@@ -262,7 +262,7 @@ class VentilationControllerTest(unittest.TestCase):
                                return_value=[get_ventilation(42), get_ventilation(43)]):
             self.controller.set_status(VentilationStatusDTO(42, 'manual', level=0))
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0))
-            self.pubsub._publisher_loop()
+            self.pubsub._publish_all_events()
 
             events = []
 
@@ -272,7 +272,7 @@ class VentilationControllerTest(unittest.TestCase):
 
             self.controller.set_status(VentilationStatusDTO(42, 'manual', level=0))
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0))
-            self.pubsub._publisher_loop()
+            self.pubsub._publish_all_events()
             assert GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE,
                                 {'id': 43, 'mode': 'manual', 'level': 2, 'timer': 60.0}) in events
             assert len(events) == 1, events

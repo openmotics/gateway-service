@@ -363,7 +363,7 @@ class ShutterControllerTest(unittest.TestCase):
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, shutter_callback)
 
         def validate(_shutter_id, _entry):
-            self.pubsub._publisher_loop()
+            self.pubsub._publish_all_events()
             self.assertEqual(controller._actual_positions.get(_shutter_id), _entry[0])
             self.assertEqual(controller._desired_positions.get(_shutter_id), _entry[1])
             self.assertEqual(controller._directions.get(_shutter_id), _entry[2])
@@ -382,7 +382,7 @@ class ShutterControllerTest(unittest.TestCase):
         for shutter_id in range(3):
             controller.shutter_down(shutter_id, None)
 
-        self.pubsub._publisher_loop()
+        self.pubsub._publish_all_events()
         time.sleep(20)
 
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00010101})

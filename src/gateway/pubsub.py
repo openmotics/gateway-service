@@ -16,6 +16,7 @@ from __future__ import absolute_import
 
 from collections import defaultdict
 import logging
+from toolbox import Queue, Empty
 
 from gateway.daemon_thread import DaemonThread
 
@@ -49,26 +50,36 @@ class PubSub(object):
         # type: () -> None
         self._gateway_topics = defaultdict(list)  # type: Dict[GATEWAY_TOPIC,List[Callable[[GatewayEvent],None]]]
         self._master_topics = defaultdict(list)  # type: Dict[MASTER_TOPIC,List[Callable[[MasterEvent],None]]]
-        self._master_events = []  # type: List[Tuple[str, MasterEvent]]
-        self._gateway_events = []  # type: List[Tuple[str, GatewayEvent]]
+        self._master_events = Queue()  # type: Queue  # Queue[Tuple[str, MasterEvent]]
+        self._gateway_events = Queue()  # type: Queue  # Queue[Tuple[str, GatewayEvent]]
+        self.is_running = False
         self._pub_thread = DaemonThread(name='Publisher loop',
                                            target=self._publisher_loop,
                                            interval=0.1, delay=0.2)
 
     def start(self):
         # type: () -> None
+        self.is_running = True
         self._pub_thread.start()
 
     def stop(self):
         # type: () -> None
+        self.is_running = False
         self._pub_thread.stop()
 
     def _publisher_loop(self):
-        while self._master_events:
-            topic, master_event = self._master_events.pop(0)
+        while self.is_running:
+            try:
+                self._publish_all_events()
+            except Empty:
+                pass
+
+    def _publish_all_events(self):
+        while not self._master_events.qsize() == 0:
+            topic, master_event = self._master_events.get(block=True, timeout=5)
             self._publish_master_event(topic, master_event)
-        while self._gateway_events:
-            topic, gateway_event = self._gateway_events.pop(0)
+        while not self._gateway_events.qsize() == 0:
+            topic, gateway_event = self._gateway_events.get(block=True, timeout=5)
             self._publish_gateway_event(topic, gateway_event)
 
     def subscribe_master_events(self, topic, callback):
@@ -77,7 +88,7 @@ class PubSub(object):
 
     def publish_master_event(self, topic, master_event):
         # type: (MASTER_TOPIC, MasterEvent) -> None
-        self._master_events.append((topic, master_event))
+        self._master_events.put((topic, master_event))
 
     def _publish_master_event(self, topic, master_event):
         # type: (MASTER_TOPIC, MasterEvent) -> None
@@ -96,7 +107,7 @@ class PubSub(object):
 
     def publish_gateway_event(self, topic, gateway_event):
         # type: (GATEWAY_TOPIC, GatewayEvent) -> None
-        self._gateway_events.append((topic, gateway_event))
+        self._gateway_events.put((topic, gateway_event))
 
     def _publish_gateway_event(self, topic, gateway_event):
         # type: (GATEWAY_TOPIC, GatewayEvent) -> None

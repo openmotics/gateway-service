@@ -66,7 +66,7 @@ class OutputControllerTest(unittest.TestCase):
         output_dto = OutputDTO(id=42)
         with mock.patch.object(self.master_controller, 'load_outputs', return_value=[output_dto]):
             self.controller.run_sync_orm()
-            self.pubsub._publisher_loop()
+            self.pubsub._publish_all_events()
             assert Output.select().where(Output.number == output_dto.id).count() == 1
             assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'output'}) in events
             assert len(events) == 1
@@ -91,7 +91,7 @@ class OutputControllerTest(unittest.TestCase):
                                return_value=[{'id': 2, 'status': True},
                                              {'id': 40, 'status': True}]):
             self.controller._sync_state()
-            self.pubsub._publisher_loop()
+            self.pubsub._publish_all_events()
             assert [GatewayEvent('OUTPUT_CHANGE', {'id': 2, 'status': {'on': True, 'locked': False}, 'location': {'room_id': 255}}),
                     GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 0, 'locked': False}, 'location': {'room_id': 3}})] == events
 
@@ -106,7 +106,7 @@ class OutputControllerTest(unittest.TestCase):
                                              {'id': 40, 'status': True, 'dimmer': 50}]):
             events = []
             self.controller._sync_state()
-            self.pubsub._publisher_loop()
+            self.pubsub._publish_all_events()
             assert [GatewayEvent('OUTPUT_CHANGE', {'id': 2, 'status': {'on': True, 'locked': False}, 'location': {'room_id': 255}}),
                     GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 50, 'locked': False}, 'location': {'room_id': 3}})] == events
 
@@ -122,18 +122,18 @@ class OutputControllerTest(unittest.TestCase):
                                                OutputDTO(id=40, module_type='D', room=3)])
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': False}))
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'id': 40, 'status': True, 'dimmer': 100}))
-        self.pubsub._publisher_loop()
+        self.pubsub._publish_all_events()
 
         events = []
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': True}))
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'id': 40, 'status': True}))
-        self.pubsub._publisher_loop()
+        self.pubsub._publish_all_events()
 
         assert [GatewayEvent('OUTPUT_CHANGE', {'id': 2, 'status': {'on': True, 'locked': False}, 'location': {'room_id': 255}})] == events
 
         events = []
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'id': 40, 'dimmer': 50}))
-        self.pubsub._publisher_loop()
+        self.pubsub._publish_all_events()
         assert [GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 50, 'locked': False}, 'location': {'room_id': 3}})] == events
 
     def test_get_output_status(self):

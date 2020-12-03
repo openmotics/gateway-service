@@ -63,7 +63,7 @@ class InputControllerTest(unittest.TestCase):
         input_dto = InputDTO(id=42)
         with mock.patch.object(self.master_controller, 'load_inputs', return_value=[input_dto]):
             self.controller.run_sync_orm()
-            self.pubsub._publisher_loop()
+            self.pubsub._publish_all_events()
             assert Input.select().where(Input.number == input_dto.id).count() == 1
             assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'input'}) in events
             assert len(events) == 1

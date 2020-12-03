@@ -167,12 +167,12 @@ class PowerCommunicatorTest(unittest.TestCase):
 
         self.communicator.start_address_mode()
         self.assertTrue(self.communicator.in_address_mode())
-        self.pubsub._publisher_loop()
+        self.pubsub._publish_all_events()
         time.sleep(0.5)
         assert [] == events
 
         self.communicator.stop_address_mode()
-        self.pubsub._publisher_loop()
+        self.pubsub._publish_all_events()
         assert MasterEvent(MasterEvent.Types.POWER_ADDRESS_EXIT, {}) in events
         assert len(events) == 1
 
