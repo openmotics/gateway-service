@@ -115,6 +115,7 @@ class MasterClassicController(MasterController):
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_eeprom_event)
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.MAINTENANCE, self._handle_maintenance_event)
 
+        self._background_consumers_registered = False
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.output_list(), 0, self._on_master_output_event, True)
         )
@@ -136,6 +137,7 @@ class MasterClassicController(MasterController):
 
             now = time.time()
             self._get_master_version()
+            self._register_version_depending_background_consumers()
             # Validate communicator checks
             if self._time_last_updated < now - 300:
                 self._check_master_time()
@@ -159,12 +161,11 @@ class MasterClassicController(MasterController):
 
     def _get_master_version(self):
         # type: () -> None
-        initialize = self._master_version is None
         self._master_version = self.get_firmware_version()
-        if initialize:
-            self._register_version_depending_background_consumers()
 
     def _register_version_depending_background_consumers(self):
+        if self._background_consumers_registered is True or self._master_version is None:
+            return
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.event_triggered(self._master_version), 0,
                                self._on_master_event, True)
@@ -177,6 +178,7 @@ class MasterClassicController(MasterController):
             BackgroundConsumer(master_api.shutter_status(self._master_version), 0,
                                self._on_master_shutter_change)
         )
+        self._background_consumers_registered = True
 
     @communication_enabled
     def _check_master_time(self):
