@@ -299,6 +299,17 @@ def main():
         return power_store, power_communicator, power_serial
 
     store, communicator, serial = _get_from_ioc()
+
+    if serial is None:
+        logger.info('Energy bus is disabled. Skipping...')
+        return
+    if store is None:
+        logger.error('Database could not be loaded. Aborting...')
+        return
+    if communicator is None:
+        logger.error('Could not load communicator. Aborting...')
+        return
+
     serial.start()
 
     if args.scan:
