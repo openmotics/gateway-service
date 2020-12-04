@@ -21,6 +21,7 @@ from __future__ import absolute_import
 import logging
 import select
 import time
+from six.moves.queue import Queue, Empty
 from threading import Event, Lock, Thread
 
 from gateway.hal.master_controller import CommunicationFailure
@@ -29,7 +30,6 @@ from ioc import INJECTED, Inject
 from master.classic import master_api
 from master.classic.master_command import Field, MasterCommandSpec, printable
 from serial_utils import CommunicationTimedOutException
-from toolbox import Empty, Queue
 
 logger = logging.getLogger('openmotics')
 
@@ -69,7 +69,7 @@ class MasterCommunicator(object):
         self.__cid = 1
 
         self.__maintenance_mode = False
-        self.__maintenance_queue = Queue()
+        self.__maintenance_queue = Queue() # type: Queue[bytearray]
 
         self.__update_mode = False
 
@@ -78,7 +78,7 @@ class MasterCommunicator(object):
         self.__passthrough_enabled = False
         self.__passthrough_mode = False
         self.__passthrough_timeout = passthrough_timeout
-        self.__passthrough_queue = Queue()
+        self.__passthrough_queue = Queue()  # type: Queue[bytearray]
         self.__passthrough_done = Event()
 
         self.__last_success = 0.0
@@ -344,7 +344,11 @@ class MasterCommunicator(object):
         if self.__maintenance_mode:
             raise InMaintenanceModeException()
 
-        self.__maintenance_queue.clear()
+        while True:
+            try:
+                self.__maintenance_queue.get(block=False)
+            except Empty:
+                break
 
         self.__maintenance_mode = True
         self.send_maintenance_data(master_api.to_cli_mode().create_input(0))
@@ -587,10 +591,33 @@ class BackgroundConsumer(object):
         self.last_cmd_data = None  # type: Optional[bytearray]  # Keep the data of the last command.
         self.send_to_passthrough = send_to_passthrough
 
+        self._queue = Queue()
+        self._running = True
+        self._callback_thread = Thread(target=self._consumer, name='MasterCommunicator BackgroundConsumer delivery thread')
+        self._callback_thread.setDaemon(True)
+        self._callback_thread.start()
+
     def get_prefix(self):
         # type: () -> bytearray
         """ Get the prefix of the answer from the master. """
         return bytearray(self.cmd.output_action) + bytearray([self.cid])
+
+    def stop(self):
+        self._running = False
+        self._callback_thread.join()
+
+    def _consumer(self):
+        while self._running:
+            try:
+                self._consume()
+            except Empty:
+                pass
+            except Exception:
+                logger.exception('Unexpected exception delivering background consumer data')
+                time.sleep(1)
+
+    def _consume(self):
+        self.callback(self._queue.get(block=True, timeout=0.25))
 
     def consume(self, data, partial_result):
         # type: (bytearray, Optional[Result]) -> Tuple[int, Result, bool]
@@ -601,8 +628,4 @@ class BackgroundConsumer(object):
 
     def deliver(self, output):
         # type: (Result) -> None
-        """ Deliver output to the thread waiting on get(). """
-        try:
-            self.callback(output)
-        except Exception:
-            logger.exception('Unexpected exception delivering BackgroundConsumer payload')
+        self._queue.put(output)

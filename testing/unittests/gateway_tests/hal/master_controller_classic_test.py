@@ -119,6 +119,10 @@ class MasterClassicControllerTest(unittest.TestCase):
             new_consumer.assert_called()
             consumer_list[-2].deliver({'input': 1})
             pubsub._publish_all_events()
+            try:
+                consumer_list[-2]._consume()
+            except:
+                pass  # Just ensure it has at least consumed once
             expected_event = MasterEvent.deserialize({'type': 'INPUT_CHANGE',
                                                       'data': {'id': 1,
                                                                'status': True,
