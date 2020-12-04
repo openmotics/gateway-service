@@ -63,9 +63,9 @@ class PubSub(object):
 
     def stop(self):
         # type: () -> None
+        self._is_running = False
         self._master_events.put(None)
         self._gateway_events.put(None)
-        self._is_running = False
         self._pub_thread.stop()
 
     def _publisher_loop(self):
@@ -78,7 +78,6 @@ class PubSub(object):
                 event = self._master_events.get(block=True, timeout=0.25)
                 if event is None:
                     return
-                logger.info("publishing master event: {}".format(event[1]))
                 self._publish_master_event(*event)
             except Empty:
                 break
@@ -87,7 +86,6 @@ class PubSub(object):
                 event = self._gateway_events.get(block=True, timeout=0.25)
                 if event is None:
                     return
-                logger.info("publishing gw event: {}".format(event[1]))
                 self._publish_gateway_event(*event)
             except Empty:
                 break
