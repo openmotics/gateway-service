@@ -49,12 +49,12 @@ class EventsTest(unittest.TestCase):
                                           {'id': 2, 'event_enabled': False}]
 
         with patch.object(Input, 'select', return_value=select_mock):
-            with patch.object(Config, 'get', return_value=True):
+            with patch.object(Config, 'get_entry', return_value=True):
                 event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, {'id': 1}))
                 event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, {'id': 1}))
                 event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 1}))
                 event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 2}))
-            with patch.object(Config, 'get', return_value=False):
+            with patch.object(Config, 'get_entry', return_value=False):
                 event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 3}))
 
         self.assertEqual(3, len(event_sender._queue))

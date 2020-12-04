@@ -57,7 +57,7 @@ class EventSender(object):
         self._events_thread.stop()
 
     def enqueue_event(self, event):
-        if Config.get('cloud_enabled') is False:
+        if Config.get_entry('cloud_enabled', False) is False:
             return
         if event.type == GatewayEvent.Types.CONFIG_CHANGE:
             if event.data.get('type') == 'input':
