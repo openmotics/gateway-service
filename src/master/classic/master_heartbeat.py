@@ -43,7 +43,7 @@ class MasterHeartbeat(object):
         self._backoff = 60
         self._last_restart = 0.0
         self._min_threshold = 2
-        self._thread = DaemonThread(name='MasterHeartbeat',
+        self._thread = DaemonThread(name='masterheartbeat',
                                     target=self._heartbeat,
                                     interval=30,
                                     delay=5)

@@ -140,7 +140,7 @@ class FrontpanelCoreController(FrontpanelController):
     def start(self):
         super(FrontpanelCoreController, self).start()
         # Start polling/writing threads
-        self._check_buttons_thread = DaemonThread(name='Button checker',
+        self._check_buttons_thread = DaemonThread(name='buttonchecker',
                                                   target=self._check_buttons,
                                                   interval=0.25)
         self._check_buttons_thread.start()

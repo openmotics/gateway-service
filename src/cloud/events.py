@@ -44,7 +44,7 @@ class EventSender(object):
         self._cloud_client = cloud_api_client
         self._event_enabled_cache = {}  # type: Dict[int, bool]
         self._events_queue = deque()  # type: deque
-        self._events_thread = DaemonThread(name='EventSender loop',
+        self._events_thread = DaemonThread(name='eventsender',
                                            target=self._send_events_loop,
                                            interval=0.1, delay=0.2)
 

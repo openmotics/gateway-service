@@ -83,17 +83,17 @@ class ThermostatControllerGateway(ThermostatController):
             self._running = True
 
             self.refresh_config_from_db()
-            self._pid_loop_thread = DaemonThread(name='Thermostat PID',
+            self._pid_loop_thread = DaemonThread(name='thermostatpid',
                                                  target=self._pid_tick,
                                                  interval=self.THERMOSTAT_PID_UPDATE_INTERVAL)
             self._pid_loop_thread.start()
 
-            self._update_pumps_thread = DaemonThread(name='Thermostat pumps',
+            self._update_pumps_thread = DaemonThread(name='thermostatpumps',
                                                      target=self._update_pumps,
                                                      interval=self.PUMP_UPDATE_INTERVAL)
             self._update_pumps_thread.start()
 
-            self._periodic_sync_thread = DaemonThread(name='Thermostat sync',
+            self._periodic_sync_thread = DaemonThread(name='thermostatsync',
                                                       target=self._periodic_sync,
                                                       interval=self.SYNC_CONFIG_INTERVAL)
             self._periodic_sync_thread.start()

@@ -53,7 +53,7 @@ class PubSub(object):
         self._master_topics = defaultdict(list)  # type: Dict[MASTER_TOPIC,List[Callable[[MasterEvent],None]]]
         self._master_events = Queue()  # type: Queue  # Queue[Tuple[str, MasterEvent]]
         self._gateway_events = Queue()  # type: Queue  # Queue[Tuple[str, GatewayEvent]]
-        self._pub_thread = DaemonThread(name='Publisher loop', target=self._publisher_loop, interval=0.1, delay=0.2)
+        self._pub_thread = DaemonThread(name='pubsub', target=self._publisher_loop, interval=0.1, delay=0.2)
         self._is_running = False
 
     def start(self):

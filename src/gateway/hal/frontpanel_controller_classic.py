@@ -106,11 +106,11 @@ class FrontpanelClassicController(FrontpanelController):
         # Enable power led
         self._enabled_leds[FrontpanelController.Leds.POWER] = True
         # Start polling/writing threads
-        self._poll_button_thread = DaemonThread(name='Button poller',
+        self._poll_button_thread = DaemonThread(name='buttonpoller',
                                                 target=self._poll_button,
                                                 interval=0.25)
         self._poll_button_thread.start()
-        self._write_leds_thread = DaemonThread(name='Led writer',
+        self._write_leds_thread = DaemonThread(name='ledwriter',
                                                target=self._write_leds,
                                                interval=0.25)
         self._write_leds_thread.start()

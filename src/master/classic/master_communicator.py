@@ -26,6 +26,7 @@ from threading import Event, Lock, Thread
 import six
 from six.moves.queue import Empty, Queue
 
+from gateway.daemon_thread import BaseThread
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_controller import InMaintenanceModeException
 from ioc import INJECTED, Inject
@@ -104,7 +105,7 @@ class MasterCommunicator(object):
             self._flush_serial_input()
 
         if not self.__read_thread:
-            self.__read_thread = Thread(target=self.__read, name='MasterCommunicator read thread')
+            self.__read_thread = BaseThread(name='masterread', target=self.__read)
             self.__read_thread.daemon = True
 
         if not self.__running:
@@ -326,7 +327,7 @@ class MasterCommunicator(object):
             self.__command_lock.acquire()
             self.__passthrough_done.clear()
             self.__passthrough_mode = True
-            passthrough_thread = Thread(target=self.__passthrough_wait)
+            passthrough_thread = BaseThread(name='passthroughwait', target=self.__passthrough_wait)
             passthrough_thread.daemon = True
             passthrough_thread.start()
 
@@ -600,7 +601,7 @@ class BackgroundConsumer(object):
 
         self._queue = Queue()
         self._running = True
-        self._callback_thread = Thread(target=self._consumer, name='MasterCommunicator BackgroundConsumer delivery thread')
+        self._callback_thread = BaseThread(name='masterdeliver', target=self._consumer)
         self._callback_thread.setDaemon(True)
         self._callback_thread.start()
 

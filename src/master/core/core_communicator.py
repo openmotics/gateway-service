@@ -23,11 +23,12 @@ import logging
 import select
 import struct
 import time
-from threading import Lock, Thread
+from threading import Lock
 
 import six
 from six.moves.queue import Empty, Queue
 
+from gateway.daemon_thread import BaseThread
 from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
 from master.core.core_command import CoreCommandSpec
@@ -73,7 +74,7 @@ class CoreCommunicator(object):
 
         self._word_helper = WordField('')
 
-        self._read_thread = Thread(target=self._read, name='CoreCommunicator read thread')
+        self._read_thread = BaseThread(name='coreread', target=self._read)
         self._read_thread.setDaemon(True)
 
         self._communication_stats = {'calls_succeeded': [],
@@ -447,7 +448,7 @@ class BackgroundConsumer(object):
         self._callback = callback
         self._queue = Queue()  # type: Queue[Dict[str, Any]]
 
-        self._callback_thread = Thread(target=self._consumer, name='CoreCommunicator BackgroundConsumer delivery thread')
+        self._callback_thread = BaseThread(name='coredelivery', target=self._consumer)
         self._callback_thread.setDaemon(True)
         self._callback_thread.start()
 

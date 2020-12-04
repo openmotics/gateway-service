@@ -12,6 +12,7 @@ import six
 import ujson as json
 from six.moves.queue import Empty, Full, Queue
 
+from gateway.daemon_thread import BaseThread
 from toolbox import PluginIPCReader, PluginIPCWriter
 
 if False:  # MYPY
@@ -137,8 +138,8 @@ class PluginRunner(object):
             raise RuntimeError(exception)
 
         self._async_command_queue = Queue(1000)
-        self._async_command_thread = Thread(target=self._perform_async_commands,
-                                            name='PluginRunner {0} async thread'.format(self.plugin_path))
+        self._async_command_thread = BaseThread(name='plugincmd{0}'.format(self.plugin_path),
+                                                target=self._perform_async_commands)
         self._async_command_thread.daemon = True
         self._async_command_thread.start()
 
@@ -436,7 +437,7 @@ class RunnerWatchdog(object):
         # type: () -> bool
         self._stopped = False
         success = self._run()  # Initial sync run
-        self._thread = Thread(target=self.run, name='Watchdog for plugin {0}'.format(self._plugin_runner.name))
+        self._thread = BaseThread(name='watchdog{0}'.format(self._plugin_runner.name), target=self.run)
         self._thread.daemon = True
         self._thread.start()
         return success

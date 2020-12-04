@@ -69,7 +69,7 @@ class BaseController(object):
             self.request_sync_orm()
 
     def start(self):
-        self._sync_orm_thread = DaemonThread(name='ORM syncer for {0}'.format(self.__class__.__name__),
+        self._sync_orm_thread = DaemonThread(name='{0}sync'.format(self.__class__.__name__.lower()[:10]),
                                              target=self._sync_orm,
                                              interval=self._sync_orm_interval,
                                              delay=300)

@@ -97,19 +97,19 @@ class MetricsController(object):
 
     def start(self):
         self._refresh_cloud_interval()
-        self._collector_plugins = DaemonThread(name='MetricsController plugin collector',
+        self._collector_plugins = DaemonThread(name='metricplugincoll',
                                                target=self._collect_plugins,
                                                interval=1)
         self._collector_plugins.start()
-        self._collector_openmotics = DaemonThread(name='MetricsController plugin distributor',
+        self._collector_openmotics = DaemonThread(name='metricplugindist',
                                                   target=self._collect_openmotics,
                                                   interval=1)
         self._collector_openmotics.start()
-        self._distributor_plugins = DaemonThread(name='MetricsController plugin distributor',
+        self._distributor_plugins = DaemonThread(name='metricplugindist',
                                                  target=self._distribute_plugins,
                                                  interval=0, delay=0.1)
         self._distributor_plugins.start()
-        self._distributor_openmotics = DaemonThread(name='MetricsController openmotics distributor',
+        self._distributor_openmotics = DaemonThread(name='metricomdist',
                                                     target=self._distribute_openmotics,
                                                     interval=0, delay=0.1)
         self._distributor_openmotics.start()

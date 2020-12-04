@@ -17,21 +17,23 @@ The scheduling module contains the SchedulingController, this controller is used
 """
 
 from __future__ import absolute_import
+
 import json
 import logging
 import time
-import pytz
 from datetime import datetime
+
+import pytz
+import six
 from croniter import croniter
-from threading import Thread
-from ioc import Injectable, Inject, INJECTED, Singleton
-from serial_utils import CommunicationTimedOutException
-from gateway.daemon_thread import DaemonThread
+
+from gateway.daemon_thread import BaseThread, DaemonThread
 from gateway.dto import ScheduleDTO
 from gateway.mappers import ScheduleMapper
-from gateway.webservice import params_parser
 from gateway.models import Schedule
-import six
+from gateway.webservice import params_parser
+from ioc import INJECTED, Inject, Injectable, Singleton
+from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
     from typing import List, Dict, Tuple, Optional
@@ -117,7 +119,7 @@ class SchedulingController(object):
     def start(self):
         self._stop = False
         self._processor = DaemonThread(target=self._process,
-                                       name='SchedulingController processor',
+                                       name='schedulingctl',
                                        interval=60)
         self._processor.start()
 
@@ -139,8 +141,8 @@ class SchedulingController(object):
                 schedule.save()
                 continue
             if schedule_dto.is_due:
-                thread = Thread(target=self._execute_schedule, args=(schedule_dto, schedule),
-                                name='SchedulingController executor')
+                thread = BaseThread(name='schedulingexc',
+                                    target=self._execute_schedule, args=(schedule_dto, schedule))
                 thread.daemon = True
                 thread.start()
 
