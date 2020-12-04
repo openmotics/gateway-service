@@ -19,14 +19,12 @@ from __future__ import absolute_import
 import logging
 import time
 from collections import deque
-from peewee import DoesNotExist
 
 from cloud.cloud_api_client import APIException, CloudAPIClient
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.events import GatewayEvent
 from gateway.input_controller import InputController
 from gateway.models import Config
-from serial_utils import CommunicationTimedOutException
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 logger = logging.getLogger('openmotics')
@@ -40,11 +38,10 @@ if False:  # MYPY
 class EventSender(object):
 
     @Inject
-    def __init__(self, cloud_api_client=INJECTED, input_controller=INJECTED):  # type: (CloudAPIClient, InputController) -> None
+    def __init__(self, cloud_api_client=INJECTED):  # type: (CloudAPIClient) -> None
         self._queue = deque()  # type: deque
         self._stopped = True
         self._cloud_client = cloud_api_client
-        self._input_controller = input_controller
         self._event_enabled_cache = {}  # type: Dict[int, bool]
         self._events_queue = deque()  # type: deque
         self._events_thread = DaemonThread(name='EventSender loop',
@@ -73,18 +70,11 @@ class EventSender(object):
         if event.type != GatewayEvent.Types.INPUT_CHANGE:
             return True
         input_id = event.data['id']
-        if input_id in self._event_enabled_cache:
-            return self._event_enabled_cache[input_id]
-        try:
-            try:
-                input_ = self._input_controller.load_input(input_id)
-                should_send = input_.event_enabled
-            except DoesNotExist:
-                should_send = False
-            self._event_enabled_cache[input_id] = should_send
-        except CommunicationTimedOutException:
-            should_send = False
-        return should_send
+        enabled = self._event_enabled_cache.get(input_id)
+        if enabled is not None:
+            return enabled
+        self._event_enabled_cache = InputController.load_inputs_event_enabled()
+        return self._event_enabled_cache.get(input_id, False)
 
     def _send_events_loop(self):
         # type: () -> None
