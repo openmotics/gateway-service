@@ -118,12 +118,11 @@ class MasterClassicControllerTest(unittest.TestCase):
             pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, subscriber.callback)
             new_consumer.assert_called()
             consumer_list[-2].deliver({'input': 1})
-
+            pubsub._publish_all_events()
             try:
                 consumer_list[-2]._consume()
             except:
                 pass  # Just ensure it has at least consumed once
-
             expected_event = MasterEvent.deserialize({'type': 'INPUT_CHANGE',
                                                       'data': {'id': 1,
                                                                'status': True,
@@ -155,8 +154,10 @@ class MasterClassicControllerTest(unittest.TestCase):
                                   1: OutputDTO(id=1),
                                   2: OutputDTO(id=2, room=3)}
 
+        pubsub._publish_all_events()
         events = []
         classic._on_master_output_event({'outputs': [(0, 0), (2, 5)]})
+        pubsub._publish_all_events()
         assert [MasterEvent('OUTPUT_STATUS', {'id': 0, 'status': True, 'dimmer': 0}),
                 MasterEvent('OUTPUT_STATUS', {'id': 1, 'status': False}),
                 MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': True, 'dimmer': 5})] == events
@@ -202,11 +203,13 @@ class MasterClassicControllerTest(unittest.TestCase):
         pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
         classic._validation_bits = ValidationBitStatus(on_validation_bit_change=classic._validation_bit_changed)
         classic._output_config = {0: OutputDTO(0, lock_bit_id=5)}
+        pubsub._publish_all_events()
 
         classic._refresh_validation_bits()
         classic._on_master_validation_bit_change(5, True)
         classic._on_master_validation_bit_change(6, True)
         classic._on_master_validation_bit_change(5, False)
+        pubsub._publish_all_events()
         self.assertEqual([{'id': 0, 'locked': False},
                           {'id': 0, 'locked': True},
                           {'id': 0, 'locked': False}], events)
@@ -230,6 +233,7 @@ class MasterClassicControllerTest(unittest.TestCase):
 
                 pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, subscriber.callback)
                 controller.module_discover_stop()
+                pubsub._publish_all_events()
                 time.sleep(0.2)
                 assert len(invalidate) == 1
 
@@ -252,6 +256,7 @@ class MasterClassicControllerTest(unittest.TestCase):
         with mock.patch.object(controller._eeprom_controller, 'invalidate_cache') as invalidate:
             master_event = MasterEvent(MasterEvent.Types.MAINTENANCE_EXIT, {})
             pubsub.publish_master_event(PubSub.MasterTopics.MAINTENANCE, master_event)
+            pubsub._publish_all_events()
             invalidate.assert_called()
 
     def test_master_eeprom_event(self):
@@ -260,6 +265,7 @@ class MasterClassicControllerTest(unittest.TestCase):
         pubsub = get_pubsub()
         master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
         pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
+        pubsub._publish_all_events()
         assert controller._input_last_updated == 0.0
 
 
