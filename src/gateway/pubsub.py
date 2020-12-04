@@ -16,12 +16,8 @@ from __future__ import absolute_import
 
 from collections import defaultdict
 import logging
-# Importing the Queue library as uniform naming convention
-import sys
-if sys.version_info.major == 3:
-    from queue import Queue, Empty
-else:
-    from Queue import Queue, Empty # type: ignore  # Needed since MyPy will detect duplicate imported names, but will never happen
+
+from six.moves.queue import Queue, Empty
 
 from gateway.daemon_thread import DaemonThread
 
@@ -57,39 +53,44 @@ class PubSub(object):
         self._master_topics = defaultdict(list)  # type: Dict[MASTER_TOPIC,List[Callable[[MasterEvent],None]]]
         self._master_events = Queue()  # type: Queue  # Queue[Tuple[str, MasterEvent]]
         self._gateway_events = Queue()  # type: Queue  # Queue[Tuple[str, GatewayEvent]]
-        self.is_running = False
-        self._pub_thread = DaemonThread(name='Publisher loop',
-                                           target=self._publisher_loop,
-                                           interval=0.1, delay=0.2)
+        self._pub_thread = DaemonThread(name='Publisher loop', target=self._publisher_loop, interval=0.1, delay=0.2)
+        self._is_running = False
 
     def start(self):
         # type: () -> None
-        self.is_running = True
+        self._is_running = True
         self._pub_thread.start()
 
     def stop(self):
         # type: () -> None
-        self.is_running = False
+        self._master_events.put(None)
+        self._gateway_events.put(None)
+        self._is_running = False
         self._pub_thread.stop()
-        self._master_events.join()
-        self._gateway_events.join()
 
     def _publisher_loop(self):
-        while self.is_running:
-            try:
-                self._publish_all_events()
-            except Empty:
-                pass
+        while self._is_running:
+            self._publish_all_events()
 
     def _publish_all_events(self):
-        while not self._master_events.empty():
-            topic, master_event = self._master_events.get(block=True, timeout=5)
-            self._publish_master_event(topic, master_event)
-            self._master_events.task_done()
-        while not self._gateway_events.empty():
-            topic, gateway_event = self._gateway_events.get(block=True, timeout=5)
-            self._publish_gateway_event(topic, gateway_event)
-            self._gateway_events.task_done()
+        while True:
+            try:
+                event = self._master_events.get(block=True, timeout=0.25)
+                if event is None:
+                    return
+                logger.info("publishing master event: {}".format(event[1]))
+                self._publish_master_event(*event)
+            except Empty:
+                break
+        while True:
+            try:
+                event = self._gateway_events.get(block=True, timeout=0.25)
+                if event is None:
+                    return
+                logger.info("publishing gw event: {}".format(event[1]))
+                self._publish_gateway_event(*event)
+            except Empty:
+                break
 
     def subscribe_master_events(self, topic, callback):
         # type: (MASTER_TOPIC, Callable[[MasterEvent],None]) -> None
