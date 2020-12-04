@@ -118,6 +118,12 @@ class MasterClassicControllerTest(unittest.TestCase):
             pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, subscriber.callback)
             new_consumer.assert_called()
             consumer_list[-2].deliver({'input': 1})
+
+            try:
+                consumer_list[-2]._consume()
+            except:
+                pass  # Just ensure it has at least consumed once
+
             expected_event = MasterEvent.deserialize({'type': 'INPUT_CHANGE',
                                                       'data': {'id': 1,
                                                                'status': True,

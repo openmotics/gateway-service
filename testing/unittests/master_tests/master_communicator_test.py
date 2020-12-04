@@ -295,9 +295,10 @@ class MasterCommunicatorTest(unittest.TestCase):
             self.assertEqual([(3, int(12 * 10.0 / 6.0))], output_['outputs'])
             got_output['passed'] = True
 
+        consumer = BackgroundConsumer(master_api.output_list(), 0, callback, True)
         comm = MasterCommunicator(init_master=False)
         comm.enable_passthrough()
-        comm.register_consumer(BackgroundConsumer(master_api.output_list(), 0, callback, True))
+        comm.register_consumer(consumer)
         comm.start()
 
         pty.fd.write(bytearray(b'OL\x00\x01'))
@@ -306,6 +307,11 @@ class MasterCommunicatorTest(unittest.TestCase):
         pty.master_reply(action.create_output(1, {'resp': 'OK'}))
         output = comm.do_command(action, fields)
         self.assertEqual('OK', output['resp'])
+
+        try:
+            consumer._consume()
+        except:
+            pass  # Just ensure it has at least consumed once
 
         self.assertEqual(True, got_output['passed'])
         self.assertEqual(bytearray(b'OL\x00\x01\x03\x0c\r\n'), comm.get_passthrough_data())
