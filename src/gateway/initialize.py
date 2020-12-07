@@ -152,6 +152,14 @@ def setup_target_platform(target_platform, message_client_name):
 
     config_database_file = constants.get_config_database_file()
 
+    # Debugging options
+    try:
+        debug_logger = config.get('OpenMotics', 'debug_logger')
+        if debug_logger:
+            logging.getLogger(debug_logger).setLevel(logging.DEBUG)
+    except NoOptionError:
+        pass
+
     # Webserver / Presentation layer
     try:
         https_port = int(config.get('OpenMotics', 'https_port'))
