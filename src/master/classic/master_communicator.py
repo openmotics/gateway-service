@@ -21,8 +21,10 @@ from __future__ import absolute_import
 import logging
 import select
 import time
-from six.moves.queue import Queue, Empty
 from threading import Event, Lock, Thread
+
+import six
+from six.moves.queue import Empty, Queue
 
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_controller import InMaintenanceModeException
@@ -92,7 +94,7 @@ class MasterCommunicator(object):
                                       'bytes_written': 0,
                                       'bytes_read': 0}  # type: Dict[str,Any]
         self.__debug_buffer = {'read': {},
-                               'write': {}}  # type: Dict[str, Dict[float,str]]
+                               'write': {}}  # type: Dict[str, Dict[float,bytearray]]
         self.__debug_buffer_duration = 300
 
     def start(self):
@@ -159,7 +161,12 @@ class MasterCommunicator(object):
                                       'bytes_read': 0}
 
     def get_debug_buffer(self):
-        return self.__debug_buffer
+        # type: () -> Dict[str,Dict[float,str]]
+        def process(buffer):
+            return {k: printable(v) for k, v in six.iteritems(buffer)}
+
+        return {'read': process(self.__debug_buffer['read']),
+                'write': process(self.__debug_buffer['write'])}
 
     def get_seconds_since_last_success(self):
         """ Get the number of seconds since the last successful communication. """
@@ -188,7 +195,7 @@ class MasterCommunicator(object):
                 logger.info('Writing to Master serial:   {0}'.format(printable(data)))
 
             threshold = time.time() - self.__debug_buffer_duration
-            self.__debug_buffer['write'][time.time()] = printable(data)
+            self.__debug_buffer['write'][time.time()] = data
             for t in self.__debug_buffer['write'].keys():
                 if t < threshold:
                     del self.__debug_buffer['write'][t]
@@ -479,7 +486,7 @@ class MasterCommunicator(object):
                 self.__communication_stats['bytes_read'] += num_bytes
 
                 threshold = time.time() - self.__debug_buffer_duration
-                self.__debug_buffer['read'][time.time()] = printable(data)
+                self.__debug_buffer['read'][time.time()] = data
                 for t in self.__debug_buffer['read'].keys():
                     if t < threshold:
                         del self.__debug_buffer['read'][t]
