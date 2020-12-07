@@ -59,7 +59,7 @@ class BaseController(object):
         self._sync_running = False
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, self._handle_master_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MODULE, self._handle_master_event)
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None

@@ -54,6 +54,8 @@ class OutputController(BaseController):
         self._cache = OutputStateCache()
         self._sync_state_thread = None  # type: Optional[DaemonThread]
 
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.OUTPUT, self._handle_master_event)
+
     def start(self):
         # type: () -> None
         super(OutputController, self).start()

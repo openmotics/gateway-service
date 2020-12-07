@@ -81,7 +81,7 @@ class MasterCoreControllerTest(unittest.TestCase):
         def _on_event(master_event):
             events.append(master_event)
 
-        self.pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.OUTPUT, _on_event)
 
         events = []
         self.controller._handle_event({'type': 0, 'device_nr': 0, 'action': 0, 'data': bytearray([255, 0, 0, 0])})
@@ -96,7 +96,7 @@ class MasterCoreControllerTest(unittest.TestCase):
         def _on_event(master_event):
             events.append(master_event)
 
-        self.pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.SHUTTER, _on_event)
 
         self.controller._output_states = {0: OutputStateDTO(id=0, status=False),
                                           10: OutputStateDTO(id=10, status=False),
@@ -111,32 +111,27 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 0, 'data': [None, 0, 0, 0]})
             self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 0, 'data': [None, 0, 0, 0]})
             self.pubsub._publish_all_events()
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': False, 'dimmer': None, 'ctimer': 0}),
-                    MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': False, 'dimmer': None, 'ctimer': 0})] == events
+            assert [] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 1, 'data': [None, 0, 0, 0]})
             self.pubsub._publish_all_events()
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': True, 'dimmer': None, 'ctimer': 0}),
-                    MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_up', 'location': {'room_id': 255}})] == events
+            assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_up', 'location': {'room_id': 255}})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 1, 'data': [None, 0, 0, 0]})
             self.pubsub._publish_all_events()
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': True, 'dimmer': None, 'ctimer': 0}),
-                    MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
+            assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 0, 'data': [None, 0, 0, 0]})
             self.pubsub._publish_all_events()
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 10, 'status': False, 'dimmer': None, 'ctimer': 0}),
-                    MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_down', 'location': {'room_id': 255}})] == events
+            assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_down', 'location': {'room_id': 255}})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 0, 'data': [None, 0, 0, 0]})
             self.pubsub._publish_all_events()
-            assert [MasterEvent('OUTPUT_STATUS', {'id': 11, 'status': False, 'dimmer': None, 'ctimer': 0}),
-                    MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
+            assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
     def test_master_shutter_refresh(self):
         events = []
@@ -144,7 +139,7 @@ class MasterCoreControllerTest(unittest.TestCase):
         def _on_event(master_event):
             events.append(master_event)
 
-        self.pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.SHUTTER, _on_event)
 
         output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
                          {'device_nr': 1, 'status': False, 'dimmer': 0},
@@ -242,7 +237,7 @@ class MasterCoreControllerTest(unittest.TestCase):
         with mock.patch.object(gateway.hal.master_controller_core, 'BackgroundConsumer',
                                side_effect=new_consumer) as new_consumer:
             controller = MasterCoreController()
-        self.pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, subscriber.callback)
+        self.pubsub.subscribe_master_events(PubSub.MasterTopics.INPUT, subscriber.callback)
 
         new_consumer.assert_called()
         event_data = {'type': 1, 'action': 1, 'device_nr': 2,
