@@ -278,6 +278,7 @@ class MasterCommunicatorTest(unittest.TestCase):
         output = comm.do_command(action, fields)
         self.assertEqual('OK', output['resp'])
 
+        time.sleep(0.2)
         self.assertEqual(3, got_output['phase'])
         self.assertEqual(bytearray(b'junk here'), comm.get_passthrough_data())
 
