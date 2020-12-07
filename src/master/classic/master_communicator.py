@@ -33,7 +33,7 @@ from master.classic import master_api
 from master.classic.master_command import Field, MasterCommandSpec, printable
 from serial_utils import CommunicationTimedOutException
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger('gateway.master.classic')
 
 if False:  # MYPY
     from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, Tuple
@@ -53,8 +53,8 @@ class MasterCommunicator(object):
     """
 
     @Inject
-    def __init__(self, controller_serial=INJECTED, init_master=True, verbose=False, passthrough_timeout=0.2):
-        # type: (Serial, bool, bool, float) -> None
+    def __init__(self, controller_serial=INJECTED, init_master=True, passthrough_timeout=0.2):
+        # type: (Serial, bool, float) -> None
         """
         :param controller_serial: Serial port to communicate with
         :param init_master: Send an initialization sequence to the master to make sure we are in CLI mode. This can be turned of for testing.
@@ -62,7 +62,7 @@ class MasterCommunicator(object):
         :param passthrough_timeout: The time to wait for an answer on a passthrough message (in sec)
         """
         self.__init_master = init_master
-        self.__verbose = verbose
+        self.__verbose = logger.level >= logging.DEBUG
 
         self.__serial = controller_serial
         self.__serial_write_lock = Lock()
@@ -192,7 +192,7 @@ class MasterCommunicator(object):
 
         with self.__serial_write_lock:
             if self.__verbose:
-                logger.info('Writing to Master serial:   {0}'.format(printable(data)))
+                logger.debug('Writing to Master serial:   {0}'.format(printable(data)))
 
             threshold = time.time() - self.__debug_buffer_duration
             self.__debug_buffer['write'][time.time()] = data
@@ -492,7 +492,7 @@ class MasterCommunicator(object):
                         del self.__debug_buffer['read'][t]
 
                 if self.__verbose:
-                    logger.info('Reading from Master serial: {0}'.format(printable(data)))
+                    logger.debug('Reading from Master serial: {0}'.format(printable(data)))
 
                 if read_state.should_resume():
                     data = read_state.consume(data)

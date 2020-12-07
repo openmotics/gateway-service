@@ -41,22 +41,23 @@ if False:  # MYPY:
 
     HEALTH = Literal['success', 'unstable', 'failure']
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('gateway.power')
 
 
 class PowerCommunicator(object):
     """ Uses a serial port to communicate with the power modules. """
 
     @Inject
-    def __init__(self, power_serial=INJECTED, power_store=INJECTED, pubsub=INJECTED, verbose=False, time_keeper_period=60,
+    def __init__(self, power_serial=INJECTED, power_store=INJECTED, pubsub=INJECTED, time_keeper_period=60,
                  address_mode_timeout=300):
-        # type: (RS485, PowerStore, PubSub, bool, int, int) -> None
+        # type: (RS485, PowerStore, PubSub, int, int) -> None
         """ Default constructor.
 
         :param power_serial: Serial port to communicate with
         :type power_serial: Instance of :class`RS485`
         :param verbose: Print all serial communication to stdout.
         """
+        self.__verbose = logger.level >= logging.DEBUG
         self.__serial = power_serial
         self.__serial_lock = RLock()
         self.__cid = 1
@@ -84,8 +85,6 @@ class PowerCommunicator(object):
         self.__debug_buffer = {'read': {},
                                'write': {}}  # type: Dict[str,Dict[float,str]]
         self.__debug_buffer_duration = 300
-
-        self.__verbose = verbose
 
     def start(self):
         # type: () -> None
@@ -164,11 +163,10 @@ class PowerCommunicator(object):
         (ret, self.__cid) = (self.__cid, (self.__cid % 255) + 1)
         return ret
 
-    @staticmethod
-    def __log(action, data):
-        # type: (Optional[str]) -> None
-        if data is not None:
-            logger.info("%.3f %s power: %s" % (time.time(), action, printable(data)))
+    def __debug(self, action, data):
+        # type: (str, Optional[bytearray]) -> None
+        if self.__verbose and data is not None:
+            logger.debug("%.3f %s power: %s" % (time.time(), action, printable(data)))
 
     def __write_to_serial(self, data):
         # type: (bytearray) -> None
@@ -176,8 +174,7 @@ class PowerCommunicator(object):
 
         :param data: the data to write
         """
-        if self.__verbose:
-            PowerCommunicator.__log('writing to', data)
+        self.__debug('writing to', data)
         self.__serial.write(data)
         self.__communication_stats_bytes['bytes_written'] += len(data)
         threshold = time.time() - self.__debug_buffer_duration
@@ -444,12 +441,10 @@ class PowerCommunicator(object):
         except Empty:
             raise CommunicationTimedOutException('Communication timed out')
         except Exception:
-            if not self.__verbose:
-                PowerCommunicator.__log('reading from', command)
+            self.__debug('reading from', command)
             raise
         finally:
-            if self.__verbose:
-                PowerCommunicator.__log('reading from', command)
+            self.__debug('reading from', command)
 
         threshold = time.time() - self.__debug_buffer_duration
         self.__debug_buffer['read'][time.time()] = printable(command)
