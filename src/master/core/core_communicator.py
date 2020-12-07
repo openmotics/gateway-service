@@ -18,16 +18,20 @@ Module to communicate with the Core.
 """
 
 from __future__ import absolute_import
+
 import logging
-import time
 import select
 import struct
-from threading import Thread, Lock
-from six.moves.queue import Queue, Empty
-from ioc import Inject, INJECTED
+import time
+from threading import Lock, Thread
+
+import six
+from six.moves.queue import Empty, Queue
+
+from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
-from master.core.fields import WordField
 from master.core.core_command import CoreCommandSpec
+from master.core.fields import WordField
 from master.core.toolbox import Toolbox
 from serial_utils import CommunicationTimedOutException, printable
 
@@ -77,7 +81,7 @@ class CoreCommunicator(object):
                                      'bytes_written': 0,
                                      'bytes_read': 0}  # type: Dict[str,Any]
         self._debug_buffer = {'read': {},
-                              'write': {}}  # type: Dict[str, Dict[float, str]]
+                              'write': {}}  # type: Dict[str, Dict[float, bytearray]]
         self._debug_buffer_duration = 300
 
     def start(self):
@@ -99,7 +103,12 @@ class CoreCommunicator(object):
                                      'bytes_read': 0}
 
     def get_debug_buffer(self):
-        return self._debug_buffer
+        # type: () -> Dict[str,Dict[float,str]]
+        def process(buffer):
+            return {k: printable(v) for k, v in six.iteritems(buffer)}
+
+        return {'read': process(self._debug_buffer['read']),
+                'write': process(self._debug_buffer['write'])}
 
     def get_seconds_since_last_success(self):  # type: () -> float
         """ Get the number of seconds since the last successful communication. """
@@ -148,7 +157,7 @@ class CoreCommunicator(object):
                 logger.info('Writing to Core serial:   {0}'.format(printable(data)))
 
             threshold = time.time() - self._debug_buffer_duration
-            self._debug_buffer['write'][time.time()] = printable(data)
+            self._debug_buffer['write'][time.time()] = data
             for t in self._debug_buffer['write'].keys():
                 if t < threshold:
                     del self._debug_buffer['write'][t]
@@ -331,7 +340,7 @@ class CoreCommunicator(object):
                 if self._verbose:
                     logger.info('Reading from Core serial: {0}'.format(printable(message)))
                 threshold = time.time() - self._debug_buffer_duration
-                self._debug_buffer['read'][time.time()] = printable(message)
+                self._debug_buffer['read'][time.time()] = message
                 for t in self._debug_buffer['read'].keys():
                     if t < threshold:
                         del self._debug_buffer['read'][t]
