@@ -115,7 +115,7 @@ class MasterClassicControllerTest(unittest.TestCase):
             pubsub = get_pubsub()
             controller._register_version_depending_background_consumers()
             controller._input_config = {1: InputDTO(id=1)}  # TODO: cleanup
-            pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, subscriber.callback)
+            pubsub.subscribe_master_events(PubSub.MasterTopics.INPUT, subscriber.callback)
             new_consumer.assert_called()
             consumer_list[-2].deliver({'input': 1})
             pubsub._publish_all_events()
@@ -149,7 +149,7 @@ class MasterClassicControllerTest(unittest.TestCase):
 
         classic = get_classic_controller_dummy()
         pubsub = get_pubsub()
-        pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
+        pubsub.subscribe_master_events(PubSub.MasterTopics.OUTPUT, _on_event)
         classic._output_config = {0: OutputDTO(id=0),
                                   1: OutputDTO(id=1),
                                   2: OutputDTO(id=2, room=3)}
@@ -200,7 +200,7 @@ class MasterClassicControllerTest(unittest.TestCase):
             if master_event.type == MasterEvent.Types.OUTPUT_STATUS:
                 events.append(master_event.data)
 
-        pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, _on_event)
+        pubsub.subscribe_master_events(PubSub.MasterTopics.OUTPUT, _on_event)
         classic._validation_bits = ValidationBitStatus(on_validation_bit_change=classic._validation_bit_changed)
         classic._output_config = {0: OutputDTO(0, lock_bit_id=5)}
         pubsub._publish_all_events()
@@ -231,7 +231,7 @@ class MasterClassicControllerTest(unittest.TestCase):
                 assert len(synchronize.call_args_list) == 1
                 assert len(invalidate) == 0
 
-                pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, subscriber.callback)
+                pubsub.subscribe_master_events(PubSub.MasterTopics.MODULE, subscriber.callback)
                 controller.module_discover_stop()
                 pubsub._publish_all_events()
                 time.sleep(0.2)

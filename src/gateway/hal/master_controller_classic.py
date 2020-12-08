@@ -328,11 +328,8 @@ class MasterClassicController(MasterController):
             event_data = {'id': output_id, 'status': status}
             if dimmer is not None:
                 event_data['dimmer'] = dimmer
-            self._publish_event(MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data))
-
-    def _publish_event(self, master_event):
-        # type: (MasterEvent) -> None
-        self._pubsub.publish_master_event(PubSub.MasterTopics.MASTER, master_event)
+            master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data)
+            self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)
 
     def _invalidate_caches(self):
         # type: () -> None
@@ -562,7 +559,8 @@ class MasterClassicController(MasterController):
         event_data = {'id': input_id,
                       'status': status,
                       'location': {'room_id': Toolbox.denonify(input_configuration.room, 255)}}
-        self._publish_event(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
+        master_event = MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data)
+        self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
 
     def _is_output_locked(self, output_id):
         # TODO remove self._output_config cache, this belongs in the output controller.
@@ -635,7 +633,8 @@ class MasterClassicController(MasterController):
             event_data = {'id': shutter_id,
                           'status': new_state[i],
                           'location': {'room_id': self._shutter_config[shutter_id].room}}
-            self._publish_event(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
+            master_event = MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data)
+            self._pubsub.publish_master_event(PubSub.MasterTopics.SHUTTER, master_event)
 
     def _interprete_output_states(self, module_id, output_states):
         states = []
@@ -1391,7 +1390,6 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
-
         self._master_communicator.do_command(master_api.module_discover_start())
 
         if self._discover_mode_timer is not None:
@@ -1425,7 +1423,8 @@ class MasterClassicController(MasterController):
     def _broadcast_module_discovery(self):
         # type: () -> None
         self._eeprom_controller.invalidate_cache()
-        self._publish_event(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
+        master_event = MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={})
+        self._pubsub.publish_master_event(PubSub.MasterTopics.MODULE, master_event)
 
     # Error functions
 
@@ -1757,4 +1756,5 @@ class MasterClassicController(MasterController):
             if output_dto.lock_bit_id == bit_nr:
                 locked = value  # the bit is set, the output is locked
                 event_data = {'id': output_id, 'locked': locked}
-                self._publish_event(MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data))
+                master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data)
+                self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)

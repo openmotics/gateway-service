@@ -103,10 +103,6 @@ class MasterCoreController(MasterController):
     # Private stuff #
     #################
 
-    def _publish_event(self, master_event):
-        # type: (MasterEvent) -> None
-        self._pubsub.publish_master_event(PubSub.MasterTopics.MASTER, master_event)
-
     def _handle_eeprom_event(self, master_event):
         # type: (MasterEvent) -> None
         if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
@@ -136,8 +132,8 @@ class MasterCoreController(MasterController):
                           'ctimer': 0 if timer_value is None else timer_value}
             self._handle_output(output_id, event_data)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
-            event = self._input_state.handle_event(core_event)
-            self._publish_event(event)
+            master_event = self._input_state.handle_event(core_event)
+            self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
         elif core_event.type == MasterCoreEvent.Types.SENSOR:
             sensor_id = core_event.data['sensor']
             if sensor_id not in self._sensor_states:
@@ -146,7 +142,8 @@ class MasterCoreController(MasterController):
 
     def _handle_output(self, output_id, event_data):
         # type: (int ,Dict[str,Any]) -> None
-        self._publish_event(MasterEvent(MasterEvent.Types.OUTPUT_STATUS, event_data))
+        master_event = MasterEvent(MasterEvent.Types.OUTPUT_STATUS, event_data)
+        self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)
         shutter_id = self._output_shutter_map.get(output_id)
         if shutter_id:
             shutter = ShutterConfiguration(shutter_id)
@@ -185,7 +182,8 @@ class MasterCoreController(MasterController):
         event_data = {'id': shutter.id,
                       'status': state,
                       'location': {'room_id': 255}}  # TODO: rooms
-        self._publish_event(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
+        master_event = MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data)
+        self._pubsub.publish_master_event(PubSub.MasterTopics.SHUTTER, master_event)
         self._shutter_status[shutter.id] = (output_0_on, output_1_on)
 
     def _synchronize(self):
@@ -393,8 +391,8 @@ class MasterCoreController(MasterController):
             cmd = CoreAPI.device_information_list_inputs()
             data = self._master_communicator.do_command(cmd, {})
             if data is not None:
-                for event in self._input_state.refresh(data['information']):
-                    self._publish_event(event)
+                for master_event in self._input_state.refresh(data['information']):
+                    self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
         return refresh
 
     # Outputs
@@ -745,7 +743,9 @@ class MasterCoreController(MasterController):
         return self._discover_mode_timer is not None
 
     def _broadcast_module_discovery(self):
-        self._publish_event(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
+        # type: () -> None
+        master_event = MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={})
+        self._pubsub.publish_master_event(PubSub.MasterTopics.MODULE, master_event)
 
     def get_module_log(self):  # type: () -> List[Dict[str, Any]]
         raise NotImplementedError()  # No need to implement. Not used and rather obsolete code anyway
