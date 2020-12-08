@@ -40,7 +40,7 @@ if False:  # MYPY
     from serial import Serial
     T_co = TypeVar('T_co', bound=None, covariant=True)
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger('gateway.master.core')
 
 
 class CoreCommunicator(object):
@@ -56,9 +56,9 @@ class CoreCommunicator(object):
     END_OF_REPLY = bytearray(b'\r\n')
 
     @Inject
-    def __init__(self, controller_serial=INJECTED, verbose=False):
-        # type: (Serial, bool) -> None
-        self._verbose = verbose
+    def __init__(self, controller_serial=INJECTED):
+        # type: (Serial) -> None
+        self._verbose = logger.level >= logging.DEBUG
         self._serial = controller_serial
         self._serial_write_lock = Lock()
         self._cid_lock = Lock()
@@ -154,7 +154,7 @@ class CoreCommunicator(object):
         """
         with self._serial_write_lock:
             if self._verbose:
-                logger.info('Writing to Core serial:   {0}'.format(printable(data)))
+                logger.debug('Writing to Core serial:   {0}'.format(printable(data)))
 
             threshold = time.time() - self._debug_buffer_duration
             self._debug_buffer['write'][time.time()] = data
@@ -338,7 +338,7 @@ class CoreCommunicator(object):
 
                 # A possible message is received, log where appropriate
                 if self._verbose:
-                    logger.info('Reading from Core serial: {0}'.format(printable(message)))
+                    logger.debug('Reading from Core serial: {0}'.format(printable(message)))
                 threshold = time.time() - self._debug_buffer_duration
                 self._debug_buffer['read'][time.time()] = message
                 for t in self._debug_buffer['read'].keys():
@@ -370,7 +370,7 @@ class CoreCommunicator(object):
                 consumers = self._consumers.get(header_fields['hash'], [])
                 for consumer in consumers[:]:
                     if self._verbose:
-                        logger.info('Delivering payload to consumer {0}.{1}: {2}'.format(header_fields['command'], header_fields['cid'], printable(payload)))
+                        logger.debug('Delivering payload to consumer {0}.{1}: {2}'.format(header_fields['command'], header_fields['cid'], printable(payload)))
                     consumer.consume(payload)
                     if isinstance(consumer, Consumer):
                         self.unregister_consumer(consumer)

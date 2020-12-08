@@ -30,7 +30,7 @@ if False:  # MYPY
     GATEWAY_TOPIC = Literal['config', 'state']
     MASTER_TOPIC = Literal['eeprom', 'maintenance', 'master', 'power']
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger('gateway.pubsub')
 
 
 @Injectable.named('pubsub')
@@ -101,8 +101,10 @@ class PubSub(object):
     def _publish_master_event(self, topic, master_event):
         # type: (MASTER_TOPIC, MasterEvent) -> None
         callbacks = self._master_topics[topic]
-        if not callbacks:
-            logger.warning('Received master event %s on topic %s without subscribers', master_event.type, topic)
+        if callbacks:
+            logger.debug('Received master event %s on topic "%s"', master_event.type, topic)
+        else:
+            logger.warning('Received master event %s on topic "%s" without subscribers', master_event.type, topic)
         for callback in callbacks:
             try:
                 callback(master_event)
@@ -120,8 +122,10 @@ class PubSub(object):
     def _publish_gateway_event(self, topic, gateway_event):
         # type: (GATEWAY_TOPIC, GatewayEvent) -> None
         callbacks = self._gateway_topics[topic]
-        if not callbacks:
-            logger.warning('Received gateway event %s on topic %s without subscribers', gateway_event.type, topic)
+        if callbacks:
+            logger.debug('Received gateway event %s on topic "%s"', gateway_event.type, topic)
+        else:
+            logger.warning('Received gateway event %s on topic "%s" without subscribers', gateway_event.type, topic)
         for callback in callbacks:
             try:
                 callback(gateway_event)
