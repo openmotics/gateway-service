@@ -238,6 +238,12 @@ class OpenmoticsService(object):
             logger.info('Stopping OM core service... Done')
             signal_request['stop'] = True
 
+        try:
+            import prctl
+            prctl.set_name('omservice')
+        except ImportError:
+            pass
+
         signal(SIGTERM, stop)
         logger.info('Starting OM core service... Done')
         while not signal_request['stop']:

@@ -21,8 +21,11 @@ import logging
 import struct
 import time
 from datetime import datetime
-from threading import Thread, Timer
+from threading import Timer
 
+from peewee import DoesNotExist
+
+from gateway.daemon_thread import BaseThread
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
     PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO
 from gateway.enums import ShutterEnums
@@ -48,7 +51,6 @@ from master.core.memory_models import CanControlModuleConfiguration, \
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.system_value import Humidity, Temperature
 from master.core.ucan_communicator import UCANCommunicator
-from peewee import DoesNotExist
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 
 if False:  # MYPY
@@ -70,7 +72,7 @@ class MasterCoreController(MasterController):
         self._slave_communicator = slave_communicator
         self._memory_files = memory_files  # type: Dict[str, MemoryFile]
         self._pubsub = pubsub
-        self._synchronization_thread = Thread(target=self._synchronize, name='CoreMasterSynchronization')
+        self._synchronization_thread = BaseThread(name='mastersync', target=self._synchronize)
         self._master_online = False
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._input_state = MasterInputState()

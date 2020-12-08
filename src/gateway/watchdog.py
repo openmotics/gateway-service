@@ -59,7 +59,7 @@ class Watchdog(object):
         # type: () -> None
         if self._watchdog_thread is None:
             self.start_time = time.time()
-            self._watchdog_thread = DaemonThread(name='Watchdog watcher',
+            self._watchdog_thread = DaemonThread(name='watchdog',
                                                  target=self._watch,
                                                  interval=60, delay=10)
             self._watchdog_thread.start()

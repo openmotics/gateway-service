@@ -23,6 +23,7 @@ from threading import RLock, Thread
 
 from six.moves.queue import Empty
 
+from gateway.daemon_thread import BaseThread
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
@@ -270,8 +271,7 @@ class PowerCommunicator(object):
         self.__address_mode_stop = False
 
         with self.__serial_lock:
-            self.__address_thread = Thread(target=self.__do_address_mode,
-                                           name="PowerCommunicator address mode thread")
+            self.__address_thread = BaseThread(name='poweraddressmode', target=self.__do_address_mode)
             self.__address_thread.daemon = True
             self.__address_thread.start()
 

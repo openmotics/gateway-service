@@ -50,7 +50,7 @@ class ThermostatControllerMaster(ThermostatController):
         self._master_controller = master_controller  # classic only
         self._pubsub = pubsub
 
-        self._monitor_thread = DaemonThread(name='ThermostatControllerMaster monitor',
+        self._monitor_thread = DaemonThread(name='thermostatctl',
                                             target=self._monitor,
                                             interval=30, delay=10)
 

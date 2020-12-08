@@ -76,7 +76,7 @@ class VpnController(object):
 
     def __init__(self):
         self.vpn_connected = False
-        self._vpn_tester = DaemonThread(name='vpn controller',
+        self._vpn_tester = DaemonThread(name='vpnctl',
                                         target=self._vpn_connected,
                                         interval=5)
 
@@ -225,7 +225,7 @@ class DataCollector(object):
         self._data_lock = Lock()
         self._interval = interval
         self._collector_function = collector
-        self._collector_thread = DaemonThread(name='{0} collector'.format(name),
+        self._collector_thread = DaemonThread(name='{0}coll'.format(name),
                                               target=self._collect,
                                               interval=interval)
 
@@ -296,7 +296,7 @@ class TaskExecutor(object):
         self._vpn_controller = VpnController()
         self._tasks = deque()
         self._previous_amount_of_tasks = 0
-        self._executor = DaemonThread(name='task executor',
+        self._executor = DaemonThread(name='taskexecutor',
                                       target=self._execute_tasks,
                                       interval=300)
 

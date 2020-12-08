@@ -94,7 +94,7 @@ class MasterClassicController(MasterController):
         self._validation_bits = ValidationBitStatus(on_validation_bit_change=self._validation_bit_changed)
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
-        self._synchronization_thread = DaemonThread(name='MasterClassicController synchronization',
+        self._synchronization_thread = DaemonThread(name='mastersync',
                                                     target=self._synchronize,
                                                     interval=30, delay=10)
         self._master_version = None

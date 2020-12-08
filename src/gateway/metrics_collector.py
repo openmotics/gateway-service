@@ -21,10 +21,11 @@ from __future__ import absolute_import
 import logging
 import time
 from collections import deque
-from threading import Event, Thread
+from threading import Event
 
 import six
 
+from gateway.daemon_thread import BaseThread
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.models import Database
@@ -115,8 +116,7 @@ class MetricsCollector(object):
         MetricsCollector._start_thread(self._run_pulsecounters, 'counter')
         MetricsCollector._start_thread(self._run_power_openmotics, 'energy')
         MetricsCollector._start_thread(self._run_power_openmotics_analytics, 'energy_analytics')
-        thread = Thread(target=self._sleep_manager)
-        thread.setName('Metric collector - Sleep manager')
+        thread = BaseThread(target=self._sleep_manager, name='metricsleep')
         thread.daemon = True
         thread.start()
 
@@ -210,8 +210,7 @@ class MetricsCollector(object):
         args = [name]
         if interval is not None:
             args.append(interval)
-        thread = Thread(target=workload, args=args)
-        thread.setName('Metric collector ({0})'.format(name))
+        thread = BaseThread(name='metric{0}'.format(name), target=workload, args=args)
         thread.daemon = True
         thread.start()
         return thread

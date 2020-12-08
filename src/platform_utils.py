@@ -161,7 +161,7 @@ class System(object):
 
     @staticmethod
     def get_vpn_service():
-        return 'openvpn.service' if System.get_operating_system()['ID'] == System.OS.ANGSTROM else 'openvpn-client@omcloud'
+        return 'openvpn.service' if System.get_operating_system().get('ID') == System.OS.ANGSTROM else 'openvpn-client@omcloud'
 
     @staticmethod
     def _use_pyopenssl():
@@ -225,6 +225,7 @@ class System(object):
     def import_libs():
         operating_system = System.get_operating_system().get('ID')
         if operating_system in (System.OS.ANGSTROM, System.OS.DEBIAN):
+            sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/dist-packages')
             sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
 
         # Patching where/if required

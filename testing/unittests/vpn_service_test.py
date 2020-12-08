@@ -354,11 +354,11 @@ class VPNServiceTest(TestCase):
                     self.assertEqual(2, heartbeat._sleep_time)
                     self.assertEqual(now, heartbeat._last_successful_heartbeat)
                     post.assert_called_once_with('https://foobar',
-                                                 data={'extra_data': json.dumps({'inputs': 'inputs collector',
-                                                                                 'errors': 'errors collector',
-                                                                                 'local_ip': 'ip address collector',
-                                                                                 'thermostats': 'thermostats collector',
-                                                                                 'shutters': 'shutters collector',
+                                                 data={'extra_data': json.dumps({'inputs': 'inputscoll',
+                                                                                 'errors': 'errorscoll',
+                                                                                 'local_ip': 'ip addresscoll',
+                                                                                 'thermostats': 'thermostatscoll',
+                                                                                 'shutters': 'shutterscoll',
                                                                                  'debug': {}},
                                                                                 sort_keys=True)},
                                                  timeout=10.0)

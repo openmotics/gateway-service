@@ -49,7 +49,7 @@ class TimeKeeper(object):
         if self.__thread is None:
             logger.info("Starting TimeKeeper")
             self.__stop = False
-            self.__thread = DaemonThread(name='TimeKeeper thread',
+            self.__thread = DaemonThread(name='timekeeper',
                                          target=self.__run,
                                          interval=self.__period)
             self.__thread.start()

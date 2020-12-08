@@ -59,7 +59,7 @@ class OutputController(BaseController):
     def start(self):
         # type: () -> None
         super(OutputController, self).start()
-        self._sync_state_thread = DaemonThread('OutputController sync state',
+        self._sync_state_thread = DaemonThread(name='outputsyncstate',
                                                target=self._sync_state,
                                                interval=600, delay=10)
         self._sync_state_thread.start()
