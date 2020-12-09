@@ -45,8 +45,8 @@ class EventsTest(unittest.TestCase):
         self.assertFalse(event_sender._batch_send_events())
 
         select_mock = Mock()
-        select_mock.dicts.return_value = [{'id': 1, 'event_enabled': True},
-                                          {'id': 2, 'event_enabled': False}]
+        select_mock.dicts.return_value = [{'number': 1, 'event_enabled': True},
+                                          {'number': 2, 'event_enabled': False}]
 
         with patch.object(Input, 'select', return_value=select_mock):
             with patch.object(Config, 'get_entry', return_value=True):
