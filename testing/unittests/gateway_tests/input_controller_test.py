@@ -71,8 +71,8 @@ class InputControllerTest(unittest.TestCase):
     def test_full_loaded_inputs(self):
         master_dtos = {1: InputDTO(id=1, name='one'),
                        2: InputDTO(id=2, name='two')}
-        orm_inputs = [Input(id=0, number=1, event_enabled=False),
-                      Input(id=1, number=2, event_enabled=True)]
+        orm_inputs = [Input(id=10, number=1, event_enabled=False),
+                      Input(id=11, number=2, event_enabled=True)]
         select_mock = mock.Mock()
         select_mock.join_from.return_value = orm_inputs
         with mock.patch.object(Input, 'select', return_value=select_mock), \

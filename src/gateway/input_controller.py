@@ -80,5 +80,5 @@ class InputController(BaseController):
 
     @staticmethod
     def load_inputs_event_enabled():
-        return {input_['id']: input_['event_enabled']
+        return {input_['number']: input_['event_enabled']
                 for input_ in Input.select().dicts()}
