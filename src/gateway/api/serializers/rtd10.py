@@ -25,6 +25,7 @@ if False:  # MYPY
 
 
 class GlobalRTD10Serializer(object):
+    BYTE_MAX = 255
 
     @staticmethod
     def _temp_to_str(temp):
@@ -34,8 +35,9 @@ class GlobalRTD10Serializer(object):
     def serialize(global_rtd10_dto, fields):  # type: (GlobalRTD10DTO, Optional[List[str]]) -> Dict[str, Any]
         data = {}
         for temperature in GlobalRTD10DTO.TEMPERATURES:
-            data['output_value_heating_{0}'.format(GlobalRTD10Serializer._temp_to_str(temperature))] = global_rtd10_dto.heating_values[temperature]
-            data['output_value_cooling_{0}'.format(GlobalRTD10Serializer._temp_to_str(temperature))] = global_rtd10_dto.cooling_values[temperature]
+            formatted_temp = GlobalRTD10Serializer._temp_to_str(temperature)
+            data['output_value_heating_{0}'.format(formatted_temp)] = global_rtd10_dto.heating_values.get(temperature, GlobalRTD10Serializer.BYTE_MAX)
+            data['output_value_cooling_{0}'.format(formatted_temp)] = global_rtd10_dto.cooling_values.get(temperature, GlobalRTD10Serializer.BYTE_MAX)
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
