@@ -42,7 +42,7 @@ def test_input_module(toolbox, discover_mode):
                              for entry in modules]
 
 
-@pytest.mark.unstable
+@pytest.mark.skip
 def test_can_control(toolbox, discover_mode):
     toolbox.tester.toggle_output(toolbox.DEBIAN_DISCOVER_CAN_CONTROL)
     modules = toolbox.watch_module_discovery_log(module_amounts={'C': 1, 'I': 1, 'T': 1})  # CAN Control, emulated Input modudule and emulated Temperature module

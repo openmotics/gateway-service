@@ -20,8 +20,6 @@ import os
 import sys
 import time
 
-import psutil
-
 import constants
 import gateway
 from ioc import INJECTED, Inject
@@ -91,6 +89,10 @@ def cmd_shell(args):
 
 
 def cmd_top(args):
+    from gateway.initialize import setup_platform
+    _ = setup_platform
+
+    import psutil
     while True:
         proc = psutil.Process(args.pid)
         total_percent = proc.cpu_percent(10)
