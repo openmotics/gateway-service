@@ -21,11 +21,15 @@ import logging
 import struct
 import time
 from datetime import datetime
-from threading import Thread, Timer
+from threading import Timer
 
+from peewee import DoesNotExist
+
+from gateway.daemon_thread import BaseThread
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
-    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO
+    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO
 from gateway.enums import ShutterEnums
+from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
 from gateway.hal.master_controller import CommunicationFailure, \
@@ -47,7 +51,6 @@ from master.core.memory_models import CanControlModuleConfiguration, \
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.system_value import Humidity, Temperature
 from master.core.ucan_communicator import UCANCommunicator
-from peewee import DoesNotExist
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 
 if False:  # MYPY
@@ -69,7 +72,7 @@ class MasterCoreController(MasterController):
         self._slave_communicator = slave_communicator
         self._memory_files = memory_files  # type: Dict[str, MemoryFile]
         self._pubsub = pubsub
-        self._synchronization_thread = Thread(target=self._synchronize, name='CoreMasterSynchronization')
+        self._synchronization_thread = BaseThread(name='mastersync', target=self._synchronize)
         self._master_online = False
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._input_state = MasterInputState()
@@ -102,10 +105,6 @@ class MasterCoreController(MasterController):
     # Private stuff #
     #################
 
-    def _publish_event(self, master_event):
-        # type: (MasterEvent) -> None
-        self._pubsub.publish_master_event(PubSub.MasterTopics.MASTER, master_event)
-
     def _handle_eeprom_event(self, master_event):
         # type: (MasterEvent) -> None
         if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
@@ -135,8 +134,8 @@ class MasterCoreController(MasterController):
                           'ctimer': 0 if timer_value is None else timer_value}
             self._handle_output(output_id, event_data)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
-            event = self._input_state.handle_event(core_event)
-            self._publish_event(event)
+            master_event = self._input_state.handle_event(core_event)
+            self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
         elif core_event.type == MasterCoreEvent.Types.SENSOR:
             sensor_id = core_event.data['sensor']
             if sensor_id not in self._sensor_states:
@@ -145,7 +144,8 @@ class MasterCoreController(MasterController):
 
     def _handle_output(self, output_id, event_data):
         # type: (int ,Dict[str,Any]) -> None
-        self._publish_event(MasterEvent(MasterEvent.Types.OUTPUT_STATUS, event_data))
+        master_event = MasterEvent(MasterEvent.Types.OUTPUT_STATUS, event_data)
+        self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)
         shutter_id = self._output_shutter_map.get(output_id)
         if shutter_id:
             shutter = ShutterConfiguration(shutter_id)
@@ -184,7 +184,8 @@ class MasterCoreController(MasterController):
         event_data = {'id': shutter.id,
                       'status': state,
                       'location': {'room_id': 255}}  # TODO: rooms
-        self._publish_event(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
+        master_event = MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data)
+        self._pubsub.publish_master_event(PubSub.MasterTopics.SHUTTER, master_event)
         self._shutter_status[shutter.id] = (output_0_on, output_1_on)
 
     def _synchronize(self):
@@ -317,8 +318,6 @@ class MasterCoreController(MasterController):
         calls_timedout = [call for call in stats['calls_timedout']]
         calls_succeeded = [call for call in stats['calls_succeeded']]
         all_calls = sorted(calls_timedout + calls_succeeded)
-        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
-        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
 
         if len(calls_timedout) == 0:
             # If there are no timeouts at all
@@ -331,11 +330,15 @@ class MasterCoreController(MasterController):
             logger.warning('Observed master communication failures, but recent calls recovered')
             # The last X calls are successfull
             return CommunicationStatus.UNSTABLE
-        elif len(calls_last_x_minutes) <= 5:
+
+        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
+        if len(calls_last_x_minutes) <= 5:
             logger.warning('Observed master communication failures, but not recent enough')
             # Not enough recent calls
             return CommunicationStatus.UNSTABLE
-        elif ratio < 0.25:
+
+        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
+        if ratio < 0.25:
             # Less than 25% of the calls fail, let's assume everything is just "fine"
             logger.warning('Observed master communication failures, but there\'s only a failure ratio of {:.2f}%'.format(ratio * 100))
             return CommunicationStatus.UNSTABLE
@@ -392,8 +395,8 @@ class MasterCoreController(MasterController):
             cmd = CoreAPI.device_information_list_inputs()
             data = self._master_communicator.do_command(cmd, {})
             if data is not None:
-                for event in self._input_state.refresh(data['information']):
-                    self._publish_event(event)
+                for master_event in self._input_state.refresh(data['information']):
+                    self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
         return refresh
 
     # Outputs
@@ -563,23 +566,29 @@ class MasterCoreController(MasterController):
 
     # Thermostats
 
-    def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
-        raise NotImplementedError()
+    def load_heating_thermostat(self, thermostat_id):
+        raise UnsupportedException()
 
-    def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
-        raise NotImplementedError()
+    def load_heating_thermostats(self):
+        raise UnsupportedException()
 
-    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
-        raise NotImplementedError()
+    def save_heating_thermostats(self, thermostats):
+        raise UnsupportedException()
 
-    def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
-        raise NotImplementedError()
+    def load_cooling_thermostat(self, thermostat_id):
+        raise UnsupportedException()
 
-    def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
-        raise NotImplementedError()
+    def load_cooling_thermostats(self):
+        raise UnsupportedException()
 
-    def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
-        raise NotImplementedError()
+    def save_cooling_thermostats(self, thermostats):
+        raise UnsupportedException()
+
+    def load_thermostat_group(self):
+        raise UnsupportedException()
+
+    def save_thermostat_group(self, thermostat_group):
+        raise UnsupportedException()
 
     # Can Led functions
 
@@ -738,7 +747,9 @@ class MasterCoreController(MasterController):
         return self._discover_mode_timer is not None
 
     def _broadcast_module_discovery(self):
-        self._publish_event(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
+        # type: () -> None
+        master_event = MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={})
+        self._pubsub.publish_master_event(PubSub.MasterTopics.MODULE, master_event)
 
     def get_module_log(self):  # type: () -> List[Dict[str, Any]]
         raise NotImplementedError()  # No need to implement. Not used and rather obsolete code anyway

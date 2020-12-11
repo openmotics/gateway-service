@@ -361,8 +361,10 @@ class ShutterControllerTest(unittest.TestCase):
             calls.setdefault(event.data['id'], []).append(event.data['status']['state'])
 
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, shutter_callback)
+        self.pubsub._publish_all_events()
 
         def validate(_shutter_id, _entry):
+            self.pubsub._publish_all_events()
             self.assertEqual(controller._actual_positions.get(_shutter_id), _entry[0])
             self.assertEqual(controller._desired_positions.get(_shutter_id), _entry[1])
             self.assertEqual(controller._directions.get(_shutter_id), _entry[2])
@@ -371,6 +373,7 @@ class ShutterControllerTest(unittest.TestCase):
                 self.assertEqual(calls[_shutter_id].pop(), _entry[3][1].upper())
 
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00000000})
+        self.pubsub._publish_all_events()
         for shutter_id in range(3):
             #                     +- actual position
             #                     |     +- desired position
@@ -380,6 +383,7 @@ class ShutterControllerTest(unittest.TestCase):
 
         for shutter_id in range(3):
             controller.shutter_down(shutter_id, None)
+            self.pubsub._publish_all_events()
 
         time.sleep(20)
 
@@ -391,12 +395,15 @@ class ShutterControllerTest(unittest.TestCase):
         for shutter_id, entry in {0: [None, None, ShutterEnums.Direction.DOWN, (20, ShutterEnums.State.GOING_DOWN)],
                                   1: [None, None, ShutterEnums.Direction.UP,   (20, ShutterEnums.State.GOING_UP)],
                                   2: [None, 99,   ShutterEnums.Direction.DOWN, (20, ShutterEnums.State.GOING_DOWN)]}.items():
+            self.pubsub._publish_all_events()
             validate(shutter_id, entry)
+            self.pubsub._publish_all_events()
 
         time.sleep(50)  # Standard shutters will be down now
 
         controller._actual_positions[2] = 20  # Simulate position reporting
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00010100})  # First shutter motor stop
+        self.pubsub._publish_all_events()
         #                             +- actual position
         #                             |     +- desired position
         #                             |     |     +- direction                      +- state                        +- optional skip call check
@@ -405,6 +412,7 @@ class ShutterControllerTest(unittest.TestCase):
                                   1: [None, None, ShutterEnums.Direction.UP,   (20, ShutterEnums.State.GOING_UP),   False],
                                   2: [20,   99,   ShutterEnums.Direction.DOWN, (20, ShutterEnums.State.GOING_DOWN), False]}.items():
             validate(shutter_id, entry)
+            self.pubsub._publish_all_events()
 
         time.sleep(50)  # Standard shutters will be down now
 

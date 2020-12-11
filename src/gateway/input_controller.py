@@ -17,6 +17,7 @@ Input BLL
 """
 from __future__ import absolute_import
 import logging
+from peewee import JOIN
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.dto import InputDTO
 from gateway.models import Input, Room
@@ -39,15 +40,19 @@ class InputController(BaseController):
         super(InputController, self).__init__(master_controller)
 
     def load_input(self, input_id):  # type: (int) -> InputDTO
-        input_ = Input.get(number=input_id)  # type: Input
-        input_dto = self._master_controller.load_input(input_id=input_.number)
+        input_ = Input.select(Input, Room) \
+                      .join_from(Input, Room, join_type=JOIN.LEFT_OUTER) \
+                      .where(Input.number == input_id) \
+                      .get()  # type: Input  # TODO: Load dict
+        input_dto = self._master_controller.load_input(input_id=input_id)
         input_dto.room = input_.room.number if input_.room is not None else None
         input_dto.event_enabled = input_.event_enabled
         return input_dto
 
     def load_inputs(self):  # type: () -> List[InputDTO]
         inputs_dtos = []
-        for input_ in list(Input.select()):
+        for input_ in list(Input.select(Input, Room)
+                                .join_from(Input, Room, join_type=JOIN.LEFT_OUTER)):  # TODO: Load dicts
             input_dto = self._master_controller.load_input(input_id=input_.number)
             input_dto.room = input_.room.number if input_.room is not None else None
             input_dto.event_enabled = input_.event_enabled
@@ -72,3 +77,8 @@ class InputController(BaseController):
                 input_.save()
             inputs_to_save.append((input_dto, fields))
         self._master_controller.save_inputs(inputs_to_save)
+
+    @staticmethod
+    def load_inputs_event_enabled():
+        return {input_['number']: input_['event_enabled']
+                for input_ in Input.select().dicts()}

@@ -20,9 +20,10 @@ from __future__ import absolute_import
 
 import fcntl
 import struct
-from threading import Thread
 
 from six.moves.queue import Queue
+
+from gateway.daemon_thread import BaseThread
 from gateway.hal.master_controller import CommunicationFailure
 
 if False:  # MYPY
@@ -76,7 +77,7 @@ class RS485(object):
 
         self._serial.timeout = None
         self._running = False
-        self._thread = Thread(target=self._reader, name='RS485 reader')
+        self._thread = BaseThread(name='rS485read', target=self._reader)
         self._thread.daemon = True
         # TODO why does this stream byte by byte?
         self.read_queue = Queue()  # type: Queue[bytearray]

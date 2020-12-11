@@ -28,6 +28,17 @@ class DaemonThreadWait(Exception):
     pass
 
 
+class BaseThread(threading.Thread):
+    def run(self):
+        # type: () -> None
+        try:
+            import prctl
+            prctl.set_name(self.name)
+        except ImportError:
+            pass
+        super(BaseThread, self).run()
+
+
 class DaemonThread(object):
     def __init__(self, name, target, interval=10, delay=None):
         # type: (str, Callable[[],Any], float, Optional[float]) -> None
@@ -70,6 +81,11 @@ class DaemonThread(object):
 
     def _run(self):
         # type: () -> None
+        try:
+            import prctl
+            prctl.set_name(self._name)
+        except ImportError:
+            pass
         backoff = 0
         while not self._stop.is_set():
             start = time.time()

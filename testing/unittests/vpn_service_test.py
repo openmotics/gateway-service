@@ -88,7 +88,7 @@ class VPNServiceTest(TestCase):
         collector = DebugDumpDataCollector()
 
         for include_dumps in [True, False]:
-            with mock.patch.object(Config, 'get', return_value=include_dumps):
+            with mock.patch.object(Config, 'get_entry', return_value=include_dumps):
                 collector._collect()
                 self.assertEqual(({'dump_info': {}, 'dumps': {}}, []), collector.data)
                 self.assertIsNone(collector.data)
@@ -254,18 +254,18 @@ class VPNServiceTest(TestCase):
         events = []
         executor = VPNServiceTest._get_task_executor(events)
 
-        with mock.patch.object(Config, 'set') as config_set:
+        with mock.patch.object(Config, 'set_entry') as config_set:
             payload = {'foo': 0}
             executor._process_configuration_data(payload)
             config_set.assert_called_with('foo', 0)
             self.assertEqual(payload, executor._configuration)
 
-        with mock.patch.object(Config, 'set') as config_set:
+        with mock.patch.object(Config, 'set_entry') as config_set:
             executor._process_configuration_data(payload)
             config_set.assert_not_called()
             self.assertEqual(payload, executor._configuration)
 
-        with mock.patch.object(Config, 'set') as config_set:
+        with mock.patch.object(Config, 'set_entry') as config_set:
             payload = {'foo': 1}
             executor._process_configuration_data(payload)
             config_set.assert_called_with('foo', 1)
@@ -296,14 +296,14 @@ class VPNServiceTest(TestCase):
 
         heartbeat = HeartbeatService(url='https://foobar')
 
-        with mock.patch.object(Config, 'get', return_value=False):
+        with mock.patch.object(Config, 'get_entry', return_value=False):
             heartbeat._beat()
             tasks = heartbeat._task_executor._tasks.pop()
             self.assertEqual({'events': [(OMBusEvents.VPN_OPEN, False), (OMBusEvents.CLOUD_REACHABLE, False)],
                               'open_vpn': False}, tasks)
             self.assertEqual(DEFAULT_SLEEP_TIME, heartbeat._sleep_time)
 
-        with mock.patch.object(Config, 'get', return_value=True):
+        with mock.patch.object(Config, 'get_entry', return_value=True):
             try:
                 fakesleep.monkey_patch()
                 now = time.time()
@@ -354,11 +354,11 @@ class VPNServiceTest(TestCase):
                     self.assertEqual(2, heartbeat._sleep_time)
                     self.assertEqual(now, heartbeat._last_successful_heartbeat)
                     post.assert_called_once_with('https://foobar',
-                                                 data={'extra_data': json.dumps({'inputs': 'inputs collector',
-                                                                                 'errors': 'errors collector',
-                                                                                 'local_ip': 'ip address collector',
-                                                                                 'thermostats': 'thermostats collector',
-                                                                                 'shutters': 'shutters collector',
+                                                 data={'extra_data': json.dumps({'inputs': 'inputscoll',
+                                                                                 'errors': 'errorscoll',
+                                                                                 'local_ip': 'ip addresscoll',
+                                                                                 'thermostats': 'thermostatscoll',
+                                                                                 'shutters': 'shutterscoll',
                                                                                  'debug': {}},
                                                                                 sort_keys=True)},
                                                  timeout=10.0)

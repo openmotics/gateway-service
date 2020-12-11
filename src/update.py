@@ -315,12 +315,13 @@ def update_gateway_backend(tarball, date, version):
         python_dir = os.path.join(PREFIX, 'python')
         etc_dir = os.path.join(PREFIX, 'etc')
         cmd(['mkdir', '-p', backup_dir])
-        cmd('ls -tp | grep "/$" | tail -n +3 | while read file; do rm -r $file; done', shell=True, cwd=backup_dir)
 
         # TODO: symlink, blue green deployment
         cmd(['mkdir', '-p', os.path.join(backup_dir, date)])
+        cmd(['mkdir', '-p', os.path.join(backup_dir, date, 'hex')])
         cmd(['mv', python_dir, os.path.join(backup_dir, date)])
         cmd(['cp', '-r', etc_dir, os.path.join(backup_dir, date)])
+        cmd('cp {0} {1}'.format(os.path.join(PREFIX, '*.hex'), os.path.join(backup_dir, date, 'hex')), shell=True)
 
         # Cleanup for old versions.
         old_dist_dir = os.path.join(PREFIX, 'dist-packages')
@@ -336,7 +337,7 @@ def update_gateway_backend(tarball, date, version):
         if plugins:
             logger.info('Restoring plugins')
             for plugin in plugins:
-                cmd(['mv', '-v', plugin, os.path.join(python_dir, 'plugins')])
+                cmd(['cp', '-r', plugin, os.path.join(python_dir, 'plugins')])
 
         logger.info('Running post-update')
         cmd(['bash', os.path.join(python_dir, 'post-update.sh')])
@@ -353,19 +354,29 @@ def update_gateway_frontend(tarball, date, version):
         backup_dir = os.path.join(PREFIX, 'backup')
         static_dir = os.path.join(PREFIX, 'static')
         cmd(['mkdir', '-p', backup_dir])
-        cmd('ls -tp | grep "/$" | tail -n +3 | while read file; do rm -r $file; done', shell=True, cwd=backup_dir)
 
         # TODO: symlink, A-B deployment
         cmd(['mkdir', '-p', os.path.join(backup_dir, date)])
         cmd(['mv', static_dir, os.path.join(backup_dir, date)])
 
-        logger.info('Extracting gateway')
+        logger.info('Extracting gateway frontend')
         cmd(['mkdir', '-p', static_dir])
         cmd(['tar', '-v', '-xzf', tarball, '-C', static_dir])
         mark_installed_version('gateway_frontend', version)
         cmd(['sync'])
     except Exception as exc:
         logger.exception('Updating Gateway service failed')
+        return exc
+
+
+def clean_update_backups():
+    try:
+        backup_dir = os.path.join(PREFIX, 'backup')
+        cmd(['mkdir', '-p', backup_dir])
+        cmd('ls -tp | grep "/$" | tail -n +5 | while read file; do rm -r $file; done', shell=True, cwd=backup_dir)
+        cmd(['sync'])
+    except Exception as exc:
+        logger.exception('Cleaning old update backups failed')
         return exc
 
 
@@ -471,6 +482,9 @@ def update(version, expected_md5):
             error = update_gateway_frontend(gateway_frontend, date, frontend_version)
             if error:
                 errors.append(error)
+
+        if os.path.exists(gateway_frontend) or os.path.exists(gateway_service):
+            clean_update_backups()
 
         logger.info(' -> Starting services')
         start_services()

@@ -102,6 +102,7 @@ class PowerControllerTest(unittest.TestCase):
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_events)
         master_event = MasterEvent(MasterEvent.Types.POWER_ADDRESS_EXIT, {})
         self.pubsub.publish_master_event(PubSub.MasterTopics.POWER, master_event)
+        self.pubsub._publish_all_events()
 
         assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'powermodule'}) in events
         assert len(events) == 1

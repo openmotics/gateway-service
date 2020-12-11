@@ -31,7 +31,7 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from serial_utils import CommunicationStatus
 
 if False:  # MYPY
-    from typing import Callable, Literal, Optional, Union
+    from typing import Callable, Literal, Optional, Union, Dict, Any
     from gateway.hal.master_controller import MasterController
     from power.power_communicator import PowerCommunicator
 
@@ -59,7 +59,7 @@ class Watchdog(object):
         # type: () -> None
         if self._watchdog_thread is None:
             self.start_time = time.time()
-            self._watchdog_thread = DaemonThread(name='Watchdog watcher',
+            self._watchdog_thread = DaemonThread(name='watchdog',
                                                  target=self._watch,
                                                  interval=60, delay=10)
             self._watchdog_thread.start()
@@ -80,9 +80,9 @@ class Watchdog(object):
         # type: (str, Union[PowerCommunicator,MasterController], Callable[[],None]) -> None
         status = controller.get_communicator_health()
         if status == CommunicationStatus.SUCCESS:
-            Config.remove('communication_recovery_{0}'.format(name))
+            Config.remove_entry('communication_recovery_{0}'.format(name))
             # Cleanup legacy
-            Config.remove('communication_recovery')
+            Config.remove_entry('communication_recovery')
         elif status == CommunicationStatus.UNSTABLE:
             logger.warning('Observed unstable communication for %s', name)
         else:
@@ -96,7 +96,9 @@ class Watchdog(object):
     def _get_reset_action(self, name, controller):
         # type: (str, Union[MasterController,PowerCommunicator]) -> Optional[str]
         recovery_data_key = 'communication_recovery_{0}'.format(name)
-        recovery_data = Config.get(recovery_data_key, {})
+        recovery_data = Config.get_entry(recovery_data_key, None)  # type: Optional[Dict[str, Any]]
+        if recovery_data is None:  # Make mypy happy
+            recovery_data = {}
 
         stats = controller.get_communication_statistics()
         calls_timedout = [call for call in stats['calls_timedout']]
@@ -112,7 +114,7 @@ class Watchdog(object):
         if len(recovery_data) == 0:
             device_reset = 'communication_errors'
         else:
-            backoff = last_device_reset.get('backoff', backoff)
+            backoff = 0 if last_device_reset is None else last_device_reset.get('backoff', backoff)
             if last_device_reset is None or last_device_reset['time'] < time.time() - backoff:
                 device_reset = 'communication_errors'
                 backoff = min(1200, backoff * 2)
@@ -153,7 +155,7 @@ class Watchdog(object):
                                                     'time': time.time(),
                                                     'attempts': attempts + 1,
                                                     'backoff': backoff}
-                Config.set(recovery_data_key, recovery_data)
+                Config.set_entry(recovery_data_key, recovery_data)
                 return 'service'
             else:
                 logger.critical('Unable to recover issues in communication with {0}'.format(name))
@@ -167,7 +169,7 @@ class Watchdog(object):
                                                  'time': time.time(),
                                                  'attempts': attempts + 1,
                                                  'backoff': backoff}
-                Config.set(recovery_data_key, recovery_data)
+                Config.set_entry(recovery_data_key, recovery_data)
                 return 'device'
             else:
                 logger.critical('Unable to recover issues in communication with {0}'.format(name))

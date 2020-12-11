@@ -23,15 +23,18 @@ import select
 import time
 from threading import Event, Lock, Thread
 
+import six
+from six.moves.queue import Empty, Queue
+
+from gateway.daemon_thread import BaseThread
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_controller import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import master_api
 from master.classic.master_command import Field, MasterCommandSpec, printable
 from serial_utils import CommunicationTimedOutException
-from toolbox import Empty, Queue
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger('gateway.master.classic')
 
 if False:  # MYPY
     from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, Tuple
@@ -51,8 +54,8 @@ class MasterCommunicator(object):
     """
 
     @Inject
-    def __init__(self, controller_serial=INJECTED, init_master=True, verbose=False, passthrough_timeout=0.2):
-        # type: (Serial, bool, bool, float) -> None
+    def __init__(self, controller_serial=INJECTED, init_master=True, passthrough_timeout=0.2):
+        # type: (Serial, bool, float) -> None
         """
         :param controller_serial: Serial port to communicate with
         :param init_master: Send an initialization sequence to the master to make sure we are in CLI mode. This can be turned of for testing.
@@ -60,7 +63,7 @@ class MasterCommunicator(object):
         :param passthrough_timeout: The time to wait for an answer on a passthrough message (in sec)
         """
         self.__init_master = init_master
-        self.__verbose = verbose
+        self.__verbose = logger.level >= logging.DEBUG
 
         self.__serial = controller_serial
         self.__serial_write_lock = Lock()
@@ -69,7 +72,7 @@ class MasterCommunicator(object):
         self.__cid = 1
 
         self.__maintenance_mode = False
-        self.__maintenance_queue = Queue()
+        self.__maintenance_queue = Queue() # type: Queue[bytearray]
 
         self.__update_mode = False
 
@@ -78,7 +81,7 @@ class MasterCommunicator(object):
         self.__passthrough_enabled = False
         self.__passthrough_mode = False
         self.__passthrough_timeout = passthrough_timeout
-        self.__passthrough_queue = Queue()
+        self.__passthrough_queue = Queue()  # type: Queue[bytearray]
         self.__passthrough_done = Event()
 
         self.__last_success = 0.0
@@ -92,7 +95,7 @@ class MasterCommunicator(object):
                                       'bytes_written': 0,
                                       'bytes_read': 0}  # type: Dict[str,Any]
         self.__debug_buffer = {'read': {},
-                               'write': {}}  # type: Dict[str, Dict[float,str]]
+                               'write': {}}  # type: Dict[str, Dict[float,bytearray]]
         self.__debug_buffer_duration = 300
 
     def start(self):
@@ -102,7 +105,7 @@ class MasterCommunicator(object):
             self._flush_serial_input()
 
         if not self.__read_thread:
-            self.__read_thread = Thread(target=self.__read, name='MasterCommunicator read thread')
+            self.__read_thread = BaseThread(name='masterread', target=self.__read)
             self.__read_thread.daemon = True
 
         if not self.__running:
@@ -159,7 +162,12 @@ class MasterCommunicator(object):
                                       'bytes_read': 0}
 
     def get_debug_buffer(self):
-        return self.__debug_buffer
+        # type: () -> Dict[str,Dict[float,str]]
+        def process(buffer):
+            return {k: printable(v) for k, v in six.iteritems(buffer)}
+
+        return {'read': process(self.__debug_buffer['read']),
+                'write': process(self.__debug_buffer['write'])}
 
     def get_seconds_since_last_success(self):
         """ Get the number of seconds since the last successful communication. """
@@ -185,10 +193,10 @@ class MasterCommunicator(object):
 
         with self.__serial_write_lock:
             if self.__verbose:
-                logger.info('Writing to Master serial:   {0}'.format(printable(data)))
+                logger.debug('Writing to Master serial:   {0}'.format(printable(data)))
 
             threshold = time.time() - self.__debug_buffer_duration
-            self.__debug_buffer['write'][time.time()] = printable(data)
+            self.__debug_buffer['write'][time.time()] = data
             for t in self.__debug_buffer['write'].keys():
                 if t < threshold:
                     del self.__debug_buffer['write'][t]
@@ -319,7 +327,7 @@ class MasterCommunicator(object):
             self.__command_lock.acquire()
             self.__passthrough_done.clear()
             self.__passthrough_mode = True
-            passthrough_thread = Thread(target=self.__passthrough_wait)
+            passthrough_thread = BaseThread(name='passthroughwait', target=self.__passthrough_wait)
             passthrough_thread.daemon = True
             passthrough_thread.start()
 
@@ -344,7 +352,11 @@ class MasterCommunicator(object):
         if self.__maintenance_mode:
             raise InMaintenanceModeException()
 
-        self.__maintenance_queue.clear()
+        while True:
+            try:
+                self.__maintenance_queue.get(block=False)
+            except Empty:
+                break
 
         self.__maintenance_mode = True
         self.send_maintenance_data(master_api.to_cli_mode().create_input(0))
@@ -475,13 +487,13 @@ class MasterCommunicator(object):
                 self.__communication_stats['bytes_read'] += num_bytes
 
                 threshold = time.time() - self.__debug_buffer_duration
-                self.__debug_buffer['read'][time.time()] = printable(data)
+                self.__debug_buffer['read'][time.time()] = data
                 for t in self.__debug_buffer['read'].keys():
                     if t < threshold:
                         del self.__debug_buffer['read'][t]
 
                 if self.__verbose:
-                    logger.info('Reading from Master serial: {0}'.format(printable(data)))
+                    logger.debug('Reading from Master serial: {0}'.format(printable(data)))
 
                 if read_state.should_resume():
                     data = read_state.consume(data)
@@ -587,10 +599,33 @@ class BackgroundConsumer(object):
         self.last_cmd_data = None  # type: Optional[bytearray]  # Keep the data of the last command.
         self.send_to_passthrough = send_to_passthrough
 
+        self._queue = Queue()
+        self._running = True
+        self._callback_thread = BaseThread(name='masterdeliver', target=self._consumer)
+        self._callback_thread.setDaemon(True)
+        self._callback_thread.start()
+
     def get_prefix(self):
         # type: () -> bytearray
         """ Get the prefix of the answer from the master. """
         return bytearray(self.cmd.output_action) + bytearray([self.cid])
+
+    def stop(self):
+        self._running = False
+        self._callback_thread.join()
+
+    def _consumer(self):
+        while self._running:
+            try:
+                self._consume()
+            except Empty:
+                pass
+            except Exception:
+                logger.exception('Unexpected exception delivering background consumer data')
+                time.sleep(1)
+
+    def _consume(self):
+        self.callback(self._queue.get(block=True, timeout=0.25))
 
     def consume(self, data, partial_result):
         # type: (bytearray, Optional[Result]) -> Tuple[int, Result, bool]
@@ -601,8 +636,4 @@ class BackgroundConsumer(object):
 
     def deliver(self, output):
         # type: (Result) -> None
-        """ Deliver output to the thread waiting on get(). """
-        try:
-            self.callback(output)
-        except Exception:
-            logger.exception('Unexpected exception delivering BackgroundConsumer payload')
+        self._queue.put(output)

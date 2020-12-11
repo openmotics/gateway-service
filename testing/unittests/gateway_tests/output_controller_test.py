@@ -66,6 +66,7 @@ class OutputControllerTest(unittest.TestCase):
         output_dto = OutputDTO(id=42)
         with mock.patch.object(self.master_controller, 'load_outputs', return_value=[output_dto]):
             self.controller.run_sync_orm()
+            self.pubsub._publish_all_events()
             assert Output.select().where(Output.number == output_dto.id).count() == 1
             assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'output'}) in events
             assert len(events) == 1
@@ -80,21 +81,24 @@ class OutputControllerTest(unittest.TestCase):
 
         outputs = {2: OutputDTO(id=2),
                    40: OutputDTO(id=40, module_type='D')}
-        with mock.patch.object(Output, 'select',
-                               return_value=[Output(id=0, number=2),
-                                             Output(id=1, number=40, room=Room(id=2, number=3))]), \
+        select_mock = mock.Mock()
+        select_mock.join_from.return_value = [Output(id=0, number=2),
+                                              Output(id=1, number=40, room=Room(id=2, number=3))]
+        with mock.patch.object(Output, 'select', return_value=select_mock), \
              mock.patch.object(self.master_controller, 'load_output',
                                side_effect=lambda output_id: outputs.get(output_id)), \
              mock.patch.object(self.master_controller, 'load_output_status',
                                return_value=[{'id': 2, 'status': True},
                                              {'id': 40, 'status': True}]):
             self.controller._sync_state()
+            self.pubsub._publish_all_events()
             assert [GatewayEvent('OUTPUT_CHANGE', {'id': 2, 'status': {'on': True, 'locked': False}, 'location': {'room_id': 255}}),
                     GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 0, 'locked': False}, 'location': {'room_id': 3}})] == events
 
-        with mock.patch.object(Output, 'select',
-                               return_value=[Output(id=0, number=2),
-                                             Output(id=1, number=40, room=Room(id=2, number=3))]), \
+        select_mock = mock.Mock()
+        select_mock.join_from.return_value = [Output(id=0, number=2),
+                                              Output(id=1, number=40, room=Room(id=2, number=3))]
+        with mock.patch.object(Output, 'select', return_value=select_mock), \
              mock.patch.object(self.master_controller, 'load_output',
                                side_effect=lambda output_id: outputs.get(output_id)), \
              mock.patch.object(self.master_controller, 'load_output_status',
@@ -102,6 +106,7 @@ class OutputControllerTest(unittest.TestCase):
                                              {'id': 40, 'status': True, 'dimmer': 50}]):
             events = []
             self.controller._sync_state()
+            self.pubsub._publish_all_events()
             assert [GatewayEvent('OUTPUT_CHANGE', {'id': 2, 'status': {'on': True, 'locked': False}, 'location': {'room_id': 255}}),
                     GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 50, 'locked': False}, 'location': {'room_id': 3}})] == events
 
@@ -117,21 +122,25 @@ class OutputControllerTest(unittest.TestCase):
                                                OutputDTO(id=40, module_type='D', room=3)])
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': False}))
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'id': 40, 'status': True, 'dimmer': 100}))
+        self.pubsub._publish_all_events()
 
         events = []
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': True}))
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'id': 40, 'status': True}))
+        self.pubsub._publish_all_events()
 
         assert [GatewayEvent('OUTPUT_CHANGE', {'id': 2, 'status': {'on': True, 'locked': False}, 'location': {'room_id': 255}})] == events
 
         events = []
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'id': 40, 'dimmer': 50}))
+        self.pubsub._publish_all_events()
         assert [GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 50, 'locked': False}, 'location': {'room_id': 3}})] == events
 
     def test_get_output_status(self):
-        with mock.patch.object(Output, 'select',
-                               return_value=[Output(id=0, number=2),
-                                             Output(id=1, number=40, room=Room(id=2, number=3))]), \
+        select_mock = mock.Mock()
+        select_mock.join_from.return_value = [Output(id=0, number=2),
+                                              Output(id=1, number=40, room=Room(id=2, number=3))]
+        with mock.patch.object(Output, 'select', return_value=select_mock), \
              mock.patch.object(self.master_controller, 'load_output',
                                side_effect=lambda output_id: OutputDTO(id=output_id)), \
              mock.patch.object(self.master_controller, 'load_output_status',
@@ -142,9 +151,10 @@ class OutputControllerTest(unittest.TestCase):
             assert status == OutputStateDTO(id=40, status=True)
 
     def test_get_output_statuses(self):
-        with mock.patch.object(Output, 'select',
-                               return_value=[Output(id=0, number=2),
-                                             Output(id=1, number=40, module_type='D', room=Room(id=2, number=3))]), \
+        select_mock = mock.Mock()
+        select_mock.join_from.return_value = [Output(id=0, number=2),
+                                              Output(id=1, number=40, module_type='D', room=Room(id=2, number=3))]
+        with mock.patch.object(Output, 'select', return_value=select_mock), \
              mock.patch.object(self.master_controller, 'load_output',
                                side_effect=lambda output_id: OutputDTO(id=output_id)), \
              mock.patch.object(self.master_controller, 'load_output_status',
@@ -157,7 +167,13 @@ class OutputControllerTest(unittest.TestCase):
             assert OutputStateDTO(id=40, status=True, dimmer=50) in status
 
     def test_load_output(self):
-        with mock.patch.object(Output, 'get', return_value=Output(id=1, number=42, room=Room(id=2, number=3))), \
+        where_mock = mock.Mock()
+        where_mock.get.return_value = Output(id=1, number=42, room=Room(id=2, number=3))
+        join_from_mock = mock.Mock()
+        join_from_mock.where.return_value = where_mock
+        select_mock = mock.Mock()
+        select_mock.join_from.return_value = join_from_mock
+        with mock.patch.object(Output, 'select', return_value=select_mock), \
              mock.patch.object(self.master_controller, 'load_output',
                                return_value=OutputDTO(id=42)) as load:
             output = self.controller.load_output(42)
@@ -165,7 +181,9 @@ class OutputControllerTest(unittest.TestCase):
             load.assert_called_with(output_id=42)
 
     def test_load_outputs(self):
-        with mock.patch.object(Output, 'select', return_value=[Output(id=1, number=42, room=Room(id=2, number=3))]), \
+        select_mock = mock.Mock()
+        select_mock.join_from.return_value = [Output(id=1, number=42, room=Room(id=2, number=3))]
+        with mock.patch.object(Output, 'select', return_value=select_mock), \
              mock.patch.object(self.master_controller, 'load_output',
                                return_value=OutputDTO(id=42)) as load:
             outputs = self.controller.load_outputs()

@@ -22,10 +22,11 @@ import logging
 import time
 from multiprocessing.connection import Client
 from signal import SIGTERM, signal
-from threading import Lock, Thread
+from threading import Lock
 
 import ujson as json
 
+from gateway.daemon_thread import BaseThread
 from bus.om_bus_events import OMBusEvents
 
 if False:  # MYPY
@@ -125,7 +126,7 @@ class MessageClient(object):
             self._stop = True
         signal(SIGTERM, stop)
 
-        receiver = Thread(target=self._message_receiver, name='MessageClient receiver')
+        receiver = BaseThread(name='msgclientrecv', target=self._message_receiver)
         receiver.daemon = True
         receiver.start()
 

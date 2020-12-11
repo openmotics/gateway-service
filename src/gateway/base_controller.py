@@ -59,7 +59,7 @@ class BaseController(object):
         self._sync_running = False
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, self._handle_master_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MODULE, self._handle_master_event)
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
@@ -69,7 +69,7 @@ class BaseController(object):
             self.request_sync_orm()
 
     def start(self):
-        self._sync_orm_thread = DaemonThread(name='ORM syncer for {0}'.format(self.__class__.__name__),
+        self._sync_orm_thread = DaemonThread(name='{0}sync'.format(self.__class__.__name__.lower()[:10]),
                                              target=self._sync_orm,
                                              interval=self._sync_orm_interval,
                                              delay=300)
@@ -114,7 +114,8 @@ class BaseController(object):
                             continue
                         id_ = dto.id
                         ids.append(id_)
-                        orm_model.get_or_create(number=id_)
+                        if not orm_model.select().where(orm_model.number == id_).exists():
+                            orm_model.create(number=id_)
                     orm_model.delete().where(orm_model.number.not_in(ids)).execute()
 
                     duration = time.time() - start
@@ -124,11 +125,11 @@ class BaseController(object):
                 except Exception:
                     logger.exception('ORM sync ({0}): Failed'.format(orm_model.__name__))
 
-            if self._sync_dirty:
-                type_name = orm_model.__name__.lower()
-                gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': type_name})
-                self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
-                self._sync_dirty = False
+                if self._sync_dirty:
+                    type_name = orm_model.__name__.lower()
+                    gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': type_name})
+                    self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
+            self._sync_dirty = False
         finally:
             self._sync_running = False
         return True

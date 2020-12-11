@@ -17,11 +17,14 @@ The maintenance module contains the MaintenanceService class.
 """
 
 from __future__ import absolute_import
-import time
+
 import logging
-from threading import Thread, Lock
-from ioc import Inject, INJECTED
+import time
+from threading import Lock
+
+from gateway.daemon_thread import BaseThread
 from gateway.maintenance_communicator import MaintenanceCommunicator
+from ioc import INJECTED, Inject
 
 logger = logging.getLogger('openmotics')
 
@@ -46,7 +49,7 @@ class MaintenanceCoreCommunicator(MaintenanceCommunicator):
 
     def start(self):
         self._stopped = False
-        self._read_data_thread = Thread(target=self._read_data, name='Core maintenance read thread')
+        self._read_data_thread = BaseThread(name='maintenanceread', target=self._read_data)
         self._read_data_thread.daemon = True
         self._read_data_thread.start()
 

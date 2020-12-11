@@ -19,11 +19,9 @@ from __future__ import absolute_import
 
 import copy
 import logging
-import warnings
 from threading import Lock
+from peewee import JOIN
 
-from bus.om_bus_client import MessageClient
-from bus.om_bus_events import OMBusEvents
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import OutputDTO, OutputStateDTO
@@ -56,10 +54,12 @@ class OutputController(BaseController):
         self._cache = OutputStateCache()
         self._sync_state_thread = None  # type: Optional[DaemonThread]
 
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.OUTPUT, self._handle_master_event)
+
     def start(self):
         # type: () -> None
         super(OutputController, self).start()
-        self._sync_state_thread = DaemonThread('OutputController sync state',
+        self._sync_state_thread = DaemonThread(name='outputsyncstate',
                                                target=self._sync_state,
                                                interval=600, delay=10)
         self._sync_state_thread.start()
@@ -127,14 +127,18 @@ class OutputController(BaseController):
         return list(self._cache.get_state().values())
 
     def load_output(self, output_id):  # type: (int) -> OutputDTO
-        output = Output.get(number=output_id)  # type: Output
-        output_dto = self._master_controller.load_output(output_id=output.number)
+        output = Output.select(Room) \
+                       .join_from(Output, Room, join_type=JOIN.LEFT_OUTER) \
+                       .where(Output.number == output_id) \
+                       .get()  # type: Output  # TODO: Load dict
+        output_dto = self._master_controller.load_output(output_id=output_id)
         output_dto.room = output.room.number if output.room is not None else None
         return output_dto
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
         output_dtos = []
-        for output in list(Output.select()):
+        for output in list(Output.select(Output, Room)
+                                 .join_from(Output, Room, join_type=JOIN.LEFT_OUTER)):  # TODO: Load dicts
             output_dto = self._master_controller.load_output(output_id=output.number)
             output_dto.room = output.room.number if output.room is not None else None
             output_dtos.append(output_dto)

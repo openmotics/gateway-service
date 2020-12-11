@@ -18,7 +18,7 @@ PulseCounter BLL
 from __future__ import absolute_import
 import logging
 import time
-from peewee import fn, DoesNotExist
+from peewee import fn, DoesNotExist, JOIN
 from ioc import Injectable, Inject, INJECTED, Singleton
 from serial_utils import CommunicationTimedOutException
 from gateway.base_controller import BaseController
@@ -72,9 +72,12 @@ class PulseCounterController(BaseController):
         return True
 
     def load_pulse_counter(self, pulse_counter_id):  # type: (int) -> PulseCounterDTO
-        pulse_counter = PulseCounter.get(number=pulse_counter_id)  # type: PulseCounter
+        pulse_counter = PulseCounter.select(PulseCounter, Room) \
+                                    .join_from(PulseCounter, Room, join_type=JOIN.LEFT_OUTER) \
+                                    .where(PulseCounter.number == pulse_counter_id) \
+                                    .get()  # type: PulseCounter  # TODO: Load dict
         if pulse_counter.source == 'master':
-            pulse_counter_dto = self._master_controller.load_pulse_counter(pulse_counter_id=pulse_counter.number)
+            pulse_counter_dto = self._master_controller.load_pulse_counter(pulse_counter_id=pulse_counter_id)
             pulse_counter_dto.room = pulse_counter.room.number if pulse_counter.room is not None else None
         else:
             pulse_counter_dto = PulseCounterMapper.orm_to_dto(pulse_counter)
@@ -82,7 +85,8 @@ class PulseCounterController(BaseController):
 
     def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
         pulse_counter_dtos = []
-        for pulse_counter in list(PulseCounter.select()):
+        for pulse_counter in list(PulseCounter.select(PulseCounter, Room)
+                                              .join_from(PulseCounter, Room, join_type=JOIN.LEFT_OUTER)):  # TODO: Load dicts
             if pulse_counter.source == 'master':
                 pulse_counter_dto = self._master_controller.load_pulse_counter(pulse_counter_id=pulse_counter.number)
                 pulse_counter_dto.room = pulse_counter.room.number if pulse_counter.room is not None else None

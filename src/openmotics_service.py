@@ -154,8 +154,9 @@ class OpenmoticsService(object):
                 frontpanel_controller=INJECTED,  # type: FrontpanelController
                 module_controller=INJECTED,  # type: ModuleController
                 user_controller=INJECTED,  # type: UserController
-                ventilation_controller=INJECTED  # type: VentilationController
-            ):
+                ventilation_controller=INJECTED,  # type: VentilationController
+                pubsub=INJECTED  # type: PubSub
+    ):
         """ Main function. """
         logger.info('Starting OM core service...')
 
@@ -203,6 +204,7 @@ class OpenmoticsService(object):
         sensor_controller.start()
         shutter_controller.start()
         group_action_controller.start()
+        pubsub.start()
 
         web_interface.set_service_state(True)
         signal_request = {'stop': False}
@@ -232,8 +234,15 @@ class OpenmoticsService(object):
             if frontpanel_controller:
                 frontpanel_controller.stop()
             event_sender.stop()
+            pubsub.stop()
             logger.info('Stopping OM core service... Done')
             signal_request['stop'] = True
+
+        try:
+            import prctl
+            prctl.set_name('omservice')
+        except ImportError:
+            pass
 
         signal(SIGTERM, stop)
         logger.info('Starting OM core service... Done')

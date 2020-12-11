@@ -4,7 +4,6 @@ import os
 import sys
 import time
 import traceback
-from threading import Thread
 
 sys.path.insert(0, '/opt/openmotics/python')
 
@@ -13,6 +12,7 @@ System.import_libs()
 
 import constants
 import six
+from gateway.daemon_thread import BaseThread
 from gateway.events import GatewayEvent
 from plugin_runtime import base
 from plugin_runtime.interfaces import has_interface
@@ -136,8 +136,7 @@ class PluginRuntime(object):
         # type: () -> None
         """ Start all background tasks. """
         for decorated_method in self._decorated_methods['background_task']:
-            thread = Thread(target=self._run_background_task, args=(decorated_method,))
-            thread.name = 'Background thread ({0})'.format(decorated_method.__name__)
+            thread = BaseThread(name='plugin{}'.format(decorated_method.__name__), target=self._run_background_task, args=(decorated_method,))
             thread.daemon = True
             thread.start()
 
@@ -250,7 +249,7 @@ class PluginRuntime(object):
             time.sleep(2)
             os._exit(0)
 
-        stop_thread = Thread(target=delayed_stop)
+        stop_thread = BaseThread(name='pluginstop', target=delayed_stop)
         stop_thread.daemon = True
         stop_thread.start()
 
@@ -388,7 +387,7 @@ if __name__ == '__main__':
             time.sleep(1)
 
     # Keep an eye on our parent process
-    watcher = Thread(target=watch_parent)
+    watcher = BaseThread(name='pluginwatch', target=watch_parent)
     watcher.daemon = True
     watcher.start()
 

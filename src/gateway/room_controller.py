@@ -18,10 +18,10 @@ Room BLL
 from __future__ import absolute_import
 
 import logging
-
+from peewee import JOIN
 from gateway.dto import RoomDTO
 from gateway.mappers import FloorMapper, RoomMapper
-from gateway.models import Database, Room
+from gateway.models import Database, Room, Floor
 from ioc import Injectable, Singleton
 
 if False:  # MYPY
@@ -39,7 +39,10 @@ class RoomController(object):
 
     def load_room(self, room_id):  # type: (int) -> RoomDTO
         _ = self
-        room = Room.get(number=room_id)
+        room = Room.select(Room, Floor) \
+                   .join_from(Room, Floor, join_type=JOIN.LEFT_OUTER) \
+                   .where(Room.number == room_id) \
+                   .get()  # type: Room  # TODO: Load dict
         room_dto = RoomMapper.orm_to_dto(room)
         if room.floor is not None:
             room_dto.floor = FloorMapper.orm_to_dto(room.floor)
@@ -48,7 +51,8 @@ class RoomController(object):
     def load_rooms(self):  # type: () -> List[RoomDTO]
         _ = self
         room_dtos = []
-        for room in Room.select():
+        for room in list(Room.select(Room, Floor)
+                             .join_from(Room, Floor, join_type=JOIN.LEFT_OUTER)):  # TODO: Load dicts
             room_dto = RoomMapper.orm_to_dto(room)
             if room.floor is not None:
                 room_dto.floor = FloorMapper.orm_to_dto(room.floor)

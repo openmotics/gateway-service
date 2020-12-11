@@ -41,7 +41,7 @@ class InputControllerTest(unittest.TestCase):
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
         self.master_controller = mock.Mock(MasterController)
-        self.pubsub = PubSub()
+        self.pubsub = PubSub()  # triggernig manually
         self.master_controller = mock.Mock(MasterController)
         SetUpTestInjections(master_controller=self.master_controller,
                             maintenance_controller=mock.Mock(),
@@ -63,6 +63,7 @@ class InputControllerTest(unittest.TestCase):
         input_dto = InputDTO(id=42)
         with mock.patch.object(self.master_controller, 'load_inputs', return_value=[input_dto]):
             self.controller.run_sync_orm()
+            self.pubsub._publish_all_events()
             assert Input.select().where(Input.number == input_dto.id).count() == 1
             assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'input'}) in events
             assert len(events) == 1
@@ -70,9 +71,11 @@ class InputControllerTest(unittest.TestCase):
     def test_full_loaded_inputs(self):
         master_dtos = {1: InputDTO(id=1, name='one'),
                        2: InputDTO(id=2, name='two')}
-        orm_inputs = [Input(id=0, number=1, event_enabled=False),
-                      Input(id=1, number=2, event_enabled=True)]
-        with mock.patch.object(Input, 'select', return_value=orm_inputs), \
+        orm_inputs = [Input(id=10, number=1, event_enabled=False),
+                      Input(id=11, number=2, event_enabled=True)]
+        select_mock = mock.Mock()
+        select_mock.join_from.return_value = orm_inputs
+        with mock.patch.object(Input, 'select', return_value=select_mock), \
              mock.patch.object(self.master_controller, 'load_input',
                                side_effect=lambda input_id: master_dtos.get(input_id)):
             dtos = self.controller.load_inputs()
