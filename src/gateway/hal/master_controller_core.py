@@ -318,8 +318,6 @@ class MasterCoreController(MasterController):
         calls_timedout = [call for call in stats['calls_timedout']]
         calls_succeeded = [call for call in stats['calls_succeeded']]
         all_calls = sorted(calls_timedout + calls_succeeded)
-        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
-        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
 
         if len(calls_timedout) == 0:
             # If there are no timeouts at all
@@ -332,11 +330,15 @@ class MasterCoreController(MasterController):
             logger.warning('Observed master communication failures, but recent calls recovered')
             # The last X calls are successfull
             return CommunicationStatus.UNSTABLE
-        elif len(calls_last_x_minutes) <= 5:
+
+        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
+        if len(calls_last_x_minutes) <= 5:
             logger.warning('Observed master communication failures, but not recent enough')
             # Not enough recent calls
             return CommunicationStatus.UNSTABLE
-        elif ratio < 0.25:
+
+        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
+        if ratio < 0.25:
             # Less than 25% of the calls fail, let's assume everything is just "fine"
             logger.warning('Observed master communication failures, but there\'s only a failure ratio of {:.2f}%'.format(ratio * 100))
             return CommunicationStatus.UNSTABLE

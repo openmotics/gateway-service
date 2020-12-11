@@ -128,18 +128,19 @@ class PowerCommunicator(object):
             logger.warning('Observed energy communication failures, but not enough calls')
             return CommunicationStatus.UNSTABLE
 
-        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
-        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
-
         if not any(t in calls_timedout for t in all_calls[-10:]):
             logger.warning('Observed energy communication failures, but recent calls recovered')
             # The last X calls are successfull
             return CommunicationStatus.UNSTABLE
-        elif len(calls_last_x_minutes) <= 5:
+
+        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
+        if len(calls_last_x_minutes) <= 5:
             logger.warning('Observed energy communication failures, but not recent enough')
             # Not enough recent calls
             return CommunicationStatus.UNSTABLE
-        elif ratio < 0.25:
+
+        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
+        if ratio < 0.25:
             # Less than 25% of the calls fail, let's assume everything is just "fine"
             logger.warning('Observed energy communication failures, but there\'s only a failure ratio of {:.2f}%'.format(ratio * 100))
             return CommunicationStatus.UNSTABLE
