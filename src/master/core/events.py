@@ -19,6 +19,7 @@ Module to handle Events from the Core
 from __future__ import absolute_import
 import logging
 from master.core.fields import WordField
+from master.core.system_value import Temperature, Humidity
 
 if False:  # MYPY
     from typing import List, Optional
@@ -145,10 +146,10 @@ class Event(object):
             sensor_value = None
             if self._action == 0:
                 sensor_type = Event.SensorType.TEMPERATURE
-                sensor_value = self._data[1]
+                sensor_value = Temperature.system_value_to_temperature(self._data[1])
             elif self._action == 1:
                 sensor_type = Event.SensorType.HUMIDITY
-                sensor_value = self._data[1]
+                sensor_value = Humidity.system_value_to_humidity(self._data[1])
             elif self._action == 2:
                 sensor_type = Event.SensorType.BRIGHTNESS
                 sensor_value = self._word_decode(self._data[0:2])
