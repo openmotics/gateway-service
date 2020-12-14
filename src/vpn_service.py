@@ -56,9 +56,6 @@ logger = logging.getLogger('openmotics')
 
 def setup_logger():
     """ Setup the OpenMotics logger. """
-    config = ConfigParser()
-    config.read(constants.get_config_file())
-
     logger.setLevel(logging.INFO)
     logger.propagate = False
 
@@ -67,9 +64,8 @@ def setup_logger():
     handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
     logger.addHandler(handler)
 
-    is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
-    if is_pyinstaller_build:
-        syslog_handler = logging.handlers.SysLogHandler(address = '/dev/log')
+    if Hardware.get_board_type() == Hardware.BoardType.ESAFE:
+        syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
         syslog_handler.setLevel(logging.INFO)
         syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
         logger.addHandler(syslog_handler)
@@ -103,28 +99,19 @@ class VpnController(object):
         """ Start openvpn """
         logger.info('Starting VPN')
         logger.info(VpnController.start_cmd)
-        # return subprocess.call(VpnController.start_cmd, shell=True) == 0
-        res = subprocess.call(VpnController.start_cmd, shell=True) == 0
-        logger.info("res: {}".format(res))
-        return res
+        return subprocess.call(VpnController.start_cmd, shell=True) == 0
 
     @staticmethod
     def stop_vpn():
         """ Stop openvpn """
         logger.info('Stopping VPN')
         logger.info(VpnController.stop_cmd)
-        # return subprocess.call(VpnController.stop_cmd, shell=True) == 0
-        res = subprocess.call(VpnController.stop_cmd, shell=True) == 0
-        logger.info("res: {}".format(res))
-        return res
+        return subprocess.call(VpnController.stop_cmd, shell=True) == 0
 
     @staticmethod
     def check_vpn():
         """ Check if openvpn is running """
-        logger.info(VpnController.check_cmd)
-        res = subprocess.call(VpnController.check_cmd, shell=True) == 0
-        logger.info("res: {}".format(res))
-        return res
+        return subprocess.call(VpnController.check_cmd, shell=True) == 0
 
     def _vpn_connected(self):
         """ Checks if the VPN tunnel is connected """
@@ -436,7 +423,6 @@ class TaskExecutor(object):
         if target is None:
             return False
 
-        print("Trying to ping to {}".format(target))
         # The popen_timeout has been added as a workaround for the hanging subprocess
         # If NTP date changes the time during a execution of a sub process this hangs forever.
         def popen_timeout(command, timeout):
