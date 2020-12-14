@@ -19,6 +19,7 @@ import inspect
 import json
 import logging
 import sys
+import time
 
 from peewee import AutoField, BooleanField, CharField, \
     DoesNotExist, FloatField, ForeignKeyField, IntegerField, SqliteDatabase, \
@@ -29,6 +30,7 @@ import constants
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Any
+    T = TypeVar('T')
 
 logger = logging.getLogger('openmotics')
 
@@ -192,43 +194,51 @@ class Config(BaseModel):
     setting = CharField(unique=True)
     data = CharField()
 
-    @staticmethod
-    def get(key, fallback=None):
-        # type: (str, Optional[Any]) -> Optional[Any]
-        """ Retrieves a setting from the DB, returns the argument 'fallback' when non existing """
-        config_orm = Config.select().where(
-            Config.setting == key.lower()
-        ).first()
-        if config_orm is not None:
-            return json.loads(config_orm.data)
-        return fallback
+    CACHE_EXPIRY_DURATION = 60
+    CACHE = {}
 
     @staticmethod
-    def set(key, value):
+    def get_entry(key, fallback):
+        # type: (str, T) -> T
+        """ Retrieves a setting from the DB, returns the argument 'fallback' when non existing """
+        key = key.lower()
+        if key in Config.CACHE:
+            data, expire_at = Config.CACHE[key]
+            if expire_at > time.time():
+                return data
+        raw_data = Config.select(Config.data).where(Config.setting == key).dicts().first()
+        if raw_data is not None:
+            data = json.loads(raw_data['data'])
+        else:
+            data = fallback
+        Config.CACHE[key] = (data, time.time() + Config.CACHE_EXPIRY_DURATION)
+        return data
+
+    @staticmethod
+    def set_entry(key, value):
         # type: (str, Any) -> None
         """ Sets a setting in the DB, does overwrite if already existing """
-        config_orm = Config.select().where(
-            Config.setting == key.lower()
-        ).first()
+        key = key.lower()
+        data = json.dumps(value)
+        config_orm = Config.get_or_none(Config.setting == key)
         if config_orm is not None:
             # if the key already exists, update the value
-            config_orm.data = json.dumps(value)
+            config_orm.data = data
             config_orm.save()
         else:
             # create a new setting if it was non existing
-            config_orm = Config(
-                setting=key,
-                data=json.dumps(value)
-            )
+            config_orm = Config(setting=key, data=data)
             config_orm.save()
+        Config.CACHE[key] = (value, time.time() + Config.CACHE_EXPIRY_DURATION)
 
     @staticmethod
-    def remove(key):
+    def remove_entry(key):
         # type: (str) -> None
         """ Removes a setting from the DB """
         Config.delete().where(
             Config.setting == key.lower()
         ).execute()
+        Config.CACHE.pop(key, None)
 
 
 class Plugin(BaseModel):

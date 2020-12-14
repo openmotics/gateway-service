@@ -400,10 +400,13 @@ class Toolbox(object):
 
         for _ in range(desired_new_outputs):
             self.dut.get('/add_virtual_output_module')
+            time.sleep(2)
         for _ in range(desired_new_inputs):
             self.dut.get('/add_virtual_input_module')
+            time.sleep(2)
         # TODO: We should/could use the module discover log as well, but adding virtual modules isn't generate events
 
+        new_outputs, new_inputs = (0, 0)
         while since > time.time() - timeout:
             current_virtual_modules = _get_current_virtual_modules()
             new_outputs = len(current_virtual_modules.get('o', set()) - previous_virtual_modules.get('o', set()))
@@ -411,7 +414,7 @@ class Toolbox(object):
             if new_outputs == desired_new_outputs and new_inputs == desired_new_inputs:
                 return True
             time.sleep(5)
-        raise AssertionError('Did not discover required virtual modules')
+        raise AssertionError('Did not discover required virtual modules, outputs: %s inputs: %s', new_outputs, new_inputs)
 
     def clear_module_discovery_log(self):
         self.dut.get('/get_module_log')

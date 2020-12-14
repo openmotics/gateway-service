@@ -304,6 +304,20 @@ class GatewayApi(object):
             for config_file in glob.glob(config_files):
                 shutil.copy(config_file, '{0}/'.format(tmp_plugin_config_dir))
 
+            # Backup hex files
+            tmp_hex_dir = '{0}/{1}'.format(tmp_dir, 'hex')
+            os.mkdir(tmp_hex_dir)
+            hex_files = constants.get_hex_files()
+            for hex_file in glob.glob(hex_files):
+                shutil.copy(hex_file, '{0}/'.format(tmp_hex_dir))
+
+            # Backup general config stuff
+            tmp_config_dir = '{0}/{1}'.format(tmp_dir, 'config')
+            os.mkdir(tmp_config_dir)
+            config_dir = constants.get_config_dir()
+            for file_name in ['openmotics.conf', 'https.key', 'https.crt']:
+                shutil.copy(os.path.join(config_dir, file_name), '{0}/'.format(tmp_config_dir))
+
             retcode = subprocess.call('cd {0}; tar cf backup.tar *'.format(tmp_dir), shell=True)
             if retcode != 0:
                 raise Exception('The backup tar could not be created.')

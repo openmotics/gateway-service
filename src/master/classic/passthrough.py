@@ -20,10 +20,12 @@ to communicate with the master.
 """
 
 from __future__ import absolute_import
+
 import logging
-import threading
-from ioc import Injectable, Inject, INJECTED, Singleton
+
+from gateway.daemon_thread import BaseThread
 from gateway.maintenance_communicator import InMaintenanceModeException
+from ioc import INJECTED, Inject, Injectable, Singleton
 from master.classic.master_command import printable
 
 logger = logging.getLogger("openmotics")
@@ -50,13 +52,11 @@ class PassthroughService(object):
 
     def start(self):
         """ Start the Passthrough service, this launches the two threads. """
-        self.__reader_thread = threading.Thread(target=self.__reader)
-        self.__reader_thread.setName("Passthrough reader thread")
+        self.__reader_thread = BaseThread(name='passthroughread', target=self.__reader)
         self.__reader_thread.daemon = True
         self.__reader_thread.start()
 
-        self.__writer_thread = threading.Thread(target=self.__writer)
-        self.__writer_thread.setName("Passthrough writer thread")
+        self.__writer_thread = BaseThread(name='passthroughwrite', target=self.__writer)
         self.__writer_thread.daemon = True
         self.__writer_thread.start()
 

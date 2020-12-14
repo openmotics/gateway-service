@@ -54,10 +54,12 @@ class OutputController(BaseController):
         self._cache = OutputStateCache()
         self._sync_state_thread = None  # type: Optional[DaemonThread]
 
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.OUTPUT, self._handle_master_event)
+
     def start(self):
         # type: () -> None
         super(OutputController, self).start()
-        self._sync_state_thread = DaemonThread('OutputController sync state',
+        self._sync_state_thread = DaemonThread(name='outputsyncstate',
                                                target=self._sync_state,
                                                interval=600, delay=10)
         self._sync_state_thread.start()

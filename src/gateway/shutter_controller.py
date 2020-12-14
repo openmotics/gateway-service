@@ -77,6 +77,8 @@ class ShutterController(BaseController):
         self._verbose = verbose
         self._config_lock = Lock()
 
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.SHUTTER, self._handle_master_event)
+
     def _log(self, message):  # type: (str) -> None
         if self._verbose:
             logger.info('ShutterController: {0}'.format(message))

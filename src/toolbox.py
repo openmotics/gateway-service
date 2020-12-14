@@ -28,6 +28,8 @@ from threading import Thread
 import msgpack
 import six
 
+from gateway.daemon_thread import BaseThread
+
 logger = logging.getLogger('openmotics')
 
 if False:  # MYPY
@@ -95,7 +97,7 @@ class PluginIPCReader(object):
     def start(self):
         # type: () -> None
         self._running = True
-        self._read_thread = Thread(target=self._read)
+        self._read_thread = BaseThread(name='ipcread', target=self._read)
         self._read_thread.daemon = True
         self._read_thread.start()
 

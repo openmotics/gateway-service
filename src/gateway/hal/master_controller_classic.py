@@ -94,7 +94,7 @@ class MasterClassicController(MasterController):
         self._validation_bits = ValidationBitStatus(on_validation_bit_change=self._validation_bit_changed)
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
-        self._synchronization_thread = DaemonThread(name='MasterClassicController synchronization',
+        self._synchronization_thread = DaemonThread(name='mastersync',
                                                     target=self._synchronize,
                                                     interval=30, delay=10)
         self._master_version = None
@@ -115,6 +115,7 @@ class MasterClassicController(MasterController):
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_eeprom_event)
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.MAINTENANCE, self._handle_maintenance_event)
 
+        self._background_consumers_registered = False
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.output_list(), 0, self._on_master_output_event, True)
         )
@@ -136,6 +137,7 @@ class MasterClassicController(MasterController):
 
             now = time.time()
             self._get_master_version()
+            self._register_version_depending_background_consumers()
             # Validate communicator checks
             if self._time_last_updated < now - 300:
                 self._check_master_time()
@@ -159,12 +161,11 @@ class MasterClassicController(MasterController):
 
     def _get_master_version(self):
         # type: () -> None
-        initialize = self._master_version is None
         self._master_version = self.get_firmware_version()
-        if initialize:
-            self._register_version_depending_background_consumers()
 
     def _register_version_depending_background_consumers(self):
+        if self._background_consumers_registered is True or self._master_version is None:
+            return
         self._master_communicator.register_consumer(
             BackgroundConsumer(master_api.event_triggered(self._master_version), 0,
                                self._on_master_event, True)
@@ -177,6 +178,7 @@ class MasterClassicController(MasterController):
             BackgroundConsumer(master_api.shutter_status(self._master_version), 0,
                                self._on_master_shutter_change)
         )
+        self._background_consumers_registered = True
 
     @communication_enabled
     def _check_master_time(self):
@@ -326,11 +328,8 @@ class MasterClassicController(MasterController):
             event_data = {'id': output_id, 'status': status}
             if dimmer is not None:
                 event_data['dimmer'] = dimmer
-            self._publish_event(MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data))
-
-    def _publish_event(self, master_event):
-        # type: (MasterEvent) -> None
-        self._pubsub.publish_master_event(PubSub.MasterTopics.MASTER, master_event)
+            master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data)
+            self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)
 
     def _invalidate_caches(self):
         # type: () -> None
@@ -560,7 +559,8 @@ class MasterClassicController(MasterController):
         event_data = {'id': input_id,
                       'status': status,
                       'location': {'room_id': Toolbox.denonify(input_configuration.room, 255)}}
-        self._publish_event(MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data))
+        master_event = MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data)
+        self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
 
     def _is_output_locked(self, output_id):
         # TODO remove self._output_config cache, this belongs in the output controller.
@@ -633,7 +633,8 @@ class MasterClassicController(MasterController):
             event_data = {'id': shutter_id,
                           'status': new_state[i],
                           'location': {'room_id': self._shutter_config[shutter_id].room}}
-            self._publish_event(MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data))
+            master_event = MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data)
+            self._pubsub.publish_master_event(PubSub.MasterTopics.SHUTTER, master_event)
 
     def _interprete_output_states(self, module_id, output_states):
         states = []
@@ -1389,7 +1390,6 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
-
         self._master_communicator.do_command(master_api.module_discover_start())
 
         if self._discover_mode_timer is not None:
@@ -1423,7 +1423,8 @@ class MasterClassicController(MasterController):
     def _broadcast_module_discovery(self):
         # type: () -> None
         self._eeprom_controller.invalidate_cache()
-        self._publish_event(MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={}))
+        master_event = MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={})
+        self._pubsub.publish_master_event(PubSub.MasterTopics.MODULE, master_event)
 
     # Error functions
 
@@ -1755,4 +1756,5 @@ class MasterClassicController(MasterController):
             if output_dto.lock_bit_id == bit_nr:
                 locked = value  # the bit is set, the output is locked
                 event_data = {'id': output_id, 'locked': locked}
-                self._publish_event(MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data))
+                master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data)
+                self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)

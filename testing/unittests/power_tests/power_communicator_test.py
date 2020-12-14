@@ -167,15 +167,18 @@ class PowerCommunicatorTest(unittest.TestCase):
 
         self.communicator.start_address_mode()
         self.assertTrue(self.communicator.in_address_mode())
+        self.pubsub._publish_all_events()
         time.sleep(0.5)
         assert [] == events
 
         self.communicator.stop_address_mode()
+        self.pubsub._publish_all_events()
         assert MasterEvent(MasterEvent.Types.POWER_ADDRESS_EXIT, {}) in events
         assert len(events) == 1
 
         self.assertEqual(self.store.get_free_address(), 4)
         self.assertFalse(self.communicator.in_address_mode())
+
 
     @mark.slow
     def test_do_command_in_address_mode(self):

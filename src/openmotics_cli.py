@@ -18,6 +18,8 @@ import argparse
 import logging
 import os
 import sys
+import time
+
 import constants
 import gateway
 from ioc import INJECTED, Inject
@@ -86,6 +88,28 @@ def cmd_shell(args):
     f()
 
 
+def cmd_top(args):
+    from gateway.initialize import setup_platform
+    _ = setup_platform
+
+    import psutil
+    while True:
+        proc = psutil.Process(args.pid)
+        total_percent = proc.cpu_percent(10)
+        total_time = sum(proc.cpu_times())
+        stats = []
+        for t in proc.threads():
+            thr = psutil.Process(t.id)
+            thread_percent = total_percent * ((t.system_time + t.user_time) / total_time)
+            thread_user_percent = total_percent * (t.user_time / total_time)
+            stats.append((thread_percent, thread_user_percent, t.id, thr.name()))
+        logger.info('Threads')
+        for thread_percent, thread_user_percent, thread_id, thread_name in sorted(stats, reverse=True):
+            if thread_user_percent > 0.1:
+                logger.info('{:.2f} {:.2f} {} {}'.format(thread_percent, thread_user_percent, thread_id, thread_name))
+        time.sleep(10)
+
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--version', action='version', version=gateway.__version__)
@@ -98,6 +122,9 @@ factory_reset_parser.set_defaults(func=cmd_factory_reset)
 factory_reset_parser.add_argument('--force', action='store_true')
 shell_parser = operator_subparsers.add_parser('shell')
 shell_parser.set_defaults(func=cmd_shell)
+top_parser = operator_subparsers.add_parser('top')
+top_parser.set_defaults(func=cmd_top)
+top_parser.add_argument('-p', '--pid', type=int)
 
 
 def main():
