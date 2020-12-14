@@ -17,7 +17,7 @@ The main module for the OpenMotics
 """
 from __future__ import absolute_import
 
-from platform_utils import System
+from platform_utils import System, Hardware
 System.import_libs()
 
 import constants
@@ -72,9 +72,6 @@ logger = logging.getLogger("openmotics")
 def setup_logger():
     """ Setup the OpenMotics logger. """
 
-    config = ConfigParser()
-    config.read(constants.get_config_file())
-
     logger.setLevel(logging.INFO)
     logger.propagate = False
 
@@ -83,9 +80,8 @@ def setup_logger():
     handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
     logger.addHandler(handler)
 
-    is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
-    if is_pyinstaller_build:
-        syslog_handler = logging.handlers.SysLogHandler(address = '/dev/log')
+    if Hardware.get_board_type() == Hardware.BoardType.ESAFE:
+        syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
         syslog_handler.setLevel(logging.INFO)
         syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
         logger.addHandler(syslog_handler)

@@ -98,14 +98,12 @@ class VpnController(object):
     def start_vpn():
         """ Start openvpn """
         logger.info('Starting VPN')
-        logger.info(VpnController.start_cmd)
         return subprocess.call(VpnController.start_cmd, shell=True) == 0
 
     @staticmethod
     def stop_vpn():
         """ Stop openvpn """
         logger.info('Stopping VPN')
-        logger.info(VpnController.stop_cmd)
         return subprocess.call(VpnController.stop_cmd, shell=True) == 0
 
     @staticmethod
