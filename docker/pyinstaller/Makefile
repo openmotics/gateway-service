@@ -24,29 +24,14 @@ DOCKER_OPTIONS_PRIVILEGED += --privileged
 DOCKER_OPTIONS_QEMU += -v /usr/bin/qemu-arm-static:/usr/bin/qemu-arm-static
 
 .PHONY: docker-build docker-run docker-build-remote
-build-docker:
-	docker build \
-		-t $(DOCKER_IMG_NAME) \
-		-f docker/Dockerfile \
-		docker
 
-build-docker-zsh:
+build-docker:
 	docker build \
 		-t $(DOCKER_IMG_NAME)-zsh \
 		-f docker/Dockerfile-zsh \
 		docker
 
 run-docker:
-	$(DOCKER_BASE_CMD) \
-	$(DOCKER_RM_CMD) \
-	$(DOCKER_INTERACTIVE) \
-	$(DOCKER_OPTIONS) \
-	$(DOCKER_OPTIONS_PRIVILEGED) \
-	$(DOCKER_OPTIONS_XORG) \
-	$(DOCKER_IMG_NAME) \
-	bash
-
-run-docker-zsh:
 	$(DOCKER_BASE_CMD) \
 	$(DOCKER_RM_CMD) \
 	$(DOCKER_INTERACTIVE) \
