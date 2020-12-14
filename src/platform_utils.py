@@ -37,6 +37,7 @@ class Hardware(object):
         BB = 'BB'
         BBB = 'BBB'
         BBGW = 'BBGW'
+        ESAFE = 'ESAFE'
 
     BoardTypes = [BoardType.BB, BoardType.BBB, BoardType.BBGW]
 
@@ -71,6 +72,8 @@ class Hardware(object):
                     return Hardware.BoardType.BBB
                 if board_type in ['TI_AM335x_BeagleBone_Green_Wireless']:
                     return Hardware.BoardType.BBGW
+                if board_type in ['TI_AM335x_esafe_Custom']:
+                    return Hardware.BoardType.ESAFE
         except IOError:
             pass
         try:
@@ -88,7 +91,7 @@ class Hardware(object):
     @staticmethod
     def get_main_interface():
         board_type = Hardware.get_board_type()
-        if board_type in [Hardware.BoardType.BB, Hardware.BoardType.BBB]:
+        if board_type in [Hardware.BoardType.BB, Hardware.BoardType.BBB, Hardware.BoardType.ESAFE]:
             return 'eth0'
         if board_type == Hardware.BoardType.BBGW:
             return 'wlan0'
@@ -107,6 +110,7 @@ class System(object):
     class OS(object):
         ANGSTROM = 'angstrom'
         DEBIAN = 'debian'
+        BUILDROOT = 'buildroot'
 
 
     @staticmethod
@@ -152,10 +156,15 @@ class System(object):
         operating_system = System.get_operating_system()
         try:
             lines = subprocess.check_output('ifconfig {0}'.format(interface), shell=True)
+            # In python3, lines is a bytes array variable, not a string. -> decoding it into a string
+            if not isinstance(lines, str):
+                lines = lines.decode('utf-8')
             if operating_system['ID'] == System.OS.ANGSTROM:
                 return lines.split('\n')[1].strip().split(' ')[1].split(':')[1]
             elif operating_system['ID'] == System.OS.DEBIAN:
                 return lines.split('\n')[1].strip().split(' ')[1]
+            elif operating_system['ID'] == System.OS.BUILDROOT:
+                return lines.split('\n')[1].strip().split(' ')[1].replace('addr:','')  # The buildroot OS prefixes addresses with 'addr'
             else:
                 return
         except Exception:

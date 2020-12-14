@@ -19,11 +19,12 @@ is instructed to open a VPN tunnel or not, and will receive some configration in
 
 from __future__ import absolute_import
 
-from platform_utils import System
+from platform_utils import System, Hardware
 System.import_libs()
 
 import glob
 import logging
+import logging.handlers
 import os
 import subprocess
 import time
@@ -76,20 +77,12 @@ def setup_logger():
 
 class VpnController(object):
     """ Contains methods to check the vpn status, start and stop the vpn. """
-
-    config = ConfigParser()
-    config.read(constants.get_config_file())
-
-    is_pyinstaller_build = False
-    if config.has_option('OpenMotics', 'build'):
-        is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
-
-    if is_pyinstaller_build:
+    if Hardware.get_board_type() == Hardware.BoardType.ESAFE:
         vpn_binary = 'openvpn'
         config_location = '/etc/openvpn/client/'
         start_cmd = 'cd {} ; {} --suppress-timestamps --nobind --config vpn.conf > /dev/null'.format(config_location, vpn_binary)
-        stop_cmd = 'pkill {} > /dev/null'.format(vpn_binary)
-        check_cmd = 'ps -aux | grep {} | grep -v "grep" > /dev/null'.format(vpn_binary)
+        stop_cmd = 'killall {} > /dev/null'.format(vpn_binary)
+        check_cmd = 'ps -a | grep {} | grep -v "grep" > /dev/null'.format(vpn_binary)
     else:
         vpn_service = System.get_vpn_service()
         start_cmd = 'systemctl start {0} > /dev/null'.format(vpn_service)
