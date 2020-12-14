@@ -1,18 +1,22 @@
 #!/bin/sh
 
 
+# setting up the package folder
 mkdir -p package
 cp -r dist package
 cd package
 mv dist bin
-echo '
-{ 
+
+# adding the package info file
+echo '{
     "name": "APP_openmotics_gateway",
     "version": [0, 0, 2],
     "description": "openmotics gateway service",
     "date": "23-11-2020",
     "fingerprint": "NA"
 }'>> package_info.txt
+
+# adding the start-application script
 echo '#!/bin/sh
 APP_PATH=$1
 APP_DATA_PATH=$2
@@ -32,8 +36,6 @@ logger "app data path: $APP_DATA_PATH"
 logger "app tmp path: $APP_TMP_PATH"
 logger "config file: $MAIN_CONFIG_FILE"
 
-# sleep 9999
-
 # -- start gateway service --
 killall -9 "openmotics_service"
 sleep 5
@@ -52,6 +54,7 @@ exec ${APP_PATH}/openmotics_service/openmotics_service
 '>> bin/start-application.sh
 chmod u+x bin/start-application.sh
 
+# adding the stop-application script
 echo '#!/bin/sh
 
 echo "$0"
@@ -75,4 +78,3 @@ fi
 ' >> bin/stop-application.sh
 chmod u+x bin/stop-application.sh
 
-# zip -r gw_service.zip bin package_info.txt

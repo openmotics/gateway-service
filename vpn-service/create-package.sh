@@ -1,17 +1,22 @@
 #!/bin/sh
 
-
+# creating the pacakge folder if non existing
 mkdir -p package
+# copy over the build files
 cp -r dist package
 cd package
 mv dist bin
+
+# creating the package info file
 echo '{
     "name": "APP_openmotics_vpn",
     "version": [0, 0, 1],
     "description": "openmotics vpn service",
-    "date": "23-11-2020",
+    "date": "'$(date +%d-%m-%Y)'",
     "fingerprint": "NA"
 }'>> package_info.txt
+
+# creating the start-application script
 echo '#!/bin/sh
 APP_PATH=$1
 APP_DATA_PATH=$2
@@ -24,14 +29,12 @@ echo "$APP_DATA_PATH"
 echo "$APP_TMP_PATH"
 echo "$MAIN_CONFIG_FILE"
 
-logger "Starting the openmotics gateway package"
+logger "Starting the openmotics vpn package"
 logger "\$0: $0"
 logger "app path: $APP_PATH"
 logger "app data path: $APP_DATA_PATH"
 logger "app tmp path: $APP_TMP_PATH"
 logger "config file: $MAIN_CONFIG_FILE"
-
-# sleep 9999
 
 # -- start gateway service --
 killall -9 "vpn_service"
@@ -51,6 +54,7 @@ exec ${APP_PATH}/vpn_service/vpn_service
 '>> bin/start-application.sh
 chmod u+x bin/start-application.sh
 
+# creating the stop-application script
 echo '#!/bin/sh
 
 echo "$0"
@@ -74,4 +78,3 @@ fi
 ' >> bin/stop-application.sh
 chmod u+x bin/stop-application.sh
 
-# zip -r gw_service.zip bin package_info.txt
