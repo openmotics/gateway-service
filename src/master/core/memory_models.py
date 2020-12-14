@@ -27,7 +27,8 @@ from master.core.memory_types import (MemoryModelDefinition, GlobalMemoryModelDe
                                       MemoryByteField, MemoryWordField, MemoryAddressField, MemoryStringField, MemoryVersionField, MemoryBasicActionField,
                                       MemoryByteArrayField, Memory3BytesField,
                                       CompositeMemoryModelDefinition, CompositeNumberField, CompositeBitField,
-                                      MemoryEnumDefinition, EnumEntry, IdField)
+                                      MemoryEnumDefinition, EnumEntry, IdField,
+                                      MemoryChecksum)
 
 
 class GlobalConfiguration(GlobalMemoryModelDefinition):
@@ -169,6 +170,10 @@ class SensorConfiguration(MemoryModelDefinition):
     aqi_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 56 + (id % 8) * 2))  # 239-254, 56-71
     dali_mapping = _DALISensorComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 72 + (id % 8))))  # 239-254, 72-79
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 128 + (id % 8) * 16), length=16)  # 239-254, 128-255
+    temperature_offset = MemoryByteField(MemoryTypes.FRAM, address_spec=lambda id: (51, id * 2),
+                                         checksum=MemoryChecksum(field=MemoryByteField(MemoryTypes.FRAM, address_spec=lambda id: (51, (id * 2) + 1)),
+                                                                 check=MemoryChecksum.Types.INVERTED,
+                                                                 default=0))  # 51, 0-255
 
 
 class ShutterConfiguration(MemoryModelDefinition):

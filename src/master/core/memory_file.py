@@ -41,6 +41,10 @@ class MemoryTypes(object):
 
 class MemoryFile(object):
 
+    # TODO:
+    #  * Multiple writes in a single page should only write the page once
+    #  * Writes to FRAM must only overwrite the changed data, not the entire page
+
     WRITE_TIMEOUT = 5
     READ_TIMEOUT = 5
     ACTIVATE_TIMEOUT = 5
@@ -142,14 +146,13 @@ class MemoryFile(object):
             self._cache[page] = data
 
     def activate(self):  # type: () -> None
-        if self.type == MemoryTypes.EEPROM:
-            if self._dirty:
-                self._dirty = False
-                logger.info('MEMORY.{0}: Activate'.format(self.type))
-                self._core_communicator.do_basic_action(action_type=200, action=1, timeout=MemoryFile.ACTIVATE_TIMEOUT)
-            else:
-                logger.info('MEMORY.{0}: Ignore activation, not dirty'.format(self.type))
-            self._self_activated = True
+        if self._dirty:
+            self._dirty = False
+            logger.info('MEMORY.{0}: Activate'.format(self.type))
+            self._core_communicator.do_basic_action(action_type=200, action=1, timeout=MemoryFile.ACTIVATE_TIMEOUT)
+        else:
+            logger.info('MEMORY.{0}: Ignore activation, not dirty'.format(self.type))
+        self._self_activated = True
 
     def invalidate_cache(self, page=None):  # type: (Optional[int]) -> None
         if page is None:

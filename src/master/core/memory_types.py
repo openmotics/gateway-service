@@ -23,6 +23,7 @@ import struct
 from peewee import DoesNotExist
 from threading import Lock
 from ioc import INJECTED, Inject
+from master.core.exceptions import InvalidMemoryChecksum
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Union, Tuple, Callable, Set
@@ -59,19 +60,28 @@ class MemoryModelDefinition(object):
         self._compositions = []  # type: List[str]
         address_cache = self.__class__._get_address_cache(self._id)
         for field_name, field_type in self.__class__._get_field_dict().items():
-            setattr(self, '_{0}'.format(field_name), MemoryFieldContainer(name=field_name,
-                                                                          memory_field=field_type,
-                                                                          memory_address=address_cache[field_name]))
+            memory_field_container = MemoryFieldContainer(name=field_name,
+                                                          memory_field=field_type,
+                                                          memory_address=address_cache[field_name])
+            if field_type._checksum is not None:
+                memory_field_container.set_checksum_container(MemoryChecksumContainer(check=field_type._checksum._check,
+                                                                                      field_container=MemoryFieldContainer(name=field_name,
+                                                                                                                           memory_field=field_type._checksum._field,
+                                                                                                                           memory_address=field_type._checksum._field.get_address(self._id)),
+                                                                                      default=field_type._checksum._default))
+            setattr(self, '_{0}'.format(field_name), memory_field_container)
             self._add_property(field_name)
             self._fields.append(field_name)
         for field_name, relation in self.__class__._get_relational_fields().items():
-            setattr(self, '_{0}'.format(field_name), relation)
+            relation_container = MemoryRelationContainer(instance_type=relation._instance_type,
+                                                         id_spec=relation._id_spec)
+            if relation._field is not None:
+                relation_container.set_field_container(MemoryFieldContainer(name=field_name,
+                                                                            memory_field=relation._field,
+                                                                            memory_address=relation._field.get_address(self._id)))
+            setattr(self, '_{0}'.format(field_name), relation_container)
             self._add_relation(field_name)
             self._relations.append(field_name)
-            if relation._field is not None:
-                relation.set_field_container(MemoryFieldContainer(name=field_name,
-                                                                  memory_field=relation._field,
-                                                                  memory_address=relation._field.get_address(self._id)))
         for field_name, composition in self.__class__._get_composite_fields().items():
             setattr(self, '_{0}'.format(field_name), CompositionContainer(composite_definition=composition,
                                                                           composition_width=composition._field.length * 8,
@@ -249,13 +259,17 @@ class MemoryFieldContainer(object):
     """
 
     @Inject
-    def __init__(self, name, memory_field, memory_address, memory_files=INJECTED):
+    def __init__(self, name, memory_field, memory_address,  memory_files=INJECTED):
         # type: (str, MemoryField, MemoryAddress, Dict[str, MemoryFile]) -> None
         self._field_name = name
         self._memory_field = memory_field
         self._memory_address = memory_address
         self._memory_files = memory_files
         self._data = None  # type: Optional[bytearray]
+        self._checksum_container = None  # type: Optional[MemoryChecksumContainer]
+
+    def set_checksum_container(self, checksum_container):  # type: (MemoryChecksumContainer) -> None
+        self._checksum_container = checksum_container
 
     def _read_data(self):  # type: () -> None
         self._data = self._memory_files[self._memory_address.memory_type].read([self._memory_address])[self._memory_address]
@@ -265,6 +279,8 @@ class MemoryFieldContainer(object):
         if self._memory_field._read_only:
             raise AttributeError('The field `{0}` is read-only'.format(self._field_name))
         self._data = self._memory_field.encode(value)
+        if self._checksum_container is not None:
+            self._checksum_container.update(self._data)
 
     def decode(self):  # type: () -> Any
         """ Decodes a memory byte array (array of 0 <= x <= 255) into a high-level valuye shuch as a string or large integer """
@@ -272,12 +288,20 @@ class MemoryFieldContainer(object):
             self._read_data()
         if self._data is None:
             raise RuntimeError('No data was read from memory')
+        if self._checksum_container is not None:
+            if not self._checksum_container.is_valid(self._data):
+                default = self._checksum_container._default
+                if default is None:
+                    raise InvalidMemoryChecksum('The field `{0}` fails its checksum'.format(self._field_name))
+                return default
         return self._memory_field.decode(self._data)
 
     def save(self):  # type: () -> None
         if self._data is None:
             return
         self._memory_files[self._memory_address.memory_type].write({self._memory_address: self._data})
+        if self._checksum_container is not None:
+            self._checksum_container.save()
 
 
 class MemoryField(object):
@@ -288,8 +312,8 @@ class MemoryField(object):
 
     # TODO: See if this can inherit from Field or use Fields internally so the implementations are unified
 
-    def __init__(self, memory_type, address_spec, length, limits=None, read_only=False):
-        # type: (str, Union[Tuple[int, int], Callable[[int], Tuple[int, int]]], int, Optional[Tuple[int, int]], bool) -> None
+    def __init__(self, memory_type, address_spec, length, limits=None, read_only=False, checksum=None):
+        # type: (str, Union[Tuple[int, int], Callable[[int], Tuple[int, int]]], int, Optional[Tuple[int, int]], bool, Optional[MemoryChecksum]) -> None
         """
         Create an instance of an MemoryDataType with an address or an address generator.
         """
@@ -297,6 +321,7 @@ class MemoryField(object):
         self._address_generator = None
         self._memory_type = memory_type
         self._read_only = read_only
+        self._checksum = checksum
         self.length = length
         if limits is not None:
             self.limits = limits
@@ -342,11 +367,12 @@ class MemoryField(object):
 
 
 class MemoryStringField(MemoryField):
-    def __init__(self, memory_type, address_spec, length, read_only=False):
+    def __init__(self, memory_type, address_spec, length, read_only=False, checksum=None):
         super(MemoryStringField, self).__init__(memory_type=memory_type,
                                                 address_spec=address_spec,
                                                 length=length,
-                                                read_only=read_only)
+                                                read_only=read_only,
+                                                checksum=checksum)
 
     def encode(self, value):  # type: (str) -> bytearray
         if len(value) > self.length:
@@ -364,10 +390,11 @@ class MemoryStringField(MemoryField):
 
 
 class MemoryByteField(MemoryField):
-    def __init__(self, memory_type, address_spec, read_only=False):
+    def __init__(self, memory_type, address_spec, read_only=False, checksum=None):
         super(MemoryByteField, self).__init__(memory_type=memory_type,
                                               address_spec=address_spec,
                                               read_only=read_only,
+                                              checksum=checksum,
                                               length=1)
 
     def encode(self, value):  # type: (int) -> bytearray
@@ -379,10 +406,11 @@ class MemoryByteField(MemoryField):
 
 
 class MemoryWordField(MemoryField):
-    def __init__(self, memory_type, address_spec, read_only=False):
+    def __init__(self, memory_type, address_spec, read_only=False, checksum=None):
         super(MemoryWordField, self).__init__(memory_type=memory_type,
                                               address_spec=address_spec,
                                               read_only=read_only,
+                                              checksum=checksum,
                                               length=2)
 
     def encode(self, value):  # type: (int) -> bytearray
@@ -394,10 +422,11 @@ class MemoryWordField(MemoryField):
 
 
 class Memory3BytesField(MemoryField):
-    def __init__(self, memory_type, address_spec, read_only=False):
+    def __init__(self, memory_type, address_spec, read_only=False, checksum=None):
         super(Memory3BytesField, self).__init__(memory_type=memory_type,
                                                 address_spec=address_spec,
                                                 read_only=read_only,
+                                                checksum=checksum,
                                                 length=3)
 
     def encode(self, value):  # type: (int) -> bytearray
@@ -409,13 +438,14 @@ class Memory3BytesField(MemoryField):
 
 
 class _MemoryArrayField(MemoryField):
-    def __init__(self, memory_type, address_spec, length, field, read_only):
+    def __init__(self, memory_type, address_spec, length, field, read_only, checksum):
         self._field = field(memory_type, address_spec)
         self._entry_length = length
         super(_MemoryArrayField, self).__init__(memory_type=memory_type,
                                                 address_spec=address_spec,
                                                 length=self._field.length * self._entry_length,
-                                                read_only=read_only)
+                                                read_only=read_only,
+                                                checksum=checksum)
 
     def encode(self, value):  # type: (Any) -> bytearray
         if len(value) != self._entry_length:
@@ -436,11 +466,12 @@ class _MemoryArrayField(MemoryField):
 
 
 class MemoryRawByteArrayField(_MemoryArrayField):
-    def __init__(self, memory_type, address_spec, length, read_only=False):
+    def __init__(self, memory_type, address_spec, length, read_only=False, checksum=None):
         super(MemoryRawByteArrayField, self).__init__(memory_type=memory_type,
                                                       address_spec=address_spec,
                                                       length=length,
                                                       read_only=read_only,
+                                                      checksum=checksum,
                                                       field=MemoryByteField)
 
     def encode(self, value):  # type: (bytearray) -> bytearray
@@ -451,14 +482,15 @@ class MemoryRawByteArrayField(_MemoryArrayField):
 
 
 class MemoryByteArrayField(_MemoryArrayField):
-    def __init__(self, memory_type, address_spec, length, field=None, read_only=False):
+    def __init__(self, memory_type, address_spec, length, field=None, read_only=False, checksum=None):
         if field is None:
             field = MemoryByteField
         super(MemoryByteArrayField, self).__init__(memory_type=memory_type,
                                                    address_spec=address_spec,
                                                    length=length,
                                                    field=field,
-                                                   read_only=read_only)
+                                                   read_only=read_only,
+                                                   checksum=checksum)
 
     def encode(self, value):  # type: (List[int]) -> bytearray
         return super(MemoryByteArrayField, self).encode(value)
@@ -468,19 +500,21 @@ class MemoryByteArrayField(_MemoryArrayField):
 
 
 class MemoryWordArrayField(MemoryByteArrayField):
-    def __init__(self, memory_type, address_spec, length, read_only=False):
+    def __init__(self, memory_type, address_spec, length, read_only=False, checksum=None):
         super(MemoryWordArrayField, self).__init__(memory_type=memory_type,
                                                    address_spec=address_spec,
                                                    length=length,
                                                    read_only=read_only,
+                                                   checksum=checksum,
                                                    field=MemoryWordField)
 
 
 class MemoryBasicActionField(MemoryField):
-    def __init__(self, memory_type, address_spec, read_only=False):
+    def __init__(self, memory_type, address_spec, read_only=False, checksum=None):
         super(MemoryBasicActionField, self).__init__(memory_type=memory_type,
                                                      address_spec=address_spec,
                                                      read_only=read_only,
+                                                     checksum=checksum,
                                                      length=6)
 
     def encode(self, value):  # type: (BasicAction) -> bytearray
@@ -497,11 +531,12 @@ class MemoryBasicActionField(MemoryField):
 
 
 class MemoryAddressField(MemoryField):
-    def __init__(self, memory_type, address_spec, length=4, read_only=False):
+    def __init__(self, memory_type, address_spec, length=4, read_only=False, checksum=None):
         super(MemoryAddressField, self).__init__(memory_type=memory_type,
                                                  address_spec=address_spec,
                                                  length=length,
-                                                 read_only=read_only)
+                                                 read_only=read_only,
+                                                 checksum=checksum)
 
     def encode(self, value):  # type: (str) -> bytearray
         example = '.'.join(['ID{0}'.format(i) for i in range(self.length - 1, -1, -1)])
@@ -525,10 +560,11 @@ class MemoryAddressField(MemoryField):
 
 
 class MemoryVersionField(MemoryAddressField):
-    def __init__(self, memory_type, address_spec, read_only=False):
+    def __init__(self, memory_type, address_spec, read_only=False, checksum=None):
         super(MemoryVersionField, self).__init__(memory_type=memory_type,
                                                  address_spec=address_spec,
                                                  read_only=read_only,
+                                                 checksum=checksum,
                                                  length=3)
 
     def decode(self, data):  # type: (bytearray) -> str
@@ -572,9 +608,15 @@ class IdField(object):
 class MemoryRelation(object):
     def __init__(self, instance_type, id_spec, field=None):
         # type: (type, Callable[[int], int], Optional[MemoryField]) -> None
-        self.instance_type = instance_type
+        self._instance_type = instance_type
         self._id_spec = id_spec
         self._field = field
+
+
+class MemoryRelationContainer(object):
+    def __init__(self, instance_type, id_spec):  # type: (type, Callable[[int], int]) -> None
+        self.instance_type = instance_type
+        self._id_spec = id_spec
         self._field_container = None  # type: Optional[MemoryFieldContainer]
 
     def set_field_container(self, field_container):  # type: (MemoryFieldContainer) -> None
@@ -615,6 +657,48 @@ class MemoryAddress(object):
         if not isinstance(other, MemoryAddress):
             return False
         return hash(self) == hash(other)
+
+
+class MemoryChecksum(object):
+    class Types(object):
+        INVERTED = 'inverted'
+
+    def __init__(self, field, check, default=None):  # type: (MemoryField, str, Optional[Any]) -> None
+        self._field = field
+        self._check = check
+        self._default = default
+
+
+class MemoryChecksumContainer(object):
+    def __init__(self, check, field_container, default):  # type: (str, MemoryFieldContainer, Optional[Any]) -> None
+        self._check = check
+        self._field_container = field_container
+        self._default = default
+
+    def is_valid(self, data):  # type: (bytearray) -> bool
+        self._field_container._read_data()
+        current_checksum = self._field_container._data
+        if current_checksum is None:
+            raise RuntimeError('No data was read from memory')
+        if set(current_checksum) | set(data) in [{0}, {255}]:
+            return True  # Ignore uninitialized data
+        expected_checksum = self._calculate(data)
+        if expected_checksum != current_checksum:
+            logger.warning('Invalid memory checksum for `{0}`'.format(self._field_container._field_name))
+            return False
+        return True
+
+    def update(self, data):  # type: (bytearray) -> None
+        self._field_container._data = self._calculate(data)
+
+    def save(self):
+        if self._field_container is not None:
+            self._field_container.save()
+
+    def _calculate(self, data):  # type: (bytearray) -> bytearray
+        if self._check == MemoryChecksum.Types.INVERTED:
+            return bytearray([value ^ 255 for value in data])
+        raise RuntimeError('Unknown checksum type')
 
 
 class CompositeField(object):
@@ -746,9 +830,10 @@ class MemoryEnumDefinition(object):
     """
     This object represents an enum
     """
-    def __init__(self, field, read_only=False):  # type: (MemoryField, bool) -> None
+    def __init__(self, field, read_only=False, checksum=None):  # type: (MemoryField, bool, Optional[MemoryChecksum]) -> None
         self._read_only = read_only
         self._field = field
+        self._checksum = checksum
         self._entries = [entry for _, entry in inspect.getmembers(self, lambda f: isinstance(f, EnumEntry))]  # type: List[EnumEntry]
 
     def get_address(self, id):  # type: (int) -> MemoryAddress
