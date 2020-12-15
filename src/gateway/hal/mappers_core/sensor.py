@@ -28,11 +28,14 @@ class SensorMapper(object):
     @staticmethod
     def orm_to_dto(orm_object):  # type: (SensorConfiguration) -> SensorDTO
         return SensorDTO(id=orm_object.id,
-                         name=orm_object.name)
+                         name=orm_object.name,
+                         offset=orm_object.temperature_offset)
 
     @staticmethod
     def dto_to_orm(sensor_dto, fields):  # type: (SensorDTO, List[str]) -> SensorConfiguration
         new_data = {'id': sensor_dto.id}  # type: Dict[str, Any]
         if 'name' in fields:
             new_data['name'] = sensor_dto.name
+        if 'offset' in fields:
+            new_data['temperature_offset'] = sensor_dto.offset
         return SensorConfiguration.deserialize(new_data)
