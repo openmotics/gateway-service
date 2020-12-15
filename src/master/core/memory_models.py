@@ -172,8 +172,7 @@ class SensorConfiguration(MemoryModelDefinition):
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 128 + (id % 8) * 16), length=16)  # 239-254, 128-255
     temperature_offset = MemoryByteField(MemoryTypes.FRAM, address_spec=lambda id: (51, id * 2),
                                          checksum=MemoryChecksum(field=MemoryByteField(MemoryTypes.FRAM, address_spec=lambda id: (51, (id * 2) + 1)),
-                                                                 check=MemoryChecksum.Types.INVERTED,
-                                                                 default=0))  # 51, 0-255
+                                                                 check=MemoryChecksum.Types.INVERTED, default=0))  # 51, 0-255
 
 
 class ShutterConfiguration(MemoryModelDefinition):
