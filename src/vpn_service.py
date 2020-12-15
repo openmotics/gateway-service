@@ -64,7 +64,7 @@ def setup_logger():
     handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
     logger.addHandler(handler)
 
-    if Hardware.get_board_type() == Hardware.BoardType.ESAFE:
+    if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
         syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
         syslog_handler.setLevel(logging.INFO)
         syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
@@ -73,7 +73,7 @@ def setup_logger():
 
 class VpnController(object):
     """ Contains methods to check the vpn status, start and stop the vpn. """
-    if Hardware.get_board_type() == Hardware.BoardType.ESAFE:
+    if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
         vpn_binary = 'openvpn'
         config_location = '/etc/openvpn/client/'
         start_cmd = 'cd {} ; {} --suppress-timestamps --nobind --config vpn.conf > /dev/null'.format(config_location, vpn_binary)
@@ -166,11 +166,11 @@ class Gateway(object):
 
     def __init__(self, host="127.0.0.1"):
         self._host = host
-        try:
-            config = ConfigParser()
-            config.read(constants.get_config_file())
+        config = ConfigParser()
+        config.read(constants.get_config_file())
+        if config.has_option('OpenMotics', 'http_port'):
             self._port = config.get('OpenMotics', 'http_port')
-        except Exception:
+        else:
             self._port = 80
 
     def do_call(self, uri):

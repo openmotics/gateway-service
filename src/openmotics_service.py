@@ -17,7 +17,7 @@ The main module for the OpenMotics
 """
 from __future__ import absolute_import
 
-from platform_utils import System, Hardware
+from platform_utils import System
 System.import_libs()
 
 import constants
@@ -80,7 +80,7 @@ def setup_logger():
     handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
     logger.addHandler(handler)
 
-    if Hardware.get_board_type() == Hardware.BoardType.ESAFE:
+    if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
         syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
         syslog_handler.setLevel(logging.INFO)
         syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
@@ -180,11 +180,8 @@ class OpenmoticsService(object):
         shutter_controller.run_sync_orm()
 
         # Execute data migration(s)
-        config = ConfigParser()
-        config.read(constants.get_config_file())
         # TODO: Make the master communication work before executing the migrations (needs eeprom use or other)
-        is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
-        if not is_pyinstaller_build:
+        if not System.get_operating_system().get('ID') == System.OS.BUILDROOT:
             FeatureMigrator.migrate()
             RoomsMigrator.migrate()
             InputMigrator.migrate()

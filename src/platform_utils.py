@@ -234,14 +234,11 @@ class System(object):
 
     @staticmethod
     def import_libs():
-        config = ConfigParser()
-        config.read(constants.get_config_file())
         operating_system = System.get_operating_system().get('ID')
-        if config.has_option('OpenMotics', 'build'):
-            is_pyinstaller_build = config.get('OpenMotics', 'build') == 'pyinstaller'
-            if not is_pyinstaller_build:
-                if operating_system in (System.OS.ANGSTROM, System.OS.DEBIAN):
-                    sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
+        # check if running in python 2 mode, otherwise packages should be included in the build (PyInstaller)
+        if sys.version_info.major == 2:
+            sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
+            sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/dist-packages')
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:
