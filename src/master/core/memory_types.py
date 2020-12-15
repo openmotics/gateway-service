@@ -259,7 +259,7 @@ class MemoryFieldContainer(object):
     """
 
     @Inject
-    def __init__(self, name, memory_field, memory_address,  memory_files=INJECTED):
+    def __init__(self, name, memory_field, memory_address, memory_files=INJECTED):
         # type: (str, MemoryField, MemoryAddress, Dict[str, MemoryFile]) -> None
         self._field_name = name
         self._memory_field = memory_field

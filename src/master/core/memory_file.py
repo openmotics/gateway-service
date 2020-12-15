@@ -44,6 +44,7 @@ class MemoryFile(object):
     # TODO:
     #  * Multiple writes in a single page should only write the page once
     #  * Writes to FRAM must only overwrite the changed data, not the entire page
+    #  * Optimize eeprom activates so there's only a single activation if both EEPROM and FRAM are updated
 
     WRITE_TIMEOUT = 5
     READ_TIMEOUT = 5
