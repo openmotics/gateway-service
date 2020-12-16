@@ -630,7 +630,8 @@ class WebInterface(object):
     def get_platform_details(self):  # type: () -> Dict[str, str]
         return {'platform': Platform.get_platform(),
                 'operating_system': System.get_operating_system().get('ID', 'unknown'),
-                'hardware': Hardware.get_board_type()}
+                'hardware': Hardware.get_board_type(),
+                'mac_address': Hardware.get_mac_address()}
 
     @openmotics_api(auth=True, check=types(type=int, id=int))
     def flash_leds(self, type, id):
