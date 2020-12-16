@@ -16,12 +16,14 @@
 Module for handling maintenance mode
 """
 from __future__ import absolute_import
+
 import logging
-import socket
 import random
-from threading import Thread
-from ioc import Injectable, Inject, INJECTED, Singleton
+import socket
+
+from gateway.daemon_thread import BaseThread
 from gateway.maintenance_communicator import InMaintenanceModeException
+from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import System
 
 logger = logging.getLogger("openmotics")
@@ -104,7 +106,7 @@ class MaintenanceController(object):
         Opens a TCP/SSL socket, connecting it with the maintenance service
         """
         port = random.randint(6000, 7000)
-        self._server_thread = Thread(target=self._run_socket_server, args=[port])
+        self._server_thread = BaseThread(name='maintenancesock', target=self._run_socket_server, args=[port])
         self._server_thread.daemon = True
         self._server_thread.start()
         return port

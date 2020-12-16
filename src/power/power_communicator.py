@@ -23,6 +23,7 @@ from threading import RLock, Thread
 
 from six.moves.queue import Empty
 
+from gateway.daemon_thread import BaseThread
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
@@ -41,22 +42,23 @@ if False:  # MYPY:
 
     HEALTH = Literal['success', 'unstable', 'failure']
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('gateway.power')
 
 
 class PowerCommunicator(object):
     """ Uses a serial port to communicate with the power modules. """
 
     @Inject
-    def __init__(self, power_serial=INJECTED, power_store=INJECTED, pubsub=INJECTED, verbose=False, time_keeper_period=60,
+    def __init__(self, power_serial=INJECTED, power_store=INJECTED, pubsub=INJECTED, time_keeper_period=60,
                  address_mode_timeout=300):
-        # type: (RS485, PowerStore, PubSub, bool, int, int) -> None
+        # type: (RS485, PowerStore, PubSub, int, int) -> None
         """ Default constructor.
 
         :param power_serial: Serial port to communicate with
         :type power_serial: Instance of :class`RS485`
         :param verbose: Print all serial communication to stdout.
         """
+        self.__verbose = logger.level >= logging.DEBUG
         self.__serial = power_serial
         self.__serial_lock = RLock()
         self.__cid = 1
@@ -84,8 +86,6 @@ class PowerCommunicator(object):
         self.__debug_buffer = {'read': {},
                                'write': {}}  # type: Dict[str,Dict[float,str]]
         self.__debug_buffer_duration = 300
-
-        self.__verbose = verbose
 
     def start(self):
         # type: () -> None
@@ -128,18 +128,19 @@ class PowerCommunicator(object):
             logger.warning('Observed energy communication failures, but not enough calls')
             return CommunicationStatus.UNSTABLE
 
-        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
-        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
-
         if not any(t in calls_timedout for t in all_calls[-10:]):
             logger.warning('Observed energy communication failures, but recent calls recovered')
             # The last X calls are successfull
             return CommunicationStatus.UNSTABLE
-        elif len(calls_last_x_minutes) <= 5:
+
+        calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
+        if len(calls_last_x_minutes) <= 5:
             logger.warning('Observed energy communication failures, but not recent enough')
             # Not enough recent calls
             return CommunicationStatus.UNSTABLE
-        elif ratio < 0.25:
+
+        ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
+        if ratio < 0.25:
             # Less than 25% of the calls fail, let's assume everything is just "fine"
             logger.warning('Observed energy communication failures, but there\'s only a failure ratio of {:.2f}%'.format(ratio * 100))
             return CommunicationStatus.UNSTABLE
@@ -164,11 +165,10 @@ class PowerCommunicator(object):
         (ret, self.__cid) = (self.__cid, (self.__cid % 255) + 1)
         return ret
 
-    @staticmethod
-    def __log(action, data):
-        # type: (Optional[str]) -> None
-        if data is not None:
-            logger.info("%.3f %s power: %s" % (time.time(), action, printable(data)))
+    def __debug(self, action, data):
+        # type: (str, Optional[bytearray]) -> None
+        if self.__verbose and data is not None:
+            logger.debug("%.3f %s power: %s" % (time.time(), action, printable(data)))
 
     def __write_to_serial(self, data):
         # type: (bytearray) -> None
@@ -176,8 +176,7 @@ class PowerCommunicator(object):
 
         :param data: the data to write
         """
-        if self.__verbose:
-            PowerCommunicator.__log('writing to', data)
+        self.__debug('writing to', data)
         self.__serial.write(data)
         self.__communication_stats_bytes['bytes_written'] += len(data)
         threshold = time.time() - self.__debug_buffer_duration
@@ -273,8 +272,7 @@ class PowerCommunicator(object):
         self.__address_mode_stop = False
 
         with self.__serial_lock:
-            self.__address_thread = Thread(target=self.__do_address_mode,
-                                           name="PowerCommunicator address mode thread")
+            self.__address_thread = BaseThread(name='poweraddressmode', target=self.__do_address_mode)
             self.__address_thread.daemon = True
             self.__address_thread.start()
 
@@ -444,12 +442,10 @@ class PowerCommunicator(object):
         except Empty:
             raise CommunicationTimedOutException('Communication timed out')
         except Exception:
-            if not self.__verbose:
-                PowerCommunicator.__log('reading from', command)
+            self.__debug('reading from', command)
             raise
         finally:
-            if self.__verbose:
-                PowerCommunicator.__log('reading from', command)
+            self.__debug('reading from', command)
 
         threshold = time.time() - self.__debug_buffer_duration
         self.__debug_buffer['read'][time.time()] = printable(command)

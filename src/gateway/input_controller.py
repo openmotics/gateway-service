@@ -77,3 +77,8 @@ class InputController(BaseController):
                 input_.save()
             inputs_to_save.append((input_dto, fields))
         self._master_controller.save_inputs(inputs_to_save)
+
+    @staticmethod
+    def load_inputs_event_enabled():
+        return {input_['number']: input_['event_enabled']
+                for input_ in Input.select().dicts()}

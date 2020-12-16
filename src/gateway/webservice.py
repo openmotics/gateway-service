@@ -2321,9 +2321,9 @@ class WebInterface(object):
         """
         Gets a given setting
         """
-        values = {}
+        values = {}  # type: Dict[str, Any]
         for setting in settings:
-            value = Config.get(setting)
+            value = Config.get_entry(setting, None)
             if value is not None:
                 values[setting] = value
         return {'values': values}
@@ -2336,7 +2336,7 @@ class WebInterface(object):
         if setting not in ['cloud_enabled', 'cloud_metrics_enabled|energy', 'cloud_metrics_enabled|counter',
                            'cloud_support']:
             raise RuntimeError('Setting {0} cannot be set'.format(setting))
-        Config.set(setting, value)
+        Config.set_entry(setting, value)
         return {}
 
     @openmotics_api(auth=True, check=types(active=bool), plugin_exposed=False)
@@ -2470,7 +2470,7 @@ class WebService(object):
                                      'tools.websocket.handler_cls': EventsSocket},
                       '/ws_maintenance': {'tools.websocket.on': True,
                                           'tools.websocket.handler_cls': MaintenanceSocket},
-                      '/': {'tools.cors.on': Config.get('cors_enabled', False),
+                      '/': {'tools.cors.on': Config.get_entry('cors_enabled', False),
                             'tools.sessions.on': False}}
 
             cherrypy.tree.mount(root=self._webinterface,
@@ -2490,7 +2490,7 @@ class WebService(object):
 
             self._http_server = cherrypy._cpserver.Server()
             self._http_server.socket_port = self._http_port
-            if Config.get('enable_http', False):
+            if Config.get_entry('enable_http', False):
                 # This is added for development purposes.
                 # Do NOT enable unless you know what you're doing and understand the risks.
                 self._http_server._socket_host = '0.0.0.0'

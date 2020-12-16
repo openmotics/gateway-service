@@ -17,12 +17,15 @@ IPC Bus messaging service
 """
 
 from __future__ import absolute_import
+
 import logging
 import time
-import ujson as json
 from multiprocessing.connection import Listener
-from threading import Thread
-from signal import signal, SIGTERM
+from signal import SIGTERM, signal
+
+import ujson as json
+
+from gateway.daemon_thread import BaseThread
 
 if False:  # MYPY
     from typing import Any, Callable, Dict, List, Optional
@@ -107,7 +110,7 @@ class MessageService(object):
             try:
                 conn = self.listener.accept()
                 logger.info('connection accepted from {0}'.format(self.listener.last_accepted))
-                receiver = Thread(target=self._receiver, args=(conn,), name='MessageService receiver')
+                receiver = BaseThread(target=self._receiver, args=(conn,), name='messageservice')
                 receiver.daemon = True
                 receiver.start()
             except IOError as io_error:
@@ -127,6 +130,6 @@ class MessageService(object):
             logger.info('Stopping OM messaging service... Done')
         signal(SIGTERM, stop)
 
-        server = Thread(target=self._server, name='MessageService server')
+        server = BaseThread(target=self._server, name='messageservice')
         server.daemon = True
         server.start()

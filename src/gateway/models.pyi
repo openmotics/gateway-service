@@ -47,13 +47,15 @@ still an issue
 
 """
 
-from typing import Optional, Literal, List, Tuple, Set, Dict, Any
+from typing import Optional, Literal, List, Tuple, Set, Dict, Any, TypeVar
 from playhouse.signals import Model
 from peewee import (
     CharField,
     FloatField, ForeignKeyField, IntegerField, PrimaryKeyField,
     SqliteDatabase, TextField
 )
+
+T = TypeVar('T')
 
 class MixedIntegerField(int, IntegerField): ...
 class MixedCharField(str, CharField): ...
@@ -205,6 +207,15 @@ class Config(BaseModel):
     id: MixedPrimaryKeyField
     setting: MixedTextField
     data: MixedTextField
+
+    @staticmethod
+    def get_entry(key: str, fallback: T) -> T: ...
+
+    @staticmethod
+    def set_entry(key: str, value: Any) -> None: ...
+
+    @staticmethod
+    def remove_entry(key: str) -> None: ...
 
 
 class Plugin(BaseModel):

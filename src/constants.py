@@ -121,6 +121,16 @@ def get_plugin_configfiles():
     return os.path.join(OPENMOTICS_PREFIX, 'etc/pi_*')
 
 
+def get_hex_files():
+    """ Get the firmware hex files. """
+    return os.path.join(OPENMOTICS_PREFIX, '*.hex')
+
+
+def get_config_dir():
+    """ Get the directory general configuration is stored. """
+    return os.path.join(OPENMOTICS_PREFIX, 'etc/')
+
+
 def get_static_dir():
     """ Get the directory where the static frontend assets are stored. """
     return os.path.join(OPENMOTICS_PREFIX, 'static')

@@ -76,7 +76,7 @@ class VpnController(object):
 
     def __init__(self):
         self.vpn_connected = False
-        self._vpn_tester = DaemonThread(name='vpn controller',
+        self._vpn_tester = DaemonThread(name='vpnctl',
                                         target=self._vpn_connected,
                                         interval=5)
 
@@ -225,7 +225,7 @@ class DataCollector(object):
         self._data_lock = Lock()
         self._interval = interval
         self._collector_function = collector
-        self._collector_thread = DaemonThread(name='{0} collector'.format(name),
+        self._collector_thread = DaemonThread(name='{0}coll'.format(name),
                                               target=self._collect,
                                               interval=interval)
 
@@ -261,7 +261,7 @@ class DebugDumpDataCollector(DataCollector):
         data = {'dumps': {},
                 'dump_info': {k: v.get('info', {})
                               for k, v in raw_dumps.items()}}  # type: Dict[str, Dict[float, Dict]]
-        if Config.get('cloud_support', False):
+        if Config.get_entry('cloud_support', False):
             # Include full dumps when support is enabled
             data['dumps'] = raw_dumps
         return data, list(raw_dumps.keys())
@@ -296,7 +296,7 @@ class TaskExecutor(object):
         self._vpn_controller = VpnController()
         self._tasks = deque()
         self._previous_amount_of_tasks = 0
-        self._executor = DaemonThread(name='task executor',
+        self._executor = DaemonThread(name='taskexecutor',
                                       target=self._execute_tasks,
                                       interval=300)
 
@@ -347,7 +347,7 @@ class TaskExecutor(object):
             configuration_changed = self._configuration != configuration
             if configuration_changed:
                 for setting, value in configuration.items():
-                    Config.set(setting, value)
+                    Config.set_entry(setting, value)
                 logger.info('Configuration changed: {0}'.format(configuration))
             self._configuration = configuration
         except Exception:
@@ -526,7 +526,7 @@ class HeartbeatService(object):
 
     def _beat(self):  # type: () -> float
         # Check whether connection to the Cloud is enabled/disabled
-        self._cloud_enabled = Config.get('cloud_enabled')
+        self._cloud_enabled = Config.get_entry('cloud_enabled', False)
         if self._cloud_enabled is False:
             self._sleep_time = DEFAULT_SLEEP_TIME
             task_data = {'open_vpn': False,

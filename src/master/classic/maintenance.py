@@ -21,6 +21,7 @@ import logging
 import time
 from threading import Thread, Timer
 
+from gateway.daemon_thread import BaseThread
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_communicator import MaintenanceCommunicator
 from gateway.pubsub import PubSub
@@ -85,7 +86,7 @@ class MaintenanceClassicCommunicator(MaintenanceCommunicator):
         self._maintenance_timeout_timer = Timer(MaintenanceClassicCommunicator.MAINTENANCE_TIMEOUT, self._check_maintenance_timeout)
         self._maintenance_timeout_timer.start()
         self._stopped = False
-        self._read_data_thread = Thread(target=self._read_data, name='Classic maintenance read thread')
+        self._read_data_thread = BaseThread(target=self._read_data, name='maintenanceread')
         self._read_data_thread.daemon = True
         self._read_data_thread.start()
         self._deactivated_sent = False

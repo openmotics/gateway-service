@@ -150,6 +150,7 @@ class SensorConfiguration(MemoryModelDefinition):
     aqi_groupaction_follow: int
     dali_mapping: _DALISensorComposition
     name: str
+    temperature_offset: int
 
 
 class ShutterConfiguration(MemoryModelDefinition):

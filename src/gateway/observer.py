@@ -46,7 +46,7 @@ class Observer(object):
         self._pubsub = pubsub  # type: PubSub
         self._message_client = message_client  # type: Optional[MessageClient]
 
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MASTER, self._handle_master_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.INPUT, self._handle_master_event)
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None

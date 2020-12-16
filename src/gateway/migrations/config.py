@@ -44,7 +44,7 @@ class ConfigMigrator(BaseMigrator):
             cursor = connection.cursor()
             for row in cursor.execute('SELECT * FROM settings;'):
                 setting = row[1]
-                config = Config.get(setting)
+                config = Config.get_or_none(Config.setting == setting)
                 if config is None:
                     config = Config(
                         setting=setting,
@@ -72,5 +72,5 @@ class ConfigMigrator(BaseMigrator):
                                    'cloud_metrics_min_interval': 300,
                                    'cloud_support': False,
                                    'cors_enabled': False}.items():
-            if Config.get(key) is None:
-                Config.set(key, default_value)
+            if Config.get_entry(key, None) is None:
+                Config.set_entry(key, default_value)

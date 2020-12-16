@@ -18,12 +18,10 @@ Tests for events.
 from __future__ import absolute_import
 
 import unittest
-
-import xmlrunner
 from mock import Mock, patch
 
 from gateway.events import GatewayEvent
-from gateway.models import Config
+from gateway.models import Config, Input
 from ioc import SetTestMode, SetUpTestInjections
 
 from cloud.events import EventSender
@@ -39,20 +37,31 @@ class EventsTest(unittest.TestCase):
         cloud_api_client = Mock()
         self.sent_events = {}
         cloud_api_client.send_events = lambda events: self.sent_events.update({'events': events})
-        SetUpTestInjections(cloud_api_client=cloud_api_client,
-                            input_controller=Mock())
+        SetUpTestInjections(cloud_api_client=cloud_api_client)
 
     def test_events_sent_to_cloud(self):
         event_sender = EventSender()  # Don't start, trigger manually
         self.assertEqual(len(event_sender._queue), 0)
         self.assertFalse(event_sender._batch_send_events())
-        with patch.object(Config, 'get', return_value=True):
-            event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, {'id': 1}))
-            event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, {'id': 1}))
-            event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 1}))
-        with patch.object(Config, 'get', return_value=False):
-            event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 2}))
-        self.assertEqual(len(event_sender._queue), 3)
+
+        select_mock = Mock()
+        select_mock.dicts.return_value = [{'number': 1, 'event_enabled': True},
+                                          {'number': 2, 'event_enabled': False}]
+
+        with patch.object(Input, 'select', return_value=select_mock):
+            with patch.object(Config, 'get_entry', return_value=True):
+                event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.OUTPUT_CHANGE, {'id': 1}))
+                event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, {'id': 1}))
+                event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 1}))
+                event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 2}))
+            with patch.object(Config, 'get_entry', return_value=False):
+                event_sender.enqueue_event(GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'id': 3}))
+
+        self.assertEqual(3, len(event_sender._queue))
         self.assertTrue(event_sender._batch_send_events())
-        self.assertEqual(len(event_sender._queue), 0)
-        self.assertEqual(len(self.sent_events.get('events', [])), 3)
+        self.assertEqual(0, len(event_sender._queue))
+        events = self.sent_events.get('events', [])
+        self.assertEqual(3, len(events))
+        input_event = [event for event in events
+                       if event.type == GatewayEvent.Types.INPUT_CHANGE][0]
+        self.assertEqual(1, input_event.data['id'])

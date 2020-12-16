@@ -114,7 +114,7 @@ class FrontpanelController(object):
             self._report_connectivity(payload)
 
     def start(self):
-        self._check_network_activity_thread = DaemonThread(name='Frontpanel runner',
+        self._check_network_activity_thread = DaemonThread(name='frontpanel',
                                                            target=self._do_frontpanel_tasks,
                                                            interval=0.5)
         self._check_network_activity_thread.start()
