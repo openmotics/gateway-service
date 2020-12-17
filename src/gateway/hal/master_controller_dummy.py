@@ -57,10 +57,6 @@ class MasterDummyController(MasterController):
         # type: () -> bool
         return False
 
-    def error_list(self):
-        # type: () -> List[Tuple[str,int]]
-        return []
-
     def get_firmware_version(self):
         # type: () -> Tuple[int, int, int]
         return (0, 0, 0)
@@ -174,6 +170,24 @@ class MasterDummyController(MasterController):
     def load_group_actions(self):
         # type: () -> List[GroupActionDTO]
         return []
+
+    # Error functions
+
+    def error_list(self):
+        # type: () -> List[Tuple[str,int]]
+        return []
+
+    def last_success(self):
+        # type: () -> int
+        return 0
+
+    def clear_error_list(self):
+        # type: () -> bool
+        return True
+
+    def set_status_leds(self, status):
+        # type: (bool) -> None
+        return
 
     def cold_reset(self, power_on=True):  # type: (bool) -> None
         return None

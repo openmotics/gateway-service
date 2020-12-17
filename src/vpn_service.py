@@ -19,11 +19,12 @@ is instructed to open a VPN tunnel or not, and will receive some configration in
 
 from __future__ import absolute_import
 
-from platform_utils import System
+from platform_utils import System, Hardware
 System.import_libs()
 
 import glob
 import logging
+import logging.handlers
 import os
 import subprocess
 import time
@@ -42,8 +43,6 @@ from gateway.daemon_thread import DaemonThread
 from gateway.initialize import setup_minimal_vpn_platform
 from gateway.models import Config
 from ioc import INJECTED, Inject
-
-
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple
@@ -65,14 +64,26 @@ def setup_logger():
     handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
     logger.addHandler(handler)
 
+    if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
+        syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
+        syslog_handler.setLevel(logging.INFO)
+        syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        logger.addHandler(syslog_handler)
+
 
 class VpnController(object):
     """ Contains methods to check the vpn status, start and stop the vpn. """
-
-    vpn_service = System.get_vpn_service()
-    start_cmd = 'systemctl start {0} > /dev/null'.format(vpn_service)
-    stop_cmd = 'systemctl stop {0} > /dev/null'.format(vpn_service)
-    check_cmd = 'systemctl is-active {0} > /dev/null'.format(vpn_service)
+    if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
+        vpn_binary = 'openvpn'
+        config_location = '/etc/openvpn/client/'
+        start_cmd = 'cd {} ; {} --suppress-timestamps --nobind --config vpn.conf > /dev/null'.format(config_location, vpn_binary)
+        stop_cmd = 'killall {} > /dev/null'.format(vpn_binary)
+        check_cmd = 'ps -a | grep {} | grep -v "grep" > /dev/null'.format(vpn_binary)
+    else:
+        vpn_service = System.get_vpn_service()
+        start_cmd = 'systemctl start {0} > /dev/null'.format(vpn_service)
+        stop_cmd = 'systemctl stop {0} > /dev/null'.format(vpn_service)
+        check_cmd = 'systemctl is-active {0} > /dev/null'.format(vpn_service)
 
     def __init__(self):
         self.vpn_connected = False
@@ -109,6 +120,9 @@ class VpnController(object):
             # 10.37.0.1 via 10.37.0.5 dev tun0
             result = False
             if routes:
+                if not isinstance(routes, str):  # to ensure python 2 and 3 compatibility
+                    routes = routes.decode()
+
                 vpn_servers = [route.split(' ')[0] for route in routes.split('\n') if '/' not in route]
                 for vpn_server in vpn_servers:
                     if TaskExecutor._ping(vpn_server, verbose=False):
@@ -152,11 +166,17 @@ class Gateway(object):
 
     def __init__(self, host="127.0.0.1"):
         self._host = host
+        config = ConfigParser()
+        config.read(constants.get_config_file())
+        if config.has_option('OpenMotics', 'http_port'):
+            self._port = config.get('OpenMotics', 'http_port')
+        else:
+            self._port = 80
 
     def do_call(self, uri):
         """ Do a call to the webservice, returns a dict parsed from the json returned by the webserver. """
         try:
-            request = requests.get('http://{0}/{1}'.format(self._host, uri), timeout=10.0)
+            request = requests.get('http://{0}:{1}/{2}'.format(self._host, self._port, uri), timeout=10.0)
             return json.loads(request.text)
         except Exception as ex:
             message = str(ex)
