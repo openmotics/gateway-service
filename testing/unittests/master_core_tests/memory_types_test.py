@@ -369,6 +369,45 @@ class MemoryTypesTest(unittest.TestCase):
         for valid_id in [0, 1]:
             self.assertEqual(valid_id, FieldLimitObject(valid_id).id)
 
+    def test_checksums(self):
+        memory_map = {0: bytearray([255, 255, 255, 255])}
+        MemoryTypesTest._mock_memory(memory_map)
+
+        class CheckedObject(MemoryModelDefinition):
+            class CheckedEnum(MemoryEnumDefinition):
+                FOO = EnumEntry('FOO', values=[0, 255])
+                BAR = EnumEntry('BAR', values=[1])
+
+            checked_field = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, 0),
+                                            checksum=MemoryChecksum(field=MemoryByteField(memory_type=MemoryTypes.EEPROM,
+                                                                                          address_spec=lambda id: (0, 1)),
+                                                                    check=MemoryChecksum.Types.INVERTED))
+            checked_enum_field = CheckedEnum(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, 2)),
+                                             checksum=MemoryChecksum(field=MemoryByteField(memory_type=MemoryTypes.EEPROM,
+                                                                                           address_spec=lambda id: (0, 3)),
+                                                                     check=MemoryChecksum.Types.INVERTED))
+        instance = CheckedObject(0)
+        # Checksum does not fail since it's not initialized
+        self.assertEqual(255, instance.checked_field)
+        self.assertEqual('FOO', instance.checked_enum_field)
+        # Set fields and thus checksums
+        instance.checked_field = 10
+        instance.checked_enum_field = 'BAR'
+        instance.save()
+        self.assertEqual(bytearray([10, 245, 1, 254]), memory_map[0])
+
+        memory_map[0][1] = 123
+        memory_map[0][3] = 123
+        instance = CheckedObject(0)
+        with self.assertRaises(InvalidMemoryChecksum):
+            _ = instance.checked_field
+        with self.assertRaises(InvalidMemoryChecksum):
+            _ = instance.checked_enum_field
+        instance.checked_field = 20
+        instance.checked_enum_field = 'FOO'
+        instance.save()
+        self.assertEqual(bytearray([20, 235, 0, 255]), memory_map[0])
+
     @staticmethod
     def _mock_memory(memory_map):
         def _read(addresses):

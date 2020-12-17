@@ -19,3 +19,7 @@ Exceptions
 
 class BootloadingException(Exception):
     pass
+
+
+class InvalidMemoryChecksum(Exception):
+    pass
