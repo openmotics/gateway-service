@@ -16,13 +16,14 @@
 The hardware_utils module contains various classes helping with Hardware and System abstraction
 """
 from __future__ import absolute_import
-
 import logging
 import os
 import subprocess
 import sys
-
 import constants
+
+if False:  # MYPY
+    from typing import Union
 
 logger = logging.getLogger('openmotics')
 
@@ -92,6 +93,16 @@ class Hardware(object):
             return 'wlan0'
         logger.warning('Could not detect local interface. Fallback: lo')
         return 'lo'
+
+    @staticmethod
+    def get_mac_address():  # type: () -> Union[str, None]
+        """ Get the main interface mac address """
+        interface = Hardware.get_main_interface()
+        try:
+            # this works both on Angstrom and Debian
+            return open('/sys/class/net/{0}/address'.format(interface)).read().strip().upper()
+        except Exception:
+            return None
 
 
 class System(object):
