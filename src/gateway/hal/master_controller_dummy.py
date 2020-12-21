@@ -20,7 +20,7 @@ from __future__ import absolute_import
 import logging
 
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
-    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO
+    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ThermostatAircoStatusDTO, PumpGroupDTO
 from gateway.hal.master_controller import MasterController
 
 if False:  # MYPY
@@ -115,6 +115,7 @@ class MasterDummyController(MasterController):
         # type: () -> Dict[str,Any]
         return {}
 
+
     def get_thermostat_modes(self):
         # type: () -> Dict[str,Any]
         return {}
@@ -197,3 +198,27 @@ class MasterDummyController(MasterController):
 
     def update_slave_modules(self, module_type, hex_filename):  # type: (str, str) -> None
         return None
+
+    def load_airco_status(self):
+        # type: () -> ThermostatAircoStatusDTO
+        return ThermostatAircoStatusDTO({})
+
+    def load_cooling_thermostat(self, thermostat_id):
+        # type: (int) -> ThermostatDTO
+        return None
+
+    def load_cooling_thermostats(self):
+        # type: () -> List[ThermostatDTO]
+        return []
+
+    def load_cooling_pump_group(self, pump_group_id):
+        # type: (int) -> PumpGroupDTO
+        return None
+
+    def load_cooling_pump_groups(self):
+        # type: () -> List[PumpGroupDTO]
+        return []
+
+    def load_dimmer_configuration(self, fields=None):
+        # type: (Any) -> Dict[str,Any]
+        return {}

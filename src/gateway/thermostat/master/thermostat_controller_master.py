@@ -330,7 +330,11 @@ class ThermostatControllerMaster(ThermostatController):
 
         try:
             thermostat_info = self._master_controller.get_thermostats()
+            if thermostat_info == {}:
+                return
             thermostat_mode = self._master_controller.get_thermostat_modes()
+            if thermostat_mode == {}:
+                return
             aircos = self._master_controller.load_airco_status()
         except CommunicationFailure:
             return
