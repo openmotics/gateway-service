@@ -128,6 +128,18 @@ class MasterDummyController(MasterController):
         # type: () -> List[ThermostatDTO]
         return []
 
+    def load_cooling_thermostat(self, thermostat_id):
+        # type: (int) -> ThermostatDTO
+        return ThermostatDTO(0)
+
+    def load_cooling_pump_group(self, pump_group_id):
+        # type: (int) -> PumpGroupDTO
+        return PumpGroupDTO(0)
+
+    def load_cooling_pump_groups(self):
+        # type: () -> List[PumpGroupDTO]
+        return []
+
     def load_heating_thermostats(self):
         # type: () -> List[ThermostatDTO]
         return []
@@ -203,21 +215,6 @@ class MasterDummyController(MasterController):
         # type: () -> ThermostatAircoStatusDTO
         return ThermostatAircoStatusDTO({})
 
-    def load_cooling_thermostat(self, thermostat_id):
-        # type: (int) -> ThermostatDTO
-        return None
-
-    def load_cooling_thermostats(self):
-        # type: () -> List[ThermostatDTO]
-        return []
-
-    def load_cooling_pump_group(self, pump_group_id):
-        # type: (int) -> PumpGroupDTO
-        return None
-
-    def load_cooling_pump_groups(self):
-        # type: () -> List[PumpGroupDTO]
-        return []
 
     def load_dimmer_configuration(self, fields=None):
         # type: (Any) -> Dict[str,Any]
