@@ -21,6 +21,7 @@ import logging
 
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
     PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ThermostatAircoStatusDTO, PumpGroupDTO
+from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import MasterController
 
 if False:  # MYPY
@@ -113,12 +114,12 @@ class MasterDummyController(MasterController):
 
     def get_thermostats(self):
         # type: () -> Dict[str,Any]
-        return {}
+        raise UnsupportedException()
 
 
     def get_thermostat_modes(self):
         # type: () -> Dict[str,Any]
-        return {}
+        raise UnsupportedException()
 
     def get_global_thermostat_configuration(self, fields=None):
         # type: (Optional[List[str]]) -> Dict[str,Any]
