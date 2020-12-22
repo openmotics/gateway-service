@@ -116,7 +116,6 @@ class MasterDummyController(MasterController):
         # type: () -> Dict[str,Any]
         raise UnsupportedException()
 
-
     def get_thermostat_modes(self):
         # type: () -> Dict[str,Any]
         raise UnsupportedException()
@@ -215,7 +214,6 @@ class MasterDummyController(MasterController):
     def load_airco_status(self):
         # type: () -> ThermostatAircoStatusDTO
         return ThermostatAircoStatusDTO({})
-
 
     def load_dimmer_configuration(self, fields=None):
         # type: (Any) -> Dict[str,Any]
