@@ -76,7 +76,7 @@ class CoreCommunicator(object):
         self._read_thread = BaseThread(name='coreread', target=self._read)
         self._read_thread.setDaemon(True)
 
-        self._command_counter = Counter()  # type: Counter
+        self._command_histogram = Counter()  # type: Counter
         self._communication_stats = {'calls_succeeded': [],
                                      'calls_timedout': [],
                                      'bytes_written': 0,
@@ -104,10 +104,10 @@ class CoreCommunicator(object):
                                      'bytes_read': 0}
 
     def get_command_histogram(self):
-        return dict(self._command_counter)
+        return dict(self._command_histogram)
 
     def reset_command_histogram(self):
-        self._command_counter.clear()
+        self._command_histogram.clear()
 
     def get_debug_buffer(self):
         # type: () -> Dict[str,Dict[float,str]]
@@ -227,7 +227,7 @@ class CoreCommunicator(object):
         try:
             self._consumers.setdefault(consumer.get_hash(), []).append(consumer)
             self._send_command(cid, command, fields)
-            self._command_counter.update(str(command.instruction))
+            self._command_histogram.update(str(command.instruction))
         except Exception:
             self.discard_cid(cid)
             raise
