@@ -90,7 +90,7 @@ class MasterCommunicator(object):
 
         self.__read_thread = None  # type: Optional[Thread]
 
-        self.__command_counter = Counter()
+        self.__command_counter = Counter() # type: Counter
         self.__communication_stats = {'calls_succeeded': [],
                                       'calls_timedout': [],
                                       'bytes_written': 0,

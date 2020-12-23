@@ -76,7 +76,7 @@ class CoreCommunicator(object):
         self._read_thread = BaseThread(name='coreread', target=self._read)
         self._read_thread.setDaemon(True)
 
-        self._command_counter = Counter()
+        self._command_counter = Counter()  # type: Counter
         self._communication_stats = {'calls_succeeded': [],
                                      'calls_timedout': [],
                                      'bytes_written': 0,
