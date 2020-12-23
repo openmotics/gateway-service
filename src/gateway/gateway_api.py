@@ -415,7 +415,7 @@ class GatewayApi(object):
     def master_restore(self, data):
         return self.__master_controller.restore(data)
 
-    # Error functions
+    # Error and diagnostic functions
 
     def master_error_list(self):
         """ Get the error list per module (input and output modules). The modules are identified by
@@ -424,6 +424,12 @@ class GatewayApi(object):
         :returns: dict with 'errors' key, it contains list of tuples (module, nr_errors).
         """
         return self.__master_controller.error_list()
+
+    def master_communication_statistics(self):
+        return self.__master_controller.get_communication_statistics()
+
+    def master_command_histogram(self):
+        return self.__master_controller.get_command_histogram()
 
     def master_last_success(self):
         """ Get the number of seconds since the last successful communication with the master.

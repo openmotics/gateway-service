@@ -25,7 +25,7 @@ from threading import Event, Lock, Thread
 
 import six
 from six.moves.queue import Empty, Queue
-
+from collections import Counter
 from gateway.daemon_thread import BaseThread
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_controller import InMaintenanceModeException
@@ -90,6 +90,7 @@ class MasterCommunicator(object):
 
         self.__read_thread = None  # type: Optional[Thread]
 
+        self.__command_counter = Counter()
         self.__communication_stats = {'calls_succeeded': [],
                                       'calls_timedout': [],
                                       'bytes_written': 0,
@@ -97,6 +98,7 @@ class MasterCommunicator(object):
         self.__debug_buffer = {'read': {},
                                'write': {}}  # type: Dict[str, Dict[float,bytearray]]
         self.__debug_buffer_duration = 300
+
 
     def start(self):
         # type: () -> None
@@ -160,6 +162,12 @@ class MasterCommunicator(object):
                                       'calls_timedout': [],
                                       'bytes_written': 0,
                                       'bytes_read': 0}
+
+    def get_command_histogram(self):
+        return dict(self.__command_counter)
+
+    def reset_command_histogram(self):
+        self.__command_counter.clear()
 
     def get_debug_buffer(self):
         # type: () -> Dict[str,Dict[float,str]]
@@ -263,6 +271,7 @@ class MasterCommunicator(object):
         with self.__command_lock:
             self.__consumers.append(consumer)
             self.__write_to_serial(inp)
+            self.__command_counter.update(str(cmd.action))
             try:
                 result = consumer.get(timeout).fields
                 if cmd.output_has_crc() and not MasterCommunicator.__check_crc(cmd, result, extended_crc):

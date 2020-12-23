@@ -1102,7 +1102,13 @@ class WebInterface(object):
         """
         Clear the number of errors.
         """
-        return self._gateway_api.master_clear_error_list
+        return self._gateway_api.master_clear_error_list()
+
+    @openmotics_api(auth=True)
+    def master_diagnostics(self):
+        return {'communication_statistics': self._gateway_api.master_communication_statistics(),
+                'command_histogram': self._gateway_api.master_command_histogram(),
+                'master_last_success': self._gateway_api.master_last_success()}
 
     # Output configurations
 

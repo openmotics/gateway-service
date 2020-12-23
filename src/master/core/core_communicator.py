@@ -23,11 +23,10 @@ import logging
 import select
 import struct
 import time
-from threading import Lock
-
 import six
+from threading import Lock
+from collections import Counter
 from six.moves.queue import Empty, Queue
-
 from gateway.daemon_thread import BaseThread
 from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
@@ -77,6 +76,7 @@ class CoreCommunicator(object):
         self._read_thread = BaseThread(name='coreread', target=self._read)
         self._read_thread.setDaemon(True)
 
+        self._command_counter = Counter()
         self._communication_stats = {'calls_succeeded': [],
                                      'calls_timedout': [],
                                      'bytes_written': 0,
@@ -102,6 +102,12 @@ class CoreCommunicator(object):
                                      'calls_timedout': [],
                                      'bytes_written': 0,
                                      'bytes_read': 0}
+
+    def get_command_histogram(self):
+        return dict(self._command_counter)
+
+    def reset_command_histogram(self):
+        self._command_counter.clear()
 
     def get_debug_buffer(self):
         # type: () -> Dict[str,Dict[float,str]]
@@ -221,6 +227,7 @@ class CoreCommunicator(object):
         try:
             self._consumers.setdefault(consumer.get_hash(), []).append(consumer)
             self._send_command(cid, command, fields)
+            self._command_counter.update(str(command.instruction))
         except Exception:
             self.discard_cid(cid)
             raise

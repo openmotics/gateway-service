@@ -53,6 +53,9 @@ class MasterController(object):
     # Public API #
     ##############
 
+    def get_command_histogram(self):
+        return self._master_communicator.get_command_histogram()
+
     def get_communication_statistics(self):
         return self._master_communicator.get_communication_statistics()
 
