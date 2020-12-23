@@ -225,9 +225,9 @@ class CoreCommunicator(object):
         command = consumer.command
 
         try:
+            self._command_histogram.update({str(command.instruction): 1})
             self._consumers.setdefault(consumer.get_hash(), []).append(consumer)
             self._send_command(cid, command, fields)
-            self._command_histogram.update(str(command.instruction))
         except Exception:
             self.discard_cid(cid)
             raise

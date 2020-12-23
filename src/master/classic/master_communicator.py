@@ -268,9 +268,9 @@ class MasterCommunicator(object):
         inp = cmd.create_input(cid, fields, extended_crc)
 
         with self.__command_lock:
+            self.__command_histogram.update({str(cmd.action): 1})
             self.__consumers.append(consumer)
             self.__write_to_serial(inp)
-            self.__command_histogram.update(str(cmd.action))
             try:
                 result = consumer.get(timeout).fields
                 if cmd.output_has_crc() and not MasterCommunicator.__check_crc(cmd, result, extended_crc):
