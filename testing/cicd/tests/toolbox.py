@@ -127,10 +127,15 @@ class TesterGateway(object):
         return self._client.get(path, params=params, success=success, use_token=use_token)
 
     def toggle_output(self, output_id, delay=0.2, inverted=False):
+        self.toggle_outputs([output_id], delay=delay, inverted=inverted)
+
+    def toggle_outputs(self, output_ids, delay=0.2, inverted=False):
         temporarily_state = not inverted
-        self.get('/set_output', {'id': output_id, 'is_on': temporarily_state})
+        for output_id in output_ids:
+            self.get('/set_output', {'id': output_id, 'is_on': temporarily_state})
         time.sleep(delay)
-        self.get('/set_output', {'id': output_id, 'is_on': not temporarily_state})
+        for output_id in output_ids:
+            self.get('/set_output', {'id': output_id, 'is_on': not temporarily_state})
 
     def log_events(self):
         # type: () -> None
@@ -179,6 +184,11 @@ class TesterGateway(object):
 
 
 class Toolbox(object):
+    class TestPlatforms(object):
+        CORE_PLUS = 'CORE_PLUS'
+        DEBIAN = 'DEBIAN'
+
+    TEST_PLATFORM = os.environ['TEST_PLATFORM']
     DEBIAN_AUTHORIZED_MODE = 13  # tester_output_1.output_5
     DEBIAN_DISCOVER_INPUT = 14  # tester_output_1.output_6
     DEBIAN_DISCOVER_OUTPUT = 15  # tester_output_1.output_7
@@ -186,6 +196,8 @@ class Toolbox(object):
     DEBIAN_DISCOVER_ENERGY = 23  # tester_output2.output_7
     DEBIAN_POWER_OUTPUT = 8  # tester_output_1.output_0
     POWER_ENERGY_MODULE = 11  # tester_output_1.output_3
+    CORE_PLUS_SETUP_BUTTON = 19
+    CORE_PLUG_ACTION_BUTTON = 16
 
     def __init__(self):
         # type: () -> None
@@ -306,7 +318,11 @@ class Toolbox(object):
     def authorized_mode_start(self):
         # type: () -> None
         logger.debug('start authorized mode')
-        self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE, delay=15)
+        if self.TEST_PLATFORM == Toolbox.TestPlatforms.DEBIAN:
+            self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE, delay=15)
+        elif self.TEST_PLATFORM == Toolbox.TestPlatforms.CORE_PLUS:
+            self.tester.toggle_outputs([self.CORE_PLUG_ACTION_BUTTON,
+                                        self.CORE_PLUS_SETUP_BUTTON], delay=15)
 
     def authorized_mode_stop(self, timeout=240):
         # type: (float) -> None
