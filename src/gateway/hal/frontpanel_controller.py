@@ -103,7 +103,8 @@ class FrontpanelController(object):
 
     @property
     def authorized_mode(self):
-        return self._authorized_mode
+        import os
+        return os.environ['TEST_PLATFORM'] == 'CORE_PLUS' or self._authorized_mode  # TODO: Remove before merging in!
 
     def event_receiver(self, event, payload):
         if event == OMBusEvents.CLOUD_REACHABLE:
