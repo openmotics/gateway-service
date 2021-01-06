@@ -73,9 +73,7 @@ class CoreCommunicator(object):
         self._stop = False
 
         self._word_helper = WordField('')
-
-        self._read_thread = BaseThread(name='coreread', target=self._read)
-        self._read_thread.setDaemon(True)
+        self._read_thread = None  # type: Optional[BaseThread]
 
         self._communication_stats = {'calls_succeeded': [],
                                      'calls_timedout': [],
@@ -88,11 +86,14 @@ class CoreCommunicator(object):
     def start(self):
         """ Start the CoreComunicator, this starts the background read thread. """
         self._stop = False
+        self._read_thread = BaseThread(name='coreread', target=self._read)
+        self._read_thread.setDaemon(True)
         self._read_thread.start()
 
     def stop(self):
         self._stop = True
         self._read_thread.join()
+        self._read_thread = None
 
     def get_communication_statistics(self):
         return self._communication_stats
