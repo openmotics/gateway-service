@@ -524,11 +524,13 @@ class Toolbox(object):
         logger.info('power on')
         if TEST_PLATFORM == TestPlatform.CORE_PLUS:
             output_id = self.CORE_PLUS_POWER_OUTPUT
+            timeout = 600  # After a potential factory reset, the Core+ has to wipe a lot more EEPROM and is therefore slower
         else:
             output_id = self.DEBIAN_POWER_OUTPUT
+            timeout = 300
         self.tester.get('/set_output', {'id': output_id, 'is_on': True})
         logger.info('waiting for gateway api to respond...')
-        self.health_check(timeout=300)
+        self.health_check(timeout=timeout)
         logger.info('health check done')
 
     @contextmanager
