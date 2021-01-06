@@ -545,7 +545,7 @@ class Toolbox(object):
         pending = ['unknown']
         while since > time.time() - timeout:
             try:
-                data = self.dut.get('/health_check', use_token=False, timeout=timeout)
+                data = self.dut.get('/health_check', use_token=False, timeout=5)
                 pending = [k for k, v in data['health'].items() if not v['state']]
                 if not pending:
                     return pending
