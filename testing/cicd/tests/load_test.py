@@ -22,7 +22,7 @@ import ujson as json
 from hypothesis.strategies import booleans
 from pytest import fixture, mark
 
-from tests.hardware import INPUT_MODULE_LAYOUT, OUTPUT_MODULE_LAYOUT, Output
+from tests.hardware_layout import INPUT_MODULE_LAYOUT, OUTPUT_MODULE_LAYOUT, Output, Module
 
 logger = logging.getLogger('openmotics')
 
@@ -44,13 +44,14 @@ def add_virtual_modules(request, toolbox_session):
     toolbox.add_virtual_modules(module_amounts=module_amounts)
     time.sleep(10)
 
+    virtual_module = Module(name='virtual module', mtype='o')
     statuses = toolbox.dut.get('/get_output_status')['status']
     max_id = max(x['id'] for x in statuses)
     if next(x['status'] == 0 for x in statuses if x['id'] == max_id):
         logger.info('setting all outputs to on')
         for status in statuses:
             if status['status'] == 0:
-                output = Output(type='o', output_id=status['id'])
+                output = Output(output_id=status['id'], module=virtual_module)
                 toolbox.set_output(output, True)
     time.sleep(10)
 
@@ -58,13 +59,20 @@ def add_virtual_modules(request, toolbox_session):
 @mark.unstable
 @hypothesis.given(booleans())
 def test_master_events(toolbox, add_virtual_modules, _status):
-    for (input, output) in zip(INPUT_MODULE_LAYOUT['I'].inputs, OUTPUT_MODULE_LAYOUT['O'].outputs):
-        input_config = {'id': input.input_id, 'action': output.output_id}
+    _ = add_virtual_modules
+    inputs = []
+    for module in INPUT_MODULE_LAYOUT:
+        inputs += module.inputs
+    outputs = []
+    for module in OUTPUT_MODULE_LAYOUT:
+        outputs += module.outputs
+    for (_input, output) in zip(inputs, outputs):
+        input_config = {'id': _input.input_id, 'action': output.output_id}
         input_config.update(DEFAULT_INPUT_CONFIG)
         toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
         time.sleep(0.2)
     time.sleep(10)
 
     for _ in range(32):
-        for input in INPUT_MODULE_LAYOUT['I'].inputs:
-            toolbox.press_input(input)
+        for _input in inputs:
+            toolbox.press_input(_input)

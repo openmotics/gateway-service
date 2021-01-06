@@ -25,7 +25,7 @@ import requests
 import ujson as json
 from requests.exceptions import ConnectionError, RequestException
 
-from tests.hardware import INPUT_MODULE_LAYOUT, Input, Output
+from tests.hardware_layout import INPUT_MODULE_LAYOUT, Input, Output
 
 logger = logging.getLogger('openmotics')
 
@@ -249,7 +249,8 @@ class Toolbox(object):
             data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
             assert 'O' in data['outputs']
             assert 'I' in data['inputs']
-            assert 'C' in data['can_inputs']
+            if Toolbox.TEST_PLATFORM == Toolbox.TestPlatforms.DEBIAN:
+                assert 'C' in data['can_inputs']
         except Exception:
             logger.info('discovering modules...')
             self.discover_modules(output_modules=True,
@@ -261,11 +262,12 @@ class Toolbox(object):
         data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
         assert 'O' in data['outputs']
         assert 'I' in data['inputs']
-        assert 'C' in data['can_inputs']
+        if Toolbox.TEST_PLATFORM == Toolbox.TestPlatforms.DEBIAN:
+            assert 'C' in data['can_inputs']
 
         # TODO ensure discovery synchonization finished.
-        self.ensure_input_exists(INPUT_MODULE_LAYOUT['I'].inputs[7], timeout=300)
-        self.ensure_input_exists(INPUT_MODULE_LAYOUT['C'].inputs[5], timeout=300)
+        for module in INPUT_MODULE_LAYOUT:
+            self.ensure_input_exists(module.inputs[-1], timeout=300)
 
         try:
             data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
@@ -324,8 +326,8 @@ class Toolbox(object):
             self.tester.toggle_outputs([self.CORE_PLUG_ACTION_BUTTON,
                                         self.CORE_PLUS_SETUP_BUTTON], delay=15)
 
-    def authorized_mode_stop(self, timeout=240):
-        # type: (float) -> None
+    def authorized_mode_stop(self):
+        # type: () -> None
         self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE)
 
     def create_or_update_user(self, success=True):
@@ -368,7 +370,11 @@ class Toolbox(object):
         since = time.time()
 
         if ucans:
-            for ucan_input in INPUT_MODULE_LAYOUT['C'].inputs:
+            ucan_inputs = []
+            for module in INPUT_MODULE_LAYOUT:
+                if module.mtype == 'C':
+                    ucan_inputs += module.inputs
+            for ucan_input in ucan_inputs:
                 self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
             time.sleep(0.5)  # Give a brief moment for the CC to settle
 
@@ -545,7 +551,7 @@ class Toolbox(object):
         # type: (Output, Dict[str,Any]) -> None
         config_data = {'id': output.output_id}
         config_data.update(**config)
-        logger.debug('configure output {}#{} with {}'.format(output.type, output.output_id, config))
+        logger.debug('configure output {}#{} with {}'.format(output.module.mtype, output.output_id, config))
         self.dut.get('/set_output_configuration', {'config': json.dumps(config_data)})
 
     def ensure_output(self, output, status, config=None):
@@ -553,8 +559,8 @@ class Toolbox(object):
         if config:
             self.configure_output(output, config)
         state = ' '.join(self.tester.get_last_outputs())
-        hypothesis.note('ensure output {}#{} is {}'.format(output.type, output.output_id, status))
-        logger.debug('ensure output {}#{} is {}    outputs={}'.format(output.type, output.output_id, status, state))
+        hypothesis.note('ensure output {}#{} is {}'.format(output.module.mtype, output.output_id, status))
+        logger.debug('ensure output {}#{} is {}    outputs={}'.format(output.module.mtype, output.output_id, status, state))
         time.sleep(0.2)
         self.set_output(output, status)
         time.sleep(0.2)
@@ -562,35 +568,35 @@ class Toolbox(object):
 
     def set_output(self, output, status):
         # type: (Output, int) -> None
-        logger.debug('set output {}#{} -> {}'.format(output.type, output.output_id, status))
+        logger.debug('set output {}#{} -> {}'.format(output.module.mtype, output.output_id, status))
         self.dut.get('/set_output', {'id': output.output_id, 'is_on': status})
 
-    def press_input(self, input):
+    def press_input(self, _input):
         # type: (Input) -> None
-        self.tester.get('/set_output', {'id': input.tester_output_id, 'is_on': False})  # ensure start status
+        self.tester.get('/set_output', {'id': _input.tester_output_id, 'is_on': False})  # ensure start status
         time.sleep(0.2)
         self.tester.reset()
-        hypothesis.note('after input {}#{} pressed'.format(input.type, input.input_id))
-        self.tester.toggle_output(input.tester_output_id)
-        logger.debug('toggled {}#{} -> True -> False'.format(input.type, input.input_id))
+        hypothesis.note('after input {}#{} pressed'.format(_input.module.mtype, _input.input_id))
+        self.tester.toggle_output(_input.tester_output_id)
+        logger.debug('toggled {}#{} -> True -> False'.format(_input.module.mtype, _input.input_id))
 
     def assert_output_changed(self, output, status, between=(0, 5)):
         # type: (Output, bool, Tuple[float,float]) -> None
-        hypothesis.note('assert output {}#{} status changed {} -> {}'.format(output.type, output.output_id, not status, status))
+        hypothesis.note('assert output {}#{} status changed {} -> {}'.format(output.module.mtype, output.output_id, not status, status))
         if self.tester.receive_output_event(output.output_id, status, between=between):
             return
-        raise AssertionError('expected event {}#{} status={}'.format(output.type, output.output_id, status))
+        raise AssertionError('expected event {}#{} status={}'.format(output.module.mtype, output.output_id, status))
 
     def assert_output_status(self, output, status, timeout=5):
         # type: (Output, bool, float) -> None
-        hypothesis.note('assert output {}#{} status is {}'.format(output.type, output.output_id, status))
+        hypothesis.note('assert output {}#{} status is {}'.format(output.module.mtype, output.output_id, status))
         since = time.time()
         current_status = None
         while since > time.time() - timeout:
             data = self.dut.get('/get_output_status')
             current_status = data['status'][output.output_id]['status']
             if status == bool(current_status):
-                logger.debug('get output {}#{} status={}, after {:.2f}s'.format(output.type, output.output_id, status, time.time() - since))
+                logger.debug('get output {}#{} status={}, after {:.2f}s'.format(output.module.type, output.output_id, status, time.time() - since))
                 return
             time.sleep(2)
         state = ' '.join(self.tester.get_last_outputs())
@@ -598,16 +604,16 @@ class Toolbox(object):
         self.tester.log_events()
         raise AssertionError('get status {} status={} != expected {}, timeout after {:.2f}s'.format(output.output_id, bool(current_status), status, time.time() - since))
 
-    def ensure_input_exists(self, input, timeout=30):
+    def ensure_input_exists(self, _input, timeout=30):
         # type: (Input, float) -> None
         since = time.time()
         while since > time.time() - timeout:
             data = self.dut.get('/get_input_status')
             try:
-                next(x for x in data['status'] if x['id'] == input.input_id)
-                logger.debug('input {}#{} with status discovered, after {:.2f}s'.format(input.type, input.input_id, time.time() - since))
+                next(x for x in data['status'] if x['id'] == _input.input_id)
+                logger.debug('input {}#{} with status discovered, after {:.2f}s'.format(_input.module.mtype, _input.input_id, time.time() - since))
                 return
             except StopIteration:
                 pass
             time.sleep(2)
-        raise AssertionError('input {}#{} status missing, timeout after {:.2f}s'.format(input.type, input.input_id, time.time() - since))
+        raise AssertionError('input {}#{} status missing, timeout after {:.2f}s'.format(_input.module.mtype, _input.input_id, time.time() - since))
