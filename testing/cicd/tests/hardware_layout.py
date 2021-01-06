@@ -33,9 +33,16 @@ class CT(object):
 
 
 class Module(object):
-    def __init__(self, name, mtype, inputs=None, cts=None, outputs=None):
+    class HardwareType(object):
+        VIRTUAL = 'virtual'
+        PHYSICAL = 'physical'
+        EMULATED = 'emulated'
+        INTERNAL = 'internal'
+
+    def __init__(self, name, mtype, hardware_type, inputs=None, cts=None, outputs=None):
         self.name = name
         self.mtype = mtype
+        self.hardware_type = hardware_type
         self.inputs = []
         for _input in (inputs or []):
             _input.module = self
@@ -52,7 +59,8 @@ class Module(object):
 
 _OUTPUT_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [
-        Module(name='output module 0', mtype='O',
+        Module(name='output module 0', mtype='o',
+               hardware_type=Module.HardwareType.INTERNAL,
                outputs=[Output(output_id=0),
                         Output(output_id=1),
                         Output(output_id=2),
@@ -61,7 +69,8 @@ _OUTPUT_MODULE_LAYOUTS = {
                         Output(output_id=5),
                         Output(output_id=6),
                         Output(output_id=7)]),
-        Module(name='output module 1', mtype='O',
+        Module(name='output module 1', mtype='o',
+               hardware_type=Module.HardwareType.INTERNAL,
                outputs=[Output(output_id=8),
                         Output(output_id=9),
                         Output(output_id=10),
@@ -73,6 +82,7 @@ _OUTPUT_MODULE_LAYOUTS = {
     ],
     TestPlatform.DEBIAN: [
         Module(name='output module', mtype='O',
+               hardware_type=Module.HardwareType.PHYSICAL,
                outputs=[Output(output_id=0),
                         Output(output_id=1),
                         Output(output_id=2),
@@ -82,6 +92,7 @@ _OUTPUT_MODULE_LAYOUTS = {
                         Output(output_id=6),
                         Output(output_id=7)]),
         Module(name='virtual output', mtype='o',
+               hardware_type=Module.HardwareType.VIRTUAL,
                outputs=[Output(output_id=8),
                         Output(output_id=9),
                         Output(output_id=10),
@@ -96,33 +107,33 @@ OUTPUT_MODULE_LAYOUT = _OUTPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Modul
 
 _INPUT_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [
-        Module(name='input module', mtype='I', inputs=[
-            Input(input_id=0, tester_output_id=0),
-            Input(input_id=1, tester_output_id=1),
-            Input(input_id=2, tester_output_id=2),
-            Input(input_id=3, tester_output_id=3)  # Only 4 inputs are wired up
-        ]),
+        Module(name='input module', mtype='I',
+               hardware_type=Module.HardwareType.INTERNAL,
+               inputs=[Input(input_id=0, tester_output_id=0),
+                       Input(input_id=1, tester_output_id=1),
+                       Input(input_id=2, tester_output_id=2),
+                       Input(input_id=3, tester_output_id=3)])  # Only 4 inputs are wired up
     ],
     TestPlatform.DEBIAN: [
-        Module(name='input module', mtype='I', inputs=[
-            Input(input_id=0, tester_output_id=0),
-            Input(input_id=1, tester_output_id=1),
-            Input(input_id=2, tester_output_id=2),
-            Input(input_id=3, tester_output_id=3),
-            Input(input_id=4, tester_output_id=4),
-            Input(input_id=5, tester_output_id=5),
-            Input(input_id=6, tester_output_id=6),
-            Input(input_id=7, tester_output_id=7),
-        ]),
-        Module(name='CAN control', mtype='C', inputs=[
-            # TODO: also test random order discovery?
-            Input(input_id=16, tester_output_id=32),
-            Input(input_id=17, tester_output_id=33),
-            Input(input_id=18, tester_output_id=34),
-            Input(input_id=19, tester_output_id=35),
-            Input(input_id=20, tester_output_id=36),
-            Input(input_id=21, tester_output_id=37),
-        ])
+        Module(name='input module', mtype='I',
+               hardware_type=Module.HardwareType.PHYSICAL,
+               inputs=[Input(input_id=0, tester_output_id=0),
+                       Input(input_id=1, tester_output_id=1),
+                       Input(input_id=2, tester_output_id=2),
+                       Input(input_id=3, tester_output_id=3),
+                       Input(input_id=4, tester_output_id=4),
+                       Input(input_id=5, tester_output_id=5),
+                       Input(input_id=6, tester_output_id=6),
+                       Input(input_id=7, tester_output_id=7)]),
+        # TODO: also test random order discovery?
+        Module(name='CAN control', mtype='i',
+               hardware_type=Module.HardwareType.EMULATED,
+               inputs=[Input(input_id=16, tester_output_id=32),
+                       Input(input_id=17, tester_output_id=33),
+                       Input(input_id=18, tester_output_id=34),
+                       Input(input_id=19, tester_output_id=35),
+                       Input(input_id=20, tester_output_id=36),
+                       Input(input_id=21, tester_output_id=37)])
     ]
 }
 INPUT_MODULE_LAYOUT = _INPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]

@@ -25,7 +25,8 @@ import requests
 import ujson as json
 from requests.exceptions import ConnectionError, RequestException
 
-from tests.hardware_layout import TEST_PLATFORM, TestPlatform, INPUT_MODULE_LAYOUT, Input, Output
+from tests.hardware_layout import TEST_PLATFORM, TestPlatform, \
+    OUTPUT_MODULE_LAYOUT, INPUT_MODULE_LAYOUT, Input, Output, Module
 
 logger = logging.getLogger('openmotics')
 
@@ -241,40 +242,53 @@ class Toolbox(object):
             self.create_or_update_user()
             self.dut.login()
 
+        expected_modules = {Module.HardwareType.EMULATED: {},
+                            Module.HardwareType.VIRTUAL: {},
+                            Module.HardwareType.PHYSICAL: {},
+                            Module.HardwareType.INTERNAL: {}}
+        for module in OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT:
+            if module.mtype not in expected_modules[module.hardware_type]:
+                expected_modules[module.hardware_type][module.mtype] = 0
+            expected_modules[module.hardware_type][module.mtype] += 1
+        logger.info('Expected modules: {0}'.format(expected_modules))
+
         try:
-            self.list_modules('O')
-            data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
-            assert 'O' in data['outputs']
-            assert 'I' in data['inputs']
-            if TEST_PLATFORM == TestPlatform.DEBIAN:
-                assert 'C' in data['can_inputs']
+            modules = self.count_modules('master')
+            logger.info('Current discovered modules: {0}'.format(modules))
+            for hardware_type in [Module.HardwareType.PHYSICAL, Module.HardwareType.EMULATED, Module.HardwareType.INTERNAL]:
+                for mtype, expected_amount in expected_modules[hardware_type].items():
+                    assert modules[mtype] == expected_amount
         except Exception:
-            logger.info('discovering modules...')
+            logger.info('Discovering modules...')
             self.discover_modules(output_modules=True,
                                   input_modules=True,
                                   can_controls=True,
                                   ucans=True)
 
-        # TODO compare with hardware modules instead.
-        data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
-        assert 'O' in data['outputs']
-        assert 'I' in data['inputs']
-        if TEST_PLATFORM == TestPlatform.DEBIAN:
-            assert 'C' in data['can_inputs']
+        modules = self.count_modules('master')
+        logger.info('Current discovered modules: {0}'.format(modules))
+        for hardware_type in [Module.HardwareType.PHYSICAL, Module.HardwareType.EMULATED, Module.HardwareType.INTERNAL]:
+            for mtype, expected_amount in expected_modules[hardware_type].items():
+                assert modules[mtype] == expected_amount
 
         # TODO ensure discovery synchonization finished.
         for module in INPUT_MODULE_LAYOUT:
             self.ensure_input_exists(module.inputs[-1], timeout=300)
 
         try:
-            data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
-            assert 'o' in data['outputs']
+            for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
+                assert modules[mtype] == expected_amount
         except Exception:
-            logger.info('adding virtual modules...')
-            self.add_virtual_modules(module_amounts={'o': 1})
+            logger.info('Adding virtual modules...')
+            for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
+                extra_needed_amount = expected_amount - modules[mtype]
+                assert extra_needed_amount > 0
+                self.add_virtual_modules(module_amounts={mtype: expected_amount - modules[mtype]})
 
-        data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
-        assert 'o' in data['outputs']
+        modules = self.count_modules('master')
+        logger.info('Current discovered modules: {0}'.format(modules))
+        for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
+            assert modules[mtype] == expected_amount
 
     def print_logs(self):
         # type: () -> None
@@ -292,24 +306,34 @@ class Toolbox(object):
         params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm}
         return self.dut.get('/factory_reset', params=params, success=confirm)
 
-    def list_modules(self, module_type, min_modules=1, hardware=True):
-        # type: (str, int, bool) -> List[Dict[str,Any]]
-        data = self.dut.get('/get_modules_information')
-        logger.info('Found modules: {0}'.format(data['modules']))
+    def list_modules(self):
+        # type: () -> Dict[str, Any]
+        return self.dut.get('/get_modules_information')['modules']
+
+    def count_modules(self, category):
+        modules = {}
+        for address, info in self.list_modules()[category].items():
+            if info['type'] not in modules:
+                modules[info['type']] = 0
+            modules[info['type']] += 1
+        return modules
+
+    def assert_modules(self, module_type, min_modules=1):
+        # type: (str, int) -> List[Dict[str, Any]]
+        data = self.list_modules()
         modules = []
-        for address, info in data['modules']['master'].items():
-            if info['type'] != module_type or (not info['firmware'] and hardware):
+        for address, info in data['master'].items():
+            if info['type'] != module_type:
                 continue
             modules.append(info)
         assert len(modules) >= min_modules, 'Not enough modules of type \'{}\' available in {}'.format(module_type, data)
         return modules
 
-    def list_energy_modules(self, module_type, min_modules=1):
+    def assert_energy_modules(self, module_type, min_modules=1):
         # type: (str, int) -> List[Dict[str, Any]]
-        data = self.dut.get('/get_modules_information')
-        logger.info('Found modules: {0}'.format(data['modules']))
+        data = self.list_modules()
         modules = []
-        for address, info in data['modules']['energy'].items():
+        for address, info in data['energy'].items():
             if info['type'] != module_type or not info['firmware']:
                 continue
             modules.append(info)
