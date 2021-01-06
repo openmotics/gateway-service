@@ -17,12 +17,12 @@ import logging
 import hypothesis
 import pytest
 import time
-from tests.hardware_layout import TEST_PLATFORM, TestPlatform
+from tests.hardware_layout import TEST_PLATFORM, TestPlatform, CT
+from tests.hardware import cts
 
 if False:  # MYPY
     from typing import Any
     from tests.toolbox import Toolbox
-    from tests.hardware_layout import CT
 
 logger = logging.getLogger('openmotics')
 
