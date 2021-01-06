@@ -191,8 +191,9 @@ class Toolbox(object):
     DEBIAN_DISCOVER_ENERGY = 23  # tester_output2.output_7
     DEBIAN_POWER_OUTPUT = 8  # tester_output_1.output_0
     POWER_ENERGY_MODULE = 11  # tester_output_1.output_3
-    CORE_PLUS_SETUP_BUTTON = 19
-    CORE_PLUG_ACTION_BUTTON = 16
+    CORE_PLUS_SETUP_BUTTON = 19  # tester_output_2.output_3
+    CORE_PLUG_ACTION_BUTTON = 16  # tester_output_2.output_0
+    CORE_PLUS_POWER_OUTPUT = 10  # tester_output_1.output_2
 
     def __init__(self):
         # type: () -> None
@@ -315,15 +316,19 @@ class Toolbox(object):
     def authorized_mode_start(self):
         # type: () -> None
         logger.debug('start authorized mode')
-        if TEST_PLATFORM == TestPlatform.DEBIAN:
-            self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE, delay=15)
-        elif TEST_PLATFORM == TestPlatform.CORE_PLUS:
+        if TEST_PLATFORM == TestPlatform.CORE_PLUS:
             self.tester.toggle_outputs([self.CORE_PLUG_ACTION_BUTTON,
                                         self.CORE_PLUS_SETUP_BUTTON], delay=15)
+        else:
+            self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE, delay=15)
 
     def authorized_mode_stop(self):
         # type: () -> None
-        self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE)
+        if TEST_PLATFORM == TestPlatform.CORE_PLUS:
+            self.tester.toggle_outputs([self.CORE_PLUG_ACTION_BUTTON,
+                                        self.CORE_PLUS_SETUP_BUTTON])
+        else:
+            self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE)
 
     def create_or_update_user(self, success=True):
         # type: (bool) -> None
@@ -505,15 +510,23 @@ class Toolbox(object):
     def power_off(self):
         # type: () -> None
         logger.debug('power off')
-        self.tester.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': False})
+        if TEST_PLATFORM == TestPlatform.CORE_PLUS:
+            output_id = self.CORE_PLUS_POWER_OUTPUT
+        else:
+            output_id = self.DEBIAN_POWER_OUTPUT
+        self.tester.get('/set_output', {'id': output_id, 'is_on': False})
         time.sleep(2)
 
     def ensure_power_on(self):
         # type: () -> None
-        if not self.health_check(timeout=0.2):
+        if not self.health_check(timeout=0.2, skip_assert=True):
             return
         logger.info('power on')
-        self.tester.get('/set_output', {'id': self.DEBIAN_POWER_OUTPUT, 'is_on': True})
+        if TEST_PLATFORM == TestPlatform.CORE_PLUS:
+            output_id = self.CORE_PLUS_POWER_OUTPUT
+        else:
+            output_id = self.DEBIAN_POWER_OUTPUT
+        self.tester.get('/set_output', {'id': output_id, 'is_on': True})
         logger.info('waiting for gateway api to respond...')
         self.health_check(timeout=300)
         logger.info('health check done')
@@ -526,7 +539,7 @@ class Toolbox(object):
         finally:
             self.dut.get('/set_self_recovery', {'active': True})
 
-    def health_check(self, timeout=30):
+    def health_check(self, timeout=30, skip_assert=False):
         # type: (float) -> List[str]
         since = time.time()
         pending = ['unknown']
@@ -540,7 +553,9 @@ class Toolbox(object):
             except Exception:
                 pass
             time.sleep(10)
-        return pending
+        if skip_assert:
+            return pending
+        assert pending == []
 
     def configure_output(self, output, config):
         # type: (Output, Dict[str,Any]) -> None
