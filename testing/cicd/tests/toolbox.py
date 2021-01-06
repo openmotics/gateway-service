@@ -242,6 +242,7 @@ class Toolbox(object):
             self.dut.login()
 
         try:
+            self.list_modules('O')
             data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
             assert 'O' in data['outputs']
             assert 'I' in data['inputs']
@@ -294,6 +295,7 @@ class Toolbox(object):
     def list_modules(self, module_type, min_modules=1, hardware=True):
         # type: (str, int, bool) -> List[Dict[str,Any]]
         data = self.dut.get('/get_modules_information')
+        logger.info('Found modules: {0}'.format(data['modules']))
         modules = []
         for address, info in data['modules']['master'].items():
             if info['type'] != module_type or (not info['firmware'] and hardware):
@@ -305,6 +307,7 @@ class Toolbox(object):
     def list_energy_modules(self, module_type, min_modules=1):
         # type: (str, int) -> List[Dict[str, Any]]
         data = self.dut.get('/get_modules_information')
+        logger.info('Found modules: {0}'.format(data['modules']))
         modules = []
         for address, info in data['modules']['energy'].items():
             if info['type'] != module_type or not info['firmware']:
