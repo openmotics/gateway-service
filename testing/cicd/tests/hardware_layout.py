@@ -1,7 +1,15 @@
-from tests.toolbox import Toolbox
+import os
 
 if False:  # MYPY
     from typing import List
+
+
+class TestPlatform(object):
+    CORE_PLUS = 'CORE_PLUS'
+    DEBIAN = 'DEBIAN'
+
+
+TEST_PLATFORM = os.environ['TEST_PLATFORM']
 
 
 class Output(object):
@@ -43,7 +51,7 @@ class Module(object):
 
 
 _OUTPUT_MODULE_LAYOUTS = {
-    Toolbox.TestPlatforms.CORE_PLUS: [
+    TestPlatform.CORE_PLUS: [
         Module(name='output module 0', mtype='O',
                outputs=[Output(output_id=0),
                         Output(output_id=1),
@@ -63,7 +71,7 @@ _OUTPUT_MODULE_LAYOUTS = {
                         Output(output_id=14),
                         Output(output_id=15)])
     ],
-    Toolbox.TestPlatforms.DEBIAN: [
+    TestPlatform.DEBIAN: [
         Module(name='output module', mtype='O',
                outputs=[Output(output_id=0),
                         Output(output_id=1),
@@ -84,10 +92,10 @@ _OUTPUT_MODULE_LAYOUTS = {
                         Output(output_id=15)])
     ]
 }
-OUTPUT_MODULE_LAYOUT = _OUTPUT_MODULE_LAYOUTS[Toolbox.TEST_PLATFORM]  # type: List[Module]
+OUTPUT_MODULE_LAYOUT = _OUTPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
 
 _INPUT_MODULE_LAYOUTS = {
-    Toolbox.TestPlatforms.CORE_PLUS: [
+    TestPlatform.CORE_PLUS: [
         Module(name='input module', mtype='I', inputs=[
             Input(input_id=0, tester_output_id=0),
             Input(input_id=1, tester_output_id=1),
@@ -95,7 +103,7 @@ _INPUT_MODULE_LAYOUTS = {
             Input(input_id=3, tester_output_id=3)  # Only 4 inputs are wired up
         ]),
     ],
-    Toolbox.TestPlatforms.DEBIAN: [
+    TestPlatform.DEBIAN: [
         Module(name='input module', mtype='I', inputs=[
             Input(input_id=0, tester_output_id=0),
             Input(input_id=1, tester_output_id=1),
@@ -117,13 +125,13 @@ _INPUT_MODULE_LAYOUTS = {
         ])
     ]
 }
-INPUT_MODULE_LAYOUT = _INPUT_MODULE_LAYOUTS[Toolbox.TEST_PLATFORM]  # type: List[Module]
+INPUT_MODULE_LAYOUT = _INPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
 
 _ENERGY_MODULE_LAYOUTS = {
-    Toolbox.TestPlatforms.CORE_PLUS: [
+    TestPlatform.CORE_PLUS: [
         # TODO: Add energy module to the Core+
     ],
-    Toolbox.TestPlatforms.DEBIAN: [
+    TestPlatform.DEBIAN: [
         Module(name='energy_module', mtype='E', cts=[
             CT(module_id=1, ct_id=0),
             CT(module_id=1, ct_id=1),
@@ -140,6 +148,6 @@ _ENERGY_MODULE_LAYOUTS = {
         ])
     ]
 }
-ENERGY_MODULE_LAYOUT = _ENERGY_MODULE_LAYOUTS[Toolbox.TEST_PLATFORM]  # type: List[Module]
+ENERGY_MODULE_LAYOUT = _ENERGY_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
 # TODO: There is no energy module in the Core+ setup at this moment, so to prevent failures from tests
 #       the Debian modules will be selected, and the test itself will skip based on the platform

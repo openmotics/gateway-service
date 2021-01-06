@@ -25,7 +25,7 @@ import requests
 import ujson as json
 from requests.exceptions import ConnectionError, RequestException
 
-from tests.hardware_layout import INPUT_MODULE_LAYOUT, Input, Output
+from tests.hardware_layout import TEST_PLATFORM, TestPlatform, INPUT_MODULE_LAYOUT, Input, Output
 
 logger = logging.getLogger('openmotics')
 
@@ -184,11 +184,6 @@ class TesterGateway(object):
 
 
 class Toolbox(object):
-    class TestPlatforms(object):
-        CORE_PLUS = 'CORE_PLUS'
-        DEBIAN = 'DEBIAN'
-
-    TEST_PLATFORM = os.environ['TEST_PLATFORM']
     DEBIAN_AUTHORIZED_MODE = 13  # tester_output_1.output_5
     DEBIAN_DISCOVER_INPUT = 14  # tester_output_1.output_6
     DEBIAN_DISCOVER_OUTPUT = 15  # tester_output_1.output_7
@@ -249,7 +244,7 @@ class Toolbox(object):
             data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
             assert 'O' in data['outputs']
             assert 'I' in data['inputs']
-            if Toolbox.TEST_PLATFORM == Toolbox.TestPlatforms.DEBIAN:
+            if TEST_PLATFORM == TestPlatform.DEBIAN:
                 assert 'C' in data['can_inputs']
         except Exception:
             logger.info('discovering modules...')
@@ -262,7 +257,7 @@ class Toolbox(object):
         data = self.dut.get('/get_modules')  # workaround for list_modules/list_energy_modules
         assert 'O' in data['outputs']
         assert 'I' in data['inputs']
-        if Toolbox.TEST_PLATFORM == Toolbox.TestPlatforms.DEBIAN:
+        if TEST_PLATFORM == TestPlatform.DEBIAN:
             assert 'C' in data['can_inputs']
 
         # TODO ensure discovery synchonization finished.
@@ -320,9 +315,9 @@ class Toolbox(object):
     def authorized_mode_start(self):
         # type: () -> None
         logger.debug('start authorized mode')
-        if self.TEST_PLATFORM == Toolbox.TestPlatforms.DEBIAN:
+        if TEST_PLATFORM == TestPlatform.DEBIAN:
             self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE, delay=15)
-        elif self.TEST_PLATFORM == Toolbox.TestPlatforms.CORE_PLUS:
+        elif TEST_PLATFORM == TestPlatform.CORE_PLUS:
             self.tester.toggle_outputs([self.CORE_PLUG_ACTION_BUTTON,
                                         self.CORE_PLUS_SETUP_BUTTON], delay=15)
 

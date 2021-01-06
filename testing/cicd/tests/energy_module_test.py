@@ -17,6 +17,7 @@ import logging
 import hypothesis
 import pytest
 import time
+from tests.hardware_layout import TEST_PLATFORM, TestPlatform
 
 if False:  # MYPY
     from typing import Any
@@ -34,8 +35,8 @@ def energy_module(toolbox):
 @hypothesis.given(cts())
 def test_realtime_power(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT) -> None
     _ = energy_module
-    if Toolbox.TEST_PLATFORM != Toolbox.TestPlatforms.DEBIAN:
-        return  # TODO: Energy module tests nog yet supported on othe platforms
+    if TEST_PLATFORM != TestPlatform.DEBIAN:
+        return  # TODO: Energy module tests not yet supported on othe platforms
     _assert_realtime(toolbox, ct)
 
 
@@ -43,8 +44,8 @@ def test_realtime_power(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT)
 @hypothesis.given(cts())
 def test_power_cycle(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT) -> None
     _ = energy_module
-    if Toolbox.TEST_PLATFORM != Toolbox.TestPlatforms.DEBIAN:
-        return  # TODO: Energy module tests nog yet supported on othe platforms
+    if TEST_PLATFORM != TestPlatform.DEBIAN:
+        return  # TODO: Energy module tests not yet supported on othe platforms
     cycles = 10
     post_boot_wait = 5  # Wait `post_boot_wait` seconds after powering up the module to start using it
     toolbox.tester.get('/set_output', {'id': toolbox.POWER_ENERGY_MODULE, 'is_on': True})
