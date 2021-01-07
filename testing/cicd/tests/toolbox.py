@@ -128,16 +128,22 @@ class TesterGateway(object):
         # type: (str, Dict[str,Any], bool, bool) -> Any
         return self._client.get(path, params=params, success=success, use_token=use_token)
 
-    def toggle_output(self, output_id, delay=0.2, inverted=False):
-        self.toggle_outputs([output_id], delay=delay, inverted=inverted)
+    def toggle_output(self, output_id, delay=0.2, inverted=False, is_dimmer=False):
+        self.toggle_outputs([output_id], delay=delay, inverted=inverted, is_dimmer=is_dimmer)
 
-    def toggle_outputs(self, output_ids, delay=0.2, inverted=False):
+    def toggle_outputs(self, output_ids, delay=0.2, inverted=False, is_dimmer=False):
         temporarily_state = not inverted
         for output_id in output_ids:
-            self.get('/set_output', {'id': output_id, 'is_on': temporarily_state})
+            payload = {'id': output_id, 'is_on': temporarily_state}
+            if is_dimmer and temporarily_state:
+                payload['dimmer'] = 100
+            self.get('/set_output', payload)
         time.sleep(delay)
         for output_id in output_ids:
-            self.get('/set_output', {'id': output_id, 'is_on': not temporarily_state})
+            payload = {'id': output_id, 'is_on': not temporarily_state}
+            if is_dimmer and not temporarily_state:
+                payload['dimmer'] = 100
+            self.get('/set_output', payload)
 
     def log_events(self):
         # type: () -> None
@@ -617,9 +623,9 @@ class Toolbox(object):
         self.tester.get('/set_output', {'id': _input.tester_output_id, 'is_on': False})  # ensure start status
         time.sleep(0.2)
         self.tester.reset()
-        hypothesis.note('after input {} pressed'.format(_input))
-        self.tester.toggle_output(_input.tester_output_id)
-        logger.debug('toggled {} -> True -> False'.format(_input))
+        hypothesis.note('After input {} pressed'.format(_input))
+        self.tester.toggle_output(_input.tester_output_id, is_dimmer=_input.is_dimmer)
+        logger.debug('Toggled {} -> True -> False'.format(_input))
 
     def assert_output_changed(self, output, status, between=(0, 5)):
         # type: (Output, bool, Tuple[float,float]) -> None

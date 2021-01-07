@@ -28,9 +28,10 @@ class Output(object):
 
 
 class Input(object):
-    def __init__(self, input_id, tester_output_id, module=None):
+    def __init__(self, input_id, tester_output_id, module=None, is_dimmer=False):
         self.input_id = input_id
         self.tester_output_id = tester_output_id
+        self.is_dimmer = is_dimmer
         self.module = module
 
     def __str__(self):
@@ -138,10 +139,10 @@ _INPUT_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [
         Module(name='input module', mtype='i',
                hardware_type=Module.HardwareType.INTERNAL,
-               inputs=[Input(input_id=0, tester_output_id=24),
-                       Input(input_id=1, tester_output_id=25),
-                       Input(input_id=2, tester_output_id=26),
-                       Input(input_id=3, tester_output_id=27)])  # Only 4 inputs are wired up
+               inputs=[Input(input_id=0, tester_output_id=24, is_dimmer=True),
+                       Input(input_id=1, tester_output_id=25, is_dimmer=True),
+                       Input(input_id=2, tester_output_id=26, is_dimmer=True),
+                       Input(input_id=3, tester_output_id=27, is_dimmer=True)])  # Only 4 inputs are wired up
     ],
     TestPlatform.DEBIAN: [
         Module(name='input module', mtype='I',
