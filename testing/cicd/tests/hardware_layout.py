@@ -17,6 +17,15 @@ class Output(object):
         self.output_id = output_id
         self.module = module
 
+    def __str__(self):
+        return 'Output({0}#{1})'.format(
+            '?' if self.module is None else self.module.mtype,
+            self.output_id
+        )
+
+    def __repr__(self):
+        return str(self)
+
 
 class Input(object):
     def __init__(self, input_id, tester_output_id, module=None):
@@ -24,12 +33,30 @@ class Input(object):
         self.tester_output_id = tester_output_id
         self.module = module
 
+    def __str__(self):
+        return 'Input({0}#{1})'.format(
+            '?' if self.module is None else self.module.mtype,
+            self.input_id
+        )
+
+    def __repr__(self):
+        return str(self)
+
 
 class CT(object):
     def __init__(self, module_id, ct_id, module=None):
         self.module_id = module_id
         self.ct_id = ct_id
         self.module = module
+
+    def __str__(self):
+        return 'CT({0}#{1}.{2})'.format(
+            '?' if self.module is None else self.module.mtype,
+            self.module_id, self.ct_id
+        )
+
+    def __repr__(self):
+        return str(self)
 
 
 class Module(object):
