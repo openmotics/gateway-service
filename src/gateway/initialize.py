@@ -306,7 +306,7 @@ def setup_target_platform(target_platform, message_client_name):
     # Thermostats
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
     thermostats_gateway_enabled = thermostats_gateway_feature is not None and thermostats_gateway_feature.enabled
-    if target_platform in Platform.CoreTypes or thermostats_gateway_enabled:
+    if target_platform not in Platform.ClassicTypes or thermostats_gateway_enabled:
         Injectable.value(thermostat_controller=ThermostatControllerGateway())
     else:
         Injectable.value(thermostat_controller=ThermostatControllerMaster())
