@@ -25,7 +25,7 @@ from threading import Event, Lock, Thread
 
 import six
 from six.moves.queue import Empty, Queue
-
+from collections import Counter
 from gateway.daemon_thread import BaseThread
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_controller import InMaintenanceModeException
@@ -89,6 +89,10 @@ class MasterCommunicator(object):
         self.__running = False
 
         self.__read_thread = None  # type: Optional[Thread]
+
+        self.__command_total_histogram = Counter()  # type: Counter
+        self.__command_success_histogram = Counter()  # type: Counter
+        self.__command_timeout_histogram = Counter()  # type: Counter
 
         self.__communication_stats = {'calls_succeeded': [],
                                       'calls_timedout': [],
@@ -160,6 +164,16 @@ class MasterCommunicator(object):
                                       'calls_timedout': [],
                                       'bytes_written': 0,
                                       'bytes_read': 0}
+
+    def get_command_histograms(self):
+        return {'total': dict(self.__command_total_histogram),
+                'success': dict(self.__command_success_histogram),
+                'timeout': dict(self.__command_timeout_histogram)}
+
+    def reset_command_histograms(self):
+        self.__command_total_histogram.clear()
+        self.__command_success_histogram.clear()
+        self.__command_timeout_histogram.clear()
 
     def get_debug_buffer(self):
         # type: () -> Dict[str,Dict[float,str]]
@@ -261,6 +275,7 @@ class MasterCommunicator(object):
         inp = cmd.create_input(cid, fields, extended_crc)
 
         with self.__command_lock:
+            self.__command_total_histogram.update({str(cmd.action): 1})
             self.__consumers.append(consumer)
             self.__write_to_serial(inp)
             try:
@@ -271,6 +286,7 @@ class MasterCommunicator(object):
                     self.__last_success = time.time()
                     self.__communication_stats['calls_succeeded'].append(time.time())
                     self.__communication_stats['calls_succeeded'] = self.__communication_stats['calls_succeeded'][-50:]
+                    self.__command_success_histogram.update({str(cmd.action): 1})
                     return result
             except CommunicationTimedOutException:
                 if cmd.action != bytearray(b'FV'):
@@ -278,6 +294,7 @@ class MasterCommunicator(object):
                     # call, so this call can timeout while it's expected. We don't take those into account.
                     self.__communication_stats['calls_timedout'].append(time.time())
                     self.__communication_stats['calls_timedout'] = self.__communication_stats['calls_timedout'][-50:]
+                self.__command_timeout_histogram.update({str(cmd.action): 1})
                 raise
 
     @staticmethod
