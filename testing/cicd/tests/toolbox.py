@@ -104,7 +104,7 @@ class Client(object):
                 logger.debug('Request {} {} failed {}, retrying...'.format(self._id, path, exc))
                 time.sleep(16)
                 pass
-        raise AssertionError('Request {0} {} failed after {:.2f}s'.format(self._id, path, time.time() - since))
+        raise AssertionError('Request {} {} failed after {:.2f}s'.format(self._id, path, time.time() - since))
 
 
 class TesterGateway(object):
@@ -330,7 +330,7 @@ class Toolbox(object):
         assert len(modules) >= min_modules, 'Not enough modules of type \'{}\' available in {}'.format(module_type, data)
         return modules
 
-    def assert_energy_modules(self, module_type, min_modules=1):
+    def list_energy_modules(self, module_type, min_modules=1):
         # type: (str, int) -> List[Dict[str, Any]]
         data = self.list_modules()
         modules = []
