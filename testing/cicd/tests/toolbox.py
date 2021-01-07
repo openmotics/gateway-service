@@ -591,7 +591,7 @@ class Toolbox(object):
         # type: (Output, Dict[str,Any]) -> None
         config_data = {'id': output.output_id}
         config_data.update(**config)
-        logger.debug('configure output {}#{} with {}'.format(output.module.mtype, output.output_id, config))
+        logger.debug('configure output {} with {}'.format(output, config))
         self.dut.get('/set_output_configuration', {'config': json.dumps(config_data)})
 
     def ensure_output(self, output, status, config=None):
@@ -599,8 +599,8 @@ class Toolbox(object):
         if config:
             self.configure_output(output, config)
         state = ' '.join(self.tester.get_last_outputs())
-        hypothesis.note('ensure output {}#{} is {}'.format(output.module.mtype, output.output_id, status))
-        logger.debug('ensure output {}#{} is {}    outputs={}'.format(output.module.mtype, output.output_id, status, state))
+        hypothesis.note('ensure output {} is {}'.format(output, status))
+        logger.debug('ensure output {} is {}    outputs={}'.format(output, status, state))
         time.sleep(0.2)
         self.set_output(output, status)
         time.sleep(0.2)
@@ -608,7 +608,7 @@ class Toolbox(object):
 
     def set_output(self, output, status):
         # type: (Output, int) -> None
-        logger.debug('set output {}#{} -> {}'.format(output.module.mtype, output.output_id, status))
+        logger.debug('set output {} -> {}'.format(output, status))
         self.dut.get('/set_output', {'id': output.output_id, 'is_on': status})
 
     def press_input(self, _input):
@@ -616,33 +616,33 @@ class Toolbox(object):
         self.tester.get('/set_output', {'id': _input.tester_output_id, 'is_on': False})  # ensure start status
         time.sleep(0.2)
         self.tester.reset()
-        hypothesis.note('after input {}#{} pressed'.format(_input.module.mtype, _input.input_id))
+        hypothesis.note('after input {} pressed'.format(_input))
         self.tester.toggle_output(_input.tester_output_id)
-        logger.debug('toggled {}#{} -> True -> False'.format(_input.module.mtype, _input.input_id))
+        logger.debug('toggled {} -> True -> False'.format(_input))
 
     def assert_output_changed(self, output, status, between=(0, 5)):
         # type: (Output, bool, Tuple[float,float]) -> None
-        hypothesis.note('assert output {}#{} status changed {} -> {}'.format(output.module.mtype, output.output_id, not status, status))
+        hypothesis.note('assert output {} status changed {} -> {}'.format(output, not status, status))
         if self.tester.receive_output_event(output.output_id, status, between=between):
             return
-        raise AssertionError('expected event {}#{} status={}'.format(output.module.mtype, output.output_id, status))
+        raise AssertionError('expected event {} status={}'.format(output, status))
 
     def assert_output_status(self, output, status, timeout=5):
         # type: (Output, bool, float) -> None
-        hypothesis.note('assert output {}#{} status is {}'.format(output.module.mtype, output.output_id, status))
+        hypothesis.note('assert output {} status is {}'.format(output, status))
         since = time.time()
         current_status = None
         while since > time.time() - timeout:
             data = self.dut.get('/get_output_status')
             current_status = data['status'][output.output_id]['status']
             if status == bool(current_status):
-                logger.debug('get output {}#{} status={}, after {:.2f}s'.format(output.module.mtype, output.output_id, status, time.time() - since))
+                logger.debug('get output {} status={}, after {:.2f}s'.format(output, status, time.time() - since))
                 return
             time.sleep(2)
         state = ' '.join(self.tester.get_last_outputs())
-        logger.error('get status {} status={} != expected {}, timeout after {:.2f}s    outputs={}'.format(output.output_id, bool(current_status), status, time.time() - since, state))
+        logger.error('get status {} status={} != expected {}, timeout after {:.2f}s    outputs={}'.format(output, bool(current_status), status, time.time() - since, state))
         self.tester.log_events()
-        raise AssertionError('get status {} status={} != expected {}, timeout after {:.2f}s'.format(output.output_id, bool(current_status), status, time.time() - since))
+        raise AssertionError('get status {} status={} != expected {}, timeout after {:.2f}s'.format(output, bool(current_status), status, time.time() - since))
 
     def ensure_input_exists(self, _input, timeout=30):
         # type: (Input, float) -> None
@@ -652,9 +652,9 @@ class Toolbox(object):
             try:
                 next(x for x in data['status'] if x['id'] == _input.input_id)
                 next(x for x in data['status'] if x['id'] == _input.input_id)
-                logger.debug('input {}#{} with status discovered, after {:.2f}s'.format(_input.module.mtype, _input.input_id, time.time() - since))
+                logger.debug('input {} with status discovered, after {:.2f}s'.format(_input, time.time() - since))
                 return
             except StopIteration:
                 pass
             time.sleep(2)
-        raise AssertionError('input {}#{} status missing, timeout after {:.2f}s'.format(_input.module.mtype, _input.input_id, time.time() - since))
+        raise AssertionError('input {} status missing, timeout after {:.2f}s'.format(_input, time.time() - since))

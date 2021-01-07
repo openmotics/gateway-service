@@ -20,7 +20,7 @@ def outputs(draw, types=output_types(), virtual=False):
             continue
         _outputs += module.outputs
     output = _outputs[draw(integers(min_value=0, max_value=len(_outputs) - 1))]
-    hypothesis.note('Using {} {}#{}'.format(output.module.name, output.module.mtype, output.output_id))
+    hypothesis.note('Using {} {}'.format(output.module.name, output))
     return output
 
 
@@ -43,7 +43,7 @@ def inputs(draw, types=input_types()):
             continue
         _inputs += module.inputs
     _input = _inputs[draw(integers(min_value=0, max_value=len(_inputs) - 1))]
-    hypothesis.note('Using {} {}#{}'.format(_input.module.name, _input.module.mtype, _input.input_id))
+    hypothesis.note('Using {} {}'.format(_input.module.name, _input))
     return _input
 
 
@@ -67,7 +67,7 @@ def cts(draw, types=energy_module_types()):
     assert module_type in ['E'], 'Invalid energy module type {}'.format(module_type)
     # TODO: For now, there's only one CT actually connected, to always take that one
     ct = ENERGY_MODULE_LAYOUT[0].cts[0]
-    hypothesis.note('Using {} {}#{}'.format(ct.module.name, ct.module.mtype, ct.ct_id))
+    hypothesis.note('Using {} {}'.format(ct.module.name, ct))
     return ct
 
 

@@ -34,12 +34,10 @@ DEFAULT_INPUT_CONFIG = {'invert': 255}
 @hypothesis.given(inputs(), outputs(), booleans())
 def test_actions(toolbox, _input, output, to_status):
     from_status = not to_status
-    logger.debug('input action {}#{} to {}#{}, expect event {} -> {}'.format(
-        _input.module.mtype, _input.input_id,
-        output.module.mtype, output.output_id,
-        from_status, to_status))
+    logger.debug('input action {} to {}, expect event {} -> {}'.format(
+        _input, output, from_status, to_status))
 
-    hypothesis.note('with input {}#{} action set to {}#{}'.format(_input.module.mtype, _input.input_id, output.module.mtype, output.output_id))
+    hypothesis.note('with input {} action set to {}'.format(_input, output))
     input_config = {'id': _input.input_id, 'action': output.output_id}
     input_config.update(DEFAULT_INPUT_CONFIG)
     toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
@@ -58,11 +56,9 @@ def test_actions(toolbox, _input, output, to_status):
 @hypothesis.given(inputs(), outputs(), just(True))
 def test_motion_sensor(toolbox, _input, output, to_status):
     from_status = not to_status
-    logger.debug('motion sensor {}#{} to {}#{}, expect event {} -> {} after 2m30s'.format(
-        _input.module.mtype, _input.input_id,
-        output.module.mtype, output.output_id,
-        from_status, to_status))
-    hypothesis.note('with input {}#{} action set to timeout after 2m30s'.format(_input.module.mtype, _input.input_id))
+    logger.debug('motion sensor {} to {}, expect event {} -> {} after 2m30s'.format(
+        _input, output, from_status, to_status))
+    hypothesis.note('with input {} action set to timeout after 2m30s'.format(_input))
     actions = ['195', str(output.output_id)]  # output timeout of 2m30s
     input_config = {'id': _input.input_id, 'basic_actions': ','.join(actions), 'action': 240}
     input_config.update(DEFAULT_INPUT_CONFIG)
@@ -87,14 +83,12 @@ def group_action_ids():
 def test_group_action_toggle(toolbox, _input, outputs, group_action_id, to_status):
     output, other_output = outputs
     from_status = not to_status
-    logger.debug('group action GA#{} for {}#{} to {}#{} {}#{}, expect event {} -> {}'.format(
+    logger.debug('group action GA#{} for {} to {} and {}, expect event {} -> {}'.format(
         group_action_id,
-        _input.module.mtype, _input.input_id,
-        output.module.mtype, output.output_id,
-        other_output.module.mtype, other_output.output_id,
+        _input, output, other_output,
         from_status, to_status))
 
-    hypothesis.note('with input {}#{} action set to GA#{}'.format(_input.module.mtype, _input.input_id, group_action_id))
+    hypothesis.note('with input {} action set to GA#{}'.format(_input, group_action_id))
     actions = ['2', str(group_action_id)]
     input_config = {'id': _input.input_id, 'basic_actions': ','.join(actions), 'action': 240}
     input_config.update(DEFAULT_INPUT_CONFIG)
