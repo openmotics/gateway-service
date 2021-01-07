@@ -35,8 +35,9 @@ if False:  # MYPY
 
 
 class Client(object):
-    def __init__(self, host, auth=None):
-        # type: (str, List[str]) -> None
+    def __init__(self, id, host, auth=None):
+        # type: (str, str, List[str]) -> None
+        self._id = id
         self._host = host
         self._auth = auth
         self._default_kwargs = {'verify': False}
@@ -79,7 +80,7 @@ class Client(object):
         uri = 'https://{}{}'.format(self._host, path)
         if use_token:
             headers['Authorization'] = 'Bearer {}'.format(self.token)
-            logger.debug('GET {} {}'.format(path, params))
+            logger.debug('GET {} {} {}'.format(self._id, path, params))
 
         job_name = os.getenv('JOB_NAME')
         build_number = os.getenv('BUILD_NUMBER')
@@ -100,10 +101,10 @@ class Client(object):
                     assert data['success'], 'content={}'.format(response.content.decode())
                 return data
             except (ConnectionError, RequestException) as exc:
-                logger.debug('request {} failed {}, retrying...'.format(path, exc))
+                logger.debug('Request {} {} failed {}, retrying...'.format(self._id, path, exc))
                 time.sleep(16)
                 pass
-        raise AssertionError('request {} failed after {:.2f}s'.format(path, time.time() - since))
+        raise AssertionError('Request {0} {} failed after {:.2f}s'.format(self._id, path, time.time() - since))
 
 
 class TesterGateway(object):
@@ -208,7 +209,7 @@ class Toolbox(object):
         if self._tester is None:
             tester_auth = os.environ['OPENMOTICS_TESTER_AUTH'].split(':')
             tester_host = os.environ['OPENMOTICS_TESTER_HOST']
-            self._tester = TesterGateway(Client(tester_host, auth=tester_auth))
+            self._tester = TesterGateway(Client('tester', tester_host, auth=tester_auth))
         return self._tester
 
     @property
@@ -217,7 +218,7 @@ class Toolbox(object):
         if self._dut is None:
             dut_auth = os.environ['OPENMOTICS_DUT_AUTH'].split(':')
             dut_host = os.environ['OPENMOTICS_DUT_HOST']
-            self._dut = Client(dut_host, auth=dut_auth)
+            self._dut = Client('dut', dut_host, auth=dut_auth)
         return self._dut
 
     @property
