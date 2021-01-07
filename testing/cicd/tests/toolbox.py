@@ -636,7 +636,7 @@ class Toolbox(object):
             data = self.dut.get('/get_output_status')
             current_status = data['status'][output.output_id]['status']
             if status == bool(current_status):
-                logger.debug('get output {}#{} status={}, after {:.2f}s'.format(output.module.type, output.output_id, status, time.time() - since))
+                logger.debug('get output {}#{} status={}, after {:.2f}s'.format(output.module.mtype, output.output_id, status, time.time() - since))
                 return
             time.sleep(2)
         state = ' '.join(self.tester.get_last_outputs())
@@ -650,6 +650,7 @@ class Toolbox(object):
         while since > time.time() - timeout:
             data = self.dut.get('/get_input_status')
             try:
+                next(x for x in data['status'] if x['id'] == _input.input_id)
                 next(x for x in data['status'] if x['id'] == _input.input_id)
                 logger.debug('input {}#{} with status discovered, after {:.2f}s'.format(_input.module.mtype, _input.input_id, time.time() - since))
                 return

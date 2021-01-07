@@ -47,7 +47,7 @@ def inputs(draw, types=input_types()):
     for module in INPUT_MODULE_LAYOUT:
         _inputs += module.inputs
     _input = _inputs[draw(input_ids(len(_inputs) - 1))]
-    hypothesis.note('Using {} {}#{}'.format(_input.module.name, _input.module.type, _input.input_id))
+    hypothesis.note('Using {} {}#{}'.format(_input.module.name, _input.module.mtype, _input.input_id))
     return input
 
 
