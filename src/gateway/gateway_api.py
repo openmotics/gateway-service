@@ -428,8 +428,8 @@ class GatewayApi(object):
     def master_communication_statistics(self):
         return self.__master_controller.get_communication_statistics()
 
-    def master_command_histogram(self):
-        return self.__master_controller.get_command_histogram()
+    def master_command_histograms(self):
+        return self.__master_controller.get_command_histograms()
 
     def master_last_success(self):
         """ Get the number of seconds since the last successful communication with the master.

@@ -165,12 +165,12 @@ class MasterCommunicator(object):
                                       'bytes_written': 0,
                                       'bytes_read': 0}
 
-    def get_command_histogram(self):
+    def get_command_histograms(self):
         return {'total': dict(self.__command_total_histogram),
                 'success': dict(self.__command_success_histogram),
                 'timeout': dict(self.__command_timeout_histogram)}
 
-    def reset_command_histogram(self):
+    def reset_command_histograms(self):
         self.__command_total_histogram.clear()
         self.__command_success_histogram.clear()
         self.__command_timeout_histogram.clear()

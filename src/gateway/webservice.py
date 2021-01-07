@@ -1107,7 +1107,7 @@ class WebInterface(object):
     @openmotics_api(auth=True)
     def master_diagnostics(self):
         return {'master_last_success': self._gateway_api.master_last_success(),
-                'command_histogram': self._gateway_api.master_command_histogram(),
+                'command_histograms': self._gateway_api.master_command_histograms(),
                 'communication_statistics': self._gateway_api.master_communication_statistics()}
 
     # Output configurations
