@@ -44,7 +44,7 @@ def inputs(draw, types=input_types()):
         _inputs += module.inputs
     _input = _inputs[draw(integers(min_value=0, max_value=len(_inputs) - 1))]
     hypothesis.note('Using {} {}#{}'.format(_input.module.name, _input.module.mtype, _input.input_id))
-    return input
+    return _input
 
 
 def multiple_inputs(size, types=input_types()):
