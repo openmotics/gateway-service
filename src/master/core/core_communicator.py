@@ -76,7 +76,10 @@ class CoreCommunicator(object):
         self._read_thread = BaseThread(name='coreread', target=self._read)
         self._read_thread.setDaemon(True)
 
-        self._command_histogram = Counter()  # type: Counter
+        self._command_total_histogram = Counter()  # type: Counter
+        self._command_success_histogram = Counter()  # type: Counter
+        self._command_timeout_histogram = Counter()  # type: Counter
+
         self._communication_stats = {'calls_succeeded': [],
                                      'calls_timedout': [],
                                      'bytes_written': 0,
@@ -104,10 +107,14 @@ class CoreCommunicator(object):
                                      'bytes_read': 0}
 
     def get_command_histogram(self):
-        return dict(self._command_histogram)
+        return {'total': dict(self._command_total_histogram),
+                'success': dict(self._command_success_histogram),
+                'timeout': dict(self._command_timeout_histogram)}
 
     def reset_command_histogram(self):
-        self._command_histogram.clear()
+        self._command_total_histogram.clear()
+        self._command_success_histogram.clear()
+        self._command_timeout_histogram.clear()
 
     def get_debug_buffer(self):
         # type: () -> Dict[str,Dict[float,str]]
@@ -225,7 +232,7 @@ class CoreCommunicator(object):
         command = consumer.command
 
         try:
-            self._command_histogram.update({str(command.instruction): 1})
+            self._command_total_histogram.update({str(command.instruction): 1})
             self._consumers.setdefault(consumer.get_hash(), []).append(consumer)
             self._send_command(cid, command, fields)
         except Exception:
@@ -239,11 +246,13 @@ class CoreCommunicator(object):
             self._last_success = time.time()
             self._communication_stats['calls_succeeded'].append(time.time())
             self._communication_stats['calls_succeeded'] = self._communication_stats['calls_succeeded'][-50:]
+            self._command_success_histogram.update({str(command.instruction): 1})
             return result
         except CommunicationTimedOutException:
             self.unregister_consumer(consumer)
             self._communication_stats['calls_timedout'].append(time.time())
             self._communication_stats['calls_timedout'] = self._communication_stats['calls_timedout'][-50:]
+            self._command_timeout_histogram.update({str(command.instruction): 1})
             raise
 
     def _send_command(self, cid, command, fields):  # type: (int, CoreCommandSpec, Dict[str, Any]) -> None
