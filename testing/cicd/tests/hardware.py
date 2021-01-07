@@ -8,11 +8,6 @@ def output_types():
     return one_of([just(x) for x in module_types])
 
 
-def output_ids(max_value=8):
-    assert max_value < 8, 'Output modules only contain 8 outputs'
-    return integers(min_value=0, max_value=max_value)
-
-
 @composite
 def outputs(draw, types=output_types(), virtual=False):
     module_type = draw(types)
@@ -24,7 +19,7 @@ def outputs(draw, types=output_types(), virtual=False):
         if not virtual and module.hardware_type == Module.HardwareType.VIRTUAL:
             continue
         _outputs += module.outputs
-    output = _outputs[draw(output_ids(len(_outputs) - 1))]
+    output = _outputs[draw(integers(min_value=0, max_value=len(_outputs) - 1))]
     hypothesis.note('Using {} {}#{}'.format(output.module.name, output.module.mtype, output.output_id))
     return output
 
@@ -38,11 +33,6 @@ def input_types():
     return one_of([just(x) for x in module_types])
 
 
-def input_ids(max_value=8):
-    assert max_value < 8, 'Input modules only contain 8 inputs'
-    return integers(min_value=0, max_value=max_value)
-
-
 @composite
 def inputs(draw, types=input_types()):
     module_type = draw(types)
@@ -52,7 +42,7 @@ def inputs(draw, types=input_types()):
         if module.mtype != module_type:
             continue
         _inputs += module.inputs
-    _input = _inputs[draw(input_ids(len(_inputs) - 1))]
+    _input = _inputs[draw(integers(min_value=0, max_value=len(_inputs) - 1))]
     hypothesis.note('Using {} {}#{}'.format(_input.module.name, _input.module.mtype, _input.input_id))
     return input
 
