@@ -59,6 +59,8 @@ class Module(object):
 
 _OUTPUT_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [
+        # TODO: Add support for open-collector outputs, that are connected
+        #       with a dim control on the tester
         Module(name='output module 0', mtype='o',
                hardware_type=Module.HardwareType.INTERNAL,
                outputs=[Output(output_id=0),
@@ -107,7 +109,7 @@ OUTPUT_MODULE_LAYOUT = _OUTPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Modul
 
 _INPUT_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [
-        Module(name='input module', mtype='I',
+        Module(name='input module', mtype='i',
                hardware_type=Module.HardwareType.INTERNAL,
                inputs=[Input(input_id=0, tester_output_id=0),
                        Input(input_id=1, tester_output_id=1),
