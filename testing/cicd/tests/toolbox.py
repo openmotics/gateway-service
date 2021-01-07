@@ -393,6 +393,7 @@ class Toolbox(object):
         self.dut.get('/module_discover_stop')
 
     def discover_modules(self, output_modules=False, input_modules=False, can_controls=False, ucans=False, timeout=120):
+        # TODO: Does not work yet for the Core(+) as they don't have this call implemented.
         logger.debug('Discovering modules')
         since = time.time()
 
