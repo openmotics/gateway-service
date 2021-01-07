@@ -24,7 +24,7 @@ def outputs(draw, types=output_types(), virtual=False):
         if not virtual and module.hardware_type == Module.HardwareType.VIRTUAL:
             continue
         _outputs += module.outputs
-    output = _outputs[draw(output_ids(len(outputs) - 1))]
+    output = _outputs[draw(output_ids(len(_outputs) - 1))]
     hypothesis.note('Using {} {}#{}'.format(output.module.name, output.module.mtype, output.output_id))
     return output
 
