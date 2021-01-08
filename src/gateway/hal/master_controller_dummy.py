@@ -218,3 +218,12 @@ class MasterDummyController(MasterController):
     def load_dimmer_configuration(self, fields=None):
         # type: (Any) -> Dict[str,Any]
         return {}
+
+    # Schedules
+    def load_scheduled_action_configurations(self, fields=None):
+        # type: (Any) -> List[Dict[str,Any]]
+        return []
+
+    def load_startup_action_configuration(self, fields=None):
+        # type: (Any) -> Dict[str,Any]
+        return {}

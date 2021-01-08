@@ -255,7 +255,7 @@ def setup_target_platform(target_platform, message_client_name):
 
     if controller_serial_port:
         Injectable.value(controller_serial=Serial(controller_serial_port, 115200, exclusive=True))
-    if target_platform == Platform.Type.DUMMY:
+    if target_platform in [Platform.Type.DUMMY, Platform.Type.ESAFE]:
         Injectable.value(maintenance_communicator=None)
         Injectable.value(passthrough_service=None)
         Injectable.value(master_controller=MasterDummyController())
@@ -294,7 +294,7 @@ def setup_target_platform(target_platform, message_client_name):
     else:
         logger.warning('Unhandled master implementation for %s', target_platform)
 
-    if target_platform == Platform.Type.DUMMY:
+    if target_platform in [Platform.Type.DUMMY, Platform.Type.ESAFE]:
         Injectable.value(frontpanel_controller=None)
     elif target_platform in Platform.CoreTypes:
         Injectable.value(frontpanel_controller=FrontpanelCoreController())
