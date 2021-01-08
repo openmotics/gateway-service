@@ -175,18 +175,18 @@ class TesterGateway(object):
         cooldown, deadline = between
         timeout = deadline - cooldown
         if cooldown > 0:
-            logger.debug('waiting {:.2f}s before event'.format(cooldown))
+            logger.debug('Waiting {:.2f}s before event'.format(cooldown))
             self.reset()
             time.sleep(cooldown)
         since = time.time()
         while since > time.time() - timeout:
             if output_id in self._outputs and output_status == self._outputs[output_id]:
-                logger.debug('received event {} status={} after {:.2f}s'.format(output_id, self._outputs[output_id], time.time() - since))
+                logger.debug('Received event {} status={} after {:.2f}s'.format(output_id, self._outputs[output_id], time.time() - since))
                 return True
             if self.update_events():
                 continue
             time.sleep(0.2)
-        logger.error('receive event {} status={}, timeout after {:.2f}s'.format(output_id, output_status, time.time() - since))
+        logger.error('Did not receive event {} status={} after {:.2f}s'.format(output_id, output_status, time.time() - since))
         self.log_events()
         return False
 

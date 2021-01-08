@@ -1,6 +1,6 @@
 import hypothesis
 from hypothesis.strategies import composite, integers, just, lists, one_of
-from tests.hardware_layout import OUTPUT_MODULE_LAYOUT, INPUT_MODULE_LAYOUT, ENERGY_MODULE_LAYOUT, Module
+from tests.hardware_layout import OUTPUT_MODULE_LAYOUT, INPUT_MODULE_LAYOUT, ENERGY_MODULE_LAYOUT, Module, TEST_PLATFORM
 
 
 def output_types():
@@ -73,3 +73,7 @@ def cts(draw, types=energy_module_types()):
 
 def multiple_cts(size, types=energy_module_types()):
     return lists(cts(types=types), min_size=size, max_size=size, unique_by=lambda x: x.ct_id)
+
+
+def skip_on_platforms(platforms):
+    return TEST_PLATFORM in platforms

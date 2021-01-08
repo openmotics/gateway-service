@@ -22,7 +22,8 @@ import pytest
 import ujson as json
 from hypothesis.strategies import booleans, integers, just
 
-from tests.hardware import multiple_outputs, outputs
+from tests.hardware import multiple_outputs, outputs, skip_on_platforms
+from tests.hardware_layout import TestPlatform
 
 logger = logging.getLogger('openmotics')
 
@@ -71,6 +72,7 @@ def test_timers(toolbox, output, to_status):
 
 @pytest.mark.smoke
 @hypothesis.given(multiple_outputs(3), integers(min_value=0, max_value=254), just(True))
+@pytest.mark.skipif(skip_on_platforms([TestPlatform.CORE_PLUS]), reason='Floors not yet supported on the Core(+)')
 def test_floor_lights(toolbox, outputs, floor_id, output_status):
     light, other_light, other_output = outputs
     logger.debug('light {} on floor {}, expect event {} -> {}'.format(light, floor_id, not output_status, output_status))
