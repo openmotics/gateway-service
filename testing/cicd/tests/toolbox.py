@@ -658,7 +658,6 @@ class Toolbox(object):
             data = self.dut.get('/get_input_status')
             try:
                 next(x for x in data['status'] if x['id'] == _input.input_id)
-                next(x for x in data['status'] if x['id'] == _input.input_id)
                 logger.debug('input {} with status discovered, after {:.2f}s'.format(_input, time.time() - since))
                 return
             except StopIteration:
