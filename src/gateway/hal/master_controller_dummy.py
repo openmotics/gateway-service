@@ -217,7 +217,13 @@ class MasterDummyController(MasterController):
 
     def load_dimmer_configuration(self, fields=None):
         # type: (Any) -> Dict[str,Any]
-        return {}
+        return {
+                "min_dim_level": 255,
+                "dim_wait_cycle": 255,
+                "dim_step": 255,
+                "dim_memory": 255
+        }
+
 
     # Schedules
     def load_scheduled_action_configurations(self, fields=None):
