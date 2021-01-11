@@ -1055,6 +1055,7 @@ class MasterCoreController(MasterController):
                 page_retry = page
                 time.sleep(10)
         self._memory_files[MemoryTypes.EEPROM].activate()
+        self.cold_reset()
 
     def error_list(self):
         return []  # TODO: Implement
