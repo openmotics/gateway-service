@@ -112,6 +112,9 @@ class GatewayApi(object):
                 # Reset timezone to default setting
                 self.set_timezone('UTC')
                 return 'UTC'
+            if path.startswith('/usr/share/zoneinfo/posix'):
+                # As seen on the buildroot os, the timezone info is all located in the posix folder within zoneinfo.
+                return path[26:]
             return path[20:]
         except Exception:
             return 'UTC'
