@@ -1054,8 +1054,8 @@ class MasterCoreController(MasterController):
                     raise
                 page_retry = page
                 time.sleep(10)
-        self._memory_files[MemoryTypes.EEPROM].activate()
-        self.cold_reset()
+        time.sleep(5)  # Give the master some time to settle
+        self.cold_reset()  # Cold reset, enforcing a reload of all settings
 
     def error_list(self):
         return []  # TODO: Implement
