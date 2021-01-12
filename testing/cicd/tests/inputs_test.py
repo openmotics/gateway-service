@@ -41,7 +41,7 @@ def test_actions(toolbox, _input, output, to_status):
     input_config = {'id': _input.input_id, 'action': output.output_id}
     input_config.update(DEFAULT_INPUT_CONFIG)
     toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
-    time.sleep(1)  # Give the configuration/activate some time
+    time.sleep(5)  # Give the configuration/activate some time
 
     # NOTE ensure output status _after_ input configuration, changing
     # inputs can impact the output status for some reason.
@@ -63,7 +63,7 @@ def test_motion_sensor(toolbox, _input, output, to_status):
     input_config = {'id': _input.input_id, 'basic_actions': ','.join(actions), 'action': 240}
     input_config.update(DEFAULT_INPUT_CONFIG)
     toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
-    time.sleep(1)  # Give the configuration/activate some time
+    time.sleep(5)  # Give the configuration/activate some time
 
     # NOTE ensure output status _after_ input configuration, changing
     # inputs can impact the output status for some reason.
@@ -94,13 +94,13 @@ def test_group_action_toggle(toolbox, _input, outputs, group_action_id, to_statu
     input_config = {'id': _input.input_id, 'basic_actions': ','.join(actions), 'action': 240}
     input_config.update(DEFAULT_INPUT_CONFIG)
     toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
-    time.sleep(1)  # Give the configuration/activate some time
+    time.sleep(5)  # Give the configuration/activate some time
 
     hypothesis.note('with action GA#{} configured as "toggle both outputs"'.format(group_action_id))
     actions = ['162', str(output.output_id), '162', str(other_output.output_id)]  # toggle both outputs
     config = {'id': group_action_id, 'actions': ','.join(actions)}
     toolbox.dut.get('/set_group_action_configuration', params={'config': json.dumps(config)})
-    time.sleep(1)  # Give the configuration/activate some time
+    time.sleep(5)  # Give the configuration/activate some time
 
     toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
     toolbox.ensure_output(other_output, from_status, DEFAULT_OUTPUT_CONFIG)

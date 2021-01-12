@@ -118,7 +118,7 @@ def test_group_action_toggle(toolbox, outputs, group_action_id, output_status):
     actions = ['162', str(output.output_id), '162', str(other_output.output_id)]  # toggle both outputs
     config = {'id': group_action_id, 'actions': ','.join(actions)}
     toolbox.dut.get('/set_group_action_configuration', params={'config': json.dumps(config)})
-    time.sleep(1)  # Give the configuration/activate some time
+    time.sleep(5)  # Give the configuration/activate some time
 
     toolbox.ensure_output(output, not output_status, DEFAULT_OUTPUT_CONFIG)
     toolbox.ensure_output(other_output, not output_status, DEFAULT_OUTPUT_CONFIG)
