@@ -1042,17 +1042,17 @@ class MasterCoreController(MasterController):
         self._restore(data_set)
 
     def _restore(self, data):  # type: (Dict[int, bytearray]) -> None
-        pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
+        amount_of_pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         page_retry = None
-        page = 0
-        while page < pages:
+        current_page = amount_of_pages - 1
+        while current_page >= 0:
             try:
-                self._memory_files[MemoryTypes.EEPROM].write_page(page, data[page])
-                page += 1
+                self._memory_files[MemoryTypes.EEPROM].write_page(current_page, data[current_page])
+                current_page -= 1
             except CommunicationTimedOutException:
-                if page_retry == page:
+                if page_retry == current_page:
                     raise
-                page_retry = page
+                page_retry = current_page
                 time.sleep(10)
         time.sleep(5)  # Give the master some time to settle
         self.cold_reset()  # Cold reset, enforcing a reload of all settings
