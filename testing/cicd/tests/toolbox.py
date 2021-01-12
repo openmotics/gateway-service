@@ -600,7 +600,6 @@ class Toolbox(object):
         config_data.update(**config)
         logger.debug('configure output {} with {}'.format(output, config))
         self.dut.get('/set_output_configuration', {'config': json.dumps(config_data)})
-        time.sleep(5)  # Give the configuration/activate some time
 
     def ensure_output(self, output, status, config=None):
         # type: (Output, int, Optional[Dict[str,Any]]) -> None
