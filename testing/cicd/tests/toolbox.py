@@ -249,22 +249,24 @@ class Toolbox(object):
             self.create_or_update_user()
             self.dut.login()
 
-        expected_modules = {Module.HardwareType.EMULATED: {},
-                            Module.HardwareType.VIRTUAL: {},
-                            Module.HardwareType.PHYSICAL: {},
-                            Module.HardwareType.INTERNAL: {}}
+        # For now, while some code knows the difference between emulated, physical, virtual, ..., the code will mainly work
+        # using the i, O, s, ... letters instead (so virtual and non-virtual).
+        # TODO: Change this in the future, as it needs a new API call on the GW.
+
+        expected_modules = {Module.HardwareType.VIRTUAL: {},
+                            Module.HardwareType.PHYSICAL: {}}  # Limit it to physical and virtual for now
         for module in OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT:
-            if module.mtype not in expected_modules[module.hardware_type]:
-                expected_modules[module.hardware_type][module.mtype] = 0
-            expected_modules[module.hardware_type][module.mtype] += 1
+            hardware_type = Module.HardwareType.VIRTUAL if module.hardware_type == Module.HardwareType.VIRTUAL else Module.HardwareType.PHYSICAL
+            if module.mtype not in expected_modules[hardware_type]:
+                expected_modules[hardware_type][module.mtype] = 0
+            expected_modules[hardware_type][module.mtype] += 1
         logger.info('Expected modules: {0}'.format(expected_modules))
 
         try:
             modules = self.count_modules('master')
             logger.info('Current discovered modules: {0}'.format(modules))
-            for hardware_type in [Module.HardwareType.PHYSICAL, Module.HardwareType.EMULATED, Module.HardwareType.INTERNAL]:
-                for mtype, expected_amount in expected_modules[hardware_type].items():
-                    assert modules[mtype] == expected_amount
+            for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
+                assert modules[mtype] == expected_amount
         except Exception:
             logger.info('Discovering modules...')
             self.discover_modules(output_modules=True,
@@ -274,9 +276,8 @@ class Toolbox(object):
 
         modules = self.count_modules('master')
         logger.info('Current discovered modules: {0}'.format(modules))
-        for hardware_type in [Module.HardwareType.PHYSICAL, Module.HardwareType.EMULATED, Module.HardwareType.INTERNAL]:
-            for mtype, expected_amount in expected_modules[hardware_type].items():
-                assert modules[mtype] == expected_amount
+        for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
+            assert modules[mtype] == expected_amount
 
         # TODO ensure discovery synchonization finished.
         for module in INPUT_MODULE_LAYOUT:
