@@ -291,7 +291,7 @@ class Toolbox(object):
             for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
                 extra_needed_amount = expected_amount - modules.get(mtype, 0)
                 assert extra_needed_amount > 0
-                self.add_virtual_modules(module_amounts={mtype: expected_amount - modules[mtype]})
+                self.add_virtual_modules(module_amounts={mtype: extra_needed_amount})
 
         modules = self.count_modules('master')
         logger.info('Current discovered modules: {0}'.format(modules))
