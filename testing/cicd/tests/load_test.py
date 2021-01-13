@@ -70,7 +70,6 @@ def test_master_events(toolbox, add_virtual_modules, _status):
         input_config = {'id': _input.input_id, 'action': output.output_id}
         input_config.update(DEFAULT_INPUT_CONFIG)
         toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
-        time.sleep(0.2)
     time.sleep(10)
 
     for _ in range(32):

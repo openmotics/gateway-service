@@ -41,7 +41,6 @@ def test_actions(toolbox, _input, output, to_status):
     input_config = {'id': _input.input_id, 'action': output.output_id}
     input_config.update(DEFAULT_INPUT_CONFIG)
     toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
-    time.sleep(0.2)
 
     # NOTE ensure output status _after_ input configuration, changing
     # inputs can impact the output status for some reason.
