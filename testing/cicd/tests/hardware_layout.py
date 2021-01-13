@@ -156,7 +156,7 @@ _INPUT_MODULE_LAYOUTS = {
                        Input(input_id=6, tester_output_id=6),
                        Input(input_id=7, tester_output_id=7)]),
         # TODO: also test random order discovery?
-        Module(name='CAN control', mtype='i',
+        Module(name='CAN control', mtype='I',
                hardware_type=Module.HardwareType.EMULATED,
                inputs=[Input(input_id=16, tester_output_id=32),
                        Input(input_id=17, tester_output_id=33),
