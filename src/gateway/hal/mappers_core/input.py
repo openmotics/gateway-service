@@ -50,7 +50,7 @@ class InputMapper(object):
         if 'name' in fields:
             new_data['name'] = input_dto.name
         if 'action' in fields:
-            direct_config = input_dto.action in [None, 255] or input_dto.action < 240
+            direct_config = input_dto.action is None or input_dto.action == 255 or input_dto.action < 240
             basic_actions_config = input_dto.action == 240 and 'basic_actions' in fields
             if direct_config or basic_actions_config:
                 new_data.update(InputMapper.classic_actions_to_core_input_configuration(input_dto.action,
@@ -98,7 +98,7 @@ class InputMapper(object):
                                'enable_2s_press': True,
                                'not_used': True,
                                'enable_double_press': True}}  # type: Dict[str, Any]
-        if action in [None, 255]:
+        if action is None or action == 255:
             return data
         data['input_link'].update({'dimming_up': False,
                                    'enable_press_and_release': False,
