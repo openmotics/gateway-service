@@ -3,13 +3,16 @@ from hypothesis.strategies import composite, integers, just, lists, one_of
 from tests.hardware_layout import OUTPUT_MODULE_LAYOUT, INPUT_MODULE_LAYOUT, ENERGY_MODULE_LAYOUT, Module, TEST_PLATFORM
 
 
-def output_types():
-    module_types = [module.mtype for module in OUTPUT_MODULE_LAYOUT]
+def output_types(virtual=False):
+    module_types = [module.mtype for module in OUTPUT_MODULE_LAYOUT
+                    if virtual is True or module.hardware_type != Module.HardwareType.VIRTUAL]
     return one_of([just(x) for x in module_types])
 
 
 @composite
-def outputs(draw, types=output_types(), virtual=False):
+def outputs(draw, types=None, virtual=False):
+    if types is None:
+        types = output_types(virtual=virtual)
     module_type = draw(types)
     assert module_type in ['O', 'o'], 'Invalid output type {}'.format(module_type)
     _outputs = []
