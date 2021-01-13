@@ -266,7 +266,7 @@ class Toolbox(object):
             modules = self.count_modules('master')
             logger.info('Current discovered modules: {0}'.format(modules))
             for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
-                assert modules[mtype] == expected_amount
+                assert modules.get(mtype, 0) == expected_amount
         except Exception:
             logger.info('Discovering modules...')
             self.discover_modules(output_modules=True,
@@ -277,7 +277,7 @@ class Toolbox(object):
         modules = self.count_modules('master')
         logger.info('Current discovered modules: {0}'.format(modules))
         for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
-            assert modules[mtype] == expected_amount
+            assert modules.get(mtype, 0) == expected_amount
 
         # TODO ensure discovery synchonization finished.
         for module in INPUT_MODULE_LAYOUT:
@@ -285,18 +285,18 @@ class Toolbox(object):
 
         try:
             for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
-                assert modules[mtype] == expected_amount
+                assert modules.get(mtype, 0) == expected_amount
         except Exception:
             logger.info('Adding virtual modules...')
             for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
-                extra_needed_amount = expected_amount - modules[mtype]
+                extra_needed_amount = expected_amount - modules.get(mtype, 0)
                 assert extra_needed_amount > 0
                 self.add_virtual_modules(module_amounts={mtype: expected_amount - modules[mtype]})
 
         modules = self.count_modules('master')
         logger.info('Current discovered modules: {0}'.format(modules))
         for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
-            assert modules[mtype] == expected_amount
+            assert modules.get(mtype, 0) == expected_amount
 
     def print_logs(self):
         # type: () -> None
