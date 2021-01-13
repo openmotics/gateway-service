@@ -153,6 +153,7 @@ class MemoryFile(object):
         activated = False
         if self._dirty:
             self._dirty = False
+            self._self_activated = True
             logger.info('MEMORY.{0}: Activate'.format(self.type))
             self._activation_event.clear()
             self._core_communicator.do_basic_action(action_type=200, action=1, timeout=MemoryFile.ACTIVATE_TIMEOUT)
@@ -160,7 +161,6 @@ class MemoryFile(object):
             activated = True
         else:
             logger.info('MEMORY.{0}: Ignore activation, not dirty'.format(self.type))
-        self._self_activated = True
         return activated
 
     def invalidate_cache(self, page=None):  # type: (Optional[int]) -> None
