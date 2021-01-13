@@ -78,7 +78,6 @@ def group_action_ids():
     return integers(min_value=0, max_value=159)
 
 
-@pytest.mark.skip
 @pytest.mark.smoke
 @hypothesis.given(inputs(), multiple_outputs(2), group_action_ids(), booleans())
 def test_group_action_toggle(toolbox, _input, outputs, group_action_id, to_status):
