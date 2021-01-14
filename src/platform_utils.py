@@ -103,8 +103,9 @@ class Hardware(object):
         """ Get the main interface mac address """
         interface = Hardware.get_main_interface()
         try:
-            # this works both on Angstrom and Debian
-            return open('/sys/class/net/{0}/address'.format(interface)).read().strip().upper()
+            # This works both on Angstrom and Debian
+            with open('/sys/class/net/{0}/address'.format(interface)) as mac_address:
+                return mac_address.read().strip().upper()
         except Exception:
             return None
 
