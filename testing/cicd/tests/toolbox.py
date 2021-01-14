@@ -200,7 +200,7 @@ class Toolbox(object):
     DEBIAN_POWER_OUTPUT = 8  # tester_output_1.output_0
     POWER_ENERGY_MODULE = 11  # tester_output_1.output_3
     CORE_PLUS_SETUP_BUTTON = 19  # tester_output_2.output_3
-    CORE_PLUG_ACTION_BUTTON = 16  # tester_output_2.output_0
+    CORE_PLUS_ACTION_BUTTON = 16  # tester_output_2.output_0
     CORE_PLUS_POWER_OUTPUT = 10  # tester_output_1.output_2
 
     def __init__(self):
@@ -352,7 +352,7 @@ class Toolbox(object):
         # type: () -> None
         logger.debug('start authorized mode')
         if TEST_PLATFORM == TestPlatform.CORE_PLUS:
-            self.tester.toggle_outputs([self.CORE_PLUG_ACTION_BUTTON,
+            self.tester.toggle_outputs([self.CORE_PLUS_ACTION_BUTTON,
                                         self.CORE_PLUS_SETUP_BUTTON], delay=15)
         else:
             self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE, delay=15)
@@ -360,7 +360,7 @@ class Toolbox(object):
     def authorized_mode_stop(self):
         # type: () -> None
         if TEST_PLATFORM == TestPlatform.CORE_PLUS:
-            self.tester.toggle_outputs([self.CORE_PLUG_ACTION_BUTTON,
+            self.tester.toggle_outputs([self.CORE_PLUS_ACTION_BUTTON,
                                         self.CORE_PLUS_SETUP_BUTTON])
         else:
             self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE)
