@@ -141,10 +141,12 @@ class System(object):
 
         if is_systemd:
             return subprocess.Popen(['systemctl', action, '--no-pager', unit_name],
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    close_fds=True)
         else:
             return subprocess.Popen(['supervisorctl', action, service],
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    close_fds=True)
 
     @staticmethod
     def get_operating_system():
