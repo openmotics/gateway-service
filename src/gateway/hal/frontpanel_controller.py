@@ -20,7 +20,7 @@ import logging
 import time
 from ioc import INJECTED, Inject
 from bus.om_bus_client import OMBusEvents
-from platform_utils import Hardware, Platform
+from platform_utils import Hardware
 from gateway.daemon_thread import DaemonThread
 
 if False:  # MYPY
@@ -103,7 +103,8 @@ class FrontpanelController(object):
 
     @property
     def authorized_mode(self):
-        return Platform.get_platform() == Platform.Type.CORE_PLUS or self._authorized_mode  # TODO: Remove before merging in!
+        # return Platform.get_platform() == Platform.Type.CORE_PLUS or self._authorized_mode  # Needed to validate Brain+ with no front panel attached
+        return self._authorized_mode
 
     def event_receiver(self, event, payload):
         if event == OMBusEvents.CLOUD_REACHABLE:

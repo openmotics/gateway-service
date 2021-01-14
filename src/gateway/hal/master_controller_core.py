@@ -1038,7 +1038,7 @@ class MasterCoreController(MasterController):
     def factory_reset(self):
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         data_set = {page: bytearray([255] * page_length) for page in range(pages)}
-        data_set[0][0] = 1  # TODO: Workaround for missing hardware. Forces Core+ detection. Remove before merge!
+        # data_set[0][0] = 1  # Needed to validate Brain+ with no front panel attached
         self._restore(data_set)
 
     def _restore(self, data):  # type: (Dict[int, bytearray]) -> None
