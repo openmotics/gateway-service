@@ -80,7 +80,8 @@ EXIT_CODES = {'failed_generic': 1,
 
 
 def cmd(command, **kwargs):
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs)
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            close_fds=True, **kwargs)
     output, ret = cmd_wait_output(proc)
     if ret != 0:
         raise Exception('Command {} failed'.format(command))
@@ -520,7 +521,7 @@ def update(version, expected_md5):
 
         if os.path.exists('/tmp/post_update_reboot'):
             logger.info('Scheduling reboot in 5 minutes')
-            subprocess.Popen('sleep 300 && reboot', shell=True)
+            subprocess.Popen('sleep 300 && reboot', close_fds=True, shell=True)
 
         logger.info('DONE')
         logger.info('exit 0')

@@ -108,7 +108,7 @@ class PluginRunner(object):
 
         self._proc = subprocess.Popen([python_executable, "runtime.py", "start", self.plugin_path],
                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=None,
-                                      cwd=self.runtime_path)
+                                      cwd=self.runtime_path, close_fds=True)
         assert self._proc.stdout, 'Plugin stdout not available'
         self._process_running = True
 

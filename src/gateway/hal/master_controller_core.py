@@ -997,15 +997,13 @@ class MasterCoreController(MasterController):
     def cold_reset(self, power_on=True):
         # type: (bool) -> None
         _ = self  # Must be an instance method
-        gpio_direction = open('/sys/class/gpio/gpio49/direction', 'w')
-        gpio_direction.write('out')
-        gpio_direction.close()
+        with open('/sys/class/gpio/gpio49/direction', 'w') as gpio_direction:
+            gpio_direction.write('out')
 
         def power(master_on):
             """ Set the power on the master. """
-            gpio_file = open('/sys/class/gpio/gpio49/value', 'w')
-            gpio_file.write('0' if master_on else '1')
-            gpio_file.close()
+            with open('/sys/class/gpio/gpio49/value', 'w') as gpio_file:
+                gpio_file.write('0' if master_on else '1')
 
         power(False)
         if power_on:

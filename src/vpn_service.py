@@ -424,16 +424,17 @@ class TaskExecutor(object):
         # The popen_timeout has been added as a workaround for the hanging subprocess
         # If NTP date changes the time during a execution of a sub process this hangs forever.
         def popen_timeout(command, timeout):
-            p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            ping_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
             for _ in range(timeout):
                 time.sleep(1)
-                if p.poll() is not None:
-                    stdout_data, stderr_data = p.communicate()
-                    if p.returncode == 0:
+                if ping_process.poll() is not None:
+                    stdout_data, stderr_data = ping_process.communicate()
+                    if ping_process.returncode == 0:
                         return True
                     raise Exception('Non-zero exit code. Stdout: {0}, stderr: {1}'.format(stdout_data, stderr_data))
             logger.warning('Got timeout during ping to {0}. Killing'.format(target))
-            p.kill()
+            ping_process.kill()
+            del ping_process  # Make sure to clean up everything (or make it cleanable by the GC)
             logger.info('Ping to {0} killed'.format(target))
             return False
 
