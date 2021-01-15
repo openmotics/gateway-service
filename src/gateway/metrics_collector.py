@@ -380,10 +380,10 @@ class MetricsCollector(object):
                         import watchdog
                         import vpn_service
                         from plugin_runtime import runtime
-                        openmotics_service_filename = openmotics_service.__file__.split('/')[-1]
-                        watchdog_filename = watchdog.__file__.split('/')[-1]
-                        vpn_service_filename = vpn_service.__file__.split('/')[-1]
-                        runtime_filename = runtime.__file__.split('/')[-1]
+                        openmotics_service_filename = openmotics_service.__file__.split('/')[-1].replace('.pyc', '.py')
+                        watchdog_filename = watchdog.__file__.split('/')[-1].replace('.pyc', '.py')
+                        vpn_service_filename = vpn_service.__file__.split('/')[-1].replace('.pyc', '.py')
+                        runtime_filename = runtime.__file__.split('/')[-1].replace('.pyc', '.py')
                         num_file_descriptors = {'fds_total': 0, 'fds_service_vpn': 0, 'fds_service_api': 0, 'fds_service_watchdog': 0,
                                                 'ofs_total': 0, 'ofs_service_vpn': 0, 'ofs_service_api': 0, 'ofs_service_watchdog': 0}
                         for proc in psutil.process_iter():
