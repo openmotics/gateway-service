@@ -376,6 +376,14 @@ class MetricsCollector(object):
                         logger.error('Error loading network metrics: {0}'.format(ex))
 
                     try:
+                        import openmotics_service
+                        import watchdog
+                        import vpn_service
+                        from plugin_runtime import runtime
+                        openmotics_service_filename = openmotics_service.__file__.split('/')[-1]
+                        watchdog_filename = watchdog.__file__.split('/')[-1]
+                        vpn_service_filename = vpn_service.__file__.split('/')[-1]
+                        runtime_filename = runtime.__file__.split('/')[-1]
                         num_file_descriptors = {'fds_total': 0, 'fds_service_vpn': 0, 'fds_service_api': 0, 'fds_service_watchdog': 0,
                                                 'ofs_total': 0, 'ofs_service_vpn': 0, 'ofs_service_api': 0, 'ofs_service_watchdog': 0}
                         for proc in psutil.process_iter():
@@ -389,16 +397,16 @@ class MetricsCollector(object):
                                 num_file_descriptors['ofs_total'] += nofs
                                 if cmd_line_length < 2:
                                     continue
-                                if 'vpn_service.py' in cmd_line[1]:
+                                if vpn_service_filename in cmd_line[1]:
                                     num_file_descriptors['fds_service_vpn'] = nfds
                                     num_file_descriptors['ofs_service_vpn'] = nofs
-                                elif 'openmotics_service.py' in cmd_line[1]:
+                                elif openmotics_service_filename in cmd_line[1]:
                                     num_file_descriptors['fds_service_api'] = nfds
                                     num_file_descriptors['ofs_service_api'] = nofs
-                                elif 'watchdog.py' in cmd_line[1]:
+                                elif watchdog_filename in cmd_line[1]:
                                     num_file_descriptors['fds_service_watchdog'] = nfds
                                     num_file_descriptors['ofs_service_watchdog'] = nofs
-                                elif cmd_line_length == 4 and 'runtime.py' in cmd_line[1]:
+                                elif cmd_line_length == 4 and runtime_filename in cmd_line[1]:
                                     plugin_name = cmd_line[-1].split('/')[-1]
                                     plugin_system_metrics[plugin_name] = {'fds_total': nfds,
                                                                           'ofs_total': nofs}
