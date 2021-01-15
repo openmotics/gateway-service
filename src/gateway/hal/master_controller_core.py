@@ -25,7 +25,7 @@ from threading import Timer
 
 from peewee import DoesNotExist
 
-from gateway.daemon_thread import BaseThread
+from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
     PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO
 from gateway.enums import ShutterEnums
@@ -72,7 +72,7 @@ class MasterCoreController(MasterController):
         self._slave_communicator = slave_communicator
         self._memory_files = memory_files  # type: Dict[str, MemoryFile]
         self._pubsub = pubsub
-        self._synchronization_thread = BaseThread(name='mastersync', target=self._synchronize)
+        self._synchronization_thread = None  # type: Optional[DaemonThread]
         self._master_online = False
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._input_state = MasterInputState()
@@ -190,30 +190,25 @@ class MasterCoreController(MasterController):
 
     def _synchronize(self):
         # type: () -> None
-        while True:
-            try:
-                # Refresh if required
-                if self._time_last_updated + 300 < time.time():
-                    self._check_master_time()
-                if self._refresh_input_states():
-                    self._set_master_state(True)
-                if self._sensor_last_updated + self._sensor_interval < time.time():
-                    self._refresh_sensor_states()
-                    self._set_master_state(True)
-                if self._shutters_last_updated + self._shutters_interval < time.time():
-                    self._refresh_shutter_states()
-                    self._set_master_state(True)
-                time.sleep(1)
-            except CommunicationTimedOutException:
-                logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
-                self._set_master_state(False)
-                time.sleep(10)
-            except CommunicationFailure:
-                # This is an expected situation
-                time.sleep(10)
-            except Exception as ex:
-                logger.exception('Unexpected error during synchronization: {0}'.format(ex))
-                time.sleep(10)
+        try:
+            # Refresh if required
+            if self._time_last_updated + 300 < time.time():
+                self._check_master_time()
+            if self._refresh_input_states():
+                self._set_master_state(True)
+            if self._sensor_last_updated + self._sensor_interval < time.time():
+                self._refresh_sensor_states()
+                self._set_master_state(True)
+            if self._shutters_last_updated + self._shutters_interval < time.time():
+                self._refresh_shutter_states()
+                self._set_master_state(True)
+        except CommunicationTimedOutException:
+            logger.error('Got communication timeout during synchronization.')
+            self._set_master_state(False)
+            raise DaemonThreadWait()
+        except CommunicationFailure:
+            # This is an expected situation
+            raise DaemonThreadWait()
 
     def _set_master_state(self, online):
         if online != self._master_online:
@@ -263,11 +258,20 @@ class MasterCoreController(MasterController):
 
     def start(self):
         super(MasterCoreController, self).start()
+        self._synchronization_thread = DaemonThread(name='mastersync',
+                                                    target=self._synchronize,
+                                                    interval=1, delay=10)
         self._synchronization_thread.start()
         try:
             self._log_stats()
         except Exception:
             pass
+
+    def stop(self):
+        if self._synchronization_thread is not None:
+            self._synchronization_thread.stop()
+            self._synchronization_thread = None
+        super(MasterCoreController, self).stop()
 
     def set_plugin_controller(self, plugin_controller):
         """ Set the plugin controller. """
@@ -1033,22 +1037,25 @@ class MasterCoreController(MasterController):
 
     def factory_reset(self):
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
-        self._restore({page: bytearray([255] * page_length) for page in range(pages)})
+        data_set = {page: bytearray([255] * page_length) for page in range(pages)}
+        # data_set[0][0] = 1  # Needed to validate Brain+ with no front panel attached
+        self._restore(data_set)
 
     def _restore(self, data):  # type: (Dict[int, bytearray]) -> None
-        pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
+        amount_of_pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         page_retry = None
-        page = 0
-        while page < pages:
+        current_page = amount_of_pages - 1
+        while current_page >= 0:
             try:
-                self._memory_files[MemoryTypes.EEPROM].write_page(page, data[page])
-                page += 1
+                self._memory_files[MemoryTypes.EEPROM].write_page(current_page, data[current_page])
+                current_page -= 1
             except CommunicationTimedOutException:
-                if page_retry == page:
+                if page_retry == current_page:
                     raise
-                page_retry = page
+                page_retry = current_page
                 time.sleep(10)
-        self._memory_files[MemoryTypes.EEPROM].activate()
+        time.sleep(5)  # Give the master some time to settle
+        self.cold_reset()  # Cold reset, enforcing a reload of all settings
 
     def error_list(self):
         return []  # TODO: Implement

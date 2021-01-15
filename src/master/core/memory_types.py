@@ -146,8 +146,7 @@ class MemoryModelDefinition(object):
                 ))
             container.save()
         if activate:
-            for memory_file in self._memory_files.values():
-                memory_file.activate()
+            MemoryActivator.activate()
 
     @classmethod
     def deserialize(cls, data):  # type: (Dict[str, Any]) -> MemoryModelDefinition
@@ -240,8 +239,12 @@ class MemoryActivator(object):
     @staticmethod
     @Inject
     def activate(memory_files=INJECTED):  # type: (Dict[str, MemoryFile]) -> None
+        # There's only one call to activate all memory devices at once. Once a memory
+        # device is activated, the others will also be activated, so no need to activate
+        # multiple times
         for memory_file in memory_files.values():
-            memory_file.activate()
+            if memory_file.activate():
+                break
 
 
 class GlobalMemoryModelDefinition(MemoryModelDefinition):
