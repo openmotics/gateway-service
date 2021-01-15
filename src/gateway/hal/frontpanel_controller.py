@@ -103,6 +103,7 @@ class FrontpanelController(object):
 
     @property
     def authorized_mode(self):
+        # return Platform.get_platform() == Platform.Type.CORE_PLUS or self._authorized_mode  # Needed to validate Brain+ with no front panel attached
         return self._authorized_mode
 
     def event_receiver(self, event, payload):

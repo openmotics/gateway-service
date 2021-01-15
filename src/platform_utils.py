@@ -16,13 +16,15 @@
 The hardware_utils module contains various classes helping with Hardware and System abstraction
 """
 from __future__ import absolute_import
-
 import logging
 import os
 import subprocess
 import sys
-
 import constants
+
+from six.moves.configparser import ConfigParser
+if False:  # MYPY
+    from typing import Union
 
 logger = logging.getLogger('openmotics')
 
@@ -35,6 +37,7 @@ class Hardware(object):
         BB = 'BB'
         BBB = 'BBB'
         BBGW = 'BBGW'
+        ESAFE = 'ESAFE'
 
     BoardTypes = [BoardType.BB, BoardType.BBB, BoardType.BBGW]
 
@@ -69,6 +72,8 @@ class Hardware(object):
                     return Hardware.BoardType.BBB
                 if board_type in ['TI_AM335x_BeagleBone_Green_Wireless']:
                     return Hardware.BoardType.BBGW
+                if board_type in ['TI_AM335x_esafe_Custom']:
+                    return Hardware.BoardType.ESAFE
         except IOError:
             pass
         try:
@@ -86,12 +91,23 @@ class Hardware(object):
     @staticmethod
     def get_main_interface():
         board_type = Hardware.get_board_type()
-        if board_type in [Hardware.BoardType.BB, Hardware.BoardType.BBB]:
+        if board_type in [Hardware.BoardType.BB, Hardware.BoardType.BBB, Hardware.BoardType.ESAFE]:
             return 'eth0'
         if board_type == Hardware.BoardType.BBGW:
             return 'wlan0'
         logger.warning('Could not detect local interface. Fallback: lo')
         return 'lo'
+
+    @staticmethod
+    def get_mac_address():  # type: () -> Union[str, None]
+        """ Get the main interface mac address """
+        interface = Hardware.get_main_interface()
+        try:
+            # This works both on Angstrom and Debian
+            with open('/sys/class/net/{0}/address'.format(interface)) as mac_address:
+                return mac_address.read().strip().upper()
+        except Exception:
+            return None
 
 
 class System(object):
@@ -105,6 +121,7 @@ class System(object):
     class OS(object):
         ANGSTROM = 'angstrom'
         DEBIAN = 'debian'
+        BUILDROOT = 'buildroot'
 
 
     @staticmethod
@@ -124,10 +141,12 @@ class System(object):
 
         if is_systemd:
             return subprocess.Popen(['systemctl', action, '--no-pager', unit_name],
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    close_fds=True)
         else:
             return subprocess.Popen(['supervisorctl', action, service],
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    close_fds=True)
 
     @staticmethod
     def get_operating_system():
@@ -150,10 +169,15 @@ class System(object):
         operating_system = System.get_operating_system()
         try:
             lines = subprocess.check_output('ifconfig {0}'.format(interface), shell=True)
+            # In python3, lines is a bytes array variable, not a string. -> decoding it into a string
+            if not isinstance(lines, str):
+                lines = lines.decode('utf-8')
             if operating_system['ID'] == System.OS.ANGSTROM:
                 return lines.split('\n')[1].strip().split(' ')[1].split(':')[1]
             elif operating_system['ID'] == System.OS.DEBIAN:
                 return lines.split('\n')[1].strip().split(' ')[1]
+            elif operating_system['ID'] == System.OS.BUILDROOT:
+                return lines.split('\n')[1].strip().split(' ')[1].replace('addr:','')  # The buildroot OS prefixes addresses with 'addr'
             else:
                 return
         except Exception:
@@ -224,9 +248,12 @@ class System(object):
     @staticmethod
     def import_libs():
         operating_system = System.get_operating_system().get('ID')
-        if operating_system in (System.OS.ANGSTROM, System.OS.DEBIAN):
-            sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/dist-packages')
-            sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
+        # check if running in python 2 mode, otherwise packages should be included in the build (PyInstaller)
+        if sys.version_info.major == 2:
+            if os.path.exists('/opt/openmotics/python-deps/lib/python2.7/site-packages'):
+                sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
+            if os.path.exists('/opt/openmotics/python-deps/lib/python2.7/dist-packages'):
+                sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/dist-packages')
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:
@@ -245,11 +272,13 @@ class Platform(object):
         CLASSIC = 'CLASSIC'
         CORE_PLUS = 'CORE_PLUS'
         CORE = 'CORE'
+        ESAFE = 'ESAFE'
 
     AnyTypes = [Type.DUMMY]
     ClassicTypes = [Type.CLASSIC]
     CoreTypes = [Type.CORE, Type.CORE_PLUS]
-    Types = AnyTypes + ClassicTypes + CoreTypes
+    EsafeTypes = [Type.ESAFE]
+    Types = AnyTypes + ClassicTypes + CoreTypes + EsafeTypes
 
     @staticmethod
     def get_platform():

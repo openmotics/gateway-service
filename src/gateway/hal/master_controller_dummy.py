@@ -20,7 +20,8 @@ from __future__ import absolute_import
 import logging
 
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
-    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO
+    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ThermostatAircoStatusDTO, PumpGroupDTO
+from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import MasterController
 
 if False:  # MYPY
@@ -56,10 +57,6 @@ class MasterDummyController(MasterController):
     def module_discover_status(self):
         # type: () -> bool
         return False
-
-    def error_list(self):
-        # type: () -> List[Tuple[str,int]]
-        return []
 
     def get_firmware_version(self):
         # type: () -> Tuple[int, int, int]
@@ -117,11 +114,11 @@ class MasterDummyController(MasterController):
 
     def get_thermostats(self):
         # type: () -> Dict[str,Any]
-        return {}
+        raise UnsupportedException()
 
     def get_thermostat_modes(self):
         # type: () -> Dict[str,Any]
-        return {}
+        raise UnsupportedException()
 
     def get_global_thermostat_configuration(self, fields=None):
         # type: (Optional[List[str]]) -> Dict[str,Any]
@@ -129,6 +126,18 @@ class MasterDummyController(MasterController):
 
     def load_cooling_thermostats(self):
         # type: () -> List[ThermostatDTO]
+        return []
+
+    def load_cooling_thermostat(self, thermostat_id):
+        # type: (int) -> ThermostatDTO
+        return ThermostatDTO(0)
+
+    def load_cooling_pump_group(self, pump_group_id):
+        # type: (int) -> PumpGroupDTO
+        return PumpGroupDTO(0)
+
+    def load_cooling_pump_groups(self):
+        # type: () -> List[PumpGroupDTO]
         return []
 
     def load_heating_thermostats(self):
@@ -175,6 +184,24 @@ class MasterDummyController(MasterController):
         # type: () -> List[GroupActionDTO]
         return []
 
+    # Error functions
+
+    def error_list(self):
+        # type: () -> List[Tuple[str,int]]
+        return []
+
+    def last_success(self):
+        # type: () -> int
+        return 0
+
+    def clear_error_list(self):
+        # type: () -> bool
+        return True
+
+    def set_status_leds(self, status):
+        # type: (bool) -> None
+        return
+
     def cold_reset(self, power_on=True):  # type: (bool) -> None
         return None
 
@@ -183,3 +210,26 @@ class MasterDummyController(MasterController):
 
     def update_slave_modules(self, module_type, hex_filename):  # type: (str, str) -> None
         return None
+
+    def load_airco_status(self):
+        # type: () -> ThermostatAircoStatusDTO
+        return ThermostatAircoStatusDTO({})
+
+    def load_dimmer_configuration(self, fields=None):
+        # type: (Any) -> Dict[str,Any]
+        return {
+                "min_dim_level": 255,
+                "dim_wait_cycle": 255,
+                "dim_step": 255,
+                "dim_memory": 255
+        }
+
+
+    # Schedules
+    def load_scheduled_action_configurations(self, fields=None):
+        # type: (Any) -> List[Dict[str,Any]]
+        return []
+
+    def load_startup_action_configuration(self, fields=None):
+        # type: (Any) -> Dict[str,Any]
+        return {}

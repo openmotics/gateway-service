@@ -53,8 +53,15 @@ class MasterCoreControllerTest(unittest.TestCase):
             else:
                 raise AssertionError('unexpected instruction: {0}'.format(instruction))
 
+        def _do_basic_action(action_type, action, device_nr=0, extra_parameter=0, timeout=2, log=True):
+            _ = device_nr, extra_parameter, timeout, log
+            if action_type == 200 and action == 1:
+                # Send EEPROM_ACTIVATE event
+                eeprom_file._handle_event({'type': 254, 'action': 0, 'device_nr': 0, 'data': 0})
+
         self.communicator = mock.Mock(CoreCommunicator)
         self.communicator.do_command = _do_command
+        self.communicator.do_basic_action = _do_basic_action
         self.pubsub = PubSub()
         SetUpTestInjections(master_communicator=self.communicator,
                             pubsub=self.pubsub)

@@ -20,7 +20,9 @@ from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 
+import constants
 import logging
+import logging.handlers
 import time
 from signal import SIGTERM, signal
 
@@ -35,6 +37,7 @@ from gateway.migrations.users import UserMigrator
 from gateway.migrations.config import ConfigMigrator
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
+from six.moves.configparser import ConfigParser
 
 if False:  # MYPY
     from gateway.output_controller import OutputController
@@ -76,6 +79,12 @@ def setup_logger():
     handler.setLevel(logging.INFO)
     handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
     logger.addHandler(handler)
+
+    if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
+        syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
+        syslog_handler.setLevel(logging.INFO)
+        syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        logger.addHandler(syslog_handler)
 
 
 class OpenmoticsService(object):
@@ -171,12 +180,14 @@ class OpenmoticsService(object):
         shutter_controller.run_sync_orm()
 
         # Execute data migration(s)
-        FeatureMigrator.migrate()
-        RoomsMigrator.migrate()
-        InputMigrator.migrate()
-        ScheduleMigrator.migrate()
-        UserMigrator.migrate()
-        ConfigMigrator.migrate()
+        # TODO: Make the master communication work before executing the migrations (needs eeprom use or other)
+        if not System.get_operating_system().get('ID') == System.OS.BUILDROOT:
+            FeatureMigrator.migrate()
+            RoomsMigrator.migrate()
+            InputMigrator.migrate()
+            ScheduleMigrator.migrate()
+            UserMigrator.migrate()
+            ConfigMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()

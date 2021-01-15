@@ -87,9 +87,18 @@ class GroupActionTest(unittest.TestCase):
                 for index, data_byte in enumerate(fields['data']):
                     page_data[start + index] = data_byte
 
+        def _do_basic_action(action_type, action, device_nr=0, extra_parameter=0, timeout=2, log=True):
+            _ = device_nr, extra_parameter, timeout, log
+            if action_type == 200 and action == 1:
+                # Send EEPROM_ACTIVATE event
+                eeprom_file._handle_event({'type': 254, 'action': 0, 'device_nr': 0, 'data': 0})
+
         master_communicator = Mock()
         master_communicator.do_command = _do_command
-        SetUpTestInjections(master_communicator=master_communicator)
+        master_communicator.do_basic_action = _do_basic_action
+
+        SetUpTestInjections(master_communicator=master_communicator,
+                            pubsub=Mock())
         eeprom_file = MemoryFile(MemoryTypes.EEPROM)
         eeprom_file._cache = memory
         SetUpTestInjections(memory_files={MemoryTypes.EEPROM: eeprom_file,

@@ -19,6 +19,7 @@ from __future__ import absolute_import
 
 import copy
 import logging
+from threading import Event as ThreadingEvent
 
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
@@ -40,6 +41,11 @@ class MemoryTypes(object):
 
 
 class MemoryFile(object):
+
+    # TODO:
+    #  * Multiple writes in a single page should only write the page once
+    #  * Writes to FRAM must only overwrite the changed data, not the entire page
+    #  * Optimize eeprom activates so there's only a single activation if both EEPROM and FRAM are updated
 
     WRITE_TIMEOUT = 5
     READ_TIMEOUT = 5
@@ -66,6 +72,7 @@ class MemoryFile(object):
         self._pages, self._page_length = MemoryFile.SIZES[memory_type]  # type: int, int
         self._self_activated = False
         self._dirty = False
+        self._activation_event = ThreadingEvent()
 
         if memory_type == MemoryTypes.EEPROM:
             self._core_communicator.register_consumer(
@@ -83,6 +90,7 @@ class MemoryFile(object):
                 # EEPROM might have been changed, so clear caches
                 self.invalidate_cache()
                 logger.info('Cache cleared: EEPROM_ACTIVATE')
+            self._activation_event.set()
             master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
             self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
 
@@ -141,15 +149,19 @@ class MemoryFile(object):
         if self.type == MemoryTypes.EEPROM:
             self._cache[page] = data
 
-    def activate(self):  # type: () -> None
-        if self.type == MemoryTypes.EEPROM:
-            if self._dirty:
-                self._dirty = False
-                logger.info('MEMORY.{0}: Activate'.format(self.type))
-                self._core_communicator.do_basic_action(action_type=200, action=1, timeout=MemoryFile.ACTIVATE_TIMEOUT)
-            else:
-                logger.info('MEMORY.{0}: Ignore activation, not dirty'.format(self.type))
+    def activate(self):  # type: () -> bool
+        activated = False
+        if self._dirty:
+            self._dirty = False
             self._self_activated = True
+            logger.info('MEMORY.{0}: Activate'.format(self.type))
+            self._activation_event.clear()
+            self._core_communicator.do_basic_action(action_type=200, action=1, timeout=MemoryFile.ACTIVATE_TIMEOUT)
+            self._activation_event.wait()
+            activated = True
+        else:
+            logger.info('MEMORY.{0}: Ignore activation, not dirty'.format(self.type))
+        return activated
 
     def invalidate_cache(self, page=None):  # type: (Optional[int]) -> None
         if page is None:

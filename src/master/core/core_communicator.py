@@ -23,11 +23,10 @@ import logging
 import select
 import struct
 import time
-from threading import Lock
-
 import six
+from threading import Lock
+from collections import Counter
 from six.moves.queue import Empty, Queue
-
 from gateway.daemon_thread import BaseThread
 from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
@@ -73,9 +72,11 @@ class CoreCommunicator(object):
         self._stop = False
 
         self._word_helper = WordField('')
+        self._read_thread = None  # type: Optional[BaseThread]
 
-        self._read_thread = BaseThread(name='coreread', target=self._read)
-        self._read_thread.setDaemon(True)
+        self._command_total_histogram = Counter()  # type: Counter
+        self._command_success_histogram = Counter()  # type: Counter
+        self._command_timeout_histogram = Counter()  # type: Counter
 
         self._communication_stats = {'calls_succeeded': [],
                                      'calls_timedout': [],
@@ -88,11 +89,15 @@ class CoreCommunicator(object):
     def start(self):
         """ Start the CoreComunicator, this starts the background read thread. """
         self._stop = False
+        self._read_thread = BaseThread(name='coreread', target=self._read)
+        self._read_thread.setDaemon(True)
         self._read_thread.start()
 
     def stop(self):
         self._stop = True
-        self._read_thread.join()
+        if self._read_thread is not None:
+            self._read_thread.join()
+            self._read_thread = None
 
     def get_communication_statistics(self):
         return self._communication_stats
@@ -102,6 +107,16 @@ class CoreCommunicator(object):
                                      'calls_timedout': [],
                                      'bytes_written': 0,
                                      'bytes_read': 0}
+
+    def get_command_histograms(self):
+        return {'total': dict(self._command_total_histogram),
+                'success': dict(self._command_success_histogram),
+                'timeout': dict(self._command_timeout_histogram)}
+
+    def reset_command_histograms(self):
+        self._command_total_histogram.clear()
+        self._command_success_histogram.clear()
+        self._command_timeout_histogram.clear()
 
     def get_debug_buffer(self):
         # type: () -> Dict[str,Dict[float,str]]
@@ -219,6 +234,7 @@ class CoreCommunicator(object):
         command = consumer.command
 
         try:
+            self._command_total_histogram.update({str(command.instruction): 1})
             self._consumers.setdefault(consumer.get_hash(), []).append(consumer)
             self._send_command(cid, command, fields)
         except Exception:
@@ -232,11 +248,13 @@ class CoreCommunicator(object):
             self._last_success = time.time()
             self._communication_stats['calls_succeeded'].append(time.time())
             self._communication_stats['calls_succeeded'] = self._communication_stats['calls_succeeded'][-50:]
+            self._command_success_histogram.update({str(command.instruction): 1})
             return result
         except CommunicationTimedOutException:
             self.unregister_consumer(consumer)
             self._communication_stats['calls_timedout'].append(time.time())
             self._communication_stats['calls_timedout'] = self._communication_stats['calls_timedout'][-50:]
+            self._command_timeout_histogram.update({str(command.instruction): 1})
             raise
 
     def _send_command(self, cid, command, fields):  # type: (int, CoreCommandSpec, Dict[str, Any]) -> None

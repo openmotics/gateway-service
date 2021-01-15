@@ -17,11 +17,12 @@ import logging
 import hypothesis
 import pytest
 import time
-from tests.hardware import cts, CT
+from tests.hardware_layout import TestPlatform, CT
+from tests.hardware import cts, skip_on_platforms
 
 if False:  # MYPY
     from typing import Any
-    from .toolbox import Toolbox
+    from tests.toolbox import Toolbox
 
 logger = logging.getLogger('openmotics')
 
@@ -32,13 +33,17 @@ def energy_module(toolbox):
 
 
 @hypothesis.given(cts())
+@pytest.mark.skipif(skip_on_platforms([TestPlatform.CORE_PLUS]), reason='No Energy Module on the Core(+) yet')
 def test_realtime_power(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT) -> None
+    _ = energy_module
     _assert_realtime(toolbox, ct)
 
 
 @pytest.mark.slow
 @hypothesis.given(cts())
+@pytest.mark.skipif(skip_on_platforms([TestPlatform.CORE_PLUS]), reason='No Energy Module on the Core(+) yet')
 def test_power_cycle(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT) -> None
+    _ = energy_module
     cycles = 10
     post_boot_wait = 5  # Wait `post_boot_wait` seconds after powering up the module to start using it
     toolbox.tester.get('/set_output', {'id': toolbox.POWER_ENERGY_MODULE, 'is_on': True})

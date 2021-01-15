@@ -5,7 +5,7 @@ import os
 
 import six
 
-import constants 
+import constants
 from plugin_runtime.decorators import *  # Import for backwards compatibility
 
 try:
@@ -57,9 +57,8 @@ class OMPluginBase(object):
         config_path = self.__get_config_path()
 
         if os.path.exists(config_path):
-            config_file = open(config_path, 'r')
-            config = config_file.read()
-            config_file.close()
+            with open(config_path, 'r') as config_file:
+                config = config_file.read()
 
             try:
                 return json.loads(config)
@@ -72,9 +71,8 @@ class OMPluginBase(object):
         """ Write the plugin configuration to the configuration file: the config is a python dict
         that will be serialized to a json string.
         """
-        config_file = open(self.__get_config_path(), 'w')
-        config_file.write(json.dumps(config))
-        config_file.close()
+        with open(self.__get_config_path(), 'w') as config_file:
+            config_file.write(json.dumps(config))
 
 
 class PluginConfigChecker(object):
