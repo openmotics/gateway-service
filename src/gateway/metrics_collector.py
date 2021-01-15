@@ -297,6 +297,7 @@ class MetricsCollector(object):
         while not self._stopped:
             start = time.time()
             now = time.time()
+            plugin_system_metrics = {}
             try:
                 values = {}
                 with open('/proc/uptime', 'r') as f:
@@ -374,6 +375,39 @@ class MetricsCollector(object):
                     except Exception as ex:
                         logger.error('Error loading network metrics: {0}'.format(ex))
 
+                    try:
+                        num_file_descriptors = {'fds_total': 0, 'fds_service_vpn': 0, 'fds_service_api': 0, 'fds_service_watchdog': 0,
+                                                'ofs_total': 0, 'ofs_service_vpn': 0, 'ofs_service_api': 0, 'ofs_service_watchdog': 0}
+                        for proc in psutil.process_iter():
+                            try:
+                                proc_data = proc.as_dict(attrs=['num_fds', 'cmdline', 'open_files'])
+                                nfds = int(proc_data['num_fds'])
+                                nofs = len(proc_data['open_files'])
+                                cmd_line = proc_data['cmdline']
+                                cmd_line_length = len(cmd_line)
+                                num_file_descriptors['fds_total'] += nfds
+                                num_file_descriptors['ofs_total'] += nofs
+                                if cmd_line_length < 2:
+                                    continue
+                                if 'vpn_service.py' in cmd_line[1]:
+                                    num_file_descriptors['fds_service_vpn'] = nfds
+                                    num_file_descriptors['ofs_service_vpn'] = nofs
+                                elif 'openmotics_service.py' in cmd_line[1]:
+                                    num_file_descriptors['fds_service_api'] = nfds
+                                    num_file_descriptors['ofs_service_api'] = nofs
+                                elif 'watchdog.py' in cmd_line[1]:
+                                    num_file_descriptors['fds_service_watchdog'] = nfds
+                                    num_file_descriptors['ofs_service_watchdog'] = nofs
+                                elif cmd_line_length == 4 and 'runtime.py' in cmd_line[1]:
+                                    plugin_name = cmd_line[-1].split('/')[-1]
+                                    plugin_system_metrics[plugin_name] = {'fds_total': nfds,
+                                                                          'ofs_total': nofs}
+                            except psutil.AccessDenied:
+                                pass
+                        values.update(num_file_descriptors)
+                    except Exception as ex:
+                        logger.error('Error loading pid/fd metrics: {0}'.format(ex))
+
                 try:
                     for key, val in Hardware.read_mmc_ext_csd().items():
                         values['disk_{}'.format(key)] = val
@@ -420,10 +454,13 @@ class MetricsCollector(object):
                                           timestamp=now)
                     assert self._plugin_controller
                     for plugin in self._plugin_controller.get_plugins():
+                        plugin_values = {'queue_length': plugin.get_queue_length()}
+                        if plugin.name in plugin_system_metrics:
+                            plugin_values.update(plugin_system_metrics[plugin.name])
                         self._enqueue_metrics(metric_type=metric_type,
                                               tags={'name': 'gateway',
                                                     'section': plugin.name},
-                                              values={'queue_length': plugin.get_queue_length()},
+                                              values=plugin_values,
                                               timestamp=now)
                     for key in set(self._metrics_controller.inbound_rates.keys()) | set(self._metrics_controller.outbound_rates.keys()):
                         self._enqueue_metrics(metric_type=metric_type,
@@ -976,6 +1013,38 @@ class MetricsCollector(object):
                           'unit': ''},
                          {'name': 'net_packets_recv',
                           'description': 'Network packets received',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'fds_total',
+                          'description': 'Total number of file descriptors',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'fds_service_vpn',
+                          'description': 'Number of file descriptors for vpn_service',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'fds_service_api',
+                          'description': 'Number of file descriptors for openmotics_service',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'fds_service_watchdog',
+                          'description': 'Number of file descriptors for watchdog',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'ofs_total',
+                          'description': 'Total number of open files',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'ofs_service_vpn',
+                          'description': 'Number of open files for vpn_service',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'ofs_service_api',
+                          'description': 'Number of open files for openmotics_service',
+                          'type': 'gauge',
+                          'unit': ''},
+                         {'name': 'ofs_service_watchdog',
+                          'description': 'Number of open files for watchdog',
                           'type': 'gauge',
                           'unit': ''},
                          {'name': 'metrics_in',
