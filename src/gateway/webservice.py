@@ -844,11 +844,12 @@ class WebInterface(object):
 
     @openmotics_api(auth=True, check=types(thermostat_id=int, automatic=bool, setpoint=int))
     def set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
+        # type: (int, bool, int) -> Dict[str,Any]
         """
         Set the thermostat mode of a given thermostat. Thermostats can be set to automatic or
         manual, in case of manual a setpoint (0 to 5) can be provided.
         """
-        return self._thermostat_controller.set_per_thermostat_mode(thermostat_id, automatic, setpoint)
+        self._thermostat_controller.set_per_thermostat_mode(thermostat_id, automatic, setpoint)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True)
