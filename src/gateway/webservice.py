@@ -1339,7 +1339,8 @@ class WebInterface(object):
         :param id: The id of the heating pump_group_configuration
         :param fields: The field of the heating pump_group_configuration to get, None if all
         """
-        return {'config': PumpGroupSerializer.serialize(pump_group_dto=self._thermostat_controller.load_heating_pump_group(pump_group_id=id),
+        pump_group_dto = self._thermostat_controller.load_heating_pump_group(pump_group_id=id)
+        return {'config': PumpGroupSerializer.serialize(pump_group_dto=pump_group_dto,
                                                         fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
@@ -1348,8 +1349,9 @@ class WebInterface(object):
         Get all heating pump_group_configurations.
         :param fields: The field of the heating pump_group_configuration to get, None if all
         """
+        pump_group_dtos = self._thermostat_controller.load_heating_pump_groups()
         return {'config': [PumpGroupSerializer.serialize(pump_group_dto=pump_group, fields=fields)
-                           for pump_group in self._thermostat_controller.load_heating_pump_groups()]}
+                           for pump_group in pump_group_dtos]}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_pump_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
