@@ -20,9 +20,10 @@ package: ${SPEC_FILE}
 	cp -r dist-overlay/* dist/
 
 
-esafe-package:
-	echo "not implemented"
+esafe-package: package
+	./create-package.sh
 
+spec-file: ${SPEC_FILE}
 ${SPEC_FILE}:
 	. ./${VENV_FOLDER}/bin/activate; \
 	python --version; \
@@ -30,6 +31,9 @@ ${SPEC_FILE}:
 		--additional-hooks-dir=../hooks \
 		--onedir \
 		--add-data "../src/gateway/migrations:gateway/migrations" \
+		--add-data "../src/gateway/webservice.py:gateway/webservice.py" \
+		--add-data "../src/plugin_runtime:plugin_runtime" \
+		--add-data "../src/plugins:plugins" \
 		--add-data "../src/terms:terms" \
 		--hidden-import cheroot.ssl \
 		--hidden-import cheroot.ssl.builtin \
@@ -49,6 +53,7 @@ venv:
 
 clean:
 	rm -rf __pycache__ build dist
+	cd package; ./clean.sh
 
 clean-spec:
 	rm -rf ${SPEC_FILE}

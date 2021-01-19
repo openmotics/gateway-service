@@ -5,7 +5,9 @@ import sys
 import time
 import traceback
 
-sys.path.insert(0, '/opt/openmotics/python')
+current_path = os.path.realpath(__file__)
+src_path = os.path.dirname(os.path.dirname(current_path))
+sys.path.insert(0, src_path)
 
 from platform_utils import System
 System.import_libs()
@@ -370,8 +372,7 @@ class PluginRuntime(object):
         except Exception as exception:
             return {'success': False, 'exception': str(exception), 'stacktrace': traceback.format_exc()}
 
-
-if __name__ == '__main__':
+def start_runtime():
     if len(sys.argv) < 3 or sys.argv[1] != 'start':
         sys.stderr.write('Usage: python {0} start <path>\n'.format(sys.argv[0]))
         sys.stderr.flush()
@@ -401,3 +402,7 @@ if __name__ == '__main__':
         os._exit(1)
 
     os._exit(0)
+
+
+if __name__ == '__main__':
+    start_runtime()
