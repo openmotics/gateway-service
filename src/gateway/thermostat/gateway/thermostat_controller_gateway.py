@@ -332,6 +332,7 @@ class ThermostatControllerGateway(ThermostatController):
         for thermostat_dto, fields in thermostats:
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, 'heating')
             self.refresh_set_configuration(thermostat)
+        self._thermostat_config_changed()
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         thermostat = Thermostat.get(number=thermostat_id)
@@ -345,6 +346,7 @@ class ThermostatControllerGateway(ThermostatController):
         for thermostat_dto, fields in thermostats:
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, 'cooling')
             self.refresh_set_configuration(thermostat)
+        self._thermostat_config_changed()
 
     def set_per_thermostat_mode(self, thermostat_number, automatic, setpoint):
         # type: (int, bool, float) -> None
@@ -434,6 +436,8 @@ class ThermostatControllerGateway(ThermostatController):
                     valve.delay = thermostat_group_dto.pump_delay  # type: ignore
                     valve.save()
 
+        self._thermostat_config_changed()
+
     def load_heating_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         pump = Pump.get(number=pump_group_id)
         return PumpGroupDTO(id=pump_group_id,
@@ -451,7 +455,7 @@ class ThermostatControllerGateway(ThermostatController):
         return pump_groups
 
     def save_heating_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
-        return ThermostatControllerGateway._save_pump_groups(ThermostatGroup.Modes.HEATING, pump_groups)
+        return self._save_pump_groups(ThermostatGroup.Modes.HEATING, pump_groups)
 
     def load_cooling_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         pump = Pump.get(number=pump_group_id)
@@ -470,10 +474,9 @@ class ThermostatControllerGateway(ThermostatController):
         return pump_groups
 
     def save_cooling_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
-        return ThermostatControllerGateway._save_pump_groups(ThermostatGroup.Modes.COOLING, pump_groups)
+        return self._save_pump_groups(ThermostatGroup.Modes.COOLING, pump_groups)
 
-    @staticmethod
-    def _save_pump_groups(mode, pump_groups):  # type: (str, List[Tuple[PumpGroupDTO, List[str]]]) -> None
+    def _save_pump_groups(self, mode, pump_groups):  # type: (str, List[Tuple[PumpGroupDTO, List[str]]]) -> None
         for pump_group_dto, fields in pump_groups:
             if 'pump_output_id' in fields and 'valve_output_ids' in fields:
                 valve_output_ids = pump_group_dto.valve_output_ids
@@ -504,6 +507,7 @@ class ThermostatControllerGateway(ThermostatController):
                         valve.save()
                     PumpToValve.create(pump=pump,
                                        valve=valve)
+        self._thermostat_config_changed()
 
     def load_global_rtd10(self):  # type: () -> GlobalRTD10DTO
         raise UnsupportedException()
@@ -517,6 +521,10 @@ class ThermostatControllerGateway(ThermostatController):
             self.thermostat_pids[thermostat.number] = thermostat_pid
         self._sync_scheduler()
         thermostat_pid.tick()
+
+    def _thermostat_config_changed(self):
+        gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'thermostats'})
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
 
     def _thermostat_changed(self, thermostat_number, active_preset, current_setpoint, actual_temperature, percentages, room):
         # type: (int, str, float, Optional[float], List[float], int) -> None
