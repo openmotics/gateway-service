@@ -24,7 +24,7 @@ import constants
 
 from six.moves.configparser import ConfigParser
 if False:  # MYPY
-    from typing import Union
+    from typing import Union, Dict
 
 logger = logging.getLogger('openmotics')
 
