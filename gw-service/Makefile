@@ -31,7 +31,7 @@ ${SPEC_FILE}:
 		--additional-hooks-dir=../hooks \
 		--onedir \
 		--add-data "../src/gateway/migrations:gateway/migrations" \
-		--add-data "../src/gateway/webservice.py:gateway/webservice.py" \
+		--add-data "../src/gateway/webservice.py:gateway/" \
 		--add-data "../src/plugin_runtime:plugin_runtime" \
 		--add-data "../src/plugins:plugins" \
 		--add-data "../src/terms:terms" \
