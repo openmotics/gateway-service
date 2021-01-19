@@ -14,9 +14,11 @@ class Logs(object):
         handler.setLevel(default_level)
         handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
 
-        syslog_handler = handlers.SysLogHandler(address='/dev/log')
-        syslog_handler.setLevel(default_level)
-        syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        syslog_handler = None
+        if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
+            syslog_handler = handlers.SysLogHandler(address='/dev/log')
+            syslog_handler.setLevel(default_level)
+            syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
 
         for logger_namespace in ['openmotics', 'gateway']:
             _logger = logging.getLogger(logger_namespace)
@@ -24,7 +26,7 @@ class Logs(object):
             _logger.propagate = False
             _logger.addHandler(handler)
 
-            if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
+            if syslog_handler is not None:
                 _logger.addHandler(syslog_handler)
 
             if extra_configuration is not None:
