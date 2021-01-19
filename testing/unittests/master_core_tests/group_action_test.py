@@ -22,6 +22,7 @@ import xmlrunner
 import logging
 from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
+from logs import Logs
 from master.core.basic_action import BasicAction
 from master.core.group_action import GroupActionController, GroupAction
 from master.core.memory_file import MemoryTypes, MemoryFile
@@ -38,13 +39,7 @@ class GroupActionTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        logger = logging.getLogger('openmotics')
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(default_level=logging.DEBUG)
 
     def setUp(self):
         self.maxDiff = None

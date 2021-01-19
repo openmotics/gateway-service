@@ -28,6 +28,7 @@ from gateway.dto import PumpGroupDTO, ThermostatGroupDTO, OutputStateDTO, \
 from gateway.output_controller import OutputController
 from gateway.gateway_api import GatewayApi
 from ioc import SetTestMode, SetUpTestInjections
+from logs import Logs
 
 MODELS = [Pump, Output, Valve, PumpToValve, Thermostat,
           ThermostatGroup, ValveToThermostat, Sensor, Preset,
@@ -39,13 +40,7 @@ class ThermostatControllerTest(unittest.TestCase):
     def setUpClass(cls):
         fakesleep.monkey_patch()
         SetTestMode()
-        logger = logging.getLogger('openmotics')
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(default_level=logging.DEBUG)
 
     @classmethod
     def tearDownClass(cls):

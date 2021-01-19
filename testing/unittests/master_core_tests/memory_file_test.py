@@ -24,6 +24,7 @@ from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
 from master.core.memory_file import MemoryTypes, MemoryFile
 from master.core.memory_types import MemoryAddress
+from logs import Logs
 
 
 class MemoryFileTest(unittest.TestCase):
@@ -32,13 +33,7 @@ class MemoryFileTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        logger = logging.getLogger('openmotics')
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(default_level=logging.DEBUG)
 
     def test_data_consistency(self):
         memory = {}

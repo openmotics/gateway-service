@@ -27,6 +27,7 @@ import logging
 import time
 from logging import handlers
 from ioc import INJECTED, Inject
+from logs import Logs
 from serial_utils import CommunicationTimedOutException
 from power import power_api
 from gateway.initialize import setup_minimal_power_platform
@@ -34,20 +35,14 @@ from gateway.initialize import setup_minimal_power_platform
 logger = logging.getLogger("openmotics")
 
 
-def setup_logger():
-    """ Setup the OpenMotics logger. """
-    logger.setLevel(logging.DEBUG)
-    logger.propagate = False
-
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    logger.addHandler(handler)
+def extend_logger(_logger):
+    """ Extends the OpenMotics logger. """
+    _logger.setLevel(logging.DEBUG)
 
     handler = handlers.RotatingFileHandler(constants.get_update_log_location(), maxBytes=3 * 1024 ** 2, backupCount=2)
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    logger.addHandler(handler)
+    _logger.addHandler(handler)
 
 
 class HexReader(object):
@@ -365,5 +360,5 @@ def main():
 
 
 if __name__ == '__main__':
-    setup_logger()
+    Logs.setup_logger(extra_configuration=extend_logger)
     main()

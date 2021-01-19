@@ -41,6 +41,7 @@ from gateway.output_controller import OutputController
 from gateway.shutter_controller import ShutterController
 from ioc import SetTestMode, SetUpTestInjections
 from plugin_runtime.base import PluginConfigChecker, PluginException
+from logs import Logs
 
 MODELS = [Plugin]
 
@@ -57,13 +58,7 @@ class PluginControllerTest(unittest.TestCase):
         SetTestMode()
         cls.PLUGINS_PATH = tempfile.mkdtemp()
         cls.PLUGIN_CONFIG_PATH = tempfile.mkdtemp()
-        logger = logging.getLogger('openmotics')
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(default_level=logging.DEBUG)
 
     def setUp(self):
         self.test_db = SqliteDatabase(':memory:')

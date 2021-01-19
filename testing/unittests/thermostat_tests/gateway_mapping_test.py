@@ -28,6 +28,7 @@ from gateway.models import (
 )
 from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
 from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatControllerGateway
+from logs import Logs
 
 MODELS = [Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump, Sensor,
           Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule]
@@ -37,13 +38,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        logger = logging.getLogger('openmotics')
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(default_level=logging.DEBUG)
         cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):
