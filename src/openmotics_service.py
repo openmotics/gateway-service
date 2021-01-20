@@ -262,10 +262,10 @@ class OpenmoticsService(object):
         while not signal_request['stop']:
             time.sleep(1)
 
-def start_plugin_runtime():
+def start_plugin_runtime(plugin_path):
     """ Function to start the plugin runtime from the openmotics_service file """
     from plugin_runtime.runtime import start_runtime
-    start_runtime()
+    start_runtime(plugin_path)
 
 
 if __name__ == "__main__":
@@ -273,13 +273,14 @@ if __name__ == "__main__":
 
     # First check if there are some arguments given, if so, check if it is for starting the plugin runtime
     if len(sys.argv) > 1:
-        # delete the first argument to allign the other arguments properly, the first argument will be the name of this file
+        # Delete the first argument since this will be this file name
         del sys.argv[0]
-        # check which file needs to be started up
-        if sys.argv[0] == 'runtime.py':
-            start_plugin_runtime()
-            # Adding the exit statement to make it obvious that the code should not continue when the plugin runtime has been started.
+        if sys.argv[1] == 'start_plugin':
+            plugin_path = sys.argv[2]
+            start_plugin_runtime(plugin_path)
+            # Explicit exit, do not continue and start the gateway code
             exit(0)
+
     # When reaching here, it should start as default gateway service
     initialize(message_client_name='openmotics_service')
 

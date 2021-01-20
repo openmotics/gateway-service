@@ -372,11 +372,13 @@ class PluginRuntime(object):
         except Exception as exception:
             return {'success': False, 'exception': str(exception), 'stacktrace': traceback.format_exc()}
 
-def start_runtime():
-    if len(sys.argv) < 3 or sys.argv[1] != 'start':
-        sys.stderr.write('Usage: python {0} start <path>\n'.format(sys.argv[0]))
+def start_runtime(plugin_location=None):
+    if plugin_location is None and (len(sys.argv) < 3 or sys.argv[1] != 'start_plugin'):
+        sys.stderr.write('Usage: python {0} start_plugin <path>\n'.format(sys.argv[0]))
         sys.stderr.flush()
         sys.exit(1)
+    elif not (len(sys.argv) < 3 or sys.argv[1] != 'start_plugin'):
+        plugin_location = sys.argv[2]
 
     def watch_parent():
         parent = os.getppid()
@@ -394,7 +396,7 @@ def start_runtime():
 
     # Start the runtime
     try:
-        runtime = PluginRuntime(path=sys.argv[2])
+        runtime = PluginRuntime(path=plugin_location)
         runtime.process_stdin()
     except BaseException as ex:
         writer = PluginIPCWriter(os.fdopen(sys.stdout.fileno(), 'wb', 0))

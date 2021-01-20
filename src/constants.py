@@ -24,6 +24,11 @@ import platform_utils
 OPENMOTICS_PREFIX = os.environ.get('OPENMOTICS_PREFIX', os.path.abspath(os.path.join(__file__, '../..')))
 
 
+def get_src_root_full_path():
+    """ Returns the top level directory of the python src code """
+    return os.path.abspath(os.path.join(__file__, '..'))
+
+
 def get_config_file():
     """ Get the filename of the OpenMotics config file. This file is in ini format. """
     return os.path.join(OPENMOTICS_PREFIX, 'etc/openmotics.conf')
