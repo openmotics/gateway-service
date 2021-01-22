@@ -126,9 +126,9 @@ class MemoryTypesTest(unittest.TestCase):
             field = field_type(MemoryTypes.EEPROM, (None, None), *args)
             if expected_bytes == ValueError:
                 with self.assertRaises(expected_bytes):
-                    field.encode(value)
+                    field.encode(value, None)
                 continue
-            result_bytes = field.encode(value)
+            result_bytes = field.encode(value, None)
             self.assertEqual(expected_bytes, result_bytes)
             result_value = field.decode(result_bytes)
             self.assertEqual(expected_value, result_value)
