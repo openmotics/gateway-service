@@ -74,25 +74,27 @@ class MemoryFile(object):
         self._dirty = False
         self._activation_event = ThreadingEvent()
 
-        if memory_type == MemoryTypes.EEPROM:
-            self._core_communicator.register_consumer(
-                BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
-            )
+        self._core_communicator.register_consumer(
+            BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
+        )
 
     def _handle_event(self, data):  # type: (Dict[str, Any]) -> None
         core_event = Event(data)
         if core_event.type == Event.Types.SYSTEM and core_event.data['type'] == Event.SystemEventTypes.EEPROM_ACTIVATE:
-            if self._self_activated:
-                # Ignore self-activations, since those changes are already in the EEPROM cache
-                self._self_activated = False
-                logger.info('Ignore EEPROM_ACTIVATE due to self-activation')
+            if self.type == MemoryTypes.EEPROM:
+                if self._self_activated:
+                    # Ignore self-activations, since those changes are already in the EEPROM cache
+                    self._self_activated = False
+                    logger.info('MEMORY.E: Ignore EEPROM_ACTIVATE due to self-activation')
+                else:
+                    # EEPROM might have been changed, so clear caches
+                    self.invalidate_cache()
+                    logger.info('MEMORY.E: Cache cleared: EEPROM_ACTIVATE')
+                master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+                self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
             else:
-                # EEPROM might have been changed, so clear caches
-                self.invalidate_cache()
-                logger.info('Cache cleared: EEPROM_ACTIVATE')
+                logger.info('MEMORY.F: Processed EEPROM_ACTIVATE')
             self._activation_event.set()
-            master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
-            self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
 
     def read(self, addresses):  # type: (List[MemoryAddress]) -> Dict[MemoryAddress, bytearray]
         data = {}
@@ -157,7 +159,7 @@ class MemoryFile(object):
             logger.info('MEMORY.{0}: Activate'.format(self.type))
             self._activation_event.clear()
             self._core_communicator.do_basic_action(action_type=200, action=1, timeout=MemoryFile.ACTIVATE_TIMEOUT)
-            self._activation_event.wait()
+            self._activation_event.wait(timeout=60.0)
             activated = True
         else:
             logger.info('MEMORY.{0}: Ignore activation, not dirty'.format(self.type))

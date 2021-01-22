@@ -24,6 +24,7 @@ from peewee import DoesNotExist
 from threading import Lock
 from ioc import INJECTED, Inject
 from master.core.exceptions import InvalidMemoryChecksum
+from master.core.system_value import Temperature
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Union, Tuple, Callable, Set
@@ -93,6 +94,9 @@ class MemoryModelDefinition(object):
 
     def __str__(self):
         return str(json.dumps(self.serialize(), indent=4))
+
+    def __repr__(self):
+        return str(self)
 
     def serialize(self):  # type: () -> Dict[str, Any]
         data = {}
@@ -281,7 +285,7 @@ class MemoryFieldContainer(object):
         """ Encodes changes a high-level value such as a string or large integer into a memory byte array (array of 0 <= x <= 255) """
         if self._memory_field._read_only:
             raise AttributeError('The field `{0}` is read-only'.format(self._field_name))
-        self._data = self._memory_field.encode(value)
+        self._data = self._memory_field.encode(value, self._field_name)
         if self._checksum_container is not None:
             self._checksum_container.update(self._data)
 
@@ -356,7 +360,7 @@ class MemoryField(object):
             page, offset = self._address_generator(id)
         return MemoryAddress(self._memory_type, page, offset, self.length)
 
-    def encode(self, data):  # type: (Any) -> bytearray
+    def encode(self, data, field_name):  # type: (Any, str) -> bytearray
         """ Encodes changes a high-level value such as a string or large integer into a bytearray """
         raise NotImplementedError()
 
@@ -364,9 +368,9 @@ class MemoryField(object):
         """ Decodes a bytearray into a high-level valuye shuch as a string or large integer """
         raise NotImplementedError()
 
-    def _check_limits(self, value):  # type: (Union[float, int]) -> None
+    def _check_limits(self, value, field_name):  # type: (Union[float, int], str) -> None
         if value is None or not (self.limits[0] <= value <= self.limits[1]):
-            raise ValueError('Value `{0}` out of limits: {1} <= value <= {2}'.format(value, self.limits[0], self.limits[1]))
+            raise ValueError('Field `{0}` value `{1}` out of limits: {2} <= value <= {3}'.format(field_name, value, self.limits[0], self.limits[1]))
 
 
 class MemoryStringField(MemoryField):
@@ -377,9 +381,9 @@ class MemoryStringField(MemoryField):
                                                 read_only=read_only,
                                                 checksum=checksum)
 
-    def encode(self, value):  # type: (str) -> bytearray
+    def encode(self, value, field_name):  # type: (str, str) -> bytearray
         if len(value) > self.length:
-            raise ValueError('Value {0} should be a string of {1} characters'.format(value, self.length))
+            raise ValueError('Field `{0}` value `{1}` should be a string of {2} characters'.format(field_name, value, self.length))
         data = []
         for char in value:
             data.append(ord(char))
@@ -400,12 +404,31 @@ class MemoryByteField(MemoryField):
                                               checksum=checksum,
                                               length=1)
 
-    def encode(self, value):  # type: (int) -> bytearray
-        self._check_limits(value)
+    def encode(self, value, field_name):  # type: (int, str) -> bytearray
+        self._check_limits(value, field_name)
         return bytearray([value])
 
     def decode(self, data):  # type: (bytearray) -> int
         return data[0]
+
+
+class MemoryTemperatureField(MemoryField):
+    def __init__(self, memory_type, address_spec, read_only=False, checksum=None):
+        super(MemoryTemperatureField, self).__init__(memory_type=memory_type,
+                                                     address_spec=address_spec,
+                                                     read_only=read_only,
+                                                     checksum=checksum,
+                                                     limits=(-32, 95),
+                                                     length=1)
+
+    def encode(self, value, field_name):  # type: (Optional[float], str) -> bytearray
+        if value is not None:
+            self._check_limits(value, field_name)
+        system_value = Temperature.temperature_to_system_value(value)
+        return bytearray([system_value])
+
+    def decode(self, data):  # type: (bytearray) -> Optional[float]
+        return Temperature.system_value_to_temperature(data[0])
 
 
 class MemoryWordField(MemoryField):
@@ -416,8 +439,8 @@ class MemoryWordField(MemoryField):
                                               checksum=checksum,
                                               length=2)
 
-    def encode(self, value):  # type: (int) -> bytearray
-        self._check_limits(value)
+    def encode(self, value, field_name):  # type: (int, str) -> bytearray
+        self._check_limits(value, field_name)
         return bytearray(struct.pack('>H', value))
 
     def decode(self, data):  # type: (bytearray) -> int
@@ -432,8 +455,8 @@ class Memory3BytesField(MemoryField):
                                                 checksum=checksum,
                                                 length=3)
 
-    def encode(self, value):  # type: (int) -> bytearray
-        self._check_limits(value)
+    def encode(self, value, field_name):  # type: (int, str) -> bytearray
+        self._check_limits(value, field_name)
         return bytearray(struct.pack('>I', value))[-3:]
 
     def decode(self, data):  # type: (bytearray) -> int
@@ -450,15 +473,14 @@ class _MemoryArrayField(MemoryField):
                                                 read_only=read_only,
                                                 checksum=checksum)
 
-    def encode(self, value):  # type: (Any) -> bytearray
+    def encode(self, value, field_name):  # type: (Any, str) -> bytearray
         if len(value) != self._entry_length:
-            raise ValueError('Value `{0}` should be an array of {1} items with {2} <= item <= {3}'.format(value,
-                                                                                                          self._entry_length,
-                                                                                                          self._field.limits[0],
-                                                                                                          self._field.limits[1]))
+            raise ValueError('Field `{0}` value `{1}` should be an array of {2} items with {3} <= item <= {4}'.format(
+                field_name, value, self._entry_length, self._field.limits[0], self._field.limits[1]
+            ))
         data = bytearray()
         for item in value:
-            data += self._field.encode(item)
+            data += self._field.encode(item, field_name)
         return data
 
     def decode(self, data):  # type: (bytearray) -> Any
@@ -477,8 +499,8 @@ class MemoryRawByteArrayField(_MemoryArrayField):
                                                       checksum=checksum,
                                                       field=MemoryByteField)
 
-    def encode(self, value):  # type: (bytearray) -> bytearray
-        return super(MemoryRawByteArrayField, self).encode(list(value))
+    def encode(self, value, field_name):  # type: (bytearray, str) -> bytearray
+        return super(MemoryRawByteArrayField, self).encode(list(value), field_name)
 
     def decode(self, data):  # type: (bytearray) -> bytearray
         return bytearray(super(MemoryRawByteArrayField, self).decode(data))
@@ -495,8 +517,8 @@ class MemoryByteArrayField(_MemoryArrayField):
                                                    read_only=read_only,
                                                    checksum=checksum)
 
-    def encode(self, value):  # type: (List[int]) -> bytearray
-        return super(MemoryByteArrayField, self).encode(value)
+    def encode(self, value, field_name):  # type: (List[int], str) -> bytearray
+        return super(MemoryByteArrayField, self).encode(value, field_name)
 
     def decode(self, data):  # type: (bytearray) -> List[int]
         return super(MemoryByteArrayField, self).decode(data)
@@ -520,11 +542,11 @@ class MemoryBasicActionField(MemoryField):
                                                      checksum=checksum,
                                                      length=6)
 
-    def encode(self, value):  # type: (BasicAction) -> bytearray
+    def encode(self, value, field_name):  # type: (BasicAction, str) -> bytearray
         from master.core.basic_action import BasicAction  # Prevent circular import
 
         if not isinstance(value, BasicAction):
-            raise ValueError('Value should be a BasicAction')
+            raise ValueError('Field `{0}` value should be a BasicAction'.format(field_name))
         return value.encode()
 
     def decode(self, data):  # type: (bytearray) -> BasicAction
@@ -541,9 +563,11 @@ class MemoryAddressField(MemoryField):
                                                  read_only=read_only,
                                                  checksum=checksum)
 
-    def encode(self, value):  # type: (str) -> bytearray
+    def encode(self, value, field_name):  # type: (str, str) -> bytearray
         example = '.'.join(['ID{0}'.format(i) for i in range(self.length - 1, -1, -1)])
-        error_message = 'Value `{0}` should be a string in the format of {1}, where 0 <= IDx <= 255'.format(value, example)
+        error_message = 'Field `{0}` value `{1}` should be a string in the format of {2}, where 0 <= IDx <= 255'.format(
+            field_name, value, example
+        )
         parts = str(value).split('.')
         if len(parts) != self.length:
             raise ValueError(error_message)
@@ -655,6 +679,9 @@ class MemoryAddress(object):
 
     def __str__(self):
         return 'Address({0}{1}, {2}, {3})'.format(self.memory_type, self.page, self.offset, self.length)
+
+    def __repr__(self):
+        return str(self)
 
     def __eq__(self, other):
         if not isinstance(other, MemoryAddress):
@@ -842,16 +869,16 @@ class MemoryEnumDefinition(object):
     def get_address(self, id):  # type: (int) -> MemoryAddress
         return self._field.get_address(id)
 
-    def encode(self, value):  # type: (Union[str, EnumEntry]) -> bytearray
+    def encode(self, value, field_name):  # type: (Union[str, EnumEntry], str) -> bytearray
         found_entry = None  # type: Optional[EnumEntry]
         for entry in self._entries:
             if value == entry:
                 found_entry = entry
                 break
         if found_entry is None:
-            raise ValueError('Value {0} is invalid'.format(value))
+            raise ValueError('Field `{0}` value `{1}` is invalid'.format(field_name, value))
         # Use original entry to make sure only the prefedined values are used
-        return self._field.encode(found_entry.values[0])
+        return self._field.encode(found_entry.values[0], field_name)
 
     def decode(self, data):  # type: (bytearray) -> EnumEntry
         decoded_field_value = self._field.decode(data)
@@ -884,4 +911,4 @@ class EnumEntry(object):
         return self._name
 
     def __repr__(self):
-        return self._name
+        return str(self)
