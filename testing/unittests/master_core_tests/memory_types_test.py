@@ -116,6 +116,14 @@ class MemoryTypesTest(unittest.TestCase):
                                               [[], '0.0.0', bytearray([0, 0, 0])],
                                               [[], '1.2.3', bytearray([1, 2, 3])]])
 
+    def test_temperature_field(self):
+        self._test_field(MemoryTemperatureField, [[[], -32.5, ValueError],
+                                                  [[], -32, bytearray([0])],
+                                                  [[], 0, bytearray([64])],
+                                                  [[], 95, bytearray([254])],
+                                                  [[], 95.5, ValueError],
+                                                  [[], None, bytearray([255])]])
+
     def _test_field(self, field_type, scenario):
         for item in scenario:
             if len(item) == 3:
