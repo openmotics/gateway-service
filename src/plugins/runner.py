@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -12,7 +13,10 @@ import six
 import ujson as json
 from six.moves.queue import Empty, Full, Queue
 
+import constants
+
 from gateway.daemon_thread import BaseThread
+from platform_utils import System
 from toolbox import PluginIPCReader, PluginIPCWriter
 
 if False:  # MYPY
@@ -106,7 +110,7 @@ class PluginRunner(object):
         if python_executable is None or len(python_executable) == 0:
             python_executable = '/usr/bin/python'
 
-        self._proc = subprocess.Popen([python_executable, "runtime.py", "start", self.plugin_path],
+        self._proc = subprocess.Popen([python_executable, 'runtime.py', 'start_plugin', self.plugin_path],
                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=None,
                                       cwd=self.runtime_path, close_fds=True)
         assert self._proc.stdout, 'Plugin stdout not available'

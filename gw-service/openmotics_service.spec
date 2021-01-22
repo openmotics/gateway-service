@@ -4,9 +4,9 @@ block_cipher = None
 
 
 a = Analysis(['../src/openmotics_service.py'],
-             pathex=['/app/build/gateway/gw-service'],
+             pathex=['/app/gw-service'],
              binaries=[],
-             datas=[('../src/gateway/migrations', 'gateway/migrations'), ('../src/terms', 'terms')],
+             datas=[('../src/gateway/migrations', 'gateway/migrations'), ('../src/gateway/webservice.py', 'gateway/'), ('../src/plugin_runtime', 'plugin_runtime'), ('../src/plugins', 'plugins'), ('../src/terms', 'terms')],
              hiddenimports=['cheroot.ssl', 'cheroot.ssl.builtin'],
              hookspath=['../hooks'],
              runtime_hooks=[],

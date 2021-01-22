@@ -24,7 +24,7 @@ import constants
 
 from six.moves.configparser import ConfigParser
 if False:  # MYPY
-    from typing import Union
+    from typing import Union, Dict
 
 logger = logging.getLogger('openmotics')
 
@@ -150,6 +150,7 @@ class System(object):
 
     @staticmethod
     def get_operating_system():
+        # type: () -> Dict[str, str]
         operating_system = {}
         try:
             with open('/etc/os-release', 'r') as osfh:
