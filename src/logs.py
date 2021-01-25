@@ -71,8 +71,10 @@ class Logs(object):
             _logger.setLevel(openmotics_log_level)
 
             if openmotics_stream_handler is not None:
+                # Don't use the parent handlers, as a new StreamHandler will be added
                 _logger.propagate = False
 
             for extra_handler in [openmotics_stream_handler, update_handler, syslog_handler]:
+                # Add extra handlers, where available
                 if extra_handler is not None:
                     _logger.addHandler(extra_handler)
