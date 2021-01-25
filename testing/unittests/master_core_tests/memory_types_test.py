@@ -116,6 +116,14 @@ class MemoryTypesTest(unittest.TestCase):
                                               [[], '0.0.0', bytearray([0, 0, 0])],
                                               [[], '1.2.3', bytearray([1, 2, 3])]])
 
+    def test_temperature_field(self):
+        self._test_field(MemoryTemperatureField, [[[], -32.5, ValueError],
+                                                  [[], -32, bytearray([0])],
+                                                  [[], 0, bytearray([64])],
+                                                  [[], 95, bytearray([254])],
+                                                  [[], 95.5, ValueError],
+                                                  [[], None, bytearray([255])]])
+
     def _test_field(self, field_type, scenario):
         for item in scenario:
             if len(item) == 3:
@@ -126,9 +134,9 @@ class MemoryTypesTest(unittest.TestCase):
             field = field_type(MemoryTypes.EEPROM, (None, None), *args)
             if expected_bytes == ValueError:
                 with self.assertRaises(expected_bytes):
-                    field.encode(value)
+                    field.encode(value, None)
                 continue
-            result_bytes = field.encode(value)
+            result_bytes = field.encode(value, None)
             self.assertEqual(expected_bytes, result_bytes)
             result_value = field.decode(result_bytes)
             self.assertEqual(expected_value, result_value)
