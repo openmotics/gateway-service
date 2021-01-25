@@ -34,7 +34,7 @@ class Logs(object):
 
         # Remove all log handlers (since python2 `defaultConfig` has no `force` flag)
         root_logger = logging.getLogger()
-        while root_logger.hasHandlers():
+        while root_logger.handlers:
             root_logger.removeHandler(root_logger.handlers[0])
 
         # Setup basic stream handler
