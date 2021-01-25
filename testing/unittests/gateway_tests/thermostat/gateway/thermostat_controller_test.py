@@ -40,7 +40,7 @@ class ThermostatControllerTest(unittest.TestCase):
     def setUpClass(cls):
         fakesleep.monkey_patch()
         SetTestMode()
-        Logs.setup_logger(default_level=logging.DEBUG)
+        Logs.setup_logger(log_level=logging.DEBUG)
 
     @classmethod
     def tearDownClass(cls):

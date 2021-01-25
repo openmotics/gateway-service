@@ -29,7 +29,7 @@ class APIFieldsTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        Logs.setup_logger(default_level=logging.DEBUG)
+        Logs.setup_logger(log_level=logging.DEBUG)
 
     def test_byte_field(self):
         self._test_field(ByteField('x'), [[-1, ValueError],

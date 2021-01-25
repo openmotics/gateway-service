@@ -76,7 +76,7 @@ class MemoryModelsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        Logs.setup_logger(default_level=logging.DEBUG)
+        Logs.setup_logger(log_level=logging.DEBUG)
 
     def setUp(self):
         self._memory_access = {MemoryTypes.EEPROM: {}, MemoryTypes.FRAM: {}}

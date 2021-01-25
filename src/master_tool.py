@@ -24,7 +24,6 @@ import argparse
 import logging
 import shutil
 import sys
-from logging import handlers
 from six.moves.configparser import ConfigParser
 
 import constants
@@ -42,18 +41,6 @@ if False:  # MYPY
 
 
 logger = logging.getLogger('openmotics')
-
-
-def extend_logger(_logger):
-    # type: (Logger) -> None
-    """ Extend the OpenMotics logger. """
-
-    _logger.setLevel(logging.DEBUG)
-
-    handler = handlers.RotatingFileHandler(constants.get_update_log_location(), maxBytes=3 * 1024 ** 2, backupCount=2)
-    handler.setLevel(logging.DEBUG)
-    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    _logger.addHandler(handler)
 
 
 @Inject
@@ -145,7 +132,7 @@ def main():
 
     args = parser.parse_args()
 
-    Logs.setup_logger(extra_configuration=extend_logger)
+    Logs.setup_logger(enable_update_logging=True)
 
     config = ConfigParser()
     config.read(constants.get_config_file())

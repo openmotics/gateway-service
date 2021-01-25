@@ -36,7 +36,7 @@ class MemoryTypesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        Logs.setup_logger(default_level=logging.DEBUG)
+        Logs.setup_logger(log_level=logging.DEBUG)
 
     def test_memory_field_addressing(self):
         for item in [[(0, 0), 0, TypeError],

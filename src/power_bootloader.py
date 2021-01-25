@@ -35,16 +35,6 @@ from gateway.initialize import setup_minimal_power_platform
 logger = logging.getLogger("openmotics")
 
 
-def extend_logger(_logger):
-    """ Extends the OpenMotics logger. """
-    _logger.setLevel(logging.DEBUG)
-
-    handler = handlers.RotatingFileHandler(constants.get_update_log_location(), maxBytes=3 * 1024 ** 2, backupCount=2)
-    handler.setLevel(logging.DEBUG)
-    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    _logger.addHandler(handler)
-
-
 class HexReader(object):
     """ Reads the hex from file and returns it in the OpenMotics format. """
 
@@ -360,5 +350,5 @@ def main():
 
 
 if __name__ == '__main__':
-    Logs.setup_logger(extra_configuration=extend_logger)
+    Logs.setup_logger(enable_update_logging=True)
     main()

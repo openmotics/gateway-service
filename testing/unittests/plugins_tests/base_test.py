@@ -58,7 +58,7 @@ class PluginControllerTest(unittest.TestCase):
         SetTestMode()
         cls.PLUGINS_PATH = tempfile.mkdtemp()
         cls.PLUGIN_CONFIG_PATH = tempfile.mkdtemp()
-        Logs.setup_logger(default_level=logging.DEBUG)
+        Logs.setup_logger(log_level=logging.DEBUG)
 
     def setUp(self):
         self.test_db = SqliteDatabase(':memory:')
