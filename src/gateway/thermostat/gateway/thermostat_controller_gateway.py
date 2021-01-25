@@ -255,6 +255,9 @@ class ThermostatControllerGateway(ThermostatController):
                 output_level = output.dimmer
             return output_level
 
+        def get_temperature_from_sensor(_sensor):
+            return None if _sensor is None else self._gateway_api.get_sensor_temperature_status(_sensor.number)
+
         global_thermostat = ThermostatGroup.get(number=0)
         if global_thermostat is None:
             raise RuntimeError('Global thermostat not found!')
@@ -282,9 +285,9 @@ class ThermostatControllerGateway(ThermostatController):
                 setpoint_temperature = active_preset.heating_setpoint
 
             group_status.statusses.append(ThermostatStatusDTO(id=thermostat.number,
-                                                              actual_temperature=self._gateway_api.get_sensor_temperature_status(thermostat.sensor),
+                                                              actual_temperature=get_temperature_from_sensor(thermostat.sensor),
                                                               setpoint_temperature=setpoint_temperature,
-                                                              outside_temperature=self._gateway_api.get_sensor_temperature_status(global_thermostat.sensor),
+                                                              outside_temperature=get_temperature_from_sensor(global_thermostat.sensor),
                                                               mode=0,  # TODO: Need to be fixed
                                                               automatic=active_preset.type == Preset.Types.SCHEDULE,
                                                               setpoint=Preset.TYPE_TO_SETPOINT.get(active_preset.type, 0),
