@@ -25,6 +25,7 @@ from ioc import SetTestMode, SetUpTestInjections
 from master.core.basic_action import BasicAction  # Must be imported
 from master.core.memory_types import *
 from master.core.memory_file import MemoryTypes, MemoryFile
+from logs import Logs
 
 logger = logging.getLogger('openmotics')
 
@@ -35,12 +36,7 @@ class MemoryTypesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(log_level=logging.DEBUG)
 
     def test_memory_field_addressing(self):
         for item in [[(0, 0), 0, TypeError],

@@ -43,6 +43,7 @@ from gateway.daemon_thread import DaemonThread
 from gateway.initialize import setup_minimal_vpn_platform
 from gateway.models import Config
 from ioc import INJECTED, Inject
+from logs import Logs
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple
@@ -52,23 +53,6 @@ CHECK_CONNECTIVITY_TIMEOUT = 60
 DEFAULT_SLEEP_TIME = 30.0
 
 logger = logging.getLogger('openmotics')
-
-
-def setup_logger():
-    """ Setup the OpenMotics logger. """
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-    logger.addHandler(handler)
-
-    if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
-        syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
-        syslog_handler.setLevel(logging.INFO)
-        syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(syslog_handler)
 
 
 class VpnController(object):
@@ -551,7 +535,7 @@ class HeartbeatService(object):
 
 
 if __name__ == '__main__':
-    setup_logger()
+    Logs.setup_logger()
     setup_minimal_vpn_platform(message_client_name='vpn_service')
 
     logger.info('Starting VPN service')

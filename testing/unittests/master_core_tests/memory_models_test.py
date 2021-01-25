@@ -24,6 +24,7 @@ from mock import Mock
 from ioc import SetTestMode, SetUpTestInjections
 from master.core.memory_models import *
 from master.core.memory_file import MemoryTypes, MemoryFile, MemoryAddress
+from logs import Logs
 
 logger = logging.getLogger('openmotics')
 
@@ -75,12 +76,7 @@ class MemoryModelsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(log_level=logging.DEBUG)
 
     def setUp(self):
         self._memory_access = {MemoryTypes.EEPROM: {}, MemoryTypes.FRAM: {}}

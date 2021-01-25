@@ -20,7 +20,6 @@ from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 
-import constants
 import logging
 import logging.handlers
 import time
@@ -38,7 +37,7 @@ from gateway.migrations.users import UserMigrator
 from gateway.migrations.config import ConfigMigrator
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
-from six.moves.configparser import ConfigParser
+from logs import Logs
 
 if False:  # MYPY
     from gateway.output_controller import OutputController
@@ -68,25 +67,6 @@ if False:  # MYPY
     from serial_utils import RS485
 
 logger = logging.getLogger("openmotics")
-
-
-def setup_logger():
-    """ Setup the OpenMotics logger. """
-
-    log_level = logging.INFO
-    logger.setLevel(log_level)
-    logger.propagate = False
-
-    handler = logging.StreamHandler()
-    handler.setLevel(log_level)
-    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    logger.addHandler(handler)
-
-    if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
-        syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
-        syslog_handler.setLevel(logging.INFO)
-        syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(syslog_handler)
 
 
 class OpenmoticsService(object):
@@ -262,6 +242,7 @@ class OpenmoticsService(object):
         while not signal_request['stop']:
             time.sleep(1)
 
+
 def start_plugin_runtime(plugin_path):
     """ Function to start the plugin runtime from the openmotics_service file """
     from plugin_runtime.runtime import start_runtime
@@ -269,7 +250,7 @@ def start_plugin_runtime(plugin_path):
 
 
 if __name__ == "__main__":
-    setup_logger()
+    Logs.setup_logger()
 
     # First check if there are some arguments given, if so, check if it is for starting the plugin runtime
     if len(sys.argv) > 1:

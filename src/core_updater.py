@@ -26,21 +26,10 @@ import constants
 from six.moves.configparser import ConfigParser
 from serial import Serial
 from ioc import Injectable
+from logs import Logs
 from master.core.core_updater import CoreUpdater
 
 logger = logging.getLogger("openmotics")
-
-
-def setup_logger():
-    """ Setup the OpenMotics logger. """
-
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    logger.addHandler(handler)
 
 
 if __name__ == '__main__':
@@ -57,5 +46,5 @@ if __name__ == '__main__':
     Injectable.value(master_communicator=None)
     Injectable.value(maintenance_communicator=None)
 
-    setup_logger()
+    Logs.setup_logger()
     CoreUpdater.update(hex_filename=firmware_filename)
