@@ -37,7 +37,6 @@ if False:  # MYPY
     from gateway.hal.master_controller import MasterController
     from master.classic.master_communicator import MasterCommunicator
     from master.core.core_communicator import CoreCommunicator
-    from logging import Logger
 
 
 logger = logging.getLogger('openmotics')

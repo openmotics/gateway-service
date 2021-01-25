@@ -241,6 +241,7 @@ class OpenmoticsService(object):
         while not signal_request['stop']:
             time.sleep(1)
 
+
 def start_plugin_runtime(plugin_path):
     """ Function to start the plugin runtime from the openmotics_service file """
     from plugin_runtime.runtime import start_runtime

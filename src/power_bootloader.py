@@ -20,12 +20,10 @@ from platform_utils import System
 System.import_libs()
 
 import intelhex
-import constants
 import sys
 import argparse
 import logging
 import time
-from logging import handlers
 from ioc import INJECTED, Inject
 from logs import Logs
 from serial_utils import CommunicationTimedOutException
