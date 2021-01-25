@@ -22,6 +22,7 @@ System.import_libs()
 
 import logging.handlers
 import time
+import sys
 from signal import SIGTERM, signal
 
 from bus.om_bus_client import MessageClient
@@ -240,9 +241,26 @@ class OpenmoticsService(object):
         while not signal_request['stop']:
             time.sleep(1)
 
+def start_plugin_runtime(plugin_path):
+    """ Function to start the plugin runtime from the openmotics_service file """
+    from plugin_runtime.runtime import start_runtime
+    start_runtime(plugin_path)
+
 
 if __name__ == "__main__":
     Logs.setup_logger()
+
+    # First check if there are some arguments given, if so, check if it is for starting the plugin runtime
+    if len(sys.argv) > 1:
+        # Delete the first argument since this will be this file name
+        del sys.argv[0]
+        if sys.argv[1] == 'start_plugin':
+            plugin_path = sys.argv[2]
+            start_plugin_runtime(plugin_path)
+            # Explicit exit, do not continue and start the gateway code
+            exit(0)
+
+    # When reaching here, it should start as default gateway service
     initialize(message_client_name='openmotics_service')
 
     logger.info("Starting OpenMotics service")

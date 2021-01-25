@@ -170,45 +170,6 @@ class Gateway(object):
                 logger.error('Exception during Gateway call {0}: {1}'.format(uri, message))
             return
 
-    def get_inputs_status(self):
-        """ Get the inputs status. """
-        data = self.do_call('get_input_status?token=None')
-        if data is None or data['success'] is False:
-            return None
-        return [(inp["id"], inp["status"]) for inp in data['status']]
-
-    def get_shutters_status(self):
-        """ Get the shutters status. """
-        data = self.do_call('get_shutter_status?token=None')
-        if data is None or data['success'] is False:
-            return None
-        return_data = []
-        for shutter_id, details in six.iteritems(data['detail']):
-            last_change = details['last_change']
-            if last_change == 0.0:
-                entry = (int(shutter_id), details['state'].upper())
-            else:
-                entry = (int(shutter_id), details['state'].upper(), last_change)
-            return_data.append(entry)
-        return return_data
-
-    def get_thermostats(self):
-        """ Fetch the setpoints for the enabled thermostats from the webservice. """
-        data = self.do_call('get_thermostat_status?token=None')
-        if data is None or data['success'] is False:
-            return None
-        ret = {'thermostats_on': data['thermostats_on'],
-               'automatic': data['automatic'],
-               'cooling': data['cooling']}
-        thermostats = []
-        for thermostat in data['status']:
-            to_add = {}
-            for field in ['id', 'act', 'csetp', 'mode', 'output0', 'output1', 'outside', 'airco']:
-                to_add[field] = thermostat[field]
-            thermostats.append(to_add)
-        ret['status'] = thermostats
-        return ret
-
     def get_errors(self):
         """ Get the errors on the gateway. """
         data = self.do_call('get_errors?token=None')
@@ -489,11 +450,8 @@ class HeartbeatService(object):
         self._task_executor = TaskExecutor()
 
         # Obsolete keys (do not use them, as they are still processed for legacy gateways):
-        # `outputs`, `update`, `energy`, `pulse_totals`
-        self._collectors = {'thermostats': DataCollector('thermostats', self._gateway.get_thermostats, 60),
-                            'inputs': DataCollector('inputs', self._gateway.get_inputs_status),
-                            'shutters': DataCollector('shutters', self._gateway.get_shutters_status),
-                            'errors': DataCollector('errors', self._gateway.get_errors, 600),
+        # `outputs`, `update`, `energy`, `pulse_totals`, `'thermostats`, `inputs`, `shutters`
+        self._collectors = {'errors': DataCollector('errors', self._gateway.get_errors, 600),
                             'local_ip': DataCollector('ip address', System.get_ip_address, 1800)}
         self._debug_collector = DebugDumpDataCollector()
 
