@@ -42,6 +42,10 @@ class Logs(object):
                             level=logging.INFO)
         openmotics_log_level = log_level
 
+        # Alter some system loggers
+        requests_logger = logging.getLogger('requests.packages.urllib3.connectionpool')
+        requests_logger.setLevel(logging.WARNING)
+
         # Prepare extra handlers
         openmotics_stream_handler = None
         if log_level != logging.INFO:
@@ -65,11 +69,9 @@ class Logs(object):
         for logger_namespace in ['openmotics', 'gateway']:
             _logger = logging.getLogger(logger_namespace)
             _logger.setLevel(openmotics_log_level)
-            _logger.propagate = False
 
             if openmotics_stream_handler is not None:
-                # Remove default StreamHandler
-                _logger.removeHandler(_logger.handlers[0])
+                _logger.propagate = False
 
             for extra_handler in [openmotics_stream_handler, update_handler, syslog_handler]:
                 if extra_handler is not None:
