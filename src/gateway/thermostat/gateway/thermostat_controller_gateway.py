@@ -324,30 +324,36 @@ class ThermostatControllerGateway(ThermostatController):
                 thermostat_pid.tick()
 
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+        mode = 'heating'  # type: Literal['heating']
         thermostat = Thermostat.get(number=thermostat_id)
-        return ThermostatMapper.orm_to_dto(thermostat, 'heating')
+        return ThermostatMapper.orm_to_dto(thermostat, mode)
 
     def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
-        return [ThermostatMapper.orm_to_dto(thermostat, 'heating')
+        mode = 'heating'  # type: Literal['heating']
+        return [ThermostatMapper.orm_to_dto(thermostat, mode)
                 for thermostat in Thermostat.select()]
 
     def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+        mode = 'heating'  # type: Literal['heating']
         for thermostat_dto, fields in thermostats:
-            thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, 'heating')
+            thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, mode)
             self.refresh_set_configuration(thermostat)
         self._thermostat_config_changed()
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
+        mode = 'cooling'  # type: Literal['cooling']
         thermostat = Thermostat.get(number=thermostat_id)
-        return ThermostatMapper.orm_to_dto(thermostat, 'cooling')
+        return ThermostatMapper.orm_to_dto(thermostat, mode)
 
     def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
-        return [ThermostatMapper.orm_to_dto(thermostat, 'cooling')
+        mode = 'cooling'  # type: Literal['cooling']
+        return [ThermostatMapper.orm_to_dto(thermostat, mode)
                 for thermostat in Thermostat.select()]
 
     def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+        mode = 'cooling'  # type: Literal['cooling']
         for thermostat_dto, fields in thermostats:
-            thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, 'cooling')
+            thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, mode)
             self.refresh_set_configuration(thermostat)
         self._thermostat_config_changed()
 
