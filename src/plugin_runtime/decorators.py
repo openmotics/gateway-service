@@ -203,7 +203,7 @@ def on_remove(method=None, version=1):
     return wrapper
 
 
-def om_expose(method=None, auth=True, content_type='application/json'):
+def om_expose(method=None, auth=True, content_type='application/json', version=1):
     """
     Decorator to expose a method of the plugin class through the
     webinterface. The url will be /plugins/<plugin-name>/<method>.
@@ -224,9 +224,15 @@ def om_expose(method=None, auth=True, content_type='application/json'):
         pass
     """
     def decorate(_method):
-        _method.om_expose = {'method': _method,
-                             'auth': auth,
-                             'content_type': content_type}
+        if version == 1:
+            _method.om_expose = {'method': _method,
+                                 'auth': auth,
+                                 'content_type': content_type}
+        else:
+            _method.om_expose = {
+                'version': 2,
+                'auth': auth
+            }
         return _method
 
     if method is not None:

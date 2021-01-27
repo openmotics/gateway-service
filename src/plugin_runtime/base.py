@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+import base64
 import logging
 import os
 
@@ -14,6 +15,8 @@ except ImportError:
     # This is the case when the plugin runtime is unittested
     import json  # type: ignore
 
+if False:  # MyPy
+    from typing import Dict, Optional, Any, Union
 
 logger = logging.getLogger("openmotics")
 
@@ -259,3 +262,145 @@ class PluginConfigChecker(object):
                     raise PluginException("Exception in nested_enum dict: %s" % ex)
                 except ValueError:
                     raise PluginException('Config \'{0}\': \'{1}\' is not in the choices: {2}'.format(name, config[name], ', '.join(choices)))
+
+
+class PluginWebResponse(object):
+    """
+    Class that will hold the data for an api response from the plugin.
+    """
+    VARS_TO_SERIALIZE = ['status_code', 'body', 'headers', 'path']
+
+    def __init__(self, status_code=None, body=None, headers=None, path=None, version=2):
+        # type: (int, str, Dict[str, str], str, int) -> PluginWebRequest
+        self.status_code = status_code
+        self.body = body
+        self.headers = headers
+        self.path = path
+        self.version = version
+
+    def serialize(self):
+        # type: () -> str
+        obj_dict = {}
+        for var in PluginWebResponse.VARS_TO_SERIALIZE:
+            obj_dict[var] = getattr(self, var)
+
+        # Serialize the body parameter
+        if 'body' in obj_dict and obj_dict['body'] is not None:
+            obj_dict['body'] = PluginWebBody.to_serial(obj_dict['body'])
+        return json.dumps(obj_dict)
+
+    @staticmethod
+    def from_serial(serial_str):
+        # type: (Union[str, bytearray]) -> PluginWebResponse
+        obj_dict = json.loads(serial_str)
+        pwr = PluginWebResponse()
+        for var in PluginWebResponse.VARS_TO_SERIALIZE:
+            setattr(pwr, var, obj_dict[var])
+
+        # deserialize the body
+        if hasattr(pwr, 'body') and pwr.body is not None:
+            pwr.body = PluginWebBody.from_serial(pwr.body)
+        return pwr
+
+    @staticmethod
+    def is_valid_serial_representation(serial_str):
+        # type: (Union[str, bytearray]) -> bool
+        try:
+            contents_dict = json.loads(serial_str)
+            # detect if the returned dict is a PluginWebResponse
+            if set(PluginWebResponse.VARS_TO_SERIALIZE).issubset(set(contents_dict.keys())):
+                return True
+            return False
+        except ValueError:  # expect a valueError from the json.loads operation
+            return False
+
+    def __str__(self):
+        # type: () -> str
+        vars_to_print = ['status_code', 'body', 'headers', 'path']
+        vars_str = ',   '.join(
+            ['{}={}'.format(name, getattr(self, name)) for name in vars_to_print]
+        )
+        return '<PluginWebRequest>   {}'.format(vars_str)
+
+class PluginWebRequest(object):
+    """
+    Class that will hold the data for an api request to the plugin
+    """
+    VARS_TO_SERIALIZE = ['method', 'body', 'headers', 'path']
+
+    def __init__(self, method=None, body=None, headers=None, path=None, version=2):
+        # type: (str, Any, Dict[str, str], str, int) -> PluginWebRequest
+        self.method = method
+        self.body = body
+        self.headers = headers
+        self.path = path
+        self.version = version
+
+    def serialize(self):
+        # type: () -> str
+        obj_dict = {}
+        for var in PluginWebRequest.VARS_TO_SERIALIZE:
+            obj_dict[var] = getattr(self, var)
+
+        # Specials to serialize
+        if 'body' in obj_dict and obj_dict['body'] is not None:
+            obj_dict['body'] = PluginWebBody.to_serial(obj_dict['body'])
+            # log.debug('Serializing body - result: {}'.format(obj_dict['body']))
+        return json.dumps(obj_dict)
+
+    @staticmethod
+    def from_serial(serial_str):
+        # type: (Union[str, bytearray]) -> PluginWebRequest
+        obj_dict = json.loads(serial_str)
+        pwr = PluginWebRequest()
+        for var in PluginWebRequest.VARS_TO_SERIALIZE:
+            setattr(pwr, var, obj_dict[var])
+
+        # deserialize the body
+        if pwr.body is not None:
+            pwr.body = PluginWebBody.from_serial(pwr.body)
+        return pwr
+
+    def __str__(self):
+        # type: () -> str
+        vars_to_print = ['method', 'body', 'headers', 'path']
+        vars_str = ',   '.join(
+            ['{}={}'.format(name, getattr(self, name)) for name in vars_to_print]
+        )
+        return '<PluginWebRequest>   {}'.format(vars_str)
+
+class PluginWebBody():
+    # def __init__(self, content=None):
+    #     self.content = content
+
+    @staticmethod
+    def to_serial(content):
+        # type: (Union[bytearray, str]) -> Optional[bytearray]
+        log.debug('Serializing body: {}'.format(content))
+        if content is None:
+            return None
+
+        # log.debug('Content is not None')
+        if not isinstance(content, bytearray):
+            # log.debug('Converting it back to bytes')
+            content = bytearray(content, encoding='utf-8')
+        # log.debug('Encoding...')
+        encoded = base64.encodebytes(content)
+        # log.debug('encoded: {}'.format(encoded))
+        return encoded
+
+    @staticmethod
+    def from_serial(serial):
+        # type: (Optional[Union[str, bytearray]]) -> Optional[bytearray]
+        # log.debug('Deserializing body: {}'.format(serial))
+        content = None
+        if not isinstance(serial, bytearray):
+            serial = bytearray(serial, encoding='utf-8')
+        if serial is not None:
+            content = base64.decodestring(serial)
+        # log.debug('result: {}'.format(content))
+        return content
+
+
+    def __str__(self):
+        return '<PluginWebBody>: ({})'.format(self.content)

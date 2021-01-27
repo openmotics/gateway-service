@@ -18,6 +18,7 @@ import constants
 from gateway.daemon_thread import BaseThread
 from platform_utils import System
 from toolbox import PluginIPCReader, PluginIPCWriter
+from plugin_runtime.base import PluginWebRequest, PluginWebResponse
 
 if False:  # MYPY
     from typing import Any, Dict, Callable, List, Optional
@@ -37,23 +38,45 @@ class Service(object):
         # type: (List[str]) -> Any
         request = cherrypy.request
         response = cherrypy.response
-        method = vpath.pop()
+        path = '/'.join(vpath)
+        method = vpath[0]
+        # Clear vpath completely, The rest is not needed anymore
+        # The complete path is stored in the path variable
+        while len(vpath) > 0:
+            vpath.pop(0)
         for exposed in self.runner._exposes:
             if exposed['name'] == method:
                 request.params['method'] = method
-                response.headers['Content-Type'] = exposed['content_type']
+                if not 'version' in exposed:  # If it is version 1
+                    response.headers['Content-Type'] = exposed['content_type']
+                else:
+                    request.params['PluginWebRequest'] = PluginWebRequest(
+                        method=request.method,
+                        body=request.body,
+                        headers=request.headers,
+                        path=path
+                    ).serialize()
                 if exposed['auth'] is True:
                     request.hooks.attach('before_handler', cherrypy.tools.authenticated.callable)
                 request.hooks.attach('before_handler', cherrypy.tools.params.callable)
                 return self
-
         return None
 
     @cherrypy.expose
     def index(self, method, *args, **kwargs):
         try:
+            # Receive the contents that the plugin will return
             contents = self.runner.request(method, args=args, kwargs=kwargs)
-            return contents.encode()
+            # See if the returned data fits the PluginWebResponse class
+            if PluginWebResponse.is_valid_serial_representation(contents):
+                pwr = PluginWebResponse.from_serial(contents)
+                cp_response = cherrypy.response
+                for key in pwr.headers.keys():
+                    cp_response.headers[key] = pwr.headers[key]
+                cp_response.status = pwr.status_code
+                return pwr.body
+            else:
+                return contents.encode()
         except Exception as ex:
             cherrypy.response.headers["Content-Type"] = "application/json"
             cherrypy.response.status = 500

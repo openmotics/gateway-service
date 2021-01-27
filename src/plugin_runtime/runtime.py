@@ -17,6 +17,7 @@ import six
 from gateway.daemon_thread import BaseThread
 from gateway.events import GatewayEvent
 from plugin_runtime import base
+from plugin_runtime.base import PluginWebRequest, PluginWebResponse
 from plugin_runtime.interfaces import has_interface
 from plugin_runtime.utils import get_plugin_class, check_plugin, get_special_methods
 from plugin_runtime.web import WebInterfaceDispatcher
@@ -113,6 +114,19 @@ class PluginRuntime(object):
 
         # Set the exposed methods
         for decorated_method, _ in get_special_methods(self._plugin, 'om_expose'):
+            # log.debug('Detected decorated_method: {}'.format(decorated_method))
+            if 'version' in decorated_method.om_expose:
+                om_expose_version = decorated_method.om_expose['version']
+                if om_expose_version == 2:
+                    # log.debug('Added as version 2 om_expose')
+                    self._exposes.append({
+                        'name': decorated_method.__name__,
+                        'version': 2,
+                        'auth': decorated_method.om_expose['auth']
+                    })
+                    continue
+            # If code has reached this point, there is no version 2 expose added
+            # Then add the version one expose definition
             self._exposes.append({'name': decorated_method.__name__,
                                   'auth': decorated_method.om_expose['auth'],
                                   'content_type': decorated_method.om_expose['content_type']})
@@ -368,9 +382,15 @@ class PluginRuntime(object):
             # Analog error message as the default CherryPy behavior
             return {'success': False, 'exception': 'Missing parameters: {0}'.format(', '.join(difference))}
         try:
-            return {'success': True, 'response': func(*args, **kwargs)}
+            if 'PluginWebRequest' in kwargs:
+                kwargs['PluginWebRequest'] = PluginWebRequest.from_serial(kwargs['PluginWebRequest'])
+            func_return = func(*args, **kwargs)
+            if isinstance(func_return, PluginWebResponse):
+                func_return = func_return.serialize()
+            return {'success': True, 'response': func_return}
         except Exception as exception:
             return {'success': False, 'exception': str(exception), 'stacktrace': traceback.format_exc()}
+
 
 def start_runtime(plugin_location=None):
     if plugin_location is None and (len(sys.argv) < 3 or sys.argv[1] != 'start_plugin'):
