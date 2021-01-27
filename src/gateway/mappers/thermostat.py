@@ -25,12 +25,19 @@ from gateway.models import Thermostat, DaySchedule, ValveToThermostat, \
     Output, Valve, Preset, Sensor, Room, ThermostatGroup
 
 if False:  # MYPY
-    from typing import List, Optional, Dict, Any
+    from typing import List, Optional, Dict, Any, Literal
 
 logger = logging.getLogger("openmotics")
 
 
 class ThermostatMapper(object):
+
+    DEFAULT_SCHEDULE_TIMES = [0, 7 * 3600, 9 * 3600, 17 * 3600, 22 * 3600]
+    DEFAULT_SCHEDULE = {ThermostatGroup.Modes.HEATING: dict(zip(DEFAULT_SCHEDULE_TIMES, [16.0, 20.0, 16.0, 21.0, 16.0])),
+                        ThermostatGroup.Modes.COOLING: dict(zip(DEFAULT_SCHEDULE_TIMES, [25.0, 24.0, 25.0, 23.0, 25.0]))}
+    DEFAULT_PRESET_TYPES = [Preset.Types.AWAY, Preset.Types.VACATION, Preset.Types.PARTY]
+    DEFAULT_PRESETS = {ThermostatGroup.Modes.HEATING: dict(zip(DEFAULT_PRESET_TYPES, [16.0, 15.0, 22.0])),
+                       ThermostatGroup.Modes.COOLING: dict(zip(DEFAULT_PRESET_TYPES, [25.0, 38.0, 25.0]))}
 
     @staticmethod
     def orm_to_dto(orm_object, mode):  # type: (Thermostat, str) -> ThermostatDTO
@@ -125,7 +132,7 @@ class ThermostatMapper(object):
         return ThermostatScheduleDTO(**kwargs)
 
     @staticmethod
-    def dto_to_orm(thermostat_dto, fields, mode):  # type: (ThermostatDTO, List[str], str) -> Thermostat
+    def dto_to_orm(thermostat_dto, fields, mode):  # type: (ThermostatDTO, List[str], Literal['cooling', 'heating']) -> Thermostat
         # TODO: A mapper should not alter the database, but instead give an in-memory
         #       structure back to the caller to process
         objects = {}  # type: Dict[str, Dict[int, Any]]
@@ -204,6 +211,9 @@ class ThermostatMapper(object):
                 valve_to_thermostat.save()
 
         # Update/save scheduling configuration
+        day_schedules = {schedule.index: schedule for schedule in
+                         DaySchedule.select().where((DaySchedule.thermostat == thermostat) &
+                                                    (DaySchedule.mode == mode))}
         for day_index, key in [(0, 'auto_mon'),
                                (1, 'auto_tue'),
                                (2, 'auto_wed'),
@@ -211,32 +221,42 @@ class ThermostatMapper(object):
                                (4, 'auto_fri'),
                                (5, 'auto_sat'),
                                (6, 'auto_sun')]:
+            if day_index not in day_schedules:
+                day_schedule = DaySchedule(thermostat=thermostat, index=day_index, mode=mode)
+                day_schedule.schedule_data = ThermostatMapper.DEFAULT_SCHEDULE[mode]
+                day_schedule.save()
+                day_schedules[day_index] = day_schedule
             if key not in fields:
                 continue
             dto_data = getattr(thermostat_dto, key)
             if dto_data is None:
                 continue
-            try:
-                day_schedule = DaySchedule.get(thermostat=thermostat, index=day_index, mode=mode)
-            except DoesNotExist:
-                day_schedule = DaySchedule(thermostat=thermostat, index=day_index, mode=mode)
-            day_schedule.schedule_data = ThermostatMapper._schedule_dto_to_orm(dto_data)
+            day_schedule = day_schedules[day_index]
+            day_schedule.schedule_data = ThermostatMapper._schedule_dto_to_orm(dto_data, mode)
             day_schedule.save()
 
         # Presets
+        presets = {preset.type: preset for preset in
+                   Preset.select().where((Preset.thermostat == thermostat))}
         for field, preset_type in [('setp3', Preset.Types.AWAY),
                                    ('setp4', Preset.Types.VACATION),
                                    ('setp5', Preset.Types.PARTY)]:
+            if preset_type not in presets:
+                preset = Preset(type=preset_type, thermostat=thermostat)
+                preset.heating_setpoint = ThermostatMapper.DEFAULT_PRESETS[ThermostatGroup.Modes.HEATING][preset_type]
+                preset.cooling_setpoint = ThermostatMapper.DEFAULT_PRESETS[ThermostatGroup.Modes.COOLING][preset_type]
+                preset.active = False
+                preset.save()
+                presets[preset_type] = preset
             if field not in fields:
                 continue
             dto_data = getattr(thermostat_dto, field)
-            if dto_data is None:
-                continue
             try:
-                preset = Preset.get(type=preset_type, thermostat=thermostat)
-            except DoesNotExist:
-                preset = Preset(type=preset_type, thermostat=thermostat)
-            setattr(preset, '{0}_setpoint'.format(mode), float(dto_data))
+                preset_value = float(dto_data)
+            except ValueError:
+                continue
+            preset = presets[preset_type]
+            setattr(preset, '{0}_setpoint'.format(mode), preset_value)
             preset.active = False
             preset.save()
 
@@ -244,13 +264,29 @@ class ThermostatMapper(object):
         return thermostat
 
     @staticmethod
-    def _schedule_dto_to_orm(schedule_dto):  # type: (ThermostatScheduleDTO) -> Dict[int, Optional[float]]
+    def _schedule_dto_to_orm(schedule_dto, mode):  # type: (ThermostatScheduleDTO, Literal['cooling', 'heating']) -> Dict[int, float]
         def get_seconds(hour_timestamp):
-            x = time.strptime(hour_timestamp, '%H:%M')
-            return int(datetime.timedelta(hours=x.tm_hour, minutes=x.tm_min, seconds=x.tm_sec).total_seconds())
+            # type: (str) -> Optional[int]
+            try:
+                x = time.strptime(hour_timestamp, '%H:%M')
+                return int(datetime.timedelta(hours=x.tm_hour, minutes=x.tm_min, seconds=x.tm_sec).total_seconds())
+            except Exception:
+                return None
 
-        return {0: schedule_dto.temp_night,
-                get_seconds(schedule_dto.start_day_1): schedule_dto.temp_day_1,
-                get_seconds(schedule_dto.end_day_1): schedule_dto.temp_night,
-                get_seconds(schedule_dto.start_day_2): schedule_dto.temp_day_2,
-                get_seconds(schedule_dto.end_day_2): schedule_dto.temp_night}
+        temperatures = [schedule_dto.temp_night, schedule_dto.temp_day_1, schedule_dto.temp_day_2]
+        times = [0,
+                 get_seconds(schedule_dto.start_day_1),
+                 get_seconds(schedule_dto.end_day_1),
+                 get_seconds(schedule_dto.start_day_2),
+                 get_seconds(schedule_dto.end_day_2)]
+
+        if None in temperatures or None in times:
+            # Some partial data and/or parsing errors, fallback to defaults
+            return ThermostatMapper.DEFAULT_SCHEDULE[mode]
+
+        # Added `ignore` type annotation below, since mypy couldn't figure out we checked for None above
+        return {times[0]: temperatures[0],  # type: ignore
+                times[1]: temperatures[1],  # type: ignore
+                times[2]: temperatures[0],  # type: ignore
+                times[3]: temperatures[2],  # type: ignore
+                times[4]: temperatures[0]}  # type: ignore
