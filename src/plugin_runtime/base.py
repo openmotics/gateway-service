@@ -16,7 +16,7 @@ except ImportError:
     import json  # type: ignore
 
 if False:  # MyPy
-    from typing import Dict, Optional, Any, Union
+    from typing import Dict, Optional, Any, Union, AnyStr
 
 logger = logging.getLogger("openmotics")
 
@@ -271,7 +271,7 @@ class PluginWebResponse(object):
     VARS_TO_SERIALIZE = ['status_code', 'body', 'headers', 'path']
 
     def __init__(self, status_code=None, body=None, headers=None, path=None, version=2):
-        # type: (int, str, Dict[str, str], str, int) -> PluginWebRequest
+        # type: (int, str, Dict[str, str], str, int) -> None
         self.status_code = status_code
         self.body = body
         self.headers = headers
@@ -291,7 +291,7 @@ class PluginWebResponse(object):
 
     @staticmethod
     def from_serial(serial_str):
-        # type: (Union[str, bytearray]) -> PluginWebResponse
+        # type: (AnyStr) -> PluginWebResponse
         obj_dict = json.loads(serial_str)
         pwr = PluginWebResponse()
         for var in PluginWebResponse.VARS_TO_SERIALIZE:
@@ -304,7 +304,7 @@ class PluginWebResponse(object):
 
     @staticmethod
     def is_valid_serial_representation(serial_str):
-        # type: (Union[str, bytearray]) -> bool
+        # type: (AnyStr) -> bool
         try:
             contents_dict = json.loads(serial_str)
             # detect if the returned dict is a PluginWebResponse
@@ -339,7 +339,7 @@ class PluginWebRequest(object):
     VARS_TO_SERIALIZE = ['method', 'body', 'headers', 'path']
 
     def __init__(self, method=None, body=None, headers=None, path=None, version=2):
-        # type: (str, Any, Dict[str, str], str, int) -> PluginWebRequest
+        # type: (str, Any, Dict[str, str], str, int) -> None
         self.method = method
         self.body = body
         self.headers = headers
@@ -360,7 +360,7 @@ class PluginWebRequest(object):
 
     @staticmethod
     def from_serial(serial_str):
-        # type: (Union[str, bytearray]) -> PluginWebRequest
+        # type: (AnyStr) -> PluginWebRequest
         obj_dict = json.loads(serial_str)
         pwr = PluginWebRequest()
         for var in PluginWebRequest.VARS_TO_SERIALIZE:
@@ -396,24 +396,25 @@ class PluginWebBody():
 
     @staticmethod
     def to_serial(content):
-        # type: (Union[bytearray, str]) -> Optional[bytearray]
+        # type: (Union[bytes, str]) -> Optional[bytes]
         if content is None:
             return None
-        if not isinstance(content, bytearray):
-            content = bytearray(content, encoding='utf-8')
+        if isinstance(content, str):
+            content = bytes(content, encoding='utf-8')
         encoded = base64.encodebytes(content)
         return encoded
 
     @staticmethod
     def from_serial(serial):
-        # type: (Optional[Union[str, bytearray]]) -> Optional[str]
+        # type: (Optional[Union[str, bytes]]) -> Optional[str]
         content = None
-        if not isinstance(serial, bytearray):
-            serial = bytearray(serial, encoding='utf-8')
+        if isinstance(serial, str):
+            serial = bytes(serial, encoding='utf-8')
         if serial is not None:
             content = base64.decodebytes(serial)
-        return content.decode(encoding='utf-8')
-
+        if content is not None:
+            return content.decode(encoding='utf-8')
+        return content
 
     def __str__(self):
         return '<PluginWebBody>: ({})'.format(self.content)

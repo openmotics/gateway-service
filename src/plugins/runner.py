@@ -71,8 +71,9 @@ class Service(object):
             if PluginWebResponse.is_valid_serial_representation(contents):
                 pwr = PluginWebResponse.from_serial(contents)
                 cp_response = cherrypy.response
-                for key in pwr.headers.keys():
-                    cp_response.headers[key] = pwr.headers[key]
+                if pwr.headers is not None:
+                    for key in pwr.headers.keys():
+                        cp_response.headers[key] = pwr.headers[key]
                 cp_response.status = pwr.status_code
                 return pwr.body
             else:
