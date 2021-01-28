@@ -45,7 +45,7 @@ logger = logging.getLogger('openmotics')
 class PluginController(object):
     """ The controller keeps track of all plugins in the system. """
 
-    DEPENDENCIES_TIMER = 3.0
+    DEPENDENCIES_TIMER = 30.0
 
     @Inject
     def __init__(self,
