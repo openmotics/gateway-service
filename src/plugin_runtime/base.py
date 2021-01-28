@@ -331,7 +331,7 @@ class PluginWebResponse(object):
         vars_str = ',   '.join(
             ['{}={}'.format(name, getattr(self, name)) for name in vars_to_print]
         )
-        return '<PluginWebRequest>   {}'.format(vars_str)
+        return '<PluginWebResponse>   {}'.format(vars_str)
 
 class PluginWebRequest(object):
     """
