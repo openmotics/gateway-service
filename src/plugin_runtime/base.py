@@ -308,11 +308,21 @@ class PluginWebResponse(object):
         try:
             contents_dict = json.loads(serial_str)
             # detect if the returned dict is a PluginWebResponse
-            if set(PluginWebResponse.VARS_TO_SERIALIZE).issubset(set(contents_dict.keys())):
+            if set(PluginWebResponse.VARS_TO_SERIALIZE) == set(contents_dict.keys()):
                 return True
             return False
         except ValueError:  # expect a valueError from the json.loads operation
             return False
+
+    def __eq__(self, other):
+        vars_to_check = ['status_code', 'body', 'headers', 'path']
+        for var in vars_to_check:
+            if getattr(self, var) != getattr(other, var):
+                return False
+        return True
+
+    def __repr__(self):
+        return self.__str__()
 
     def __str__(self):
         # type: () -> str
@@ -361,6 +371,16 @@ class PluginWebRequest(object):
             pwr.body = PluginWebBody.from_serial(pwr.body)
         return pwr
 
+    def __eq__(self, other):
+        vars_to_check = ['method', 'body', 'headers', 'path']
+        for var in vars_to_check:
+            if getattr(self, var) != getattr(other, var):
+                return False
+        return True
+
+    def __repr__(self):
+        return self.__str__()
+
     def __str__(self):
         # type: () -> str
         vars_to_print = ['method', 'body', 'headers', 'path']
@@ -370,36 +390,29 @@ class PluginWebRequest(object):
         return '<PluginWebRequest>   {}'.format(vars_str)
 
 class PluginWebBody():
-    # def __init__(self, content=None):
-    #     self.content = content
+    """
+    Class that will hold the PluginWebBody content and can serialize the content in Base64 string.
+    """
 
     @staticmethod
     def to_serial(content):
         # type: (Union[bytearray, str]) -> Optional[bytearray]
-        log.debug('Serializing body: {}'.format(content))
         if content is None:
             return None
-
-        # log.debug('Content is not None')
         if not isinstance(content, bytearray):
-            # log.debug('Converting it back to bytes')
             content = bytearray(content, encoding='utf-8')
-        # log.debug('Encoding...')
         encoded = base64.encodebytes(content)
-        # log.debug('encoded: {}'.format(encoded))
         return encoded
 
     @staticmethod
     def from_serial(serial):
-        # type: (Optional[Union[str, bytearray]]) -> Optional[bytearray]
-        # log.debug('Deserializing body: {}'.format(serial))
+        # type: (Optional[Union[str, bytearray]]) -> Optional[str]
         content = None
         if not isinstance(serial, bytearray):
             serial = bytearray(serial, encoding='utf-8')
         if serial is not None:
-            content = base64.decodestring(serial)
-        # log.debug('result: {}'.format(content))
-        return content
+            content = base64.decodebytes(serial)
+        return content.decode(encoding='utf-8')
 
 
     def __str__(self):

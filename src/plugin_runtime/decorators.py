@@ -229,10 +229,8 @@ def om_expose(method=None, auth=True, content_type='application/json', version=1
                                  'auth': auth,
                                  'content_type': content_type}
         else:
-            _method.om_expose = {
-                'version': 2,
-                'auth': auth
-            }
+            _method.om_expose = {'version': 2,
+                                 'auth': auth}
         return _method
 
     if method is not None:

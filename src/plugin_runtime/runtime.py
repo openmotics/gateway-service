@@ -114,14 +114,12 @@ class PluginRuntime(object):
 
         # Set the exposed methods
         for decorated_method, _ in get_special_methods(self._plugin, 'om_expose'):
-            # log.debug('Detected decorated_method: {}'.format(decorated_method))
             if 'version' in decorated_method.om_expose:
                 om_expose_version = decorated_method.om_expose['version']
                 if om_expose_version == 2:
-                    # log.debug('Added as version 2 om_expose')
                     self._exposes.append({
                         'name': decorated_method.__name__,
-                        'version': 2,
+                        'version': om_expose_version,
                         'auth': decorated_method.om_expose['auth']
                     })
                     continue
