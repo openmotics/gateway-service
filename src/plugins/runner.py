@@ -51,9 +51,11 @@ class Service(object):
                 else:
                     # Creating the plugin web request object here, since
                     # we have the path variable in this function scope
+                    # Body is also empty since this is passed in the params as 'request_body'
+                    # This is parsed out of the request in the index function below
                     request.params['plugin_web_request'] = PluginWebRequest(
                         method=request.method,
-                        body=request.body,
+                        body=None,
                         headers=request.headers,
                         path=path
                     )
@@ -67,6 +69,11 @@ class Service(object):
     def index(self, method, plugin_web_request=None, *args, **kwargs):
         try:
             if plugin_web_request is not None:
+                # This has been placed under the 'request_body' in the webservice.py file
+                # Here it is read out when nessesary and put in the PluginWebRequest object at the correct place
+                if 'request_body' in kwargs:
+                    plugin_web_request.body = kwargs['request_body']
+                    del kwargs['request_body']
                 plugin_web_request.params = kwargs
                 kwargs = {'plugin_web_request': plugin_web_request.serialize()}
             contents = self.runner.request(method, args=args, kwargs=kwargs)
