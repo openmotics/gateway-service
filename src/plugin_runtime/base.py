@@ -356,7 +356,6 @@ class PluginWebRequest(object):
         # Specials to serialize
         if 'body' in obj_dict and obj_dict['body'] is not None:
             obj_dict['body'] = PluginWebBody.to_serial(obj_dict['body'])
-            # log.debug('Serializing body - result: {}'.format(obj_dict['body']))
         return json.dumps(obj_dict)
 
     @staticmethod
