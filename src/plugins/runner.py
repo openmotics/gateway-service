@@ -26,7 +26,6 @@ if False:  # MYPY
 
 logger_ = logging.getLogger('openmotics')
 
-
 class Service(object):
     def __init__(self, runner, webinterface):
         # type: (PluginRunner, WebInterface) -> None
@@ -50,12 +49,14 @@ class Service(object):
                 if not 'version' in exposed:  # If it is version 1
                     response.headers['Content-Type'] = exposed['content_type']
                 else:
-                    request.params['PluginWebRequest'] = PluginWebRequest(
+                    # Creating the plugin web request object here, since
+                    # we have the path variable in this function scope
+                    request.params['plugin_web_request'] = PluginWebRequest(
                         method=request.method,
                         body=request.body,
                         headers=request.headers,
                         path=path
-                    ).serialize()
+                    )
                 if exposed['auth'] is True:
                     request.hooks.attach('before_handler', cherrypy.tools.authenticated.callable)
                 request.hooks.attach('before_handler', cherrypy.tools.params.callable)
@@ -63,9 +64,11 @@ class Service(object):
         return None
 
     @cherrypy.expose
-    def index(self, method, *args, **kwargs):
+    def index(self, method, plugin_web_request=None, *args, **kwargs):
         try:
-            # Receive the contents that the plugin will return
+            if plugin_web_request is not None:
+                plugin_web_request.params = kwargs
+                kwargs = {'plugin_web_request': plugin_web_request.serialize()}
             contents = self.runner.request(method, args=args, kwargs=kwargs)
             # See if the returned data fits the PluginWebResponse class
             if PluginWebResponse.is_valid_serial_representation(contents):

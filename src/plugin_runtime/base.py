@@ -337,14 +337,15 @@ class PluginWebRequest(object):
     """
     Class that will hold the data for an api request to the plugin
     """
-    VARS_TO_SERIALIZE = ['method', 'body', 'headers', 'path']
+    VARS_TO_SERIALIZE = ['method', 'body', 'headers', 'path', 'params']
 
-    def __init__(self, method=None, body=None, headers=None, path=None, version=2):
-        # type: (str, Any, Dict[str, str], str, int) -> None
+    def __init__(self, method=None, body=None, headers=None, path=None, params=None, version=2):
+        # type: (str, Any, Dict[str, str], str, Dict[str, str], int) -> None
         self.method = method
         self.body = body
         self.headers = headers
         self.path = path
+        self.params = params
         self.version = version
 
     def serialize(self):
@@ -372,7 +373,7 @@ class PluginWebRequest(object):
         return pwr
 
     def __eq__(self, other):
-        vars_to_check = ['method', 'body', 'headers', 'path']
+        vars_to_check = ['method', 'body', 'headers', 'path', 'params']
         for var in vars_to_check:
             if getattr(self, var) != getattr(other, var):
                 return False
@@ -383,7 +384,7 @@ class PluginWebRequest(object):
 
     def __str__(self):
         # type: () -> str
-        vars_to_print = ['method', 'body', 'headers', 'path']
+        vars_to_print = ['method', 'body', 'headers', 'path', 'params']
         vars_str = ',   '.join(
             ['{}={}'.format(name, getattr(self, name)) for name in vars_to_print]
         )

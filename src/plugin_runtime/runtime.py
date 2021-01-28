@@ -380,8 +380,8 @@ class PluginRuntime(object):
             # Analog error message as the default CherryPy behavior
             return {'success': False, 'exception': 'Missing parameters: {0}'.format(', '.join(difference))}
         try:
-            if 'PluginWebRequest' in kwargs:
-                kwargs['PluginWebRequest'] = PluginWebRequest.from_serial(kwargs['PluginWebRequest'])
+            if 'plugin_web_request' in kwargs:
+                kwargs['plugin_web_request'] = PluginWebRequest.from_serial(kwargs['plugin_web_request'])
             func_return = func(*args, **kwargs)
             if isinstance(func_return, PluginWebResponse):
                 func_return = func_return.serialize()
