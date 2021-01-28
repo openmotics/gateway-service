@@ -24,6 +24,7 @@ import os
 import shutil
 import tempfile
 import time
+import ujson as json
 import unittest
 import logging
 from subprocess import call
@@ -40,7 +41,7 @@ from gateway.models import Plugin
 from gateway.output_controller import OutputController
 from gateway.shutter_controller import ShutterController
 from ioc import SetTestMode, SetUpTestInjections
-from plugin_runtime.base import PluginConfigChecker, PluginException
+from plugin_runtime.base import PluginConfigChecker, PluginException, PluginWebResponse, PluginWebRequest
 from logs import Logs
 
 MODELS = [Plugin]
@@ -924,3 +925,61 @@ class PluginConfigCheckerTest(unittest.TestCase):
             self.assertEqual(arg_spec.args[1:], call_info)
             ramaining_methods.remove(method_name)
         self.assertEqual(ramaining_methods, [])
+
+    def test_plugin_web_request_serialize(self):
+        """ Test the functionality fo the plugin web request serialize"""
+        pwr = PluginWebRequest(
+            method='POST',
+            body=json.dumps({"test": "value"}),
+            headers={"Some-Header": "Some-Header-Value"},
+            path='/api/test/endpoint'
+        )
+        pwr_serial = pwr.serialize()
+        self.assertTrue(isinstance(pwr_serial, str))
+        pwr_deserialized = PluginWebRequest.from_serial(pwr_serial)
+        self.assertEqual(pwr, pwr_deserialized)
+
+    def test_plugin_web_response_serialize(self):
+        """ Test the functionality fo the plugin web response serialize"""
+        pwr = PluginWebResponse(
+            status_code=200,
+            body=json.dumps({"test": "value"}),
+            headers={"Some-Header": "Some-Header-Value"},
+            path='/api/test/endpoint'
+        )
+        pwr_serial = pwr.serialize()
+        self.assertTrue(isinstance(pwr_serial, str))
+        pwr_deserialized = PluginWebResponse.from_serial(pwr_serial)
+        self.assertEqual(pwr, pwr_deserialized)
+
+    def test_plugin_web_response_is_valid(self):
+        """ Test the check if valid functionality """
+        # Correct representation
+        valid_dict = {
+            'status_code': 200,
+            'body': 'somebody',
+            'headers': {'Some-Header': 'Some-Header-Value'},
+            'path': '/some/path'
+        }
+        valid_str = json.dumps(valid_dict)
+        self.assertTrue(PluginWebResponse.is_valid_serial_representation(valid_str))
+
+        # One to many keys
+        non_valid_dict = {
+            'status_code': 200,
+            'body': 'somebody',
+            'headers': {'Some-Header': 'Some-Header-Value'},
+            'path': '/some/path',
+            'some-extra': 'something'
+        }
+        non_valid_str = json.dumps(non_valid_dict)
+        self.assertFalse(PluginWebResponse.is_valid_serial_representation(non_valid_str))
+
+        # One to less keys
+        non_valid_dict = {
+            'status_code': 200,
+            'body': 'somebody',
+            'headers': {'Some-Header': 'Some-Header-Value'},
+        }
+        non_valid_str = json.dumps(non_valid_dict)
+        self.assertFalse(PluginWebResponse.is_valid_serial_representation(non_valid_str))
