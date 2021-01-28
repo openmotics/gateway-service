@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import base64
 import logging
 import os
+import sys
 
 import six
 
@@ -400,8 +401,8 @@ class PluginWebBody():
         if content is None:
             return None
         if isinstance(content, str):
-            content = bytes(content, encoding='utf-8')
-        encoded = base64.encodebytes(content)
+            content = bytes(content.encode('utf-8'))
+        encoded = base64.b64encode(content)
         return encoded
 
     @staticmethod
@@ -409,9 +410,9 @@ class PluginWebBody():
         # type: (Optional[Union[str, bytes]]) -> Optional[str]
         content = None
         if isinstance(serial, str):
-            serial = bytes(serial, encoding='utf-8')
+            serial = bytes(serial.encode('utf-8'))
         if serial is not None:
-            content = base64.decodebytes(serial)
+            content = base64.b64decode(serial)
         if content is not None:
             return content.decode(encoding='utf-8')
         return content
