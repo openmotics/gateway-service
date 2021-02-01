@@ -388,7 +388,7 @@ class PluginWebBody():
         self.obj_type = type(content).__name__
 
     def serialize(self):
-        # type: () -> Optional[bytes]
+        # type: () -> Optional[str]
         if self.obj_type not in ['str', 'bytes', 'dict', 'NoneType']:
             raise AttributeError('Could not serialize body data of type: {}'.format(type(self.content)))
         if self.content is None:
@@ -397,8 +397,8 @@ class PluginWebBody():
             content_bytes = bytes(self.content.encode('utf-8'))
             encoded = base64.b64encode(content_bytes)
         elif self.obj_type == 'dict':
-            encoded = json.dumps(self.content)
-            encoded = base64.b64encode(encoded.encode('utf-8'))
+            json_dump = json.dumps(self.content)
+            encoded = base64.b64encode(json_dump.encode('utf-8'))
         else:
             encoded = base64.b64encode(self.content)
         obj_dict = {
@@ -409,7 +409,7 @@ class PluginWebBody():
 
     @staticmethod
     def deserialize(serial):
-        # type: (Optional[bytes, str]) -> Optional[Any]
+        # type: (Optional[AnyStr]) -> Optional[Any]
         if serial is None:
             return None
         obj_dict = json.loads(serial)

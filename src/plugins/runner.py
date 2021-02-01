@@ -88,7 +88,10 @@ class Service(object):
                 for key in plugin_response.headers.keys():
                     cp_response.headers[key] = plugin_response.headers[key]
                 cp_response.status = plugin_response.status_code
-            return plugin_response.body.encode()
+            if plugin_response.body is not None:
+                return plugin_response.body.encode()
+            else:
+                return None
         except Exception as ex:
             cherrypy.response.headers["Content-Type"] = "application/json"
             cherrypy.response.status = 500

@@ -27,7 +27,7 @@ from toolbox import PluginIPCReader, PluginIPCWriter, Toolbox
 logger = logging.getLogger('openmotics')
 
 if False:  # MYPY
-    from typing import Any, Callable, Dict, List, Optional
+    from typing import Any, Callable, Dict, List, Optional, Union
 
 
 class PluginRuntime(object):
@@ -375,7 +375,7 @@ class PluginRuntime(object):
             # Analog error message as the default CherryPy behavior
             return {'success': False, 'exception': 'Missing parameters: {0}'.format(', '.join(difference))}
         try:
-            to_pass_arguments = {}
+            to_pass_arguments = {}  # type: Dict[str, Union[str, PluginWebRequest]]
             for req_param in requested_parameters:
                 if req_param == 'plugin_web_request':
                     to_pass_arguments[req_param] = web_request
