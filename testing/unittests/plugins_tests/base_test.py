@@ -724,6 +724,12 @@ class P1(OMPluginBase):
         return param
         
     @om_expose(version=2)
+    def v2_default_dict(self, plugin_web_request):
+        self.print_func_name()
+        self.logger('Received PluginWebRequest: {}'.format(plugin_web_request))
+        return {'response-data': 'response...'} 
+        
+    @om_expose(version=2)
     def v2_default_param_web_request_web_response(self, param, plugin_web_request):
         self.print_func_name()
         self.logger('Received param: {} of type: {}'.format(param, type(param)))
@@ -797,6 +803,12 @@ class P1(OMPluginBase):
                                   web_request=PluginWebRequest(version=2, params={'param': {'test': 'test'}}))
             self.assertEqual(response, {'test': 'test'})
 
+            response = do_request('v2_default_dict',
+                                  web_request=PluginWebRequest(version=2, params={}),
+                                  get_web_response=True)
+            self.assertEqual(response.body, {'response-data': 'response...'})
+            self.assertEqual(response.version, 2)
+            self.assertEqual(response.status_code, 200)
 
             response = do_request('v2_default_param_web_request',
                                   web_request=PluginWebRequest(version=2, params={'param': {'test': 'test'}}),
@@ -1215,4 +1227,37 @@ class PluginConfigCheckerTest(unittest.TestCase):
         except Exception as ex:
             self.fail('Wrong exception raised: {}'.format(ex))
 
+    def test_plugin_web_response_serialize(self):
+        """ Test the functionality fo the plugin web response serialize"""
+        pwr = PluginWebResponse(
+            body=json.dumps({"test": "value"}),
+            headers={"Some-Header": "Some-Header-Value"},
+            status_code=200,
+            path='somepath'
+        )
+        pwr_serial = pwr.serialize()
+        self.assertTrue(isinstance(pwr_serial, str))
+        pwr_deserialized = PluginWebResponse.deserialize(pwr_serial)
+        self.assertEqual(pwr, pwr_deserialized)
 
+        pwr = PluginWebResponse(
+            body={"test": "value"},
+            headers={"Some-Header": "Some-Header-Value"},
+            status_code=200,
+            path='somepath'
+        )
+        pwr_serial = pwr.serialize()
+        self.assertTrue(isinstance(pwr_serial, str))
+        pwr_deserialized = PluginWebResponse.deserialize(pwr_serial)
+        self.assertEqual(pwr, pwr_deserialized)
+
+        pwr = PluginWebResponse(
+            body=b'testString',
+            headers={"Some-Header": "Some-Header-Value"},
+            status_code=200,
+            path='somepath'
+        )
+        pwr_serial = pwr.serialize()
+        self.assertTrue(isinstance(pwr_serial, str))
+        pwr_deserialized = PluginWebResponse.deserialize(pwr_serial)
+        self.assertEqual(pwr, pwr_deserialized)
