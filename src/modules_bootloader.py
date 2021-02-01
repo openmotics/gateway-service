@@ -52,6 +52,8 @@ def main():
                         help='The filename of the hex file to bootload')
     parser.add_argument('-v', '--version', dest='version', required=False,
                         help='The version of the firmware to flash')
+    parser.add_argument('-a', '--address', dest='address', required=False,
+                        help='Updates a specific slave address. Remarks: No type checking, only for Brain(+), not for UC type')
     parser.add_argument('--verbose', dest='verbose', action='store_true',
                         help='Show the serial output')
 
@@ -75,7 +77,16 @@ def main():
         if Platform.get_platform() in Platform.CoreTypes:
             from master.core.slave_updater import SlaveUpdater
 
-            update_success = SlaveUpdater.update_all(module_type=module_type,
+            if not args.address:
+                update_success = SlaveUpdater.update_all(module_type=module_type,
+                                                         hex_filename=filename,
+                                                         gen3_firmware=gen3_firmware,
+                                                         version=version)
+            else:
+                if module_type == 'UC':
+                    print('No address can be given for uCAN modules')
+                    return True  # Don't fail the update
+                update_success = SlaveUpdater.update(address=args.address,
                                                      hex_filename=filename,
                                                      gen3_firmware=gen3_firmware,
                                                      version=version)
