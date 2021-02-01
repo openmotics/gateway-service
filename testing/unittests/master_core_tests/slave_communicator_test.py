@@ -136,7 +136,7 @@ class SlaveCommunicatorTest(unittest.TestCase):
     @staticmethod
     def _build_request_message(payload):
         crc = SlaveCommandSpec.calculate_crc(bytearray(payload))
-        return bytearray(b'ST' + payload + b'C' + crc + b'\r\n\r\n')
+        return bytearray(b'ST' + payload + b'C' + crc + b'\r\n')
 
     @staticmethod
     def _build_response_message(payload, bad_crc=False):
