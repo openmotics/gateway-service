@@ -144,6 +144,7 @@ class SlaveUpdater(object):
                     # answered by the active code. E.g. if the application was active, it's the application that will
                     # answer this call with the return_code APPLICATION_ACTIVE
                     logger.info('{0} - Bootloader active'.format(address))
+                    time.sleep(2)  # Wait for the bootloader to settle
                 except CommunicationTimedOutException:
                     logger.error('{0} - Could not enter bootloader. Aborting'.format(address))
                     return False
@@ -154,9 +155,15 @@ class SlaveUpdater(object):
                                                              fields={'version': version})
                     SlaveUpdater._validate_response(response)
 
+                data_blocks = len(firmware) // SlaveUpdater.BLOCK_SIZE + 1
                 blocks = SlaveUpdater.BLOCKS_SMALL_SLAVE
-                if len(firmware) // SlaveUpdater.BLOCK_SIZE + 1 > blocks:
+                if data_blocks > blocks:
                     blocks = SlaveUpdater.BLOCKS_LARGE_SLAVE
+                logger.info('{0} - {1} slave ({2}/{3} blocks)'.format(
+                    address,
+                    'Large' if blocks == SlaveUpdater.BLOCKS_LARGE_SLAVE else 'Small',
+                    data_blocks, blocks
+                ))
 
                 crc = SlaveUpdater._get_crc(firmware, blocks)
                 response = slave_communicator.do_command(address=address,
@@ -213,13 +220,16 @@ class SlaveUpdater(object):
                     # logger.error('{0} - Could not enter application. Aborting'.format(address))
                     # return False
 
-                logger.info('{0} - Loading new firmware version'.format(address))
-                new_version = SlaveUpdater._get_version(slave_communicator, address, tries=60)
-                if new_version is None:
-                    logger.error('{0} - Could not request new firmware version'.format(address))
-                    return False
-                firmware_version, hardware_version = new_version
-                logger.info('{0} - New version: {1} ({2})'.format(address, firmware_version, hardware_version))
+                if address != '255.255.255.255':
+                    logger.info('{0} - Loading new firmware version'.format(address))
+                    new_version = SlaveUpdater._get_version(slave_communicator, address, tries=60)
+                    if new_version is None:
+                        logger.error('{0} - Could not request new firmware version'.format(address))
+                        return False
+                    firmware_version, hardware_version = new_version
+                    logger.info('{0} - New version: {1} ({2})'.format(address, firmware_version, hardware_version))
+                else:
+                    logger.info('{0} - Skip loading new version as address will have been changed by the application'.format(address))
 
                 logger.info('{0} - Update completed'.format(address))
                 return True
