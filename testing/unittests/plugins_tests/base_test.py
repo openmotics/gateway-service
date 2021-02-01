@@ -104,6 +104,8 @@ class PluginControllerTest(unittest.TestCase):
 
     @staticmethod
     def _get_controller(output_controller=None, shutter_controller=None):
+        import log
+        log.debug('getting controller....')
         SetUpTestInjections(shutter_controller=shutter_controller,
                             web_interface=None,
                             configuration_controller=None,
@@ -299,7 +301,9 @@ class P1(OMPluginBase):
             controller = PluginControllerTest._get_controller(output_controller=output_controller)
             controller.start()
 
-            response = controller._request('P1', 'html_index')
+            kwargs = {'plugin_web_request': PluginWebRequest(method='html_index', version=1).serialize()}
+            response = controller._request('P1', 'html_index', kwargs=kwargs)
+            response = PluginWebResponse.deserialize(response).body
             self.assertEqual(response, 'HTML')
 
             rising_input_event = {'id': 1,
@@ -321,7 +325,9 @@ class P1(OMPluginBase):
             keys = ['input_data', 'input_data_version_2', 'output_data', 'output_data_version_2', 'event_data']
             start = time.time()
             while time.time() - start < 2:
-                response = controller._request('P1', 'get_log')
+                kwargs = {'plugin_web_request': PluginWebRequest(method='html_index', version=1).serialize()}
+                response = controller._request('P1', 'get_log', kwargs=kwargs)
+                response = PluginWebResponse.deserialize(response).body
                 if all(response[key] is not None for key in keys):
                     break
                 time.sleep(0.1)
@@ -426,7 +432,7 @@ class ShutterPlugin(OMPluginBase):
 """)
             shutter_controller = Mock(ShutterController)
             shutter_status = [ShutterEnums.State.STOPPED]
-            detail_for_shutter = {1: {'state': ShutterEnums.State.STOPPED,
+            detail_for_shutter = {'1': {'state': ShutterEnums.State.STOPPED,
                                       'actual_position': None,
                                       'desired_position': None,
                                       'last_change': 1596787761.147892}}
@@ -440,17 +446,21 @@ class ShutterPlugin(OMPluginBase):
 
             keys = ['shutter_data_v1', 'shutter_data_v1_detail', 'shutter_data_v2', 'shutter_data_v3']
             start = time.time()
-            response = None
+            dict_response = None
             while time.time() - start < 2:
-                response = controller._request('ShutterPlugin', 'get_log')
-                if all(response[key] is not None for key in keys):
+                kwargs = {'plugin_web_request': PluginWebRequest(method='get_log', version=1).serialize()}
+                response = controller._request('ShutterPlugin', 'get_log', kwargs=kwargs)
+                # Expect a plugin web response string
+                plugin_response = PluginWebResponse.deserialize(response)
+                dict_response = plugin_response.body
+                if all(dict_response[key] is not None for key in keys):
                     break
                 time.sleep(0.1)
             self.maxDiff = None
-            self.assertEqual(response['shutter_data_v1'], shutter_status)
-            self.assertEqual(response['shutter_data_v1_detail'], [shutter_status, detail_for_shutter])
-            self.assertEqual(response['shutter_data_v2'], [shutter_status, detail_for_shutter])
-            self.assertEqual(response['shutter_data_v3'], shutter_event.data)
+            self.assertEqual(dict_response['shutter_data_v1'], shutter_status)
+            self.assertEqual(dict_response['shutter_data_v1_detail'], [shutter_status, detail_for_shutter])
+            self.assertEqual(dict_response['shutter_data_v2'], [shutter_status, detail_for_shutter])
+            self.assertEqual(dict_response['shutter_data_v3'], shutter_event.data)
         finally:
             if controller is not None:
                 controller.stop()
@@ -562,8 +572,11 @@ class P2(OMPluginBase):
             p1_metric = {'metric': None}
             p2_metric = {'metric': None}
             while time.time() - start < 2:
-                p1_metric = controller._request('P1', 'get_metric')
-                p2_metric = controller._request('P2', 'get_metric')
+                kwargs = {'plugin_web_request': PluginWebRequest(version=1).serialize()}
+                p1_metric = controller._request('P1', 'get_metric', kwargs=kwargs)
+                p1_metric = PluginWebResponse.deserialize(p1_metric).body
+                p2_metric = controller._request('P2', 'get_metric', kwargs=kwargs)
+                p2_metric = PluginWebResponse.deserialize(p2_metric).body
                 if p1_metric['metric'] is not None and p2_metric['metric'] is not None:
                     break
                 time.sleep(0.1)
@@ -643,6 +656,193 @@ class P2(OMPluginBase):
             check_plugin(P6)
         except PluginException as exception:
             self.assertEqual('Plugin \'test\' has no method named \'html_index\'', str(exception))
+
+    @mark.slow
+    def test_om_expose_decorator(self):
+        """ Test the om_expose decorator. """
+        controller = None
+        try:
+            PluginControllerTest._create_plugin('P1', """
+import inspect
+import time
+from plugins.base import *
+
+class P1(OMPluginBase):
+    name = 'P1'
+    version = '0.1.0'
+    interfaces = []
+
+    def __init__(self, webservice, logger):
+        OMPluginBase.__init__(self, webservice, logger)
+        self.logger = logger
+        self.dummy_var = 37
+
+    def print_func_name(self):
+        self.logger('Calling func: {}'.format(inspect.stack()[1][3]))
+
+    # om_expose function naming convention:
+    # vX : version 1 or 2
+    # auth or nonauth
+    # return type
+    @om_expose(auth=True)
+    def v1_auth_string(self):
+        self.print_func_name()
+        return 'string'
+
+    @om_expose(auth=False)
+    def v1_nonauth_dict(self):
+        self.print_func_name()
+        return {'dummy_var': self.dummy_var}
+        
+    @om_expose
+    def v1_default_bytes(self):
+        self.print_func_name()
+        return b'someBytesString'
+        
+    @om_expose
+    def v1_default_param(self, param):
+        self.print_func_name()
+        self.logger('Received param: {} of type: {}'.format(param, type(param)))
+        return param
+        
+    @om_expose(version=2)
+    def v2_default_string(self):
+        self.print_func_name()
+        return 'someString'
+        
+    @om_expose(version=2)
+    def v2_default_param(self, param):
+        self.print_func_name()
+        self.logger('Received param: {} of type: {}'.format(param, type(param)))
+        return param
+        
+    @om_expose(version=2)
+    def v2_default_param_web_request(self, param, plugin_web_request):
+        self.print_func_name()
+        self.logger('Received param: {} of type: {}'.format(param, type(param)))
+        self.logger('Received PluginWebRequest: {}'.format(plugin_web_request))
+        return param
+        
+    @om_expose(version=2)
+    def v2_default_param_web_request_web_response(self, param, plugin_web_request):
+        self.print_func_name()
+        self.logger('Received param: {} of type: {}'.format(param, type(param)))
+        self.logger('Received PluginWebRequest: {}'.format(plugin_web_request))
+        response =PluginWebResponse(
+            status_code=201,
+            headers={'some-header': 'some-header-value'},
+            body=param,
+            path='somePath'
+        )
+        return response
+""")
+
+            controller = PluginControllerTest._get_controller()
+            controller.start()
+
+            def do_request(func, plugin='P1', web_request=None, get_web_response=False, self=self):
+                if web_request is None:
+                    request = PluginWebRequest(version=1).serialize()
+                    version = 1
+                else:
+                    request = web_request.serialize()
+                    version = web_request.version
+
+                kwargs = {'plugin_web_request': request}
+                resp = controller._request(plugin, func, kwargs=kwargs)
+                if not get_web_response:
+                    plugin_response = PluginWebResponse.deserialize(resp)
+                    resp = plugin_response.body
+                    self.assertEqual(plugin_response.version, version)
+                else:
+                    resp = PluginWebResponse.deserialize(resp)
+                return resp
+
+            response = do_request('v1_auth_string')
+            self.assertEqual(response, 'string')
+
+            response = do_request('v1_nonauth_dict')
+            self.assertEqual(response, {'dummy_var': 37})
+
+            response = do_request('v1_default_bytes')
+            self.assertEqual(response, b'someBytesString')
+
+            response = do_request('v1_default_param',
+                                  web_request=PluginWebRequest(version=1, params={'param': 'some-param'}))
+            self.assertEqual(response, 'some-param')
+
+            response = do_request('v1_default_param',
+                                  web_request=PluginWebRequest(version=1, params={'param': {'test': 'test'}}))
+            self.assertEqual(response, {'test': 'test'})
+
+            try:
+                response = do_request('v1_default_param',
+                                      web_request=PluginWebRequest(version=1, params={}))
+                self.fail('There should be a missing parameter')
+            except Exception as ex:
+                pass
+
+            response = do_request('v2_default_string')
+            self.assertEqual(response, 'someString')
+
+            response = do_request('v2_default_param',
+                                  web_request=PluginWebRequest(version=2, params={'param': 'some-param'}))
+            self.assertEqual(response, 'some-param')
+
+            response = do_request('v2_default_param',
+                                  web_request=PluginWebRequest(version=2, params={'param': {'test': 'test'}}))
+            self.assertEqual(response, {'test': 'test'})
+
+            response = do_request('v2_default_param_web_request',
+                                  web_request=PluginWebRequest(version=2, params={'param': {'test': 'test'}}))
+            self.assertEqual(response, {'test': 'test'})
+
+
+            response = do_request('v2_default_param_web_request',
+                                  web_request=PluginWebRequest(version=2, params={'param': {'test': 'test'}}),
+                                  get_web_response=True)
+            self.assertEqual(response.body, {'test': 'test'})
+            self.assertEqual(response.version, 2)
+            self.assertEqual(response.status_code, 200)
+
+            response = do_request('v2_default_param_web_request_web_response',
+                                  web_request=PluginWebRequest(version=2, params={'param': {'test': 'test'}}),
+                                  get_web_response=True)
+            self.assertEqual(response.body, {'test': 'test'})
+            self.assertEqual(response.version, 2)
+            self.assertEqual(response.status_code, 201)
+            self.assertEqual(response.headers, {'some-header': 'some-header-value'})
+
+            response = do_request('v2_default_param_web_request_web_response',
+                                  web_request=PluginWebRequest(version=2, params={'param': 'someString'}),
+                                  get_web_response=True)
+            self.assertEqual(response.body, 'someString')
+            self.assertEqual(response.version, 2)
+            self.assertEqual(response.status_code, 201)
+            self.assertEqual(response.headers, {'some-header': 'some-header-value'})
+
+            response = do_request('v2_default_param_web_request_web_response',
+                                  web_request=PluginWebRequest(version=2, params={'param': 'someString', 'param2': 'test'}),
+                                  get_web_response=True)
+            self.assertEqual(response.body, 'someString')
+            self.assertEqual(response.version, 2)
+            self.assertEqual(response.status_code, 201)
+            self.assertEqual(response.headers, {'some-header': 'some-header-value'})
+
+            try:
+                response = do_request('v2_default_param_web_request_web_response',
+                                      web_request=PluginWebRequest(version=2, params={}),
+                                      get_web_response=True)
+                self.fail('Request should not succeed due to parameter not filled in')
+            except Exception:
+                pass
+
+
+
+        finally:
+            if controller is not None:
+                controller.stop()
+            PluginControllerTest._destroy_plugin('P1')
 
 
 FULL_DESCR = [
@@ -936,50 +1136,83 @@ class PluginConfigCheckerTest(unittest.TestCase):
         )
         pwr_serial = pwr.serialize()
         self.assertTrue(isinstance(pwr_serial, str))
-        pwr_deserialized = PluginWebRequest.from_serial(pwr_serial)
+        pwr_deserialized = PluginWebRequest.deserialize(pwr_serial)
         self.assertEqual(pwr, pwr_deserialized)
 
-    def test_plugin_web_response_serialize(self):
-        """ Test the functionality fo the plugin web response serialize"""
-        pwr = PluginWebResponse(
-            status_code=200,
-            body=json.dumps({"test": "value"}),
+        # with a dict as body
+        pwr = PluginWebRequest(
+            method='POST',
+            body={"test": "value"},
             headers={"Some-Header": "Some-Header-Value"},
             path='/api/test/endpoint'
         )
         pwr_serial = pwr.serialize()
         self.assertTrue(isinstance(pwr_serial, str))
-        pwr_deserialized = PluginWebResponse.from_serial(pwr_serial)
+        pwr_deserialized = PluginWebRequest.deserialize(pwr_serial)
         self.assertEqual(pwr, pwr_deserialized)
 
-    def test_plugin_web_response_is_valid(self):
-        """ Test the check if valid functionality """
-        # Correct representation
-        valid_dict = {
-            'status_code': 200,
-            'body': 'somebody',
-            'headers': {'Some-Header': 'Some-Header-Value'},
-            'path': '/some/path'
-        }
-        valid_str = json.dumps(valid_dict)
-        self.assertTrue(PluginWebResponse.is_valid_serial_representation(valid_str))
+        # with a dict as body with non string values
+        pwr = PluginWebRequest(
+            method='POST',
+            body={"test": 236, 'other': 'test', 'last': 'test'},
+            headers={"Some-Header": "Some-Header-Value"},
+            path='/api/test/endpoint'
+        )
+        pwr_serial = pwr.serialize()
+        self.assertTrue(isinstance(pwr_serial, str))
+        pwr_deserialized = PluginWebRequest.deserialize(pwr_serial)
+        self.assertEqual(pwr, pwr_deserialized)
 
-        # One to many keys
-        non_valid_dict = {
-            'status_code': 200,
-            'body': 'somebody',
-            'headers': {'Some-Header': 'Some-Header-Value'},
-            'path': '/some/path',
-            'some-extra': 'something'
-        }
-        non_valid_str = json.dumps(non_valid_dict)
-        self.assertFalse(PluginWebResponse.is_valid_serial_representation(non_valid_str))
+        # with a empty body
+        pwr = PluginWebRequest(
+            method='POST',
+            body=None,
+            headers={"Some-Header": "Some-Header-Value"},
+            path='/api/test/endpoint'
+        )
+        pwr_serial = pwr.serialize()
+        self.assertTrue(isinstance(pwr_serial, str))
+        pwr_deserialized = PluginWebRequest.deserialize(pwr_serial)
+        self.assertEqual(pwr, pwr_deserialized)
 
-        # One to less keys
-        non_valid_dict = {
-            'status_code': 200,
-            'body': 'somebody',
-            'headers': {'Some-Header': 'Some-Header-Value'},
-        }
-        non_valid_str = json.dumps(non_valid_dict)
-        self.assertFalse(PluginWebResponse.is_valid_serial_representation(non_valid_str))
+        # Complete empty web request
+        pwr = PluginWebRequest(
+            method=None,
+            body=None,
+            headers=None,
+            path=None
+        )
+        pwr_serial = pwr.serialize()
+        self.assertTrue(isinstance(pwr_serial, str))
+        pwr_deserialized = PluginWebRequest.deserialize(pwr_serial)
+        self.assertEqual(pwr, pwr_deserialized)
+
+        # Bytestring test
+        pwr = PluginWebRequest(
+            method=None,
+            body=b'sometest',
+            headers=None,
+            path=None
+        )
+        pwr_serial = pwr.serialize()
+        self.assertTrue(isinstance(pwr_serial, str))
+        pwr_deserialized = PluginWebRequest.deserialize(pwr_serial)
+        self.assertEqual(pwr, pwr_deserialized)
+
+        # Bytestring test
+        pwr = PluginWebRequest(
+            method=None,
+            body=object(),
+            headers=None,
+            path=None
+        )
+        try:
+            pwr_serial = pwr.serialize()
+            self.fail('It should not be possible to serialize web request with object as body')
+        except AttributeError as ex:
+            self.assertEqual('Could not serialize body data of type: <class \'object\'>', ex.args[0])
+            pass
+        except Exception as ex:
+            self.fail('Wrong exception raised: {}'.format(ex))
+
+

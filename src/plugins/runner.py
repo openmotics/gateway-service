@@ -41,24 +41,25 @@ class Service(object):
         method = vpath[0]
         # Clear vpath completely, The rest is not needed anymore
         # The complete path is stored in the path variable
+        # This is needed to not call this function recursively until this variable is empty
         while len(vpath) > 0:
             vpath.pop(0)
         for exposed in self.runner._exposes:
             if exposed['name'] == method:
                 request.params['method'] = method
-                if not 'version' in exposed:  # If it is version 1
+                if exposed['version'] == 1:
                     response.headers['Content-Type'] = exposed['content_type']
-                else:
-                    # Creating the plugin web request object here, since
-                    # we have the path variable in this function scope
-                    # Body is also empty since this is passed in the params as 'request_body'
-                    # This is parsed out of the request in the index function below
-                    request.params['plugin_web_request'] = PluginWebRequest(
-                        method=request.method,
-                        body=None,
-                        headers=request.headers,
-                        path=path
-                    )
+                # Creating the plugin web request object here, since
+                # we have the path variable in this function scope
+                # Body is also empty since this is passed in the params as 'request_body'
+                # This is parsed out of the request in the index function below
+                request.params['plugin_web_request'] = PluginWebRequest(
+                    method=request.method,
+                    body=None,
+                    headers=request.headers,
+                    path=path,
+                    version=exposed['version']
+                )
                 if exposed['auth'] is True:
                     request.hooks.attach('before_handler', cherrypy.tools.authenticated.callable)
                 request.hooks.attach('before_handler', cherrypy.tools.params.callable)
@@ -68,26 +69,26 @@ class Service(object):
     @cherrypy.expose
     def index(self, method, plugin_web_request=None, *args, **kwargs):
         try:
-            if plugin_web_request is not None:
-                # This has been placed under the 'request_body' in the webservice.py file
-                # Here it is read out when nessesary and put in the PluginWebRequest object at the correct place
-                if 'request_body' in kwargs:
-                    plugin_web_request.body = kwargs['request_body']
-                    del kwargs['request_body']
-                plugin_web_request.params = kwargs
-                kwargs = {'plugin_web_request': plugin_web_request.serialize()}
+            # This has been placed under the 'request_body' in the webservice.py file
+            # Here it is read out when necessary and put in the PluginWebRequest object at the correct place
+            if 'request_body' in kwargs:
+                plugin_web_request.body = kwargs['request_body']
+                del kwargs['request_body']
+            # Embed the params that where given with the call into the PluginWebResponse object and pass it as one object
+            plugin_web_request.params = kwargs
+            kwargs = {'plugin_web_request': plugin_web_request.serialize()}
+            # Perform the request with the set PluginWebRequest object
             contents = self.runner.request(method, args=args, kwargs=kwargs)
-            # See if the returned data fits the PluginWebResponse class
-            if PluginWebResponse.is_valid_serial_representation(contents):
-                pwr = PluginWebResponse.from_serial(contents)
+            # Deserialize the response contents to a PluginWebResponse object
+            plugin_response = PluginWebResponse.deserialize(contents)
+            # Only read out all the data from the PluginWebResponse when the version is higher than 1
+            # otherwise, let cherrypy figure out how to return it to keep it similar to the previous implementation
+            if plugin_response.version > 1:
                 cp_response = cherrypy.response
-                if pwr.headers is not None:
-                    for key in pwr.headers.keys():
-                        cp_response.headers[key] = pwr.headers[key]
-                cp_response.status = pwr.status_code
-                return pwr.body
-            else:
-                return contents.encode()
+                for key in plugin_response.headers.keys():
+                    cp_response.headers[key] = plugin_response.headers[key]
+                cp_response.status = plugin_response.status_code
+            return plugin_response.body.encode()
         except Exception as ex:
             cherrypy.response.headers["Content-Type"] = "application/json"
             cherrypy.response.status = 500

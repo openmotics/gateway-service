@@ -269,53 +269,40 @@ class PluginWebResponse(object):
     """
     Class that will hold the data for an api response from the plugin.
     """
-    VARS_TO_SERIALIZE = ['status_code', 'body', 'headers', 'path']
+    VARIABLES_TO_SERIALIZE = ['status_code', 'body', 'headers', 'path', 'version']
 
     def __init__(self, status_code=None, body=None, headers=None, path=None, version=2):
-        # type: (int, str, Dict[str, str], str, int) -> None
+        # type: (Optional[int], Optional[Any], Optional[Dict[str, str]], Optional[str], int) -> None
         self.status_code = status_code
         self.body = body
-        self.headers = headers
+        self.headers = headers or {}
         self.path = path
         self.version = version
-
     def serialize(self):
         # type: () -> str
         obj_dict = {}
-        for var in PluginWebResponse.VARS_TO_SERIALIZE:
-            obj_dict[var] = getattr(self, var)
-
-        # Serialize the body parameter
-        if 'body' in obj_dict and obj_dict['body'] is not None:
-            obj_dict['body'] = PluginWebBody.to_serial(obj_dict['body'])
+        for var in PluginWebResponse.VARIABLES_TO_SERIALIZE:
+            if var == 'body':
+                obj_dict[var] = PluginWebBody(self.body).serialize()
+            else:
+                obj_dict[var] = getattr(self, var)
         return json.dumps(obj_dict)
 
     @staticmethod
-    def from_serial(serial_str):
+    def deserialize(serial_str):
         # type: (AnyStr) -> PluginWebResponse
         obj_dict = json.loads(serial_str)
-        pwr = PluginWebResponse()
-        for var in PluginWebResponse.VARS_TO_SERIALIZE:
-            setattr(pwr, var, obj_dict[var])
-
-        # deserialize the body
-        if hasattr(pwr, 'body') and pwr.body is not None:
-            pwr.body = PluginWebBody.from_serial(pwr.body)
-        return pwr
-
-    @staticmethod
-    def is_valid_serial_representation(serial_str):
-        # type: (AnyStr) -> bool
-        try:
-            contents_dict = json.loads(serial_str)
-            # detect if the returned dict is a PluginWebResponse
-            if set(PluginWebResponse.VARS_TO_SERIALIZE) == set(contents_dict.keys()):
-                return True
-            return False
-        except ValueError:  # expect a valueError from the json.loads operation
-            return False
+        response = PluginWebResponse()
+        for var in PluginWebResponse.VARIABLES_TO_SERIALIZE:
+            if var == 'body':
+                response.body = PluginWebBody.deserialize(obj_dict['body'])
+            else:
+                setattr(response, var, obj_dict[var])
+        return response
 
     def __eq__(self, other):
+        if not isinstance(other, PluginWebResponse):
+            return False
         vars_to_check = ['status_code', 'body', 'headers', 'path']
         for var in vars_to_check:
             if getattr(self, var) != getattr(other, var):
@@ -337,42 +324,43 @@ class PluginWebRequest(object):
     """
     Class that will hold the data for an api request to the plugin
     """
-    VARS_TO_SERIALIZE = ['method', 'body', 'headers', 'path', 'params']
+    VARIABLES_TO_SERIALIZE = ['method', 'body', 'headers', 'path', 'params', 'version']
 
     def __init__(self, method=None, body=None, headers=None, path=None, params=None, version=2):
-        # type: (str, Any, Dict[str, str], str, Dict[str, str], int) -> None
+        # type: (Optional[str], Optional[Any], Optional[Dict[str, str]], Optional[str], Optional[Dict[str, str]], int) -> None
         self.method = method
         self.body = body
-        self.headers = headers
+        self.headers = headers or {}
         self.path = path
-        self.params = params
+        self.params = params or {}
         self.version = version
 
     def serialize(self):
         # type: () -> str
         obj_dict = {}
-        for var in PluginWebRequest.VARS_TO_SERIALIZE:
-            obj_dict[var] = getattr(self, var)
-
-        # Specials to serialize
-        if 'body' in obj_dict and obj_dict['body'] is not None:
-            obj_dict['body'] = PluginWebBody.to_serial(obj_dict['body'])
+        for var in PluginWebRequest.VARIABLES_TO_SERIALIZE:
+            if var == 'body':
+                obj_dict[var] = PluginWebBody(self.body).serialize()
+            else:
+                obj_dict[var] = getattr(self, var)
         return json.dumps(obj_dict)
 
+
     @staticmethod
-    def from_serial(serial_str):
+    def deserialize(serial_str):
         # type: (AnyStr) -> PluginWebRequest
         obj_dict = json.loads(serial_str)
-        pwr = PluginWebRequest()
-        for var in PluginWebRequest.VARS_TO_SERIALIZE:
-            setattr(pwr, var, obj_dict[var])
-
-        # deserialize the body
-        if pwr.body is not None:
-            pwr.body = PluginWebBody.from_serial(pwr.body)
-        return pwr
+        response = PluginWebRequest()
+        for var in PluginWebRequest.VARIABLES_TO_SERIALIZE:
+            if var == 'body':
+                response.body = PluginWebBody.deserialize(obj_dict['body'])
+            else:
+                setattr(response, var, obj_dict[var])
+        return response
 
     def __eq__(self, other):
+        if not isinstance(other, PluginWebRequest):
+            return False
         vars_to_check = ['method', 'body', 'headers', 'path', 'params']
         for var in vars_to_check:
             if getattr(self, var) != getattr(other, var):
@@ -395,27 +383,52 @@ class PluginWebBody():
     Class that will hold the PluginWebBody content and can serialize the content in Base64 string.
     """
 
-    @staticmethod
-    def to_serial(content):
-        # type: (Union[bytes, str]) -> Optional[bytes]
-        if content is None:
+    def __init__(self, content=None):
+        self.content = content
+        self.obj_type = type(content).__name__
+
+    def serialize(self):
+        # type: () -> Optional[bytes]
+        if self.obj_type not in ['str', 'bytes', 'dict', 'NoneType']:
+            raise AttributeError('Could not serialize body data of type: {}'.format(type(self.content)))
+        if self.content is None:
             return None
-        if isinstance(content, str):
-            content = bytes(content.encode('utf-8'))
-        encoded = base64.b64encode(content)
-        return encoded
+        if self.obj_type == 'str':
+            content_bytes = bytes(self.content.encode('utf-8'))
+            encoded = base64.b64encode(content_bytes)
+        elif self.obj_type == 'dict':
+            encoded = json.dumps(self.content)
+            encoded = base64.b64encode(encoded.encode('utf-8'))
+        else:
+            encoded = base64.b64encode(self.content)
+        obj_dict = {
+            'type': self.obj_type,
+            'data': encoded
+        }
+        return json.dumps(obj_dict)
 
     @staticmethod
-    def from_serial(serial):
-        # type: (Optional[Union[str, bytes]]) -> Optional[str]
+    def deserialize(serial):
+        # type: (Optional[bytes, str]) -> Optional[Any]
+        if serial is None:
+            return None
+        obj_dict = json.loads(serial)
+        obj_type = obj_dict['type']
+        data = obj_dict['data']
+        if obj_type not in ['str', 'bytes', 'dict', 'NoneType']:
+            raise AttributeError('Could not deserialize serial data of type: {}'.format(type(serial)))
         content = None
-        if isinstance(serial, str):
-            serial = bytes(serial.encode('utf-8'))
-        if serial is not None:
-            content = base64.b64decode(serial)
+        if data is not None:
+            content = base64.b64decode(data)
         if content is not None:
-            return content.decode(encoding='utf-8')
-        return content
-
-    def __str__(self):
-        return '<PluginWebBody>: ({})'.format(self.content)
+            if obj_type == 'dict':
+                try:
+                    content_json = json.loads(content)
+                    return content_json
+                except Exception:
+                    return content.decode(encoding='utf-8')
+            elif obj_type == 'str':
+                return content.decode(encoding='utf-8')
+            else:  # bytes string
+                return content
+        return None

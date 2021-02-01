@@ -114,20 +114,10 @@ class PluginRuntime(object):
 
         # Set the exposed methods
         for decorated_method, _ in get_special_methods(self._plugin, 'om_expose'):
-            if 'version' in decorated_method.om_expose:
-                om_expose_version = decorated_method.om_expose['version']
-                if om_expose_version == 2:
-                    self._exposes.append({
-                        'name': decorated_method.__name__,
-                        'version': om_expose_version,
-                        'auth': decorated_method.om_expose['auth']
-                    })
-                    continue
-            # If code has reached this point, there is no version 2 expose added
-            # Then add the version one expose definition
             self._exposes.append({'name': decorated_method.__name__,
                                   'auth': decorated_method.om_expose['auth'],
-                                  'content_type': decorated_method.om_expose['content_type']})
+                                  'content_type': decorated_method.om_expose['content_type'],
+                                  'version': decorated_method.om_expose['version']})
 
         # Set the metric collectors
         for decorated_method, _ in get_special_methods(self._plugin, 'om_metric_data'):
@@ -370,25 +360,35 @@ class PluginRuntime(object):
 
     def _handle_request(self, method, args, kwargs):
         func = getattr(self._plugin, method)
+        # Always expect a web_request
+        web_request = PluginWebRequest.deserialize(kwargs['plugin_web_request'])
+        passed_parameters = set(web_request.params.keys())
+        if web_request.version > 1:
+            passed_parameters.add('plugin_web_request')
         requested_parameters = set(Toolbox.get_parameter_names(func)) - {'self'}
-        difference = set(kwargs.keys()) - requested_parameters
-        if difference:
+        difference = set(passed_parameters) - requested_parameters
+        if difference and web_request.version == 1:
             # Analog error message as the default CherryPy behavior
             return {'success': False, 'exception': 'Unexpected query string parameters: {0}'.format(', '.join(difference))}
-        difference = requested_parameters - set(kwargs.keys())
+        difference = requested_parameters - set(passed_parameters)
         if difference:
             # Analog error message as the default CherryPy behavior
             return {'success': False, 'exception': 'Missing parameters: {0}'.format(', '.join(difference))}
         try:
-            if 'plugin_web_request' in kwargs:
-                kwargs['plugin_web_request'] = PluginWebRequest.from_serial(kwargs['plugin_web_request'])
-            func_return = func(*args, **kwargs)
+            to_pass_arguments = {}
+            for req_param in requested_parameters:
+                if req_param == 'plugin_web_request':
+                    to_pass_arguments[req_param] = web_request
+                else:
+                    to_pass_arguments[req_param] = web_request.params[req_param]
+            func_return = func(*args, **to_pass_arguments)
             if isinstance(func_return, PluginWebResponse):
                 func_return = func_return.serialize()
+            else:
+                func_return = PluginWebResponse(status_code=200, body=func_return, version=web_request.version).serialize()
             return {'success': True, 'response': func_return}
         except Exception as exception:
             return {'success': False, 'exception': str(exception), 'stacktrace': traceback.format_exc()}
-
 
 def start_runtime(plugin_location=None):
     if plugin_location is None and (len(sys.argv) < 3 or sys.argv[1] != 'start_plugin'):
