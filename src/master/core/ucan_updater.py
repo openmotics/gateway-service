@@ -103,6 +103,7 @@ class UCANUpdater(object):
             total_payload = bytearray()
             logged_percentage = -1
             reset_vector = bytearray([intel_hex[i] for i in range(4)])
+            empty_payload = bytearray([255] * UCANUpdater.MAX_FLASH_BYTES)
             for index, start_address in enumerate(address_blocks):
                 end_address = min(UCANUpdater.ADDRESS_END, start_address + UCANUpdater.MAX_FLASH_BYTES) - 1
 
@@ -115,7 +116,7 @@ class UCANUpdater(object):
 
                 little_start_address = struct.unpack('<I', struct.pack('>I', start_address))[0]
 
-                if payload != [255] * UCANUpdater.MAX_FLASH_BYTES:
+                if payload != empty_payload:
                     # Since the uCAN flash area is erased, skip empty blocks
                     ucan_communicator.do_command(cc_address, UCANAPI.write_flash(len(payload)), ucan_address, {'start_address': little_start_address,
                                                                                                                'data': payload})
