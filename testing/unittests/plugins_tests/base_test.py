@@ -1305,3 +1305,14 @@ class PluginConfigCheckerTest(unittest.TestCase):
         self.assertTrue(isinstance(pwr_serial, str))
         pwr_deserialized = PluginWebResponse.deserialize(pwr_serial)
         self.assertEqual(pwr, pwr_deserialized)
+
+        pwr = PluginWebResponse(
+            body=None,
+            headers=None,
+            status_code=None,
+            path=None
+        )
+        pwr_serial = pwr.serialize()
+        self.assertTrue(isinstance(pwr_serial, str))
+        pwr_deserialized = PluginWebResponse.deserialize(pwr_serial)
+        self.assertEqual(pwr, pwr_deserialized)

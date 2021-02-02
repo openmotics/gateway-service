@@ -394,12 +394,12 @@ class PluginWebBody():
         if self.content is None:
             return None
         if self.obj_type == 'str':
-            content_bytes = bytes(self.content.encode('utf-8'))
+            content_bytes = self.content.encode('utf-8')  # type: bytes
             encoded = base64.b64encode(content_bytes)
         elif self.obj_type == 'dict':
-            json_dump = json.dumps(self.content)
-            encoded = base64.b64encode(json_dump.encode('utf-8'))
-        else:
+            json_dump = json.dumps(self.content).encode('utf-8')  # type: bytes
+            encoded = base64.b64encode(json_dump)
+        else:  # if bytes (py3 only)
             encoded = base64.b64encode(self.content)
         obj_dict = {
             'type': self.obj_type,
@@ -432,3 +432,12 @@ class PluginWebBody():
             else:  # bytes string
                 return content
         return None
+
+    def __eq__(self, other):
+        if not isinstance(other, PluginWebBody):
+            return False
+        vars_to_check = ['content', 'obj_type']
+        for var in vars_to_check:
+            if getattr(self, var) != getattr(other, var):
+                return False
+        return True

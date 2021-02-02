@@ -382,11 +382,16 @@ class PluginRuntime(object):
                 else:
                     to_pass_arguments[req_param] = web_request.params[req_param]
             func_return = func(*args, **to_pass_arguments)
-            if isinstance(func_return, PluginWebResponse):
-                func_return = func_return.serialize()
-            else:
-                func_return = PluginWebResponse(status_code=200, body=func_return, version=web_request.version).serialize()
-            return {'success': True, 'response': func_return}
+            try:
+                if isinstance(func_return, PluginWebResponse):
+                    serialized_func_return = func_return.serialize()
+                else:
+                    serialized_func_return = PluginWebResponse(status_code=200, body=func_return, version=web_request.version).serialize()
+            except AttributeError as ex:
+                error_msg = "[RUNTIME] Could not serialize the returned object for function call {} with return data: {}".format(method, func_return)
+                self._writer.log(error_msg)
+                return {'success': False, 'exception': str(error_msg)}
+            return {'success': True, 'response': serialized_func_return}
         except Exception as exception:
             return {'success': False, 'exception': str(exception), 'stacktrace': traceback.format_exc()}
 
