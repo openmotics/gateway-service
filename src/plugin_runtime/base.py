@@ -389,7 +389,7 @@ class PluginWebBody():
 
     def serialize(self):
         # type: () -> Optional[str]
-        if self.obj_type not in ['str', 'bytes', 'dict', 'NoneType']:
+        if self.obj_type not in ['str', 'bytes', 'dict', 'NoneType', 'unicode']:
             raise AttributeError('Could not serialize body data of type: {}'.format(type(self.content)))
         if self.content is None:
             return None
@@ -415,7 +415,7 @@ class PluginWebBody():
         obj_dict = json.loads(serial)
         obj_type = obj_dict['type']
         data = obj_dict['data']
-        if obj_type not in ['str', 'bytes', 'dict', 'NoneType']:
+        if obj_type not in ['str', 'bytes', 'dict', 'NoneType', 'unicode']:
             raise AttributeError('Could not deserialize serial data of type: {}'.format(type(serial)))
         content = None
         if data is not None:

@@ -104,8 +104,6 @@ class PluginControllerTest(unittest.TestCase):
 
     @staticmethod
     def _get_controller(output_controller=None, shutter_controller=None):
-        import log
-        log.debug('getting controller....')
         SetUpTestInjections(shutter_controller=shutter_controller,
                             web_interface=None,
                             configuration_controller=None,
@@ -841,6 +839,19 @@ class P1(OMPluginBase):
             self.assertEqual(response.status_code, 201)
             self.assertEqual(response.headers, {'some-header': 'some-header-value'})
 
+            for special_string in [
+                'someString/someOtherText!@#$%^&*()<>{}[]',
+                'basic_string',
+                u'test_unicode'
+            ]:
+                response = do_request('v2_default_param_web_request_web_response',
+                                      web_request=PluginWebRequest(version=2, params={'param': special_string, 'param2': 'test'}),
+                                      get_web_response=True)
+                self.assertEqual(response.body, special_string)
+                self.assertEqual(response.version, 2)
+                self.assertEqual(response.status_code, 201)
+                self.assertEqual(response.headers, {'some-header': 'some-header-value'})
+
             try:
                 response = do_request('v2_default_param_web_request_web_response',
                                       web_request=PluginWebRequest(version=2, params={}),
@@ -1222,10 +1233,21 @@ class PluginConfigCheckerTest(unittest.TestCase):
             pwr_serial = pwr.serialize()
             self.fail('It should not be possible to serialize web request with object as body')
         except AttributeError as ex:
-            self.assertEqual('Could not serialize body data of type: <class \'object\'>', ex.args[0])
             pass
         except Exception as ex:
             self.fail('Wrong exception raised: {}'.format(ex))
+
+        # special characters test
+        pwr = PluginWebRequest(
+            method=None,
+            body='sometest/someothertext!@#$%^&*()',
+            headers=None,
+            path=None
+        )
+        pwr_serial = pwr.serialize()
+        self.assertTrue(isinstance(pwr_serial, str))
+        pwr_deserialized = PluginWebRequest.deserialize(pwr_serial)
+        self.assertEqual(pwr, pwr_deserialized)
 
     def test_plugin_web_response_serialize(self):
         """ Test the functionality fo the plugin web response serialize"""
@@ -1253,6 +1275,28 @@ class PluginConfigCheckerTest(unittest.TestCase):
 
         pwr = PluginWebResponse(
             body=b'testString',
+            headers={"Some-Header": "Some-Header-Value"},
+            status_code=200,
+            path='somepath'
+        )
+        pwr_serial = pwr.serialize()
+        self.assertTrue(isinstance(pwr_serial, str))
+        pwr_deserialized = PluginWebResponse.deserialize(pwr_serial)
+        self.assertEqual(pwr, pwr_deserialized)
+
+        pwr = PluginWebResponse(
+            body='testString/someothertext!@#$%^&*()<>',
+            headers={"Some-Header": "Some-Header-Value"},
+            status_code=200,
+            path='somepath'
+        )
+        pwr_serial = pwr.serialize()
+        self.assertTrue(isinstance(pwr_serial, str))
+        pwr_deserialized = PluginWebResponse.deserialize(pwr_serial)
+        self.assertEqual(pwr, pwr_deserialized)
+
+        pwr = PluginWebResponse(
+            body={'test': 'testString/someothertext!@#$%^&*()<>'},
             headers={"Some-Header": "Some-Header-Value"},
             status_code=200,
             path='somepath'
