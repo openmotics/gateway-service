@@ -106,7 +106,7 @@ class UCANUpdater(object):
             for index, start_address in enumerate(address_blocks):
                 end_address = min(UCANUpdater.ADDRESS_END, start_address + UCANUpdater.MAX_FLASH_BYTES) - 1
 
-                payload = intel_hex.tobinarray(start=start_address, end=end_address)
+                payload = bytearray(intel_hex.tobinarray(start=start_address, end=end_address))
                 crc = UCANPalletCommandSpec.calculate_crc(payload, crc)
                 if start_address == address_blocks[-1]:
                     crc = UCANPalletCommandSpec.calculate_crc(reset_vector, crc)
@@ -145,14 +145,17 @@ class UCANUpdater(object):
             if response.get('application_mode', 0) != 1:
                 raise RuntimeError('uCAN didn\'t enter application mode after reset')
 
-            try:
-                response = ucan_communicator.do_command(cc_address, UCANAPI.get_version(), ucan_address, {})
-                if response is None:
-                    raise RuntimeError()
-                current_version = response['firmware_version']
-                logger.info('New uCAN version: v{0}'.format(current_version))
-            except Exception:
-                raise RuntimeError('Could not load new uCAN version')
+            if ucan_address != '255.255.255':
+                try:
+                    response = ucan_communicator.do_command(cc_address, UCANAPI.get_version(), ucan_address, {})
+                    if response is None:
+                        raise RuntimeError()
+                    current_version = response['firmware_version']
+                    logger.info('New uCAN version: v{0}'.format(current_version))
+                except Exception:
+                    raise RuntimeError('Could not load new uCAN version')
+            else:
+                logger.info('Skip loading new version as address will have been changed by the application')
 
             logger.info('Update completed')
             return True

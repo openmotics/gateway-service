@@ -84,12 +84,14 @@ def main():
                                                          version=version)
             else:
                 if module_type == 'UC':
-                    print('No address can be given for uCAN modules')
-                    return True  # Don't fail the update
-                update_success = SlaveUpdater.update(address=args.address,
-                                                     hex_filename=filename,
-                                                     gen3_firmware=gen3_firmware,
-                                                     version=version)
+                    update_success = SlaveUpdater.update_ucan(address=args.address,
+                                                              hex_filename=filename,
+                                                              version=version)
+                else:
+                    update_success = SlaveUpdater.update(address=args.address,
+                                                         hex_filename=filename,
+                                                         gen3_firmware=gen3_firmware,
+                                                         version=version)
         else:
             from master.classic.slave_updater import bootload_modules
 
