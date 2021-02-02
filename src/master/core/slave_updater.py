@@ -88,7 +88,8 @@ class SlaveUpdater(object):
                 for module_id in range(number_of_ucs):
                     ucan_configuration = UCanModuleConfiguration(module_id)
                     executed_update = True
-                    success &= UCANUpdater.update(cc_address=ucan_configuration.module.address,
+                    cc_address = ucan_configuration.module.address if ucan_configuration.module is not None else '000.000.000.000'
+                    success &= UCANUpdater.update(cc_address=cc_address,
                                                   ucan_address=ucan_configuration.address,
                                                   ucan_communicator=ucan_communicator,
                                                   hex_filename=hex_filename,
@@ -98,6 +99,17 @@ class SlaveUpdater(object):
             logger.info('No modules of type {0} were updated'.format(module_type))
             return True
         return success
+
+    @staticmethod
+    def update_ucan(address, hex_filename, version):
+        if '@' not in address:
+            raise RuntimeError('Address must be in the form of <ucan address>@<cc address>')
+        ucan_address, cc_address = address.split('@')
+        return UCANUpdater.update(cc_address=cc_address,
+                                  ucan_address=ucan_address,
+                                  ucan_communicator=UCANCommunicator(),
+                                  hex_filename=hex_filename,
+                                  version=version)
 
     @staticmethod
     @Inject
@@ -157,7 +169,7 @@ class SlaveUpdater(object):
 
                 data_blocks = len(firmware) // SlaveUpdater.BLOCK_SIZE + 1
                 blocks = SlaveUpdater.BLOCKS_SMALL_SLAVE
-                if data_blocks > blocks:
+                if data_blocks > blocks or gen3_module:
                     blocks = SlaveUpdater.BLOCKS_LARGE_SLAVE
                 logger.info('{0} - {1} slave ({2}/{3} blocks)'.format(
                     address,

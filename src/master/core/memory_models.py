@@ -241,7 +241,7 @@ class UCanModuleConfiguration(MemoryModelDefinition):
     id = IdField(limits=lambda f: (0, f - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 7)))
     device_type = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16), length=1, read_only=True)  # 383-390, 0-255
     address = MemoryAddressField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16), length=3, read_only=True)  # 383-390, 0-255
-    module = MemoryRelation(CanControlModuleConfiguration, id_spec=lambda id: None if id == 0 else id - 1, field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 3)))
+    module = MemoryRelation(CanControlModuleConfiguration, id_spec=lambda id: None if id == 100 else id, field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 3)))
     modbus_address = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 12))
     modbus_type = _ModbusTypeComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 13)))
     modbus_model = ModbusModel(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (383 + (id // 16), id % 16 * 16 + 14)))
