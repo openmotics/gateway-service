@@ -57,6 +57,7 @@ class UCANUpdater(object):
                                                                     cc_address,
                                                                     'v{0}'.format(version) if version is not None else 'unknown version'))
 
+            current_version = None
             try:
                 response = ucan_communicator.do_command(cc_address, UCANAPI.get_version(), ucan_address, {})
                 if response is None:
@@ -64,7 +65,7 @@ class UCANUpdater(object):
                 current_version = response['firmware_version']
                 logger.info('Current uCAN version: v{0}'.format(current_version))
             except Exception:
-                raise RuntimeError('Could not load uCAN version')
+                logger.warning('Could not load uCAN version')
 
             if current_version == version:
                 logger.info('uCAN already up-to-date. Skipping')
@@ -74,7 +75,11 @@ class UCANUpdater(object):
                 raise RuntimeError('The given path does not point to an existing file')
             intel_hex = IntelHex(hex_filename)
 
-            in_bootloader = ucan_communicator.is_ucan_in_bootloader(cc_address, ucan_address)
+            try:
+                in_bootloader = ucan_communicator.is_ucan_in_bootloader(cc_address, ucan_address)
+            except Exception:
+                raise RuntimeError('uCAN did not respond')
+
             if in_bootloader:
                 logger.info('Bootloader active')
             else:
