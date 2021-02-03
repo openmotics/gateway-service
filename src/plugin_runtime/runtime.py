@@ -17,6 +17,7 @@ import six
 from gateway.daemon_thread import BaseThread
 from gateway.events import GatewayEvent
 from plugin_runtime import base
+from plugin_runtime.base import PluginWebRequest, PluginWebResponse
 from plugin_runtime.interfaces import has_interface
 from plugin_runtime.utils import get_plugin_class, check_plugin, get_special_methods
 from plugin_runtime.web import WebInterfaceDispatcher
@@ -26,7 +27,7 @@ from toolbox import PluginIPCReader, PluginIPCWriter, Toolbox
 logger = logging.getLogger('openmotics')
 
 if False:  # MYPY
-    from typing import Any, Callable, Dict, List, Optional
+    from typing import Any, Callable, Dict, List, Optional, Union
 
 
 class PluginRuntime(object):
@@ -115,7 +116,8 @@ class PluginRuntime(object):
         for decorated_method, _ in get_special_methods(self._plugin, 'om_expose'):
             self._exposes.append({'name': decorated_method.__name__,
                                   'auth': decorated_method.om_expose['auth'],
-                                  'content_type': decorated_method.om_expose['content_type']})
+                                  'content_type': decorated_method.om_expose['content_type'],
+                                  'version': decorated_method.om_expose['version']})
 
         # Set the metric collectors
         for decorated_method, _ in get_special_methods(self._plugin, 'om_metric_data'):
@@ -358,17 +360,40 @@ class PluginRuntime(object):
 
     def _handle_request(self, method, args, kwargs):
         func = getattr(self._plugin, method)
+        # Always expect a web_request
+        web_request = PluginWebRequest.deserialize(kwargs['plugin_web_request'])
+        passed_parameters = set(web_request.params.keys())
+        if web_request.version > 1:
+            passed_parameters.add('plugin_web_request')
         requested_parameters = set(Toolbox.get_parameter_names(func)) - {'self'}
-        difference = set(kwargs.keys()) - requested_parameters
-        if difference:
+        difference = set(passed_parameters) - requested_parameters
+        if difference and web_request.version == 1:
             # Analog error message as the default CherryPy behavior
             return {'success': False, 'exception': 'Unexpected query string parameters: {0}'.format(', '.join(difference))}
-        difference = requested_parameters - set(kwargs.keys())
+        difference = requested_parameters - (set(passed_parameters) | {'request_body'})
         if difference:
             # Analog error message as the default CherryPy behavior
             return {'success': False, 'exception': 'Missing parameters: {0}'.format(', '.join(difference))}
         try:
-            return {'success': True, 'response': func(*args, **kwargs)}
+            to_pass_arguments = {}  # type: Dict[str, Any]
+            for req_param in requested_parameters:
+                if req_param == 'plugin_web_request':
+                    to_pass_arguments[req_param] = web_request
+                elif req_param == 'request_body':
+                    to_pass_arguments[req_param] = web_request.body
+                else:
+                    to_pass_arguments[req_param] = web_request.params[req_param]
+            func_return = func(*args, **to_pass_arguments)
+            try:
+                if isinstance(func_return, PluginWebResponse):
+                    serialized_func_return = func_return.serialize()
+                else:
+                    serialized_func_return = PluginWebResponse(status_code=200, body=func_return, version=web_request.version).serialize()
+            except AttributeError as ex:
+                error_msg = "[RUNTIME] Could not serialize the returned object for function call {} with return data: {}".format(method, func_return)
+                self._writer.log(error_msg)
+                return {'success': False, 'exception': str(error_msg)}
+            return {'success': True, 'response': serialized_func_return}
         except Exception as exception:
             return {'success': False, 'exception': str(exception), 'stacktrace': traceback.format_exc()}
 
