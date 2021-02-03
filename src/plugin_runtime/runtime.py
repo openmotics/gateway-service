@@ -370,7 +370,7 @@ class PluginRuntime(object):
         if difference and web_request.version == 1:
             # Analog error message as the default CherryPy behavior
             return {'success': False, 'exception': 'Unexpected query string parameters: {0}'.format(', '.join(difference))}
-        difference = requested_parameters - set(passed_parameters)
+        difference = requested_parameters - (set(passed_parameters) | {'request_body'})
         if difference:
             # Analog error message as the default CherryPy behavior
             return {'success': False, 'exception': 'Missing parameters: {0}'.format(', '.join(difference))}
@@ -379,6 +379,8 @@ class PluginRuntime(object):
             for req_param in requested_parameters:
                 if req_param == 'plugin_web_request':
                     to_pass_arguments[req_param] = web_request
+                elif req_param == 'request_body':
+                    to_pass_arguments[req_param] = web_request.body
                 else:
                     to_pass_arguments[req_param] = web_request.params[req_param]
             func_return = func(*args, **to_pass_arguments)

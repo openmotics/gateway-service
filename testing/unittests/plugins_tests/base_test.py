@@ -739,6 +739,18 @@ class P1(OMPluginBase):
             path='somePath'
         )
         return response
+
+    @om_expose
+    def v1_body(self, request_body):
+        self.print_func_name()
+        self.logger('Received body: {}'.format(request_body))
+        return request_body
+
+    @om_expose(version=2)
+    def v2_body(self, request_body):
+        self.print_func_name()
+        self.logger('Received body: {}'.format(request_body))
+        return request_body
 """)
 
             controller = PluginControllerTest._get_controller()
@@ -860,6 +872,19 @@ class P1(OMPluginBase):
             except Exception:
                 pass
 
+            response = do_request('v1_body',
+                                  web_request=PluginWebRequest(version=1, body='somebody'),
+                                  get_web_response=True)
+            self.assertEqual(response.body, 'somebody')
+            self.assertEqual(response.version, 1)
+            self.assertEqual(response.status_code, 200)
+
+            response = do_request('v2_body',
+                                  web_request=PluginWebRequest(version=2, body='somebody'),
+                                  get_web_response=True)
+            self.assertEqual(response.body, 'somebody')
+            self.assertEqual(response.version, 2)
+            self.assertEqual(response.status_code, 200)
 
 
         finally:
