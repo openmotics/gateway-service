@@ -21,7 +21,7 @@ from toolbox import PluginIPCReader, PluginIPCWriter
 from plugin_runtime.base import PluginWebRequest, PluginWebResponse
 
 if False:  # MYPY
-    from typing import Any, Dict, Callable, List, Optional
+    from typing import Any, Dict, Callable, List, Optional, AnyStr
     from gateway.webservice import WebInterface
 
 logger_ = logging.getLogger('openmotics')
@@ -67,7 +67,8 @@ class Service(object):
         return None
 
     @cherrypy.expose
-    def index(self, method, plugin_web_request=None, *args, **kwargs):
+    def index(self, method, plugin_web_request, *args, **kwargs):
+        # type: (str, PluginWebRequest, Any, Any) -> Optional[AnyStr]
         try:
             # This has been placed under the 'request_body' in the webservice.py file
             # Here it is read out when necessary and put in the PluginWebRequest object at the correct place
@@ -77,8 +78,10 @@ class Service(object):
             # Embed the params that where given with the call into the PluginWebResponse object and pass it as one object
             plugin_web_request.params = kwargs
             kwargs = {'plugin_web_request': plugin_web_request.serialize()}
+
             # Perform the request with the set PluginWebRequest object
             contents = self.runner.request(method, args=args, kwargs=kwargs)
+
             # Deserialize the response contents to a PluginWebResponse object
             plugin_response = PluginWebResponse.deserialize(contents)
             # Only read out all the data from the PluginWebResponse when the version is higher than 1
@@ -93,6 +96,7 @@ class Service(object):
             else:
                 return None
         except Exception as ex:
+            self.runner._logger('Exception when dispatching API call ({}): {}'.format(plugin_web_request.path, ex))
             cherrypy.response.headers["Content-Type"] = "application/json"
             cherrypy.response.status = 500
             contents = json.dumps({"success": False, "msg": str(ex)})
