@@ -106,8 +106,8 @@ class UCANUpdater(object):
             address_blocks = list(range(UCANUpdater.APPLICATION_START, UCANUpdater.BOOTLOADER_START, UCANUpdater.MAX_FLASH_BYTES))
             total_amount = float(len(address_blocks))
             for i in range(4):
-                intel_hex[UCANUpdater.BOOTLOADER_START - 8 + i] = intel_hex[i]
-                intel_hex[UCANUpdater.BOOTLOADER_START - 4 + i] = 0x0
+                intel_hex[UCANUpdater.BOOTLOADER_START - 8 + i] = intel_hex[i]  # Copy reset vector
+                intel_hex[UCANUpdater.BOOTLOADER_START - 4 + i] = 0x0  # Reserve some space for the CRC
             crc = 0
             total_payload = bytearray()
             logged_percentage = -1
