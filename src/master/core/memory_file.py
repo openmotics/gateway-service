@@ -24,6 +24,7 @@ from threading import Lock, Event as ThreadingEvent
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
+from master.core.basic_action import BasicAction
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.events import Event
@@ -196,7 +197,7 @@ class MemoryFile(object):
                 logger.info('MEMORY: Activating')
                 self._self_activated = True
                 self._activation_event.clear()
-                self._core_communicator.do_basic_action(action_type=200, action=1, timeout=MemoryFile.ACTIVATE_TIMEOUT)
+                self._core_communicator.do_basic_action(BasicAction(action_type=200, action=1), timeout=MemoryFile.ACTIVATE_TIMEOUT)
                 self._activation_event.wait(timeout=60.0)
             else:
                 logger.info('MEMORY: No activation requred')
