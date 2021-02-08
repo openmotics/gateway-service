@@ -69,8 +69,8 @@ class VirtualCore(object):
         else:
             raise AssertionError('unexpected instruction: {0}'.format(instruction))
 
-    def _do_basic_action(self, action_type, action, device_nr=0, extra_parameter=0, timeout=2, log=True):
-        _ = device_nr, extra_parameter, timeout, log
-        if action_type == 200 and action == 1:
+    def _do_basic_action(self, basic_action, timeout=2, log=True):
+        _ = timeout, log
+        if basic_action.action_type == 200 and basic_action.action == 1:
             # Send EEPROM_ACTIVATE event
             self.memory_file._handle_event({'type': 254, 'action': 0, 'device_nr': 0, 'data': 0})
