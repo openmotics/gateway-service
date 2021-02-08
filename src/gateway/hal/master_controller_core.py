@@ -994,7 +994,7 @@ class MasterCoreController(MasterController):
 
     def reset(self):
         # type: () -> None
-        self._master_communicator.do_basic_action(BasicAction(action_type=254, action=0))
+        self._master_communicator.do_basic_action(BasicAction(action_type=254, action=0), timeout=None)
 
     def cold_reset(self, power_on=True):
         # type: (bool) -> None
