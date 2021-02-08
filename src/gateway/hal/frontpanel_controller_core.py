@@ -156,6 +156,7 @@ class FrontpanelCoreController(FrontpanelController):
             self._authorized_mode_buttons_released = True
         if self._authorized_mode:
             if time.time() > self._authorized_mode_timeout or (buttons_pressed and self._authorized_mode_buttons_released):
+                logger.info('Authorized mode: inactive')
                 self._authorized_mode = False
         else:
             if buttons_pressed:
@@ -163,6 +164,7 @@ class FrontpanelCoreController(FrontpanelController):
                 if self._authorized_mode_buttons_pressed_since is None:
                     self._authorized_mode_buttons_pressed_since = time.time()
                 if time.time() - self._authorized_mode_buttons_pressed_since > FrontpanelController.AUTH_MODE_PRESS_DURATION:
+                    logger.info('Authorized mode: active')
                     self._authorized_mode = True
                     self._authorized_mode_timeout = time.time() + FrontpanelController.AUTH_MODE_TIMEOUT
                     self._authorized_mode_buttons_pressed_since = None
