@@ -407,6 +407,30 @@ class MemoryByteField(MemoryField):
         return data[0]
 
 
+class MemoryBooleanField(MemoryField):
+    def __init__(self, memory_type, address_spec, true_value, false_value, fallback, read_only=False, checksum=None):
+        super(MemoryBooleanField, self).__init__(memory_type=memory_type,
+                                                 address_spec=address_spec,
+                                                 read_only=read_only,
+                                                 checksum=checksum,
+                                                 length=1)
+        self._true_value = true_value
+        self._false_value = false_value
+        self._fallback = fallback
+
+    def encode(self, value, field_name):  # type: (bool, str) -> bytearray
+        if not (value is True or value is False):
+            raise ValueError('Field `{0}` value `{1}` is no boolean'.format(field_name, value))
+        return bytearray([self._true_value if value else self._false_value])
+
+    def decode(self, data):  # type: (bytearray) -> bool
+        if data[0] == self._true_value:
+            return True
+        if data[0] == self._false_value:
+            return False
+        return self._fallback
+
+
 class MemoryTemperatureField(MemoryField):
     def __init__(self, memory_type, address_spec, read_only=False, checksum=None):
         super(MemoryTemperatureField, self).__init__(memory_type=memory_type,

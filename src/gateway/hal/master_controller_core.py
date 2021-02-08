@@ -287,6 +287,7 @@ class MasterCoreController(MasterController):
         general_configuration = GlobalConfiguration()
         logger.info('General core information:')
         logger.info('* Modules:')
+        logger.info('  * Auto discovery: {0}'.format(general_configuration.automatic_module_discovery))
         logger.info('  * Output: {0}/{1}'.format(_default_if_255(general_configuration.number_of_output_modules, 0),
                                                  max_specs['output']))
         logger.info('  * Input: {0}/{1}'.format(_default_if_255(general_configuration.number_of_input_modules, 0),
@@ -299,11 +300,13 @@ class MasterCoreController(MasterController):
         logger.info('* CAN:')
         logger.info('  * Inputs: {0}'.format(general_configuration.number_of_can_inputs))
         logger.info('  * Sensors: {0}'.format(general_configuration.number_of_can_sensors))
+        logger.info('  * Termination: {0}'.format(general_configuration.can_bus_termination))
         logger.info('* Scan times:')
         logger.info('  * General bus: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_bus, 8)))
         logger.info('  * Sensor modules: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_sensor_modules, 50) * 100))
         logger.info('  * CAN Control modules: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_can_control_modules, 50) * 100))
         logger.info('* Runtime stats:')
+        logger.info('  * Debug: {0}'.format(general_configuration.debug_mode))
         logger.info('  * Uptime: {0}d {1}h'.format(general_configuration.uptime_hours / 24,
                                                    general_configuration.uptime_hours % 24))
         # noinspection PyStringFormat

@@ -25,7 +25,7 @@ from master.core.memory_file import MemoryTypes
 from master.core.memory_types import (MemoryModelDefinition, GlobalMemoryModelDefinition,
                                       MemoryRelation,
                                       MemoryByteField, MemoryWordField, MemoryAddressField, MemoryStringField, MemoryVersionField, MemoryBasicActionField,
-                                      MemoryTemperatureField,
+                                      MemoryTemperatureField, MemoryBooleanField,
                                       MemoryByteArrayField, Memory3BytesField,
                                       CompositeMemoryModelDefinition, CompositeNumberField, CompositeBitField,
                                       MemoryEnumDefinition, EnumEntry, IdField,
@@ -44,6 +44,9 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
     scan_time_rs485_bus = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 8))  # 0, 8
     number_of_can_control_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 9))  # 0, 9
     scan_time_rs485_can_control_modules = MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 10))  # 0, 10
+    automatic_module_discovery = MemoryBooleanField(MemoryTypes.EEPROM, address_spec=(0, 11), true_value=255, false_value=0, fallback=True)  # 0, 11
+    can_bus_termination = MemoryBooleanField(MemoryTypes.EEPROM, address_spec=(0, 12), true_value=255, false_value=0, fallback=True)  # 0, 12
+    debug_mode = MemoryBooleanField(MemoryTypes.EEPROM, address_spec=(0, 13), true_value=0, false_value=255, fallback=True)  # 0, 13
     groupaction_all_outputs_off = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 50))  # 0, 50-51
     groupaction_startup = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 52))  # 0, 52-53
     groupaction_minutes_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 54))  # 0, 54-55

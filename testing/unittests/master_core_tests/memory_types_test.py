@@ -124,6 +124,12 @@ class MemoryTypesTest(unittest.TestCase):
                                                   [{}, 95.5, ValueError],
                                                   [{}, None, bytearray([255])]])
 
+    def test_boolean_field(self):
+        self._test_field(MemoryBooleanField, [[{'true_value': 0, 'false_value': 255, 'fallback': True}, 0, ValueError],
+                                              [{'true_value': 0, 'false_value': 255, 'fallback': True}, 'foo', ValueError],
+                                              [{'true_value': 0, 'false_value': 255, 'fallback': True}, True, bytearray([0])],
+                                              [{'true_value': 0, 'false_value': 255, 'fallback': True}, False, bytearray([255])]])
+
     def _test_field(self, field_type, scenario):
         for item in scenario:
             if len(item) == 3:

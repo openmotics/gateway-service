@@ -33,6 +33,9 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
     scan_time_rs485_bus: int
     number_of_can_control_modules: int
     scan_time_rs485_can_control_modules: int
+    automatic_module_discovery: bool
+    can_bus_termination: bool
+    debug_mode: bool
     groupaction_all_outputs_off: int
     groupaction_startup: int
     groupaction_minutes_changed: int
