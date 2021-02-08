@@ -44,7 +44,7 @@ class MemoryModelDefinition(object):
     _cache_lock = Lock()
 
     @Inject
-    def __init__(self, id, memory_files=INJECTED, verbose=False):  # type: (Optional[int], Dict[str, MemoryFile], bool) -> None
+    def __init__(self, id, memory_file=INJECTED, verbose=False):  # type: (Optional[int], MemoryFile, bool) -> None
         self._id = id
         self._id_field = self.__class__._get_id_field()  # TODO: Make sure that an id field is mandatory for id-lookups
         if self._id_field is not None:
@@ -53,7 +53,7 @@ class MemoryModelDefinition(object):
             self._id_field.validate(self.__class__.__name__, id)
             setattr(self.__class__, 'id', property(lambda s: s._id))
         self._verbose = verbose
-        self._memory_files = memory_files
+        self._memory_file = memory_file
         self._fields = []  # type: List[str]
         self._loaded_fields = set()  # type: Set[str]
         self._relations = []  # type: List[str]
@@ -242,13 +242,8 @@ class MemoryActivator(object):
     """ Holds a static method to activate memory """
     @staticmethod
     @Inject
-    def activate(memory_files=INJECTED):  # type: (Dict[str, MemoryFile]) -> None
-        # There's only one call to activate all memory devices at once. Once a memory
-        # device is activated, the others will also be activated, so no need to activate
-        # multiple times
-        for memory_file in memory_files.values():
-            if memory_file.activate():
-                break
+    def activate(memory_file=INJECTED):  # type: (MemoryFile) -> None
+        memory_file.activate()
 
 
 class GlobalMemoryModelDefinition(MemoryModelDefinition):
@@ -266,12 +261,12 @@ class MemoryFieldContainer(object):
     """
 
     @Inject
-    def __init__(self, name, memory_field, memory_address, memory_files=INJECTED):
-        # type: (str, MemoryField, MemoryAddress, Dict[str, MemoryFile]) -> None
+    def __init__(self, name, memory_field, memory_address, memory_file=INJECTED):
+        # type: (str, MemoryField, MemoryAddress, MemoryFile) -> None
         self._field_name = name
         self._memory_field = memory_field
         self._memory_address = memory_address
-        self._memory_files = memory_files
+        self._memory_file = memory_file
         self._data = None  # type: Optional[bytearray]
         self._checksum_container = None  # type: Optional[MemoryChecksumContainer]
 
@@ -279,7 +274,7 @@ class MemoryFieldContainer(object):
         self._checksum_container = checksum_container
 
     def _read_data(self):  # type: () -> None
-        self._data = self._memory_files[self._memory_address.memory_type].read([self._memory_address])[self._memory_address]
+        self._data = self._memory_file.read([self._memory_address])[self._memory_address]
 
     def encode(self, value):  # type: (Any) -> None
         """ Encodes changes a high-level value such as a string or large integer into a memory byte array (array of 0 <= x <= 255) """
@@ -306,7 +301,7 @@ class MemoryFieldContainer(object):
     def save(self):  # type: () -> None
         if self._data is None:
             return
-        self._memory_files[self._memory_address.memory_type].write({self._memory_address: self._data})
+        self._memory_file.write({self._memory_address: self._data})
         if self._checksum_container is not None:
             self._checksum_container.save()
 

@@ -48,6 +48,7 @@ from master.core.memory_models import CanControlModuleConfiguration, \
     GlobalConfiguration, InputConfiguration, InputModuleConfiguration, \
     OutputConfiguration, OutputModuleConfiguration, SensorConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
+from master.core.memory_types import MemoryAddress
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.system_value import Humidity, Temperature
 from master.core.ucan_communicator import UCANCommunicator
@@ -64,13 +65,13 @@ logger = logging.getLogger("openmotics")
 class MasterCoreController(MasterController):
 
     @Inject
-    def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, slave_communicator=INJECTED, memory_files=INJECTED, pubsub=INJECTED):
-        # type: (CoreCommunicator, UCANCommunicator, SlaveCommunicator, Dict[str,MemoryFile], PubSub) -> None
+    def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, slave_communicator=INJECTED, memory_file=INJECTED, pubsub=INJECTED):
+        # type: (CoreCommunicator, UCANCommunicator, SlaveCommunicator, MemoryFile, PubSub) -> None
         super(MasterCoreController, self).__init__(master_communicator)
         self._master_communicator = master_communicator
         self._ucan_communicator = ucan_communicator
         self._slave_communicator = slave_communicator
-        self._memory_files = memory_files  # type: Dict[str, MemoryFile]
+        self._memory_file = memory_file
         self._pubsub = pubsub
         self._synchronization_thread = None  # type: Optional[DaemonThread]
         self._master_online = False
@@ -1020,7 +1021,8 @@ class MasterCoreController(MasterController):
         data = bytearray()
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         for page in range(pages):
-            data += self._memory_files[MemoryTypes.EEPROM].read_page(page)
+            page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=page, offset=0, length=page_length)
+            data += self._memory_file.read([page_address])[page_address]
         return ''.join(str(chr(entry)) for entry in data)
 
     def restore(self, data):
@@ -1045,7 +1047,8 @@ class MasterCoreController(MasterController):
         current_page = amount_of_pages - 1
         while current_page >= 0:
             try:
-                self._memory_files[MemoryTypes.EEPROM].write_page(current_page, data[current_page])
+                page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=current_page, offset=0, length=page_length)
+                self._memory_file.write({page_address: data[current_page]})
                 current_page -= 1
             except CommunicationTimedOutException:
                 if page_retry == current_page:
