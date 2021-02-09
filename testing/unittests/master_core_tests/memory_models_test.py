@@ -20,11 +20,11 @@ from __future__ import absolute_import
 import unittest
 import xmlrunner
 import logging
-from mock import Mock
-from ioc import SetTestMode, SetUpTestInjections
+from ioc import SetTestMode
 from master.core.memory_models import *
 from master.core.memory_file import MemoryTypes, MemoryFile, MemoryAddress
 from logs import Logs
+from mocked_core_helper import MockedCore
 
 logger = logging.getLogger('openmotics')
 
@@ -79,17 +79,17 @@ class MemoryModelsTest(unittest.TestCase):
         Logs.setup_logger(log_level=logging.DEBUG)
 
     def setUp(self):
+        self.mocked_core = MockedCore()
+        self.memory = self.mocked_core.memory
         self._memory_access = {MemoryTypes.EEPROM: {}, MemoryTypes.FRAM: {}}
-        self._memory_map = {MemoryTypes.EEPROM: {}, MemoryTypes.FRAM: {}}
         for memory_type in [MemoryTypes.EEPROM, MemoryTypes.FRAM]:
             for page in range(MemoryFile.SIZES[memory_type][0]):
-                self._memory_map[memory_type][page] = bytearray([255] * MemoryFile.SIZES[memory_type][1])
-        self._memory_map[MemoryTypes.EEPROM][0][1] = MemoryModelsTest.AMOUNT_OF_OUTPUT_MODULES
-        self._memory_map[MemoryTypes.EEPROM][0][2] = MemoryModelsTest.AMOUNT_OF_INPUT_MODULES
-        self._memory_map[MemoryTypes.EEPROM][0][3] = MemoryModelsTest.AMOUNT_OF_SENSOR_MODULES
-        self._memory_map[MemoryTypes.EEPROM][0][7] = MemoryModelsTest.AMOUNT_OF_UCANS
-        self._memory_map[MemoryTypes.EEPROM][0][9] = MemoryModelsTest.AMOUNT_OF_CAN_CONTROLS
-        MemoryModelsTest._mock_memory(self._memory_map)
+                self.memory[memory_type][page] = bytearray([255] * MemoryFile.SIZES[memory_type][1])
+        self.memory[MemoryTypes.EEPROM][0][1] = MemoryModelsTest.AMOUNT_OF_OUTPUT_MODULES
+        self.memory[MemoryTypes.EEPROM][0][2] = MemoryModelsTest.AMOUNT_OF_INPUT_MODULES
+        self.memory[MemoryTypes.EEPROM][0][3] = MemoryModelsTest.AMOUNT_OF_SENSOR_MODULES
+        self.memory[MemoryTypes.EEPROM][0][7] = MemoryModelsTest.AMOUNT_OF_UCANS
+        self.memory[MemoryTypes.EEPROM][0][9] = MemoryModelsTest.AMOUNT_OF_CAN_CONTROLS
 
     def test_models(self):
         for code, specs in MemoryModelsTest.TEST_MATRIX.items():
@@ -146,26 +146,6 @@ class MemoryModelsTest(unittest.TestCase):
             print('Legend:')
             for code, specs in MemoryModelsTest.TEST_MATRIX.items():
                 print('  {0}: {1}'.format(code, specs[0].__name__))
-
-    @staticmethod
-    def _mock_memory(memory_map):
-        def _read(addresses):
-            data_ = {}
-            for address in addresses:
-                data_[address] = memory_map[address.memory_type][address.page][address.offset:address.offset + address.length]
-            return data_
-
-        def _write(data_map):
-            for address, data_ in data_map.items():
-                for index, data_byte in enumerate(data_):
-                    memory_map[address.memory_type][address.page][address.offset + index] = data_byte
-
-        memory_file_mock = Mock(MemoryFile)
-        memory_file_mock.read = _read
-        memory_file_mock.write = _write
-
-        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: memory_file_mock,
-                                          MemoryTypes.FRAM: memory_file_mock})
 
 
 if __name__ == "__main__":

@@ -67,8 +67,11 @@ class BasicAction(object):
         basic_action._extra_parameter = data[4:6]
         return basic_action
 
-    def __repr__(self):
+    def __str__(self):
         return 'BA({0},{1},{2},{3})'.format(self.action_type, self.action, self.device_nr, self.extra_parameter)
+
+    def __repr__(self):
+        return str(self)
 
     def __eq__(self, other):  # type: (Any) -> bool
         if not isinstance(other, BasicAction):

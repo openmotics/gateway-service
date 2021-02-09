@@ -271,8 +271,7 @@ def setup_target_platform(target_platform, message_client_name):
 
         Injectable.value(master_communicator=CoreCommunicator())
         Injectable.value(maintenance_communicator=MaintenanceCoreCommunicator())
-        Injectable.value(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
-                                       MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
+        Injectable.value(memory_file=MemoryFile())
         Injectable.value(master_controller=MasterCoreController())
     elif target_platform in Platform.ClassicTypes:
         # FIXME don't create singleton for optional controller?
@@ -339,8 +338,7 @@ def setup_minimal_master_platform(port):
         Injectable.value(cli_serial=Serial(core_cli_serial_port, 115200))
         Injectable.value(master_communicator=CoreCommunicator())
         Injectable.value(maintenance_communicator=None)
-        Injectable.value(memory_files={MemoryTypes.EEPROM: MemoryFile(MemoryTypes.EEPROM),
-                                       MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
+        Injectable.value(memory_file=MemoryFile())
         Injectable.value(master_controller=MasterCoreController())
     elif platform in Platform.ClassicTypes:
         Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())

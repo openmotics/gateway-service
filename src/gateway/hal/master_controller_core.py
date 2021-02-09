@@ -37,6 +37,7 @@ from gateway.hal.master_controller import CommunicationFailure, \
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
+from master.core.basic_action import BasicAction
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.core_updater import CoreUpdater
@@ -48,6 +49,7 @@ from master.core.memory_models import CanControlModuleConfiguration, \
     GlobalConfiguration, InputConfiguration, InputModuleConfiguration, \
     OutputConfiguration, OutputModuleConfiguration, SensorConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
+from master.core.memory_types import MemoryAddress
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.system_value import Humidity, Temperature
 from master.core.ucan_communicator import UCANCommunicator
@@ -64,13 +66,13 @@ logger = logging.getLogger("openmotics")
 class MasterCoreController(MasterController):
 
     @Inject
-    def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, slave_communicator=INJECTED, memory_files=INJECTED, pubsub=INJECTED):
-        # type: (CoreCommunicator, UCANCommunicator, SlaveCommunicator, Dict[str,MemoryFile], PubSub) -> None
+    def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, slave_communicator=INJECTED, memory_file=INJECTED, pubsub=INJECTED):
+        # type: (CoreCommunicator, UCANCommunicator, SlaveCommunicator, MemoryFile, PubSub) -> None
         super(MasterCoreController, self).__init__(master_communicator)
         self._master_communicator = master_communicator
         self._ucan_communicator = ucan_communicator
         self._slave_communicator = slave_communicator
-        self._memory_files = memory_files  # type: Dict[str, MemoryFile]
+        self._memory_file = memory_file
         self._pubsub = pubsub
         self._synchronization_thread = None  # type: Optional[DaemonThread]
         self._master_online = False
@@ -285,6 +287,7 @@ class MasterCoreController(MasterController):
         general_configuration = GlobalConfiguration()
         logger.info('General core information:')
         logger.info('* Modules:')
+        logger.info('  * Auto discovery: {0}'.format(general_configuration.automatic_module_discovery))
         logger.info('  * Output: {0}/{1}'.format(_default_if_255(general_configuration.number_of_output_modules, 0),
                                                  max_specs['output']))
         logger.info('  * Input: {0}/{1}'.format(_default_if_255(general_configuration.number_of_input_modules, 0),
@@ -297,11 +300,13 @@ class MasterCoreController(MasterController):
         logger.info('* CAN:')
         logger.info('  * Inputs: {0}'.format(general_configuration.number_of_can_inputs))
         logger.info('  * Sensors: {0}'.format(general_configuration.number_of_can_sensors))
+        logger.info('  * Termination: {0}'.format(general_configuration.can_bus_termination))
         logger.info('* Scan times:')
         logger.info('  * General bus: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_bus, 8)))
         logger.info('  * Sensor modules: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_sensor_modules, 50) * 100))
         logger.info('  * CAN Control modules: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_can_control_modules, 50) * 100))
         logger.info('* Runtime stats:')
+        logger.info('  * Debug: {0}'.format(general_configuration.debug_mode))
         logger.info('  * Uptime: {0}d {1}h'.format(general_configuration.uptime_hours / 24,
                                                    general_configuration.uptime_hours % 24))
         # noinspection PyStringFormat
@@ -410,28 +415,28 @@ class MasterCoreController(MasterController):
         if output.is_shutter:
             # Shutter outputs cannot be controlled
             return
-        self._master_communicator.do_basic_action(action_type=0,
-                                                  action=1 if state else 0,
-                                                  device_nr=output_id)
+        self._master_communicator.do_basic_action(BasicAction(action_type=0,
+                                                              action=1 if state else 0,
+                                                              device_nr=output_id))
         if dimmer is not None:
-            self._master_communicator.do_basic_action(action_type=0,
-                                                      action=9,
-                                                      device_nr=output_id,
-                                                      extra_parameter=int(2.55 * dimmer))  # Map 0-100 to 0-255
+            self._master_communicator.do_basic_action(BasicAction(action_type=0,
+                                                                  action=9,
+                                                                  device_nr=output_id,
+                                                                  extra_parameter=int(2.55 * dimmer)))  # Map 0-100 to 0-255
         if timer is not None:
-            self._master_communicator.do_basic_action(action_type=0,
-                                                      action=11,
-                                                      device_nr=output_id,
-                                                      extra_parameter=timer)
+            self._master_communicator.do_basic_action(BasicAction(action_type=0,
+                                                                  action=11,
+                                                                  device_nr=output_id,
+                                                                  extra_parameter=timer))
 
     def toggle_output(self, output_id):
         output = OutputConfiguration(output_id)
         if output.is_shutter:
             # Shutter outputs cannot be controlled
             return
-        self._master_communicator.do_basic_action(action_type=0,
-                                                  action=16,
-                                                  device_nr=output_id)
+        self._master_communicator.do_basic_action(BasicAction(action_type=0,
+                                                              action=16,
+                                                              device_nr=output_id))
 
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         output = OutputConfiguration(output_id)
@@ -465,19 +470,19 @@ class MasterCoreController(MasterController):
     # Shutters
 
     def shutter_up(self, shutter_id):
-        self._master_communicator.do_basic_action(action_type=10,
-                                                  action=1,
-                                                  device_nr=shutter_id)
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=1,
+                                                              device_nr=shutter_id))
 
     def shutter_down(self, shutter_id):
-        self._master_communicator.do_basic_action(action_type=10,
-                                                  action=2,
-                                                  device_nr=shutter_id)
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=2,
+                                                              device_nr=shutter_id))
 
     def shutter_stop(self, shutter_id):
-        self._master_communicator.do_basic_action(action_type=10,
-                                                  action=0,
-                                                  device_nr=shutter_id)
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=0,
+                                                              device_nr=shutter_id))
 
     def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
         shutter = ShutterConfiguration(shutter_id)
@@ -668,16 +673,16 @@ class MasterCoreController(MasterController):
         sensor_configuration = SensorConfiguration(sensor_id)
         if sensor_configuration.module.device_type != 't':
             raise ValueError('Sensor ID {0} does not map to a virtual Sensor'.format(sensor_id))
-        self._master_communicator.do_basic_action(action_type=3,
-                                                  action=sensor_id,
-                                                  device_nr=Temperature.temperature_to_system_value(temperature))
-        self._master_communicator.do_basic_action(action_type=4,
-                                                  action=sensor_id,
-                                                  device_nr=Humidity.humidity_to_system_value(humidity))
-        self._master_communicator.do_basic_action(action_type=5,
-                                                  action=sensor_id,
-                                                  device_nr=brightness if brightness is not None else (2 ** 16 - 1),
-                                                  extra_parameter=3)  # Store full word-size brightness value
+        self._master_communicator.do_basic_action(BasicAction(action_type=3,
+                                                              action=sensor_id,
+                                                              device_nr=Temperature.temperature_to_system_value(temperature)))
+        self._master_communicator.do_basic_action(BasicAction(action_type=4,
+                                                              action=sensor_id,
+                                                              device_nr=Humidity.humidity_to_system_value(humidity)))
+        self._master_communicator.do_basic_action(BasicAction(action_type=5,
+                                                              action=sensor_id,
+                                                              device_nr=brightness if brightness is not None else (2 ** 16 - 1),
+                                                              extra_parameter=3))  # Store full word-size brightness value
         self._refresh_sensor_states()
 
     # PulseCounters
@@ -703,13 +708,10 @@ class MasterCoreController(MasterController):
     def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
         basic_actions = GroupActionMapper.classic_actions_to_core_actions([action_type, action_number])
         for basic_action in basic_actions:
-            self._master_communicator.do_basic_action(action_type=basic_action.action_type,
-                                                      action=basic_action.action,
-                                                      device_nr=basic_action.device_nr,
-                                                      extra_parameter=basic_action.extra_parameter)
+            self._master_communicator.do_basic_action(basic_action)
 
     def do_group_action(self, group_action_id):  # type: (int) -> None
-        self._master_communicator.do_basic_action(action_type=19, action=0, device_nr=group_action_id)
+        self._master_communicator.do_basic_action(BasicAction(action_type=19, action=0, device_nr=group_action_id))
 
     def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
         return GroupActionMapper.orm_to_dto(GroupActionController.load_group_action(group_action_id))
@@ -728,9 +730,9 @@ class MasterCoreController(MasterController):
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
 
-        self._master_communicator.do_basic_action(action_type=200,
-                                                  action=0,
-                                                  extra_parameter=0)
+        self._master_communicator.do_basic_action(BasicAction(action_type=200,
+                                                              action=0,
+                                                              extra_parameter=0))
 
         if self._discover_mode_timer is not None:
             self._discover_mode_timer.cancel()
@@ -742,9 +744,9 @@ class MasterCoreController(MasterController):
             self._discover_mode_timer.cancel()
             self._discover_mode_timer = None
 
-        self._master_communicator.do_basic_action(action_type=200,
-                                                  action=0,
-                                                  extra_parameter=255)
+        self._master_communicator.do_basic_action(BasicAction(action_type=200,
+                                                              action=0,
+                                                              extra_parameter=255))
         self._broadcast_module_discovery()
 
     def module_discover_status(self):  # type: () -> bool
@@ -960,18 +962,18 @@ class MasterCoreController(MasterController):
         addresses_and_none.append(None)
         next_address = next(i for i, e in enumerate(addresses_and_none, 256) if i != e)
         new_address = bytearray([ord(module_type)]) + struct.pack('>I', next_address)[-3:]
-        self._master_communicator.do_basic_action(action_type={'output': 201,
-                                                               'input': 202,
-                                                               'sensor': 203}[module_type_name],
-                                                  action=number_of_modules,  # 0-based, so no +1 needed here
-                                                  device_nr=struct.unpack('>H', new_address[0:2])[0],
-                                                  extra_parameter=struct.unpack('>H', new_address[2:4])[0])
-        self._master_communicator.do_basic_action(action_type=200,
-                                                  action=4,
-                                                  device_nr={'output': 0,
-                                                             'input': 1,
-                                                             'sensor': 2}[module_type_name],
-                                                  extra_parameter=number_of_modules + 1)
+        self._master_communicator.do_basic_action(BasicAction(action_type={'output': 201,
+                                                                           'input': 202,
+                                                                           'sensor': 203}[module_type_name],
+                                                              action=number_of_modules,  # 0-based, so no +1 needed here
+                                                              device_nr=struct.unpack('>H', new_address[0:2])[0],
+                                                              extra_parameter=struct.unpack('>H', new_address[2:4])[0]))
+        self._master_communicator.do_basic_action(BasicAction(action_type=200,
+                                                              action=4,
+                                                              device_nr={'output': 0,
+                                                                         'input': 1,
+                                                                         'sensor': 2}[module_type_name],
+                                                              extra_parameter=number_of_modules + 1))
 
     # Generic
 
@@ -992,7 +994,7 @@ class MasterCoreController(MasterController):
 
     def reset(self):
         # type: () -> None
-        self._master_communicator.do_basic_action(action_type=254, action=0, timeout=None)
+        self._master_communicator.do_basic_action(BasicAction(action_type=254, action=0), timeout=None)
 
     def cold_reset(self, power_on=True):
         # type: (bool) -> None
@@ -1020,7 +1022,8 @@ class MasterCoreController(MasterController):
         data = bytearray()
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         for page in range(pages):
-            data += self._memory_files[MemoryTypes.EEPROM].read_page(page)
+            page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=page, offset=0, length=page_length)
+            data += self._memory_file.read([page_address])[page_address]
         return ''.join(str(chr(entry)) for entry in data)
 
     def restore(self, data):
@@ -1045,7 +1048,8 @@ class MasterCoreController(MasterController):
         current_page = amount_of_pages - 1
         while current_page >= 0:
             try:
-                self._memory_files[MemoryTypes.EEPROM].write_page(current_page, data[current_page])
+                page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=current_page, offset=0, length=page_length)
+                self._memory_file.write({page_address: data[current_page]})
                 current_page -= 1
             except CommunicationTimedOutException:
                 if page_retry == current_page:
@@ -1069,9 +1073,9 @@ class MasterCoreController(MasterController):
 
     def set_all_lights_off(self):
         # type: () -> None
-        self._master_communicator.do_basic_action(action_type=0,
-                                                  action=255,
-                                                  device_nr=1)
+        self._master_communicator.do_basic_action(BasicAction(action_type=0,
+                                                              action=255,
+                                                              device_nr=1))
 
     def set_all_lights_floor_off(self, floor):
         # type: (int) -> None
