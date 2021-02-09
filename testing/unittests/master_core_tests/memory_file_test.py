@@ -24,7 +24,7 @@ from ioc import SetTestMode
 from master.core.memory_file import MemoryTypes
 from master.core.memory_types import MemoryAddress
 from logs import Logs
-from virtual_core_helper import VirtualCore
+from mocked_core_helper import MockedCore
 
 
 class MemoryFileTest(unittest.TestCase):
@@ -36,8 +36,8 @@ class MemoryFileTest(unittest.TestCase):
         Logs.setup_logger(log_level=logging.DEBUG)
 
     def test_data_consistency(self):
-        virtual_core = VirtualCore()
-        memory = virtual_core.memory[MemoryTypes.EEPROM]
+        mocked_core = MockedCore()
+        memory = mocked_core.memory[MemoryTypes.EEPROM]
 
         memory[5] = bytearray([255] * 256)
         memory[5][10] = 1
@@ -45,11 +45,11 @@ class MemoryFileTest(unittest.TestCase):
         memory[5][12] = 3
         address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=5, offset=10, length=3)
 
-        data = virtual_core.memory_file.read([address])[address]
+        data = mocked_core.memory_file.read([address])[address]
         self.assertEqual(bytearray([1, 2, 3]), data)
-        virtual_core.memory_file.write({address: bytearray([6, 7, 8])})
+        mocked_core.memory_file.write({address: bytearray([6, 7, 8])})
         self.assertEqual(bytearray([1, 2, 3]), memory[5][10:13])
-        virtual_core.memory_file.activate()  # Only save on activate
+        mocked_core.memory_file.activate()  # Only save on activate
         self.assertEqual(bytearray([6, 7, 8]), memory[5][10:13])
 
 

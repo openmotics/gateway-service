@@ -20,7 +20,7 @@ from gateway.dto import InputDTO
 from gateway.hal.mappers_core import InputMapper
 from master.core.basic_action import BasicAction
 from master.core.memory_models import InputConfiguration, InputModuleConfiguration
-from virtual_core_helper import VirtualCore
+from mocked_core_helper import MockedCore
 
 
 class InputCoreMapperTest(unittest.TestCase):
@@ -29,8 +29,8 @@ class InputCoreMapperTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
-        self.virtual_core = VirtualCore()
-        self.memory = self.virtual_core.memory
+        self.mocked_core = MockedCore()
+        self.memory = self.mocked_core.memory
 
         # Remove read-only flags from device_type for testing purposes below
         if hasattr(InputModuleConfiguration, '_device_type'):

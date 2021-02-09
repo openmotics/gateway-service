@@ -18,7 +18,7 @@ from master.core.core_communicator import BackgroundConsumer
 from master.core.memory_models import InputConfiguration, \
     InputModuleConfiguration, OutputConfiguration, OutputModuleConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
-from virtual_core_helper import VirtualCore
+from mocked_core_helper import MockedCore
 
 
 class MasterCoreControllerTest(unittest.TestCase):
@@ -29,10 +29,10 @@ class MasterCoreControllerTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
-        self.virtual_core = VirtualCore()
-        self.controller = self.virtual_core.controller
-        self.pubsub = self.virtual_core.pubsub
-        self.return_data = self.virtual_core.return_data
+        self.mocked_core = MockedCore()
+        self.controller = self.mocked_core.controller
+        self.pubsub = self.mocked_core.pubsub
+        self.return_data = self.mocked_core.return_data
 
         # For testing purposes, remove read-only flag from certain properties
         for field_name in ['device_type', 'address', 'firmware_version']:

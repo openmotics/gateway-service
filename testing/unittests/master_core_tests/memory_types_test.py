@@ -25,7 +25,7 @@ from master.core.basic_action import BasicAction  # Must be imported
 from master.core.memory_types import *
 from master.core.memory_file import MemoryTypes, MemoryFile
 from logs import Logs
-from virtual_core_helper import VirtualCore
+from mocked_core_helper import MockedCore
 
 logger = logging.getLogger('openmotics')
 
@@ -39,8 +39,8 @@ class MemoryTypesTest(unittest.TestCase):
         Logs.setup_logger(log_level=logging.DEBUG)
 
     def setUp(self):
-        self.virtual_core = VirtualCore(memory_is_cache=True)
-        self.memory = self.virtual_core.memory[MemoryTypes.EEPROM]
+        self.mocked_core = MockedCore(memory_is_cache=True)
+        self.memory = self.mocked_core.memory[MemoryTypes.EEPROM]
 
     def test_memory_field_addressing(self):
         for item in [[(0, 0), 0, TypeError],

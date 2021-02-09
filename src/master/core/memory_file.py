@@ -165,11 +165,12 @@ class MemoryFile(object):
                         else:
                             break
                     # Compare with cache (is anything changed)
-                    cached_data = None
-                    if page in self._eeprom_cache:
-                        cached_data = self._eeprom_cache[page][start:start + len(data)]
-                    if data == cached_data:
-                        continue
+                    if memory_type == MemoryTypes.EEPROM:
+                        cached_data = None
+                        if page in self._eeprom_cache:
+                            cached_data = self._eeprom_cache[page][start:start + len(data)]
+                        if data == cached_data:
+                            continue
                     # Write in chuncks
                     for i in range(0, len(data), MemoryFile.WRITE_CHUNK_SIZE):
                         chunck = data[i:i + MemoryFile.WRITE_CHUNK_SIZE]

@@ -24,7 +24,7 @@ from ioc import SetTestMode
 from master.core.memory_models import *
 from master.core.memory_file import MemoryTypes, MemoryFile, MemoryAddress
 from logs import Logs
-from virtual_core_helper import VirtualCore
+from mocked_core_helper import MockedCore
 
 logger = logging.getLogger('openmotics')
 
@@ -79,8 +79,8 @@ class MemoryModelsTest(unittest.TestCase):
         Logs.setup_logger(log_level=logging.DEBUG)
 
     def setUp(self):
-        self.virtual_core = VirtualCore()
-        self.memory = self.virtual_core.memory
+        self.mocked_core = MockedCore()
+        self.memory = self.mocked_core.memory
         self._memory_access = {MemoryTypes.EEPROM: {}, MemoryTypes.FRAM: {}}
         for memory_type in [MemoryTypes.EEPROM, MemoryTypes.FRAM]:
             for page in range(MemoryFile.SIZES[memory_type][0]):

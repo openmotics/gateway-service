@@ -26,7 +26,7 @@ from master.core.basic_action import BasicAction
 from master.core.group_action import GroupActionController, GroupAction
 from master.core.fields import WordField
 from master.core.memory_file import MemoryTypes
-from virtual_core_helper import VirtualCore
+from mocked_core_helper import MockedCore
 
 
 class GroupActionTest(unittest.TestCase):
@@ -44,8 +44,8 @@ class GroupActionTest(unittest.TestCase):
     def setUp(self):
         self.maxDiff = None
         self._word_helper = WordField('')
-        self.virtual_core = VirtualCore(memory_is_cache=True)
-        self.memory = self.virtual_core.memory[MemoryTypes.EEPROM]
+        self.mocked_core = MockedCore(memory_is_cache=True)
+        self.memory = self.mocked_core.memory[MemoryTypes.EEPROM]
 
     @staticmethod
     def _encode_string(value):

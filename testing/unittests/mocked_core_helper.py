@@ -27,7 +27,7 @@ from master.core.ucan_communicator import UCANCommunicator
 from master.core.slave_communicator import SlaveCommunicator
 
 
-class VirtualCore(object):
+class MockedCore(object):
 
     def __init__(self, memory_is_cache=False):
         self.memory = {MemoryTypes.FRAM: {}, MemoryTypes.EEPROM: {}}
