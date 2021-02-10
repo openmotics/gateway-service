@@ -206,11 +206,10 @@ class CoreCommunicator(object):
             consumers.remove(consumer)
         self.discard_cid(consumer.cid)
 
-    def do_basic_action(self, basic_action, timeout=2, log=True):
-        # type: (BasicAction, Optional[int], bool) -> Optional[Dict[str, Any]]
+    def do_basic_action(self, basic_action, timeout=2):
+        # type: (BasicAction, Optional[int]) -> Optional[Dict[str, Any]]
         """ Sends a basic action to the Core with the given action type and action number """
-        if log:
-            logger.info('BA: Executed {0}'.format(basic_action))
+        logger.info('BA: Executed {0}'.format(basic_action))
         return self.do_command(
             CoreAPI.basic_action(),
             {'type': basic_action.action_type,
