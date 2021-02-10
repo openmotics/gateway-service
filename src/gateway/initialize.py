@@ -259,6 +259,9 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(maintenance_communicator=None)
         Injectable.value(passthrough_service=None)
         Injectable.value(master_controller=MasterDummyController())
+        Injectable.value(eeprom_db=None)
+        from gateway.hal.master_controller_dummy import DummyEepromObject
+        Injectable.value(eeprom_extension=DummyEepromObject())
     elif target_platform in Platform.CoreTypes:
         # FIXME don't create singleton for optional controller?
         from master.core import ucan_communicator, slave_communicator

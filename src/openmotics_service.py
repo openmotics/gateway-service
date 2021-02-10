@@ -162,14 +162,12 @@ class OpenmoticsService(object):
         shutter_controller.run_sync_orm()
 
         # Execute data migration(s)
-        # TODO: Make the master communication work before executing the migrations (needs eeprom use or other)
-        if not System.get_operating_system().get('ID') == System.OS.BUILDROOT:
-            FeatureMigrator.migrate()
-            RoomsMigrator.migrate()
-            InputMigrator.migrate()
-            ScheduleMigrator.migrate()
-            UserMigrator.migrate()
-            ConfigMigrator.migrate()
+        FeatureMigrator.migrate()
+        RoomsMigrator.migrate()
+        InputMigrator.migrate()
+        ScheduleMigrator.migrate()
+        UserMigrator.migrate()
+        ConfigMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()
