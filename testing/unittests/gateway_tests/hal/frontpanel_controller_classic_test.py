@@ -31,46 +31,58 @@ class FrontpanelControllerClassicTest(unittest.TestCase):
 
     def test_serial_activity(self):
         controller = FrontpanelControllerClassicTest._get_controller()
-        for activity, led_state in [(False, False),
-                                    (True, True),
-                                    (True, False),
-                                    (True, True),
-                                    (False, False),
-                                    (False, False)]:
+        for activity, led_state in [(False, FrontpanelController.LedStates.OFF),
+                                    (True, FrontpanelController.LedStates.BLINKING_50),
+                                    (True, FrontpanelController.LedStates.BLINKING_50),
+                                    (False, FrontpanelController.LedStates.OFF),
+                                    (False, FrontpanelController.LedStates.OFF)]:
             controller._report_serial_activity(FrontpanelController.SerialPorts.MASTER_API, activity)
             self.assertEqual(led_state, controller._enabled_leds[FrontpanelController.Leds.COMMUNICATION_2])
 
     def test_report_carrier(self):
         controller = FrontpanelControllerClassicTest._get_controller()
         controller._report_carrier(False)
-        self.assertTrue(controller._enabled_leds[FrontpanelController.Leds.STATUS_RED])
+        self.assertEqual(FrontpanelController.LedStates.SOLID, controller._enabled_leds[FrontpanelController.Leds.STATUS_RED])
         controller._report_carrier(True)
-        self.assertFalse(controller._enabled_leds[FrontpanelController.Leds.STATUS_RED])
+        self.assertEqual(FrontpanelController.LedStates.OFF, controller._enabled_leds[FrontpanelController.Leds.STATUS_RED])
 
     def test_report_network_activity(self):
         controller = FrontpanelControllerClassicTest._get_controller()
-        for activity, led_state in [(False, False),
-                                    (True, True),
-                                    (True, False),
-                                    (True, True),
-                                    (False, False),
-                                    (False, False)]:
+        for activity, led_state in [(False, FrontpanelController.LedStates.OFF),
+                                    (True, FrontpanelController.LedStates.BLINKING_50),
+                                    (True, FrontpanelController.LedStates.BLINKING_50),
+                                    (False, FrontpanelController.LedStates.OFF),
+                                    (False, FrontpanelController.LedStates.OFF)]:
             controller._report_network_activity(activity)
             self.assertEqual(led_state, controller._enabled_leds[FrontpanelController.Leds.ALIVE])
 
     def test_report_cloud_reachable(self):
         controller = FrontpanelControllerClassicTest._get_controller()
         controller._report_cloud_reachable(False)
-        self.assertFalse(controller._enabled_leds[FrontpanelController.Leds.CLOUD])
+        self.assertEqual(FrontpanelController.LedStates.OFF, controller._enabled_leds[FrontpanelController.Leds.CLOUD])
         controller._report_cloud_reachable(True)
-        self.assertTrue(controller._enabled_leds[FrontpanelController.Leds.CLOUD])
+        self.assertEqual(FrontpanelController.LedStates.SOLID, controller._enabled_leds[FrontpanelController.Leds.CLOUD])
 
     def test_report_vpn_open(self):
         controller = FrontpanelControllerClassicTest._get_controller()
         controller._report_vpn_open(False)
-        self.assertFalse(controller._enabled_leds[FrontpanelController.Leds.VPN])
+        self.assertEqual(FrontpanelController.LedStates.OFF, controller._enabled_leds[FrontpanelController.Leds.VPN])
         controller._report_vpn_open(True)
-        self.assertTrue(controller._enabled_leds[FrontpanelController.Leds.VPN])
+        self.assertEqual(FrontpanelController.LedStates.SOLID, controller._enabled_leds[FrontpanelController.Leds.VPN])
+
+    def test_mapping(self):
+        controller = FrontpanelControllerClassicTest._get_controller()
+        led = FrontpanelController.Leds.CLOUD
+        for state, sequence in {FrontpanelController.LedStates.OFF: [False, False, False, False, False, False, False, False],
+                                FrontpanelController.LedStates.SOLID: [True, True, True, True, True, True, True, True],
+                                FrontpanelController.LedStates.BLINKING_25: [True, False, False, False, True, False, False, False],
+                                FrontpanelController.LedStates.BLINKING_50: [True, True, False, False, True, True, False, False],
+                                FrontpanelController.LedStates.BLINKING_75: [True, True, True, False, True, True, True, False]}.items():
+            controller._enabled_leds[led] = state
+            recorded_sequence = []
+            for i in range(8):
+                recorded_sequence.append(controller._map_states().get(led))
+            self.assertEqual(sequence, recorded_sequence)
 
     @staticmethod
     @Scope

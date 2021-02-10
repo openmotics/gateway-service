@@ -81,7 +81,6 @@ class FrontpanelClassicController(FrontpanelController):
         self._poll_button_thread = None
         self._write_leds_thread = None
         self._enabled_leds = {}  # type: Dict[str, str]
-        self._current_leds = {}  # type: Dict[str, bool]
         self._previous_leds = {}  # type: Dict[str, bool]
         self._last_i2c_led_code = None  # type: Optional[int]
         self._button_pressed_since = None  # type: Optional[float]
@@ -173,21 +172,13 @@ class FrontpanelClassicController(FrontpanelController):
             self._enabled_leds[FrontpanelController.Leds.STATUS_RED] = FrontpanelController.LedStates.BLINKING_25
 
         # Map blinking states
-        for led in FrontpanelClassicController.ALL_LEDS:
-            requested_state = self._enabled_leds.get(led, FrontpanelController.LedStates.OFF)
-            if requested_state == FrontpanelController.LedStates.OFF:
-                self._current_leds[led] = False
-            else:
-                self._current_leds[led] = self._blink_counter in FrontpanelClassicController.BLINK_SEQUENCE[requested_state]
-        self._blink_counter += 1
-        if self._blink_counter >= 4:
-            self._blink_counter = 0
+        current_leds = self._map_states()
 
         # Drive I2C leds
         try:
             code = 0x0
             for led in FrontpanelClassicController.I2C_LED_CONFIG:
-                if self._current_leds.get(led, False) is True:
+                if current_leds.get(led, False) is True:
                     code |= FrontpanelClassicController.I2C_LED_CONFIG[led]
             if self._authorized_mode:
                 # Light all leds in authorized mode
@@ -207,7 +198,7 @@ class FrontpanelClassicController(FrontpanelController):
         # Drive GPIO leds
         try:
             for led in FrontpanelClassicController.GPIO_LED_CONFIG:
-                on = self._current_leds.get(led, False)
+                on = current_leds.get(led, False)
                 if self._previous_leds.get(led) != on:
                     self._previous_leds[led] = on
                     try:
@@ -218,3 +209,16 @@ class FrontpanelClassicController(FrontpanelController):
                         pass  # The GPIO doesn't exist or is read only
         except Exception as ex:
             logger.error('Error while writing to GPIO: {0}'.format(ex))
+
+    def _map_states(self):  # type: () -> Dict[str, bool]
+        current_leds = {}  # type: Dict[str, bool]
+        for led in FrontpanelClassicController.ALL_LEDS:
+            requested_state = self._enabled_leds.get(led, FrontpanelController.LedStates.OFF)
+            if requested_state == FrontpanelController.LedStates.OFF:
+                current_leds[led] = False
+            else:
+                current_leds[led] = self._blink_counter in FrontpanelClassicController.BLINK_SEQUENCE[requested_state]
+        self._blink_counter += 1
+        if self._blink_counter >= 4:
+            self._blink_counter = 0
+        return current_leds
