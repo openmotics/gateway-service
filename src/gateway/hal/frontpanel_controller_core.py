@@ -259,8 +259,7 @@ class FrontpanelCoreController(FrontpanelController):
             self._master_communicator.do_basic_action(BasicAction(action_type=210,
                                                                   action=action,
                                                                   device_nr=1 if on else 0,
-                                                                  extra_parameter=extra_parameter),
-                                                      log=False)
+                                                                  extra_parameter=extra_parameter))
             self._led_drive_states[led] = on, mode
 
 
