@@ -29,7 +29,7 @@ from playhouse.signals import Model, post_save
 import constants
 
 if False:  # MYPY
-    from typing import Dict, List, Optional, Any
+    from typing import Dict, List, Any
     T = TypeVar('T')
 
 logger = logging.getLogger('openmotics')
@@ -368,8 +368,14 @@ class Thermostat(BaseModel):
     thermostat_group = ForeignKeyField(ThermostatGroup, backref='thermostats', on_delete='CASCADE')
 
     def get_preset(self, preset_type):  # type: (str) -> Preset
-        return Preset.get((Preset.type == preset_type) &
-                          (Preset.thermostat_id == self.id))
+        if preset_type not in Preset.ALL_TYPES:
+            raise ValueError('Preset type `{0}` unknown'.format(preset_type))
+        preset = Preset.get_or_none((Preset.type == preset_type) &
+                                    (Preset.thermostat_id == self.id))
+        if preset is None:
+            preset = Preset(thermostat=self, type=preset_type)
+            preset.save()
+        return preset
 
     @property
     def setpoint(self):
@@ -457,6 +463,10 @@ class Preset(BaseModel):
         VACATION = 'vacation'
         PARTY = 'party'
 
+    ALL_TYPES = [Types.MANUAL, Types.SCHEDULE, Types.AWAY, Types.VACATION, Types.PARTY]
+    DEFAULT_PRESET_TYPES = [Types.AWAY, Types.VACATION, Types.PARTY]
+    DEFAULT_PRESETS = {ThermostatGroup.Modes.HEATING: dict(zip(DEFAULT_PRESET_TYPES, [16.0, 15.0, 22.0])),
+                       ThermostatGroup.Modes.COOLING: dict(zip(DEFAULT_PRESET_TYPES, [25.0, 38.0, 25.0]))}
     TYPE_TO_SETPOINT = {Types.AWAY: 3,
                         Types.VACATION: 4,
                         Types.PARTY: 5}
@@ -472,6 +482,10 @@ class Preset(BaseModel):
 
 
 class DaySchedule(BaseModel):
+    DEFAULT_SCHEDULE_TIMES = [0, 7 * 3600, 9 * 3600, 17 * 3600, 22 * 3600]
+    DEFAULT_SCHEDULE = {ThermostatGroup.Modes.HEATING: dict(zip(DEFAULT_SCHEDULE_TIMES, [16.0, 20.0, 16.0, 21.0, 16.0])),
+                        ThermostatGroup.Modes.COOLING: dict(zip(DEFAULT_SCHEDULE_TIMES, [25.0, 24.0, 25.0, 23.0, 25.0]))}
+
     id = AutoField()
     index = IntegerField()
     content = TextField()
@@ -501,12 +515,20 @@ class DaySchedule(BaseModel):
 def on_thermostat_save_handler(model_class, instance, created):
     _ = model_class
     if created:
-        for preset_type in [Preset.Types.MANUAL, Preset.Types.SCHEDULE, Preset.Types.AWAY,
-                            Preset.Types.VACATION, Preset.Types.PARTY]:
+        for preset_type in Preset.ALL_TYPES:
             try:
                 preset = Preset.get(type=preset_type, thermostat=instance)
             except DoesNotExist:
                 preset = Preset(type=preset_type, thermostat=instance)
+                if preset_type in Preset.DEFAULT_PRESET_TYPES:
+                    preset.heating_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.HEATING][preset_type]
+                    preset.cooling_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.COOLING][preset_type]
+            preset.active = False
             if preset_type == Preset.Types.SCHEDULE:
                 preset.active = True
             preset.save()
+        for mode in [ThermostatGroup.Modes.HEATING, ThermostatGroup.Modes.COOLING]:
+            for day_index in range(7):
+                day_schedule = DaySchedule(thermostat=instance, index=day_index, mode=mode)
+                day_schedule.schedule_data = DaySchedule.DEFAULT_SCHEDULE[mode]
+                day_schedule.save()
