@@ -47,11 +47,9 @@ class Logs(object):
         requests_logger.setLevel(logging.WARNING)
 
         # Prepare extra handlers
-        openmotics_stream_handler = None
-        if log_level != logging.INFO:
-            openmotics_stream_handler = logging.StreamHandler()
-            openmotics_stream_handler.setLevel(log_level)
-            openmotics_stream_handler.setFormatter(logging.Formatter(Logs.LOG_FORMAT))
+        openmotics_stream_handler = logging.StreamHandler()
+        openmotics_stream_handler.setLevel(log_level)
+        openmotics_stream_handler.setFormatter(logging.Formatter(Logs.LOG_FORMAT))
 
         update_handler = None
         if enable_update_logging:
@@ -69,10 +67,7 @@ class Logs(object):
         for logger_namespace in ['openmotics', 'gateway']:
             _logger = logging.getLogger(logger_namespace)
             _logger.setLevel(openmotics_log_level)
-
-            if openmotics_stream_handler is not None:
-                # Don't use the parent handlers, as a new StreamHandler will be added
-                _logger.propagate = False
+            _logger.propagate = False
 
             for extra_handler in [openmotics_stream_handler, update_handler, syslog_handler]:
                 # Add extra handlers, where available
