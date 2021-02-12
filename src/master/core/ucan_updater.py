@@ -57,20 +57,6 @@ class UCANUpdater(object):
                                                                     cc_address,
                                                                     'v{0}'.format(version) if version is not None else 'unknown version'))
 
-            current_version = None
-            try:
-                response = ucan_communicator.do_command(cc_address, UCANAPI.get_version(), ucan_address, {})
-                if response is None:
-                    raise RuntimeError()
-                current_version = response['firmware_version']
-                logger.info('Current uCAN version: v{0}'.format(current_version))
-            except Exception:
-                logger.warning('Could not load uCAN version')
-
-            if current_version == version:
-                logger.info('uCAN already up-to-date. Skipping')
-                return True
-
             if not os.path.exists(hex_filename):
                 raise RuntimeError('The given path does not point to an existing file')
             intel_hex = IntelHex(hex_filename)
@@ -81,8 +67,22 @@ class UCANUpdater(object):
                 raise RuntimeError('uCAN did not respond')
 
             if in_bootloader:
-                logger.info('Bootloader active')
+                logger.info('Bootloader already active, skipping version check')
             else:
+                current_version = None
+                try:
+                    response = ucan_communicator.do_command(cc_address, UCANAPI.get_version(), ucan_address, {})
+                    if response is None:
+                        raise RuntimeError()
+                    current_version = response['firmware_version']
+                    logger.info('Current uCAN version: v{0}'.format(current_version))
+                except Exception:
+                    logger.warning('Could not load uCAN version')
+
+                if current_version == version:
+                    logger.info('uCAN already up-to-date. Skipping')
+                    return True
+
                 logger.info('Bootloader not active, switching to bootloader')
                 ucan_communicator.do_command(cc_address, UCANAPI.set_bootloader_timeout(SID.NORMAL_COMMAND), ucan_address, {'timeout': UCANUpdater.BOOTLOADER_TIMEOUT_UPDATE})
                 response = ucan_communicator.do_command(cc_address, UCANAPI.reset(SID.NORMAL_COMMAND), ucan_address, {}, timeout=10)
