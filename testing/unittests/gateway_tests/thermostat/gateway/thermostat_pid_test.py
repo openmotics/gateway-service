@@ -20,14 +20,14 @@ import mock
 import logging
 from peewee import SqliteDatabase
 
-from gateway.models import Output, Valve, Thermostat, ThermostatGroup, Sensor, Preset, ValveToThermostat
+from gateway.models import Output, Valve, Thermostat, ThermostatGroup, Sensor, Preset, ValveToThermostat, DaySchedule
 from gateway.gateway_api import GatewayApi
 from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
 from gateway.thermostat.gateway.thermostat_pid import ThermostatPid, PID
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 
-MODELS = [Thermostat, ThermostatGroup, Sensor, Preset, ValveToThermostat, Valve, Output]
+MODELS = [Thermostat, ThermostatGroup, Sensor, Preset, ValveToThermostat, Valve, Output, DaySchedule]
 
 
 class PumpValveControllerTest(unittest.TestCase):
