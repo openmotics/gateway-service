@@ -52,7 +52,6 @@ from master.core.memory_models import CanControlModuleConfiguration, \
 from master.core.memory_types import MemoryAddress
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.system_value import Humidity, Temperature
-from master.core.ucan_communicator import UCANCommunicator
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 
 if False:  # MYPY
@@ -66,11 +65,10 @@ logger = logging.getLogger("openmotics")
 class MasterCoreController(MasterController):
 
     @Inject
-    def __init__(self, master_communicator=INJECTED, ucan_communicator=INJECTED, slave_communicator=INJECTED, memory_file=INJECTED, pubsub=INJECTED):
-        # type: (CoreCommunicator, UCANCommunicator, SlaveCommunicator, MemoryFile, PubSub) -> None
+    def __init__(self, master_communicator=INJECTED, slave_communicator=INJECTED, memory_file=INJECTED, pubsub=INJECTED):
+        # type: (CoreCommunicator, SlaveCommunicator, MemoryFile, PubSub) -> None
         super(MasterCoreController, self).__init__(master_communicator)
         self._master_communicator = master_communicator
-        self._ucan_communicator = ucan_communicator
         self._slave_communicator = slave_communicator
         self._memory_file = memory_file
         self._pubsub = pubsub

@@ -23,7 +23,7 @@ def watch(port):
         buffer = ''
         while True:
             buffer += serial.read(1)
-            if buffer.endswith('\r\n\r\n'):
+            if buffer.endswith('\r\n'):
                 _print(buffer)
                 buffer = ''
     except KeyboardInterrupt:
