@@ -22,7 +22,6 @@ import subprocess
 import sys
 import constants
 
-from six.moves.configparser import ConfigParser
 if False:  # MYPY
     from typing import Union
 

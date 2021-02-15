@@ -108,10 +108,14 @@ BA_LIGHT_ON_TIMER_2220_NO_OVERRULE = 205
 BA_LIGHT_ON_TIMER_3120_NO_OVERRULE = 206
 
 
-def basic_action():
+def basic_action(master_version):
     """ Basic actions. """
+    if master_version < (3, 143, 113):
+        return MasterCommandSpec('BA',
+                                 [Field.byte('action_type'), Field.byte('action_number'), Field.padding(11)],
+                                 [Field.string('resp', 2), Field.padding(11), Field.lit('\r\n')])
     return MasterCommandSpec('BA',
-                             [Field.byte('action_type'), Field.byte('action_number'), Field.padding(11)],
+                             [Field.byte('action_type'), Field.byte('action_number'), Field.byte('parameter'), Field.padding(10)],
                              [Field.string('resp', 2), Field.padding(11), Field.lit('\r\n')])
 
 

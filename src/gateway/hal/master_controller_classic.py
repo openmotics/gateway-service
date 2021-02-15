@@ -474,39 +474,24 @@ class MasterClassicController(MasterController):
                     dimmer_action = master_api.BA_DIMMER_MAX
                 else:
                     dimmer_action = getattr(master_api, 'BA_LIGHT_ON_DIMMER_{0}'.format(dimmer))
-                self._master_communicator.do_command(
-                    master_api.basic_action(),
-                    {'action_type': dimmer_action, 'action_number': output_id}
-                )
+                self.do_basic_action(dimmer_action, output_id)
 
         if not state:
-            self._master_communicator.do_command(
-                master_api.basic_action(),
-                {'action_type': master_api.BA_LIGHT_OFF, 'action_number': output_id}
-            )
+            self.do_basic_action(master_api.BA_LIGHT_OFF, output_id)
             return
 
-        self._master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_LIGHT_ON, 'action_number': output_id}
-        )
+        self.do_basic_action(master_api.BA_LIGHT_ON, output_id)
 
         if timer is not None:
             timer_action = getattr(master_api, 'BA_LIGHT_ON_TIMER_{0}_OVERRULE'.format(timer))
-            self._master_communicator.do_command(
-                master_api.basic_action(),
-                {'action_type': timer_action, 'action_number': output_id}
-            )
+            self.do_basic_action(timer_action, output_id)
 
     @communication_enabled
     def toggle_output(self, output_id):
         if output_id is None or output_id < 0 or output_id > 240:
             raise ValueError('Output ID {0} not in range 0 <= id <= 240'.format(output_id))
 
-        self._master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_LIGHT_TOGGLE, 'action_number': output_id}
-        )
+        self.do_basic_action(master_api.BA_LIGHT_TOGGLE, output_id)
 
     @communication_enabled
     def load_output(self, output_id):  # type: (int) -> OutputDTO
@@ -577,16 +562,24 @@ class MasterClassicController(MasterController):
     # Shutters
 
     @communication_enabled
-    def shutter_up(self, shutter_id):  # type: (int) -> None
-        self._master_communicator.do_basic_action(master_api.BA_SHUTTER_UP, shutter_id)
+    def shutter_up(self, shutter_id, timer=None):  # type: (int, Optional[int]) -> None
+        if timer is not None:
+            if self._master_version < (3, 143, 113):
+                raise NotImplementedError('Shutter up with a timer is not supported on Master version {0}'.format(self._master_version))
+            self.do_basic_action(master_api.BA_SHUTTER_UP, shutter_id, parameter=timer)
+        self.do_basic_action(master_api.BA_SHUTTER_UP, shutter_id)
 
     @communication_enabled
-    def shutter_down(self, shutter_id):  # type: (int) -> None
-        self._master_communicator.do_basic_action(master_api.BA_SHUTTER_DOWN, shutter_id)
+    def shutter_down(self, shutter_id, timer=None):  # type: (int, Optional[int]) -> None
+        if timer is not None:
+            if self._master_version < (3, 143, 113):
+                raise NotImplementedError('Shutter down with a timer is not supported on Master version {0}'.format(self._master_version))
+            self.do_basic_action(master_api.BA_SHUTTER_DOWN, shutter_id, parameter=timer)
+        self.do_basic_action(master_api.BA_SHUTTER_DOWN, shutter_id)
 
     @communication_enabled
     def shutter_stop(self, shutter_id):  # type: (int) -> None
-        self._master_communicator.do_basic_action(master_api.BA_SHUTTER_STOP, shutter_id)
+        self.do_basic_action(master_api.BA_SHUTTER_STOP, shutter_id)
 
     @communication_enabled
     def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
@@ -660,31 +653,33 @@ class MasterClassicController(MasterController):
         return states
 
     @communication_enabled
-    def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
+    def shutter_group_up(self, shutter_group_id, timer=None):  # type: (int) -> None
         if not (0 <= shutter_group_id <= 30):
             raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
-        self._master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_SHUTTER_GROUP_UP, 'action_number': shutter_group_id}
-        )
+
+        if timer is not None:
+            if self._master_version < (3, 143, 113):
+                raise NotImplementedError(
+                    'Shutter group up with a timer is not supported on Master version {0}'.format(self._master_version))
+            self.do_basic_action(master_api.BA_SHUTTER_GROUP_UP, shutter_group_id, parameter=timer)
+        self.do_basic_action(master_api.BA_SHUTTER_GROUP_UP, shutter_group_id)
 
     @communication_enabled
-    def shutter_group_down(self, shutter_group_id):  # type: (int) -> None
+    def shutter_group_down(self, shutter_group_id, timer=None):  # type: (int) -> None
         if not (0 <= shutter_group_id <= 30):
             raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
-        self._master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_SHUTTER_GROUP_DOWN, 'action_number': shutter_group_id}
-        )
+        if timer is not None:
+            if self._master_version < (3, 143, 113):
+                raise NotImplementedError(
+                    'Shutter group down with a timer is not supported on Master version {0}'.format(self._master_version))
+            self.do_basic_action(master_api.BA_SHUTTER_GROUP_UP, shutter_group_id, parameter=timer)
+        self.do_basic_action(master_api.BA_SHUTTER_GROUP_UP, shutter_group_id)
 
     @communication_enabled
     def shutter_group_stop(self, shutter_group_id):  # type: (int) -> None
         if not (0 <= shutter_group_id <= 30):
             raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
-        self._master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_SHUTTER_GROUP_STOP, 'action_number': shutter_group_id}
-        )
+        self.do_basic_action(master_api.BA_SHUTTER_GROUP_STOP, shutter_group_id)
 
     @communication_enabled
     def load_shutter_group(self, shutter_group_id):  # type: (int) -> ShutterGroupDTO
@@ -708,29 +703,29 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def set_thermostat_mode(self, mode):
         # type: (int) -> None
-        self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_MODE, mode)
+        self.do_basic_action(master_api.BA_THERMOSTAT_MODE, mode)
 
     @communication_enabled
     def set_thermostat_cooling_heating(self, mode):
         # type: (int) -> None
-        self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_COOLING_HEATING, mode)
+        self.do_basic_action(master_api.BA_THERMOSTAT_COOLING_HEATING, mode)
 
     @communication_enabled
     def set_thermostat_automatic(self, action_number):
         # type: (int) -> None
-        self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_AUTOMATIC, action_number)
+        self.do_basic_action(master_api.BA_THERMOSTAT_AUTOMATIC, action_number)
 
     @communication_enabled
     def set_thermostat_all_setpoints(self, setpoint):
         # type: (int) -> None
-        self._master_communicator.do_basic_action(
+        self.do_basic_action(
             getattr(master_api, 'BA_ALL_SETPOINT_{0}'.format(setpoint)), 0
         )
 
     @communication_enabled
     def set_thermostat_setpoint(self, thermostat_id, setpoint):
         # type: (int, int) -> None
-        self._master_communicator.do_basic_action(
+        self.do_basic_action(
             getattr(master_api, 'BA_ONE_SETPOINT_{0}'.format(setpoint)), thermostat_id
         )
 
@@ -747,12 +742,12 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def set_thermostat_tenant_auto(self, thermostat_id):
         # type: (int) -> None
-        self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_TENANT_AUTO, thermostat_id)
+        self.do_basic_action(master_api.BA_THERMOSTAT_TENANT_AUTO, thermostat_id)
 
     @communication_enabled
     def set_thermostat_tenant_manual(self, thermostat_id):
         # type: (int) -> None
-        self._master_communicator.do_basic_action(master_api.BA_THERMOSTAT_TENANT_MANUAL, thermostat_id)
+        self.do_basic_action(master_api.BA_THERMOSTAT_TENANT_MANUAL, thermostat_id)
 
     @communication_enabled
     def get_thermostats(self):
@@ -773,7 +768,7 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def set_airco_status(self, thermostat_id, airco_on):
         # type: (int, bool) -> None
-        self._master_communicator.do_basic_action(
+        self.do_basic_action(
             master_api.BA_THERMOSTAT_AIRCO_STATUS, thermostat_id + (0 if airco_on else 100)
         )
 
@@ -1298,7 +1293,7 @@ class MasterClassicController(MasterController):
     @Inject
     def power_cycle_bus(self, power_communicator=INJECTED):
         """ Turns the power of both bussed off for 5 seconds """
-        self._master_communicator.do_basic_action(master_api.BA_POWER_CYCLE_BUS, 0)
+        self.do_basic_action(master_api.BA_POWER_CYCLE_BUS, 0)
         if power_communicator:
             power_communicator.reset_communication_statistics()  # TODO cleanup, use an event instead?
 
@@ -1462,21 +1457,20 @@ class MasterClassicController(MasterController):
         :returns: empty dict.
         """
         on = 1 if status is True else 0
-        self._master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_STATUS_LEDS, 'action_number': on}
-        )
+        self.do_basic_action(master_api.BA_STATUS_LEDS, on)
         return dict()
 
     # (Group)Actions
 
     @communication_enabled
-    def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
+    def do_basic_action(self, action_type, action_number, parameter=0, timeout=2):  # type: (int, int, int, int) -> Union[T_co, Dict[str,Any]]
         """
         Execute a basic action.
 
         :param action_type: The type of the action as defined by the master api.
         :param action_number: The number provided to the basic action, its meaning depends on the action_type.
+        :param parameter: An (optional) parameter for the basic action
+        :param timeout: An (optional) timeout for the basic action
         """
         if action_type < 0 or action_type > 254:
             raise ValueError('action_type not in [0, 254]: %d' % action_type)
@@ -1484,22 +1478,18 @@ class MasterClassicController(MasterController):
         if action_number < 0 or action_number > 254:
             raise ValueError('action_number not in [0, 254]: %d' % action_number)
 
-        self._master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': action_type,
-             'action_number': action_number}
-        )
+        logger.info('BA: Execute {0} {1} {2}'.format(action_type, action_number, parameter))
+        self._master_communicator.do_command(master_api.basic_action(self._master_version),
+                                             fields={'action_type': action_type,
+                                                     'action_number': action_number,
+                                                     'parameter': parameter},
+                                             timeout=timeout)
 
     @communication_enabled
     def do_group_action(self, group_action_id):  # type: (int) -> None
         if group_action_id < 0 or group_action_id > 159:
             raise ValueError('group_action_id not in [0, 160]: %d' % group_action_id)
-
-        self._master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_GROUP_ACTION,
-             'action_number': group_action_id}
-        )
+        self.do_basic_action(master_api.BA_GROUP_ACTION, group_action_id)
 
     @communication_enabled
     def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
@@ -1590,28 +1580,19 @@ class MasterClassicController(MasterController):
     def set_all_lights_off(self):
         # type: () -> None
         """ Turn all lights off. """
-        self._master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_ALL_LIGHTS_OFF, 'action_number': 0}
-        )
+        self.do_basic_action(master_api.BA_ALL_LIGHTS_OFF, 0)
 
     @communication_enabled
     def set_all_lights_floor_off(self, floor):
         # type: (int) -> None
         """ Turn all lights on a given floor off. """
-        self._master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_LIGHTS_OFF_FLOOR, 'action_number': floor}
-        )
+        self.do_basic_action(master_api.BA_LIGHTS_OFF_FLOOR, floor)
 
     @communication_enabled
     def set_all_lights_floor_on(self, floor):
         # type: (int) -> None
         """ Turn all lights on a given floor on. """
-        self._master_communicator.do_command(
-            master_api.basic_action(),
-            {'action_type': master_api.BA_LIGHTS_ON_FLOOR, 'action_number': floor}
-        )
+        self.do_basic_action(master_api.BA_LIGHTS_ON_FLOOR, floor)
 
     # Sensors
 

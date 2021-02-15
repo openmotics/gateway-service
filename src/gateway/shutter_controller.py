@@ -73,6 +73,7 @@ class ShutterController(BaseController):
         self._desired_positions = {}  # type: Dict[int, Optional[int]]
         self._directions = {}  # type: Dict[int, str]
         self._states = {}  # type: Dict[int, Tuple[float, str]]
+        self._position_accuracy = {}  # type: Dict[int, float]
 
         self._verbose = verbose
         self._config_lock = Lock()
@@ -106,6 +107,7 @@ class ShutterController(BaseController):
                     self._actual_positions[shutter_id] = None
                     self._desired_positions[shutter_id] = None
                     self._directions[shutter_id] = ShutterEnums.Direction.STOP
+                    self._position_accuracy[shutter_id] = 100 if shutter_dto.steps else 0
 
             for shutter_id in list(self._shutters.keys()):
                 if shutter_id not in shutter_ids:
@@ -114,6 +116,7 @@ class ShutterController(BaseController):
                     del self._actual_positions[shutter_id]
                     del self._desired_positions[shutter_id]
                     del self._directions[shutter_id]
+                    del self._position_accuracy[shutter_id]
 
     # Allow shutter positions to be reported
 
@@ -240,7 +243,13 @@ class ShutterController(BaseController):
         # Fetch and validate data
         shutter = self._get_shutter(shutter_id)
         steps = ShutterController._get_steps(shutter)
-        ShutterController._validate_position(shutter_id, desired_position, steps)
+        timer = None
+
+        if steps is None:
+            # we use a percentage (steps=100) to mimic the steps
+            timer = self._calculate_shutter_timer(shutter_id, desired_position, steps=100)
+        else:
+            ShutterController._validate_position(shutter_id, desired_position, steps)
 
         actual_position = self._actual_positions[shutter_id]
         if actual_position is None:
@@ -254,7 +263,7 @@ class ShutterController(BaseController):
 
         self._desired_positions[shutter_id] = desired_position
         self._directions[shutter_id] = direction
-        self._execute_shutter(shutter_id, direction)
+        self._execute_shutter(shutter_id, direction, timer=timer)
 
     def shutter_stop(self, shutter_id):  # type: (int) -> None
         # Validate data
@@ -271,13 +280,18 @@ class ShutterController(BaseController):
     def _shutter_goto_direction(self, shutter_id, direction, desired_position=None):
         # type: (int, str, Optional[int]) -> None
         # Fetch and validate data
+        timer = None
         shutter = self._get_shutter(shutter_id)
         steps = ShutterController._get_steps(shutter)
 
-        if desired_position is not None:
-            ShutterController._validate_position(shutter_id, desired_position, steps)
-        else:
+        if desired_position is None:
             desired_position = ShutterController._get_limit(direction, steps)
+        else:
+            if steps is None:
+                # we use a percentage (steps=100) to mimic the steps
+                timer = self._calculate_shutter_timer(shutter_id, desired_position, steps=100)
+            else:
+                ShutterController._validate_position(shutter_id, desired_position, steps)
 
         self._log('Shutter {0} setting direction to {1} {2}'.format(
             shutter_id, direction,
@@ -286,15 +300,43 @@ class ShutterController(BaseController):
 
         self._desired_positions[shutter_id] = desired_position
         self._directions[shutter_id] = direction
-        self._execute_shutter(shutter_id, direction)
+        self._execute_shutter(shutter_id, direction, timer=timer)
 
-    def _execute_shutter(self, shutter_id, direction):  # type: (int, str) -> None
-        if direction == ShutterEnums.Direction.UP:
-            self._master_controller.shutter_up(shutter_id)
-        elif direction == ShutterEnums.Direction.DOWN:
-            self._master_controller.shutter_down(shutter_id)
-        elif direction == ShutterEnums.Direction.STOP:
+    def _calculate_shutter_timer(self, shutter_id, desired_position, steps=100):
+        ShutterController._validate_position(shutter_id, desired_position, steps)
+        shutter = self._get_shutter(shutter_id)
+        if self._actual_positions[shutter_id] is None:
+            self.reset_shutter(shutter_id)
+        delta_position = desired_position - self._actual_positions[shutter_id]
+        direction = self._get_direction(self._actual_positions[shutter_id], desired_position)
+        configured_timer = getattr(shutter, 'timer_{0}'.format(direction.lower()))
+        timer = int(delta_position / float(steps) * configured_timer)
+        return timer
+
+    def _execute_shutter(self, shutter_id, direction, timer=None):  # type: (int, str, Optional[int]) -> None
+        if direction == ShutterEnums.Direction.STOP or timer == 0:
             self._master_controller.shutter_stop(shutter_id)
+        else:
+            if timer is not None and self._position_accuracy[shutter_id] <= 0:
+                self.reset_shutter(shutter_id)
+            if direction == ShutterEnums.Direction.UP:
+                self._master_controller.shutter_up(shutter_id, timer=timer)
+            elif direction == ShutterEnums.Direction.DOWN:
+                self._master_controller.shutter_down(shutter_id, timer=timer)
+            if timer is not None:
+                self._position_accuracy[shutter_id] = self._position_accuracy[shutter_id] - 10
+
+    def reset_shutter(self, shutter_id): # type: (int) -> None
+        # reset shutter to known state
+        shutter = self._get_shutter(shutter_id)
+        configured_timer = getattr(shutter, 'timer_up')
+        start = time.time()
+        self._execute_shutter(shutter_id, ShutterEnums.Direction.UP)
+        while self._actual_positions[shutter_id] != 0:
+            if time.time() - start > configured_timer * 1.1:
+                raise RuntimeError('Timer expired when resetting shutter, could not get actual position')
+            time.sleep(1)
+        self._position_accuracy[shutter_id] = 100
 
     # Internal checks and validators
 
@@ -386,14 +428,20 @@ class ShutterController(BaseController):
                     self._log('Shutter {0} is time-based but has no valid timer. New state {1}'.format(shutter_id, ShutterEnums.State.STOPPED))
                     new_state = ShutterEnums.State.STOPPED
                 else:
-                    threshold = 0.90 * timer  # Allow 10% difference
                     elapsed_time = time.time() - current_state_timestamp
-                    if elapsed_time >= threshold:  # The shutter was going up/down for the whole `timer`. So it's now up/down
+                    threshold_timer = 0.95 * timer  # Allow 5% difference
+                    if elapsed_time >= threshold_timer:  # The shutter was going up/down for the whole `timer`. So it's now up/down
                         self._log('Shutter {0} going {1} passed time threshold. New state {2}'.format(shutter_id, direction, ShutterController.DIRECTION_END_STATE_MAP[direction]))
                         new_state = ShutterController.DIRECTION_END_STATE_MAP[direction]
+                        self._actual_positions[shutter_id] = 0 if direction == ShutterEnums.Direction.UP else 100
+                        self._position_accuracy[shutter_id] = 100
                     else:
-                        self._log('Shutter {0} going {1} did not pass time threshold ({2:.2f}s vs {3:.2f}s). New state {4}'.format(shutter_id, direction, elapsed_time, threshold, ShutterEnums.State.STOPPED))
                         new_state = ShutterEnums.State.STOPPED
+                        abs_position_delta = int(elapsed_time / float(timer) * 100.0)
+                        position_delta = -abs_position_delta if direction == ShutterEnums.Direction.UP else abs_position_delta
+                        self._actual_positions[shutter_id] = self._actual_positions[shutter_id] + position_delta
+                        position_accuracy = self._position_accuracy[shutter_id]
+                        self._log('Shutter {0} going {1} for ({2:.2f}s - timer: {3:.2f}s). Delta: {4}%. New state {5}. Position accuracy: {6}'.format(shutter_id, direction, elapsed_time, threshold_timer, position_delta, new_state, position_accuracy))
             else:
                 # Supports position, so state will be calculated on position
                 limit_position = ShutterController._get_limit(direction, steps)
@@ -423,6 +471,7 @@ class ShutterController(BaseController):
         gateway_event = GatewayEvent(event_type=GatewayEvent.Types.SHUTTER_CHANGE,
                                      data={'id': shutter_id,
                                            'status': {'state': shutter_state[1].upper(),
+                                                      'position': self._actual_positions.get(shutter_id),
                                                       'last_change': shutter_state[0]},
                                            'location': {'room_id': Toolbox.nonify(shutter_data.room, 255)}})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
