@@ -440,8 +440,9 @@ class ShutterController(BaseController):
                         new_state = ShutterEnums.State.STOPPED
                         abs_position_delta = elapsed_time / float(timer) * self.TIME_BASED_SHUTTER_STEPS
                         position_delta = -abs_position_delta if direction == ShutterEnums.Direction.UP else abs_position_delta
-                        if self._actual_positions[shutter_id] is not None:
-                            self._actual_positions[shutter_id] = self._actual_positions[shutter_id] + int(position_delta)
+                        actual_position = self._actual_positions[shutter_id]
+                        if actual_position is not None:
+                            self._actual_positions[shutter_id] = actual_position + int(position_delta)
                         else:
                             self._position_accuracy[shutter_id] = 0
                         self._log('Shutter {0} going {1} for {2:.2f}% ({3:.2f}s - timer: {4:.2f}s). New state {5}.'
