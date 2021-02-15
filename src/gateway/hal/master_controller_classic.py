@@ -61,7 +61,7 @@ from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Optional, Tuple
+    from typing import Any, Dict, List, Literal, Optional, Tuple, Union
     from serial import Serial
 
     HEALTH = Literal['success', 'unstable', 'failure']
@@ -97,7 +97,7 @@ class MasterClassicController(MasterController):
         self._synchronization_thread = DaemonThread(name='mastersync',
                                                     target=self._synchronize,
                                                     interval=30, delay=10)
-        self._master_version = None
+        self._master_version = None  # type: Optional[Tuple[int, int, int]]
         self._communication_enabled = True
         self._input_interval = 300
         self._input_last_updated = 0.0
@@ -564,7 +564,7 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def shutter_up(self, shutter_id, timer=None):  # type: (int, Optional[int]) -> None
         if timer is not None:
-            if self._master_version < (3, 143, 113):
+            if self._master_version is None or self._master_version < (3, 143, 113):
                 raise NotImplementedError('Shutter up with a timer is not supported on Master version {0}'.format(self._master_version))
             self.do_basic_action(master_api.BA_SHUTTER_UP, shutter_id, parameter=timer)
         self.do_basic_action(master_api.BA_SHUTTER_UP, shutter_id)
@@ -572,7 +572,7 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def shutter_down(self, shutter_id, timer=None):  # type: (int, Optional[int]) -> None
         if timer is not None:
-            if self._master_version < (3, 143, 113):
+            if self._master_version is None or  self._master_version < (3, 143, 113):
                 raise NotImplementedError('Shutter down with a timer is not supported on Master version {0}'.format(self._master_version))
             self.do_basic_action(master_api.BA_SHUTTER_DOWN, shutter_id, parameter=timer)
         self.do_basic_action(master_api.BA_SHUTTER_DOWN, shutter_id)
@@ -653,23 +653,23 @@ class MasterClassicController(MasterController):
         return states
 
     @communication_enabled
-    def shutter_group_up(self, shutter_group_id, timer=None):  # type: (int) -> None
+    def shutter_group_up(self, shutter_group_id, timer=None):  # type: (int, Optional[int]) -> None
         if not (0 <= shutter_group_id <= 30):
             raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
 
         if timer is not None:
-            if self._master_version < (3, 143, 113):
+            if self._master_version is None or self._master_version < (3, 143, 113):
                 raise NotImplementedError(
                     'Shutter group up with a timer is not supported on Master version {0}'.format(self._master_version))
             self.do_basic_action(master_api.BA_SHUTTER_GROUP_UP, shutter_group_id, parameter=timer)
         self.do_basic_action(master_api.BA_SHUTTER_GROUP_UP, shutter_group_id)
 
     @communication_enabled
-    def shutter_group_down(self, shutter_group_id, timer=None):  # type: (int) -> None
+    def shutter_group_down(self, shutter_group_id, timer=None):  # type: (int, Optional[int]) -> None
         if not (0 <= shutter_group_id <= 30):
             raise ValueError('ShutterGroup ID {0} not in range 0 <= id <= 30'.format(shutter_group_id))
         if timer is not None:
-            if self._master_version < (3, 143, 113):
+            if self._master_version is None or self._master_version < (3, 143, 113):
                 raise NotImplementedError(
                     'Shutter group down with a timer is not supported on Master version {0}'.format(self._master_version))
             self.do_basic_action(master_api.BA_SHUTTER_GROUP_UP, shutter_group_id, parameter=timer)
@@ -1463,7 +1463,7 @@ class MasterClassicController(MasterController):
     # (Group)Actions
 
     @communication_enabled
-    def do_basic_action(self, action_type, action_number, parameter=0, timeout=2):  # type: (int, int, int, int) -> Union[T_co, Dict[str,Any]]
+    def do_basic_action(self, action_type, action_number, parameter=0, timeout=2):  # type: (int, int, int, int) -> None
         """
         Execute a basic action.
 
@@ -1701,7 +1701,7 @@ class MasterClassicController(MasterController):
         bytes_per_call = 11
 
         def load_bits_batch(start_bit):  # type: (int) -> Dict[int, bool]
-            batch = {}
+            batch = {}  # type: Dict[int, bool]
             response = self._master_communicator.do_command(master_api.read_user_information(self._master_version),
                                                             {'information_type': 0, 'number': start_bit})
             for byte_index in range(bytes_per_call):
