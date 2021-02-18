@@ -245,11 +245,11 @@ def _openmotics_api(f, *args, **kwargs):
         status = 503  # Service Unavailable
         data = {'success': False, 'msg': 'maintenance_mode'}
     except CommunicationTimedOutException:
-        logger.exception('Communication timeout during API call %s', f.__name__)
+        logger.error('Communication timeout during API call %s', f.__name__)
         status = 200  # OK
         data = {'success': False, 'msg': 'Internal communication timeout'}
     except CommunicationFailure:
-        logger.exception('Communication failure during API call %s', f.__name__)
+        logger.error('Communication failure during API call %s', f.__name__)
         status = 503  # Service Unavailable
         data = {'success': False, 'msg': 'Internal communication failure'}
     except DoesNotExist as ex:
