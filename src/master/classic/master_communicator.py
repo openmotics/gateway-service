@@ -236,21 +236,6 @@ class MasterCommunicator(object):
                                     [Field.bytes('data', size), Field.lit('\r\n')])
         return self.do_command(command, fields={'data': data}, timeout=timeout)
 
-    def do_basic_action(self, action_type, action_number, timeout=2):
-        # type: (int, int, Union[T_co, int]) -> Union[T_co, Dict[str,Any]]
-        """
-        Sends a basic action to the master with the given action type and action number
-        :param action_type: The action type to execute
-        :param action_number: The action number to execute
-        :returns: dict containing the output fields of the command
-        """
-        logger.info('BA: Execute {0} {1}'.format(action_type, action_number))
-        return self.do_command(
-            master_api.basic_action(),
-            {'action_type': action_type,
-             'action_number': action_number}
-        )
-
     def do_command(self, cmd, fields=None, timeout=2, extended_crc=False):
         # type: (MasterCommandSpec, Optional[Dict[str,Any]], Union[T_co, int], bool) -> Union[T_co, Dict[str, Any]]
         """

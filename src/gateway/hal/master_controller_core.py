@@ -467,15 +467,19 @@ class MasterCoreController(MasterController):
 
     # Shutters
 
-    def shutter_up(self, shutter_id):
-        self._master_communicator.do_basic_action(BasicAction(action_type=10,
-                                                              action=1,
-                                                              device_nr=shutter_id))
+    def shutter_up(self, shutter_id, timer=None):
+        if timer:
+            raise NotImplementedError('Shutter timers are not supported')
+        self._master_communicator.do_basic_action(action_type=10,
+                                                  action=1,
+                                                  device_nr=shutter_id)
 
-    def shutter_down(self, shutter_id):
-        self._master_communicator.do_basic_action(BasicAction(action_type=10,
-                                                              action=2,
-                                                              device_nr=shutter_id))
+    def shutter_down(self, shutter_id, timer=None):
+        if timer:
+            raise NotImplementedError('Shutter timers are not supported')
+        self._master_communicator.do_basic_action(action_type=10,
+                                                  action=2,
+                                                  device_nr=shutter_id)
 
     def shutter_stop(self, shutter_id):
         self._master_communicator.do_basic_action(BasicAction(action_type=10,
