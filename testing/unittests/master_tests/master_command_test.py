@@ -30,6 +30,9 @@ from master.classic.master_command import MasterCommandSpec, Field, OutputFieldT
 class MasterCommandSpecTest(unittest.TestCase):
     """ Tests for :class`MasterCommandSpec` """
 
+    def setUp(self):
+        self.master_version = (3, 143, 103)
+
     def test_encode_byte_field(self):
         """ Test for Field.byte.encode """
         self.assertEqual(bytearray([0]), Field.byte('test').encode(0))
@@ -144,6 +147,20 @@ class MasterCommandSpecTest(unittest.TestCase):
 
         self.assertEqual(21, len(ba_input))
         self.assertEqual(bytearray(b'STRBA\x01\x02\x04' + (b'\x00' * 11) + b'\r\n'), ba_input)
+
+    def test_create_basic_action(self):
+        """ Test for MasterCommandSpec.basic_action """
+        self.master_version = (3, 143, 113)
+        basic_action = MasterCommandSpec('BA',
+                                         [Field.byte('actionType'),
+                                          Field.byte('actionNumber'),
+                                          Field.byte('parameter'),
+                                          Field.padding(10)],
+                                         [])
+        ba_input = basic_action.create_input(1, {"actionType": 2, "actionNumber": 4, "parameter": 9})
+
+        self.assertEqual(21, len(ba_input))
+        self.assertEqual(bytearray(b'STRBA\x01\x02\x04\x09' + (b'\x00' * 10) + b'\r\n'), ba_input)
 
     def test_input_with_crc(self):
         """ Test encoding with crc. """
@@ -284,7 +301,7 @@ class MasterCommandSpecTest(unittest.TestCase):
 
     def test_output_has_crc(self):
         """ Test for MasterCommandSpec.output_has_crc. """
-        self.assertFalse(master_api.basic_action().output_has_crc())
+        self.assertFalse(master_api.basic_action(self.master_version).output_has_crc())
         self.assertTrue(master_api.read_output().output_has_crc())
 
 
