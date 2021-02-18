@@ -391,6 +391,12 @@ class ShutterController(BaseController):
         return steps
 
     @staticmethod
+    def clamp_position(shutter, position):  # type: (ShutterDTO, int) -> int
+        steps = ShutterController._get_steps(shutter)
+        max_position = steps - 1 if steps is not None else ShutterController.TIME_BASED_SHUTTER_STEPS - 1
+        return max(0, min(position, max_position))
+
+    @staticmethod
     def _validate_position(shutter_id, position, steps):  # type: (int, int, Optional[int]) -> None
         if steps is None:
             raise RuntimeError('Shutter {0} does not support positioning'.format(shutter_id))
@@ -439,7 +445,8 @@ class ShutterController(BaseController):
                         self._log('Shutter {0} going {1} passed time threshold. New state {2}'.format(shutter_id, direction, ShutterController.DIRECTION_END_STATE_MAP[direction]))
                         new_state = ShutterController.DIRECTION_END_STATE_MAP[direction]
                         direction_to_check = ShutterEnums.Direction.UP if not shutter.up_down_config else ShutterEnums.Direction.DOWN
-                        self._actual_positions[shutter_id] = 0 if direction == direction_to_check else self.TIME_BASED_SHUTTER_STEPS - 1
+                        new_actual_position = 0 if direction == direction_to_check else self.TIME_BASED_SHUTTER_STEPS - 1
+                        self._actual_positions[shutter_id] = ShutterController.clamp_position(shutter, new_actual_position)
                         self._position_accuracy[shutter_id] = 100
                     else:
                         new_state = ShutterEnums.State.STOPPED
@@ -449,7 +456,8 @@ class ShutterController(BaseController):
                             position_delta = -position_delta
                         actual_position = self._actual_positions[shutter_id]
                         if actual_position is not None:
-                            self._actual_positions[shutter_id] = actual_position + int(position_delta)
+                            new_actual_position = actual_position + int(position_delta)
+                            self._actual_positions[shutter_id] = ShutterController.clamp_position(shutter, new_actual_position)
                             self._position_accuracy[shutter_id] = self._position_accuracy.get(shutter_id, 0) - 10
                         else:
                             self._position_accuracy[shutter_id] = 0
