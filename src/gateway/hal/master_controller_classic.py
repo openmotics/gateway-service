@@ -1478,6 +1478,9 @@ class MasterClassicController(MasterController):
         if action_number < 0 or action_number > 254:
             raise ValueError('action_number not in [0, 254]: %d' % action_number)
 
+        if parameter < 0 or parameter > 240:
+            raise ValueError('parameter not in [0, 240]: %d' % parameter)
+
         logger.info('BA: Execute {0} {1} {2}'.format(action_type, action_number, parameter))
         self._master_communicator.do_command(master_api.basic_action(self._master_version),
                                              fields={'action_type': action_type,

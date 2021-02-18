@@ -65,6 +65,7 @@ class ShutterController(BaseController):
                            ShutterEnums.State.STOPPED: ShutterEnums.Direction.STOP}
 
     TIME_BASED_SHUTTER_STEPS = 100
+    SINGLE_ACTION_ACCURACY_LOSS_PERCENTAGE = 10
 
     @Inject
     def __init__(self, master_controller=INJECTED, verbose=False):  # type: (MasterController, bool) -> None
@@ -247,15 +248,16 @@ class ShutterController(BaseController):
         steps = ShutterController._get_steps(shutter)
         timer = None
 
+        actual_position = self._actual_positions.get(shutter_id)
+        if actual_position is None:
+            raise RuntimeError('Shutter {0} has unknown actual position'.format(shutter_id))
+
         if steps is None:
             ShutterController._validate_position(shutter_id, desired_position, self.TIME_BASED_SHUTTER_STEPS)
             timer = self._calculate_shutter_timer(shutter_id, desired_position)
         else:
             ShutterController._validate_position(shutter_id, desired_position, steps)
 
-        actual_position = self._actual_positions[shutter_id]
-        if actual_position is None:
-            raise RuntimeError('Shutter {0} has unknown actual position'.format(shutter_id))
 
         direction = self._get_direction(actual_position, desired_position)
         if direction == ShutterEnums.Direction.STOP:
@@ -293,6 +295,9 @@ class ShutterController(BaseController):
                 desired_position = ShutterController._get_limit(direction, steps)
         else:
             if steps is None:
+                actual_position = self._actual_positions.get(shutter_id)
+                if actual_position is None:
+                    raise RuntimeError('Shutter {0} has unknown actual position'.format(shutter_id))
                 # we use a percentage (steps=100) to mimic the steps
                 timer = self._calculate_shutter_timer(shutter_id, desired_position)
             else:
@@ -310,8 +315,6 @@ class ShutterController(BaseController):
     def _calculate_shutter_timer(self, shutter_id, desired_position, steps=TIME_BASED_SHUTTER_STEPS):
         ShutterController._validate_position(shutter_id, desired_position, steps)
         shutter = self._get_shutter(shutter_id)
-        if self._actual_positions[shutter_id] is None:
-            raise RuntimeError('Shutter {0} has unknown actual position'.format(shutter_id))
         delta_position = desired_position - self._actual_positions[shutter_id]
         direction = self._get_direction(self._actual_positions[shutter_id], desired_position)
         if direction == ShutterEnums.Direction.STOP:
@@ -324,7 +327,7 @@ class ShutterController(BaseController):
         if direction == ShutterEnums.Direction.STOP or timer == 0:
             self._master_controller.shutter_stop(shutter_id)
         else:
-            if timer is not None and (self._position_accuracy[shutter_id] <= 0 or self._actual_positions[shutter_id] is None):
+            if timer is not None and self._position_accuracy[shutter_id] <= 0:
                 self.reset_shutter(shutter_id)
             if direction == ShutterEnums.Direction.UP:
                 self._master_controller.shutter_up(shutter_id, timer=timer)
@@ -458,7 +461,7 @@ class ShutterController(BaseController):
                         if actual_position is not None:
                             new_actual_position = actual_position + int(position_delta)
                             self._actual_positions[shutter_id] = ShutterController.clamp_position(shutter, new_actual_position)
-                            self._position_accuracy[shutter_id] = self._position_accuracy.get(shutter_id, 0) - 10
+                            self._position_accuracy[shutter_id] = self._position_accuracy.get(shutter_id, 0) - self.SINGLE_ACTION_ACCURACY_LOSS_PERCENTAGE
                         else:
                             self._position_accuracy[shutter_id] = 0
                         self._log('Shutter {0} going {1} for {2:.2f}% ({3:.2f}s - timer: {4:.2f}s). New state {5}.'

@@ -468,13 +468,15 @@ class MasterCoreController(MasterController):
     # Shutters
 
     def shutter_up(self, shutter_id, timer=None):
-        # TODO: implement timer
+        if timer:
+            raise NotImplementedError('Shutter timers are not supported')
         self._master_communicator.do_basic_action(action_type=10,
                                                   action=1,
                                                   device_nr=shutter_id)
 
     def shutter_down(self, shutter_id, timer=None):
-        # TODO: implement timer
+        if timer:
+            raise NotImplementedError('Shutter timers are not supported')
         self._master_communicator.do_basic_action(action_type=10,
                                                   action=2,
                                                   device_nr=shutter_id)
