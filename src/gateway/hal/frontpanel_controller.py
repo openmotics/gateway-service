@@ -92,6 +92,7 @@ class FrontpanelController(object):
         self._power_communicator = power_communicator
         self._network_carrier = None
         self._network_activity = None
+        self._network_activity_scan_counter = 0
         self._network_bytes = 0
         self._check_network_activity_thread = None
         self._authorized_mode = False
@@ -103,6 +104,7 @@ class FrontpanelController(object):
 
     @property
     def authorized_mode(self):
+        # return Platform.get_platform() == Platform.Type.CORE_PLUS or self._authorized_mode  # Needed to validate Brain+ with no front panel attached
         return self._authorized_mode
 
     def event_receiver(self, event, payload):
@@ -157,30 +159,38 @@ class FrontpanelController(object):
             with open('/sys/class/net/{0}/carrier'.format(FrontpanelController.MAIN_INTERFACE), 'r') as fh_up:
                 line = fh_up.read()
             carrier = int(line) == 1
-            if self._network_carrier != carrier:
+            carrier_changed = self._network_carrier != carrier
+            if carrier_changed:
                 self._network_carrier = carrier
                 self._report_carrier(carrier)
 
-            with open('/proc/net/dev', 'r') as fh_stat:
-                for line in fh_stat.readlines():
-                    if FrontpanelController.MAIN_INTERFACE in line:
-                        received, transmitted = 0, 0
-                        parts = line.split()
-                        if len(parts) == 17:
-                            received = parts[1]
-                            transmitted = parts[9]
-                        elif len(parts) == 16:
-                            (_, received) = tuple(parts[0].split(':'))
-                            transmitted = parts[8]
-                        new_bytes = received + transmitted
-                        if self._network_bytes != new_bytes:
-                            self._network_bytes = new_bytes
-                            network_activity = True
-                        else:
-                            network_activity = False
-                        if self._network_activity != network_activity or network_activity:
-                            self._report_network_activity(network_activity)
-                        self._network_activity = network_activity
+            # Check network activity every second, or if the carrier changed
+            if self._network_activity_scan_counter >= 9 or carrier_changed:
+                self._network_activity_scan_counter = 0
+                network_activity = False
+                if self._network_carrier:  # There's no activity when there's no carrier
+                    with open('/proc/net/dev', 'r') as fh_stat:
+                        for line in fh_stat.readlines():
+                            if FrontpanelController.MAIN_INTERFACE not in line:
+                                continue
+                            received, transmitted = 0, 0
+                            parts = line.split()
+                            if len(parts) == 17:
+                                received = parts[1]
+                                transmitted = parts[9]
+                            elif len(parts) == 16:
+                                (_, received) = tuple(parts[0].split(':'))
+                                transmitted = parts[8]
+                            new_bytes = received + transmitted
+                            if self._network_bytes != new_bytes:
+                                self._network_bytes = new_bytes
+                                network_activity = True
+                            else:
+                                network_activity = False
+                if self._network_activity != network_activity:
+                    self._report_network_activity(network_activity)
+                self._network_activity = network_activity
+            self._network_activity_scan_counter += 1
         except Exception as exception:
             logger.error('Error while checking network activity: {0}'.format(exception))
 

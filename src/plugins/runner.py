@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -12,15 +13,18 @@ import six
 import ujson as json
 from six.moves.queue import Empty, Full, Queue
 
+import constants
+
 from gateway.daemon_thread import BaseThread
+from platform_utils import System
 from toolbox import PluginIPCReader, PluginIPCWriter
+from plugin_runtime.base import PluginWebRequest, PluginWebResponse
 
 if False:  # MYPY
-    from typing import Any, Dict, Callable, List, Optional
+    from typing import Any, Dict, Callable, List, Optional, AnyStr
     from gateway.webservice import WebInterface
 
 logger_ = logging.getLogger('openmotics')
-
 
 class Service(object):
     def __init__(self, runner, webinterface):
@@ -33,24 +37,66 @@ class Service(object):
         # type: (List[str]) -> Any
         request = cherrypy.request
         response = cherrypy.response
-        method = vpath.pop()
+        path = '/'.join(vpath)
+        method = vpath[0]
+        # Clear vpath completely, The rest is not needed anymore
+        # The complete path is stored in the path variable
+        # This is needed to not call this function recursively until this variable is empty
+        while len(vpath) > 0:
+            vpath.pop(0)
         for exposed in self.runner._exposes:
             if exposed['name'] == method:
                 request.params['method'] = method
-                response.headers['Content-Type'] = exposed['content_type']
+                if exposed['version'] == 1:
+                    response.headers['Content-Type'] = exposed['content_type']
+                # Creating the plugin web request object here, since
+                # we have the path variable in this function scope
+                # Body is also empty since this is passed in the params as 'request_body'
+                # This is parsed out of the request in the index function below
+                request.params['plugin_web_request'] = PluginWebRequest(
+                    method=request.method,
+                    body=None,
+                    headers=request.headers,
+                    path=path,
+                    version=exposed['version']
+                )
                 if exposed['auth'] is True:
                     request.hooks.attach('before_handler', cherrypy.tools.authenticated.callable)
                 request.hooks.attach('before_handler', cherrypy.tools.params.callable)
                 return self
-
         return None
 
     @cherrypy.expose
-    def index(self, method, *args, **kwargs):
+    def index(self, method, plugin_web_request, *args, **kwargs):
+        # type: (str, PluginWebRequest, Any, Any) -> Optional[AnyStr]
         try:
+            # This has been placed under the 'request_body' in the webservice.py file
+            # Here it is read out when necessary and put in the PluginWebRequest object at the correct place
+            if 'request_body' in kwargs:
+                plugin_web_request.body = kwargs['request_body']
+                del kwargs['request_body']
+            # Embed the params that where given with the call into the PluginWebResponse object and pass it as one object
+            plugin_web_request.params = kwargs
+            kwargs = {'plugin_web_request': plugin_web_request.serialize()}
+
+            # Perform the request with the set PluginWebRequest object
             contents = self.runner.request(method, args=args, kwargs=kwargs)
-            return contents.encode()
+
+            # Deserialize the response contents to a PluginWebResponse object
+            plugin_response = PluginWebResponse.deserialize(contents)
+            # Only read out all the data from the PluginWebResponse when the version is higher than 1
+            # otherwise, let cherrypy figure out how to return it to keep it similar to the previous implementation
+            if plugin_response.version > 1:
+                cp_response = cherrypy.response
+                for key in plugin_response.headers.keys():
+                    cp_response.headers[key] = plugin_response.headers[key]
+                cp_response.status = plugin_response.status_code
+            if plugin_response.body is not None:
+                return plugin_response.body.encode()
+            else:
+                return None
         except Exception as ex:
+            self.runner._logger('Exception when dispatching API call ({}): {}'.format(plugin_web_request.path, ex))
             cherrypy.response.headers["Content-Type"] = "application/json"
             cherrypy.response.status = 500
             contents = json.dumps({"success": False, "msg": str(ex)})
@@ -106,9 +152,9 @@ class PluginRunner(object):
         if python_executable is None or len(python_executable) == 0:
             python_executable = '/usr/bin/python'
 
-        self._proc = subprocess.Popen([python_executable, "runtime.py", "start", self.plugin_path],
+        self._proc = subprocess.Popen([python_executable, 'runtime.py', 'start_plugin', self.plugin_path],
                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=None,
-                                      cwd=self.runtime_path)
+                                      cwd=self.runtime_path, close_fds=True)
         assert self._proc.stdout, 'Plugin stdout not available'
         self._process_running = True
 

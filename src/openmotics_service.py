@@ -20,10 +20,10 @@ from __future__ import absolute_import
 from platform_utils import System
 System.import_libs()
 
-import constants
 import logging
 import logging.handlers
 import time
+import sys
 from signal import SIGTERM, signal
 
 from bus.om_bus_client import MessageClient
@@ -37,7 +37,7 @@ from gateway.migrations.users import UserMigrator
 from gateway.migrations.config import ConfigMigrator
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
-from six.moves.configparser import ConfigParser
+from logs import Logs
 
 if False:  # MYPY
     from gateway.output_controller import OutputController
@@ -67,24 +67,6 @@ if False:  # MYPY
     from serial_utils import RS485
 
 logger = logging.getLogger("openmotics")
-
-
-def setup_logger():
-    """ Setup the OpenMotics logger. """
-
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    logger.addHandler(handler)
-
-    if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
-        syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
-        syslog_handler.setLevel(logging.INFO)
-        syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(syslog_handler)
 
 
 class OpenmoticsService(object):
@@ -180,14 +162,12 @@ class OpenmoticsService(object):
         shutter_controller.run_sync_orm()
 
         # Execute data migration(s)
-        # TODO: Make the master communication work before executing the migrations (needs eeprom use or other)
-        if not System.get_operating_system().get('ID') == System.OS.BUILDROOT:
-            FeatureMigrator.migrate()
-            RoomsMigrator.migrate()
-            InputMigrator.migrate()
-            ScheduleMigrator.migrate()
-            UserMigrator.migrate()
-            ConfigMigrator.migrate()
+        FeatureMigrator.migrate()
+        RoomsMigrator.migrate()
+        InputMigrator.migrate()
+        ScheduleMigrator.migrate()
+        UserMigrator.migrate()
+        ConfigMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()
@@ -261,8 +241,26 @@ class OpenmoticsService(object):
             time.sleep(1)
 
 
+def start_plugin_runtime(plugin_path):
+    """ Function to start the plugin runtime from the openmotics_service file """
+    from plugin_runtime.runtime import start_runtime
+    start_runtime(plugin_path)
+
+
 if __name__ == "__main__":
-    setup_logger()
+    Logs.setup_logger()
+
+    # First check if there are some arguments given, if so, check if it is for starting the plugin runtime
+    if len(sys.argv) > 1:
+        # Delete the first argument since this will be this file name
+        del sys.argv[0]
+        if sys.argv[1] == 'start_plugin':
+            plugin_path = sys.argv[2]
+            start_plugin_runtime(plugin_path)
+            # Explicit exit, do not continue and start the gateway code
+            exit(0)
+
+    # When reaching here, it should start as default gateway service
     initialize(message_client_name='openmotics_service')
 
     logger.info("Starting OpenMotics service")

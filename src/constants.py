@@ -18,9 +18,15 @@ The constants modules contains static definitions for filenames.
 @author: fryckbos
 """
 import os
+import platform_utils
 
 
 OPENMOTICS_PREFIX = os.environ.get('OPENMOTICS_PREFIX', os.path.abspath(os.path.join(__file__, '../..')))
+
+
+def get_src_root_full_path():
+    """ Returns the top level directory of the python src code """
+    return os.path.abspath(os.path.join(__file__, '..'))
 
 
 def get_config_file():
@@ -144,8 +150,13 @@ def get_terms_dir():
 
 def get_plugin_dir():
     """ Get the directory where plugin data is stored. """
-    python_root = os.path.abspath(os.path.join(__file__, '..'))
-    return os.path.join(python_root, 'plugins/')
+    curr_os = platform_utils.System.get_operating_system()
+    if curr_os.get('ID') != platform_utils.System.OS.BUILDROOT:
+        python_root = os.path.abspath(os.path.join(__file__, '..'))
+        return os.path.join(python_root, 'plugins/')
+    else:
+        path = os.path.join(OPENMOTICS_PREFIX, 'plugins/')
+        return path
 
 
 def get_plugin_runtime_dir():

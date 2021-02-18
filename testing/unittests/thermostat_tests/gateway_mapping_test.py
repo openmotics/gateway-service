@@ -28,6 +28,7 @@ from gateway.models import (
 )
 from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
 from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatControllerGateway
+from logs import Logs
 
 MODELS = [Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump, Sensor,
           Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule]
@@ -37,13 +38,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        logger = logging.getLogger('openmotics')
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(log_level=logging.DEBUG)
         cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):
@@ -79,18 +74,6 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                 thermostat_group=group)
         thermostat.save()
 
-        for i in range(7):
-            day_schedule = DaySchedule(index=i,
-                                       content='{}',
-                                       mode='heating')
-            day_schedule.thermostat = thermostat
-            day_schedule.save()
-            day_schedule = DaySchedule(index=i,
-                                       content='{}',
-                                       mode='cooling')
-            day_schedule.thermostat = thermostat
-            day_schedule.save()
-
         # Validate load calls
         heating_thermostats = controller.load_heating_thermostats()
         self.assertEqual(1, len(heating_thermostats))
@@ -102,10 +85,12 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         self.assertEqual(cooling_thermostat_dto, controller.load_cooling_thermostat(10))
 
         # Validate contents
-        # Presets have a different default value for cooling vs heating
+        # Presets & schedules have a different default value for cooling vs heating
         heating_thermostat_dto.setp3 = cooling_thermostat_dto.setp3
         heating_thermostat_dto.setp4 = cooling_thermostat_dto.setp4
         heating_thermostat_dto.setp5 = cooling_thermostat_dto.setp5
+        for day in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']:
+            setattr(heating_thermostat_dto, 'auto_{0}'.format(day), getattr(cooling_thermostat_dto, 'auto_{0}'.format(day)))
         self.assertEqual(heating_thermostat_dto, cooling_thermostat_dto)
         self.assertEqual('thermostat', heating_thermostat_dto.name)
         self.assertEqual(thermostat.number, heating_thermostat_dto.id)
@@ -120,28 +105,36 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                 thermostat_group=group)
         thermostat.save()
 
-        for i in range(7):
-            day_schedule = DaySchedule(index=i,
-                                       content='{}',
-                                       mode='heating')
-            day_schedule.thermostat = thermostat
-            day_schedule.save()
-
         heating_thermostats = controller.load_heating_thermostats()
         self.assertEqual(1, len(heating_thermostats))
         dto = heating_thermostats[0]  # type: ThermostatDTO
 
+        schedule_dto = ThermostatScheduleDTO(temp_day_1=20.0,
+                                             start_day_1='07:00',
+                                             end_day_1='09:00',
+                                             temp_day_2=21.0,
+                                             start_day_2='17:00',
+                                             end_day_2='22:00',
+                                             temp_night=16.0)
+
         self.assertEqual(ThermostatDTO(id=10,
                                        name='thermostat',
-                                       setp3=14.0,
-                                       setp4=14.0,
-                                       setp5=14.0,
+                                       setp3=16.0,
+                                       setp4=15.0,
+                                       setp5=22.0,
                                        sensor=None,
                                        pid_p=120.0,
                                        pid_i=0.0,
                                        pid_d=0.0,
                                        room=None,
-                                       permanent_manual=True), dto)
+                                       permanent_manual=True,
+                                       auto_mon=schedule_dto,
+                                       auto_tue=schedule_dto,
+                                       auto_wed=schedule_dto,
+                                       auto_thu=schedule_dto,
+                                       auto_fri=schedule_dto,
+                                       auto_sat=schedule_dto,
+                                       auto_sun=schedule_dto), dto)
 
         day_schedule = thermostat.heating_schedules()[0]  # type: DaySchedule
         day_schedule.schedule_data = {0: 5.0,
@@ -179,16 +172,17 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                 thermostat_group=thermostat_group)
         thermostat.save()
 
-        for i in range(7):
-            day_schedule = DaySchedule(index=i,
-                                       content='{}',
-                                       mode='heating')
-            day_schedule.thermostat = thermostat
-            day_schedule.save()
-
         heating_thermostats = controller.load_heating_thermostats()
         self.assertEqual(1, len(heating_thermostats))
         dto = heating_thermostats[0]  # type: ThermostatDTO
+
+        default_schedule_dto = ThermostatScheduleDTO(temp_day_1=20.0,
+                                                     start_day_1='07:00',
+                                                     end_day_1='09:00',
+                                                     temp_day_2=21.0,
+                                                     start_day_2='17:00',
+                                                     end_day_2='22:00',
+                                                     temp_night=16.0)
 
         Sensor.create(number=15)
 
@@ -213,9 +207,9 @@ class GatewayThermostatMappingTests(unittest.TestCase):
 
         self.assertEqual(ThermostatDTO(id=10,
                                        name='changed',
-                                       setp3=14.0,
-                                       setp4=14.0,
-                                       setp5=14.0,
+                                       setp3=16.0,
+                                       setp4=15.0,
+                                       setp5=22.0,
                                        sensor=15,
                                        pid_p=120.0,
                                        pid_i=0.0,
@@ -223,13 +217,19 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        room=None,  # Unchanged
                                        output0=5,
                                        permanent_manual=True,
+                                       auto_mon=default_schedule_dto,
+                                       auto_tue=default_schedule_dto,
+                                       auto_wed=default_schedule_dto,
                                        auto_thu=ThermostatScheduleDTO(temp_night=10.0,
                                                                       temp_day_1=15.0,
                                                                       temp_day_2=30.0,
                                                                       start_day_1='08:00',
                                                                       end_day_1='10:30',
                                                                       start_day_2='16:00',
-                                                                      end_day_2='18:45')), dto)
+                                                                      end_day_2='18:45'),
+                                       auto_fri=default_schedule_dto,
+                                       auto_sat=default_schedule_dto,
+                                       auto_sun=default_schedule_dto), dto)
 
 
 if __name__ == "__main__":

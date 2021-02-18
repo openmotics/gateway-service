@@ -15,14 +15,12 @@
 from __future__ import absolute_import
 
 import unittest
-from mock import Mock
-from ioc import SetTestMode, SetUpTestInjections
+from ioc import SetTestMode
 from gateway.dto import InputDTO
 from gateway.hal.mappers_core import InputMapper
-from master.core.core_communicator import CoreCommunicator
 from master.core.basic_action import BasicAction
 from master.core.memory_models import InputConfiguration, InputModuleConfiguration
-from master.core.memory_file import MemoryTypes, MemoryFile
+from mocked_core_helper import MockedCore
 
 
 class InputCoreMapperTest(unittest.TestCase):
@@ -31,33 +29,8 @@ class InputCoreMapperTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
-        self.memory = {}
-
-        def _do_command(command, fields, timeout=None):
-            _ = timeout
-            instruction = ''.join(str(chr(c)) for c in command.instruction)
-            if instruction == 'MR':
-                page = fields['page']
-                start = fields['start']
-                length = fields['length']
-                return {'data': self.memory.get(page, bytearray([255] * 256))[start:start + length]}
-            elif instruction == 'MW':
-                page = fields['page']
-                start = fields['start']
-                page_data = self.memory.setdefault(page, bytearray([255] * 256))
-                for index, data_byte in enumerate(fields['data']):
-                    page_data[start + index] = data_byte
-            else:
-                raise AssertionError('unexpected instruction: {0}'.format(instruction))
-
-        self.communicator = Mock(CoreCommunicator)
-        self.communicator.do_command = _do_command
-        SetUpTestInjections(master_communicator=self.communicator)
-
-        eeprom_file = MemoryFile(MemoryTypes.EEPROM)
-        eeprom_file._cache = self.memory
-        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: eeprom_file,
-                                          MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)})
+        self.mocked_core = MockedCore()
+        self.memory = self.mocked_core.memory
 
         # Remove read-only flags from device_type for testing purposes below
         if hasattr(InputModuleConfiguration, '_device_type'):

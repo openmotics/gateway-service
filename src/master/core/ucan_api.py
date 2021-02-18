@@ -132,7 +132,8 @@ class UCANAPI(object):
         """
         return UCANPalletCommandSpec(identifier=AddressField('ucan_address', 3),
                                      pallet_type=PalletType.FLASH_WRITE_REQUEST,
-                                     request_fields=[UInt32Field('start_address'), ByteArrayField('data', data_length)])
+                                     request_fields=[UInt32Field('start_address'), ByteArrayField('data', data_length)],
+                                     response_fields=[ByteField('success')])
 
     @staticmethod
     def read_flash(data_length):  # type: (int) -> UCANCommandSpec
@@ -152,4 +153,5 @@ class UCANAPI(object):
         Note: uCAN needs to be in bootloader
         """
         return UCANPalletCommandSpec(identifier=AddressField('ucan_address', 3),
-                                     pallet_type=PalletType.FLASH_ERASE_REQUEST)
+                                     pallet_type=PalletType.FLASH_ERASE_REQUEST,
+                                     response_fields=[ByteField('success')])

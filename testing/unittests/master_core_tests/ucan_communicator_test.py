@@ -26,6 +26,7 @@ from master.core.exceptions import BootloadingException
 from master.core.ucan_communicator import UCANCommunicator, SID
 from master.core.ucan_command import UCANCommandSpec, UCANPalletCommandSpec, PalletType, Instruction
 from master.core.fields import AddressField, ByteArrayField, ByteField, UInt32Field, StringField, LiteralBytesField
+from logs import Logs
 
 
 class UCANCommunicatorTest(unittest.TestCase):
@@ -33,13 +34,7 @@ class UCANCommunicatorTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        logger = logging.getLogger('openmotics')
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(log_level=logging.DEBUG)
 
     def setUp(self):
         self._uint32_helper = UInt32Field('')

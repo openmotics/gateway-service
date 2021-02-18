@@ -53,7 +53,7 @@ class SlaveCommandSpec(object):
 
         self.header_length = 6  # Literal 'ST/RC' + 4 address bytes
         self._instruction_length = len(self.instruction.instruction)
-        self._request_padded_suffix = bytearray([0] * self.instruction.padding) + b'\r\n\r\n'
+        self._request_padded_suffix = bytearray([0] * self.instruction.padding) + b'\r\n'
         self._response_prefix_length = len(SlaveCommandSpec.RESPONSE_PREFIX)
         self._response_footer_length = 3 + len(SlaveCommandSpec.RESPONSE_SUFFIX)  # Literal 'C' + 2 CRC bytes + RESPONSE_SUFFIX
         if any(not isinstance(field.length, int) for field in self.response_fields):

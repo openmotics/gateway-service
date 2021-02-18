@@ -24,12 +24,12 @@ import argparse
 import logging
 import shutil
 import sys
-from logging import handlers
 from six.moves.configparser import ConfigParser
 
 import constants
 from gateway.initialize import setup_minimal_master_platform
 from ioc import INJECTED, Inject
+from logs import Logs
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
@@ -40,24 +40,6 @@ if False:  # MYPY
 
 
 logger = logging.getLogger('openmotics')
-
-
-def setup_logger():
-    # type: () -> None
-    """ Setup the OpenMotics logger. """
-
-    logger.setLevel(logging.DEBUG)
-    logger.propagate = False
-
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    logger.addHandler(handler)
-
-    handler = handlers.RotatingFileHandler(constants.get_update_log_location(), maxBytes=3 * 1024 ** 2, backupCount=2)
-    handler.setLevel(logging.DEBUG)
-    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    logger.addHandler(handler)
 
 
 @Inject
@@ -149,7 +131,7 @@ def main():
 
     args = parser.parse_args()
 
-    setup_logger()
+    Logs.setup_logger(enable_update_logging=True)
 
     config = ConfigParser()
     config.read(constants.get_config_file())

@@ -22,7 +22,8 @@ import pytest
 import ujson as json
 from hypothesis.strategies import booleans, integers, just
 
-from tests.hardware import multiple_outputs, outputs
+from tests.hardware import multiple_outputs, outputs, skip_on_platforms
+from tests.hardware_layout import TestPlatform
 
 logger = logging.getLogger('openmotics')
 
@@ -34,20 +35,20 @@ DEFAULT_LIGHT_CONFIG = {'type': 255, 'timer': 2**16 - 1}
 @hypothesis.given(outputs(), booleans())
 def test_events(toolbox, output, to_status):
     from_status = not to_status
-    logger.debug('output status {}#{}, expect event {} -> {}'.format(output.type, output.output_id, from_status, to_status))
+    logger.debug('output status {}, expect event {} -> {}'.format(output, from_status, to_status))
     toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
 
-    hypothesis.note('after output {}#{} set to {}'.format(output.type, output.output_id, to_status))
+    hypothesis.note('after output {} set to {}'.format(output, to_status))
     toolbox.set_output(output, to_status)
     toolbox.assert_output_changed(output, to_status)
 
 
 @hypothesis.given(outputs(virtual=True), booleans())
 def test_status(toolbox, output, status):
-    logger.debug('output status {}#{}, expect status ? -> {}'.format(output.type, output.output_id, status))
+    logger.debug('output status {}, expect status ? -> {}'.format(output, status))
     toolbox.configure_output(output, DEFAULT_OUTPUT_CONFIG)
 
-    hypothesis.note('after output {}#{} set to {}'.format(output.type, output.output_id, status))
+    hypothesis.note('after output {} set to {}'.format(output, status))
     toolbox.set_output(output, status)
     time.sleep(0.2)
     toolbox.assert_output_status(output, status)
@@ -57,13 +58,13 @@ def test_status(toolbox, output, status):
 @hypothesis.given(outputs(), just(True))
 def test_timers(toolbox, output, to_status):
     from_status = not to_status
-    logger.debug('output timer {}#{}, expect event {} -> {} -> {}'.format(output.type, output.output_id, from_status, to_status, from_status))
+    logger.debug('output timer {}, expect event {} -> {} -> {}'.format(output, from_status, to_status, from_status))
 
     output_config = {'type': 0, 'timer': 3}  # FIXME: event reordering with timer of <2s
-    hypothesis.note('with output {}#{} configured as a timer'.format(output.type, output.output_id))
+    hypothesis.note('with output {} configured as a timer'.format(output))
     toolbox.ensure_output(output, from_status, output_config)
 
-    hypothesis.note('after output {}#{} set to {}'.format(output.type, output.output_id, to_status))
+    hypothesis.note('after output {} set to {}'.format(output, to_status))
     toolbox.set_output(output, to_status)
     toolbox.assert_output_changed(output, to_status)
     toolbox.assert_output_changed(output, from_status, between=(2, 7))
@@ -71,21 +72,22 @@ def test_timers(toolbox, output, to_status):
 
 @pytest.mark.smoke
 @hypothesis.given(multiple_outputs(3), integers(min_value=0, max_value=254), just(True))
+@pytest.mark.skipif(skip_on_platforms([TestPlatform.CORE_PLUS]), reason='Floors not yet supported on the Core(+)')
 def test_floor_lights(toolbox, outputs, floor_id, output_status):
     light, other_light, other_output = outputs
-    logger.debug('light {}#{} on floor {}, expect event {} -> {}'.format(light.type, light.output_id, floor_id, not output_status, output_status))
+    logger.debug('light {} on floor {}, expect event {} -> {}'.format(light, floor_id, not output_status, output_status))
 
     output_config = {'floor': floor_id}
     output_config.update(DEFAULT_LIGHT_CONFIG)
-    hypothesis.note('with light {}#{} on floor {}'.format(light.type, light.output_id, floor_id))
+    hypothesis.note('with light {} on floor {}'.format(light, floor_id))
     toolbox.ensure_output(light, not output_status, output_config)
     output_config = {'floor': 255}  # no floor
     output_config.update(DEFAULT_LIGHT_CONFIG)
-    hypothesis.note('with light {}#{} not on floor'.format(other_light.type, other_light.output_id))
+    hypothesis.note('with light {} not on floor'.format(other_light))
     toolbox.ensure_output(other_light, not output_status, output_config)
     output_config = {'floor': floor_id}
     output_config.update(DEFAULT_OUTPUT_CONFIG)  # not a light
-    hypothesis.note('with output {}#{} on floor {}'.format(other_output.type, other_output.output_id, floor_id))
+    hypothesis.note('with output {} on floor {}'.format(other_output, floor_id))
     toolbox.ensure_output(other_output, not output_status, output_config)
     time.sleep(2)
 
@@ -109,8 +111,8 @@ def group_action_ids():
 @hypothesis.given(multiple_outputs(2), group_action_ids(), booleans())
 def test_group_action_toggle(toolbox, outputs, group_action_id, output_status):
     (output, other_output) = outputs
-    logger.debug('group action BA#{} for {}#{} {}#{}, expect event {} -> {}'.format(
-        group_action_id, output.type, output.output_id, other_output.type, other_output.output_id,
+    logger.debug('group action BA#{} for {} {}, expect event {} -> {}'.format(
+        group_action_id, output, other_output,
         not output_status, output_status))
 
     actions = ['162', str(output.output_id), '162', str(other_output.output_id)]  # toggle both outputs

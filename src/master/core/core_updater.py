@@ -87,7 +87,7 @@ class CoreUpdater(object):
                 if not response.startswith('ok'):
                     raise RuntimeError('Unexpected answer while flashing: {0}'.format(response))
                 if index % int(amount_lines / 10) == 0 and index != 0:
-                    logger.debug('Flashing... {0}%'.format(int(index * 100 / amount_lines)))
+                    logger.info('Flashing... {0}%'.format(int(index * 100 / amount_lines)))
             logger.info('Flashing... Done')
 
             logger.info('Verify Core communication')
@@ -122,7 +122,7 @@ class CoreUpdater(object):
         return response.split('=')[-1]
 
     @staticmethod
-    def _read_line(serial, verbose=True, discard_lines=0):  # type: (Serial, bool, int) -> str
+    def _read_line(serial, verbose=False, discard_lines=0):  # type: (Serial, bool, int) -> str
         timeout = time.time() + CoreUpdater.BOOTLOADER_SERIAL_READ_TIMEOUT
         line = ''
         while time.time() < timeout:
@@ -130,8 +130,9 @@ class CoreUpdater(object):
                 data = bytearray(serial.read(1))
                 line += chr(data[0])
                 if data == bytearray(b'\n'):
-                    if line[0] == '#' and verbose:
-                        logger.debug('* Debug: {0}'.format(line.strip()))
+                    if line[0] == '#':
+                        if verbose:
+                            logger.debug('* Debug: {0}'.format(line.strip()))
                         line = ''
                     elif discard_lines == 0:
                         return line.strip()

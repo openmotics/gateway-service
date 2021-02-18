@@ -12,7 +12,7 @@ echo '{
     "name": "APP_openmotics_gateway",
     "version": [0, 0, 2],
     "description": "openmotics gateway service",
-    "date": "23-11-2020",
+    "date": "'$(date +%d-%m-%Y)'",
     "fingerprint": "NA"
 }'>> package_info.txt
 

@@ -39,7 +39,8 @@ class ModuleSerializer(object):
                             ModuleDTO.ModuleType.DIM_CONTROL: 'OUTPUT',
                             ModuleDTO.ModuleType.OPEN_COLLECTOR: 'OUTPUT',
                             None: 'UNKNOWN'}
-            data.update({'type': chr(int(module_dto.address.split('.')[0])),
+            type_int = int(module_dto.address.split('.')[0])
+            data.update({'type': chr(type_int) if 32 <= type_int <= 126 else None,
                          'module_nr': module_dto.order,
                          'is_can': (module_dto.hardware_type == ModuleDTO.HardwareType.EMULATED or
                                     module_dto.module_type == ModuleDTO.ModuleType.CAN_CONTROL),
