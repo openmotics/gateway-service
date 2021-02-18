@@ -162,6 +162,19 @@ class MasterCommandSpecTest(unittest.TestCase):
         self.assertEqual(21, len(ba_input))
         self.assertEqual(bytearray(b'STRBA\x01\x02\x04\x09' + (b'\x00' * 10) + b'\r\n'), ba_input)
 
+    def test_old_create_basic_action(self):
+        """ Test for MasterCommandSpec.basic_action """
+        self.master_version = (3, 143, 103)
+        basic_action = MasterCommandSpec('BA',
+                                         [Field.byte('actionType'),
+                                          Field.byte('actionNumber'),
+                                          Field.padding(11)],
+                                         [])
+        ba_input = basic_action.create_input(1, {"actionType": 2, "actionNumber": 4})
+
+        self.assertEqual(21, len(ba_input))
+        self.assertEqual(bytearray(b'STRBA\x01\x02\x04' + (b'\x00' * 11) + b'\r\n'), ba_input)
+
     def test_input_with_crc(self):
         """ Test encoding with crc. """
         spec = MasterCommandSpec('TE',

@@ -248,16 +248,15 @@ class ShutterController(BaseController):
         steps = ShutterController._get_steps(shutter)
         timer = None
 
-        actual_position = self._actual_positions.get(shutter_id)
-        if actual_position is None:
-            raise RuntimeError('Shutter {0} has unknown actual position'.format(shutter_id))
-
         if steps is None:
             ShutterController._validate_position(shutter_id, desired_position, self.TIME_BASED_SHUTTER_STEPS)
             timer = self._calculate_shutter_timer(shutter_id, desired_position)
         else:
             ShutterController._validate_position(shutter_id, desired_position, steps)
 
+        actual_position = self._actual_positions.get(shutter_id)
+        if actual_position is None:
+            raise RuntimeError('Shutter {0} has unknown actual position'.format(shutter_id))
 
         direction = self._get_direction(actual_position, desired_position)
         if direction == ShutterEnums.Direction.STOP:
@@ -295,9 +294,6 @@ class ShutterController(BaseController):
                 desired_position = ShutterController._get_limit(direction, steps)
         else:
             if steps is None:
-                actual_position = self._actual_positions.get(shutter_id)
-                if actual_position is None:
-                    raise RuntimeError('Shutter {0} has unknown actual position'.format(shutter_id))
                 # we use a percentage (steps=100) to mimic the steps
                 timer = self._calculate_shutter_timer(shutter_id, desired_position)
             else:
@@ -314,9 +310,13 @@ class ShutterController(BaseController):
 
     def _calculate_shutter_timer(self, shutter_id, desired_position, steps=TIME_BASED_SHUTTER_STEPS):
         ShutterController._validate_position(shutter_id, desired_position, steps)
+        actual_position = self._actual_positions.get(shutter_id)
+        if actual_position is None:
+            raise RuntimeError('Shutter {0} has unknown actual position'.format(shutter_id))
+        ShutterController._validate_position(shutter_id, desired_position, steps)
         shutter = self._get_shutter(shutter_id)
-        delta_position = desired_position - self._actual_positions[shutter_id]
-        direction = self._get_direction(self._actual_positions[shutter_id], desired_position)
+        delta_position = desired_position - actual_position
+        direction = self._get_direction(actual_position, desired_position)
         if direction == ShutterEnums.Direction.STOP:
             return 0
         else:
@@ -340,6 +340,7 @@ class ShutterController(BaseController):
         configured_timer = getattr(shutter, 'timer_up')
         start = time.time()
         self._execute_shutter(shutter_id, ShutterEnums.Direction.UP)
+        # TODO: https://openmotics.atlassian.net/browse/OM-2026
         while self._actual_positions[shutter_id] != 0:
             if time.time() - start > configured_timer * 1.1:
                 raise RuntimeError('Timer expired when resetting shutter, could not get actual position')
