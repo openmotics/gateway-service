@@ -157,7 +157,7 @@ class EepromFile(object):
         and adjust the current settings.
         """
         logger.info('EEPROM - Activate')
-        self._master_communicator.do_command(activate_eeprom(), {'eep': 0})
+        self._master_communicator.do_command(activate_eeprom(), {'eep': 0}, timeout=5)
         master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
         self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
 
