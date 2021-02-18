@@ -288,7 +288,8 @@ class MasterClassicController(MasterController):
             write = True
 
         if write:
-            self._master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0})
+            self._master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0},
+                                                 timeout=5)
         self.set_status_leds(True)
 
     def _handle_maintenance_event(self, master_event):
@@ -1329,7 +1330,8 @@ class MasterClassicController(MasterController):
                         {'bank': bank, 'address': addr, 'data': new}
                     )
 
-        self._master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0})
+        self._master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0},
+                                             timeout=5)
         ret.append('Activated eeprom')
         self._eeprom_controller.invalidate_cache()
 

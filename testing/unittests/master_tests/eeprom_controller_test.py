@@ -472,7 +472,7 @@ class MasterCommunicator(object):
         self.__list_function = list_function
         self.__write_function = write_function
 
-    def do_command(self, cmd, data):
+    def do_command(self, cmd, data, timeout=None):
         """ Execute a command on the master dummy. """
         if cmd == master_api.eeprom_list():
             return self.__list_function(data)
