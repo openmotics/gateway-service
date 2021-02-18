@@ -21,6 +21,7 @@ import unittest
 import xmlrunner
 import logging
 from master.core.fields import *
+from logs import Logs
 
 
 class APIFieldsTest(unittest.TestCase):
@@ -28,13 +29,7 @@ class APIFieldsTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        logger = logging.getLogger('openmotics')
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(log_level=logging.DEBUG)
 
     def test_byte_field(self):
         self._test_field(ByteField('x'), [[-1, ValueError],

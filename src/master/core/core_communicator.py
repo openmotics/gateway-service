@@ -36,6 +36,7 @@ from master.core.toolbox import Toolbox
 from serial_utils import CommunicationTimedOutException, printable
 
 if False:  # MYPY
+    from master.core.basic_action import BasicAction
     from typing import Dict, Any, Optional, TypeVar, Union, Callable, Set, List
     from serial import Serial
     T_co = TypeVar('T_co', bound=None, covariant=True)
@@ -72,9 +73,7 @@ class CoreCommunicator(object):
         self._stop = False
 
         self._word_helper = WordField('')
-
-        self._read_thread = BaseThread(name='coreread', target=self._read)
-        self._read_thread.setDaemon(True)
+        self._read_thread = None  # type: Optional[BaseThread]
 
         self._command_total_histogram = Counter()  # type: Counter
         self._command_success_histogram = Counter()  # type: Counter
@@ -91,11 +90,15 @@ class CoreCommunicator(object):
     def start(self):
         """ Start the CoreComunicator, this starts the background read thread. """
         self._stop = False
+        self._read_thread = BaseThread(name='coreread', target=self._read)
+        self._read_thread.setDaemon(True)
         self._read_thread.start()
 
     def stop(self):
         self._stop = True
-        self._read_thread.join()
+        if self._read_thread is not None:
+            self._read_thread.join()
+            self._read_thread = None
 
     def get_communication_statistics(self):
         return self._communication_stats
@@ -203,17 +206,16 @@ class CoreCommunicator(object):
             consumers.remove(consumer)
         self.discard_cid(consumer.cid)
 
-    def do_basic_action(self, action_type, action, device_nr=0, extra_parameter=0, timeout=2, log=True):
-        # type: (int, int, int, int, Optional[int], bool) -> Optional[Dict[str, Any]]
+    def do_basic_action(self, basic_action, timeout=2):
+        # type: (BasicAction, Optional[int]) -> Optional[Dict[str, Any]]
         """ Sends a basic action to the Core with the given action type and action number """
-        if log:
-            logger.info('BA: Execute {0} {1} {2} {3}'.format(action_type, action, device_nr, extra_parameter))
+        logger.info('BA: Executed {0}'.format(basic_action))
         return self.do_command(
             CoreAPI.basic_action(),
-            {'type': action_type,
-             'action': action,
-             'device_nr': device_nr,
-             'extra_parameter': extra_parameter},
+            {'type': basic_action.action_type,
+             'action': basic_action.action,
+             'device_nr': basic_action.device_nr,
+             'extra_parameter': basic_action.extra_parameter},
             timeout=timeout
         )
 

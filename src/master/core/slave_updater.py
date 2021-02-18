@@ -88,7 +88,8 @@ class SlaveUpdater(object):
                 for module_id in range(number_of_ucs):
                     ucan_configuration = UCanModuleConfiguration(module_id)
                     executed_update = True
-                    success &= UCANUpdater.update(cc_address=ucan_configuration.module.address,
+                    cc_address = ucan_configuration.module.address if ucan_configuration.module is not None else '000.000.000.000'
+                    success &= UCANUpdater.update(cc_address=cc_address,
                                                   ucan_address=ucan_configuration.address,
                                                   ucan_communicator=ucan_communicator,
                                                   hex_filename=hex_filename,
@@ -98,6 +99,17 @@ class SlaveUpdater(object):
             logger.info('No modules of type {0} were updated'.format(module_type))
             return True
         return success
+
+    @staticmethod
+    def update_ucan(address, hex_filename, version):
+        if '@' not in address:
+            raise RuntimeError('Address must be in the form of <ucan address>@<cc address>')
+        ucan_address, cc_address = address.split('@')
+        return UCANUpdater.update(cc_address=cc_address,
+                                  ucan_address=ucan_address,
+                                  ucan_communicator=UCANCommunicator(),
+                                  hex_filename=hex_filename,
+                                  version=version)
 
     @staticmethod
     @Inject
@@ -144,6 +156,7 @@ class SlaveUpdater(object):
                     # answered by the active code. E.g. if the application was active, it's the application that will
                     # answer this call with the return_code APPLICATION_ACTIVE
                     logger.info('{0} - Bootloader active'.format(address))
+                    time.sleep(2)  # Wait for the bootloader to settle
                 except CommunicationTimedOutException:
                     logger.error('{0} - Could not enter bootloader. Aborting'.format(address))
                     return False
@@ -154,9 +167,15 @@ class SlaveUpdater(object):
                                                              fields={'version': version})
                     SlaveUpdater._validate_response(response)
 
+                data_blocks = len(firmware) // SlaveUpdater.BLOCK_SIZE + 1
                 blocks = SlaveUpdater.BLOCKS_SMALL_SLAVE
-                if len(firmware) // SlaveUpdater.BLOCK_SIZE + 1 > blocks:
+                if data_blocks > blocks or gen3_module:
                     blocks = SlaveUpdater.BLOCKS_LARGE_SLAVE
+                logger.info('{0} - {1} slave ({2}/{3} blocks)'.format(
+                    address,
+                    'Large' if blocks == SlaveUpdater.BLOCKS_LARGE_SLAVE else 'Small',
+                    data_blocks, blocks
+                ))
 
                 crc = SlaveUpdater._get_crc(firmware, blocks)
                 response = slave_communicator.do_command(address=address,
@@ -213,13 +232,16 @@ class SlaveUpdater(object):
                     # logger.error('{0} - Could not enter application. Aborting'.format(address))
                     # return False
 
-                logger.info('{0} - Loading new firmware version'.format(address))
-                new_version = SlaveUpdater._get_version(slave_communicator, address, tries=60)
-                if new_version is None:
-                    logger.error('{0} - Could not request new firmware version'.format(address))
-                    return False
-                firmware_version, hardware_version = new_version
-                logger.info('{0} - New version: {1} ({2})'.format(address, firmware_version, hardware_version))
+                if address != '255.255.255.255':
+                    logger.info('{0} - Loading new firmware version'.format(address))
+                    new_version = SlaveUpdater._get_version(slave_communicator, address, tries=60)
+                    if new_version is None:
+                        logger.error('{0} - Could not request new firmware version'.format(address))
+                        return False
+                    firmware_version, hardware_version = new_version
+                    logger.info('{0} - New version: {1} ({2})'.format(address, firmware_version, hardware_version))
+                else:
+                    logger.info('{0} - Skip loading new version as address will have been changed by the application'.format(address))
 
                 logger.info('{0} - Update completed'.format(address))
                 return True

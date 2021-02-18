@@ -54,6 +54,7 @@ from gateway.enums import ShutterEnums, UserEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.mappers.thermostat import ThermostatMapper
 from gateway.models import Database, Feature, Config
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
@@ -63,7 +64,7 @@ from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Dict, Optional, Any, List
+    from typing import Dict, Optional, Any, List, Literal
     from bus.om_bus_client import MessageClient
     from gateway.gateway_api import GatewayApi
     from gateway.group_action_controller import GroupActionController
@@ -844,11 +845,12 @@ class WebInterface(object):
 
     @openmotics_api(auth=True, check=types(thermostat_id=int, automatic=bool, setpoint=int))
     def set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
+        # type: (int, bool, int) -> Dict[str,Any]
         """
         Set the thermostat mode of a given thermostat. Thermostats can be set to automatic or
         manual, in case of manual a setpoint (0 to 5) can be provided.
         """
-        return self._thermostat_controller.set_per_thermostat_mode(thermostat_id, automatic, setpoint)
+        self._thermostat_controller.set_per_thermostat_mode(thermostat_id, automatic, setpoint)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True)
@@ -1262,7 +1264,8 @@ class WebInterface(object):
         except DoesNotExist:
             if id >= 32:
                 raise
-            thermostat_dto = ThermostatDTO(id=id)
+            mode = 'heating'  # type: Literal['heating']
+            thermostat_dto = ThermostatMapper.get_default_dto(thermostat_id=id, mode=mode)
         return {'config': ThermostatSerializer.serialize(thermostat_dto=thermostat_dto,
                                                          fields=fields)}
 
@@ -1272,11 +1275,13 @@ class WebInterface(object):
         Get all thermostat_configurations.
         :param fields: The field of the thermostat_configuration to get, None if all
         """
+        mode = 'heating'  # type: Literal['heating']
         thermostat_dtos = {thermostat.id: thermostat
                            for thermostat in self._thermostat_controller.load_heating_thermostats()}
         all_dtos = []
         for thermostat_id in set(list(thermostat_dtos.keys()) + list(range(32))):
-            all_dtos.append(thermostat_dtos.get(thermostat_id, ThermostatDTO(id=thermostat_id)))
+            all_dtos.append(thermostat_dtos.get(thermostat_id, ThermostatMapper.get_default_dto(thermostat_id=thermostat_id,
+                                                                                                mode=mode)))
         return {'config': [ThermostatSerializer.serialize(thermostat_dto=thermostat, fields=fields)
                            for thermostat in all_dtos]}
 
@@ -1338,7 +1343,8 @@ class WebInterface(object):
         :param id: The id of the heating pump_group_configuration
         :param fields: The field of the heating pump_group_configuration to get, None if all
         """
-        return {'config': PumpGroupSerializer.serialize(pump_group_dto=self._thermostat_controller.load_heating_pump_group(pump_group_id=id),
+        pump_group_dto = self._thermostat_controller.load_heating_pump_group(pump_group_id=id)
+        return {'config': PumpGroupSerializer.serialize(pump_group_dto=pump_group_dto,
                                                         fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
@@ -1347,8 +1353,9 @@ class WebInterface(object):
         Get all heating pump_group_configurations.
         :param fields: The field of the heating pump_group_configuration to get, None if all
         """
+        pump_group_dtos = self._thermostat_controller.load_heating_pump_groups()
         return {'config': [PumpGroupSerializer.serialize(pump_group_dto=pump_group, fields=fields)
-                           for pump_group in self._thermostat_controller.load_heating_pump_groups()]}
+                           for pump_group in pump_group_dtos]}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_pump_group_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
@@ -1378,7 +1385,8 @@ class WebInterface(object):
         except DoesNotExist:
             if id >= 32:
                 raise
-            thermostat_dto = ThermostatDTO(id=id)
+            mode = 'cooling'  # type: Literal['cooling']
+            thermostat_dto = ThermostatMapper.get_default_dto(thermostat_id=id, mode=mode)
         return {'config': ThermostatSerializer.serialize(thermostat_dto=thermostat_dto,
                                                          fields=fields)}
 
@@ -1388,11 +1396,13 @@ class WebInterface(object):
         Get all cooling_configurations.
         :param fields: The field of the cooling_configuration to get, None if all
         """
+        mode = 'cooling'  # type: Literal['cooling']
         thermostat_dtos = {thermostat.id: thermostat
                            for thermostat in self._thermostat_controller.load_cooling_thermostats()}
         all_dtos = []
         for thermostat_id in set(list(thermostat_dtos.keys()) + list(range(32))):
-            all_dtos.append(thermostat_dtos.get(thermostat_id, ThermostatDTO(id=thermostat_id)))
+            all_dtos.append(thermostat_dtos.get(thermostat_id, ThermostatMapper.get_default_dto(thermostat_id=thermostat_id,
+                                                                                                mode=mode)))
         return {'config': [ThermostatSerializer.serialize(thermostat_dto=thermostat, fields=fields)
                            for thermostat in all_dtos]}
 

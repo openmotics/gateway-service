@@ -26,10 +26,11 @@ def diff(hex_filename_1, hex_filename_2):
     hex_2 = IntelHex(hex_filename_2)
     max_address = max(hex_1.maxaddr(), hex_2.maxaddr())
 
-    print('+-{0}-+-{1}-+-{1}-+'.format('-' * 6, '-' * WIDTH * 2))
-    print('| Addr   | {0} | {1} |'.format(hex_filename_1.split('/')[-1].ljust(WIDTH * 2),
-                                          hex_filename_2.split('/')[-1].ljust(WIDTH * 2)))
-    print('+-{0}-+-{1}-+-{1}-+'.format('-' * 6, '-' * WIDTH * 2))
+    print('+-{0}-+-{1}-+-{1}-+'.format('-' * 6, '-' * (WIDTH * 2 + 7)))
+    print('| Addr   | {0} | {1} |'.format(hex_filename_1.split('/')[-1].ljust(WIDTH * 2 + 7),
+                                          hex_filename_2.split('/')[-1].ljust(WIDTH * 2 + 7)))
+    print('+-{0}-+-{1}-+-{1}-+'.format('-' * 6, '-' * (WIDTH * 2 + 7)))
+    print('|        | {0} | {0} |'.format('=0    =3 =4    =7 =8    =B =C    =F +0    +3 +4    +7 +8    +B +C    +F'))
 
     previous_data_1, previous_data_2 = None, None
     start_skip = None
@@ -59,7 +60,7 @@ def diff(hex_filename_1, hex_filename_2):
         # Printing
         _print(address, data_1, data_2)
 
-    print('+-{0}-+-{1}-+-{1}-+'.format('-' * 6, '-' * WIDTH * 2))
+    print('+-{0}-+-{1}-+-{1}-+'.format('-' * 6, '-' * (WIDTH * 2 + 7)))
 
 
 def _print(address, data_1, data_2):
@@ -69,9 +70,11 @@ def _print(address, data_1, data_2):
     else:
         formatted_address = '{:06X}'.format(address)
     formatted_data_1 = ''.join('{:02X}'.format(byte) for byte in data_1)
-    formatted_data_2 = '='.ljust(WIDTH * 2)
+    formatted_data_1 = ' '.join([formatted_data_1[i * 8:(i + 1) * 8] for i in xrange(8)])
+    formatted_data_2 = '='.ljust(WIDTH * 2 + 7)
     if data_1 != data_2:
         formatted_data_2 = ''.join('{:02X}'.format(byte) for byte in data_2).rjust(WIDTH * 2)
+        formatted_data_2 = ' '.join([formatted_data_2[i * 8:(i + 1) * 8] for i in xrange(8)])
     print('| {0} | {1} | {2} |'.format(formatted_address, formatted_data_1, formatted_data_2))
 
 

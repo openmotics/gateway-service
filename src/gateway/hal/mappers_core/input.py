@@ -49,9 +49,12 @@ class InputMapper(object):
         new_data = {'id': input_dto.id}  # type: Dict[str, Any]
         if 'name' in fields:
             new_data['name'] = input_dto.name
-        if 'action' in fields and 'basic_actions' in fields:
-            new_data.update(InputMapper.classic_actions_to_core_input_configuration(input_dto.action,
-                                                                                    input_dto.basic_actions))
+        if 'action' in fields:
+            direct_config = input_dto.action is None or input_dto.action == 255 or input_dto.action < 240
+            basic_actions_config = input_dto.action == 240 and 'basic_actions' in fields
+            if direct_config or basic_actions_config:
+                new_data.update(InputMapper.classic_actions_to_core_input_configuration(input_dto.action,
+                                                                                        input_dto.basic_actions))
         if 'invert' in fields:
             new_data['input_config'] = {'normal_open': not input_dto.invert}
         return InputConfiguration.deserialize(new_data)

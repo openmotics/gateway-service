@@ -63,8 +63,7 @@ def maintenance_mode(request, toolbox):
 def test_power_cycle(toolbox, power_on):
     toolbox.power_off()
     toolbox.ensure_power_on()
-    pending = toolbox.health_check()
-    assert pending == []
+    toolbox.health_check()
 
 
 @pytest.mark.slow

@@ -12,15 +12,13 @@ from gateway.dto import InputDTO, OutputStateDTO
 from gateway.hal.master_controller_core import MasterCoreController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
-from ioc import SetTestMode, SetUpTestInjections
+from ioc import SetTestMode
 from master.core.core_api import CoreAPI
-from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
-from master.core.memory_file import MemoryFile, MemoryTypes
+from master.core.core_communicator import BackgroundConsumer
 from master.core.memory_models import InputConfiguration, \
     InputModuleConfiguration, OutputConfiguration, OutputModuleConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
-from master.core.slave_communicator import SlaveCommunicator
-from master.core.ucan_communicator import UCANCommunicator
+from mocked_core_helper import MockedCore
 
 
 class MasterCoreControllerTest(unittest.TestCase):
@@ -31,41 +29,10 @@ class MasterCoreControllerTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
-        self.memory = {}
-        self.return_data = {}
-
-        def _do_command(command, fields, timeout=None):
-            _ = timeout
-            instruction = ''.join(str(chr(c)) for c in command.instruction)
-            if instruction == 'MR':
-                page = fields['page']
-                start = fields['start']
-                length = fields['length']
-                return {'data': self.memory.get(page, bytearray([255] * 256))[start:start + length]}
-            elif instruction == 'MW':
-                page = fields['page']
-                start = fields['start']
-                page_data = self.memory.setdefault(page, bytearray([255] * 256))
-                for index, data_byte in enumerate(fields['data']):
-                    page_data[start + index] = data_byte
-            elif instruction in self.return_data:
-                return self.return_data[instruction]
-            else:
-                raise AssertionError('unexpected instruction: {0}'.format(instruction))
-
-        self.communicator = mock.Mock(CoreCommunicator)
-        self.communicator.do_command = _do_command
-        self.pubsub = PubSub()
-        SetUpTestInjections(master_communicator=self.communicator,
-                            pubsub=self.pubsub)
-
-        eeprom_file = MemoryFile(MemoryTypes.EEPROM)
-        eeprom_file._cache = self.memory
-        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: eeprom_file,
-                                          MemoryTypes.FRAM: MemoryFile(MemoryTypes.FRAM)},
-                            ucan_communicator=UCANCommunicator(),
-                            slave_communicator=SlaveCommunicator())
-        self.controller = MasterCoreController()
+        self.mocked_core = MockedCore()
+        self.controller = self.mocked_core.controller
+        self.pubsub = self.mocked_core.pubsub
+        self.return_data = self.mocked_core.return_data
 
         # For testing purposes, remove read-only flag from certain properties
         for field_name in ['device_type', 'address', 'firmware_version']:

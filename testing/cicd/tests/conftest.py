@@ -14,6 +14,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 sys.path.insert(0, os.path.abspath(os.path.join(__file__, '../..')))
 
 from tests.toolbox import Toolbox
+from tests.hardware_layout import TEST_PLATFORM, TestPlatform
 
 
 logging.getLogger('urllib3').propagate = False
@@ -81,14 +82,16 @@ def firmware_updates(toolbox_session):
 
     versions = toolbox.get_firmware_versions()
     firmware = {}
-    master_firmware = os.environ.get('OPENMOTICS_MASTER_FIRMWARE')
-    if master_firmware and master_firmware != versions['M']:
-        logger.info('master firmware {} -> {}...'.format(versions['M'], master_firmware))
-        firmware['master'] = master_firmware
-    can_firmware = os.environ.get('OPENMOTICS_CAN_FIRMWARE')
-    if can_firmware and can_firmware != versions['C']:
-        logger.info('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
-        firmware['can'] = can_firmware
+    # TODO: Add support for Core+ firmwares
+    if TEST_PLATFORM != TestPlatform.CORE_PLUS:
+        master_firmware = os.environ.get('OPENMOTICS_MASTER_FIRMWARE')
+        if master_firmware and master_firmware != versions['M']:
+            logger.info('master firmware {} -> {}...'.format(versions['M'], master_firmware))
+            firmware['master'] = master_firmware
+        can_firmware = os.environ.get('OPENMOTICS_CAN_FIRMWARE')
+        if can_firmware and can_firmware != versions['C']:
+            logger.info('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
+            firmware['can'] = can_firmware
     if firmware:
         logger.info('updating firmware...')
         for _ in range(8):

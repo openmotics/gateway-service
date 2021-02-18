@@ -28,6 +28,7 @@ from master.core.slave_communicator import SlaveCommunicator, CommunicationTimed
 from master.core.slave_command import SlaveCommandSpec, Instruction
 from master.core.core_api import CoreAPI
 from master.core.fields import ByteField
+from logs import Logs
 
 
 class SlaveCommunicatorTest(unittest.TestCase):
@@ -35,13 +36,7 @@ class SlaveCommunicatorTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        logger = logging.getLogger('openmotics')
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(log_level=logging.DEBUG)
 
     def setUp(self):
         fakesleep.monkey_patch()
@@ -141,7 +136,7 @@ class SlaveCommunicatorTest(unittest.TestCase):
     @staticmethod
     def _build_request_message(payload):
         crc = SlaveCommandSpec.calculate_crc(bytearray(payload))
-        return bytearray(b'ST' + payload + b'C' + crc + b'\r\n\r\n')
+        return bytearray(b'ST' + payload + b'C' + crc + b'\r\n')
 
     @staticmethod
     def _build_response_message(payload, bad_crc=False):

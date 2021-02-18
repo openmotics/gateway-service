@@ -20,13 +20,14 @@ import mock
 import logging
 from peewee import SqliteDatabase
 
-from gateway.models import Output, Valve, Thermostat, ThermostatGroup, Sensor, Preset, ValveToThermostat
+from gateway.models import Output, Valve, Thermostat, ThermostatGroup, Sensor, Preset, ValveToThermostat, DaySchedule
 from gateway.gateway_api import GatewayApi
 from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
 from gateway.thermostat.gateway.thermostat_pid import ThermostatPid, PID
 from ioc import SetTestMode, SetUpTestInjections
+from logs import Logs
 
-MODELS = [Thermostat, ThermostatGroup, Sensor, Preset, ValveToThermostat, Valve, Output]
+MODELS = [Thermostat, ThermostatGroup, Sensor, Preset, ValveToThermostat, Valve, Output, DaySchedule]
 
 
 class PumpValveControllerTest(unittest.TestCase):
@@ -34,13 +35,7 @@ class PumpValveControllerTest(unittest.TestCase):
     def setUpClass(cls):
         fakesleep.monkey_patch()
         SetTestMode()
-        logger = logging.getLogger('openmotics')
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(log_level=logging.DEBUG)
 
     @classmethod
     def tearDownClass(cls):

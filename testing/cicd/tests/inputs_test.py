@@ -32,39 +32,34 @@ DEFAULT_INPUT_CONFIG = {'invert': 255}
 
 @pytest.mark.smoke
 @hypothesis.given(inputs(), outputs(), booleans())
-def test_actions(toolbox, input, output, to_status):
+def test_actions(toolbox, _input, output, to_status):
     from_status = not to_status
-    logger.debug('input action {}#{} to {}#{}, expect event {} -> {}'.format(
-        input.type, input.input_id,
-        output.type, output.output_id,
-        from_status, to_status))
+    logger.debug('input action {} to {}, expect event {} -> {}'.format(
+        _input, output, from_status, to_status))
 
-    hypothesis.note('with input {}#{} action set to {}#{}'.format(input.type, input.input_id, output.type, output.output_id))
-    input_config = {'id': input.input_id, 'action': output.output_id}
+    hypothesis.note('with input {} action set to {}'.format(_input, output))
+    input_config = {'id': _input.input_id, 'action': output.output_id}
     input_config.update(DEFAULT_INPUT_CONFIG)
     toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
-    time.sleep(0.2)
 
     # NOTE ensure output status _after_ input configuration, changing
     # inputs can impact the output status for some reason.
     toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
 
-    toolbox.press_input(input)
+    toolbox.press_input(_input)
     toolbox.assert_output_changed(output, to_status)
 
 
 @pytest.mark.slow
 @hypothesis.settings(max_examples=2)
 @hypothesis.given(inputs(), outputs(), just(True))
-def test_motion_sensor(toolbox, input, output, to_status):
+def test_motion_sensor(toolbox, _input, output, to_status):
     from_status = not to_status
-    logger.debug('motion sensor {}#{} to {}#{}, expect event {} -> {} after 2m30s'.format(
-        input.type, input.input_id,
-        output.type, output.output_id,
-        from_status, to_status))
-    hypothesis.note('with input {}#{} action set to timeout after 2m30s'.format(input.type, input.input_id))
+    logger.debug('motion sensor {} to {}, expect event {} -> {} after 2m30s'.format(
+        _input, output, from_status, to_status))
+    hypothesis.note('with input {} action set to timeout after 2m30s'.format(_input))
     actions = ['195', str(output.output_id)]  # output timeout of 2m30s
-    input_config = {'id': input.input_id, 'basic_actions': ','.join(actions), 'action': 240}
+    input_config = {'id': _input.input_id, 'basic_actions': ','.join(actions), 'action': 240}
     input_config.update(DEFAULT_INPUT_CONFIG)
     toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
 
@@ -72,7 +67,7 @@ def test_motion_sensor(toolbox, input, output, to_status):
     # inputs can impact the output status for some reason.
     toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
 
-    toolbox.press_input(input)
+    toolbox.press_input(_input)
     toolbox.assert_output_changed(output, to_status)
     logger.warning('should use a shorter timeout')
     toolbox.assert_output_changed(output, from_status, between=(130, 180))
@@ -84,19 +79,17 @@ def group_action_ids():
 
 @pytest.mark.smoke
 @hypothesis.given(inputs(), multiple_outputs(2), group_action_ids(), booleans())
-def test_group_action_toggle(toolbox, input, outputs, group_action_id, to_status):
+def test_group_action_toggle(toolbox, _input, outputs, group_action_id, to_status):
     output, other_output = outputs
     from_status = not to_status
-    logger.debug('group action GA#{} for {}#{} to {}#{} {}#{}, expect event {} -> {}'.format(
+    logger.debug('group action GA#{} for {} to {} and {}, expect event {} -> {}'.format(
         group_action_id,
-        input.type, input.input_id,
-        output.type, output.output_id,
-        other_output.type, other_output.output_id,
+        _input, output, other_output,
         from_status, to_status))
 
-    hypothesis.note('with input {}#{} action set to GA#{}'.format(input.type, input.input_id, group_action_id))
+    hypothesis.note('with input {} action set to GA#{}'.format(_input, group_action_id))
     actions = ['2', str(group_action_id)]
-    input_config = {'id': input.input_id, 'basic_actions': ','.join(actions), 'action': 240}
+    input_config = {'id': _input.input_id, 'basic_actions': ','.join(actions), 'action': 240}
     input_config.update(DEFAULT_INPUT_CONFIG)
     toolbox.dut.get('/set_input_configuration', {'config': json.dumps(input_config)})
 
@@ -108,6 +101,6 @@ def test_group_action_toggle(toolbox, input, outputs, group_action_id, to_status
     toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
     toolbox.ensure_output(other_output, from_status, DEFAULT_OUTPUT_CONFIG)
 
-    toolbox.press_input(input)
+    toolbox.press_input(_input)
     toolbox.assert_output_changed(output, to_status)
     toolbox.assert_output_changed(other_output, to_status)
