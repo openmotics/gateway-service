@@ -572,7 +572,7 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def shutter_down(self, shutter_id, timer=None):  # type: (int, Optional[int]) -> None
         if timer is not None:
-            if self._master_version is None or  self._master_version < (3, 143, 113):
+            if self._master_version is None or self._master_version < (3, 143, 113):
                 raise NotImplementedError('Shutter down with a timer is not supported on Master version {0}'.format(self._master_version))
             self.do_basic_action(master_api.BA_SHUTTER_DOWN, shutter_id, parameter=timer)
         self.do_basic_action(master_api.BA_SHUTTER_DOWN, shutter_id)

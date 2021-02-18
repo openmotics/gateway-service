@@ -377,6 +377,7 @@ class ShutterControllerTest(unittest.TestCase):
                             eeprom_controller=Mock())
 
         master_controller = MasterClassicController()
+        master_controller._master_version = (3, 143, 103)
         master_controller._shutter_config = {shutter.id: shutter for shutter in ShutterControllerTest.SHUTTER_CONFIG}
         SetUpTestInjections(master_controller=master_controller,
                             maintenance_controller=Mock())

@@ -79,7 +79,7 @@ class UserControllerTest(unittest.TestCase):
         # verfify that the cloud user can login
         success, data = self.controller.login(user_dto)
         self.assertTrue(success)
-        self.assertNotEquals(None, data)
+        self.assertNotEqual(None, data)
 
         # verify that the cloud user token is valid.
         self.assertTrue(self.controller.check_token(data))
@@ -138,7 +138,7 @@ class UserControllerTest(unittest.TestCase):
         # try if the user is able to login with terms accepted
         success, token = self.controller.login(user_dto, accept_terms=True)
         self.assertEqual(True, success)
-        self.assertNotEquals(None, token)
+        self.assertNotEqual(None, token)
 
         # check if the token is valid
         self.assertTrue(self.controller.check_token(token))
@@ -151,7 +151,7 @@ class UserControllerTest(unittest.TestCase):
         # try if the user is able to login with terms accepted
         success, token = self.controller.login(user_dto, accept_terms=True)
         self.assertEqual(True, success)
-        self.assertNotEquals(None, token)
+        self.assertNotEqual(None, token)
 
         # try to remove the user
         self.controller.remove_user(user_dto)
@@ -192,7 +192,7 @@ class UserControllerTest(unittest.TestCase):
         user_dto.set_password('test')
         success, token = self.controller.login(user_dto, accept_terms=True)
         self.assertEqual(True, success)
-        self.assertNotEquals(None, token)
+        self.assertNotEqual(None, token)
 
         # try to logout with the new users
         self.controller.logout(token)
@@ -208,7 +208,7 @@ class UserControllerTest(unittest.TestCase):
         # verify that the user can login
         success, token = self.controller.login(user_dto, accept_terms=True)
         self.assertEqual(True, success)
-        self.assertNotEquals(None, token)
+        self.assertNotEqual(None, token)
 
         # verify that the token is still valid
         self.assertTrue(self.controller.check_token(token))
@@ -221,7 +221,7 @@ class UserControllerTest(unittest.TestCase):
         # login again tot verify that the token is then again valid
         success, token = self.controller.login(user_dto, accept_terms=True)
         self.assertTrue(success)
-        self.assertNotEquals(None, token)
+        self.assertNotEqual(None, token)
         self.assertTrue(self.controller.check_token(token))
 
     def test_logout(self):
@@ -233,7 +233,7 @@ class UserControllerTest(unittest.TestCase):
         # test to see if you are able to login
         success, token = self.controller.login(user_dto, accept_terms=True)
         self.assertTrue(success)
-        self.assertNotEquals(None, token)
+        self.assertNotEqual(None, token)
         self.assertTrue(self.controller.check_token(token))
 
         # check if after logout te user has a valid token
