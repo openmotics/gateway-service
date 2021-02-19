@@ -249,11 +249,6 @@ class ShutterControllerTest(unittest.TestCase):
             with self.assertRaises(RuntimeError) as ex:
                 controller.shutter_goto(shutter_id, 105)
             self.assertEqual(str(ex.exception), message)
-            # A shutter with unknown position can't be instructed
-            controller._actual_positions[shutter_id] = None
-            with self.assertRaises(RuntimeError) as ex:
-                controller.shutter_goto(shutter_id, 50)
-            self.assertEqual(str(ex.exception), 'Shutter {0} has unknown actual position'.format(shutter_id))
             # Validate correct calls
             for entry in data:
                 controller._actual_positions[shutter_id] = entry[0]
@@ -272,8 +267,8 @@ class ShutterControllerTest(unittest.TestCase):
         #                             |   |   +- expected direction after the call
         #                             |   |   |                            +- expected BA to be executed
         calls = {}                  # v   v   v                            v
-        for shutter_id, data in {2: [[10, 50, ShutterEnums.Direction.UP,   'up', None],  # down = 0, up = 100
-                                     [10, 5,  ShutterEnums.Direction.DOWN, 'down', None]]}.items():
+        for shutter_id, data in {2: [[10, 50, ShutterEnums.Direction.DOWN,   'down', None],  # down = 79, up = 0
+                                     [10, 5,  ShutterEnums.Direction.UP, 'up', None]]}.items():
             # Out of range calls need to fail
             message = 'Shutter {0} has a position limit of 0 <= position <= {1}'.format(shutter_id, ShutterControllerTest.SHUTTER_CONFIG[shutter_id].steps - 1)
             with self.assertRaises(RuntimeError) as ex:
