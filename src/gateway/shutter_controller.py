@@ -311,8 +311,13 @@ class ShutterController(BaseController):
     def _calculate_shutter_timer(self, shutter_id, desired_position, steps=TIME_BASED_SHUTTER_STEPS):
         ShutterController._validate_position(shutter_id, desired_position, steps)
         actual_position = self._actual_positions.get(shutter_id)
-        if actual_position is None:
-            raise RuntimeError('Shutter {0} has unknown actual position'.format(shutter_id))
+        if actual_position is None or self._position_accuracy[shutter_id] <= 0:
+            self.reset_shutter(shutter_id)
+            actual_position = self._actual_positions.get(shutter_id)
+            if actual_position is None:
+                raise RuntimeError('Shutter {0} has unknown actual position'.format(shutter_id))
+            if self._position_accuracy[shutter_id] <= 0:
+                raise RuntimeError('Could not get accurate position for shutter {}'.format(shutter_id))
         ShutterController._validate_position(shutter_id, desired_position, steps)
         shutter = self._get_shutter(shutter_id)
         delta_position = desired_position - actual_position
@@ -324,11 +329,10 @@ class ShutterController(BaseController):
             return int(abs(delta_position) / float(steps) * configured_timer)
 
     def _execute_shutter(self, shutter_id, direction, timer=None):  # type: (int, str, Optional[int]) -> None
+        logger.debug('_execute_shutter({}, {}, timer={}'.format(shutter_id, direction, timer))
         if direction == ShutterEnums.Direction.STOP or timer == 0:
             self._master_controller.shutter_stop(shutter_id)
         else:
-            if timer is not None and self._position_accuracy[shutter_id] <= 0:
-                self.reset_shutter(shutter_id)
             if direction == ShutterEnums.Direction.UP:
                 self._master_controller.shutter_up(shutter_id, timer=timer)
             elif direction == ShutterEnums.Direction.DOWN:
@@ -336,6 +340,7 @@ class ShutterController(BaseController):
 
     def reset_shutter(self, shutter_id):  # type: (int) -> None
         # reset shutter to known state
+        logger.debug('resetting shutter {}...'.format(shutter_id))
         shutter = self._get_shutter(shutter_id)
         configured_timer = getattr(shutter, 'timer_up')
         start = time.time()
@@ -346,6 +351,7 @@ class ShutterController(BaseController):
                 raise RuntimeError('Timer expired when resetting shutter, could not get actual position')
             time.sleep(1)
         self._position_accuracy[shutter_id] = 100
+        logger.info('shutter {} reset complete'.format(shutter_id))
 
     # Internal checks and validators
 
