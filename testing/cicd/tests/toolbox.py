@@ -523,6 +523,8 @@ class Toolbox(object):
 
     def discover_energy_module(self):
         # type: () -> None
+        self.tester.get('/set_output', {'id': self.POWER_ENERGY_MODULE, 'is_on': True})
+        time.sleep(5)
         try:
             logger.debug('discover Energy module')
             self.dut.get('/start_power_address_mode')

@@ -60,7 +60,7 @@ def maintenance_mode(request, toolbox):
 
 
 @pytest.mark.slow
-def test_power_cycle(toolbox, power_on):
+def test_gateway_power_cycle(toolbox, power_on):
     toolbox.power_off()
     toolbox.ensure_power_on()
     toolbox.health_check()
