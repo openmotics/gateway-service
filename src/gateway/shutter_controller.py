@@ -240,7 +240,7 @@ class ShutterController(BaseController):
 
     def shutter_goto(self, shutter_id, desired_position):  # type: (int, int) -> None
         # Fetch and validate data
-        shutter = self._get_shutter(shutter_id)  # type: ShutterDTO
+        shutter = self._get_shutter(shutter_id)
         steps = ShutterController._get_steps(shutter)
         timer = None
 
@@ -254,7 +254,7 @@ class ShutterController(BaseController):
         if actual_position is None:
             raise RuntimeError('Shutter {0} has unknown actual position'.format(shutter_id))
 
-        direction = self._get_direction(shutter, actual_position, desired_position)
+        direction = self._get_direction(actual_position, desired_position)
         if direction == ShutterEnums.Direction.STOP:
             return self.shutter_stop(shutter_id)
 
@@ -315,9 +315,9 @@ class ShutterController(BaseController):
             if self._position_accuracy[shutter_id] <= 0:
                 raise RuntimeError('Could not get accurate position for shutter {}'.format(shutter_id))
         ShutterController._validate_position(shutter_id, desired_position, steps)
-        shutter = self._get_shutter(shutter_id)  # type: ShutterDTO
+        shutter = self._get_shutter(shutter_id)
         delta_position = desired_position - actual_position
-        direction = self._get_direction(shutter, actual_position, desired_position)
+        direction = self._get_direction(actual_position, desired_position)
         if direction == ShutterEnums.Direction.STOP:
             return 0
         else:
@@ -381,12 +381,12 @@ class ShutterController(BaseController):
         return steps - 1
 
     @staticmethod
-    def _get_direction(shutter, actual_position, desired_position):  # type: (ShutterDTO, int, int) -> str
+    def _get_direction(actual_position, desired_position):  # type: (int, int) -> str
         if actual_position == desired_position:
             return ShutterEnums.Direction.STOP
         if actual_position > desired_position:
-            return ShutterEnums.Direction.UP if not shutter.up_down_config else ShutterEnums.Direction.DOWN
-        return ShutterEnums.Direction.DOWN if not shutter.up_down_config else ShutterEnums.Direction.UP
+            return ShutterEnums.Direction.UP
+        return ShutterEnums.Direction.DOWN
 
     @staticmethod
     def _get_steps(shutter):  # type: (ShutterDTO) -> Optional[int]
@@ -450,16 +450,13 @@ class ShutterController(BaseController):
                     if elapsed_time >= threshold_timer:  # The shutter was going up/down for the whole `timer`. So it's now up/down
                         logger.debug('Shutter {0} going {1} passed time threshold. New state {2}'.format(shutter_id, direction, ShutterController.DIRECTION_END_STATE_MAP[direction]))
                         new_state = ShutterController.DIRECTION_END_STATE_MAP[direction]
-                        direction_to_check = ShutterEnums.Direction.UP if not shutter.up_down_config else ShutterEnums.Direction.DOWN
-                        new_actual_position = 0 if direction == direction_to_check else self.TIME_BASED_SHUTTER_STEPS - 1
+                        new_actual_position = 0 if direction == ShutterEnums.Direction.UP else self.TIME_BASED_SHUTTER_STEPS - 1
                         self._actual_positions[shutter_id] = ShutterController.clamp_position(shutter, new_actual_position)
                         self._position_accuracy[shutter_id] = 100
                     else:
                         new_state = ShutterEnums.State.STOPPED
                         abs_position_delta = elapsed_time / float(timer) * self.TIME_BASED_SHUTTER_STEPS
                         position_delta = -abs_position_delta if direction == ShutterEnums.Direction.UP else abs_position_delta
-                        if shutter.up_down_config:
-                            position_delta = -position_delta
                         actual_position = self._actual_positions[shutter_id]
                         if actual_position is not None:
                             new_actual_position = actual_position + int(position_delta)
