@@ -240,7 +240,7 @@ class ShutterController(BaseController):
 
     def shutter_goto(self, shutter_id, desired_position):  # type: (int, int) -> None
         # Fetch and validate data
-        shutter = self._get_shutter(shutter_id)
+        shutter = self._get_shutter(shutter_id)  # type: ShutterDTO
         steps = ShutterController._get_steps(shutter)
         timer = None
 
@@ -315,7 +315,7 @@ class ShutterController(BaseController):
             if self._position_accuracy[shutter_id] <= 0:
                 raise RuntimeError('Could not get accurate position for shutter {}'.format(shutter_id))
         ShutterController._validate_position(shutter_id, desired_position, steps)
-        shutter = self._get_shutter(shutter_id)
+        shutter = self._get_shutter(shutter_id)  # type: ShutterDTO
         delta_position = desired_position - actual_position
         direction = self._get_direction(shutter, actual_position, desired_position)
         if direction == ShutterEnums.Direction.STOP:
