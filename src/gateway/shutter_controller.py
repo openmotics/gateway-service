@@ -425,8 +425,6 @@ class ShutterController(BaseController):
         if shutter is None:
             logger.warning('Shutter {0} unknown'.format(shutter_id))
             return
-        steps = ShutterController._get_steps(shutter)
-
         self._directions[shutter_id] = ShutterController.STATE_DIRECTION_MAP[new_state]
         logger.debug('Shutter {0} reports state {1}, which is direction {2}'.format(shutter_id, new_state, self._directions[shutter_id]))
 
@@ -446,6 +444,7 @@ class ShutterController(BaseController):
             logger.debug('Shutter {0} started moving'.format(shutter_id))
         else:
             direction = ShutterController.STATE_DIRECTION_MAP[current_state]
+            steps = ShutterController._get_steps(shutter)
             if steps is None:
                 # Time based state calculation
                 timer = getattr(shutter, 'timer_{0}'.format(direction.lower()))
@@ -456,14 +455,14 @@ class ShutterController(BaseController):
                     elapsed_time = now - current_state_timestamp
                     threshold_timer = 0.90 * timer  # Allow 5% difference
                     if elapsed_time >= threshold_timer:  # The shutter was going up/down for the whole `timer`. So it's now up/down
-                        logger.debug('Shutter {0} going {1} passed time threshold. New state {2}'.format(shutter_id, direction, ShutterController.DIRECTION_END_STATE_MAP[direction]))
+                        logger.info('Shutter {0} going {1} for {2:.2f}s passed time threshold. New state {3}'.format(shutter_id, direction, elapsed_time, ShutterController.DIRECTION_END_STATE_MAP[direction]))
                         new_state = ShutterController.DIRECTION_END_STATE_MAP[direction]
                         new_actual_position = 0 if direction == ShutterEnums.Direction.UP else self.TIME_BASED_SHUTTER_STEPS - 1
                         self._actual_positions[shutter_id] = ShutterController.clamp_position(shutter, new_actual_position)
                         self._position_accuracy[shutter_id] = 100
                     else:
                         new_state = ShutterEnums.State.STOPPED
-                        abs_position_delta = int(elapsed_time / float(timer) * self.TIME_BASED_SHUTTER_STEPS)
+                        abs_position_delta = int(round(elapsed_time / float(timer) * self.TIME_BASED_SHUTTER_STEPS))
                         position_delta = -abs_position_delta if direction == ShutterEnums.Direction.UP else abs_position_delta
                         actual_position = self._actual_positions[shutter_id]
                         if actual_position is not None:
@@ -472,7 +471,7 @@ class ShutterController(BaseController):
                             self._position_accuracy[shutter_id] = self._position_accuracy.get(shutter_id, 0) - self.SINGLE_ACTION_ACCURACY_LOSS_PERCENTAGE
                         else:
                             self._position_accuracy[shutter_id] = 0
-                        logger.info('Shutter {0} going {1} for {2:.2f} steps ({3:.2f}s). New state {4}.'
+                        logger.info('Shutter {0} going {1} for {2} steps ({3:.2f}s). New state {4}.'
                                     'Actual position: {5}. Position accuracy: {6}'.format(shutter_id, direction,
                                                                                         position_delta, elapsed_time,
                                                                                         new_state,
