@@ -1465,7 +1465,7 @@ class MasterClassicController(MasterController):
     # (Group)Actions
 
     @communication_enabled
-    def do_basic_action(self, action_type, action_number, parameter=0, timeout=2):  # type: (int, int, int, int) -> None
+    def do_basic_action(self, action_type, action_number, parameter=None, timeout=2):  # type: (int, int, Optional[int], int) -> None
         """
         Execute a basic action.
 
@@ -1480,15 +1480,19 @@ class MasterClassicController(MasterController):
         if action_number < 0 or action_number > 254:
             raise ValueError('action_number not in [0, 254]: %d' % action_number)
 
-        if parameter < 0 or parameter > 240:
-            raise ValueError('parameter not in [0, 240]: %d' % parameter)
+        fields = {'action_type': action_type,
+                  'action_number': action_number}
 
-        logger.info('BA: Execute {0} {1} {2}'.format(action_type, action_number, parameter))
-        self._master_communicator.do_command(master_api.basic_action(self._master_version),
-                                             fields={'action_type': action_type,
-                                                     'action_number': action_number,
-                                                     'parameter': parameter},
-                                             timeout=timeout)
+        if parameter is None:
+            logger.info('BA: Execute {0} {1}'.format(action_type, action_number))
+            command_spec = master_api.basic_action(self._master_version)
+        else:
+            if parameter < 0 or parameter > 65535:
+                raise ValueError('parameter not in [0, 65535]: %d' % parameter)
+            fields.update({'parameter': parameter})
+            logger.info('BA: Execute {0} {1} P {2}'.format(action_type, action_number, parameter))
+            command_spec = master_api.basic_action(self._master_version, use_param=True)
+        self._master_communicator.do_command(command_spec, fields=fields, timeout=timeout)
 
     @communication_enabled
     def do_group_action(self, group_action_id):  # type: (int) -> None
