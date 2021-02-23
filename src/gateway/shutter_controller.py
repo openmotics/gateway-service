@@ -66,6 +66,7 @@ class ShutterController(BaseController):
 
     TIME_BASED_SHUTTER_STEPS = 100
     SINGLE_ACTION_ACCURACY_LOSS_PERCENTAGE = 20
+    MIN_POSITION_TIMER_SHUTTER = 2
 
     @Inject
     def __init__(self, master_controller=INJECTED, verbose=False):  # type: (MasterController, bool) -> None
@@ -259,9 +260,10 @@ class ShutterController(BaseController):
         self._directions[shutter_id] = direction
         logger.debug('Shutter {0} setting desired position to {1}'.format(shutter_id, desired_position))
         self._desired_positions[shutter_id] = desired_position
-        if timer is not None and desired_position == old_desired_position and timer < 2:
+        if timer is not None and desired_position == old_desired_position and timer < self.MIN_POSITION_TIMER_SHUTTER:
             # this is path where timers are used, and we avoid too much cumulative error by not repeating the actions
-            logger.warning('Shutter {0} skipping shutter action as timer < 2 seconds ({1:.2f}s)'.format(shutter_id, timer))
+            logger.warning('Shutter {0} skipping shutter action as timer < {1} seconds ({2:.2f}s)'
+                           .format(shutter_id, self.MIN_POSITION_TIMER_SHUTTER, timer))
         else:
             self._execute_shutter(shutter_id, direction, timer=timer)
 
@@ -305,9 +307,10 @@ class ShutterController(BaseController):
         self._directions[shutter_id] = direction
         logger.debug('Shutter {0} setting desired position to {1}'.format(shutter_id, desired_position))
         self._desired_positions[shutter_id] = desired_position
-        if timer is not None and desired_position == old_desired_position and timer < 3:
+        if timer is not None and desired_position == old_desired_position and timer < self.MIN_POSITION_TIMER_SHUTTER:
             # this is path where timers are used, and we avoid too much cumulative error by not repeating the actions
-            logger.warning('Shutter {0} skipping shutter action as timer < 2 seconds ({1:.2f}s)'.format(shutter_id, timer))
+            logger.warning('Shutter {0} skipping shutter action as timer < {1} seconds ({2:.2f}s)'
+                           .format(shutter_id, self.MIN_POSITION_TIMER_SHUTTER, timer))
         else:
             self._execute_shutter(shutter_id, direction, timer=timer)
 
