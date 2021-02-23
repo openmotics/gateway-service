@@ -1070,7 +1070,7 @@ class MasterCoreController(MasterController):
         return []  # TODO: Implement
 
     def last_success(self):
-        return time.time()  # TODO: Implement
+        return 0.0  # TODO: Implement
 
     def clear_error_list(self):
         raise NotImplementedError()
