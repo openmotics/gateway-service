@@ -2024,8 +2024,12 @@ class WebInterface(object):
         :returns: 'version': String (a.b.c).
         :rtype: dict
         """
+        master_version = self._gateway_api.get_master_version()
+        if master_version is not None:
+            master_version = ".".join([str(n) for n in master_version] if len(master_version) else None)
         return {'version': self._gateway_api.get_main_version(),
-                'gateway': gateway.__version__}
+                'gateway': gateway.__version__,
+                'master': master_version}
 
     @openmotics_api(auth=True)
     def get_system_info(self):
