@@ -326,15 +326,6 @@ class ShutterControllerTest(unittest.TestCase):
         controller = ShutterController()
         controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)
 
-        # Positionned calls on non-positional shutters should fail
-        calls = {}
-        for shutter_id in [0, 1]:
-            message = 'Shutter {0} does not support positioning'.format(shutter_id)
-            with self.assertRaises(RuntimeError) as ex:
-                controller.report_shutter_position(shutter_id, 5)
-            self.assertEqual(str(ex.exception), message)
-        self.assertEqual(len(calls), 0)
-
         #                             +- desired position
         #                             |   +- reported position
         #                             |   |   +- internal direction of the shutter
