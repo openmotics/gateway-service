@@ -329,19 +329,24 @@ class MasterCoreController(MasterController):
         if len(calls_timedout) == 0:
             # If there are no timeouts at all
             return CommunicationStatus.SUCCESS
-        elif len(all_calls) <= 10:
+
+        if len(all_calls) <= 10:
             # Not enough calls made to have a decent view on what's going on
             logger.warning('Observed master communication failures, but not enough calls')
-            return CommunicationStatus.UNSTABLE
-        elif not any(t in calls_timedout for t in all_calls[-10:]):
-            logger.warning('Observed master communication failures, but recent calls recovered')
-            # The last X calls are successfull
             return CommunicationStatus.UNSTABLE
 
         calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
         if len(calls_last_x_minutes) <= 5:
+            # Not enough calls in the last 3 minutes to have a decent view on what's going on
             logger.warning('Observed master communication failures, but not recent enough')
-            # Not enough recent calls
+            return CommunicationStatus.UNSTABLE
+
+        if len(all_calls) >= 30 and not any(t in calls_timedout for t in all_calls[-30:]):
+            # The last 30 calls are successfull, consider "recoverd"
+            return CommunicationStatus.SUCCESS
+        if not any(t in calls_timedout for t in all_calls[-10:]):
+            # The last 10 calls are successfull, consider "recovering"
+            logger.warning('Observed master communication failures, but recovering')
             return CommunicationStatus.UNSTABLE
 
         ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
@@ -349,8 +354,8 @@ class MasterCoreController(MasterController):
             # Less than 25% of the calls fail, let's assume everything is just "fine"
             logger.warning('Observed master communication failures, but there\'s only a failure ratio of {:.2f}%'.format(ratio * 100))
             return CommunicationStatus.UNSTABLE
-        else:
-            return CommunicationStatus.FAILURE
+
+        return CommunicationStatus.FAILURE
 
     def get_firmware_version(self):
         version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
