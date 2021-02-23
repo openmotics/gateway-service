@@ -259,7 +259,7 @@ class ShutterController(BaseController):
         self._directions[shutter_id] = direction
         logger.debug('Shutter {0} setting desired position to {1}'.format(shutter_id, desired_position))
         self._desired_positions[shutter_id] = desired_position
-        if timer is not None and desired_position == old_desired_position and timer < 3:
+        if timer is not None and desired_position == old_desired_position and timer < 2:
             # this is path where timers are used, and we avoid too much cumulative error by not repeating the actions
             logger.warning('Shutter {0} skipping shutter action as timer < 2 seconds ({1:.2f}s)'.format(shutter_id, timer))
         else:
