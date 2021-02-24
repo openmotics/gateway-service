@@ -85,11 +85,15 @@ class MasterCoreController(MasterController):
         self._shutter_status = {}  # type: Dict[int, Tuple[bool, bool]]
         self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
+        self._firmware_versions = {}  # type: Dict[str, Optional[str]]
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_eeprom_event)
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
+        )
+        self._master_communicator.register_consumer(
+            BackgroundConsumer(CoreAPI.firmware_information(), 0, self._handle_firmware_information)
         )
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.error_information(), 0, lambda e: logger.info('Got master error: {0}'.format(Error(e))))
@@ -825,12 +829,18 @@ class MasterCoreController(MasterController):
         def _default_if_255(value, default):
             return value if value != 255 else default
 
-        def get_master_version(_module_address):
-            try:
-                # TODO: Implement call to load slave module version
-                return True, None, None
-            except CommunicationTimedOutException:
+        self._firmware_versions = {}
+        self._master_communicator.do_command(command=CoreAPI.request_slave_firmware_versions(),
+                                             fields={})
+
+        def _wait_for_version(address_, timeout=3):
+            threshold = time.time() + timeout
+            while address_ not in self._firmware_versions and time.time() < threshold:
+                time.sleep(0.1)
+            version_info = self._firmware_versions.get(address_)
+            if version_info is None:
                 return False, None, None
+            return True, None, version_info
 
         information = []
         module_type_lookup = {'c': ModuleDTO.ModuleType.CAN_CONTROL,
@@ -858,11 +868,11 @@ class MasterCoreController(MasterController):
                 hardware_type = ModuleDTO.HardwareType.EMULATED
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=input_module_info.address,
-                            module_type=module_type_lookup.get(device_type),
+                            module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
             if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(input_module_info.address)
+                dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(input_module_info.address)
             information.append(dto)
 
         nr_of_output_modules = _default_if_255(general_configuration.number_of_output_modules, 0)
@@ -877,11 +887,11 @@ class MasterCoreController(MasterController):
                     hardware_type = ModuleDTO.HardwareType.VIRTUAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=output_module_info.address,
-                            module_type=module_type_lookup.get(device_type),
+                            module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
             if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(output_module_info.address)
+                dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(output_module_info.address)
             information.append(dto)
 
         nr_of_sensor_modules = _default_if_255(general_configuration.number_of_sensor_modules, 0)
@@ -896,11 +906,11 @@ class MasterCoreController(MasterController):
                     hardware_type = ModuleDTO.HardwareType.VIRTUAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=sensor_module_info.address,
-                            module_type=module_type_lookup.get(device_type),
+                            module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
             if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(sensor_module_info.address)
+                dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(sensor_module_info.address)
             information.append(dto)
 
         nr_of_can_controls = _default_if_255(general_configuration.number_of_can_control_modules, 0)
@@ -912,14 +922,19 @@ class MasterCoreController(MasterController):
                 hardware_type = ModuleDTO.HardwareType.INTERNAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=can_control_module_info.address,
-                            module_type=module_type_lookup.get(device_type),
+                            module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
             if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(can_control_module_info.address)
+                dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(can_control_module_info.address)
             information.append(dto)
 
         return information
+
+    def _handle_firmware_information(self, information):  # type: (Dict[str, str]) -> None
+        raw_version = information['version']
+        version = None if raw_version == '0.0.0' else raw_version
+        self._firmware_versions[information['address']] = version
 
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
         raise NotImplementedError('Module replacement not supported')
@@ -989,13 +1004,13 @@ class MasterCoreController(MasterController):
 
     def get_status(self):
         firmware_version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
-        bus_mode = self._master_communicator.do_command(CoreAPI.get_slave_bus_mode(), {})['mode']
+        rs485_mode = self._master_communicator.do_command(CoreAPI.get_master_modes(), {})['rs485_mode']
         date_time = self._master_communicator.do_command(CoreAPI.get_date_time(), {})
         return {'time': '{0:02}:{1:02}'.format(date_time['hours'], date_time['minutes']),
                 'date': '{0:02}/{1:02}/20{2:02}'.format(date_time['day'], date_time['month'], date_time['year']),
                 'mode': {CoreAPI.SlaveBusMode.INIT: 'I',
                          CoreAPI.SlaveBusMode.LIVE: 'L',
-                         CoreAPI.SlaveBusMode.TRANSPARENT: 'T'}[bus_mode],
+                         CoreAPI.SlaveBusMode.TRANSPARENT: 'T'}[rs485_mode],
                 'version': firmware_version,
                 'hw_version': 1}  # TODO: Hardware version
 
