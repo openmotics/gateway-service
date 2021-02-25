@@ -195,17 +195,22 @@ class SlaveUpdater(object):
                                 bytearray(firmware.tobinarray(start=0, end=7))  # Store jump address to the end of the flash space
                         )
 
-                    try:
-                        response = slave_communicator.do_command(address=address,
-                                                                 command=SlaveAPI.write_firmware_block(),
-                                                                 fields={'address': block, 'payload': payload},
-                                                                 timeout=SlaveUpdater.WRITE_FLASH_BLOCK_TIMEOUT)
-                        SlaveUpdater._validate_response(response)
-                        if block % int(blocks / 10) == 0 and block != 0:
-                            logger.info('{0} - Flashing... {1}%'.format(address, int(block * 100 / blocks)))
-                    except CommunicationTimedOutException:
-                        logger.info('{0} - Flashing... block {1} failed'.format(address, block))
-                        raise
+                    tries = 0
+                    while True:
+                        tries += 1
+                        try:
+                            response = slave_communicator.do_command(address=address,
+                                                                     command=SlaveAPI.write_firmware_block(),
+                                                                     fields={'address': block, 'payload': payload},
+                                                                     timeout=SlaveUpdater.WRITE_FLASH_BLOCK_TIMEOUT)
+                            SlaveUpdater._validate_response(response)
+                            if block % int(blocks / 10) == 0 and block != 0:
+                                logger.info('{0} - Flashing... {1}%'.format(address, int(block * 100 / blocks)))
+                            break
+                        except CommunicationTimedOutException as ex:
+                            logger.warning('{0} - Flashing... Block {1} failed: {2}'.format(address, block, ex))
+                            if tries >= 3:
+                                raise
 
                 logger.info('{0} - Flashing... Done'.format(address))
 

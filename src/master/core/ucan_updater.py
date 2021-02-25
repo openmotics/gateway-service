@@ -25,6 +25,7 @@ from master.core.ucan_api import UCANAPI
 from master.core.ucan_command import UCANPalletCommandSpec, SID
 from master.core.ucan_communicator import UCANCommunicator
 from master.core.fields import UInt32Field
+from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
     from typing import Optional
@@ -126,13 +127,22 @@ class UCANUpdater(object):
 
                 if payload != empty_payload:
                     # Since the uCAN flash area is erased, skip empty blocks
-                    result = ucan_communicator.do_command(cc_address=cc_address,
-                                                          command=UCANAPI.write_flash(len(payload)),
-                                                          identity=ucan_address,
-                                                          fields={'start_address': little_start_address,
-                                                                  'data': payload})
-                    if result is None or not result['success']:
-                        raise RuntimeError('Failed to flash {0} bytes to address 0x{1:04X}'.format(len(payload), start_address))
+                    tries = 0
+                    while True:
+                        tries += 1
+                        try:
+                            result = ucan_communicator.do_command(cc_address=cc_address,
+                                                                  command=UCANAPI.write_flash(len(payload)),
+                                                                  identity=ucan_address,
+                                                                  fields={'start_address': little_start_address,
+                                                                          'data': payload})
+                            if result is None or not result['success']:
+                                raise RuntimeError('Failed to flash {0} bytes to address 0x{1:04X}'.format(len(payload), start_address))
+                            break
+                        except CommunicationTimedOutException as ex:
+                            logger.warning('Flashing... Address 0x{0:04X} failed: {1}'.format(start_address, ex))
+                            if tries >= 3:
+                                raise
 
                 total_payload += payload
 
