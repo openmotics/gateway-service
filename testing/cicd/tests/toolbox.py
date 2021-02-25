@@ -262,20 +262,26 @@ class Toolbox(object):
             expected_modules[hardware_type][module.mtype] += 1
         logger.info('Expected modules: {0}'.format(expected_modules))
 
-        try:
-            modules = self.count_modules('master')
-            logger.info('Current discovered modules: {0}'.format(modules))
-            for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
-                assert modules.get(mtype, 0) == expected_amount
-        except Exception:
+        missing_modules = set()
+        modules = self.count_modules('master')
+        logger.info('Current modules: {0}'.format(modules))
+        for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
+            if modules.get(mtype, 0) == 0:
+                missing_modules.add(mtype)
+        modules_info = self.list_modules()['master'].values()
+        if not any(v['type'] == 'C' for v in modules_info):
+            missing_modules.add('C')
+        if not any(v['type'] == 'I' and v['is_can'] for v in modules_info):
+            missing_modules.add('C')
+        if missing_modules:
             logger.info('Discovering modules...')
-            self.discover_modules(output_modules=True,
-                                  input_modules=True,
-                                  can_controls=True,
-                                  ucans=True)
+            self.discover_modules(output_modules='O' in missing_modules,
+                                  input_modules='I' in missing_modules,
+                                  can_controls='C' in missing_modules,
+                                  ucans='C' in missing_modules)
 
         modules = self.count_modules('master')
-        logger.info('Current discovered modules: {0}'.format(modules))
+        logger.info('Discovered modules: {0}'.format(modules))
         for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
             assert modules.get(mtype, 0) == expected_amount
 
@@ -285,7 +291,7 @@ class Toolbox(object):
 
         try:
             for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
-                assert modules.get(mtype, 0) == expected_amount
+                assert modules.get(mtype, 0) >= expected_amount
         except Exception:
             logger.info('Adding virtual modules...')
             for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
@@ -294,9 +300,9 @@ class Toolbox(object):
                 self.add_virtual_modules(module_amounts={mtype: extra_needed_amount})
 
         modules = self.count_modules('master')
-        logger.info('Current discovered modules: {0}'.format(modules))
+        logger.info('Virtual modules: {0}'.format(modules))
         for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
-            assert modules.get(mtype, 0) == expected_amount
+            assert modules.get(mtype, 0) >= expected_amount
 
     def print_logs(self):
         # type: () -> None
