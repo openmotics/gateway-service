@@ -55,6 +55,12 @@ class CoreAPI(object):
         return CoreCommandSpec(instruction='ER',
                                response_fields=[ByteField('type'), ByteField('parameter_a'), WordField('parameter_b'), WordField('parameter_c')])
 
+    @staticmethod
+    def firmware_information():  # type: () -> CoreCommandSpec
+        """ Firmware information """
+        return CoreCommandSpec(instruction='FW',
+                               response_fields=[AddressField('address'), VersionField('version')])
+
     # Generic information and configuration
 
     @staticmethod
@@ -98,11 +104,11 @@ class CoreAPI(object):
                                                 AddressField('address'), WordField('bus_errors'), ByteField('module_status')])
 
     @staticmethod
-    def get_slave_bus_mode():  # type: () -> CoreCommandSpec
-        """ Receives the slave bus mode """
+    def get_master_modes():  # type: () -> CoreCommandSpec
+        """ Receives various master modes (rs485 bus mode, BA debug mode) """
         return CoreCommandSpec(instruction='ST',
                                request_fields=[LiteralBytesField(0)],
-                               response_fields=[ByteField('info_type'), ByteField('mode')])
+                               response_fields=[ByteField('info_type'), ByteField('rs485_mode'), ByteField('ba_debug_mode')])
 
     @staticmethod
     def get_firmware_version():  # type: () -> CoreCommandSpec
@@ -110,6 +116,13 @@ class CoreAPI(object):
         return CoreCommandSpec(instruction='ST',
                                request_fields=[LiteralBytesField(1)],
                                response_fields=[ByteField('info_type'), VersionField('version')])
+
+    @staticmethod
+    def request_slave_firmware_versions():  # type: () -> CoreCommandSpec
+        """ Requests the slave firmware versions, which will be send to the GW in separate FW calls """
+        return CoreCommandSpec(instruction='ST',
+                               request_fields=[LiteralBytesField(2)],
+                               response_fields=[ByteField('info_type'), PaddingField(2)])
 
     @staticmethod
     def get_date_time():  # type: () -> CoreCommandSpec
