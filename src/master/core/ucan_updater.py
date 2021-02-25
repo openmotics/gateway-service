@@ -40,6 +40,7 @@ class UCANUpdater(object):
 
     APPLICATION_START = 0x4
     BOOTLOADER_START = 0xD000
+    WRITE_FLASH_BLOCK_TIMEOUT = 10
 
     # There's a buffer of 8 segments on the uCAN. This means 7 data segments with a 1-byte header, so 49 bytes.
     # In this data stream is also the address (4 bytes) and the CRC (4 bytes) leaving 41 usefull bytes.
@@ -135,7 +136,8 @@ class UCANUpdater(object):
                                                                   command=UCANAPI.write_flash(len(payload)),
                                                                   identity=ucan_address,
                                                                   fields={'start_address': little_start_address,
-                                                                          'data': payload})
+                                                                          'data': payload},
+                                                                  timeout=UCANUpdater.WRITE_FLASH_BLOCK_TIMEOUT)
                             if result is None or not result['success']:
                                 raise RuntimeError('Failed to flash {0} bytes to address 0x{1:04X}'.format(len(payload), start_address))
                             break
