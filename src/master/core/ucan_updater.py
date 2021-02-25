@@ -41,6 +41,7 @@ class UCANUpdater(object):
     APPLICATION_START = 0x4
     BOOTLOADER_START = 0xD000
     WRITE_FLASH_BLOCK_TIMEOUT = 10
+    BOOTLOADER_APPLICATION_SWITHC_TIMEOUT = 15
 
     # There's a buffer of 8 segments on the uCAN. This means 7 data segments with a 1-byte header, so 49 bytes.
     # In this data stream is also the address (4 bytes) and the CRC (4 bytes) leaving 41 usefull bytes.
@@ -87,7 +88,11 @@ class UCANUpdater(object):
 
                 logger.info('Bootloader not active, switching to bootloader')
                 ucan_communicator.do_command(cc_address, UCANAPI.set_bootloader_timeout(SID.NORMAL_COMMAND), ucan_address, {'timeout': UCANUpdater.BOOTLOADER_TIMEOUT_UPDATE})
-                response = ucan_communicator.do_command(cc_address, UCANAPI.reset(SID.NORMAL_COMMAND), ucan_address, {}, timeout=10)
+                response = ucan_communicator.do_command(cc_address=cc_address,
+                                                        command=UCANAPI.reset(SID.NORMAL_COMMAND),
+                                                        identity=ucan_address,
+                                                        fields={},
+                                                        timeout=UCANUpdater.BOOTLOADER_APPLICATION_SWITHC_TIMEOUT)
                 if response is None:
                     raise RuntimeError('Error resettings uCAN before flashing')
                 if response.get('application_mode', 1) != 0:
@@ -166,7 +171,11 @@ class UCANUpdater(object):
 
             # Switch to application mode
             logger.info('Reset to application mode')
-            response = ucan_communicator.do_command(cc_address, UCANAPI.reset(SID.BOOTLOADER_COMMAND), ucan_address, {}, timeout=10)
+            response = ucan_communicator.do_command(cc_address=cc_address,
+                                                    command=UCANAPI.reset(SID.BOOTLOADER_COMMAND),
+                                                    identity=ucan_address,
+                                                    fields={},
+                                                    timeout=UCANUpdater.BOOTLOADER_APPLICATION_SWITHC_TIMEOUT)
             if response is None:
                 raise RuntimeError('Error resettings uCAN after flashing')
             if response.get('application_mode', 0) != 1:
