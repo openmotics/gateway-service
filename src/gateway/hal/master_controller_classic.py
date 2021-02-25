@@ -1268,7 +1268,7 @@ class MasterClassicController(MasterController):
         # type: (str, str, Serial) -> None
         self._communication_enabled = False
         try:
-            bootload_modules(module_type, hex_filename)
+            bootload_modules(module_type, hex_filename, None, None)
         finally:
             self._communication_enabled = True
 
