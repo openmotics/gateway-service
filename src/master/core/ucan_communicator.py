@@ -78,8 +78,8 @@ class UCANCommunicator(object):
         if consumer in consumers:
             consumers.remove(consumer)
 
-    def do_command(self, cc_address, command, identity, fields, timeout=2):
-        # type: (str, UCANCommandSpec, str, Dict[str, Any], Optional[int]) -> Optional[Dict[str, Any]]
+    def do_command(self, cc_address, command, identity, fields, timeout=2, tx_timeout=2):
+        # type: (str, UCANCommandSpec, str, Dict[str, Any], Optional[int], Optional[int]) -> Optional[Dict[str, Any]]
         """
         Send a uCAN command over the Communicator and block until an answer is received.
         If the Core does not respond within the timeout period, a CommunicationTimedOutException is raised
@@ -89,6 +89,7 @@ class UCANCommunicator(object):
         :param identity: The identity
         :param fields: A dictionary with the command input field values
         :param timeout: maximum allowed time before a CommunicationTimedOutException is raised
+        :param tx_timeout: timeout for the TX message(s) before a CommunicationTimedOutException is raised
         :returns: dict containing the output fields of the command
         """
         if self._cc_pallet_mode.get(cc_address, False) is True:
@@ -113,7 +114,7 @@ class UCANCommunicator(object):
                                                       'nr_can_bytes': len(payload),
                                                       'sid': command.sid,
                                                       'payload': payload + bytearray([0] * (8 - len(payload)))},
-                                              timeout=timeout)
+                                              timeout=tx_timeout if tx_timeout is not None else timeout)
             except CommunicationTimedOutException as ex:
                 logger.error('Internal timeout during uCAN transport to CC {0}: {1}'.format(cc_address, ex))
                 master_timeout = True
