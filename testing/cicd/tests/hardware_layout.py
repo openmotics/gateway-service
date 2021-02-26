@@ -35,9 +35,10 @@ class Input(object):
         self.module = module
 
     def __str__(self):
-        return 'Input({0}#{1})'.format(
+        return 'Input({0}#{1}{2})'.format(
             '?' if self.module is None else self.module.mtype,
-            self.input_id
+            self.input_id,
+            ', ucan' if self.module.is_can else ''
         )
 
     def __repr__(self):
@@ -67,10 +68,11 @@ class Module(object):
         EMULATED = 'emulated'
         INTERNAL = 'internal'
 
-    def __init__(self, name, mtype, hardware_type, inputs=None, cts=None, outputs=None):
+    def __init__(self, name, mtype, hardware_type, is_can=False, inputs=None, cts=None, outputs=None):
         self.name = name
         self.mtype = mtype
         self.hardware_type = hardware_type
+        self.is_can = is_can
         self.inputs = []
         for _input in (inputs or []):
             _input.module = self
@@ -156,7 +158,7 @@ _INPUT_MODULE_LAYOUTS = {
                        Input(input_id=6, tester_output_id=6),
                        Input(input_id=7, tester_output_id=7)]),
         # TODO: also test random order discovery?
-        Module(name='CAN control', mtype='I',
+        Module(name='CAN control', mtype='I', is_can=True,
                hardware_type=Module.HardwareType.EMULATED,
                inputs=[Input(input_id=16, tester_output_id=32),
                        Input(input_id=17, tester_output_id=33),
