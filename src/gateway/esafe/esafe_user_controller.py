@@ -22,6 +22,7 @@ from ioc import Injectable, Inject, Singleton, INJECTED
 
 from gateway.models import EsafeUser
 from gateway.mappers.esafe import EsafeUserMapper
+from gateway.esafe.esafe_exception import EsafeItemDoesNotExistError, EsafeWrongInputParametersError
 
 if False:  # MYPY
     from typing import Tuple, List, Optional, Dict
@@ -37,12 +38,25 @@ class EsafeUserController(object):
     def __init__(self):
         pass
 
-    def load_user(self, user_id):
+    def load_user(self, user_id=None, first_name=None, last_name=None, code=None):
         _ = self
-        user_orm = EsafeUser.select().where(EsafeUser.id == user_id).first()
+        if user_id is not None:
+            user_orm = EsafeUser.select().where(EsafeUser.id == user_id).first()
+        elif first_name is not None and last_name is not None:
+            user_orm = EsafeUser.select()\
+                                .where(EsafeUser.first_name == first_name and EsafeUser.last_name == last_name)\
+                                .first()
+        elif code is not None:
+            user_orm = EsafeUser.select() \
+                .where(EsafeUser.code == code) \
+                .first()
+        else:
+            raise EsafeWrongInputParametersError('When loading specific user, there is a set of values needed to identify a user')
+
         if user_orm is None:
-            return None
+            raise EsafeItemDoesNotExistError('Could not find the required user')
         user_dto = EsafeUserMapper.orm_to_dto(user_orm)
+
         return user_dto
 
     def load_users(self):

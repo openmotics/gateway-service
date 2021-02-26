@@ -267,6 +267,7 @@ def setup_target_platform(target_platform, message_client_name):
         # Add a eSafe api service when the platform is eSafe
         if target_platform == Platform.Type.ESAFE:
             Injectable.value(esafe_endpoints=[webservice_esafe.EsafeUsers(), webservice_esafe.EsafeApartment()])
+            Injectable.value(esafe_token_timeout=3600)
     elif target_platform in Platform.CoreTypes:
         # FIXME don't create singleton for optional controller?
         from master.core import ucan_communicator, slave_communicator

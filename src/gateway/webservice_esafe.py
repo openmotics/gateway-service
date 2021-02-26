@@ -1,12 +1,18 @@
 from __future__ import absolute_import
 import cherrypy
+from decorator import decorator
 import ujson as json
+import time
 
 import logging
 
 from ioc import INJECTED, Inject, Injectable, Singleton
+from gateway.esafe.esafe_exception import EsafeParseError, EsafeTimeOutError, EsafeForbiddenError, EsafeStateError,\
+    EsafeUnAuthorizedError, EsafeNotImplementedError, EsafeItemDoesNotExistError, EsafeInvalidOperationError,\
+    EsafeWrongInputParametersError, EsafeError
 from gateway.esafe.esafe_user_controller import EsafeUserController
 from gateway.api.serializers.esafe import EsafeUserSerializer, EsafeApartmentSerializer
+from gateway.webservice import limit_floats
 
 
 logger = logging.getLogger("openmotics")
@@ -17,24 +23,71 @@ if False:  # MyPy
     from typing import Optional, List, Dict
 
 
-# ----------------------------
-# eSafe Authentication
-# ----------------------------
+# ------------------------
+# eSafe api decorator
+# ------------------------
 
-class EsafeUserAuth:
-    USER = 'USER'
-    ADMIN = 'ADMIN'
-    TECHNICIAN = 'TECHNICIAN'
-    COURIER = 'COURIER'
+# api decorator
+@decorator
+def _esafe_api(f, *args, **kwargs):
+    start = time.time()
+    timings = {}
+    status = 200  # OK
+    try:
+        data = f(*args, **kwargs)
+    except cherrypy.HTTPError as ex:
+        status = ex.status
+        data = json.dumps({'success': False, 'msg': ex._message})
+    except EsafeUnAuthorizedError as ex:
+        status = 401
+        data = ex.message
+    except EsafeForbiddenError as ex:
+        status = 400
+        data = ex.message
+    except EsafeItemDoesNotExistError as ex:
+        status = 404
+        data = ex.message
+    except EsafeWrongInputParametersError as ex:
+        status = 400
+        data = ex.message
+    except EsafeParseError as ex:
+        status = 400
+        data = ex.message
+    except EsafeTimeOutError as ex:
+        status = 500
+        data = ex.message
+    except EsafeInvalidOperationError as ex:
+        status = 409
+        data = ex.message
+    except EsafeNotImplementedError as ex:
+        status = 503
+        data = ex.message
+    except EsafeError as ex:
+        status = 500
+        data = ex.message
+
+    timings['process'] = ('Processing', time.time() - start)
+    serialization_start = time.time()
+    contents = data
+    timings['serialization'] = 'Serialization', time.time() - serialization_start
+    cherrypy.response.headers['Content-Type'] = 'application/json'
+    cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
+                                                           for key, value in timings.items()])
+    cherrypy.response.status = status
+    return contents.encode()
 
 
-def esafe_api(auth=None):
+def esafe_api(auth=False, check=None, pass_token=False):
     def wrapper(func):
+        func = _esafe_api(func)
         if auth is not None:
-            # Esafe auth here...
-            pass
+            func = cherrypy.tools.authenticated(pass_token=pass_token)(func)
+        func = cherrypy.tools.params(**(check or {}))(func)
+        func.exposed = True
+        func.check = check
         return func
     return wrapper
+
 
 # ----------------------------
 # eSafe API
@@ -72,11 +125,10 @@ class EsafeRestAPIEndpoint(object):
 class EsafeUsers(EsafeRestAPIEndpoint):
     API_ENDPOINT = '/api/v1/users'
 
-    @esafe_api(auth=None)
+    @esafe_api(auth=True)
     def GET(self, user_id=None):
         if user_id is None:
             users = self.user_controller.load_users()
-            # users_dto = [EsafeUserMapper.orm_to_dto(user) for user in users]
             users_serial = [EsafeUserSerializer.serialize(user) for user in users]
             return json.dumps({'users': users_serial})
 
