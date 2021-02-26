@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-Ventilation Mapper
+eSafe object Mapper
 """
 from __future__ import absolute_import
 
