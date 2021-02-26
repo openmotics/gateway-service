@@ -163,7 +163,7 @@ class SchedulingController(object):
             return
         try:
             schedule_dto.running = True
-            logger.info('Executing schedule {0} ({1})'.format(schedule_dto.name, schedule_dto.action))
+            logger.debug('Executing schedule {0} ({1})'.format(schedule_dto.name, schedule_dto.action))
             if schedule_dto.arguments is None:
                 raise ValueError('Invalid schedule arguments')
             # Execute
