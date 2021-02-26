@@ -50,8 +50,7 @@ still an issue
 from typing import Optional, Literal, List, Tuple, Set, Dict, Any, TypeVar
 from playhouse.signals import Model
 from peewee import (
-    CharField,
-    FloatField, ForeignKeyField, IntegerField, PrimaryKeyField,
+    CharField, FloatField, ForeignKeyField, IntegerField, PrimaryKeyField, BooleanField,
     SqliteDatabase, TextField
 )
 
@@ -62,6 +61,7 @@ class MixedCharField(str, CharField): ...
 class MixedFloatField(float, FloatField): ...
 class MixedPrimaryKeyField(int, PrimaryKeyField): ...
 class MixedTextField(str, TextField): ...
+class MixedBooleanField(str, BooleanField): ...
 
 
 class Database(object):
@@ -400,3 +400,57 @@ class DaySchedule(BaseModel):
     def schedule_data(self, value: Dict[int, float]) -> None: ...
 
     def get_scheduled_temperature(self, seconds_in_day: int) -> float: ...
+
+# -------------
+# eSafe models
+# -------------
+
+class EsafeApartment(BaseModel):
+    id: MixedPrimaryKeyField
+    name: MixedCharField
+    mailbox_rebus_id: MixedIntegerField
+    doorbell_rebus_id: MixedIntegerField
+
+class EsafeApartmentForeignKeyField(EsafeApartment, ForeignKeyField): ...
+
+
+class EsafeUser(BaseModel):
+    user_id: MixedPrimaryKeyField
+    user_first_name: MixedCharField
+    user_last_name: MixedCharField
+    user_role: MixedCharField
+    user_code: MixedCharField
+    apartment_id: EsafeApartmentForeignKeyField
+
+class EsafeUserForeignKeyField(EsafeUser, ForeignKeyField): ...
+
+class EsafeSystem(BaseModel):
+    key: MixedCharField
+    value: MixedCharField
+
+
+class EsafeRFID(BaseModel):
+    id: MixedPrimaryKeyField
+    tag_string: MixedCharField
+    uid_manufacturer: MixedCharField
+    uid_extension: MixedCharField
+    enter_count: MixedIntegerField
+    blacklisted: MixedBooleanField
+    label: MixedCharField
+    timestamp_created: MixedCharField
+    timestamp_last_used: MixedCharField
+    user_id: EsafeUserForeignKeyField
+
+
+class EsafeDelivery(BaseModel):
+    id: MixedPrimaryKeyField
+    type: MixedCharField
+    timestamp_delivery: MixedCharField
+    timestamp_pickup: MixedCharField
+    courier_firm: MixedCharField
+    signature_delivery: MixedCharField
+    signature_pickup: MixedCharField
+    parcelbox_rebus_id: MixedIntegerField
+    user_id_delivery: EsafeUserForeignKeyField
+    user_id_pickup: EsafeUserForeignKeyField
+
