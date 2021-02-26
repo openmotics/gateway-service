@@ -40,7 +40,7 @@ if False:  # MYPY
     from gateway.group_action_controller import GroupActionController
     from gateway.gateway_api import GatewayApi
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger('gateway.scheduling.controller')
 
 
 @Injectable.named('scheduling_controller')
@@ -163,6 +163,7 @@ class SchedulingController(object):
             return
         try:
             schedule_dto.running = True
+            logger.info('Executing schedule {0} ({1})'.format(schedule_dto.name, schedule_dto.action))
             if schedule_dto.arguments is None:
                 raise ValueError('Invalid schedule arguments')
             # Execute
