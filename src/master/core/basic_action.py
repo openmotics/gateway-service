@@ -53,7 +53,7 @@ class BasicAction(object):
 
     @property
     def in_use(self):  # type: () -> bool
-        return self.action_type != 255 and self.action != 255
+        return self.action_type != 255 or self.action != 255
 
     @property
     def is_execute_group_action(self):  # type: () -> bool
@@ -66,6 +66,10 @@ class BasicAction(object):
         basic_action._device_nr = data[2:4]
         basic_action._extra_parameter = data[4:6]
         return basic_action
+
+    @staticmethod
+    def empty():
+        return BasicAction.decode(bytearray([255] * 6))
 
     def __str__(self):
         return 'BA({0},{1},{2},{3})'.format(self.action_type, self.action, self.device_nr, self.extra_parameter)
