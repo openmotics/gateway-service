@@ -43,24 +43,29 @@ class MasterHeartbeat(object):
         self._backoff = 60
         self._last_restart = 0.0
         self._min_threshold = 2
-        self._thread = DaemonThread(name='masterheartbeat',
-                                    target=self._heartbeat,
-                                    interval=30,
-                                    delay=5)
+        self._thread = None  # type: Optional[DaemonThread]
 
     def start(self):
         # type: () -> None
-        logger.info('Starting master heartbeat')
-        self._thread.start()
+        if self._thread is None:
+            logger.info('Starting master heartbeat')
+            self._thread = DaemonThread(name='masterheartbeat',
+                                        target=self._heartbeat,
+                                        interval=30,
+                                        delay=5)
+            self._thread.start()
 
     def stop(self):
         # type: () -> None
-        self._thread.stop()
+        if self._thread:
+            self._thread.stop()
+            self._thread = None
 
     def is_online(self):
         # type: () -> bool
         if self._failures == -1:
-            self._thread.request_single_run()
+            if self._thread:
+                self._thread.request_single_run()
             time.sleep(2)
         return self._failures == 0
 

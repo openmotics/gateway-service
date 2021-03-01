@@ -1192,6 +1192,7 @@ class MasterClassicController(MasterController):
         # type: (str, Serial) -> None
         try:
             self._communication_enabled = False
+            self._heartbeat.stop()
             self._master_communicator.update_mode_start()
 
             port = controller_serial.port  # type: ignore
@@ -1261,15 +1262,18 @@ class MasterClassicController(MasterController):
 
         finally:
             self._master_communicator.update_mode_stop()
+            self._heartbeat.start()
             self._communication_enabled = True
 
     @Inject
-    def update_slave_modules(self, module_type, hex_filename, controller_serial=INJECTED):
-        # type: (str, str, Serial) -> None
-        self._communication_enabled = False
+    def update_slave_modules(self, module_type, hex_filename):
+        # type: (str, str) -> None
         try:
+            self._communication_enabled = False
+            self._heartbeat.stop()
             bootload_modules(module_type, hex_filename, None, None)
         finally:
+            self._heartbeat.start()
             self._communication_enabled = True
 
     @staticmethod
