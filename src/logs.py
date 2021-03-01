@@ -67,7 +67,7 @@ class Logs(object):
         for logger_namespace in ['openmotics', 'gateway']:
             _logger = logging.getLogger(logger_namespace)
             _logger.setLevel(openmotics_log_level)
-            _logger.propagate = False
+            _logger.propagate = True
 
             for extra_handler in [openmotics_stream_handler, update_handler, syslog_handler]:
                 # Add extra handlers, where available
