@@ -23,7 +23,7 @@ from datetime import datetime
 import hypothesis
 import requests
 import ujson as json
-from requests.exceptions import ConnectionError, RequestException
+from requests.exceptions import ConnectionError, RequestException, Timeout
 
 from tests.hardware_layout import TEST_PLATFORM, TestPlatform, \
     OUTPUT_MODULE_LAYOUT, INPUT_MODULE_LAYOUT, Input, Output, Module
@@ -104,7 +104,7 @@ class Client(object):
                 logger.debug('Request {} {} failed {}, retrying...'.format(self._id, path, exc))
                 time.sleep(16)
                 pass
-        raise AssertionError('Request {} {} failed after {:.2f}s'.format(self._id, path, time.time() - since))
+        raise Timeout('Request {} {} failed after {:.2f}s'.format(self._id, path, time.time() - since))
 
 
 class TesterGateway(object):
@@ -585,7 +585,7 @@ class Toolbox(object):
         pending = ['unknown']
         while since > time.time() - timeout:
             try:
-                data = self.dut.get('/health_check', use_token=False, timeout=5)
+                data = self.dut.get('/health_check', use_token=False, success=False, timeout=5)
                 pending = [k for k, v in data['health'].items() if not v['state']]
                 if not pending:
                     return pending
