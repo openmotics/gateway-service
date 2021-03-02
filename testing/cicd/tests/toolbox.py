@@ -23,7 +23,7 @@ from datetime import datetime
 import hypothesis
 import requests
 import ujson as json
-from requests.exceptions import ConnectionError, RequestException
+from requests.exceptions import ConnectionError, RequestException, Timeout
 
 from tests.hardware_layout import TEST_PLATFORM, TestPlatform, \
     OUTPUT_MODULE_LAYOUT, INPUT_MODULE_LAYOUT, Input, Output, Module
@@ -104,7 +104,7 @@ class Client(object):
                 logger.debug('Request {} {} failed {}, retrying...'.format(self._id, path, exc))
                 time.sleep(16)
                 pass
-        raise AssertionError('Request {} {} failed after {:.2f}s'.format(self._id, path, time.time() - since))
+        raise Timeout('Request {} {} failed after {:.2f}s'.format(self._id, path, time.time() - since))
 
 
 class TesterGateway(object):
@@ -170,8 +170,8 @@ class TesterGateway(object):
         # type: () -> None
         self._outputs = {}
 
-    def receive_output_event(self, output_id, output_status, between):
-        # type: (int, bool, Tuple[float, float]) -> bool
+    def receive_output_event(self, output, output_status, between):
+        # type: (Output, bool, Tuple[float, float]) -> bool
         cooldown, deadline = between
         timeout = deadline - cooldown
         if cooldown > 0:
@@ -180,13 +180,13 @@ class TesterGateway(object):
             time.sleep(cooldown)
         since = time.time()
         while since > time.time() - timeout:
-            if output_id in self._outputs and output_status == self._outputs[output_id]:
-                logger.debug('Received event {} status={} after {:.2f}s'.format(output_id, self._outputs[output_id], time.time() - since))
+            if output.output_id in self._outputs and output_status == self._outputs[output.output_id]:
+                logger.debug('Received event {} status={} after {:.2f}s'.format(output, self._outputs[output.output_id], time.time() - since))
                 return True
             if self.update_events():
                 continue
             time.sleep(0.2)
-        logger.error('Did not receive event {} status={} after {:.2f}s'.format(output_id, output_status, time.time() - since))
+        logger.error('Did not receive event {} status={} after {:.2f}s'.format(output, output_status, time.time() - since))
         self.log_events()
         return False
 
@@ -591,7 +591,7 @@ class Toolbox(object):
         pending = ['unknown']
         while since > time.time() - timeout:
             try:
-                data = self.dut.get('/health_check', use_token=False, timeout=5)
+                data = self.dut.get('/health_check', use_token=False, success=False, timeout=5)
                 pending = [k for k, v in data['health'].items() if not v['state']]
                 if not pending:
                     return pending
@@ -639,7 +639,7 @@ class Toolbox(object):
     def assert_output_changed(self, output, status, between=(0, 5)):
         # type: (Output, bool, Tuple[float,float]) -> None
         hypothesis.note('assert output {} status changed {} -> {}'.format(output, not status, status))
-        if self.tester.receive_output_event(output.output_id, status, between=between):
+        if self.tester.receive_output_event(output, status, between=between):
             return
         raise AssertionError('expected event {} status={}'.format(output, status))
 

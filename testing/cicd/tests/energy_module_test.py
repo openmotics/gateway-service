@@ -58,7 +58,7 @@ def test_module_power_cycle(toolbox, energy_module, ct):  # type: (Toolbox, Any,
 
 
 def _assert_realtime(toolbox, ct):  # type: (Toolbox, CT) -> None
-    logger.info('validating realtime data from energy module e#{}.{}'.format(ct.module_id, ct.ct_id))
+    logger.debug('validating realtime data from energy module e#{}.{}'.format(ct.module_id, ct.ct_id))
     data = toolbox.dut.get('/get_realtime_power')
     assert str(ct.module_id) in data
     voltage, frequency, current, power = data[str(ct.module_id)][ct.ct_id]

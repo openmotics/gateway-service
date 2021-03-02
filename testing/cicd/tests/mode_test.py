@@ -150,24 +150,17 @@ def test_factory_reset(toolbox, authorized_mode, factory_reset):
     assert 'outputs' in data
     assert data['outputs'] == []
 
-    toolbox.discover_modules(input_modules=True,
-                             output_modules=True)
-    # TODO: Once `can_controls` and `ucans` are also included, the below `firmeware` check
-    #       also needs to be adapted, as emulated modules don't have a firwmare version
+    toolbox.initialize()
 
     data = toolbox.dut.get('/get_modules')
     assert 'inputs' in data
     assert ['I'] == data['inputs']
     assert 'outputs' in data
-    assert ['O'] == data['outputs']
+    assert ['O', 'o'] == data['outputs']
 
     data = toolbox.dut.get('/get_modules_information')
     modules = list(data['modules']['master'].values())
-    assert {'I', 'O'} == set(x['type'] for x in modules)
-    assert None not in [x['firmware'] for x in modules]
-
-    toolbox.add_virtual_modules(module_amounts={'o': 1})
-
-    data = toolbox.dut.get('/get_modules_information')
-    modules = list(data['modules']['master'].values())
-    assert {'I', 'O', 'o'} == set(x['type'] for x in modules)
+    assert 'I' in set(x['type'] for x in modules)
+    assert 'O' in set(x['type'] for x in modules)
+    # Filter out CAN inputs since those are expected to not have a firmware version.
+    assert None not in [x['firmware'] for x in modules if x['type'] in {'I', 'O'} and not x.get('is_can', False)]
