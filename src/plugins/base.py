@@ -255,6 +255,7 @@ class PluginController(object):
         from subprocess import call
         import hashlib
 
+
         # Check if the md5 sum matches the provided md5 sum
         hasher = hashlib.md5()
         hasher.update(package_data)
@@ -269,7 +270,7 @@ class PluginController(object):
             with open('{0}/package.tgz'.format(tmp_dir), "wb") as tgz:
                 tgz.write(package_data)
 
-            retcode = call('cd {0}; mkdir new_package; tar xzf package.tgz -C new_package/'.format(tmp_dir),
+            retcode = call('cd {0}; mkdir new_package; gzip -d package.tgz; tar xf package.tar -C new_package/'.format(tmp_dir),
                            shell=True)
             if retcode != 0:
                 raise Exception('The package data (tgz format) could not be extracted.')
@@ -280,6 +281,13 @@ class PluginController(object):
                 with open(init_path, 'w'):
                     # Create an empty file
                     pass
+
+            # Check if the plugins directory exists, This will be created when not available
+            if not os.path.exists(self._plugins_path):
+                cmd = 'mkdir -p {0}'.format(self._plugins_path)
+                retcode = call(cmd, shell=True)
+                if retcode != 0:
+                    raise Exception('Could not create the base plugin folder')
 
             # Check if the package contains a valid plugin
             _logger = self.get_logger('new_package')
@@ -313,9 +321,10 @@ class PluginController(object):
 
             # Check if the package directory exists, this can only be the case if a previous
             # install failed or if the plugin has gone corrupt: remove it!
-            plugin_path = '{0}/{1}'.format(self._plugins_path, name)
+            plugin_path = os.path.join(self._plugins_path, name)
             if os.path.exists(plugin_path):
                 rmtree(plugin_path)
+
 
             # Install the package
             retcode = call('cd {0}; mv new_package {1}'.format(tmp_dir, plugin_path), shell=True)

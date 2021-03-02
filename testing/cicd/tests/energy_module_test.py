@@ -42,7 +42,7 @@ def test_realtime_power(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT)
 @pytest.mark.slow
 @hypothesis.given(cts())
 @pytest.mark.skipif(skip_on_platforms([TestPlatform.CORE_PLUS]), reason='No Energy Module on the Core(+) yet')
-def test_power_cycle(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT) -> None
+def test_module_power_cycle(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT) -> None
     _ = energy_module
     cycles = 10
     post_boot_wait = 5  # Wait `post_boot_wait` seconds after powering up the module to start using it
@@ -58,7 +58,7 @@ def test_power_cycle(toolbox, energy_module, ct):  # type: (Toolbox, Any, CT) ->
 
 
 def _assert_realtime(toolbox, ct):  # type: (Toolbox, CT) -> None
-    logger.info('validating realtime data from energy module e#{}.{}'.format(ct.module_id, ct.ct_id))
+    logger.debug('validating realtime data from energy module e#{}.{}'.format(ct.module_id, ct.ct_id))
     data = toolbox.dut.get('/get_realtime_power')
     assert str(ct.module_id) in data
     voltage, frequency, current, power = data[str(ct.module_id)][ct.ct_id]

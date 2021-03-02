@@ -25,29 +25,12 @@ import time
 import os
 import sys
 import logging
-from logging import handlers
 from six.moves.configparser import ConfigParser
 from ioc import INJECTED, Inject
+from logs import Logs
 from gateway.initialize import setup_minimal_master_platform
 
 logger = logging.getLogger("openmotics")
-
-
-def setup_logger():
-    """ Setup the OpenMotics logger. """
-
-    logger.setLevel(logging.DEBUG)
-    logger.propagate = False
-
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    logger.addHandler(handler)
-
-    handler = handlers.RotatingFileHandler(constants.get_update_log_location(), maxBytes=3 * 1024 ** 2, backupCount=2)
-    handler.setLevel(logging.DEBUG)
-    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    logger.addHandler(handler)
 
 
 @Inject
@@ -69,6 +52,8 @@ def main():
                         help='The filename of the hex file to bootload')
     parser.add_argument('-v', '--version', dest='version', required=False,
                         help='The version of the firmware to flash')
+    parser.add_argument('-a', '--address', dest='address', required=False,
+                        help='Updates a specific slave address. Remarks: No type checking, only for Brain(+), not for UC type')
     parser.add_argument('--verbose', dest='verbose', action='store_true',
                         help='Show the serial output')
 
@@ -92,10 +77,21 @@ def main():
         if Platform.get_platform() in Platform.CoreTypes:
             from master.core.slave_updater import SlaveUpdater
 
-            update_success = SlaveUpdater.update_all(module_type=module_type,
-                                                     hex_filename=filename,
-                                                     gen3_firmware=gen3_firmware,
-                                                     version=version)
+            if not args.address:
+                update_success = SlaveUpdater.update_all(module_type=module_type,
+                                                         hex_filename=filename,
+                                                         gen3_firmware=gen3_firmware,
+                                                         version=version)
+            else:
+                if module_type == 'UC':
+                    update_success = SlaveUpdater.update_ucan(address=args.address,
+                                                              hex_filename=filename,
+                                                              version=version)
+                else:
+                    update_success = SlaveUpdater.update(address=args.address,
+                                                         hex_filename=filename,
+                                                         gen3_firmware=gen3_firmware,
+                                                         version=version)
         else:
             from master.classic.slave_updater import bootload_modules
 
@@ -123,7 +119,7 @@ def main():
 
 
 if __name__ == '__main__':
-    setup_logger()
+    Logs.setup_logger(enable_update_logging=True)
     success = main()
     if not success:
         sys.exit(1)

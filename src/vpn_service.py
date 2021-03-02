@@ -43,6 +43,7 @@ from gateway.daemon_thread import DaemonThread
 from gateway.initialize import setup_minimal_vpn_platform
 from gateway.models import Config
 from ioc import INJECTED, Inject
+from logs import Logs
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple
@@ -52,23 +53,6 @@ CHECK_CONNECTIVITY_TIMEOUT = 60
 DEFAULT_SLEEP_TIME = 30.0
 
 logger = logging.getLogger('openmotics')
-
-
-def setup_logger():
-    """ Setup the OpenMotics logger. """
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-    logger.addHandler(handler)
-
-    if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
-        syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
-        syslog_handler.setLevel(logging.INFO)
-        syslog_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(syslog_handler)
 
 
 class VpnController(object):
@@ -185,45 +169,6 @@ class Gateway(object):
             else:
                 logger.error('Exception during Gateway call {0}: {1}'.format(uri, message))
             return
-
-    def get_inputs_status(self):
-        """ Get the inputs status. """
-        data = self.do_call('get_input_status?token=None')
-        if data is None or data['success'] is False:
-            return None
-        return [(inp["id"], inp["status"]) for inp in data['status']]
-
-    def get_shutters_status(self):
-        """ Get the shutters status. """
-        data = self.do_call('get_shutter_status?token=None')
-        if data is None or data['success'] is False:
-            return None
-        return_data = []
-        for shutter_id, details in six.iteritems(data['detail']):
-            last_change = details['last_change']
-            if last_change == 0.0:
-                entry = (int(shutter_id), details['state'].upper())
-            else:
-                entry = (int(shutter_id), details['state'].upper(), last_change)
-            return_data.append(entry)
-        return return_data
-
-    def get_thermostats(self):
-        """ Fetch the setpoints for the enabled thermostats from the webservice. """
-        data = self.do_call('get_thermostat_status?token=None')
-        if data is None or data['success'] is False:
-            return None
-        ret = {'thermostats_on': data['thermostats_on'],
-               'automatic': data['automatic'],
-               'cooling': data['cooling']}
-        thermostats = []
-        for thermostat in data['status']:
-            to_add = {}
-            for field in ['id', 'act', 'csetp', 'mode', 'output0', 'output1', 'outside', 'airco']:
-                to_add[field] = thermostat[field]
-            thermostats.append(to_add)
-        ret['status'] = thermostats
-        return ret
 
     def get_errors(self):
         """ Get the errors on the gateway. """
@@ -505,11 +450,8 @@ class HeartbeatService(object):
         self._task_executor = TaskExecutor()
 
         # Obsolete keys (do not use them, as they are still processed for legacy gateways):
-        # `outputs`, `update`, `energy`, `pulse_totals`
-        self._collectors = {'thermostats': DataCollector('thermostats', self._gateway.get_thermostats, 60),
-                            'inputs': DataCollector('inputs', self._gateway.get_inputs_status),
-                            'shutters': DataCollector('shutters', self._gateway.get_shutters_status),
-                            'errors': DataCollector('errors', self._gateway.get_errors, 600),
+        # `outputs`, `update`, `energy`, `pulse_totals`, `'thermostats`, `inputs`, `shutters`
+        self._collectors = {'errors': DataCollector('errors', self._gateway.get_errors, 600),
                             'local_ip': DataCollector('ip address', System.get_ip_address, 1800)}
         self._debug_collector = DebugDumpDataCollector()
 
@@ -593,7 +535,7 @@ class HeartbeatService(object):
 
 
 if __name__ == '__main__':
-    setup_logger()
+    Logs.setup_logger()
     setup_minimal_vpn_platform(message_client_name='vpn_service')
 
     logger.info('Starting VPN service')

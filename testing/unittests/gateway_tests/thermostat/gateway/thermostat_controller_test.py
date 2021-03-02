@@ -21,17 +21,19 @@ import logging
 from peewee import SqliteDatabase
 
 from gateway.models import Pump, Output, Valve, PumpToValve, Thermostat, \
-    ThermostatGroup, ValveToThermostat, Sensor, Preset, OutputToThermostatGroup
+    ThermostatGroup, ValveToThermostat, Sensor, Preset, OutputToThermostatGroup, \
+    DaySchedule
 from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatControllerGateway
 from gateway.dto import PumpGroupDTO, ThermostatGroupDTO, OutputStateDTO, \
     ThermostatGroupStatusDTO, ThermostatStatusDTO
 from gateway.output_controller import OutputController
 from gateway.gateway_api import GatewayApi
 from ioc import SetTestMode, SetUpTestInjections
+from logs import Logs
 
 MODELS = [Pump, Output, Valve, PumpToValve, Thermostat,
           ThermostatGroup, ValveToThermostat, Sensor, Preset,
-          OutputToThermostatGroup]
+          OutputToThermostatGroup, DaySchedule]
 
 
 class ThermostatControllerTest(unittest.TestCase):
@@ -39,13 +41,7 @@ class ThermostatControllerTest(unittest.TestCase):
     def setUpClass(cls):
         fakesleep.monkey_patch()
         SetTestMode()
-        logger = logging.getLogger('openmotics')
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(log_level=logging.DEBUG)
 
     @classmethod
     def tearDownClass(cls):
@@ -296,13 +292,13 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertEqual(Preset.Types.SCHEDULE, preset.type)
 
         self._thermostat_controller.set_current_preset(thermostat_number=1, preset_type=Preset.Types.PARTY)
-        expected.statusses[0].setpoint_temperature = 14.0
+        expected.statusses[0].setpoint_temperature = 22.0
         expected.statusses[0].setpoint = expected.setpoint = 5  # PARTY = legacy `5` setpoint
         expected.statusses[0].automatic = expected.automatic = False
         self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
 
         self._thermostat_controller.set_thermostat_mode(thermostat_on=True, cooling_mode=True, cooling_on=True, automatic=False, setpoint=4)
-        expected.statusses[0].setpoint_temperature = 30.0
+        expected.statusses[0].setpoint_temperature = 38.0
         expected.statusses[0].setpoint = expected.setpoint = 4  # VACATION = legacy `4` setpoint
         expected.cooling = True
         self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())

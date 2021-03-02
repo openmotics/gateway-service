@@ -27,6 +27,7 @@ from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer
 from master.core.events import Event as MasterCoreEvent
+from master.core.basic_action import BasicAction
 
 if False:  # MYPY
     from typing import Any, Dict, Tuple, Optional
@@ -156,6 +157,7 @@ class FrontpanelCoreController(FrontpanelController):
             self._authorized_mode_buttons_released = True
         if self._authorized_mode:
             if time.time() > self._authorized_mode_timeout or (buttons_pressed and self._authorized_mode_buttons_released):
+                logger.info('Authorized mode: inactive')
                 self._authorized_mode = False
         else:
             if buttons_pressed:
@@ -163,6 +165,7 @@ class FrontpanelCoreController(FrontpanelController):
                 if self._authorized_mode_buttons_pressed_since is None:
                     self._authorized_mode_buttons_pressed_since = time.time()
                 if time.time() - self._authorized_mode_buttons_pressed_since > FrontpanelController.AUTH_MODE_PRESS_DURATION:
+                    logger.info('Authorized mode: active')
                     self._authorized_mode = True
                     self._authorized_mode_timeout = time.time() + FrontpanelController.AUTH_MODE_TIMEOUT
                     self._authorized_mode_buttons_pressed_since = None
@@ -253,11 +256,10 @@ class FrontpanelCoreController(FrontpanelController):
         state = self._led_drive_states.get(led)
         if state != (on, mode):
             extra_parameter = FrontpanelCoreController.BLINKING_MAP[mode]
-            self._master_communicator.do_basic_action(action_type=210,
-                                                      action=action,
-                                                      device_nr=1 if on else 0,
-                                                      extra_parameter=extra_parameter,
-                                                      log=False)
+            self._master_communicator.do_basic_action(BasicAction(action_type=210,
+                                                                  action=action,
+                                                                  device_nr=1 if on else 0,
+                                                                  extra_parameter=extra_parameter))
             self._led_drive_states[led] = on, mode
 
 

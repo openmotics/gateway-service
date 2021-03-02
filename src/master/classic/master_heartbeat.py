@@ -43,24 +43,29 @@ class MasterHeartbeat(object):
         self._backoff = 60
         self._last_restart = 0.0
         self._min_threshold = 2
-        self._thread = DaemonThread(name='masterheartbeat',
-                                    target=self._heartbeat,
-                                    interval=30,
-                                    delay=5)
+        self._thread = None  # type: Optional[DaemonThread]
 
     def start(self):
         # type: () -> None
-        logger.info('Starting master heartbeat')
-        self._thread.start()
+        if self._thread is None:
+            logger.info('Starting master heartbeat')
+            self._thread = DaemonThread(name='masterheartbeat',
+                                        target=self._heartbeat,
+                                        interval=30,
+                                        delay=5)
+            self._thread.start()
 
     def stop(self):
         # type: () -> None
-        self._thread.stop()
+        if self._thread:
+            self._thread.stop()
+            self._thread = None
 
     def is_online(self):
         # type: () -> bool
         if self._failures == -1:
-            self._thread.request_single_run()
+            if self._thread:
+                self._thread.request_single_run()
             time.sleep(2)
         return self._failures == 0
 
@@ -116,19 +121,24 @@ class MasterHeartbeat(object):
         if len(calls_timedout) == 0:
             # If there are no timeouts at all
             return True
-        elif len(all_calls) <= 10:
+
+        if len(all_calls) <= 10:
             # Not enough calls made to have a decent view on what's going on
             logger.warning('Observed master communication failures, but not enough calls')
-            return None
-        elif not any(t in calls_timedout for t in all_calls[-10:]):
-            logger.warning('Observed master communication failures, but recent calls recovered')
-            # The last X calls are successfull
             return None
 
         calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
         if len(calls_last_x_minutes) <= 5:
+            # Not enough calls in the last 3 minutes to have a decent view on what's going on
             logger.warning('Observed master communication failures, but not recent enough')
-            # Not enough recent calls
+            return None
+
+        if len(all_calls) >= 30 and not any(t in calls_timedout for t in all_calls[-30:]):
+            # The last 30 calls are successfull, consider "recoverd"
+            return True
+        if not any(t in calls_timedout for t in all_calls[-10:]):
+            # The last 10 calls are successfull, consider "recovering"
+            logger.warning('Observed master communication failures, but recovering')
             return None
 
         ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
@@ -136,5 +146,5 @@ class MasterHeartbeat(object):
             # Less than 25% of the calls fail, let's assume everything is just "fine"
             logger.warning('Observed master communication failures, but there\'s only a failure ratio of {:.2f}%'.format(ratio * 100))
             return None
-        else:
-            return False
+
+        return False

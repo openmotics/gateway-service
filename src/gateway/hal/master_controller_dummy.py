@@ -41,10 +41,34 @@ class MasterCommunicator(object):
         pass
 
 
+class DummyEepromObject(object):
+    def __init__(self):
+        pass
+
+    def return_none(self, *args, **kwargs):
+        """ Ignore all calls and return None"""
+        _ = args
+        _ = kwargs
+        return None
+
+    def return_iter(self, *args, **kwargs):
+        _ = args
+        _ = kwargs
+        return iter([])
+
+    def __getattr__(self, item):
+        """ Return a function that will return none on every call """
+        if item in ['read_all', 'read_batch']:
+            return self.return_iter
+        else:
+            return self.return_none
+
+
 class MasterDummyController(MasterController):
     def __init__(self):
         # type: () -> None
         super(MasterDummyController, self).__init__(MasterCommunicator())
+        self._eeprom_controller = DummyEepromObject()
 
     def set_plugin_controller(self, plugin_controller):
         # type: (PluginController) -> None

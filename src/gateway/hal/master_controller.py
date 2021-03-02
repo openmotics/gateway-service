@@ -120,10 +120,10 @@ class MasterController(object):
 
     # Shutters
 
-    def shutter_up(self, shutter_id):
+    def shutter_up(self, shutter_id, timer=None):
         raise NotImplementedError()
 
-    def shutter_down(self, shutter_id):
+    def shutter_down(self, shutter_id, timer=None):
         raise NotImplementedError()
 
     def shutter_stop(self, shutter_id):

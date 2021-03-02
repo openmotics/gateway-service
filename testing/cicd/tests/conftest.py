@@ -96,6 +96,7 @@ def firmware_updates(toolbox_session):
         logger.info('updating firmware...')
         for _ in range(8):
             try:
+                toolbox.health_check(timeout=120)
                 toolbox.dut.get('/update_firmware', firmware)
                 toolbox.health_check(timeout=120)
                 break

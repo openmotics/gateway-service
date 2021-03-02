@@ -23,7 +23,7 @@ from datetime import datetime
 import hypothesis
 import requests
 import ujson as json
-from requests.exceptions import ConnectionError, RequestException
+from requests.exceptions import ConnectionError, RequestException, Timeout
 
 from tests.hardware_layout import TEST_PLATFORM, TestPlatform, \
     OUTPUT_MODULE_LAYOUT, INPUT_MODULE_LAYOUT, Input, Output, Module
@@ -104,7 +104,7 @@ class Client(object):
                 logger.debug('Request {} {} failed {}, retrying...'.format(self._id, path, exc))
                 time.sleep(16)
                 pass
-        raise AssertionError('Request {} {} failed after {:.2f}s'.format(self._id, path, time.time() - since))
+        raise Timeout('Request {} {} failed after {:.2f}s'.format(self._id, path, time.time() - since))
 
 
 class TesterGateway(object):
@@ -170,8 +170,8 @@ class TesterGateway(object):
         # type: () -> None
         self._outputs = {}
 
-    def receive_output_event(self, output_id, output_status, between):
-        # type: (int, bool, Tuple[float, float]) -> bool
+    def receive_output_event(self, output, output_status, between):
+        # type: (Output, bool, Tuple[float, float]) -> bool
         cooldown, deadline = between
         timeout = deadline - cooldown
         if cooldown > 0:
@@ -180,13 +180,13 @@ class TesterGateway(object):
             time.sleep(cooldown)
         since = time.time()
         while since > time.time() - timeout:
-            if output_id in self._outputs and output_status == self._outputs[output_id]:
-                logger.debug('Received event {} status={} after {:.2f}s'.format(output_id, self._outputs[output_id], time.time() - since))
+            if output.output_id in self._outputs and output_status == self._outputs[output.output_id]:
+                logger.debug('Received event {} status={} after {:.2f}s'.format(output, self._outputs[output.output_id], time.time() - since))
                 return True
             if self.update_events():
                 continue
             time.sleep(0.2)
-        logger.error('Did not receive event {} status={} after {:.2f}s'.format(output_id, output_status, time.time() - since))
+        logger.error('Did not receive event {} status={} after {:.2f}s'.format(output, output_status, time.time() - since))
         self.log_events()
         return False
 
@@ -262,20 +262,26 @@ class Toolbox(object):
             expected_modules[hardware_type][module.mtype] += 1
         logger.info('Expected modules: {0}'.format(expected_modules))
 
-        try:
-            modules = self.count_modules('master')
-            logger.info('Current discovered modules: {0}'.format(modules))
-            for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
-                assert modules.get(mtype, 0) == expected_amount
-        except Exception:
+        missing_modules = set()
+        modules = self.count_modules('master')
+        logger.info('Current modules: {0}'.format(modules))
+        for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
+            if modules.get(mtype, 0) == 0:
+                missing_modules.add(mtype)
+        modules_info = self.list_modules()['master'].values()
+        if not any(v['type'] == 'C' for v in modules_info):
+            missing_modules.add('C')
+        if not any(v['type'] == 'I' and v['is_can'] for v in modules_info):
+            missing_modules.add('C')
+        if missing_modules:
             logger.info('Discovering modules...')
-            self.discover_modules(output_modules=True,
-                                  input_modules=True,
-                                  can_controls=True,
-                                  ucans=True)
+            self.discover_modules(output_modules='O' in missing_modules,
+                                  input_modules='I' in missing_modules,
+                                  can_controls='C' in missing_modules,
+                                  ucans='C' in missing_modules)
 
         modules = self.count_modules('master')
-        logger.info('Current discovered modules: {0}'.format(modules))
+        logger.info('Discovered modules: {0}'.format(modules))
         for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
             assert modules.get(mtype, 0) == expected_amount
 
@@ -285,7 +291,7 @@ class Toolbox(object):
 
         try:
             for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
-                assert modules.get(mtype, 0) == expected_amount
+                assert modules.get(mtype, 0) >= expected_amount
         except Exception:
             logger.info('Adding virtual modules...')
             for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
@@ -294,9 +300,9 @@ class Toolbox(object):
                 self.add_virtual_modules(module_amounts={mtype: extra_needed_amount})
 
         modules = self.count_modules('master')
-        logger.info('Current discovered modules: {0}'.format(modules))
+        logger.info('Virtual modules: {0}'.format(modules))
         for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
-            assert modules.get(mtype, 0) == expected_amount
+            assert modules.get(mtype, 0) >= expected_amount
 
     def print_logs(self):
         # type: () -> None
@@ -523,6 +529,8 @@ class Toolbox(object):
 
     def discover_energy_module(self):
         # type: () -> None
+        self.tester.get('/set_output', {'id': self.POWER_ENERGY_MODULE, 'is_on': True})
+        time.sleep(5)
         try:
             logger.debug('discover Energy module')
             self.dut.get('/start_power_address_mode')
@@ -583,7 +591,7 @@ class Toolbox(object):
         pending = ['unknown']
         while since > time.time() - timeout:
             try:
-                data = self.dut.get('/health_check', use_token=False, timeout=5)
+                data = self.dut.get('/health_check', use_token=False, success=False, timeout=5)
                 pending = [k for k, v in data['health'].items() if not v['state']]
                 if not pending:
                     return pending
@@ -631,7 +639,7 @@ class Toolbox(object):
     def assert_output_changed(self, output, status, between=(0, 5)):
         # type: (Output, bool, Tuple[float,float]) -> None
         hypothesis.note('assert output {} status changed {} -> {}'.format(output, not status, status))
-        if self.tester.receive_output_event(output.output_id, status, between=between):
+        if self.tester.receive_output_event(output, status, between=between):
             return
         raise AssertionError('expected event {} status={}'.format(output, status))
 

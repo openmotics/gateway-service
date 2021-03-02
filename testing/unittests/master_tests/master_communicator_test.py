@@ -41,8 +41,11 @@ class MasterCommunicatorTest(unittest.TestCase):
     def setUpClass(cls):
         SetTestMode()
 
+    def setUp(self):
+        self.master_version = (3, 143, 103)
+
     def test_do_command(self):
-        action = master_api.basic_action()
+        action = master_api.basic_action(self.master_version)
         fields = {'action_type': 1, 'action_number': 2}
 
         pty = DummyPty([action.create_input(1, fields)])
@@ -57,7 +60,7 @@ class MasterCommunicatorTest(unittest.TestCase):
 
     @mark.slow
     def test_timeout(self):
-        action = master_api.basic_action()
+        action = master_api.basic_action(self.master_version)
         fields = {'action_type': 1, 'action_number': 2}
 
         pty = DummyPty([action.create_input(1, fields)])
@@ -69,7 +72,7 @@ class MasterCommunicatorTest(unittest.TestCase):
         self.assertRaises(CommunicationTimedOutException, comm.do_command, action, fields)
 
     def test_timeout_ongoing(self):
-        action = master_api.basic_action()
+        action = master_api.basic_action(self.master_version)
         fields = {'action_type': 1, 'action_number': 2}
 
         pty = DummyPty([action.create_input(1, fields),
@@ -88,7 +91,7 @@ class MasterCommunicatorTest(unittest.TestCase):
 
     @mark.slow
     def test_split_data(self):
-        action = master_api.basic_action()
+        action = master_api.basic_action(self.master_version)
         fields = {'action_type': 1, 'action_number': 2}
 
         sequence = []
@@ -123,7 +126,7 @@ class MasterCommunicatorTest(unittest.TestCase):
 
     @mark.skip
     def test_misalignment(self):
-        action = master_api.basic_action()
+        action = master_api.basic_action(self.master_version)
         fields = {'action_type': 1, 'action_number': 2}
 
         pty = DummyPty([action.create_input(1, fields),
@@ -158,7 +161,7 @@ class MasterCommunicatorTest(unittest.TestCase):
         self.assertEqual(bytearray(b'got it!'), comm.get_passthrough_data())
 
     def test_passthrough_with_commands(self):
-        action = master_api.basic_action()
+        action = master_api.basic_action(self.master_version)
         fields = {'action_type': 1, 'action_number': 2}
 
         pty = DummyPty([action.create_input(1, fields),
@@ -183,7 +186,7 @@ class MasterCommunicatorTest(unittest.TestCase):
         self.assertEqual(bytearray(b'hello world'), comm.get_passthrough_data())
 
     def test_maintenance_mode(self):
-        action = master_api.basic_action()
+        action = master_api.basic_action(self.master_version)
         fields = {'action_type': 1, 'action_number': 2}
 
         pty = DummyPty([master_api.to_cli_mode().create_input(0),
@@ -205,7 +208,7 @@ class MasterCommunicatorTest(unittest.TestCase):
         comm.stop_maintenance_mode()
 
     def test_maintenance_passthrough(self):
-        action = master_api.basic_action()
+        action = master_api.basic_action(self.master_version)
         fields = {'action_type': 1, 'action_number': 2}
 
         pty = DummyPty([master_api.to_cli_mode().create_input(0),
@@ -248,7 +251,7 @@ class MasterCommunicatorTest(unittest.TestCase):
         assert not thread.is_alive()
 
     def test_background_consumer(self):
-        action = master_api.basic_action()
+        action = master_api.basic_action(self.master_version)
         fields = {'action_type': 1, 'action_number': 2}
 
         pty = DummyPty([action.create_input(1, fields)])
@@ -283,7 +286,7 @@ class MasterCommunicatorTest(unittest.TestCase):
         self.assertEqual(bytearray(b'junk here'), comm.get_passthrough_data())
 
     def test_background_consumer_passthrough(self):
-        action = master_api.basic_action()
+        action = master_api.basic_action(self.master_version)
         fields = {'action_type': 1, 'action_number': 2}
 
         pty = DummyPty([action.create_input(1, fields)])
@@ -318,7 +321,7 @@ class MasterCommunicatorTest(unittest.TestCase):
         self.assertEqual(bytearray(b'OL\x00\x01\x03\x0c\r\n'), comm.get_passthrough_data())
 
     def test_bytes_counter(self):
-        action = master_api.basic_action()
+        action = master_api.basic_action(self.master_version)
         fields = {'action_type': 1, 'action_number': 2}
 
         pty = DummyPty([action.create_input(1, fields)])

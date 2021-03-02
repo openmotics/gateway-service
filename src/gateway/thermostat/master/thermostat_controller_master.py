@@ -63,6 +63,7 @@ class ThermostatControllerMaster(ThermostatController):
         self._thermostats_config = {}  # type: Dict[int, ThermostatDTO]
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MODULE, self._handle_master_event)
 
     def start(self):
         # type: () -> None
@@ -74,8 +75,11 @@ class ThermostatControllerMaster(ThermostatController):
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
-        if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
+        if master_event.type in [MasterEvent.Types.EEPROM_CHANGE,
+                                 MasterEvent.Types.MODULE_DISCOVERY]:
             self.invalidate_cache(THERMOSTATS)
+            gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'thermostats'})
+            self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
 
     def _thermostat_changed(self, thermostat_id, status):
         # type: (int, Dict[str,Any]) -> None

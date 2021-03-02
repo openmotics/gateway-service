@@ -19,12 +19,13 @@ Tests for the types module
 from __future__ import absolute_import
 import unittest
 import xmlrunner
-from peewee import DoesNotExist
 from mock import Mock
-from ioc import SetTestMode, SetUpTestInjections
+from ioc import SetTestMode
 from master.core.basic_action import BasicAction  # Must be imported
 from master.core.memory_types import *
 from master.core.memory_file import MemoryTypes, MemoryFile
+from logs import Logs
+from mocked_core_helper import MockedCore
 
 logger = logging.getLogger('openmotics')
 
@@ -35,12 +36,11 @@ class MemoryTypesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        logger.setLevel(logging.DEBUG)
-        logger.propagate = False
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        logger.addHandler(handler)
+        Logs.setup_logger(log_level=logging.DEBUG)
+
+    def setUp(self):
+        self.mocked_core = MockedCore(memory_is_cache=True)
+        self.memory = self.mocked_core.memory[MemoryTypes.EEPROM]
 
     def test_memory_field_addressing(self):
         for item in [[(0, 0), 0, TypeError],
@@ -57,78 +57,94 @@ class MemoryTypesTest(unittest.TestCase):
             self.assertEqual(MemoryAddress(MemoryTypes.EEPROM, expected_address[0], expected_address[1], 1), field.get_address(object_id))
 
     def test_string_field(self):
-        self._test_field(MemoryStringField, [[[1], 'a', bytearray([97])],
-                                             [[1], 'ab', ValueError],
-                                             [[3], 'abc', bytearray([97, 98, 99])]])
+        self._test_field(MemoryStringField, [[{'length': 1}, 'a', bytearray([97])],
+                                             [{'length': 1}, 'ab', ValueError],
+                                             [{'length': 3}, 'abc', bytearray([97, 98, 99])]])
 
     def test_byte_field(self):
-        self._test_field(MemoryByteField, [[[], -1, ValueError],
-                                           [[], 0, bytearray([0])],
-                                           [[], 20, bytearray([20])],
-                                           [[], 2 ** 8 - 1, bytearray([255])],
-                                           [[], 2 ** 8, ValueError]])
+        self._test_field(MemoryByteField, [[{}, -1, ValueError],
+                                           [{}, 0, bytearray([0])],
+                                           [{}, 20, bytearray([20])],
+                                           [{}, 2 ** 8 - 1, bytearray([255])],
+                                           [{}, 2 ** 8, ValueError]])
 
     def test_word_field(self):
-        self._test_field(MemoryWordField, [[[], -1, ValueError],
-                                           [[], 0, bytearray([0, 0])],
-                                           [[], 2 ** 8, bytearray([1, 0])],
-                                           [[], 2 ** 16 - 1, bytearray([255, 255])],
-                                           [[], 2 ** 16, ValueError]])
+        self._test_field(MemoryWordField, [[{}, -1, ValueError],
+                                           [{}, 0, bytearray([0, 0])],
+                                           [{}, 2 ** 8, bytearray([1, 0])],
+                                           [{}, 2 ** 16 - 1, bytearray([255, 255])],
+                                           [{}, 2 ** 16, ValueError]])
 
     def test_3bytes_field(self):
-        self._test_field(Memory3BytesField, [[[], -1, ValueError],
-                                             [[], 0, bytearray([0, 0, 0])],
-                                             [[], 2 ** 8, bytearray([0, 1, 0])],
-                                             [[], 2 ** 16 - 1, bytearray([0, 255, 255])],
-                                             [[], 2 ** 16, bytearray([1, 0, 0])],
-                                             [[], 2 ** 24 - 1, bytearray([255, 255, 255])],
-                                             [[], 2 ** 24, ValueError]])
+        self._test_field(Memory3BytesField, [[{}, -1, ValueError],
+                                             [{}, 0, bytearray([0, 0, 0])],
+                                             [{}, 2 ** 8, bytearray([0, 1, 0])],
+                                             [{}, 2 ** 16 - 1, bytearray([0, 255, 255])],
+                                             [{}, 2 ** 16, bytearray([1, 0, 0])],
+                                             [{}, 2 ** 24 - 1, bytearray([255, 255, 255])],
+                                             [{}, 2 ** 24, ValueError]])
 
     def test_bytearray_field(self):
-        self._test_field(MemoryByteArrayField, [[[1], [], ValueError],
-                                                [[1], [-1], ValueError],
-                                                [[1], [0], bytearray([0])],
-                                                [[2], [0], ValueError],
-                                                [[2], [0, 0, 0], ValueError],
-                                                [[2], [10, 0], bytearray([10, 0])],
-                                                [[2], [10, 265], ValueError]])
+        self._test_field(MemoryByteArrayField, [[{'length': 1}, [], ValueError],
+                                                [{'length': 1}, [-1], ValueError],
+                                                [{'length': 1}, [0], bytearray([0])],
+                                                [{'length': 2}, [0], ValueError],
+                                                [{'length': 2}, [0, 0, 0], ValueError],
+                                                [{'length': 2}, [10, 0], bytearray([10, 0])],
+                                                [{'length': 2}, [10, 265], ValueError]])
 
     def test_memoryarray_field(self):
-        self._test_field(MemoryWordArrayField, [[[1], [], ValueError],
-                                                [[1], [-1], ValueError],
-                                                [[1], [0], bytearray([0, 0])],
-                                                [[2], [0], ValueError],
-                                                [[2], [0, 0], bytearray([0, 0, 0, 0])],
-                                                [[2], [2 ** 8, 2 ** 16 - 1], bytearray([1, 0, 255, 255])],
-                                                [[2], [2 ** 8, 2 ** 16], ValueError]])
+        self._test_field(MemoryWordArrayField, [[{'length': 1}, [], ValueError],
+                                                [{'length': 1}, [-1], ValueError],
+                                                [{'length': 1}, [0], bytearray([0, 0])],
+                                                [{'length': 2}, [0], ValueError],
+                                                [{'length': 2}, [0, 0], bytearray([0, 0, 0, 0])],
+                                                [{'length': 2}, [2 ** 8, 2 ** 16 - 1], bytearray([1, 0, 255, 255])],
+                                                [{'length': 2}, [2 ** 8, 2 ** 16], ValueError]])
 
     def test_basicaction_field(self):
-        self._test_field(MemoryBasicActionField, [[[], BasicAction(10, 10, 0, 0), bytearray([10, 10, 0, 0, 0, 0])],
-                                                  [[], BasicAction(10, 20, 256, 256), bytearray([10, 20, 1, 0, 1, 0])]])
+        self._test_field(MemoryBasicActionField, [[{}, BasicAction(10, 10, 0, 0), bytearray([10, 10, 0, 0, 0, 0])],
+                                                  [{}, BasicAction(10, 20, 256, 256), bytearray([10, 20, 1, 0, 1, 0])]])
 
     def test_address_field(self):
-        self._test_field(MemoryAddressField, [[[], '0', ValueError],
-                                              [[], '0.0.0.0', bytearray([0, 0, 0, 0]), '000.000.000.000'],
-                                              [[], '1.2.3.4', bytearray([1, 2, 3, 4]), '001.002.003.004']])
+        self._test_field(MemoryAddressField, [[{}, '0', ValueError],
+                                              [{}, '0.0.0.0', bytearray([0, 0, 0, 0]), '000.000.000.000'],
+                                              [{}, '1.2.3.4', bytearray([1, 2, 3, 4]), '001.002.003.004']])
 
     def test_version_field(self):
-        self._test_field(MemoryVersionField, [[[], '0', ValueError],
-                                              [[], '0.0.0', bytearray([0, 0, 0])],
-                                              [[], '1.2.3', bytearray([1, 2, 3])]])
+        self._test_field(MemoryVersionField, [[{}, '0', ValueError],
+                                              [{}, '0.0.0', bytearray([0, 0, 0])],
+                                              [{}, '1.2.3', bytearray([1, 2, 3])]])
+
+    def test_temperature_field(self):
+        self._test_field(MemoryTemperatureField, [[{}, -32.5, ValueError],
+                                                  [{}, -32, bytearray([0])],
+                                                  [{}, 0, bytearray([64])],
+                                                  [{}, 95, bytearray([254])],
+                                                  [{}, 95.5, ValueError],
+                                                  [{}, None, bytearray([255])]])
+
+    def test_boolean_field(self):
+        self._test_field(MemoryBooleanField, [[{'true_value': 0, 'false_value': 255, 'fallback': True}, 0, ValueError],
+                                              [{'true_value': 0, 'false_value': 255, 'fallback': True}, 'foo', ValueError],
+                                              [{'true_value': 0, 'false_value': 255, 'fallback': True}, True, bytearray([0])],
+                                              [{'true_value': 0, 'false_value': 255, 'fallback': True}, False, bytearray([255])]])
 
     def _test_field(self, field_type, scenario):
         for item in scenario:
             if len(item) == 3:
-                args, value, expected_bytes = item
+                kwargs, value, expected_bytes = item
                 expected_value = value
             else:
-                args, value, expected_bytes, expected_value = item
-            field = field_type(MemoryTypes.EEPROM, (None, None), *args)
+                kwargs, value, expected_bytes, expected_value = item
+            field = field_type(memory_type=MemoryTypes.EEPROM,
+                               address_spec=(None, None),
+                               **kwargs)
             if expected_bytes == ValueError:
                 with self.assertRaises(expected_bytes):
-                    field.encode(value)
+                    field.encode(value, None)
                 continue
-            result_bytes = field.encode(value)
+            result_bytes = field.encode(value, None)
             self.assertEqual(expected_bytes, result_bytes)
             result_value = field.decode(result_bytes)
             self.assertEqual(expected_value, result_value)
@@ -140,7 +156,7 @@ class MemoryTypesTest(unittest.TestCase):
         container = MemoryFieldContainer(name='field',
                                          memory_field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)),
                                          memory_address=address,
-                                         memory_files={MemoryTypes.EEPROM: memory_file_mock})
+                                         memory_file=memory_file_mock)
         data = container.decode()
         self.assertEqual(1, data)
         memory_file_mock.read.assert_called_with([address])
@@ -151,12 +167,11 @@ class MemoryTypesTest(unittest.TestCase):
         memory_file_mock.write.assert_called_with({address: bytearray([2])})
 
     def test_model_definition(self):
-        memory_map = {0: bytearray([30, 31, 32]),
-                      1: bytearray([40, 0b0101]),
-                      2: bytearray([41, 0b1011]),
-                      3: bytearray([42, 0b1000]),
-                      4: bytearray([43, 0b0000])}
-        MemoryTypesTest._mock_memory(memory_map)
+        self.memory[0] = bytearray([30, 31, 32])
+        self.memory[1] = bytearray([40, 0b0101])
+        self.memory[2] = bytearray([41, 0b1011])
+        self.memory[3] = bytearray([42, 0b1000])
+        self.memory[4] = bytearray([43, 0b0000])
 
         class Parent(MemoryModelDefinition):
             info = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, id))
@@ -206,7 +221,7 @@ class MemoryTypesTest(unittest.TestCase):
         with self.assertRaises(AttributeError):
             child.parent = parent
         child.save()
-        self.assertEqual(bytearray([20, 0b1000]), memory_map[4])
+        self.assertEqual(bytearray([20, 0b1000]), self.memory[4])
         child.composed.bit = False
         child.composed.info = 4
         self.assertEqual({'id': 4,
@@ -214,13 +229,12 @@ class MemoryTypesTest(unittest.TestCase):
                           'composed': {'bit': False,
                                        'info': 4}}, child.serialize())
         child.save()
-        self.assertEqual(bytearray([20, 0b0110]), memory_map[4])
+        self.assertEqual(bytearray([20, 0b0110]), self.memory[4])
 
     def test_fk_relation(self):
-        memory_map = {0: bytearray([10]),
-                      1: bytearray([0, 20]),
-                      2: bytearray([1, 30])}
-        MemoryTypesTest._mock_memory(memory_map)
+        self.memory[0] = bytearray([10])
+        self.memory[1] = bytearray([0, 20])
+        self.memory[2] = bytearray([1, 30])
 
         class FKParent(MemoryModelDefinition):
             info = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, id))
@@ -240,8 +254,7 @@ class MemoryTypesTest(unittest.TestCase):
         self.assertEqual(10, child_1.parent.info)
 
     def test_factor_composition(self):
-        memory_map = {0: bytearray([0])}
-        MemoryTypesTest._mock_memory(memory_map)
+        self.memory[0] = bytearray([0])
 
         class Object(MemoryModelDefinition):
             class _ObjectComposed(CompositeMemoryModelDefinition):
@@ -257,21 +270,20 @@ class MemoryTypesTest(unittest.TestCase):
         instance.composed.field_0 = 14
         self.assertEqual(15, instance.composed.field_1)
         instance.save()
-        self.assertEqual(7, memory_map[0][0])
+        self.assertEqual(7, self.memory[0][0])
 
-        memory_map[0][0] = 100
+        self.memory[0][0] = 100
         instance = Object(0)
         self.assertEqual(200, instance.composed.field_0)
         self.assertEqual(201, instance.composed.field_1)
 
-        memory_map[0][0] = 255
+        self.memory[0][0] = 255
         instance = Object(0)
         self.assertEqual(510, instance.composed.field_0)
         self.assertEqual(511, instance.composed.field_1)
 
     def test_enums(self):
-        memory_map = {0: bytearray([0])}
-        MemoryTypesTest._mock_memory(memory_map)
+        self.memory[0] = bytearray([0])
 
         class Object2(MemoryModelDefinition):
             class SomeType(MemoryEnumDefinition):
@@ -286,21 +298,21 @@ class MemoryTypesTest(unittest.TestCase):
 
         instance.enum = Object2.SomeType.BAR
         self.assertEqual(Object2.SomeType.BAR, instance.enum)
-        self.assertEqual(0, memory_map[0][0])
+        self.assertEqual(0, self.memory[0][0])
         instance.save()
-        self.assertEqual(1, memory_map[0][0])
+        self.assertEqual(1, self.memory[0][0])
 
         instance.enum = 'FOO'  # It is allowed to directly use the string representation
         self.assertEqual(Object2.SomeType.FOO, instance.enum)
-        self.assertEqual(1, memory_map[0][0])
+        self.assertEqual(1, self.memory[0][0])
         instance.save()
-        self.assertEqual(0, memory_map[0][0])
+        self.assertEqual(0, self.memory[0][0])
 
-        memory_map[0][0] = 255
+        self.memory[0][0] = 255
         instance = Object2(0)
         self.assertEqual(Object2.SomeType.FOO, instance.enum)
 
-        memory_map[0][0] = 123
+        self.memory[0][0] = 123
         instance = Object2(0)
         self.assertEqual(Object2.SomeType.FOO, instance.enum)
 
@@ -322,8 +334,7 @@ class MemoryTypesTest(unittest.TestCase):
             instance.enum = 'BAR_'
 
     def test_readonly(self):
-        memory_map = {0: bytearray([0, 0])}
-        MemoryTypesTest._mock_memory(memory_map)
+        self.memory[0] = bytearray([0, 0])
 
         class RObject(MemoryModelDefinition):
             rw = MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, 0))
@@ -332,15 +343,14 @@ class MemoryTypesTest(unittest.TestCase):
         instance = RObject(0)
         instance.rw = 1
         instance.save()
-        self.assertEqual(1, memory_map[0][0])
+        self.assertEqual(1, self.memory[0][0])
         with self.assertRaises(AttributeError):
             instance.ro = 2
         instance.save()
-        self.assertEqual(0, memory_map[0][1])
+        self.assertEqual(0, self.memory[0][1])
 
     def test_model_ids(self):
-        memory_map = {0: bytearray([2])}
-        MemoryTypesTest._mock_memory(memory_map)
+        self.memory[0] = bytearray([2])
 
         with self.assertRaises(ValueError):
             class InvalidFixedLimitObject(MemoryModelDefinition):
@@ -370,8 +380,7 @@ class MemoryTypesTest(unittest.TestCase):
             self.assertEqual(valid_id, FieldLimitObject(valid_id).id)
 
     def test_checksums(self):
-        memory_map = {0: bytearray([255, 255, 255, 255])}
-        MemoryTypesTest._mock_memory(memory_map)
+        self.memory[0] = bytearray([255, 255, 255, 255, 255])
 
         class CheckedObject(MemoryModelDefinition):
             class CheckedEnum(MemoryEnumDefinition):
@@ -382,9 +391,9 @@ class MemoryTypesTest(unittest.TestCase):
                                             checksum=MemoryChecksum(field=MemoryByteField(memory_type=MemoryTypes.EEPROM,
                                                                                           address_spec=lambda id: (0, 1)),
                                                                     check=MemoryChecksum.Types.INVERTED))
-            checked_enum_field = CheckedEnum(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, 2)),
+            checked_enum_field = CheckedEnum(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (0, 3)),
                                              checksum=MemoryChecksum(field=MemoryByteField(memory_type=MemoryTypes.EEPROM,
-                                                                                           address_spec=lambda id: (0, 3)),
+                                                                                           address_spec=lambda id: (0, 4)),
                                                                      check=MemoryChecksum.Types.INVERTED))
         instance = CheckedObject(0)
         # Checksum does not fail since it's not initialized
@@ -394,10 +403,10 @@ class MemoryTypesTest(unittest.TestCase):
         instance.checked_field = 10
         instance.checked_enum_field = 'BAR'
         instance.save()
-        self.assertEqual(bytearray([10, 245, 1, 254]), memory_map[0])
+        self.assertEqual(bytearray([10, 245, 255, 1, 254]), self.memory[0])
 
-        memory_map[0][1] = 123
-        memory_map[0][3] = 123
+        self.memory[0][1] = 123
+        self.memory[0][3] = 123
         instance = CheckedObject(0)
         with self.assertRaises(InvalidMemoryChecksum):
             _ = instance.checked_field
@@ -406,26 +415,7 @@ class MemoryTypesTest(unittest.TestCase):
         instance.checked_field = 20
         instance.checked_enum_field = 'FOO'
         instance.save()
-        self.assertEqual(bytearray([20, 235, 0, 255]), memory_map[0])
-
-    @staticmethod
-    def _mock_memory(memory_map):
-        def _read(addresses):
-            data_ = {}
-            for address in addresses:
-                data_[address] = memory_map[address.page][address.offset:address.offset + address.length]
-            return data_
-
-        def _write(data_map):
-            for address, data_ in data_map.items():
-                for index, data_byte in enumerate(data_):
-                    memory_map[address.page][address.offset + index] = data_byte
-
-        memory_file_mock = Mock(MemoryFile)
-        memory_file_mock.read = _read
-        memory_file_mock.write = _write
-
-        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: memory_file_mock})
+        self.assertEqual(bytearray([20, 235, 255, 0, 255]), self.memory[0])
 
 
 if __name__ == "__main__":

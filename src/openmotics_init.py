@@ -21,23 +21,11 @@ from platform_utils import System
 System.import_libs()
 
 import logging
+from logs import Logs
 
 logger = logging.getLogger('openmotics')
 
-
-def setup_logger():
-    """ Setup the OpenMotics logger. """
-
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-    logger.addHandler(handler)
-
-
 if __name__ == '__main__':
-    setup_logger()
+    Logs.setup_logger()
     # TODO remove, no longer used
     logger.warning('Initialization was moved into the services')

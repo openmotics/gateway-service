@@ -20,6 +20,7 @@ from __future__ import absolute_import
 import logging
 from master.core.fields import WordField
 from master.core.system_value import Temperature, Humidity
+from master.core.basic_action import BasicAction
 
 if False:  # MYPY
     from typing import List, Optional
@@ -35,6 +36,7 @@ class Event(object):
         THERMOSTAT = 'THERMOSTAT'
         SYSTEM = 'SYSTEM'
         POWER = 'POWER'
+        EXECUTED_BA = 'EXECUTED_BA'
         BUTTON_PRESS = 'BUTTON_PRESS'
         LED_ON = 'LED_ON'
         LED_BLINK = 'LED_BLINK'
@@ -113,6 +115,7 @@ class Event(object):
                     1: Event.Types.INPUT,
                     2: Event.Types.SENSOR,
                     20: Event.Types.THERMOSTAT,
+                    22: Event.Types.EXECUTED_BA,
                     250: Event.Types.BUTTON_PRESS,
                     251: Event.Types.LED_BLINK,
                     252: Event.Types.LED_ON,
@@ -200,6 +203,11 @@ class Event(object):
             if event_type == Event.SystemEventTypes.ONBOARD_TEMP_CHANGED:
                 event_data['temperature'] = self._data[0]
             return event_data
+        if self.type == Event.Types.EXECUTED_BA:
+            return {'basic_action': BasicAction(action_type=self._data[0],
+                                                action=self._data[1],
+                                                device_nr=self._device_nr,
+                                                extra_parameter=self._word_decode(self._data[2:4]))}
         return None
 
     def _word_decode(self, data):  # type: (List[int]) -> int
