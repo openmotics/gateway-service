@@ -134,6 +134,7 @@ def factory_reset(request, toolbox):
 def test_factory_reset(toolbox, authorized_mode, factory_reset):
     data = toolbox.factory_reset()
     assert data['factory_reset'] == 'pending'
+    logger.info('factory reset pending...')
     time.sleep(60)
     toolbox.health_check(timeout=300)
 
