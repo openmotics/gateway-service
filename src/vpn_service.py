@@ -26,8 +26,10 @@ import glob
 import logging
 import logging.handlers
 import os
+import signal
 import subprocess
 import time
+import traceback
 from collections import deque
 from threading import Lock
 
@@ -455,6 +457,12 @@ class HeartbeatService(object):
                             'local_ip': DataCollector('ip address', System.get_ip_address, 1800)}
         self._debug_collector = DebugDumpDataCollector()
 
+    @staticmethod
+    def _handle_signal_alarm(signum, frame):
+        logger.error('Signal alarm ({0}) triggered:\n{1}'.format(signum, (''.join(traceback.format_stack(frame))).strip()))
+        logger.error('Exit(1)')
+        os._exit(1)
+
     def _check_state(self):
         return {'cloud_disabled': not self._cloud_enabled,
                 'cloud_last_connect': None if not self._cloud_enabled else self._last_successful_heartbeat,
@@ -471,9 +479,11 @@ class HeartbeatService(object):
 
     def run_heartbeat(self):
         # type: () -> None
+        signal.signal(signal.SIGALRM, HeartbeatService._handle_signal_alarm)
         while True:
             self._last_cycle = time.time()
             try:
+                signal.alarm(600)  # 10 minutes
                 start_time = time.time()
                 call_home_duration = self._beat()
                 beat_time = time.time() - start_time
@@ -482,6 +492,7 @@ class HeartbeatService(object):
                 if self._previous_sleep_time != self._sleep_time:
                     logger.info('Set sleep interval to {0}s'.format(self._sleep_time))
                     self._previous_sleep_time = self._sleep_time
+                signal.alarm(0)
                 time.sleep(self._sleep_time)
             except Exception as ex:
                 logger.error("Error during vpn check loop: {0}".format(ex))
