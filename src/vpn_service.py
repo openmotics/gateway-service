@@ -460,7 +460,8 @@ class HeartbeatService(object):
     @staticmethod
     def _handle_signal_alarm(signum, frame):
         logger.error('Signal alarm ({0}) triggered:\n{1}'.format(signum, (''.join(traceback.format_stack(frame))).strip()))
-        raise RuntimeError('Signal alarm triggered')
+        logger.error('Exit(1)')
+        os._exit(1)
 
     def _check_state(self):
         return {'cloud_disabled': not self._cloud_enabled,
@@ -482,7 +483,7 @@ class HeartbeatService(object):
         while True:
             self._last_cycle = time.time()
             try:
-                signal.alarm(30)
+                signal.alarm(600)  # 10 minutes
                 start_time = time.time()
                 call_home_duration = self._beat()
                 beat_time = time.time() - start_time
