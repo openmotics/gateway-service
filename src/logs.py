@@ -46,11 +46,6 @@ class Logs(object):
         requests_logger = logging.getLogger('requests.packages.urllib3.connectionpool')
         requests_logger.setLevel(logging.WARNING)
 
-        # Prepare extra handlers
-        openmotics_stream_handler = logging.StreamHandler()
-        openmotics_stream_handler.setLevel(log_level)
-        openmotics_stream_handler.setFormatter(logging.Formatter(Logs.LOG_FORMAT))
-
         update_handler = None
         if enable_update_logging:
             update_handler = handlers.RotatingFileHandler(constants.get_update_log_location(), maxBytes=3 * 1024 ** 2, backupCount=2)
@@ -69,7 +64,7 @@ class Logs(object):
             _logger.setLevel(openmotics_log_level)
             _logger.propagate = True
 
-            for extra_handler in [openmotics_stream_handler, update_handler, syslog_handler]:
+            for extra_handler in [update_handler, syslog_handler]:
                 # Add extra handlers, where available
                 if extra_handler is not None:
                     _logger.addHandler(extra_handler)
