@@ -68,7 +68,7 @@ class BasicAction(object):
         return basic_action
 
     @staticmethod
-    def empty():
+    def empty():  # type: () -> BasicAction
         return BasicAction.decode(bytearray([255] * 6))
 
     def __str__(self):
@@ -81,3 +81,9 @@ class BasicAction(object):
         if not isinstance(other, BasicAction):
             return False
         return self.encode() == other.encode()
+
+    def __hash__(self):
+        hash_value = 0
+        for i, value in enumerate(self.encode()):
+            hash_value += 256 ** i * value
+        return hash_value

@@ -27,7 +27,7 @@ from peewee import DoesNotExist
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
-    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO
+    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, FeedbackLedDTO
 from gateway.enums import ShutterEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
@@ -43,13 +43,13 @@ from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.core_updater import CoreUpdater
 from master.core.errors import Error
 from master.core.events import Event as MasterCoreEvent
-from master.core.group_action import GroupActionController
+from master.core.group_action import GroupActionController, GroupAction
 from master.core.memory_file import MemoryFile, MemoryTypes
 from master.core.memory_models import CanControlModuleConfiguration, \
     GlobalConfiguration, InputConfiguration, InputModuleConfiguration, \
     OutputConfiguration, OutputModuleConfiguration, SensorConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
-from master.core.memory_types import MemoryAddress
+from master.core.memory_types import MemoryAddress, MemoryActivator
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.system_value import Humidity, Temperature
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
@@ -402,7 +402,8 @@ class MasterCoreController(MasterController):
     def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
         for input_dto, fields in inputs:
             input_ = InputMapper.dto_to_orm(input_dto, fields)
-            input_.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
+            input_.save(activate=False)
+        MemoryActivator.activate()
 
     def _refresh_input_states(self):
         # type: () -> bool
@@ -450,7 +451,9 @@ class MasterCoreController(MasterController):
         if output.is_shutter:
             # Outputs that are used by a shutter are returned as unconfigured (read-only) outputs
             return OutputDTO(id=output.id)
-        return OutputMapper.orm_to_dto(output)
+        output_dto = OutputMapper.orm_to_dto(output)
+        self._load_output_led_feedback_configuration(output, output_dto)
+        return output_dto
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
         outputs = []
@@ -464,7 +467,112 @@ class MasterCoreController(MasterController):
             if output.is_shutter:
                 # Shutter outputs cannot be changed
                 continue
-            output.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
+            output.save(activate=False)
+            MasterCoreController._save_output_led_feedback_configuration(output, output_dto, fields)
+        MemoryActivator.activate()
+
+    @staticmethod
+    def _load_output_led_feedback_configuration(output, output_dto):
+        # type: (OutputConfiguration, OutputDTO) -> None
+        if output.output_groupaction_follow > 255:
+            output_dto.can_led_1 = FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
+            output_dto.can_led_2 = FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
+            output_dto.can_led_3 = FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
+            output_dto.can_led_4 = FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
+            return
+        group_action = GroupActionController.load_group_action(output.output_groupaction_follow)
+        led_counter = 1
+        confirmed_output = None  # type: Optional[int]
+        for basic_action in group_action.actions:
+            if basic_action.action_type == 19 and basic_action.action == 80:
+                # Ouput value selector
+                confirmed_output = basic_action.device_nr
+            if basic_action.action_type == 20 and basic_action.action in [50, 51]:
+                # Feedback LED action
+                if confirmed_output != output.id:
+                    continue  # Feedback actions for other output, ignoring
+                brightness = 'B{0}'.format(basic_action.extra_parameter // 256 // 16 + 1)
+                blinking = {0: 'On',
+                            1: 'Fast blink',
+                            2: 'Medium blink',
+                            3: 'Slow blink',
+                            4: 'Swinging'}.get(int(basic_action.extra_parameter & 0xFF), 'On')
+                function = '{0} {1}{2}'.format(blinking, brightness, '' if basic_action.action == 50 else ' Inverted')
+                setattr(output_dto, 'can_led_{0}'.format(led_counter), FeedbackLedDTO(id=basic_action.device_nr,
+                                                                                      function=function))
+                led_counter += 1
+                if led_counter > 4:
+                    break
+
+    @staticmethod
+    def _save_output_led_feedback_configuration(output, output_dto, fields):
+        # type: (OutputConfiguration, OutputDTO, List[str]) -> None
+        dto_holds_data = ('can_led_1' in fields or
+                          'can_led_2' in fields or
+                          'can_led_3' in fields or
+                          'can_led_4' in fields)
+        if not dto_holds_data:
+            return  # No change required
+        has_configuration = (output_dto.can_led_1.id is not None or
+                             output_dto.can_led_2.id is not None or
+                             output_dto.can_led_3.id is not None or
+                             output_dto.can_led_4.id is not None)  # If there is led feedback configuration
+        group_action_id = output.output_groupaction_follow
+        group_action = None  # type: Optional[GroupAction]
+        new_group_action = False
+        if group_action_id <= 255:
+            group_action = GroupActionController.load_group_action(group_action_id)
+            confirmed_output = None  # type: Optional[int]
+            for basic_action in group_action.actions[:]:
+                if basic_action.action_type == 19 and basic_action.action == 80:
+                    confirmed_output = basic_action.device_nr
+                    if confirmed_output == output.id:
+                        group_action.actions.remove(basic_action)
+                if basic_action.action_type == 20 and basic_action.action in [50, 51] and confirmed_output == output.id:
+                    group_action.actions.remove(basic_action)
+        else:
+            if not has_configuration:
+                return  # No GroupAction configured, and no configurion. Nothing to do.
+            # Search for a free GroupAction
+            for possible_group_action in GroupActionController.load_group_actions():
+                if not possible_group_action.in_use:
+                    group_action = possible_group_action
+                    break
+            if group_action is None:
+                raise ValueError('No GroupAction available to store LED feedback configuration')
+            new_group_action = True
+        group_action.actions.append(BasicAction(action_type=19,
+                                                action=80,
+                                                device_nr=output.id))
+        for i in range(1, 5):
+            field = 'can_led_{0}'.format(i)
+            feedback_led_dto = getattr(output_dto, field)
+            if field in fields and feedback_led_dto.id is not None:
+                function = feedback_led_dto.function.lower()
+                action = 51 if 'inverted' in function else 50
+                blinking = 0
+                for speed, value in {'fast': 1, 'medium': 2, 'slow': 4, 'swinging': 4}.items():
+                    if speed in function:
+                        blinking = value
+                        break
+                brightness = 16
+                for level in range(16, 0, -1):  # Reverse, as otherwise e.g. B15 would als be mached by B1
+                    if 'b{0}'.format(level) in function:
+                        brightness = level
+                        break
+                extra_parameter = int(brightness / 16.0 * 255) * 256 + blinking
+                group_action.actions.append(BasicAction(action_type=20, action=action,
+                                                        device_nr=feedback_led_dto.id,
+                                                        extra_parameter=extra_parameter))
+        if group_action.actions:
+            if group_action.name == '':
+                group_action.name = 'Output {0}'.format(output.id)
+            output.output_groupaction_follow = group_action.id
+        else:
+            group_action.name = ''
+            output.output_groupaction_follow = 65535
+        output.save(activate=False)
+        GroupActionController.save_group_action(group_action, ['name', 'actions'], activate=False)
 
     def load_output_status(self):
         # type: () -> List[Dict[str,Any]]
@@ -479,16 +587,16 @@ class MasterCoreController(MasterController):
     def shutter_up(self, shutter_id, timer=None):
         if timer:
             raise NotImplementedError('Shutter timers are not supported')
-        self._master_communicator.do_basic_action(action_type=10,
-                                                  action=1,
-                                                  device_nr=shutter_id)
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=1,
+                                                              device_nr=shutter_id))
 
     def shutter_down(self, shutter_id, timer=None):
         if timer:
             raise NotImplementedError('Shutter timers are not supported')
-        self._master_communicator.do_basic_action(action_type=10,
-                                                  action=2,
-                                                  device_nr=shutter_id)
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=2,
+                                                              device_nr=shutter_id))
 
     def shutter_stop(self, shutter_id):
         self._master_communicator.do_basic_action(BasicAction(action_type=10,
@@ -521,8 +629,6 @@ class MasterCoreController(MasterController):
         return shutters
 
     def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
-        # TODO: Batch saving - postpone eeprom activate if relevant for the Core
-        # TODO: Atomic saving
         for shutter_dto, fields in shutters:
             # Validate whether output module exists
             output_module = OutputConfiguration(shutter_dto.id * 2).module
@@ -541,11 +647,12 @@ class MasterCoreController(MasterController):
                 self._output_shutter_map.pop(shutter.outputs.output_1, None)
                 shutter.outputs.output_0 = 255 * 2
                 is_configured = False
-            shutter.save()
+            shutter.save(activate=False)
             # Mark related Outputs as "occupied by shutter"
             setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_configured)
             setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
-            output_module.save()
+            output_module.save(activate=False)
+        MemoryActivator.activate()
 
     def _refresh_shutter_states(self):
         status_data = {x['device_nr']: x for x in self.load_output_status()}
@@ -665,7 +772,8 @@ class MasterCoreController(MasterController):
     def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
         for sensor_dto, fields in sensors:
             sensor = SensorMapper.dto_to_orm(sensor_dto, fields)
-            sensor.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
+            sensor.save(activate=False)
+        MemoryActivator.activate()
 
     def _refresh_sensor_states(self):
         amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
@@ -732,9 +840,13 @@ class MasterCoreController(MasterController):
                 for o in GroupActionController.load_group_actions()]
 
     def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
+        should_activate = False
         for group_action_dto, fields in group_actions:
             group_action = GroupActionMapper.dto_to_orm(group_action_dto, fields)
-            GroupActionController.save_group_action(group_action, fields)
+            GroupActionController.save_group_action(group_action, fields, activate=False)
+            should_activate |= bool(fields)
+        if should_activate:
+            MemoryActivator.activate()
 
     # Module management
 

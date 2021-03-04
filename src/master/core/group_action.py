@@ -81,7 +81,7 @@ class GroupActionController(object):
                            actions=basic_actions)
 
     @staticmethod
-    def save_group_action(group_action, fields):  # type: (GroupAction, List[str]) -> None
+    def save_group_action(group_action, fields, activate=True):  # type: (GroupAction, List[str], bool) -> None
         group_action_id = group_action.id
         if not (0 <= group_action_id <= 255):
             raise ValueError('GroupAction ID {0} not in range 0 <= id <= 255'.format(group_action_id))
@@ -130,7 +130,7 @@ class GroupActionController(object):
             group_action_configuration.name = group_action.name
             group_action_configuration.save(activate=False)
 
-        if fields:
+        if fields and activate:
             MemoryActivator.activate()
 
     @staticmethod
