@@ -519,7 +519,6 @@ class MasterCoreController(MasterController):
                              output_dto.can_led_4.id is not None)  # If there is led feedback configuration
         group_action_id = output.output_groupaction_follow
         group_action = None  # type: Optional[GroupAction]
-        new_group_action = False
         if group_action_id <= 255:
             group_action = GroupActionController.load_group_action(group_action_id)
             confirmed_output = None  # type: Optional[int]
@@ -540,7 +539,6 @@ class MasterCoreController(MasterController):
                     break
             if group_action is None:
                 raise ValueError('No GroupAction available to store LED feedback configuration')
-            new_group_action = True
         group_action.actions.append(BasicAction(action_type=19,
                                                 action=80,
                                                 device_nr=output.id))

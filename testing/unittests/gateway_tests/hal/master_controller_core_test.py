@@ -8,16 +8,19 @@ from six.moves import map
 from six.moves.queue import Queue
 
 import gateway.hal.master_controller_core
-from gateway.dto import InputDTO, OutputStateDTO
+from gateway.dto import InputDTO, OutputStateDTO, OutputDTO, FeedbackLedDTO
 from gateway.hal.master_controller_core import MasterCoreController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import SetTestMode
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer
+from master.core.group_action import GroupActionController
+from master.core.basic_action import BasicAction
 from master.core.memory_models import InputConfiguration, \
     InputModuleConfiguration, OutputConfiguration, OutputModuleConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
+from master.core.memory_types import MemoryActivator
 from mocked_core_helper import MockedCore
 
 
@@ -256,6 +259,59 @@ class MasterCoreControllerTest(unittest.TestCase):
         self.pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
         self.pubsub._publish_all_events()
         assert self.controller._output_last_updated == 0
+
+    def test_feedback_leds_rw(self):
+        output = OutputConfiguration.deserialize({'id': 0})
+        # Setup basic LED feedback
+        output_dto = OutputDTO(id=0,
+                               can_led_1=FeedbackLedDTO(id=5, function=FeedbackLedDTO.Functions.ON_B16_NORMAL),
+                               can_led_3=FeedbackLedDTO(id=7, function=FeedbackLedDTO.Functions.MB_B8_INVERTED))
+
+        # Save led feedback config
+        self.controller._save_output_led_feedback_configuration(output, output_dto, ['can_led_1', 'can_led_3'])
+        MemoryActivator.activate()
+
+        # Validate correct data in created GA
+        self.assertEqual(0, output.output_groupaction_follow)
+        group_action = GroupActionController.load_group_action(0)
+        self.assertEqual([BasicAction(action_type=19, action=80, device_nr=0),
+                          BasicAction(action_type=20, action=50, device_nr=5, extra_parameter=65280),
+                          BasicAction(action_type=20, action=51, device_nr=7, extra_parameter=32514)], group_action.actions)
+        self.assertEqual('Output 0', group_action.name)
+
+        # Alter GA
+        extra_bas = [BasicAction(action_type=123, action=123),  # Some random BA
+                     BasicAction(action_type=19, action=80, device_nr=1),  # Another batch of feedback statements for another Output
+                     BasicAction(action_type=20, action=50, device_nr=15),
+                     BasicAction(action_type=20, action=51, device_nr=17)]
+        group_action.actions += extra_bas
+        group_action.name = 'Foobar'
+        GroupActionController.save_group_action(group_action, ['name', 'actions'])
+
+        # Validate loading data
+        output_dto = OutputDTO(id=0)
+        self.controller._load_output_led_feedback_configuration(output, output_dto)
+        self.assertEqual(FeedbackLedDTO(id=5, function=FeedbackLedDTO.Functions.ON_B16_NORMAL), output_dto.can_led_1)
+        self.assertEqual(FeedbackLedDTO(id=7, function=FeedbackLedDTO.Functions.MB_B8_INVERTED), output_dto.can_led_2)  # Moved to 2
+
+        # Change led feedback config
+        output_dto.can_led_2.function = FeedbackLedDTO.Functions.ON_B8_INVERTED
+        self.controller._save_output_led_feedback_configuration(output, output_dto, ['can_led_1', 'can_led_2'])
+        MemoryActivator.activate()
+
+        # Validate stored led feedback data
+        output_dto = OutputDTO(id=0)
+        self.controller._load_output_led_feedback_configuration(output, output_dto)
+        self.assertEqual(FeedbackLedDTO(id=5, function=FeedbackLedDTO.Functions.ON_B16_NORMAL), output_dto.can_led_1)
+        self.assertEqual(FeedbackLedDTO(id=7, function=FeedbackLedDTO.Functions.ON_B8_INVERTED), output_dto.can_led_2)
+
+        # Validate GA changes
+        group_action = GroupActionController.load_group_action(0)
+        self.assertEqual(extra_bas + [BasicAction(action_type=19, action=80, device_nr=0),
+                                      BasicAction(action_type=20, action=50, device_nr=5, extra_parameter=65280),
+                                      BasicAction(action_type=20, action=51, device_nr=7, extra_parameter=32512)],
+                         group_action.actions)
+        self.assertEqual('Foobar', group_action.name)
 
 
 class MasterInputState(unittest.TestCase):
