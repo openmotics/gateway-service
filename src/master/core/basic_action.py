@@ -36,17 +36,33 @@ class BasicAction(object):
     def action_type(self):  # type: () -> int
         return self._byte_helper.decode(self._action_type)
 
+    @action_type.setter
+    def action_type(self, value): # type: (int) -> None
+        self._action_type = self._byte_helper.encode(value)
+
     @property
     def action(self):  # type: () -> int
         return self._byte_helper.decode(self._action)
+
+    @action.setter
+    def action(self, value):  # type: (int) -> None
+        self._action = self._byte_helper.encode(value)
 
     @property
     def device_nr(self):  # type: () -> int
         return self._word_helper.decode(self._device_nr)
 
+    @device_nr.setter
+    def device_nr(self, value):  # type: (int) -> None
+        self._device_nr = self._word_helper.encode(value)
+
     @property
     def extra_parameter(self):  # type: () -> int
         return self._word_helper.decode(self._extra_parameter)
+
+    @extra_parameter.setter
+    def extra_parameter(self, value):  # type: (int) -> None
+        self._extra_parameter = self._word_helper.encode(value)
 
     def encode(self):  # type: () -> bytearray
         return self._action_type + self._action + self._device_nr + self._extra_parameter

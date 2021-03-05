@@ -55,6 +55,13 @@ class GroupActionController(object):
     MAX_WORD = 2 ** 16 - 1
 
     @staticmethod
+    def get_unused_group_action():  # type: () -> Optional[GroupAction]
+        for group_action in GroupActionController.load_group_actions():
+            if not group_action.in_use:
+                return group_action
+        return None
+
+    @staticmethod
     def load_group_actions():  # type: () -> List[GroupAction]
         group_actions = []
         for i in range(256):

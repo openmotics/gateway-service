@@ -27,7 +27,8 @@ from peewee import DoesNotExist
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
-    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, FeedbackLedDTO
+    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, \
+    FeedbackLedDTO, GlobalFeedbackDTO
 from gateway.enums import ShutterEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
@@ -286,34 +287,34 @@ class MasterCoreController(MasterController):
             return value if value != 255 else default
 
         max_specs = self._master_communicator.do_command(CoreAPI.general_configuration_max_specs(), {})
-        general_configuration = GlobalConfiguration()
+        global_configuration = GlobalConfiguration()
         logger.info('General core information:')
         logger.info('* Modules:')
-        logger.info('  * Auto discovery: {0}'.format(general_configuration.automatic_module_discovery))
-        logger.info('  * Output: {0}/{1}'.format(_default_if_255(general_configuration.number_of_output_modules, 0),
+        logger.info('  * Auto discovery: {0}'.format(global_configuration.automatic_module_discovery))
+        logger.info('  * Output: {0}/{1}'.format(_default_if_255(global_configuration.number_of_output_modules, 0),
                                                  max_specs['output']))
-        logger.info('  * Input: {0}/{1}'.format(_default_if_255(general_configuration.number_of_input_modules, 0),
+        logger.info('  * Input: {0}/{1}'.format(_default_if_255(global_configuration.number_of_input_modules, 0),
                                                 max_specs['input']))
-        logger.info('  * Sensor: {0}/{1}'.format(_default_if_255(general_configuration.number_of_sensor_modules, 0),
+        logger.info('  * Sensor: {0}/{1}'.format(_default_if_255(global_configuration.number_of_sensor_modules, 0),
                                                  max_specs['sensor']))
-        logger.info('  * uCAN: {0}/{1}'.format(_default_if_255(general_configuration.number_of_ucan_modules, 0),
+        logger.info('  * uCAN: {0}/{1}'.format(_default_if_255(global_configuration.number_of_ucan_modules, 0),
                                                max_specs['ucan']))
-        logger.info('  * CAN Control: {0}'.format(_default_if_255(general_configuration.number_of_can_control_modules, 0)))
+        logger.info('  * CAN Control: {0}'.format(_default_if_255(global_configuration.number_of_can_control_modules, 0)))
         logger.info('* CAN:')
-        logger.info('  * Inputs: {0}'.format(general_configuration.number_of_can_inputs))
-        logger.info('  * Sensors: {0}'.format(general_configuration.number_of_can_sensors))
-        logger.info('  * Termination: {0}'.format(general_configuration.can_bus_termination))
+        logger.info('  * Inputs: {0}'.format(global_configuration.number_of_can_inputs))
+        logger.info('  * Sensors: {0}'.format(global_configuration.number_of_can_sensors))
+        logger.info('  * Termination: {0}'.format(global_configuration.can_bus_termination))
         logger.info('* Scan times:')
-        logger.info('  * General bus: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_bus, 8)))
-        logger.info('  * Sensor modules: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_sensor_modules, 50) * 100))
-        logger.info('  * CAN Control modules: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_can_control_modules, 50) * 100))
+        logger.info('  * General bus: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_bus, 8)))
+        logger.info('  * Sensor modules: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_sensor_modules, 50) * 100))
+        logger.info('  * CAN Control modules: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_can_control_modules, 50) * 100))
         logger.info('* Runtime stats:')
-        logger.info('  * Debug: {0}'.format(general_configuration.debug_mode))
-        logger.info('  * Uptime: {0}d {1}h'.format(general_configuration.uptime_hours / 24,
-                                                   general_configuration.uptime_hours % 24))
+        logger.info('  * Debug: {0}'.format(global_configuration.debug_mode))
+        logger.info('  * Uptime: {0}d {1}h'.format(global_configuration.uptime_hours / 24,
+                                                   global_configuration.uptime_hours % 24))
         # noinspection PyStringFormat
-        logger.info('  * Started at 20{0}/{1}/{2} {3}:{4}:{5}'.format(*(list(reversed(general_configuration.startup_date)) +
-                                                                        general_configuration.startup_time)))
+        logger.info('  * Started at 20{0}/{1}/{2} {3}:{4}:{5}'.format(*(list(reversed(global_configuration.startup_date)) +
+                                                                        global_configuration.startup_time)))
 
     ##############
     # Public API #
@@ -518,7 +519,7 @@ class MasterCoreController(MasterController):
                              output_dto.can_led_3.id is not None or
                              output_dto.can_led_4.id is not None)  # If there is led feedback configuration
         group_action_id = output.output_groupaction_follow
-        group_action = None  # type: Optional[GroupAction]
+        group_action = None  # type: Optional[GroupAction]  # Needed for keeping Mypy happy...
         if group_action_id <= 255:
             group_action = GroupActionController.load_group_action(group_action_id)
             confirmed_output = None  # type: Optional[int]
@@ -532,11 +533,7 @@ class MasterCoreController(MasterController):
         else:
             if not has_configuration:
                 return  # No GroupAction configured, and no configurion. Nothing to do.
-            # Search for a free GroupAction
-            for possible_group_action in GroupActionController.load_group_actions():
-                if not possible_group_action.in_use:
-                    group_action = possible_group_action
-                    break
+            group_action = GroupActionController.get_unused_group_action()
             if group_action is None:
                 raise ValueError('No GroupAction available to store LED feedback configuration')
         group_action.actions.append(BasicAction(action_type=19,
@@ -717,9 +714,114 @@ class MasterCoreController(MasterController):
 
     # Can Led functions
 
-    def load_can_led_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        return []  # TODO: implement
+    def load_global_feedback(self, global_feedback_id):  # type: (int) -> GlobalFeedbackDTO
+        global_configuration = GlobalConfiguration()
+        if global_configuration.groupaction_any_output_changed > 255:
+            # No global feedback configuration
+            return GlobalFeedbackDTO(id=global_feedback_id)
+        global_feedbacks = {global_feedback.id: global_feedback for global_feedback in self.load_global_feedbacks()}
+        return global_feedbacks[global_feedback_id]
+
+    def load_global_feedbacks(self):  # type: () -> List[GlobalFeedbackDTO]
+        global_configuration = GlobalConfiguration()
+        if global_configuration.groupaction_any_output_changed > 255:
+            # No global feedback configuration
+            return [GlobalFeedbackDTO(id=i) for i in range(32)]
+        group_action = GroupActionController.load_group_action(global_configuration.groupaction_any_output_changed)
+        global_feedbacks = {i: (GlobalFeedbackDTO(id=i), 1) for i in range(32)}
+        for basic_action in group_action.actions:
+            if basic_action.action_type != 20 or basic_action.action not in [70, 71, 73]:  # 70 = # outputs, 71 = # lights, 72 = # outputs + lights
+                continue
+            # For the calculation of this `global_feedback_id`, see `master.classic.eeprom_models.CanLedConfiguration` docstring
+            if basic_action.action == 73:
+                # 73 is the "zero-case": extra_parametery.msb = 0 -> # outputs,
+                #                        extra_parametery.msb = 1 -> # lights,
+                #                        extra_parametery.msb = 2 -> # outputs + lights
+                appliance_type = basic_action.extra_parameter // 256
+                if appliance_type not in [0, 1]:
+                    continue  # Unsupported
+                global_feedback_id = 0 if appliance_type == 1 else 16
+            else:
+                nr_of_appliances = basic_action.extra_parameter // 256
+                if nr_of_appliances > 14:
+                    continue  # Unsupported
+                global_feedback_id = nr_of_appliances + 1 + (0 if basic_action.action == 71 else 16)
+            global_feedback_dto, led_counter = global_feedbacks[global_feedback_id]
+            if led_counter > 4:
+                continue  # No space remaining
+            blinking = {0: 'On',
+                        1: 'Fast blink',
+                        2: 'Medium blink',
+                        3: 'Slow blink',
+                        4: 'Swinging'}.get(int(basic_action.extra_parameter & 0xFF), 'On')
+            function = '{0} B16'.format(blinking)
+            setattr(global_feedback_dto, 'can_led_{0}'.format(led_counter), FeedbackLedDTO(id=basic_action.device_nr,
+                                                                                           function=function))
+            led_counter += 1
+            global_feedbacks[global_feedback_id] = (global_feedback_dto, led_counter)
+        return [data[0] for data in global_feedbacks.values()]
+
+    def save_global_feedbacks(self, global_feedbacks):  # type: (List[Tuple[GlobalFeedbackDTO, List[str]]]) -> None
+        # Important assumption in the below code to make this strategy solvable: If any of the 4 feedbacks is
+        # given, they all are assumed to be given.
+        global_configuration = GlobalConfiguration()
+        if global_configuration.groupaction_any_output_changed > 255:
+            group_action = GroupActionController.get_unused_group_action()
+            if group_action is None:
+                raise ValueError('No GroupAction available to store LED feedback configuration')
+        else:
+            group_action = GroupActionController.load_group_action(global_configuration.groupaction_any_output_changed)
+
+        for global_feedback_dto, fields in global_feedbacks:
+            dto_holds_data = ('can_led_1' in fields or
+                              'can_led_2' in fields or
+                              'can_led_3' in fields or
+                              'can_led_4' in fields)
+            if not dto_holds_data:
+                continue  # No change required
+            # First, delete everything related to this global_feedback_dto
+            if global_feedback_dto.id in [0, 16]:
+                action = 73
+                extra_parametery_msb = 0 if global_feedback_dto.id == 16 else 1
+            else:
+                action = 71 if global_feedback_dto.id < 16 else 70
+                extra_parametery_msb = global_feedback_dto.id - (1 if global_feedback_dto.id < 16 else 17)
+            for basic_action in group_action.actions[:]:
+                if basic_action.action_type == 20 and basic_action.action == action:
+                    if basic_action.extra_parameter // 256 == extra_parametery_msb:
+                        group_action.actions.remove(basic_action)
+            # Then, add the relevant entries back again
+            has_configuration = (global_feedback_dto.can_led_1.id is not None or
+                                 global_feedback_dto.can_led_2.id is not None or
+                                 global_feedback_dto.can_led_3.id is not None or
+                                 global_feedback_dto.can_led_4.id is not None)
+            if has_configuration:
+                for i in range(1, 5):
+                    field = 'can_led_{0}'.format(i)
+                    feedback_led_dto = getattr(global_feedback_dto, field)
+                    if field in fields and feedback_led_dto.id is not None:
+                        function = feedback_led_dto.function.lower()
+                        blinking = 0
+                        for speed, value in {'fast': 1, 'medium': 2, 'slow': 4, 'swinging': 4}.items():
+                            if speed in function:
+                                blinking = value
+                                break
+                        extra_parameter = extra_parametery_msb * 256 + blinking
+                        group_action.actions.append(BasicAction(action_type=20,
+                                                                action=action,
+                                                                device_nr=feedback_led_dto.id,
+                                                                extra_parameter=extra_parameter))
+        # Save changes
+        if group_action.actions:
+            if group_action.name == '':
+                group_action.name = 'Global feedback'
+            global_configuration.groupaction_any_output_changed = group_action.id
+        else:
+            group_action.name = ''
+            global_configuration.groupaction_any_output_changed = 65535
+        global_configuration.save(activate=False)
+        GroupActionController.save_group_action(group_action, ['name', 'actions'], activate=False)
+        MemoryActivator.activate()
 
     # Sensors
 
@@ -885,10 +987,10 @@ class MasterCoreController(MasterController):
         def _default_if_255(value, default):
             return value if value != 255 else default
 
-        general_configuration = GlobalConfiguration()
+        global_configuration = GlobalConfiguration()
 
         outputs = []
-        nr_of_output_modules = _default_if_255(general_configuration.number_of_output_modules, 0)
+        nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
@@ -903,9 +1005,9 @@ class MasterCoreController(MasterController):
 
         inputs = []
         can_inputs = []
-        nr_of_input_modules = _default_if_255(general_configuration.number_of_input_modules, 0)
-        nr_of_sensor_modules = _default_if_255(general_configuration.number_of_sensor_modules, 0)
-        nr_of_can_controls = _default_if_255(general_configuration.number_of_can_control_modules, 0)
+        nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
+        nr_of_sensor_modules = _default_if_255(global_configuration.number_of_sensor_modules, 0)
+        nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
@@ -963,8 +1065,8 @@ class MasterCoreController(MasterController):
                               'r': ModuleDTO.ModuleType.SHUTTER,
                               'd': ModuleDTO.ModuleType.DIM_CONTROL}
 
-        general_configuration = GlobalConfiguration()
-        nr_of_input_modules = _default_if_255(general_configuration.number_of_input_modules, 0)
+        global_configuration = GlobalConfiguration()
+        nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
@@ -985,7 +1087,7 @@ class MasterCoreController(MasterController):
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(input_module_info.address)
             information.append(dto)
 
-        nr_of_output_modules = _default_if_255(general_configuration.number_of_output_modules, 0)
+        nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
@@ -1004,7 +1106,7 @@ class MasterCoreController(MasterController):
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(output_module_info.address)
             information.append(dto)
 
-        nr_of_sensor_modules = _default_if_255(general_configuration.number_of_sensor_modules, 0)
+        nr_of_sensor_modules = _default_if_255(global_configuration.number_of_sensor_modules, 0)
         for module_id in range(nr_of_sensor_modules):
             sensor_module_info = SensorModuleConfiguration(module_id)
             device_type = sensor_module_info.device_type
@@ -1023,7 +1125,7 @@ class MasterCoreController(MasterController):
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(sensor_module_info.address)
             information.append(dto)
 
-        nr_of_can_controls = _default_if_255(general_configuration.number_of_can_control_modules, 0)
+        nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
         for module_id in range(nr_of_can_controls):
             can_control_module_info = CanControlModuleConfiguration(module_id)
             device_type = can_control_module_info.device_type

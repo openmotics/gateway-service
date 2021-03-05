@@ -8,7 +8,8 @@ from six.moves import map
 from six.moves.queue import Queue
 
 import gateway.hal.master_controller_core
-from gateway.dto import InputDTO, OutputStateDTO, OutputDTO, FeedbackLedDTO
+from gateway.dto import InputDTO, OutputStateDTO, OutputDTO, FeedbackLedDTO, \
+    GlobalFeedbackDTO
 from gateway.hal.master_controller_core import MasterCoreController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
@@ -19,7 +20,7 @@ from master.core.group_action import GroupActionController
 from master.core.basic_action import BasicAction
 from master.core.memory_models import InputConfiguration, \
     InputModuleConfiguration, OutputConfiguration, OutputModuleConfiguration, \
-    SensorModuleConfiguration, ShutterConfiguration
+    SensorModuleConfiguration, ShutterConfiguration, GlobalConfiguration
 from master.core.memory_types import MemoryActivator
 from mocked_core_helper import MockedCore
 
@@ -260,7 +261,7 @@ class MasterCoreControllerTest(unittest.TestCase):
         self.pubsub._publish_all_events()
         assert self.controller._output_last_updated == 0
 
-    def test_feedback_leds_rw(self):
+    def test_individual_feedback_leds(self):
         output = OutputConfiguration.deserialize({'id': 0})
         # Setup basic LED feedback
         output_dto = OutputDTO(id=0,
@@ -312,6 +313,144 @@ class MasterCoreControllerTest(unittest.TestCase):
                                       BasicAction(action_type=20, action=51, device_nr=7, extra_parameter=32512)],
                          group_action.actions)
         self.assertEqual('Foobar', group_action.name)
+
+    def test_global_feedback_leds(self):
+        global_configuration = GlobalConfiguration()
+        all_default_global_feedbacks = [GlobalFeedbackDTO(id=i) for i in range(32)]
+
+        # Verify base
+        self.assertEqual(65535, global_configuration.groupaction_any_output_changed)
+        self.assertEqual([GlobalFeedbackDTO(id=i) for i in range(32)], self.controller.load_global_feedbacks())
+
+        # Store feedback "0" (nr of lights == 0)
+        global_feedback_0 = GlobalFeedbackDTO(id=0,
+                                              can_led_1=FeedbackLedDTO(id=5, function=FeedbackLedDTO.Functions.ON_B16_NORMAL),
+                                              can_led_3=FeedbackLedDTO(id=7, function=FeedbackLedDTO.Functions.ON_B8_INVERTED),
+                                              can_led_4=FeedbackLedDTO(id=9, function=FeedbackLedDTO.Functions.FB_B8_NORMAL))
+        self.controller.save_global_feedbacks([(global_feedback_0, ['can_led_1', 'can_led_3', 'can_led_4'])])
+
+        #                                                                                                 +- 256 = MSB is 1 = lights
+        # Validate                                                                                        |   +- 0 = Solid on, 1 = Fast blinking
+        expected_basic_actions_0 = [BasicAction(action_type=20, action=73, device_nr=5, extra_parameter=256 + 0),
+                                    BasicAction(action_type=20, action=73, device_nr=7, extra_parameter=256 + 0),
+                                    BasicAction(action_type=20, action=73, device_nr=9, extra_parameter=256 + 1)]
+        expected_global_feedback_0 = GlobalFeedbackDTO(id=0,
+                                                       can_led_1=FeedbackLedDTO(id=5, function=FeedbackLedDTO.Functions.ON_B16_NORMAL),
+                                                       can_led_2=FeedbackLedDTO(id=7, function=FeedbackLedDTO.Functions.ON_B16_NORMAL),
+                                                       can_led_3=FeedbackLedDTO(id=9, function=FeedbackLedDTO.Functions.FB_B16_NORMAL))
+        expected_global_feedbacks = all_default_global_feedbacks[:]
+        expected_global_feedbacks[0] = expected_global_feedback_0
+        global_configuration = GlobalConfiguration()
+        group_action = GroupActionController.load_group_action(0)
+        self.assertEqual(0, global_configuration.groupaction_any_output_changed)
+        self.assertEqual('Global feedback', group_action.name)
+        self.assertEqual(expected_basic_actions_0, group_action.actions)
+        self.assertEqual(expected_global_feedbacks, self.controller.load_global_feedbacks())
+        self.assertEqual(expected_global_feedback_0, self.controller.load_global_feedback(0))
+
+        # Prepare feedback "3" (nr of lights > 2)
+        global_feedback_3 = GlobalFeedbackDTO(id=3,
+                                              can_led_1=FeedbackLedDTO(id=11, function=FeedbackLedDTO.Functions.ON_B16_NORMAL),
+                                              can_led_3=FeedbackLedDTO(id=13, function=FeedbackLedDTO.Functions.FB_B8_INVERTED),
+                                              can_led_4=FeedbackLedDTO(id=15, function=FeedbackLedDTO.Functions.ON_B8_INVERTED))
+        expected_global_feedback_3 = GlobalFeedbackDTO(id=3,
+                                                       can_led_1=FeedbackLedDTO(id=11, function=FeedbackLedDTO.Functions.ON_B16_NORMAL),
+                                                       can_led_2=FeedbackLedDTO(id=13, function=FeedbackLedDTO.Functions.FB_B16_NORMAL))
+        expected_basic_actions_3 = [BasicAction(action_type=20, action=71, device_nr=11, extra_parameter=512 + 0),
+                                    BasicAction(action_type=20, action=71, device_nr=13, extra_parameter=512 + 1)]
+        #                                                                                                |   +- 0 = Solid on, 1 = Fast blinking
+        #                                                                                                +- 512 = MSB is 2 = nr of lights
+
+        # Store in various scenarios, all should yield the same response
+        save_scenarios = [[(global_feedback_3, ['can_led_1', 'can_led_3'])],
+                          [(global_feedback_0, ['can_led_1', 'can_led_3', 'can_led_4']), (global_feedback_3, ['can_led_1', 'can_led_3'])]]
+        for save_scenario in save_scenarios:
+            self.controller.save_global_feedbacks(save_scenario)
+
+            expected_global_feedbacks = all_default_global_feedbacks[:]
+            expected_global_feedbacks[0] = expected_global_feedback_0
+            expected_global_feedbacks[3] = expected_global_feedback_3
+            global_configuration = GlobalConfiguration()
+            group_action = GroupActionController.load_group_action(0)
+            self.assertEqual(0, global_configuration.groupaction_any_output_changed)
+            self.assertEqual(expected_basic_actions_0 + expected_basic_actions_3, group_action.actions)
+            self.assertEqual(expected_global_feedbacks, self.controller.load_global_feedbacks())
+            self.assertEqual(expected_global_feedback_0, self.controller.load_global_feedback(0))
+            self.assertEqual(expected_global_feedback_3, self.controller.load_global_feedback(3))
+
+        # Add extra BA that should not be removed by altering global feedback
+        extra_basic_actions = [BasicAction(action_type=123, action=123)]
+        group_action.actions += extra_basic_actions
+        group_action.name = 'Foobar'
+        GroupActionController.save_group_action(group_action, ['name', 'actions'])
+
+        # Save without scenario (will re-save data, but should not alter)
+        self.controller.save_global_feedbacks([])
+        group_action = GroupActionController.load_group_action(0)
+        self.assertEqual('Foobar', group_action.name)
+        self.assertEqual(expected_basic_actions_0 + expected_basic_actions_3 + extra_basic_actions, group_action.actions)
+
+        # Save full scenario (will remove feedback BAs and save them again at the end of the GA)
+        self.controller.save_global_feedbacks(save_scenarios[1])
+        group_action = GroupActionController.load_group_action(0)
+        self.assertEqual('Foobar', group_action.name)
+        self.assertEqual(extra_basic_actions + expected_basic_actions_0 + expected_basic_actions_3, group_action.actions)
+
+        # Prepare feedbacks "16" (nr of outputs == 0) and "20" (nr of outputs > 3)
+        global_feedback_16 = GlobalFeedbackDTO(id=16, can_led_1=FeedbackLedDTO(id=15, function=FeedbackLedDTO.Functions.ON_B16_NORMAL))
+        global_feedback_20 = GlobalFeedbackDTO(id=20, can_led_1=FeedbackLedDTO(id=17, function=FeedbackLedDTO.Functions.ON_B16_NORMAL))
+        expected_global_feedback_16 = GlobalFeedbackDTO(id=16, can_led_1=FeedbackLedDTO(id=15, function=FeedbackLedDTO.Functions.ON_B16_NORMAL))
+        expected_global_feedback_20 = GlobalFeedbackDTO(id=20, can_led_1=FeedbackLedDTO(id=17, function=FeedbackLedDTO.Functions.ON_B16_NORMAL))
+        expected_basic_actions_16 = [BasicAction(action_type=20, action=73, device_nr=15, extra_parameter=0 + 0)]  # 0 = MSB is 0 = outputs
+        expected_basic_actions_20 = [BasicAction(action_type=20, action=70, device_nr=17, extra_parameter=768 + 0)]  # 768 = MSB is 3 = nr of outputs
+
+        # Store
+        self.controller.save_global_feedbacks([(global_feedback_0, ['can_led_1', 'can_led_3', 'can_led_4']),
+                                               (global_feedback_3, ['can_led_1', 'can_led_3']),
+                                               (global_feedback_16, ['can_led_1']),
+                                               (global_feedback_20, ['can_led_1'])])
+
+        # Validate
+        expected_global_feedbacks = all_default_global_feedbacks[:]
+        expected_global_feedbacks[0] = expected_global_feedback_0
+        expected_global_feedbacks[3] = expected_global_feedback_3
+        expected_global_feedbacks[16] = expected_global_feedback_16
+        expected_global_feedbacks[20] = expected_global_feedback_20
+        global_configuration = GlobalConfiguration()
+        group_action = GroupActionController.load_group_action(0)
+        self.assertEqual(0, global_configuration.groupaction_any_output_changed)
+        self.assertEqual(extra_basic_actions +
+                         expected_basic_actions_0 +
+                         expected_basic_actions_3 +
+                         expected_basic_actions_16 +
+                         expected_basic_actions_20, group_action.actions)
+        self.assertEqual(expected_global_feedbacks, self.controller.load_global_feedbacks())
+        self.assertEqual(expected_global_feedback_0, self.controller.load_global_feedback(0))
+        self.assertEqual(expected_global_feedback_3, self.controller.load_global_feedback(3))
+        self.assertEqual(expected_global_feedback_16, self.controller.load_global_feedback(16))
+        self.assertEqual(expected_global_feedback_20, self.controller.load_global_feedback(20))
+
+        # Remove 3
+        empty_global_feedback_3 = GlobalFeedbackDTO(id=3)
+        self.controller.save_global_feedbacks([(empty_global_feedback_3, ['can_led_1', 'can_led_2']),
+                                               (global_feedback_20, ['can_led_1'])])
+
+        # Validate
+        expected_global_feedbacks = all_default_global_feedbacks[:]
+        expected_global_feedbacks[0] = expected_global_feedback_0
+        expected_global_feedbacks[16] = expected_global_feedback_16
+        expected_global_feedbacks[20] = expected_global_feedback_20
+        global_configuration = GlobalConfiguration()
+        group_action = GroupActionController.load_group_action(0)
+        self.assertEqual(0, global_configuration.groupaction_any_output_changed)
+        self.assertEqual(extra_basic_actions +
+                         expected_basic_actions_0 +
+                         expected_basic_actions_16 +
+                         expected_basic_actions_20, group_action.actions)
+        self.assertEqual(expected_global_feedbacks, self.controller.load_global_feedbacks())
+        self.assertEqual(expected_global_feedback_0, self.controller.load_global_feedback(0))
+        self.assertEqual(expected_global_feedback_16, self.controller.load_global_feedback(16))
+        self.assertEqual(expected_global_feedback_20, self.controller.load_global_feedback(20))
 
 
 class MasterInputState(unittest.TestCase):

@@ -31,13 +31,13 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO, \
     ThermostatGroupDTO, ThermostatAircoStatusDTO, PumpGroupDTO, \
-    GlobalRTD10DTO, RTD10DTO
+    GlobalRTD10DTO, RTD10DTO, GlobalFeedbackDTO
 from gateway.enums import ShutterEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
     OutputMapper, PulseCounterMapper, SensorMapper, ShutterGroupMapper, \
     ShutterMapper, ThermostatMapper, ThermostatGroupMapper, PumpGroupMapper, \
-    GlobalRTD10Mapper, RTD10Mapper
+    GlobalRTD10Mapper, RTD10Mapper, GlobalFeedbackMapper
 from gateway.hal.master_controller import CommunicationFailure, \
     MasterController
 from gateway.hal.master_event import MasterEvent
@@ -1570,24 +1570,21 @@ class MasterClassicController(MasterController):
     # Can Led functions
 
     @communication_enabled
-    def load_can_led_configuration(self, can_led_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        return self._eeprom_controller.read(CanLedConfiguration, can_led_id, fields).serialize()
+    def load_global_feedback(self, global_feedback_id):  # type: (int) -> GlobalFeedbackDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.CanLedConfiguration, global_feedback_id)
+        return GlobalFeedbackMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def load_can_led_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        return [o.serialize() for o in self._eeprom_controller.read_all(CanLedConfiguration, fields)]
+    def load_global_feedbacks(self):  # type: () -> List[GlobalFeedbackDTO]
+        return [GlobalFeedbackMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.CanLedConfiguration)]
 
     @communication_enabled
-    def save_can_led_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(CanLedConfiguration.deserialize(config))
-
-    @communication_enabled
-    def save_can_led_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        self._eeprom_controller.write_batch([CanLedConfiguration.deserialize(o) for o in config])
+    def save_global_feedbacks(self, global_feedbacks):  # type: (List[Tuple[GlobalFeedbackDTO, List[str]]]) -> None
+        batch = []
+        for global_feedback, fields in global_feedbacks:
+            batch.append(GlobalFeedbackMapper.dto_to_orm(global_feedback, fields))
+        self._eeprom_controller.write_batch(batch)
 
     # All lights off functions
 

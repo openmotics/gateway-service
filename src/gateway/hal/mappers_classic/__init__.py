@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from gateway.hal.mappers_classic.global_feedback import GlobalFeedbackMapper
 from gateway.hal.mappers_classic.output import OutputMapper
 from gateway.hal.mappers_classic.shutter import ShutterMapper
 from gateway.hal.mappers_classic.shutter_group import ShutterGroupMapper

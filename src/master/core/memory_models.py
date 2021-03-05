@@ -52,6 +52,7 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
     groupaction_minutes_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 54))  # 0, 54-55
     groupaction_hours_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 56))  # 0, 56-57
     groupaction_day_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 58))  # 0, 58-59
+    groupaction_any_output_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 60))  # 0, 60-61
     startup_time = MemoryByteArrayField(MemoryTypes.FRAM, address_spec=(0, 64), length=3, read_only=True)  # 0, 64-66
     startup_date = MemoryByteArrayField(MemoryTypes.FRAM, address_spec=(0, 67), length=3, read_only=True)  # 0, 67-69
     uptime_hours = Memory3BytesField(MemoryTypes.FRAM, address_spec=(0, 70), read_only=True)  # 0, 70-72
