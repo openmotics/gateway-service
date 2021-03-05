@@ -64,6 +64,22 @@ class BasicAction(object):
     def extra_parameter(self, value):  # type: (int) -> None
         self._extra_parameter = self._word_helper.encode(value)
 
+    @property
+    def extra_parameter_lsb(self):  # type: () -> int
+        return self._extra_parameter[1]
+
+    @extra_parameter_lsb.setter
+    def extra_parameter_lsb(self, value):  # type: (int) -> None
+        self._extra_parameter[1] = min(255, max(0, value))
+
+    @property
+    def extra_parameter_msb(self):  # type: () -> int
+        return self._extra_parameter[0]
+
+    @extra_parameter_msb.setter
+    def extra_parameter_msb(self, value):  # type: (int) -> None
+        self._extra_parameter[0] = min(255, max(0, value))
+
     def encode(self):  # type: () -> bytearray
         return self._action_type + self._action + self._device_nr + self._extra_parameter
 
