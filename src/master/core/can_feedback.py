@@ -50,7 +50,7 @@ class CANFeedbackController(object):
         led_counter = 1
         confirmed_output = None  # type: Optional[int]
         for basic_action in group_action.actions:
-            if basic_action.action_type == 19 and basic_action.action == 80:
+            if basic_action.action_type == 19 and basic_action.action == 2:
                 # Ouput value selector
                 confirmed_output = basic_action.device_nr
             if basic_action.action_type == 20 and basic_action.action in [50, 51]:
@@ -79,7 +79,7 @@ class CANFeedbackController(object):
             group_action = GroupActionController.load_group_action(group_action_id)
             confirmed_output = None  # type: Optional[int]
             for basic_action in group_action.actions[:]:
-                if basic_action.action_type == 19 and basic_action.action == 80:
+                if basic_action.action_type == 19 and basic_action.action == 2:
                     confirmed_output = basic_action.device_nr
                     if confirmed_output == output.id:
                         group_action.actions.remove(basic_action)
@@ -92,7 +92,7 @@ class CANFeedbackController(object):
             if group_action is None:
                 raise ValueError('No GroupAction available to store LED feedback configuration')
         group_action.actions.append(BasicAction(action_type=19,
-                                                action=80,
+                                                action=2,
                                                 device_nr=output.id))
         for field in CANFeedbackController.FIELDS:
             feedback_led_dto = getattr(output_dto, field)
