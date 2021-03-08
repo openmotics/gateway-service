@@ -939,8 +939,25 @@ class MasterCoreController(MasterController):
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
         raise NotImplementedError('Module replacement not supported')
 
-    def flash_leds(self, led_type, led_id):
-        raise NotImplementedError()
+    def flash_leds(self, led_type, led_id):  # type: (int, int) -> str
+        """
+        Flash the leds on the module for an output/input/sensor.
+        :param led_type: The module type: output/dimmer (0), input (1), sensor/temperatur (2).
+        :param led_id: The id of the output/input/sensor.
+        """
+        if led_type not in [0, 1, 2]:
+            raise ValueError('Module indication can only be executed on led types 0, 1 and 2')
+        if led_type == 0:
+            output = OutputConfiguration(led_id)
+            if output.is_shutter:
+                self._master_communicator.do_basic_action(BasicAction(action_type=10, action=200, device_nr=led_id // 2))
+            else:
+                self._master_communicator.do_basic_action(BasicAction(action_type=0, action=200, device_nr=led_id))
+        elif led_type == 1:
+            self._master_communicator.do_basic_action(BasicAction(action_type=1, action=200, device_nr=led_id))
+        elif led_type == 2:
+            self._master_communicator.do_basic_action(BasicAction(action_type=8, action=200, device_nr=led_id))
+        return 'OK'
 
     # Virtual modules
 
