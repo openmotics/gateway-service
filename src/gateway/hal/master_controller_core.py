@@ -28,7 +28,7 @@ from peewee import DoesNotExist
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
     PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, GlobalFeedbackDTO
-from gateway.enums import ShutterEnums
+from gateway.enums import ShutterEnums, IndicateType
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
@@ -956,8 +956,28 @@ class MasterCoreController(MasterController):
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
         raise NotImplementedError('Module replacement not supported')
 
-    def flash_leds(self, led_type, led_id):
-        raise NotImplementedError()
+    def flash_leds(self, led_type, led_id):  # type: (int, int) -> str
+        """
+        Flash the leds on the module for an output/input/sensor.
+        :param led_type: The module type, see `IndicateType`.
+        :param led_id: The id of the output/input/sensor.
+        """
+        all_types = [IndicateType.INPUT,
+                     IndicateType.OUTPUT,
+                     IndicateType.SENSOR]
+        if led_type not in all_types:
+            raise ValueError('Module indication can only be executed on types: {0}'.format(', '.join(str(t) for t in all_types)))
+        if led_type == IndicateType.OUTPUT:
+            output = OutputConfiguration(led_id)
+            if output.is_shutter:
+                self._master_communicator.do_basic_action(BasicAction(action_type=10, action=200, device_nr=led_id // 2))
+            else:
+                self._master_communicator.do_basic_action(BasicAction(action_type=0, action=200, device_nr=led_id))
+        elif led_type == IndicateType.INPUT:
+            self._master_communicator.do_basic_action(BasicAction(action_type=1, action=200, device_nr=led_id))
+        elif led_type == IndicateType.SENSOR:
+            self._master_communicator.do_basic_action(BasicAction(action_type=8, action=200, device_nr=led_id))
+        return 'OK'
 
     # Virtual modules
 

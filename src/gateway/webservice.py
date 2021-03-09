@@ -635,18 +635,14 @@ class WebInterface(object):
                 'mac_address': Hardware.get_mac_address()}
 
     @openmotics_api(auth=True, check=types(type=int, id=int))
-    def flash_leds(self, type, id):
+    def flash_leds(self, type, id):  # type: (int, int) -> Dict[str, str]
         """
         Flash the leds on the module for an output/input/sensor.
-
         :param type: The module type: output/dimmer (0), input (1), sensor/temperatur (2).
-        :type type: int
         :param id: The id of the output/input/sensor.
-        :type id: int
-        :returns: 'status': 'OK'.
-        :rtype: dict
         """
-        return self._gateway_api.flash_leds(type, id)
+        status = self._gateway_api.flash_leds(type, id)
+        return {'status': status}
 
     @openmotics_api(auth=True)
     def get_status(self):

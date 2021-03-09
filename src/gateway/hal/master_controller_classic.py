@@ -1124,18 +1124,15 @@ class MasterClassicController(MasterController):
         raise RuntimeError('Could not correctly match modules {0} and {1}'.format(old_address, new_address))
 
     @communication_enabled
-    def flash_leds(self, led_type, led_id):
-        """ Flash the leds on the module for an output/input/sensor.
-
-        :type led_type: byte
-        :param led_type: The module type: output/dimmer (0), input (1), sensor/temperatur (2).
-        :type led_id: byte
+    def flash_leds(self, led_type, led_id):  # type: (int, int) -> str
+        """
+        Flash the leds on the module for an output/input/sensor.
+        :param led_type: The module type, see `IndicateType`.
         :param led_id: The id of the output/input/sensor.
-        :returns: dict with 'status' ('OK').
         """
         ret = self._master_communicator.do_command(master_api.indicate(),
                                                    {'type': led_type, 'id': led_id})
-        return {'status': ret['resp']}
+        return ret['resp']
 
     @communication_enabled
     def get_backup(self):

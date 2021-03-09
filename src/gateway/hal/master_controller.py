@@ -407,7 +407,7 @@ class MasterController(object):
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
         raise NotImplementedError()
 
-    def flash_leds(self, led_type, led_id):
+    def flash_leds(self, led_type, led_id):  # type: (int, int) -> str
         raise NotImplementedError()
 
     def get_backup(self):
