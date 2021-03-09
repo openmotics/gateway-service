@@ -19,6 +19,7 @@ from __future__ import absolute_import
 
 import logging
 import time
+import threading
 from threading import Lock, Event as ThreadingEvent
 
 from gateway.hal.master_event import MasterEvent
@@ -43,9 +44,6 @@ class MemoryTypes(object):
 
 class MemoryFile(object):
 
-    # TODO:
-    #  * Create a virtual transaction so that e.g. per API call all data is written consistently
-
     WRITE_TIMEOUT = 5
     READ_TIMEOUT = 5
     ACTIVATE_TIMEOUT = 5
@@ -69,11 +67,12 @@ class MemoryFile(object):
         self._eeprom_cache = {}  # type: Dict[int, bytearray]
         self._fram_cache = {}  # type: Dict[int, Tuple[float, bytearray]]
 
-        # The write cache is a per-type cache of all changes that need to be written that has the page
+        # The write cache is a per-thread/per-type cache of all changes that need to be written that has the page
         # as key, and a list of tuples as value, where the tuples holds the start byte and contents
-        self._write_cache = {MemoryTypes.EEPROM: {},
-                             MemoryTypes.FRAM: {}}  # type: Dict[str, Dict[int, Dict[int, int]]]
-        self._write_lock = Lock()
+        self._write_cache = {}  # type: Dict[int, Dict[str, Dict[int, Dict[int, int]]]]
+        self._write_cache_lock = {}  # type: Dict[int, Lock]
+        self._select_write_cache_lock = Lock()
+        self._activate_lock = Lock()
 
         self._eeprom_change_callback = None  # type: Optional[Callable[[], None]]
         self._self_activated = False
@@ -97,6 +96,16 @@ class MemoryFile(object):
                 master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
                 self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
             self._activation_event.set()
+
+    def _get_write_cache(self):
+        thread_id = threading.current_thread().ident or 0
+        if thread_id not in self._write_cache:
+            with self._select_write_cache_lock:
+                if thread_id not in self._write_cache:
+                    self._write_cache[thread_id] = {MemoryTypes.EEPROM: {},
+                                                    MemoryTypes.FRAM: {}}
+                    self._write_cache_lock[thread_id] = Lock()
+        return self._write_cache[thread_id], self._write_cache_lock[thread_id]
 
     @staticmethod
     def _create_read_map(addresses):  # type: (List[MemoryAddress]) -> Dict[str, Set[int]]
@@ -142,15 +151,17 @@ class MemoryFile(object):
         return page_data
 
     def write(self, data_map):  # type: (Dict[MemoryAddress, bytearray]) -> None
-        with self._write_lock:
+        write_cache, lock = self._get_write_cache()
+        with lock:
             for address, data in data_map.items():
-                page_cache = self._write_cache[address.memory_type].setdefault(address.page, {})
+                page_cache = write_cache[address.memory_type].setdefault(address.page, {})
                 for index, data_byte in enumerate(data):
                     page_cache[address.offset + index] = data_byte
 
     def _store_data(self):  # type: () -> bool
         data_written = False
-        for memory_type, type_data in self._write_cache.items():
+        write_cache, _ = self._get_write_cache()
+        for memory_type, type_data in write_cache.items():
             for page, page_data in type_data.items():
                 byte_numbers = list(page_data.keys())
                 while len(byte_numbers) > 0:
@@ -189,11 +200,12 @@ class MemoryFile(object):
         return data_written
 
     def activate(self):  # type: () -> None
-        with self._write_lock:
+        with self._activate_lock:
             logger.info('MEMORY: Writing')
             data_written = self._store_data()
-            self._write_cache[MemoryTypes.EEPROM] = {}
-            self._write_cache[MemoryTypes.FRAM] = {}
+            write_cache, _ = self._get_write_cache()
+            write_cache[MemoryTypes.EEPROM] = {}
+            write_cache[MemoryTypes.FRAM] = {}
             if data_written:
                 logger.info('MEMORY: Activating')
                 self._self_activated = True
