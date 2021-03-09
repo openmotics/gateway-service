@@ -30,7 +30,7 @@ if False:  # MYPY
     from master.core.group_action import GroupAction
     from gateway.dto import OutputDTO
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class CANFeedbackController(object):
@@ -178,7 +178,7 @@ class CANFeedbackController(object):
                 action = 73
                 extra_parametery_msb = 0 if global_feedback_dto.id == 16 else 1
             else:
-                action = 71 if global_feedback_dto.id < 16 else 70
+                action = 71 if 0 < global_feedback_dto.id < 16 else 70
                 extra_parametery_msb = global_feedback_dto.id - (1 if global_feedback_dto.id < 16 else 17)
             for basic_action in group_action.actions[:]:
                 if basic_action.action_type == 20 and basic_action.action == action:
