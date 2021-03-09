@@ -41,6 +41,7 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
     groupaction_minutes_changed: int
     groupaction_hours_changed: int
     groupaction_day_changed: int
+    groupaction_any_output_changed: int
     startup_time: List[int]
     startup_date: List[int]
     uptime_hours: int

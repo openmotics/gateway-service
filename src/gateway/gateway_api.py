@@ -549,50 +549,6 @@ class GatewayApi(object):
         """
         self.__master_controller.save_dimmer_configuration(config)
 
-    def get_can_led_configuration(self, can_led_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        """
-        Get a specific can_led_configuration defined by its id.
-
-        :param can_led_id: The id of the can_led_configuration
-        :type can_led_id: Id
-        :param fields: The field of the can_led_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
-        """
-        return self.__master_controller.load_can_led_configuration(can_led_id, fields=fields)
-
-    def get_can_led_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        """
-        Get all can_led_configurations.
-
-        :param fields: The field of the can_led_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
-        """
-        return self.__master_controller.load_can_led_configurations(fields=fields)
-
-    def set_can_led_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set one can_led_configuration.
-
-        :param config: The can_led_configuration to set
-        :type config: can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
-        """
-        self.__master_controller.save_can_led_configuration(config)
-
-    def set_can_led_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        """
-        Set multiple can_led_configurations.
-
-        :param config: The list of can_led_configurations to set
-        :type config: list of can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
-        """
-        self.__master_controller.save_can_led_configurations(config)
-
     # End of auto generated functions
 
     def get_configuration_dirty_flag(self):

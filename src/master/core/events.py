@@ -18,7 +18,7 @@ Module to handle Events from the Core
 
 from __future__ import absolute_import
 import logging
-from master.core.fields import WordField
+from master.core.fields import WordField, AddressField
 from master.core.system_value import Temperature, Humidity
 from master.core.basic_action import BasicAction
 
@@ -40,6 +40,7 @@ class Event(object):
         BUTTON_PRESS = 'BUTTON_PRESS'
         LED_ON = 'LED_ON'
         LED_BLINK = 'LED_BLINK'
+        UCAN = 'UCAN'
         UNKNOWN = 'UNKNOWN'
 
     class SensorType(object):
@@ -108,6 +109,7 @@ class Event(object):
         self._device_nr = data['device_nr']
         self._data = data['data']
         self._word_helper = WordField('')
+        self._address_helper = AddressField('', length=3)
 
     @property
     def type(self):
@@ -115,6 +117,7 @@ class Event(object):
                     1: Event.Types.INPUT,
                     2: Event.Types.SENSOR,
                     20: Event.Types.THERMOSTAT,
+                    21: Event.Types.UCAN,
                     22: Event.Types.EXECUTED_BA,
                     250: Event.Types.BUTTON_PRESS,
                     251: Event.Types.LED_BLINK,
@@ -203,6 +206,9 @@ class Event(object):
             if event_type == Event.SystemEventTypes.ONBOARD_TEMP_CHANGED:
                 event_data['temperature'] = self._data[0]
             return event_data
+        if self.type == Event.Types.UCAN:
+            return {'address': self._address_helper.decode(bytearray([self._device_nr & 0xFF]) + self._data[0:2]),
+                    'data': self._data[2:4]}
         if self.type == Event.Types.EXECUTED_BA:
             return {'basic_action': BasicAction(action_type=self._data[0],
                                                 action=self._data[1],

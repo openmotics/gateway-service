@@ -27,7 +27,7 @@ from peewee import DoesNotExist
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
-    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO
+    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, GlobalFeedbackDTO
 from gateway.enums import ShutterEnums, IndicateType
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
@@ -38,6 +38,7 @@ from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from master.core.basic_action import BasicAction
+from master.core.can_feedback import CANFeedbackController
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.core_updater import CoreUpdater
@@ -49,7 +50,7 @@ from master.core.memory_models import CanControlModuleConfiguration, \
     GlobalConfiguration, InputConfiguration, InputModuleConfiguration, \
     OutputConfiguration, OutputModuleConfiguration, SensorConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
-from master.core.memory_types import MemoryAddress
+from master.core.memory_types import MemoryAddress, MemoryActivator
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.system_value import Humidity, Temperature
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
@@ -286,34 +287,34 @@ class MasterCoreController(MasterController):
             return value if value != 255 else default
 
         max_specs = self._master_communicator.do_command(CoreAPI.general_configuration_max_specs(), {})
-        general_configuration = GlobalConfiguration()
+        global_configuration = GlobalConfiguration()
         logger.info('General core information:')
         logger.info('* Modules:')
-        logger.info('  * Auto discovery: {0}'.format(general_configuration.automatic_module_discovery))
-        logger.info('  * Output: {0}/{1}'.format(_default_if_255(general_configuration.number_of_output_modules, 0),
+        logger.info('  * Auto discovery: {0}'.format(global_configuration.automatic_module_discovery))
+        logger.info('  * Output: {0}/{1}'.format(_default_if_255(global_configuration.number_of_output_modules, 0),
                                                  max_specs['output']))
-        logger.info('  * Input: {0}/{1}'.format(_default_if_255(general_configuration.number_of_input_modules, 0),
+        logger.info('  * Input: {0}/{1}'.format(_default_if_255(global_configuration.number_of_input_modules, 0),
                                                 max_specs['input']))
-        logger.info('  * Sensor: {0}/{1}'.format(_default_if_255(general_configuration.number_of_sensor_modules, 0),
+        logger.info('  * Sensor: {0}/{1}'.format(_default_if_255(global_configuration.number_of_sensor_modules, 0),
                                                  max_specs['sensor']))
-        logger.info('  * uCAN: {0}/{1}'.format(_default_if_255(general_configuration.number_of_ucan_modules, 0),
+        logger.info('  * uCAN: {0}/{1}'.format(_default_if_255(global_configuration.number_of_ucan_modules, 0),
                                                max_specs['ucan']))
-        logger.info('  * CAN Control: {0}'.format(_default_if_255(general_configuration.number_of_can_control_modules, 0)))
+        logger.info('  * CAN Control: {0}'.format(_default_if_255(global_configuration.number_of_can_control_modules, 0)))
         logger.info('* CAN:')
-        logger.info('  * Inputs: {0}'.format(general_configuration.number_of_can_inputs))
-        logger.info('  * Sensors: {0}'.format(general_configuration.number_of_can_sensors))
-        logger.info('  * Termination: {0}'.format(general_configuration.can_bus_termination))
+        logger.info('  * Inputs: {0}'.format(global_configuration.number_of_can_inputs))
+        logger.info('  * Sensors: {0}'.format(global_configuration.number_of_can_sensors))
+        logger.info('  * Termination: {0}'.format(global_configuration.can_bus_termination))
         logger.info('* Scan times:')
-        logger.info('  * General bus: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_bus, 8)))
-        logger.info('  * Sensor modules: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_sensor_modules, 50) * 100))
-        logger.info('  * CAN Control modules: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_can_control_modules, 50) * 100))
+        logger.info('  * General bus: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_bus, 8)))
+        logger.info('  * Sensor modules: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_sensor_modules, 50) * 100))
+        logger.info('  * CAN Control modules: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_can_control_modules, 50) * 100))
         logger.info('* Runtime stats:')
-        logger.info('  * Debug: {0}'.format(general_configuration.debug_mode))
-        logger.info('  * Uptime: {0}d {1}h'.format(general_configuration.uptime_hours / 24,
-                                                   general_configuration.uptime_hours % 24))
+        logger.info('  * Debug: {0}'.format(global_configuration.debug_mode))
+        logger.info('  * Uptime: {0}d {1}h'.format(global_configuration.uptime_hours / 24,
+                                                   global_configuration.uptime_hours % 24))
         # noinspection PyStringFormat
-        logger.info('  * Started at 20{0}/{1}/{2} {3}:{4}:{5}'.format(*(list(reversed(general_configuration.startup_date)) +
-                                                                        general_configuration.startup_time)))
+        logger.info('  * Started at 20{0}/{1}/{2} {3}:{4}:{5}'.format(*(list(reversed(global_configuration.startup_date)) +
+                                                                        global_configuration.startup_time)))
 
     ##############
     # Public API #
@@ -402,7 +403,8 @@ class MasterCoreController(MasterController):
     def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
         for input_dto, fields in inputs:
             input_ = InputMapper.dto_to_orm(input_dto, fields)
-            input_.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
+            input_.save(activate=False)
+        MemoryActivator.activate()
 
     def _refresh_input_states(self):
         # type: () -> bool
@@ -450,7 +452,9 @@ class MasterCoreController(MasterController):
         if output.is_shutter:
             # Outputs that are used by a shutter are returned as unconfigured (read-only) outputs
             return OutputDTO(id=output.id)
-        return OutputMapper.orm_to_dto(output)
+        output_dto = OutputMapper.orm_to_dto(output)
+        CANFeedbackController.load_output_led_feedback_configuration(output, output_dto)
+        return output_dto
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
         outputs = []
@@ -464,7 +468,9 @@ class MasterCoreController(MasterController):
             if output.is_shutter:
                 # Shutter outputs cannot be changed
                 continue
-            output.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
+            output.save(activate=False)
+            CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, fields, activate=False)
+        MemoryActivator.activate()
 
     def load_output_status(self):
         # type: () -> List[Dict[str,Any]]
@@ -479,16 +485,16 @@ class MasterCoreController(MasterController):
     def shutter_up(self, shutter_id, timer=None):
         if timer:
             raise NotImplementedError('Shutter timers are not supported')
-        self._master_communicator.do_basic_action(action_type=10,
-                                                  action=1,
-                                                  device_nr=shutter_id)
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=1,
+                                                              device_nr=shutter_id))
 
     def shutter_down(self, shutter_id, timer=None):
         if timer:
             raise NotImplementedError('Shutter timers are not supported')
-        self._master_communicator.do_basic_action(action_type=10,
-                                                  action=2,
-                                                  device_nr=shutter_id)
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=2,
+                                                              device_nr=shutter_id))
 
     def shutter_stop(self, shutter_id):
         self._master_communicator.do_basic_action(BasicAction(action_type=10,
@@ -521,8 +527,6 @@ class MasterCoreController(MasterController):
         return shutters
 
     def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
-        # TODO: Batch saving - postpone eeprom activate if relevant for the Core
-        # TODO: Atomic saving
         for shutter_dto, fields in shutters:
             # Validate whether output module exists
             output_module = OutputConfiguration(shutter_dto.id * 2).module
@@ -541,11 +545,12 @@ class MasterCoreController(MasterController):
                 self._output_shutter_map.pop(shutter.outputs.output_1, None)
                 shutter.outputs.output_0 = 255 * 2
                 is_configured = False
-            shutter.save()
+            shutter.save(activate=False)
             # Mark related Outputs as "occupied by shutter"
             setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_configured)
             setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
-            output_module.save()
+            output_module.save(activate=False)
+        MemoryActivator.activate()
 
     def _refresh_shutter_states(self):
         status_data = {x['device_nr']: x for x in self.load_output_status()}
@@ -612,9 +617,16 @@ class MasterCoreController(MasterController):
 
     # Can Led functions
 
-    def load_can_led_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        return []  # TODO: implement
+    def load_global_feedback(self, global_feedback_id):  # type: (int) -> GlobalFeedbackDTO
+        global_feedbacks = CANFeedbackController.load_global_led_feedback_configuration()
+        return global_feedbacks.get(global_feedback_id, GlobalFeedbackDTO(id=global_feedback_id))
+
+    def load_global_feedbacks(self):  # type: () -> List[GlobalFeedbackDTO]
+        global_feedbacks = CANFeedbackController.load_global_led_feedback_configuration()
+        return [global_feedbacks.get(i, GlobalFeedbackDTO(id=i)) for i in range(32)]
+
+    def save_global_feedbacks(self, global_feedbacks):  # type: (List[Tuple[GlobalFeedbackDTO, List[str]]]) -> None
+        CANFeedbackController.save_global_led_feedback_configuration(global_feedbacks, activate=True)
 
     # Sensors
 
@@ -665,7 +677,8 @@ class MasterCoreController(MasterController):
     def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
         for sensor_dto, fields in sensors:
             sensor = SensorMapper.dto_to_orm(sensor_dto, fields)
-            sensor.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
+            sensor.save(activate=False)
+        MemoryActivator.activate()
 
     def _refresh_sensor_states(self):
         amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
@@ -734,7 +747,8 @@ class MasterCoreController(MasterController):
     def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
         for group_action_dto, fields in group_actions:
             group_action = GroupActionMapper.dto_to_orm(group_action_dto, fields)
-            GroupActionController.save_group_action(group_action, fields)
+            GroupActionController.save_group_action(group_action, fields, activate=False)
+        MemoryActivator.activate()
 
     # Module management
 
@@ -775,10 +789,10 @@ class MasterCoreController(MasterController):
         def _default_if_255(value, default):
             return value if value != 255 else default
 
-        general_configuration = GlobalConfiguration()
+        global_configuration = GlobalConfiguration()
 
         outputs = []
-        nr_of_output_modules = _default_if_255(general_configuration.number_of_output_modules, 0)
+        nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
@@ -793,9 +807,9 @@ class MasterCoreController(MasterController):
 
         inputs = []
         can_inputs = []
-        nr_of_input_modules = _default_if_255(general_configuration.number_of_input_modules, 0)
-        nr_of_sensor_modules = _default_if_255(general_configuration.number_of_sensor_modules, 0)
-        nr_of_can_controls = _default_if_255(general_configuration.number_of_can_control_modules, 0)
+        nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
+        nr_of_sensor_modules = _default_if_255(global_configuration.number_of_sensor_modules, 0)
+        nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
@@ -853,8 +867,8 @@ class MasterCoreController(MasterController):
                               'r': ModuleDTO.ModuleType.SHUTTER,
                               'd': ModuleDTO.ModuleType.DIM_CONTROL}
 
-        general_configuration = GlobalConfiguration()
-        nr_of_input_modules = _default_if_255(general_configuration.number_of_input_modules, 0)
+        global_configuration = GlobalConfiguration()
+        nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
@@ -875,7 +889,7 @@ class MasterCoreController(MasterController):
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(input_module_info.address)
             information.append(dto)
 
-        nr_of_output_modules = _default_if_255(general_configuration.number_of_output_modules, 0)
+        nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
@@ -894,7 +908,7 @@ class MasterCoreController(MasterController):
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(output_module_info.address)
             information.append(dto)
 
-        nr_of_sensor_modules = _default_if_255(general_configuration.number_of_sensor_modules, 0)
+        nr_of_sensor_modules = _default_if_255(global_configuration.number_of_sensor_modules, 0)
         for module_id in range(nr_of_sensor_modules):
             sensor_module_info = SensorModuleConfiguration(module_id)
             device_type = sensor_module_info.device_type
@@ -913,7 +927,7 @@ class MasterCoreController(MasterController):
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(sensor_module_info.address)
             information.append(dto)
 
-        nr_of_can_controls = _default_if_255(general_configuration.number_of_can_control_modules, 0)
+        nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
         for module_id in range(nr_of_can_controls):
             can_control_module_info = CanControlModuleConfiguration(module_id)
             device_type = can_control_module_info.device_type

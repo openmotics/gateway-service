@@ -18,6 +18,7 @@ Contains Basic Action related code
 
 from __future__ import absolute_import
 from master.core.fields import ByteField, WordField
+from master.core.toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Optional, Any
@@ -36,17 +37,49 @@ class BasicAction(object):
     def action_type(self):  # type: () -> int
         return self._byte_helper.decode(self._action_type)
 
+    @action_type.setter
+    def action_type(self, value): # type: (int) -> None
+        self._action_type = self._byte_helper.encode(value)
+
     @property
     def action(self):  # type: () -> int
         return self._byte_helper.decode(self._action)
+
+    @action.setter
+    def action(self, value):  # type: (int) -> None
+        self._action = self._byte_helper.encode(value)
 
     @property
     def device_nr(self):  # type: () -> int
         return self._word_helper.decode(self._device_nr)
 
+    @device_nr.setter
+    def device_nr(self, value):  # type: (int) -> None
+        self._device_nr = self._word_helper.encode(value)
+
     @property
     def extra_parameter(self):  # type: () -> int
         return self._word_helper.decode(self._extra_parameter)
+
+    @extra_parameter.setter
+    def extra_parameter(self, value):  # type: (int) -> None
+        self._extra_parameter = self._word_helper.encode(value)
+
+    @property
+    def extra_parameter_lsb(self):  # type: () -> int
+        return self._extra_parameter[1]
+
+    @extra_parameter_lsb.setter
+    def extra_parameter_lsb(self, value):  # type: (int) -> None
+        self._extra_parameter[1] = min(255, max(0, value))
+
+    @property
+    def extra_parameter_msb(self):  # type: () -> int
+        return self._extra_parameter[0]
+
+    @extra_parameter_msb.setter
+    def extra_parameter_msb(self, value):  # type: (int) -> None
+        self._extra_parameter[0] = min(255, max(0, value))
 
     def encode(self):  # type: () -> bytearray
         return self._action_type + self._action + self._device_nr + self._extra_parameter
@@ -68,7 +101,7 @@ class BasicAction(object):
         return basic_action
 
     @staticmethod
-    def empty():
+    def empty():  # type: () -> BasicAction
         return BasicAction.decode(bytearray([255] * 6))
 
     def __str__(self):
@@ -81,3 +114,6 @@ class BasicAction(object):
         if not isinstance(other, BasicAction):
             return False
         return self.encode() == other.encode()
+
+    def __hash__(self):
+        return Toolbox.hash(self.encode())
