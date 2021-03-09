@@ -116,6 +116,8 @@ class System(object):
 
     SYSTEMD_UNIT_MAP = {'openmotics': 'openmotics-api.service',
                         'vpn_service': 'openmotics-vpn.service'}
+    RUNIT_ACTION_MAP = {'status': 'status',
+                        'stop': 'force-stop'}
 
     class OS(object):
         ANGSTROM = 'angstrom'
@@ -130,22 +132,53 @@ class System(object):
 
     @staticmethod
     def run_service_action(action, service):
-        # type: (str) -> subprocess.Popen
+        # type: (str, str) -> subprocess.Popen
         unit_name = System.SYSTEMD_UNIT_MAP.get(service, service)
+        is_systemd = False
+        is_supervisor = False
+        is_runit = False
+        logger.info('Running service command for service: {} Action: {}'.format(service, action))
         try:
             subprocess.check_output(['systemctl', 'is-enabled', unit_name])
             is_systemd = True
         except subprocess.CalledProcessError:
             is_systemd = False
+        except FileNotFoundError:  # Python 3 error
+            is_systemd = False
+
+        try:
+            subprocess.check_output(['supervisorctl', 'status', service])
+            is_supervisor = True
+        except subprocess.CalledProcessError:
+            is_supervisor = False
+        except FileNotFoundError:  # Python 3 error
+            is_supervisor = False
+
+        try:
+            runit_path = constants.get_runit_service_folder()
+            subprocess.check_output(['sv', 'status', os.path.join(runit_path, service)])
+            is_runit = True
+        except subprocess.CalledProcessError:
+            is_runit = False
+        except FileNotFoundError:  # Python 3 error
+            is_runit = False
 
         if is_systemd:
             return subprocess.Popen(['systemctl', action, '--no-pager', unit_name],
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     close_fds=True)
-        else:
+        elif is_supervisor:
             return subprocess.Popen(['supervisorctl', action, service],
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     close_fds=True)
+        elif is_runit:
+            runit_path = constants.get_runit_service_folder()
+            service_str = os.path.join(runit_path, service)
+            return subprocess.Popen(['sv', action, service_str],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    close_fds=True)
+        else:
+            raise RuntimeError('Could not find the appropriate service manager to run the service action command')
 
     @staticmethod
     def get_operating_system():
@@ -292,3 +325,10 @@ class Platform(object):
             if platform in Platform.Types:
                 return platform
         return Platform.Type.CLASSIC
+
+    @staticmethod
+    def has_master_hardware():
+        # type: () -> bool
+        if Platform.get_platform() in [Platform.Type.DUMMY, Platform.Type.ESAFE]:
+            return False
+        return True

@@ -70,6 +70,9 @@ class MasterDummyController(MasterController):
         super(MasterDummyController, self).__init__(MasterCommunicator())
         self._eeprom_controller = DummyEepromObject()
 
+    def get_master_online(self):  # type: () -> bool
+        return True
+
     def set_plugin_controller(self, plugin_controller):
         # type: (PluginController) -> None
         pass

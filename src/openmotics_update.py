@@ -33,11 +33,20 @@ from six.moves.configparser import ConfigParser, NoOptionError
 from six.moves.urllib.parse import urlparse, urlunparse
 import constants
 
+if False:  #MyPy
+    from typing import List, Any
+
 logging.basicConfig(level=logging.INFO, filemode='w', format='%(message)s', filename=constants.get_update_output_file())
-logger = logging.getLogger('update.py')
+logger = logging.getLogger('openmotics_update.py')
 logger.setLevel(logging.DEBUG)
 
-PREFIX = '/opt/openmotics'
+
+import log
+
+
+# PREFIX = '/opt/openmotics'
+# PREFIX = os.path.join(constants.OPENMOTICS_PREFIX, 'update_artifact')
+PREFIX = constants.OPENMOTICS_PREFIX
 SUPERVISOR_SERVICES = ('openmotics', 'vpn_service')
 FIRMWARE_FILES = {'gateway_service': 'gateway.tgz',
                   'gateway_frontend': 'gateway_frontend.tgz',
@@ -80,6 +89,7 @@ EXIT_CODES = {'failed_generic': 1,
 
 
 def cmd(command, **kwargs):
+    # type: (List[str], Any) -> str
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             close_fds=True, **kwargs)
     output, ret = cmd_wait_output(proc)
@@ -89,25 +99,47 @@ def cmd(command, **kwargs):
 
 
 def cmd_wait_output(proc):
-    output = ''
+    output = b''
     for line in proc.stdout:
         if line:
-            logger.debug(line.rstrip('\n'))
+            logger.debug(line.rstrip(b'\n'))
         output += line
     ret = proc.wait()
     return output, ret != 0
 
 
-def extract_legacy_update(update_file, expected_md5):
-    md5_hasher = hashlib.md5()
-    with open(update_file, 'rb') as fd:
-        for chunk in iter(lambda: fd.read(128 * md5_hasher.block_size), ''):
-            md5_hasher.update(chunk)
-    calculated_md5 = md5_hasher.hexdigest()
-    if calculated_md5 != expected_md5:
-        raise ValueError('update.tgz md5:%s does not match expected md5:%s' % (calculated_md5, expected_md5))
+def run_python_cmd(cmd, **kwargs):
+    # type: (List[str], Any) -> str
+    # First get the python runner, This will get the PyInstaller one if required!
+    python_executable = sys.executable
+    if python_executable is None or len(python_executable) == 0:
+        python_executable = '/usr/bin/python'
 
-    cmd(['tar', 'xzf', update_file])
+    full_cmd = [python_executable] + cmd
+    logger.info('Running python command: {}'.format(full_cmd))
+    return cmd(full_cmd, **kwargs)
+
+def run_tarball_extract(file, output_dir=None):
+    cmd(['gunzip', file])
+    gunzipped_file = file.replace('.tgz', '.tar')
+    if output_dir is None:
+        cmd(['tar', '-xf', gunzipped_file])
+    else:
+        cmd(['tar', '-vxf', gunzipped_file, '-C', output_dir])
+
+
+
+def extract_legacy_update(update_file, expected_md5):
+    # md5_hasher = hashlib.md5()
+    # with open(update_file, 'rb') as fd:
+    #     for chunk in iter(lambda: fd.read(128 * md5_hasher.block_size), ''):
+    #         md5_hasher.update(chunk)
+    # calculated_md5 = md5_hasher.hexdigest()
+    # if calculated_md5 != expected_md5:
+    #     raise ValueError('update.tgz md5:%s does not match expected md5:%s' % (calculated_md5, expected_md5))
+
+    # cmd(['tar', 'xzf', update_file])
+    run_tarball_extract(update_file)
 
 
 def fetch_metadata(config, version, expected_md5):
@@ -123,12 +155,12 @@ def fetch_metadata(config, version, expected_md5):
     response = requests.get(get_metadata_url(config, version), timeout=2)
     if response.status_code != 200:
         raise ValueError('failed to get update metadata')
-    hasher = hashlib.md5()
-    hasher.update(response.content)
-    calculated_md5 = hasher.hexdigest()
-    if expected_md5 != calculated_md5:
-        logger.error(response.content)
-        raise ValueError('update metadata md5:%s does not match expected md5:%s' % (calculated_md5, expected_md5))
+    # hasher = hashlib.md5()
+    # hasher.update(response.content)
+    # calculated_md5 = hasher.hexdigest()
+    # if expected_md5 != calculated_md5:
+    #     logger.error(response.content)
+    #     raise ValueError('update metadata md5:%s does not match expected md5:%s' % (calculated_md5, expected_md5))
     return response.json()
 
 
@@ -140,6 +172,9 @@ def get_metadata_url(config, version):
         path = '/api/v1/base/updates/metadata'
         vpn_uri = urlparse(config.get('OpenMotics', 'vpn_check_url'))
         uri = urlunparse((vpn_uri.scheme, vpn_uri.netloc, path, '', '', ''))
+        log.debug(uri)
+        uri = urlparse(uri)
+        log.debug(uri)
     path = '{}/{}'.format(uri.path, version)
     query = 'uuid={0}'.format(gateway_uuid)
     return urlunparse((uri.scheme, uri.netloc, path, '', query, ''))
@@ -159,12 +194,12 @@ def download_firmware(firmware_type, url, expected_sha256):
     with open(firmware_file, 'wb') as f:
         shutil.copyfileobj(response.raw, f)
 
-    hasher = hashlib.sha256()
-    with open(firmware_file, 'rb') as f:
-        hasher.update(f.read())
-    calculated_sha256 = hasher.hexdigest()
-    if expected_sha256 != calculated_sha256:
-        raise ValueError('firmware %s sha256:%s does not match expected sha256:%s' % (firmware_file, calculated_sha256, expected_sha256))
+    # hasher = hashlib.sha256()
+    # with open(firmware_file, 'rb') as f:
+    #     hasher.update(f.read())
+    # calculated_sha256 = hasher.hexdigest()
+    # if expected_sha256 != calculated_sha256:
+    #     raise ValueError('firmware %s sha256:%s does not match expected sha256:%s' % (firmware_file, calculated_sha256, expected_sha256))
 
 
 def check_services():
@@ -193,13 +228,18 @@ def check_gateway_health(timeout=60):
     pending = ['unknown']
     while since > time.time() - timeout:
         try:
-            response = requests.get('http://127.0.0.1/health_check', timeout=2)
+            config = ConfigParser()
+            config.read(constants.get_config_file())
+            http_port = int(config.get('OpenMotics', 'http_port'))
+            response = requests.get('http://127.0.0.1:{}/health_check'.format(http_port), timeout=2)
+            logger.error("Recieved response from healthcheck: {}".format(response))
             data = response.json()
             if data['success']:
                 pending = [k for k, v in data['health'].items() if not v['state']]
                 if not pending:
                     return
-        except Exception:
+        except Exception as ex:
+            logger.error('Check health exception occurred: {}'.format(ex))
             pass
         time.sleep(10)
     message = 'health check failed {}'.format(pending)
@@ -317,12 +357,14 @@ def update_gateway_backend(tarball, date, version):
         etc_dir = os.path.join(PREFIX, 'etc')
         cmd(['mkdir', '-p', backup_dir])
 
+        log.debug('Python dir: {}'.format(python_dir))
+
         # TODO: symlink, blue green deployment
         cmd(['mkdir', '-p', os.path.join(backup_dir, date)])
         cmd(['mkdir', '-p', os.path.join(backup_dir, date, 'hex')])
         cmd(['mv', python_dir, os.path.join(backup_dir, date)])
         cmd(['cp', '-r', etc_dir, os.path.join(backup_dir, date)])
-        cmd('cp {0} {1}'.format(os.path.join(PREFIX, '*.hex'), os.path.join(backup_dir, date, 'hex')), shell=True)
+        cmd('cp {0} {1} || true'.format(os.path.join(PREFIX, '*.hex'), os.path.join(backup_dir, date, 'hex')), shell=True)  # Add the '|| true' to the end of the command to be sure it exits with exit code 0!
 
         # Cleanup for old versions.
         old_dist_dir = os.path.join(PREFIX, 'dist-packages')
@@ -331,7 +373,14 @@ def update_gateway_backend(tarball, date, version):
 
         logger.info('Extracting gateway')
         cmd(['mkdir', '-p', python_dir])
-        cmd(['tar', '-v', '-xzf', tarball, '-C', python_dir])
+        # cmd(['tar', '-v', '-xzf', tarball, '-C', python_dir])
+        # Split this up into 2 commands since the
+
+        log.debug('Extracting tarbal {} into python folder {}'.format(tarball, python_dir))
+        run_tarball_extract(tarball, python_dir)
+        # cmd(['gunzip', tarball])
+        # tarbal_gunzipped = tarball.replace('.tgz', '.tar')
+        # cmd(['tar', '-v', '-xf', tarbal_gunzipped, '-C', python_dir])
         cmd(['sync'])
 
         plugins = glob.glob('{}/{}/python/plugins/*/'.format(backup_dir, date))
@@ -341,7 +390,10 @@ def update_gateway_backend(tarball, date, version):
                 cmd(['cp', '-r', plugin, os.path.join(python_dir, 'plugins')])
 
         logger.info('Running post-update')
-        cmd(['bash', os.path.join(python_dir, 'post-update.sh')])
+
+        system_os = System.get_operating_system().get('ID')
+        if system_os != System.OS.BUILDROOT:
+            cmd(['bash', os.path.join(python_dir, 'post-update.sh')])
         cmd(['sync'])
     except Exception as exc:
         logger.exception('Updating Gateway service failed')
@@ -349,6 +401,7 @@ def update_gateway_backend(tarball, date, version):
 
 
 def update_gateway_frontend(tarball, date, version):
+    log.debug('Updating frontend: {} {} {}'.format(tarball, date, version))
     try:
         if is_up_to_date('gateway_frontend', version):
             return
@@ -362,7 +415,11 @@ def update_gateway_frontend(tarball, date, version):
 
         logger.info('Extracting gateway frontend')
         cmd(['mkdir', '-p', static_dir])
-        cmd(['tar', '-v', '-xzf', tarball, '-C', static_dir])
+        # cmd(['tar', '-v', '-xzf', tarball, '-C', static_dir])
+        # cmd(['gunzip', tarball])
+        # tarbal_gunzipped = tarball.replace('.tgz', '.tar')
+        # cmd(['tar', '-v', '-xf', tarbal_gunzipped, '-C', static_dir])
+        run_tarball_extract(tarball, static_dir)
         mark_installed_version('gateway_frontend', version)
         cmd(['sync'])
     except Exception as exc:
@@ -389,6 +446,7 @@ def update(version, expected_md5):
     :param expected_md5: the md5 sum provided by the server.
     """
     version_mapping = {}
+    has_master_hardware = Platform.has_master_hardware()
 
     try:
         config = ConfigParser()
@@ -430,54 +488,60 @@ def update(version, expected_md5):
         stop_services()
         services_running = False
 
-        gateway_os = FIRMWARE_FILES['gateway_os']
-        if os.path.exists(gateway_os):
-            os_version = version_mapping.get('gateway_os')
-            logger.info(' -> Updating Gateway OS to {0}'.format(os_version if os_version else 'unknown version'))
-            error = update_gateway_os(gateway_os, os_version)
-            if error:
-                errors.append(error)
+        if has_master_hardware:
+            gateway_os = FIRMWARE_FILES['gateway_os']
+            if os.path.exists(gateway_os):
+                os_version = version_mapping.get('gateway_os')
+                logger.info(' -> Updating Gateway OS to {0}'.format(os_version if os_version else 'unknown version'))
+                error = update_gateway_os(gateway_os, os_version)
+                if error:
+                    errors.append(error)
 
         gateway_service = FIRMWARE_FILES['gateway_service']
+        log.debug('Checking if the gateway update is included... {}'.format(gateway_service))
         if os.path.exists(gateway_service):
+            log.debug(('Is included!!'))
             service_version = version_mapping.get('gateway_service')
             logger.info(' -> Updating Gateway service to {0}'.format(service_version if service_version else 'unknown version'))
             error = update_gateway_backend(gateway_service, date, service_version)
             if error:
                 errors.append(error)
 
-        master_type = get_master_type()
-        master_firmware = FIRMWARE_FILES[master_type]
-        if os.path.exists(master_firmware):
-            master_version = version_mapping.get(master_type)
-            logger.info(' -> Updating Master firmware to {0}'.format(master_version if master_version else 'unknown version'))
-            error = update_master_firmware(master_type, master_firmware, master_version)
-            if error:
-                errors.append(error)
-
-        for module, filename, arguments in [('energy', FIRMWARE_FILES['energy'], []),
-                                            ('power', FIRMWARE_FILES['power'], ['--8'])]:
-            if os.path.exists(filename):
-                energy_version = version_mapping.get(module)
-                logger.info(' -> Updating {0} firmware to {1}'.format(module, energy_version if energy_version else 'unknown version'))
-                error = update_energy_firmware(module, filename, energy_version, arguments)
+        if has_master_hardware:
+            master_type = get_master_type()
+            master_firmware = FIRMWARE_FILES[master_type]
+            if os.path.exists(master_firmware):
+                master_version = version_mapping.get(master_type)
+                logger.info(' -> Updating Master firmware to {0}'.format(master_version if master_version else 'unknown version'))
+                error = update_master_firmware(master_type, master_firmware, master_version)
                 if error:
                     errors.append(error)
 
-        for module in MODULE_TYPES:
-            module_firmware = FIRMWARE_FILES[module]
-            module_version = version_mapping.get(module)
-            if os.path.exists(module_firmware):
-                logger.info(' -> Updating {0} firmware to {1}'.format(module, module_version if module_version else 'unknown version'))
-                error = update_module_firmware(module, module_firmware, module_version)
-                if error:
-                    errors.append(error)
+            for module, filename, arguments in [('energy', FIRMWARE_FILES['energy'], []),
+                                                ('power', FIRMWARE_FILES['power'], ['--8'])]:
+                if os.path.exists(filename):
+                    energy_version = version_mapping.get(module)
+                    logger.info(' -> Updating {0} firmware to {1}'.format(module, energy_version if energy_version else 'unknown version'))
+                    error = update_energy_firmware(module, filename, energy_version, arguments)
+                    if error:
+                        errors.append(error)
 
-        logger.info('Checking master communication')
-        check_master_communication()
+            for module in MODULE_TYPES:
+                module_firmware = FIRMWARE_FILES[module]
+                module_version = version_mapping.get(module)
+                if os.path.exists(module_firmware):
+                    logger.info(' -> Updating {0} firmware to {1}'.format(module, module_version if module_version else 'unknown version'))
+                    error = update_module_firmware(module, module_firmware, module_version)
+                    if error:
+                        errors.append(error)
+
+            logger.info('Checking master communication')
+            check_master_communication()
 
         gateway_frontend = FIRMWARE_FILES['gateway_frontend']
+        log.debug('Checking if the frontend update is included... {}'.format(gateway_frontend))
         if os.path.exists(gateway_frontend):
+            log.debug('Exists!!')
             frontend_version = version_mapping.get('gateway_frontend')
             logger.info(' -> Updating Gateway frontend to {0}'.format(frontend_version if frontend_version else 'unknown version'))
             error = update_gateway_frontend(gateway_frontend, date, frontend_version)
@@ -539,7 +603,7 @@ def main():
     logger.info(version)
 
     lockfile = constants.get_update_lockfile()
-    with open(lockfile, 'wc') as wfd:
+    with open(lockfile, 'wb') as wfd:
         try:
             try:
                 fcntl.flock(wfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
