@@ -745,13 +745,10 @@ class MasterCoreController(MasterController):
                 for o in GroupActionController.load_group_actions()]
 
     def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
-        should_activate = False
         for group_action_dto, fields in group_actions:
             group_action = GroupActionMapper.dto_to_orm(group_action_dto, fields)
             GroupActionController.save_group_action(group_action, fields, activate=False)
-            should_activate |= bool(fields)
-        if should_activate:
-            MemoryActivator.activate()
+        MemoryActivator.activate()
 
     # Module management
 

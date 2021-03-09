@@ -18,6 +18,7 @@ Contains Basic Action related code
 
 from __future__ import absolute_import
 from master.core.fields import ByteField, WordField
+from master.core.toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Optional, Any
@@ -115,7 +116,4 @@ class BasicAction(object):
         return self.encode() == other.encode()
 
     def __hash__(self):
-        hash_value = 0
-        for i, value in enumerate(self.encode()):
-            hash_value += 256 ** i * value
-        return hash_value
+        return Toolbox.hash(self.encode())

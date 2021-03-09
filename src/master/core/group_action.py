@@ -137,7 +137,7 @@ class GroupActionController(object):
             group_action_configuration.name = group_action.name
             group_action_configuration.save(activate=False)
 
-        if fields and activate:
+        if activate:
             MemoryActivator.activate()
 
     @staticmethod
