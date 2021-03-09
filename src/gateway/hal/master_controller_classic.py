@@ -1127,7 +1127,7 @@ class MasterClassicController(MasterController):
     def flash_leds(self, led_type, led_id):  # type: (int, int) -> str
         """
         Flash the leds on the module for an output/input/sensor.
-        :param led_type: The module type: output/dimmer (0), input (1), sensor/temperatur (2).
+        :param led_type: The module type, see `IndicateType`.
         :param led_id: The id of the output/input/sensor.
         """
         ret = self._master_communicator.do_command(master_api.indicate(),
