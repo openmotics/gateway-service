@@ -46,3 +46,9 @@ class UserEnums(object):
 class ThermostatMode(object):
     COOLING = 'cooling'  # type: Literal['cooling']
     HEATING = 'heating'  # type: Literal['heating']
+
+
+class IndicateType(object):
+    OUTPUT = 0
+    INPUT = 1
+    SENSOR = 2
