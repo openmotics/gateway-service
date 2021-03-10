@@ -28,6 +28,7 @@ import subprocess
 import sys
 import time
 import requests
+import traceback
 from datetime import datetime
 from six.moves.configparser import ConfigParser, NoOptionError
 from six.moves.urllib.parse import urlparse, urlunparse
@@ -229,9 +230,7 @@ def check_gateway_health(timeout=60):
     pending = ['unknown']
     while since > time.time() - timeout:
         try:
-            config = ConfigParser()
-            config.read(constants.get_config_file())
-            http_port = int(config.get('OpenMotics', 'http_port'))
+            http_port = Platform.http_port()
             response = requests.get('http://127.0.0.1:{}/health_check'.format(http_port), timeout=2)
             logger.error("Recieved response from healthcheck: {}".format(response))
             data = response.json()
@@ -580,11 +579,7 @@ def update(version, expected_md5):
         config.set('OpenMotics', 'version', version)
         temp_file = constants.get_config_file() + '.update'
         # Configparser needs different writing modes to update the config depending on the python version
-        if sys.version_info.major == 2:
-            file_mode = 'wb'
-        elif sys.version_info.major == 3:
-            file_mode = 'w'
-        with open(temp_file, file_mode) as configfile:
+        with open(temp_file, 'w') as configfile:
             config.write(configfile)
         shutil.move(temp_file, constants.get_config_file())
         cmd(['sync'])
@@ -600,7 +595,6 @@ def update(version, expected_md5):
 def main():
     """ The main function. """
 
-    import traceback
 
     if len(sys.argv) != 3:
         print('Usage: python ' + __file__ + ' version md5sum')

@@ -22,6 +22,8 @@ import subprocess
 import sys
 import constants
 
+from six.moves.configparser import ConfigParser
+
 if False:  # MYPY
     from typing import Union, Dict
 
@@ -143,7 +145,7 @@ class System(object):
             is_systemd = True
         except subprocess.CalledProcessError:
             is_systemd = False
-        except FileNotFoundError:  # Python 3 error
+        except Exception:  # Python 3 error (FileNotFoundErr) but is not known in python 2...
             is_systemd = False
 
         try:
@@ -151,7 +153,7 @@ class System(object):
             is_supervisor = True
         except subprocess.CalledProcessError:
             is_supervisor = False
-        except FileNotFoundError:  # Python 3 error
+        except Exception:  # Python 3 error (FileNotFoundErr) but is not known in python 2...
             is_supervisor = False
 
         try:
@@ -160,7 +162,7 @@ class System(object):
             is_runit = True
         except subprocess.CalledProcessError:
             is_runit = False
-        except FileNotFoundError:  # Python 3 error
+        except Exception:  # Python 3 error (FileNotFoundErr) but is not known in python 2...
             is_runit = False
 
         if is_systemd:
@@ -332,3 +334,29 @@ class Platform(object):
         if Platform.get_platform() in [Platform.Type.DUMMY, Platform.Type.ESAFE]:
             return False
         return True
+
+    @staticmethod
+    def http_port():
+        # type: () -> int
+        try:
+            config = ConfigParser()
+            config.read(constants.get_config_file())
+            http_port = int(config.get('OpenMotics', 'http_port'))
+            if http_port is None:
+                http_port = 80  # default http port
+            return http_port
+        except Exception:
+            return 80
+
+    @staticmethod
+    def https_port():
+        # type: () -> int
+        try:
+            config = ConfigParser()
+            config.read(constants.get_config_file())
+            https_port = int(config.get('OpenMotics', 'https_port'))
+            if https_port is None:
+                https_port = 433  # default https port
+            return https_port
+        except Exception:
+            return 433
