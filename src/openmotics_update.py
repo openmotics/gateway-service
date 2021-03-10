@@ -90,6 +90,7 @@ EXIT_CODES = {'failed_generic': 1,
 
 def cmd(command, **kwargs):
     # type: (List[str], Any) -> str
+    logger.debug('Running general command: "{}"'.format(command))
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             close_fds=True, **kwargs)
     output, ret = cmd_wait_output(proc)
@@ -578,7 +579,12 @@ def update(version, expected_md5):
 
         config.set('OpenMotics', 'version', version)
         temp_file = constants.get_config_file() + '.update'
-        with open(temp_file, 'wb') as configfile:
+        # Configparser needs different writing modes to update the config depending on the python version
+        if sys.version_info.major == 2:
+            file_mode = 'wb'
+        elif sys.version_info.major == 3:
+            file_mode = 'w'
+        with open(temp_file, file_mode) as configfile:
             config.write(configfile)
         shutil.move(temp_file, constants.get_config_file())
         cmd(['sync'])
@@ -593,6 +599,9 @@ def update(version, expected_md5):
 
 def main():
     """ The main function. """
+
+    import traceback
+
     if len(sys.argv) != 3:
         print('Usage: python ' + __file__ + ' version md5sum')
         sys.exit(1)
@@ -613,10 +622,13 @@ def main():
             update(version, expected_md5)
         except SystemExit as sex:
             logger.error('FAILED')
-            logger.error('exit {}'.format(sex.code))
-        except Exception:
+            logger.error('exit ({}) : {}'.format(sex.code, sex))
+            logger.error(traceback.format_exc())
+        except Exception as ex:
             logger.error('FAILED')
+            logger.error('Exception occurred: {}'.format(ex))
             logger.error('exit {}'.format(EXIT_CODES['failed_generic']))
+            logger.error(traceback.format_exc())
         finally:
             fcntl.flock(wfd, fcntl.LOCK_UN)
             os.unlink(lockfile)
