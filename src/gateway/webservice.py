@@ -47,7 +47,7 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer, \
     ThermostatGroupStatusSerializer, ThermostatGroupSerializer, \
     ThermostatAircoStatusSerializer, PumpGroupSerializer, \
-    GlobalRTD10Serializer, RTD10Serializer
+    GlobalRTD10Serializer, RTD10Serializer, GlobalFeedbackSerializer
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO, \
     GlobalRTD10DTO
 from gateway.enums import ShutterEnums, UserEnums
@@ -1749,51 +1749,36 @@ class WebInterface(object):
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_can_led_configuration(self, id, fields=None):
+    def get_can_led_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
         Get a specific can_led_configuration defined by its id.
-
         :param id: The id of the can_led_configuration
-        :type id: int
-        :param fields: The field of the can_led_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
-        :rtype: dict
+        :param fields: The field of the can_led_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_can_led_configuration(id, fields)}
+        return {'config': GlobalFeedbackSerializer.serialize(global_feedback_dto=self._output_controller.load_global_feedback(id),
+                                                             fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_can_led_configurations(self, fields=None):
+    def get_can_led_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
         Get all can_led_configurations.
-
-        :param fields: The field of the can_led_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
-        :rtype: dict
+        :param fields: The field of the can_led_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_can_led_configurations(fields)}
+        return {'config': [GlobalFeedbackSerializer.serialize(global_feedback_dto=global_feedback, fields=fields)
+                           for global_feedback in self._output_controller.load_global_feedbacks()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_can_led_configuration(self, config):
-        """
-        Set one can_led_configuration.
-
-        :param config: The can_led_configuration to set: can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
-        :type config: dict
-        """
-        self._gateway_api.set_can_led_configuration(config)
+    def set_can_led_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one can_led_configuration. """
+        data = GlobalFeedbackSerializer.deserialize(config)
+        self._output_controller.save_global_feedbacks([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_can_led_configurations(self, config):
-        """
-        Set multiple can_led_configurations.
-
-        :param config: The list of can_led_configurations to set: list of can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
-        :type config: list
-        """
-        self._gateway_api.set_can_led_configurations(config)
+    def set_can_led_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple can_led_configurations. """
+        data = [GlobalFeedbackSerializer.deserialize(entry) for entry in config]
+        self._output_controller.save_global_feedbacks(data)
         return {}
 
     # Room configurations

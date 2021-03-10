@@ -20,7 +20,8 @@ from __future__ import absolute_import
 import logging
 
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
-    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ThermostatAircoStatusDTO, PumpGroupDTO
+    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, \
+    ThermostatAircoStatusDTO, PumpGroupDTO, GlobalFeedbackDTO
 from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import MasterController
 
@@ -109,8 +110,8 @@ class MasterDummyController(MasterController):
         # type: () -> List[InputDTO]
         return []
 
-    def load_can_led_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
+    def load_global_feedbacks(self):
+        # type: () -> List[GlobalFeedbackDTO]
         return []
 
     def get_inputs_with_status(self):

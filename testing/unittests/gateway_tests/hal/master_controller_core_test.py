@@ -8,11 +8,12 @@ from six.moves import map
 from six.moves.queue import Queue
 
 import gateway.hal.master_controller_core
-from gateway.dto import InputDTO, OutputStateDTO
+from gateway.dto import InputDTO, OutputStateDTO, OutputDTO
 from gateway.hal.master_controller_core import MasterCoreController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import SetTestMode
+from master.core.can_feedback import CANFeedbackController
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer
 from master.core.memory_models import InputConfiguration, \
@@ -171,7 +172,7 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.controller.save_inputs(data)
             self.assertIn(mock.call({'id': 1, 'name': 'foo'}), deserialize.call_args_list)
             self.assertIn(mock.call({'id': 2, 'name': 'bar'}), deserialize.call_args_list)
-            save.assert_called_with()
+            save.assert_called_with(activate=False)
 
     def test_inputs_with_status(self):
         from gateway.hal.master_controller_core import MasterInputState
@@ -256,6 +257,27 @@ class MasterCoreControllerTest(unittest.TestCase):
         self.pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
         self.pubsub._publish_all_events()
         assert self.controller._output_last_updated == 0
+
+    def test_can_feedback_controller_calls(self):
+        with mock.patch.object(CANFeedbackController, 'load_global_led_feedback_configuration') as call:
+            self.controller.load_global_feedback(0)
+            call.assert_called_once()
+
+        with mock.patch.object(CANFeedbackController, 'load_global_led_feedback_configuration') as call:
+            self.controller.load_global_feedbacks()
+            call.assert_called_once()
+
+        with mock.patch.object(CANFeedbackController, 'save_global_led_feedback_configuration') as call:
+            self.controller.save_global_feedbacks([])
+            call.assert_called_once()
+
+        with mock.patch.object(CANFeedbackController, 'load_output_led_feedback_configuration') as call:
+            self.controller.load_output(0)
+            call.assert_called_once()
+
+        with mock.patch.object(CANFeedbackController, 'save_output_led_feedback_configuration') as call:
+            self.controller.save_outputs([(OutputDTO(id=0), [])])
+            call.assert_called_once()
 
 
 class MasterInputState(unittest.TestCase):

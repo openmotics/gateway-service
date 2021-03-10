@@ -15,6 +15,7 @@
 
 from gateway.dto.feedback_led import FeedbackLedDTO
 from gateway.dto.floor import FloorDTO
+from gateway.dto.global_feedback import GlobalFeedbackDTO
 from gateway.dto.group_action import GroupActionDTO
 from gateway.dto.input import InputDTO
 from gateway.dto.module import ModuleDTO
