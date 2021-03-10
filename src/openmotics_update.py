@@ -35,7 +35,7 @@ from six.moves.urllib.parse import urlparse, urlunparse
 import constants
 
 if False:  #MyPy
-    from typing import List, Any
+    from typing import List, Any, Union
 
 logging.basicConfig(level=logging.INFO, filemode='w', format='%(message)s', filename=constants.get_update_output_file())
 logger = logging.getLogger('openmotics_update.py')
@@ -90,7 +90,7 @@ EXIT_CODES = {'failed_generic': 1,
 
 
 def cmd(command, **kwargs):
-    # type: (List[str], Any) -> str
+    # type: (Union[str, List[str]], Any) -> str
     logger.debug('Running general command: "{}"'.format(command))
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             close_fds=True, **kwargs)
@@ -110,14 +110,14 @@ def cmd_wait_output(proc):
     return output, ret != 0
 
 
-def run_python_cmd(cmd, **kwargs):
+def run_python_cmd(command, **kwargs):
     # type: (List[str], Any) -> str
     # First get the python runner, This will get the PyInstaller one if required!
     python_executable = sys.executable
     if python_executable is None or len(python_executable) == 0:
         python_executable = '/usr/bin/python'
 
-    full_cmd = [python_executable] + cmd
+    full_cmd = [python_executable] + command
     logger.info('Running python command: {}'.format(full_cmd))
     return cmd(full_cmd, **kwargs)
 
