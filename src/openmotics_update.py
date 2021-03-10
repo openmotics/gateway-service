@@ -35,7 +35,7 @@ from six.moves.urllib.parse import urlparse, urlunparse
 import constants
 
 if False:  #MyPy
-    from typing import List, Any, Union
+    from typing import List, Any, Union, Tuple
 
 logging.basicConfig(level=logging.INFO, filemode='w', format='%(message)s', filename=constants.get_update_output_file())
 logger = logging.getLogger('openmotics_update.py')
@@ -45,8 +45,6 @@ logger.setLevel(logging.DEBUG)
 import log
 
 
-# PREFIX = '/opt/openmotics'
-# PREFIX = os.path.join(constants.OPENMOTICS_PREFIX, 'update_artifact')
 PREFIX = constants.OPENMOTICS_PREFIX
 SUPERVISOR_SERVICES = ('openmotics', 'vpn_service')
 FIRMWARE_FILES = {'gateway_service': 'gateway.tgz',
@@ -97,10 +95,11 @@ def cmd(command, **kwargs):
     output, ret = cmd_wait_output(proc)
     if ret != 0:
         raise Exception('Command {} failed'.format(command))
-    return output
+    return str(output)
 
 
 def cmd_wait_output(proc):
+    # type: (Any) -> Tuple[bytes, bool]
     output = b''
     for line in proc.stdout:
         if line:
@@ -121,6 +120,7 @@ def run_python_cmd(command, **kwargs):
     logger.info('Running python command: {}'.format(full_cmd))
     return cmd(full_cmd, **kwargs)
 
+
 def run_tarball_extract(file, output_dir=None):
     cmd(['gunzip', file])
     gunzipped_file = file.replace('.tgz', '.tar')
@@ -132,15 +132,16 @@ def run_tarball_extract(file, output_dir=None):
 
 
 def extract_legacy_update(update_file, expected_md5):
-    # md5_hasher = hashlib.md5()
-    # with open(update_file, 'rb') as fd:
-    #     for chunk in iter(lambda: fd.read(128 * md5_hasher.block_size), ''):
-    #         md5_hasher.update(chunk)
-    # calculated_md5 = md5_hasher.hexdigest()
-    # if calculated_md5 != expected_md5:
-    #     raise ValueError('update.tgz md5:%s does not match expected md5:%s' % (calculated_md5, expected_md5))
+    md5_hasher = hashlib.md5()
+    with open(update_file, 'rb') as fd:
+        for chunk in iter(lambda: fd.read(128 * md5_hasher.block_size), ''):
+            md5_hasher.update(chunk)
+            if len(chunk) == 0:
+                break
+    calculated_md5 = md5_hasher.hexdigest()
+    if calculated_md5 != expected_md5:
+        raise ValueError('update.tgz md5:%s does not match expected md5:%s' % (calculated_md5, expected_md5))
 
-    # cmd(['tar', 'xzf', update_file])
     run_tarball_extract(update_file)
 
 
@@ -157,12 +158,12 @@ def fetch_metadata(config, version, expected_md5):
     response = requests.get(get_metadata_url(config, version), timeout=2)
     if response.status_code != 200:
         raise ValueError('failed to get update metadata')
-    # hasher = hashlib.md5()
-    # hasher.update(response.content)
-    # calculated_md5 = hasher.hexdigest()
-    # if expected_md5 != calculated_md5:
-    #     logger.error(response.content)
-    #     raise ValueError('update metadata md5:%s does not match expected md5:%s' % (calculated_md5, expected_md5))
+    hasher = hashlib.md5()
+    hasher.update(response.content)
+    calculated_md5 = hasher.hexdigest()
+    if expected_md5 != calculated_md5:
+        logger.error(response.content)
+        raise ValueError('update metadata md5:%s does not match expected md5:%s' % (calculated_md5, expected_md5))
     return response.json()
 
 
@@ -174,9 +175,7 @@ def get_metadata_url(config, version):
         path = '/api/v1/base/updates/metadata'
         vpn_uri = urlparse(config.get('OpenMotics', 'vpn_check_url'))
         uri = urlunparse((vpn_uri.scheme, vpn_uri.netloc, path, '', '', ''))
-        log.debug(uri)
         uri = urlparse(uri)
-        log.debug(uri)
     path = '{}/{}'.format(uri.path, version)
     query = 'uuid={0}'.format(gateway_uuid)
     return urlunparse((uri.scheme, uri.netloc, path, '', query, ''))
@@ -196,12 +195,12 @@ def download_firmware(firmware_type, url, expected_sha256):
     with open(firmware_file, 'wb') as f:
         shutil.copyfileobj(response.raw, f)
 
-    # hasher = hashlib.sha256()
-    # with open(firmware_file, 'rb') as f:
-    #     hasher.update(f.read())
-    # calculated_sha256 = hasher.hexdigest()
-    # if expected_sha256 != calculated_sha256:
-    #     raise ValueError('firmware %s sha256:%s does not match expected sha256:%s' % (firmware_file, calculated_sha256, expected_sha256))
+    hasher = hashlib.sha256()
+    with open(firmware_file, 'rb') as f:
+        hasher.update(f.read())
+    calculated_sha256 = hasher.hexdigest()
+    if expected_sha256 != calculated_sha256:
+        raise ValueError('firmware %s sha256:%s does not match expected sha256:%s' % (firmware_file, calculated_sha256, expected_sha256))
 
 
 def check_services():
@@ -357,7 +356,6 @@ def update_gateway_backend(tarball, date, version):
         etc_dir = os.path.join(PREFIX, 'etc')
         cmd(['mkdir', '-p', backup_dir])
 
-        log.debug('Python dir: {}'.format(python_dir))
 
         # TODO: symlink, blue green deployment
         cmd(['mkdir', '-p', os.path.join(backup_dir, date)])
@@ -373,14 +371,7 @@ def update_gateway_backend(tarball, date, version):
 
         logger.info('Extracting gateway')
         cmd(['mkdir', '-p', python_dir])
-        # cmd(['tar', '-v', '-xzf', tarball, '-C', python_dir])
-        # Split this up into 2 commands since the
-
-        log.debug('Extracting tarbal {} into python folder {}'.format(tarball, python_dir))
         run_tarball_extract(tarball, python_dir)
-        # cmd(['gunzip', tarball])
-        # tarbal_gunzipped = tarball.replace('.tgz', '.tar')
-        # cmd(['tar', '-v', '-xf', tarbal_gunzipped, '-C', python_dir])
         cmd(['sync'])
 
         plugins = glob.glob('{}/{}/python/plugins/*/'.format(backup_dir, date))
@@ -401,7 +392,6 @@ def update_gateway_backend(tarball, date, version):
 
 
 def update_gateway_frontend(tarball, date, version):
-    log.debug('Updating frontend: {} {} {}'.format(tarball, date, version))
     try:
         if is_up_to_date('gateway_frontend', version):
             return
@@ -415,10 +405,6 @@ def update_gateway_frontend(tarball, date, version):
 
         logger.info('Extracting gateway frontend')
         cmd(['mkdir', '-p', static_dir])
-        # cmd(['tar', '-v', '-xzf', tarball, '-C', static_dir])
-        # cmd(['gunzip', tarball])
-        # tarbal_gunzipped = tarball.replace('.tgz', '.tar')
-        # cmd(['tar', '-v', '-xf', tarbal_gunzipped, '-C', static_dir])
         run_tarball_extract(tarball, static_dir)
         mark_installed_version('gateway_frontend', version)
         cmd(['sync'])
@@ -498,9 +484,7 @@ def update(version, expected_md5):
                     errors.append(error)
 
         gateway_service = FIRMWARE_FILES['gateway_service']
-        log.debug('Checking if the gateway update is included... {}'.format(gateway_service))
         if os.path.exists(gateway_service):
-            log.debug(('Is included!!'))
             service_version = version_mapping.get('gateway_service')
             logger.info(' -> Updating Gateway service to {0}'.format(service_version if service_version else 'unknown version'))
             error = update_gateway_backend(gateway_service, date, service_version)
@@ -539,9 +523,7 @@ def update(version, expected_md5):
             check_master_communication()
 
         gateway_frontend = FIRMWARE_FILES['gateway_frontend']
-        log.debug('Checking if the frontend update is included... {}'.format(gateway_frontend))
         if os.path.exists(gateway_frontend):
-            log.debug('Exists!!')
             frontend_version = version_mapping.get('gateway_frontend')
             logger.info(' -> Updating Gateway frontend to {0}'.format(frontend_version if frontend_version else 'unknown version'))
             error = update_gateway_frontend(gateway_frontend, date, frontend_version)
@@ -578,7 +560,6 @@ def update(version, expected_md5):
 
         config.set('OpenMotics', 'version', version)
         temp_file = constants.get_config_file() + '.update'
-        # Configparser needs different writing modes to update the config depending on the python version
         with open(temp_file, 'w') as configfile:
             config.write(configfile)
         shutil.move(temp_file, constants.get_config_file())
@@ -594,8 +575,6 @@ def update(version, expected_md5):
 
 def main():
     """ The main function. """
-
-
     if len(sys.argv) != 3:
         print('Usage: python ' + __file__ + ' version md5sum')
         sys.exit(1)
