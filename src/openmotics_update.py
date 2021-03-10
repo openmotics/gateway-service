@@ -89,7 +89,6 @@ EXIT_CODES = {'failed_generic': 1,
 
 def cmd(command, **kwargs):
     # type: (Union[str, List[str]], Any) -> str
-    logger.debug('Running general command: "{}"'.format(command))
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             close_fds=True, **kwargs)
     output, ret = cmd_wait_output(proc)
@@ -117,7 +116,6 @@ def run_python_cmd(command, **kwargs):
         python_executable = '/usr/bin/python'
 
     full_cmd = [python_executable] + command
-    logger.info('Running python command: {}'.format(full_cmd))
     return cmd(full_cmd, **kwargs)
 
 
@@ -231,14 +229,12 @@ def check_gateway_health(timeout=60):
         try:
             http_port = Platform.http_port()
             response = requests.get('http://127.0.0.1:{}/health_check'.format(http_port), timeout=2)
-            logger.error("Recieved response from healthcheck: {}".format(response))
             data = response.json()
             if data['success']:
                 pending = [k for k, v in data['health'].items() if not v['state']]
                 if not pending:
                     return
         except Exception as ex:
-            logger.error('Check health exception occurred: {}'.format(ex))
             pass
         time.sleep(10)
     message = 'health check failed {}'.format(pending)

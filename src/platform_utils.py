@@ -118,8 +118,11 @@ class System(object):
 
     SYSTEMD_UNIT_MAP = {'openmotics': 'openmotics-api.service',
                         'vpn_service': 'openmotics-vpn.service'}
+    # runit action map to make sure the executable will be stopped,
+    # otherwise runit will return timeout, but not have killed the app
     RUNIT_ACTION_MAP = {'status': 'status',
-                        'stop': 'force-stop'}
+                        'stop': 'force-stop',
+                        'restart': 'force-restart'}
 
     class OS(object):
         ANGSTROM = 'angstrom'
@@ -139,7 +142,6 @@ class System(object):
         is_systemd = False
         is_supervisor = False
         is_runit = False
-        logger.info('Running service command for service: {} Action: {}'.format(service, action))
         try:
             subprocess.check_output(['systemctl', 'is-enabled', unit_name])
             is_systemd = True
