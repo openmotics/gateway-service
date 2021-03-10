@@ -97,7 +97,7 @@ class MemoryFile(object):
                 self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
             self._activation_event.set()
 
-    def _get_write_cache(self):
+    def _get_write_cache(self):  # type: () -> Tuple[Dict[str, Dict[int, Dict[int, int]]], Lock]
         thread_id = threading.current_thread().ident or 0
         if thread_id not in self._write_cache:
             with self._select_write_cache_lock:
@@ -106,6 +106,12 @@ class MemoryFile(object):
                                                     MemoryTypes.FRAM: {}}
                     self._write_cache_lock[thread_id] = Lock()
         return self._write_cache[thread_id], self._write_cache_lock[thread_id]
+
+    def _clear_write_cache(self):  # type: () -> None
+        thread_id = threading.current_thread().ident or 0
+        with self._select_write_cache_lock:
+            self._write_cache.pop(thread_id, None)
+            self._write_cache_lock.pop(thread_id, None)
 
     @staticmethod
     def _create_read_map(addresses):  # type: (List[MemoryAddress]) -> Dict[str, Set[int]]
@@ -158,9 +164,8 @@ class MemoryFile(object):
                 for index, data_byte in enumerate(data):
                     page_cache[address.offset + index] = data_byte
 
-    def _store_data(self):  # type: () -> bool
+    def _store_data(self, write_cache):  # type: (Dict[str, Dict[int, Dict[int, int]]]) -> bool
         data_written = False
-        write_cache, _ = self._get_write_cache()
         for memory_type, type_data in write_cache.items():
             for page, page_data in type_data.items():
                 byte_numbers = list(page_data.keys())
@@ -202,10 +207,10 @@ class MemoryFile(object):
     def activate(self):  # type: () -> None
         with self._activate_lock:
             logger.info('MEMORY: Writing')
-            data_written = self._store_data()
-            write_cache, _ = self._get_write_cache()
-            write_cache[MemoryTypes.EEPROM] = {}
-            write_cache[MemoryTypes.FRAM] = {}
+            write_cache, write_lock = self._get_write_cache()
+            with write_lock:
+                data_written = self._store_data(write_cache)
+                self._clear_write_cache()
             if data_written:
                 logger.info('MEMORY: Activating')
                 self._self_activated = True
