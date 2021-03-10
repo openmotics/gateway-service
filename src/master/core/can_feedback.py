@@ -48,15 +48,8 @@ class CANFeedbackController(object):
             return
         group_action = GroupActionController.load_group_action(output.output_groupaction_follow)
         led_counter = 1
-        confirmed_output = None  # type: Optional[int]
         for basic_action in group_action.actions:
-            if basic_action.action_type == 19 and basic_action.action == 2:
-                # Ouput value selector
-                confirmed_output = basic_action.device_nr
             if basic_action.action_type == 20 and basic_action.action in [50, 51]:
-                # Feedback LED action
-                if confirmed_output != output.id:
-                    continue  # Feedback actions for other output, ignoring
                 brightness = CANFeedbackController._byte_to_brightness_string(basic_action.extra_parameter_msb)
                 blinking = CANFeedbackController._byte_to_blinking_string(basic_action.extra_parameter_lsb)
                 inverted = CANFeedbackController._action_to_inverted_string(basic_action.action)
@@ -77,13 +70,8 @@ class CANFeedbackController(object):
         group_action = None  # type: Optional[GroupAction]  # Needed for keeping Mypy happy...
         if group_action_id <= 255:
             group_action = GroupActionController.load_group_action(group_action_id)
-            confirmed_output = None  # type: Optional[int]
             for basic_action in group_action.actions[:]:
-                if basic_action.action_type == 19 and basic_action.action == 2:
-                    confirmed_output = basic_action.device_nr
-                    if confirmed_output == output.id:
-                        group_action.actions.remove(basic_action)
-                if basic_action.action_type == 20 and basic_action.action in [50, 51] and confirmed_output == output.id:
+                if basic_action.action_type == 20 and basic_action.action in [50, 51]:
                     group_action.actions.remove(basic_action)
         else:
             if not holds_configuration:
@@ -91,9 +79,6 @@ class CANFeedbackController(object):
             group_action = GroupActionController.get_unused_group_action()
             if group_action is None:
                 raise ValueError('No GroupAction available to store LED feedback configuration')
-        group_action.actions.append(BasicAction(action_type=19,
-                                                action=2,
-                                                device_nr=output.id))
         for field in CANFeedbackController.FIELDS:
             feedback_led_dto = getattr(output_dto, field)
             if field in fields and feedback_led_dto.id is not None:
