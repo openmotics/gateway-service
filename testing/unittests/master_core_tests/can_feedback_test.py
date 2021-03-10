@@ -50,17 +50,13 @@ class CANFeedbackTest(unittest.TestCase):
         # Validate correct data in created GA
         self.assertEqual(0, output.output_groupaction_follow)
         group_action = GroupActionController.load_group_action(0)
-        self.assertEqual([BasicAction(action_type=19, action=2, device_nr=0),
-                          BasicAction(action_type=20, action=50, device_nr=5, extra_parameter=65280),
+        self.assertEqual([BasicAction(action_type=20, action=50, device_nr=5, extra_parameter=65280),
                           BasicAction(action_type=20, action=51, device_nr=7, extra_parameter=32514)], group_action.actions)
         self.assertEqual('Output 0', group_action.name)
 
         # Alter GA
-        extra_bas = [BasicAction(action_type=123, action=123),  # Some random BA
-                     BasicAction(action_type=19, action=2, device_nr=1),  # Another batch of feedback statements for another Output
-                     BasicAction(action_type=20, action=50, device_nr=15),
-                     BasicAction(action_type=20, action=51, device_nr=17)]
-        group_action.actions += extra_bas
+        extra_ba = BasicAction(action_type=123, action=123)  # Some random BA
+        group_action.actions.append(extra_ba)
         group_action.name = 'Foobar'
         GroupActionController.save_group_action(group_action, ['name', 'actions'])
 
@@ -82,9 +78,8 @@ class CANFeedbackTest(unittest.TestCase):
 
         # Validate GA changes
         group_action = GroupActionController.load_group_action(0)
-        self.assertEqual(extra_bas + [BasicAction(action_type=19, action=2, device_nr=0),
-                                      BasicAction(action_type=20, action=50, device_nr=5, extra_parameter=65280),
-                                      BasicAction(action_type=20, action=51, device_nr=7, extra_parameter=32512)],
+        self.assertEqual([extra_ba] + [BasicAction(action_type=20, action=50, device_nr=5, extra_parameter=65280),
+                                       BasicAction(action_type=20, action=51, device_nr=7, extra_parameter=32512)],
                          group_action.actions)
         self.assertEqual('Foobar', group_action.name)
 
