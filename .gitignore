@@ -16,4 +16,3 @@ venv/
 gw_py3_venv
 vpn-service/package/**
 gw-service/package/**
-src/log.py
