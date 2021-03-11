@@ -16,6 +16,7 @@
 """
 Output DTO
 """
+import time
 from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
@@ -75,13 +76,22 @@ class VentilationStatusDTO(BaseDTO):
         AUTO = 'auto'
         MANUAL = 'manual'
 
-    def __init__(self, id, mode, level=None, timer=None, remaining_time=None):
-        # type: (int, str, Optional[int], Optional[float], Optional[float]) -> None
+    def __init__(self, id, mode, level=None, timer=None, remaining_time=None, timestamp=None):
+        # type: (int, str, Optional[int], Optional[float], Optional[float], Optional[float]) -> None
+        if timestamp is None:
+            # Set the default value for a timestamp as the current timestamp
+            timestamp = time.time()
         self.id = id
         self.mode = mode
         self.level = level
         self.timer = timer
         self.remaining_time = remaining_time
+        self.timestamp = timestamp
+
+    @property
+    def is_online(self):
+        # type: () -> bool
+        return (time.time() - self.timestamp) < 30
 
     def __eq__(self, other):
         # type: (Any) -> bool
