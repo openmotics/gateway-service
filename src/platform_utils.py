@@ -22,6 +22,8 @@ import subprocess
 import sys
 import constants
 
+from six.moves.configparser import ConfigParser
+
 if False:  # MYPY
     from typing import Union, Dict
 
@@ -116,6 +118,11 @@ class System(object):
 
     SYSTEMD_UNIT_MAP = {'openmotics': 'openmotics-api.service',
                         'vpn_service': 'openmotics-vpn.service'}
+    # runit action map to make sure the executable will be stopped,
+    # otherwise runit will return timeout, but not have killed the app
+    RUNIT_ACTION_MAP = {'status': 'status',
+                        'stop': 'force-stop',
+                        'restart': 'force-restart'}
 
     class OS(object):
         ANGSTROM = 'angstrom'
@@ -130,22 +137,52 @@ class System(object):
 
     @staticmethod
     def run_service_action(action, service):
-        # type: (str) -> subprocess.Popen
+        # type: (str, str) -> subprocess.Popen
         unit_name = System.SYSTEMD_UNIT_MAP.get(service, service)
+        is_systemd = False
+        is_supervisor = False
+        is_runit = False
         try:
             subprocess.check_output(['systemctl', 'is-enabled', unit_name])
             is_systemd = True
         except subprocess.CalledProcessError:
             is_systemd = False
+        except Exception:  # Python 3 error (FileNotFoundErr) but is not known in python 2...
+            is_systemd = False
+
+        try:
+            subprocess.check_output(['supervisorctl', 'status', service])
+            is_supervisor = True
+        except subprocess.CalledProcessError:
+            is_supervisor = False
+        except Exception:  # Python 3 error (FileNotFoundErr) but is not known in python 2...
+            is_supervisor = False
+
+        try:
+            runit_path = constants.get_runit_service_folder()
+            subprocess.check_output(['sv', 'status', os.path.join(runit_path, service)])
+            is_runit = True
+        except subprocess.CalledProcessError:
+            is_runit = False
+        except Exception:  # Python 3 error (FileNotFoundErr) but is not known in python 2...
+            is_runit = False
 
         if is_systemd:
             return subprocess.Popen(['systemctl', action, '--no-pager', unit_name],
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     close_fds=True)
-        else:
+        elif is_supervisor:
             return subprocess.Popen(['supervisorctl', action, service],
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     close_fds=True)
+        elif is_runit:
+            runit_path = constants.get_runit_service_folder()
+            service_str = os.path.join(runit_path, service)
+            return subprocess.Popen(['sv', action, service_str],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    close_fds=True)
+        else:
+            raise RuntimeError('Could not find the appropriate service manager to run the service action command')
 
     @staticmethod
     def get_operating_system():
@@ -292,3 +329,36 @@ class Platform(object):
             if platform in Platform.Types:
                 return platform
         return Platform.Type.CLASSIC
+
+    @staticmethod
+    def has_master_hardware():
+        # type: () -> bool
+        if Platform.get_platform() in [Platform.Type.DUMMY, Platform.Type.ESAFE]:
+            return False
+        return True
+
+    @staticmethod
+    def http_port():
+        # type: () -> int
+        try:
+            config = ConfigParser()
+            config.read(constants.get_config_file())
+            http_port = int(config.get('OpenMotics', 'http_port'))
+            if http_port is None:
+                http_port = 80  # default http port
+            return http_port
+        except Exception:
+            return 80
+
+    @staticmethod
+    def https_port():
+        # type: () -> int
+        try:
+            config = ConfigParser()
+            config.read(constants.get_config_file())
+            https_port = int(config.get('OpenMotics', 'https_port'))
+            if https_port is None:
+                https_port = 433  # default https port
+            return https_port
+        except Exception:
+            return 433

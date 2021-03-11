@@ -545,7 +545,7 @@ class HeartbeatService(object):
         return call_home_duration
 
 
-if __name__ == '__main__':
+def main():
     Logs.setup_logger()
     setup_minimal_vpn_platform(message_client_name='vpn_service')
 
@@ -553,3 +553,7 @@ if __name__ == '__main__':
     heartbeat_service = HeartbeatService()
     heartbeat_service.start()
     heartbeat_service.run_heartbeat()
+
+
+if __name__ == '__main__':
+    main()
