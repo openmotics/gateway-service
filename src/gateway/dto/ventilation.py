@@ -89,9 +89,9 @@ class VentilationStatusDTO(BaseDTO):
         self.timestamp = timestamp
 
     @property
-    def is_online(self):
+    def is_online(self, timeout=300):
         # type: () -> bool
-        return (time.time() - self.timestamp) < 30
+        return (time.time() - self.timestamp) < timeout
 
     def __eq__(self, other):
         # type: (Any) -> bool
