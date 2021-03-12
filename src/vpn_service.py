@@ -36,7 +36,7 @@ from threading import Lock
 import requests
 import six
 import ujson as json
-from six.moves.configparser import ConfigParser
+from six.moves.configparser import ConfigParser, NoOptionError
 
 import constants
 from bus.om_bus_client import MessageClient
@@ -128,10 +128,15 @@ class Cloud(object):
         if self._url is None:
             config = ConfigParser()
             config.read(constants.get_config_file())
-            self._url = config.get('OpenMotics', 'vpn_check_url') % config.get('OpenMotics', 'uuid')
+            try:
+                self._url = config.get('OpenMotics', 'vpn_check_url') % config.get('OpenMotics', 'uuid')
+            except NoOptionError:
+                pass
 
     def call_home(self, extra_data):
         """ Call home reporting our state, and optionally get new settings or other stuff """
+        if self._url is None:
+            logger.debug('Cloud not configured, skipping call home')
         try:
             request = requests.post(self._url,
                                     data={'extra_data': json.dumps(extra_data, sort_keys=True)},
