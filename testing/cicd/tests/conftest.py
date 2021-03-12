@@ -109,6 +109,7 @@ def firmware_updates(toolbox_session):
                 try:
                     toolbox.health_check(timeout=120)
                     toolbox.dut.get('/update_firmware', {module: version})
+                    time.sleep(5)
                     toolbox.health_check(timeout=120)
                     break
                 except Exception:
