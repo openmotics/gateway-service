@@ -83,21 +83,22 @@ def firmware_updates(toolbox_session):
     versions = toolbox.get_firmware_versions()
     firmware = {}
     # TODO: Add support for Core+ firmwares
+    force_update = os.environ.get('OPENMOTICS_FORCE_UPDATE', '0') == '1'
     if TEST_PLATFORM != TestPlatform.CORE_PLUS:
         master_firmware = os.environ.get('OPENMOTICS_MASTER_FIRMWARE')
-        if master_firmware and master_firmware != versions['M']:
+        if master_firmware and (force_update or master_firmware != versions['M']):
             logger.info('master firmware {} -> {}...'.format(versions['M'], master_firmware))
             firmware['master'] = master_firmware
         output_firmware = os.environ.get('OPENMOTICS_OUTPUT_FIRMWARE')
-        if output_firmware and output_firmware != versions['O']:
+        if output_firmware and (force_update or output_firmware != versions['O']):
             logger.info('Output firmware {} -> {}...'.format(versions['O'], output_firmware))
             firmware['output'] = output_firmware
         input_firmware = os.environ.get('OPENMOTICS_INPUT_FIRMWARE')
-        if input_firmware and input_firmware != versions['I']:
+        if input_firmware and (force_update or input_firmware != versions['I']):
             logger.info('Input firmware {} -> {}...'.format(versions['I'], input_firmware))
             firmware['input'] = input_firmware
         can_firmware = os.environ.get('OPENMOTICS_CAN_FIRMWARE')
-        if can_firmware and can_firmware != versions['C']:
+        if can_firmware and (force_update or can_firmware != versions['C']):
             logger.info('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
             firmware['can'] = can_firmware
     if firmware:
