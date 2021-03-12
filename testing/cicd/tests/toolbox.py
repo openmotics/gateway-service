@@ -603,6 +603,14 @@ class Toolbox(object):
             return pending
         assert pending == []
 
+    def module_error_check(self):
+        # type: () -> None
+        data = self.dut.get('/get_errors')
+        for module, count in data['errors']:
+            # TODO just fail?
+            if count != 0:
+                logger.warning('master reported errors {} {}'.format(module, count))
+
     def configure_output(self, output, config):
         # type: (Output, Dict[str,Any]) -> None
         config_data = {'id': output.output_id}
