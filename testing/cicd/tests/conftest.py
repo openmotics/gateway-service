@@ -81,6 +81,7 @@ def firmware_updates(toolbox_session):
         return
 
     versions = toolbox.get_firmware_versions()
+    logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in versions.items())))
     firmware = {}
     # TODO: Add support for Core+ firmwares
     force_update = os.environ.get('OPENMOTICS_FORCE_UPDATE', '0') == '1'
@@ -102,18 +103,19 @@ def firmware_updates(toolbox_session):
             logger.info('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
             firmware['can'] = can_firmware
     if firmware:
-        logger.info('updating firmware...')
-        for _ in range(8):
-            try:
-                toolbox.health_check(timeout=120)
-                toolbox.dut.get('/update_firmware', firmware)
-                toolbox.health_check(timeout=120)
-                break
-            except Exception:
-                logger.error('update failed, retrying')
-                time.sleep(30)
+        for module, version in firmware.items():
+            logger.info('updating {} firmware...'.format(module))
+            for _ in range(8):
+                try:
+                    toolbox.health_check(timeout=120)
+                    toolbox.dut.get('/update_firmware', {module: version})
+                    toolbox.health_check(timeout=120)
+                    break
+                except Exception:
+                    logger.error('updating {} failed, retrying'.format(module))
+                    time.sleep(30)
         versions = toolbox.get_firmware_versions()
-    logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in versions.items())))
+        logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in versions.items())))
 
 
 @fixture
