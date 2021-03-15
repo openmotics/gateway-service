@@ -16,3 +16,5 @@ venv/
 gw_py3_venv
 vpn-service/package/**
 gw-service/package/**
+pytest.ini
+*.egg-info
