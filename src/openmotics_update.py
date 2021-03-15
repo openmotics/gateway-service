@@ -41,10 +41,6 @@ logging.basicConfig(level=logging.INFO, filemode='w', format='%(message)s', file
 logger = logging.getLogger('openmotics_update.py')
 logger.setLevel(logging.DEBUG)
 
-
-import log
-
-
 PREFIX = constants.OPENMOTICS_PREFIX
 SUPERVISOR_SERVICES = ('openmotics', 'vpn_service')
 FIRMWARE_FILES = {'gateway_service': 'gateway.tgz',
