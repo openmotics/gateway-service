@@ -68,6 +68,7 @@ def software_update(toolbox_session):
             output = toolbox.dut.get('/get_update_output')['output']
             assert 'exit 0' in output
             assert 'DONE' in output
+            time.sleep(120)
 
     logger.info('gateway {}'.format(toolbox.get_gateway_version()))
 
