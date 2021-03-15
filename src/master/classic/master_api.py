@@ -714,7 +714,7 @@ class Svt(object):
         """
         if self.__value == 255:
             return None
-        return (float(self.__value) // 2) - 32
+        return (float(self.__value) / 2.0) - 32
 
     def get_humidity(self):
         """ Convert an Svt to humidity.
