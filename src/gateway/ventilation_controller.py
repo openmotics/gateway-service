@@ -37,7 +37,6 @@ logger = logging.getLogger(__name__)
 @Injectable.named('ventilation_controller')
 @Singleton
 class VentilationController(object):
-    STATUS_TIMEOUT = 300  # Seconds until the last status is invalid
 
     @Inject
     def __init__(self, pubsub=INJECTED):
@@ -47,7 +46,7 @@ class VentilationController(object):
         self.last_ventilation_status = {}  # type: Dict[int, VentilationStatusDTO]  # id, ventilationStatusDTO
         self.check_connected_runner = DaemonThread('check_connected_thread',
                                                    self._check_connected_timeout,
-                                                   interval=5,
+                                                   interval=10,
                                                    delay=5)
 
     def start(self):
@@ -78,12 +77,16 @@ class VentilationController(object):
     def _check_connected_timeout(self):
         ventilation_items = list(self.last_ventilation_status.items())
         for ventilation_id, ventilation_status_dto in ventilation_items:
-            delta = time.time() - ventilation_status_dto.timestamp
-            if delta > VentilationController.STATUS_TIMEOUT:
-                # timeout has passed, send a disconnect event
+            if not ventilation_status_dto.is_connected and ventilation_status_dto.mode is not None:
+                ventilation_status_dto.mode = None
+                ventilation_status_dto.level = None
+                ventilation_status_dto.remaining_time = None
+                ventilation_status_dto.timer = None
+                # also update the instance in the dict
+                self.last_ventilation_status[ventilation_id] = ventilation_status_dto
+                # timeout has passed, send a disconnect event with all relevant fields as None.
+                # This will also update the is_connected flag to the cloud.
                 self._publish_state(ventilation_status_dto)
-                # Remove it from the last status since the status is disconnected, and it does not need to update again
-                del self.last_ventilation_status[ventilation_id]
 
 
     def load_ventilations(self):

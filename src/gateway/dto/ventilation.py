@@ -72,26 +72,24 @@ class VentilationSourceDTO(BaseDTO):
 
 
 class VentilationStatusDTO(BaseDTO):
+    STATUS_TIMEOUT = 300  # Seconds until the last status is invalid
     class Mode:
         AUTO = 'auto'
         MANUAL = 'manual'
 
-    def __init__(self, id, mode, level=None, timer=None, remaining_time=None, timestamp=None):
+    def __init__(self, id, mode, level=None, timer=None, remaining_time=None, last_seen=None):
         # type: (int, str, Optional[int], Optional[float], Optional[float], Optional[float]) -> None
-        if timestamp is None:
-            # Set the default value for a timestamp as the current timestamp
-            timestamp = time.time()
         self.id = id
         self.mode = mode
         self.level = level
         self.timer = timer
         self.remaining_time = remaining_time
-        self.timestamp = timestamp
+        self.last_seen = last_seen or time.time()
 
     @property
     def is_connected(self):
         # type: () -> bool
-        return (time.time() - self.timestamp) < 300
+        return (time.time() - self.last_seen) < VentilationStatusDTO.STATUS_TIMEOUT
 
     def __eq__(self, other):
         # type: (Any) -> bool
