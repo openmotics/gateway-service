@@ -13,13 +13,15 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Output BLL
+Ventilation BLL
 """
 from __future__ import absolute_import
 
 import logging
+import time
 
 from gateway.dto import VentilationDTO, VentilationStatusDTO
+from gateway.daemon_thread import DaemonThread
 from gateway.events import GatewayEvent
 from gateway.mappers import VentilationMapper
 from gateway.models import Ventilation
@@ -35,20 +37,27 @@ logger = logging.getLogger(__name__)
 @Injectable.named('ventilation_controller')
 @Singleton
 class VentilationController(object):
+    STATUS_TIMEOUT = 300  # Seconds until the last status is invalid
 
     @Inject
     def __init__(self, pubsub=INJECTED):
         # type: (PubSub) -> None
         self._pubsub = pubsub
         self._status = {}  # type: Dict[int, VentilationStatusDTO]
+        self.last_ventilation_status = {}  # type: Dict[int, VentilationStatusDTO]  # id, ventilationStatusDTO
+        self.check_connected_runner = DaemonThread('check_connected_thread',
+                                                   self._check_connected_timeout,
+                                                   interval=5,
+                                                   delay=5)
 
     def start(self):
         # type: () -> None
         self._publish_config()
+        self.check_connected_runner.start()
 
     def stop(self):
         # type: () -> None
-        pass
+        self.check_connected_runner.stop()
 
     def _publish_config(self):
         # type: () -> None
@@ -57,12 +66,25 @@ class VentilationController(object):
 
     def _publish_state(self, state_dto):
         # type: (VentilationStatusDTO) -> None
+        self.last_ventilation_status[state_dto.id] = state_dto
         event_data = {'id': state_dto.id,
                       'mode': state_dto.mode,
                       'level': state_dto.level,
-                      'timer': state_dto.timer}
+                      'timer': state_dto.timer,
+                      'is_connected': state_dto.is_connected}
         gateway_event = GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE, event_data)
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
+
+    def _check_connected_timeout(self):
+        ventilation_items = list(self.last_ventilation_status.items())
+        for ventilation_id, ventilation_status_dto in ventilation_items:
+            delta = time.time() - ventilation_status_dto.timestamp
+            if delta > VentilationController.STATUS_TIMEOUT:
+                # timeout has passed, send a disconnect event
+                self._publish_state(ventilation_status_dto)
+                # Remove it from the last status since the status is disconnected, and it does not need to update again
+                del self.last_ventilation_status[ventilation_id]
+
 
     def load_ventilations(self):
         # type: () -> List[VentilationDTO]
