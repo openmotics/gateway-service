@@ -75,8 +75,7 @@ class VentilationController(object):
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     def _check_connected_timeout(self):
-        ventilation_items = list(self.last_ventilation_status.items())
-        for ventilation_id, ventilation_status_dto in ventilation_items:
+        for ventilation_id, ventilation_status_dto in self.last_ventilation_status.items():
             if not ventilation_status_dto.is_connected and ventilation_status_dto.mode is not None:
                 ventilation_status_dto.mode = None
                 ventilation_status_dto.level = None
