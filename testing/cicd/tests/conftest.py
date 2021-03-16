@@ -95,10 +95,18 @@ def firmware_updates(toolbox_session):
         if output_firmware and (force_update or output_firmware != versions['O']):
             logger.info('Output firmware {} -> {}...'.format(versions['O'], output_firmware))
             firmware['output'] = output_firmware
+        dimmer_firmware = os.environ.get('OPENMOTICS_DIMMER_FIRMWARE')
+        if dimmer_firmware and (force_update or dimmer_firmware != versions['D']):
+            logger.info('Dimmer firmware {} -> {}...'.format(versions['D'], dimmer_firmware))
+            firmware['dimmer'] = dimmer_firmware
         input_firmware = os.environ.get('OPENMOTICS_INPUT_FIRMWARE')
         if input_firmware and (force_update or input_firmware != versions['I']):
             logger.info('Input firmware {} -> {}...'.format(versions['I'], input_firmware))
             firmware['input'] = input_firmware
+        temperature_firmware = os.environ.get('OPENMOTICS_TEMPERATURE_FIRMWARE')
+        if temperature_firmware and (force_update or temperature_firmware != versions['T']):
+            logger.info('Temperature firmware {} -> {}...'.format(versions['T'], temperature_firmware))
+            firmware['temperature'] = temperature_firmware
         can_firmware = os.environ.get('OPENMOTICS_CAN_FIRMWARE')
         if can_firmware and (force_update or can_firmware != versions['C']):
             logger.info('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
@@ -116,8 +124,7 @@ def firmware_updates(toolbox_session):
                 except Exception:
                     logger.error('updating {} failed, retrying'.format(module))
                     time.sleep(30)
-        versions = toolbox.get_firmware_versions()
-        logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in versions.items())))
+        logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in firmware.items())))
 
 
 @fixture
