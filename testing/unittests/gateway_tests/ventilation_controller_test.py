@@ -301,3 +301,43 @@ class VentilationControllerTest(unittest.TestCase):
             assert GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE,
                                 {'id': 43, 'mode': 'manual', 'level': 2, 'timer': 60.0, 'is_connected': False}) in events
             assert len(events) == 1, events
+
+    def test_ventilation_controller_inactive_status(self):
+        plugin = Plugin(id=2, name='dummy', version='0.0.1')
+
+        def get_ventilation(id):
+            return Ventilation(id=id, amount_of_levels=4, source='plugin', plugin=plugin)
+
+        with mock.patch.object(Select, 'count', return_value=1), \
+                mock.patch.object(Ventilation, 'get', side_effect=get_ventilation), \
+                mock.patch.object(Ventilation, 'select',
+                                  return_value=[get_ventilation(43)]):
+            events = []
+
+            def callback(event):
+                events.append(event)
+            self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, callback)
+
+            self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0,
+                                                            last_seen=(time.time() - 600)))
+            self.pubsub._publish_all_events()
+
+            self.assertEqual(1, len(events))
+            self.assertEqual(1, len(self.controller.last_ventilation_status))
+
+            self.controller._check_connected_timeout()
+            self.pubsub._publish_all_events()
+            self.assertEqual(2, len(events))
+            self.assertEqual(1, len(self.controller.last_ventilation_status))
+
+            self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0))
+            self.pubsub._publish_all_events()
+
+            self.assertEqual(3, len(events))
+            self.assertEqual(1, len(self.controller.last_ventilation_status))
+
+            self.controller._check_connected_timeout()
+            self.pubsub._publish_all_events()
+            # Now there would no timeout occur
+            self.assertEqual(3, len(events))
+            self.assertEqual(1, len(self.controller.last_ventilation_status))
