@@ -275,7 +275,8 @@ class VentilationControllerTest(unittest.TestCase):
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0))
             self.pubsub._publish_all_events()
             assert GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE,
-                                {'id': 43, 'mode': 'manual', 'level': 2, 'timer': 60.0, 'is_connected': True}) in events
+                                {'id': 43, 'mode': 'manual', 'level': 2, 'timer': 60.0,
+                                 'remaining_time': None,'is_connected': True}) in events
             assert len(events) == 1, events
 
     def test_ventilation_status_timeout(self):
@@ -299,7 +300,8 @@ class VentilationControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
 
             assert GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE,
-                                {'id': 43, 'mode': 'manual', 'level': 2, 'timer': 60.0, 'is_connected': False}) in events
+                                {'id': 43, 'mode': 'manual', 'level': 2, 'timer': 60.0,
+                                 'remaining_time': None, 'is_connected': False}) in events
             assert len(events) == 1, events
 
     def test_ventilation_controller_inactive_status(self):

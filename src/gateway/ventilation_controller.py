@@ -67,7 +67,7 @@ class VentilationController(object):
         # type: (VentilationStatusDTO) -> None
         # if the timer or remaining time is set, the other value will not be set,
         # so cache the previous value so it does not get lost
-        if self.last_ventilation_status.get(state_dto.id) is not None:
+        if self.last_ventilation_status.get(state_dto.id) is not None and state_dto.mode == VentilationStatusDTO.Mode.MANUAL:
             state_dto.timer = state_dto.timer or self.last_ventilation_status[state_dto.id].timer
             state_dto.remaining_time = state_dto.remaining_time or self.last_ventilation_status[state_dto.id].remaining_time
         self.last_ventilation_status[state_dto.id] = state_dto
