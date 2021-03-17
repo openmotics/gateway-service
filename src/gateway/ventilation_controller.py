@@ -65,11 +65,19 @@ class VentilationController(object):
 
     def _publish_state(self, state_dto):
         # type: (VentilationStatusDTO) -> None
+        # if the timer or remaining time is set, the other value will not be set,
+        # so cache the previous value so it does not get lost
+        if self.last_ventilation_status.get(state_dto.id) is not None and state_dto.mode == VentilationStatusDTO.Mode.MANUAL:
+            if state_dto.timer is None:
+                state_dto.timer = self.last_ventilation_status[state_dto.id].timer
+            if state_dto.remaining_time is None:
+                state_dto.remaining_time = self.last_ventilation_status[state_dto.id].remaining_time
         self.last_ventilation_status[state_dto.id] = state_dto
         event_data = {'id': state_dto.id,
                       'mode': state_dto.mode,
                       'level': state_dto.level,
                       'timer': state_dto.timer,
+                      'remaining_time': state_dto.remaining_time,
                       'is_connected': state_dto.is_connected}
         gateway_event = GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE, event_data)
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
