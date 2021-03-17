@@ -89,7 +89,8 @@ class VentilationStatusSerializer(object):
                 'mode': status_dto.mode,
                 'level': status_dto.level,
                 # timer value is write only
-                'remaining_time': status_dto.remaining_time}
+                'remaining_time': status_dto.remaining_time,
+                'connected': status_dto.is_connected}
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod

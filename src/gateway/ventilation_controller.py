@@ -13,13 +13,15 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Output BLL
+Ventilation BLL
 """
 from __future__ import absolute_import
 
 import logging
+import time
 
 from gateway.dto import VentilationDTO, VentilationStatusDTO
+from gateway.daemon_thread import DaemonThread
 from gateway.events import GatewayEvent
 from gateway.mappers import VentilationMapper
 from gateway.models import Ventilation
@@ -41,14 +43,20 @@ class VentilationController(object):
         # type: (PubSub) -> None
         self._pubsub = pubsub
         self._status = {}  # type: Dict[int, VentilationStatusDTO]
+        self.last_ventilation_status = {}  # type: Dict[int, VentilationStatusDTO]  # id, ventilationStatusDTO
+        self.check_connected_runner = DaemonThread('check_connected_thread',
+                                                   self._check_connected_timeout,
+                                                   interval=10,
+                                                   delay=5)
 
     def start(self):
         # type: () -> None
         self._publish_config()
+        self.check_connected_runner.start()
 
     def stop(self):
         # type: () -> None
-        pass
+        self.check_connected_runner.stop()
 
     def _publish_config(self):
         # type: () -> None
@@ -57,12 +65,28 @@ class VentilationController(object):
 
     def _publish_state(self, state_dto):
         # type: (VentilationStatusDTO) -> None
+        self.last_ventilation_status[state_dto.id] = state_dto
         event_data = {'id': state_dto.id,
                       'mode': state_dto.mode,
                       'level': state_dto.level,
-                      'timer': state_dto.timer}
+                      'timer': state_dto.timer,
+                      'is_connected': state_dto.is_connected}
         gateway_event = GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE, event_data)
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
+
+    def _check_connected_timeout(self):
+        for ventilation_id, ventilation_status_dto in self.last_ventilation_status.items():
+            if not ventilation_status_dto.is_connected and ventilation_status_dto.mode is not None:
+                ventilation_status_dto.mode = None
+                ventilation_status_dto.level = None
+                ventilation_status_dto.remaining_time = None
+                ventilation_status_dto.timer = None
+                # also update the instance in the dict
+                self.last_ventilation_status[ventilation_id] = ventilation_status_dto
+                # timeout has passed, send a disconnect event with all relevant fields as None.
+                # This will also update the is_connected flag to the cloud.
+                self._publish_state(ventilation_status_dto)
+
 
     def load_ventilations(self):
         # type: () -> List[VentilationDTO]

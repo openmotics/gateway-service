@@ -16,6 +16,7 @@
 """
 Output DTO
 """
+import time
 from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
@@ -71,17 +72,24 @@ class VentilationSourceDTO(BaseDTO):
 
 
 class VentilationStatusDTO(BaseDTO):
+    STATUS_TIMEOUT = 300  # Seconds until the last status is invalid
     class Mode:
         AUTO = 'auto'
         MANUAL = 'manual'
 
-    def __init__(self, id, mode, level=None, timer=None, remaining_time=None):
-        # type: (int, str, Optional[int], Optional[float], Optional[float]) -> None
+    def __init__(self, id, mode, level=None, timer=None, remaining_time=None, last_seen=None):
+        # type: (int, str, Optional[int], Optional[float], Optional[float], Optional[float]) -> None
         self.id = id
         self.mode = mode
         self.level = level
         self.timer = timer
         self.remaining_time = remaining_time
+        self.last_seen = last_seen or time.time()
+
+    @property
+    def is_connected(self):
+        # type: () -> bool
+        return (time.time() - self.last_seen) < VentilationStatusDTO.STATUS_TIMEOUT
 
     def __eq__(self, other):
         # type: (Any) -> bool
