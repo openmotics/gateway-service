@@ -122,7 +122,12 @@ class MemoryTypesTest(unittest.TestCase):
                                                   [{}, 0, bytearray([64])],
                                                   [{}, 95, bytearray([254])],
                                                   [{}, 95.5, ValueError],
-                                                  [{}, None, bytearray([255])]])
+                                                  [{}, None, bytearray([255])],
+                                                  [{'limits': (-15, 15)}, -15.5, ValueError],
+                                                  [{'limits': (-15, 15)}, -15, bytearray([34])],
+                                                  [{'limits': (-15, 15)}, 0, bytearray([64])],
+                                                  [{'limits': (-15, 15)}, 15, bytearray([94])],
+                                                  [{'limits': (-15, 15)}, 15.5, ValueError]])
 
     def test_boolean_field(self):
         self._test_field(MemoryBooleanField, [[{'true_value': 0, 'false_value': 255, 'fallback': True}, 0, ValueError],
