@@ -330,6 +330,11 @@ class VentilationControllerTest(unittest.TestCase):
             self.assertEqual(2, len(events))
             self.assertEqual(1, len(self.controller.last_ventilation_status))
 
+            # Check that the last event that has been send is Null
+            last_event = events[-1]
+            self.assertEqual(None, last_event.data['mode'])
+            self.assertEqual(None, last_event.data['level'])
+
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0))
             self.pubsub._publish_all_events()
 

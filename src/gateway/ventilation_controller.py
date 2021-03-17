@@ -70,6 +70,7 @@ class VentilationController(object):
                       'mode': state_dto.mode,
                       'level': state_dto.level,
                       'timer': state_dto.timer,
+                      'remaining_time': state_dto.remaining_time,
                       'is_connected': state_dto.is_connected}
         gateway_event = GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE, event_data)
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
