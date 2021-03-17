@@ -2065,31 +2065,47 @@ class WebInterface(object):
                 'version': version}
 
     @openmotics_api(auth=True, plugin_exposed=False)
-    def update_firmware(self, master=None, can=None):
+    def update_firmware(self, master=None, output=None, input=None, can=None, dimmer=None, temperature=None):
         if master:
             temp_file = self._download_firmware('master_classic', master)
             self._gateway_api.update_master_firmware(temp_file)
             shutil.move(temp_file, '/opt/openmotics/firmware.hex')
+        if output:
+            temp_file = self._download_firmware('output', output)
+            self._gateway_api.update_slave_firmware('O', temp_file)
+            shutil.move(temp_file, '/opt/openmotics/o_firmware.hex')
+        if input:
+            temp_file = self._download_firmware('input', input)
+            self._gateway_api.update_slave_firmware('I', temp_file)
+            shutil.move(temp_file, '/opt/openmotics/i_firmware.hex')
         if can:
             temp_file = self._download_firmware('can', can)
             self._gateway_api.update_slave_firmware('C', temp_file)
             shutil.move(temp_file, '/opt/openmotics/c_firmware.hex')
-
+        if dimmer:
+            temp_file = self._download_firmware('dimmer', dimmer)
+            self._gateway_api.update_slave_firmware('D', temp_file)
+            shutil.move(temp_file, '/opt/openmotics/d_firmware.hex')
+        if temperature:
+            temp_file = self._download_firmware('temperature', temperature)
+            self._gateway_api.update_slave_firmware('T', temp_file)
+            shutil.move(temp_file, '/opt/openmotics/t_firmware.hex')
         return {}
 
     @Inject
-    def _get_firmware_url(self, firmware, version, cloud_url=INJECTED, gateway_uuid=INJECTED):
+    def _get_firmware_url(self, firmware, version, firmware_url=INJECTED, gateway_uuid=INJECTED):
         # type: (str, str, str, str) -> str
-        uri = urlparse(cloud_url)
-        path = '/portal/firmware_metadata/{0}/{1}/'.format(firmware, version)
+        uri = urlparse(firmware_url)
+        path = '{0}/{1}/{2}/'.format(uri.path, firmware, version)
         query = 'uuid={0}'.format(gateway_uuid)
         return urlunparse((uri.scheme, uri.netloc, path, '', query, ''))
 
     def _download_firmware(self, firmware, version):
         # type: (str, str) -> str
-        response = requests.get(self._get_firmware_url(firmware, version))
+        url = self._get_firmware_url(firmware, version)
+        response = requests.get(url)
         if response.status_code != 200:
-            raise ValueError('failed to retrieve firmware')
+            raise ValueError('failed to retrieve firmware from {}, response {}'.format(url, response.status_code))
         data = response.json()
         temp_file = tempfile.mktemp('-firmware.hex')
         logger.info('downloading {}...'.format(data['url']))
