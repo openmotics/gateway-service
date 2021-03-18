@@ -21,7 +21,7 @@ from __future__ import absolute_import
 import logging
 
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto.esafe import EsafeUserDTO, EsafeSystemDTO, EsafeRfidDTO, EsafeDeliveryDTO, EsafeApartmentDTO
+from gateway.dto.esafe import EsafeUserDTO, RfidDTO, DeliveryDTO, ApartmentDTO
 from toolbox import Toolbox
 
 if False:  # MYPY
@@ -29,10 +29,10 @@ if False:  # MYPY
 
 logger = logging.getLogger('openmotics')
 
-class EsafeApartmentSerializer(object):
+class ApartmentSerializer(object):
     @staticmethod
     def serialize(dto_object, fields=None):
-        # type: (EsafeApartmentDTO, Optional[List[str]]) -> Dict[str,Any]
+        # type: (ApartmentDTO, Optional[List[str]]) -> Dict[str,Any]
         data = {'id': dto_object.id,
                 'name': dto_object.name,
                 'mailbox_rebus_id': dto_object.mailbox_rebus_id,
@@ -41,7 +41,7 @@ class EsafeApartmentSerializer(object):
 
     @staticmethod
     def deserialize(api_data):
-        # type: (Dict[str,Any]) -> Tuple[EsafeApartmentDTO, List[str]]
+        # type: (Dict[str,Any]) -> Tuple[ApartmentDTO, List[str]]
         loaded_fields = []
         apartment_id = None
         if 'id' in api_data:
@@ -59,7 +59,7 @@ class EsafeApartmentSerializer(object):
         if 'doorbell_rebus_id' in api_data:
             loaded_fields.append('doorbell_rebus_id')
             doorbell_rebus_id = api_data['doorbell_rebus_id']
-        apartment_dto = EsafeApartmentDTO(apartment_id, name, mailbox_rebus_id, doorbell_rebus_id)
+        apartment_dto = ApartmentDTO(apartment_id, name, mailbox_rebus_id, doorbell_rebus_id)
         return apartment_dto, loaded_fields
 
 
@@ -75,7 +75,7 @@ class EsafeUserSerializer(object):
                 'apartment': None}
         if fields is not None:
             if 'apartment' in fields:
-                apartment_data = EsafeApartmentSerializer.serialize(dto_object.apartment)
+                apartment_data = ApartmentSerializer.serialize(dto_object.apartment)
                 data['apartment'] = apartment_data
         return SerializerToolbox.filter_fields(data, fields)
 
@@ -93,40 +93,16 @@ class EsafeUserSerializer(object):
                 loaded_fields.append(field)
                 setattr(user_dto, field, api_data[field])
         if 'apartment' in api_data:
-            apartment_dto, _ = EsafeApartmentSerializer.deserialize(api_data['apartment'])
+            apartment_dto, _ = ApartmentSerializer.deserialize(api_data['apartment'])
             user_dto.apartment = apartment_dto
             loaded_fields.append('apartment')
         return user_dto, loaded_fields
 
 
-class EsafeSystemSerializer(object):
+class RfidSerializer(object):
     @staticmethod
     def serialize(dto_object, fields=None):
-        # type: (EsafeSystemDTO, Optional[List[str]]) -> Dict[str,Any]
-        data = {'key': dto_object.key,
-                'value': dto_object.value}
-        return SerializerToolbox.filter_fields(data, fields)
-
-    @staticmethod
-    def deserialize(api_data):
-        # type: (Dict[str,Any]) -> Tuple[EsafeSystemDTO, List[str]]
-        loaded_fields = []
-        key = None
-        if 'key' in api_data:
-            loaded_fields.append('key')
-            key = api_data['key']
-        value = None
-        if 'value' in api_data:
-            loaded_fields.append('value')
-            value = api_data['value']
-        system_dto = EsafeSystemDTO(key, value)
-        return system_dto, loaded_fields
-
-
-class EsafeRfidSerializer(object):
-    @staticmethod
-    def serialize(dto_object, fields=None):
-        # type: (EsafeRfidDTO, Optional[List[str]]) -> Dict[str,Any]
+        # type: (RfidDTO, Optional[List[str]]) -> Dict[str,Any]
         data = {'id': dto_object.id,
                 'tag_string': dto_object.tag_string,
                 'uid_manufacturer': dto_object.uid_manufacturer,
@@ -143,7 +119,7 @@ class EsafeRfidSerializer(object):
 
     @staticmethod
     def deserialize(api_data):
-        # type: (Dict[str,Any]) -> Tuple[EsafeRfidDTO, List[str]]
+        # type: (Dict[str,Any]) -> Tuple[RfidDTO, List[str]]
         loaded_fields = []
         id = None
         if 'id' in api_data:
@@ -157,7 +133,7 @@ class EsafeRfidSerializer(object):
         if 'uid_manufacturer' in api_data:
             loaded_fields.append('uid_manufacturer')
             uid_manu = api_data['uid_manufacturer']
-        rfid_dto = EsafeRfidDTO(id, tag_string, uid_manu)
+        rfid_dto = RfidDTO(id, tag_string, uid_manu)
         for field in ['uid_extension', 'enter_count', 'blacklisted', 'label', 'timestamp_created', 'timestamp_last_used']:
             if field in api_data:
                 loaded_fields.append(field)
@@ -168,10 +144,10 @@ class EsafeRfidSerializer(object):
             rfid_dto.user = user_dto
         return rfid_dto, loaded_fields
 
-class EsafeDeliverySerializer(object):
+class DeliverySerializer(object):
     @staticmethod
     def serialize(dto_object, fields=None):
-        # type: (EsafeDeliveryDTO, Optional[List[str]]) -> Dict[str,Any]
+        # type: (DeliveryDTO, Optional[List[str]]) -> Dict[str,Any]
         data = {'id': dto_object.id,
                 'type': dto_object.type,
                 'timestamp_delivery': dto_object.timestamp_delivery,
@@ -190,7 +166,7 @@ class EsafeDeliverySerializer(object):
 
     @staticmethod
     def deserialize(api_data):
-        # type: (Dict[str,Any]) -> Tuple[EsafeDeliveryDTO, List[str]]
+        # type: (Dict[str,Any]) -> Tuple[DeliveryDTO, List[str]]
         loaded_fields = []
         id = None
         if 'id' in api_data:
@@ -200,7 +176,7 @@ class EsafeDeliverySerializer(object):
         if 'type' in api_data:
             loaded_fields.append('type')
             type = api_data['type']
-        delivery_dto = EsafeDeliveryDTO(id, type)
+        delivery_dto = DeliveryDTO(id, type)
         for field in ['timestamp_delivery', 'timestamp_pickup', 'courier_firm', 'signature_delivery', 'signature_pickup', 'parcelbox_rebus_id']:
             if field in api_data:
                 loaded_fields.append(field)

@@ -35,7 +35,7 @@ def migrate(migrator, database, fake=False, **kwargs):
                                       pragmas={'foreign_keys': 1})
 
 
-    class EsafeApartment(BaseModel):
+    class Apartment(BaseModel):
         id = AutoField()
         name = CharField(null=False)
         mailbox_rebus_id = IntegerField(unique=True)
@@ -52,17 +52,13 @@ def migrate(migrator, database, fake=False, **kwargs):
         id = AutoField()
         first_name = CharField()
         last_name = CharField()
-        role = CharField(default=EsafeUserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
+        role = CharField(default=EsafeUserRoles.USER, null=False, )  # options USER, ADMIN, TECHNICAN, COURIER
         code = CharField(null=False, unique=True)
-        apartment_id = ForeignKeyField(EsafeApartment, backref='users', on_delete='SET NULL')
+        apartment_id = ForeignKeyField(Apartment, backref='users', on_delete='SET NULL')
+        is_active = BooleanField(default=True)
 
 
-    class EsafeSystem(BaseModel):
-        key = CharField(null=False, unique=True, primary_key=True)
-        value = CharField()
-
-
-    class EsafeRFID(BaseModel):
+    class RFID(BaseModel):
         id = AutoField()
         tag_string = CharField(null=False, unique=True)
         uid_manufacturer = CharField(null=False, unique=True)
@@ -75,7 +71,7 @@ def migrate(migrator, database, fake=False, **kwargs):
         user_id = ForeignKeyField(EsafeUser, null=False, backref='rfids', on_delete='CASCADE')
 
 
-    class EsafeDelivery(BaseModel):
+    class Delivery(BaseModel):
         id = AutoField()
         type = CharField(null=False)
         timestamp_delivery = CharField(null=False)
@@ -87,10 +83,9 @@ def migrate(migrator, database, fake=False, **kwargs):
         user_id_delivery = ForeignKeyField(EsafeUser, backref='deliveries', on_delete='NO ACTION', null=False)
         user_id_pickup = ForeignKeyField(EsafeUser, backref='pickups', on_delete='NO ACTION')
 
-    migrator.create_model(EsafeApartment)
-    migrator.create_model(EsafeSystem)
-    migrator.create_model(EsafeRFID)
-    migrator.create_model(EsafeDelivery)
+    migrator.create_model(Apartment)
+    migrator.create_model(RFID)
+    migrator.create_model(Delivery)
     migrator.create_model(EsafeUser)
 
 

@@ -536,7 +536,7 @@ def on_thermostat_save_handler(model_class, instance, created):
 
 # eSafe models
 
-class EsafeApartment(BaseModel):
+class Apartment(BaseModel):
     id = AutoField()
     name = CharField(null=False)
     mailbox_rebus_id = IntegerField(unique=True)
@@ -555,15 +555,11 @@ class EsafeUser(BaseModel):
     last_name = CharField()
     role = CharField(default=EsafeUserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
     code = CharField(null=False, unique=True)
-    apartment_id = ForeignKeyField(EsafeApartment, backref='users', on_delete='SET NULL')
+    apartment_id = ForeignKeyField(Apartment, backref='users', on_delete='SET NULL')
+    is_active = BooleanField(default=True)
 
 
-class EsafeSystem(BaseModel):
-    key = CharField(null=False, unique=True, primary_key=True)
-    value = CharField()
-
-
-class EsafeRFID(BaseModel):
+class RFID(BaseModel):
     id = AutoField()
     tag_string = CharField(null=False, unique=True)
     uid_manufacturer = CharField(null=False, unique=True)
@@ -576,7 +572,7 @@ class EsafeRFID(BaseModel):
     user_id = ForeignKeyField(EsafeUser, null=False, backref='rfids', on_delete='CASCADE')
 
 
-class EsafeDelivery(BaseModel):
+class Delivery(BaseModel):
     id = AutoField()
     type = CharField(null=False)
     timestamp_delivery = CharField(null=False)

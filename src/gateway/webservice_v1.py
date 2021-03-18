@@ -11,7 +11,7 @@ from gateway.esafe.esafe_exception import EsafeParseError, EsafeTimeOutError, Es
     EsafeUnAuthorizedError, EsafeNotImplementedError, EsafeItemDoesNotExistError, EsafeInvalidOperationError,\
     EsafeWrongInputParametersError, EsafeError
 from gateway.esafe.esafe_user_controller import EsafeUserController
-from gateway.api.serializers.esafe import EsafeUserSerializer, EsafeApartmentSerializer
+from gateway.api.serializers.esafe import EsafeUserSerializer, ApartmentSerializer
 from gateway.webservice import limit_floats
 
 
@@ -159,7 +159,7 @@ class EsafeUsers(EsafeRestAPIEndpoint):
 
 
 @cherrypy.expose
-class EsafeApartment(EsafeRestAPIEndpoint):
+class Apartment(EsafeRestAPIEndpoint):
     API_ENDPOINT = '/api/v1/apartments'
 
     def GET(self):
@@ -174,9 +174,9 @@ class EsafeApartment(EsafeRestAPIEndpoint):
             return json.dumps({'body': request_body, 'testparam': list})
 
 
-@Injectable.named('web_service_esafe')
+@Injectable.named('web_service_v1')
 @Singleton
-class WebServiceEsafe(object):
+class WebServiceV1(object):
     def __init__(self, esafe_endpoints=INJECTED, web_service=INJECTED):
         # type: (List[EsafeRestAPIEndpoint], Optional[WebService]) -> None
         self.web_service = web_service

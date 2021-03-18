@@ -20,8 +20,8 @@ from __future__ import absolute_import
 
 import logging
 
-from gateway.dto.esafe import EsafeDeliveryDTO, EsafeRfidDTO, EsafeSystemDTO, EsafeApartmentDTO, EsafeUserDTO
-from gateway.models import EsafeApartment, EsafeUser, EsafeRFID, EsafeSystem, EsafeDelivery
+from gateway.dto.esafe import DeliveryDTO, RfidDTO, ApartmentDTO, EsafeUserDTO
+from gateway.models import Apartment, EsafeUser, RFID, Delivery
 
 if False:  # MYPY
     from typing import Any, Dict, List
@@ -42,7 +42,7 @@ class EsafeUserMapper(object):
                                 orm_object.code,
                                 None)
         if apartment_orm is not None:
-            apartment_dto = EsafeApartmentMapper.orm_to_dto(apartment_orm)
+            apartment_dto = ApartmentMapper.orm_to_dto(apartment_orm)
             user_dto.apartment = apartment_dto
 
         return user_dto
@@ -62,7 +62,7 @@ class EsafeUserMapper(object):
             if getattr(user_orm, field, None) is None or getattr(user_orm, field, None) is None:
                 continue
             if field == 'apartment_id':
-                apartment_orm, _ = EsafeApartmentMapper.dto_to_orm(dto_object.apartment, ['id', 'name', 'mailbox_rebus_id', 'doorbell_rebus_id'])
+                apartment_orm, _ = ApartmentMapper.dto_to_orm(dto_object.apartment, ['id', 'name', 'mailbox_rebus_id', 'doorbell_rebus_id'])
                 user_orm.apartment_id = apartment_orm
                 continue
             setattr(user_orm, field, getattr(dto_object, field))
@@ -70,28 +70,28 @@ class EsafeUserMapper(object):
 
 
 
-class EsafeApartmentMapper(object):
+class ApartmentMapper(object):
 
     @staticmethod
     def orm_to_dto(orm_object):
-        # type: (EsafeApartment) -> EsafeApartmentDTO
-        apartment_dto = EsafeApartmentDTO(orm_object.id,
-                                          orm_object.name,
-                                          orm_object.mailbox_rebus_id,
-                                          orm_object.doorbell_rebus_id)
+        # type: (Apartment) -> ApartmentDTO
+        apartment_dto = ApartmentDTO(orm_object.id,
+                                     orm_object.name,
+                                     orm_object.mailbox_rebus_id,
+                                     orm_object.doorbell_rebus_id)
         return apartment_dto
 
     @staticmethod
     def dto_to_orm(dto_object, fields):
-        # type: (EsafeApartmentDTO, List[str]) -> EsafeApartment
+        # type: (ApartmentDTO, List[str]) -> Apartment
         apartment = EsafeUser.get_or_none(name=dto_object.name,
                                           mailbox_rebus_id=dto_object.mailbox_rebus_id,
                                           doorbell_rebus_id=dto_object.doorbell_rebus_id)
         if apartment is None:
             mandatory_fields = {'name', 'mailbox_rebus_id', 'doorbell_rebus_id'}
             if not mandatory_fields.issubset(set(fields)):
-                raise ValueError('Cannot create eSafe apartment without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
-        apartment_orm = EsafeApartment()
+                raise ValueError('Cannot create apartment without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
+        apartment_orm = Apartment()
         for field in fields:
             if getattr(apartment_orm, field, None) is None or getattr(apartment_orm, field, None) is None:
                 continue
@@ -99,12 +99,12 @@ class EsafeApartmentMapper(object):
         return apartment_orm
 
 
-class EsafeDeliveryMapper(object):
+class DeliveryMapper(object):
 
     @staticmethod
     def orm_to_dto(orm_object):
-        # type: (EsafeDelivery) -> EsafeDeliveryDTO
-        delivery_dto = EsafeDeliveryDTO(orm_object.id,
+        # type: (Delivery) -> DeliveryDTO
+        delivery_dto = DeliveryDTO(orm_object.id,
                                         orm_object.type,
                                         orm_object.timestamp_delivery,
                                         orm_object.timestamp_pickup,
@@ -118,17 +118,17 @@ class EsafeDeliveryMapper(object):
 
     @staticmethod
     def dto_to_orm(dto_object, fields):
-        # type: (EsafeDeliveryDTO, List[str]) -> EsafeDelivery
-        delivery = EsafeDelivery.get_or_none(type=dto_object.type,
-                                             user_id_delivery=dto_object.user_delivery.id,
-                                             timestamp_delivery=dto_object.timestamp_delivery,
-                                             parcelbox_rebus_id=dto_object.parcelbox_rebus_id)
+        # type: (DeliveryDTO, List[str]) -> Delivery
+        delivery = Delivery.get_or_none(type=dto_object.type,
+                                        user_id_delivery=dto_object.user_delivery.id,
+                                        timestamp_delivery=dto_object.timestamp_delivery,
+                                        parcelbox_rebus_id=dto_object.parcelbox_rebus_id)
         if delivery is None:
             mandatory_fields = {'type', 'timestamp_delivery', 'user_id_delivery', 'parcelbox_rebus_id'}
             if not mandatory_fields.issubset(set(fields)):
-                raise ValueError('Cannot create eSafe delivery without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
+                raise ValueError('Cannot create delivery without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
 
-        delivery_orm = EsafeDelivery()
+        delivery_orm = Delivery()
         for field in fields:
             if getattr(delivery_orm, field, None) is None or getattr(delivery_orm, field, None) is None:
                 continue
@@ -144,12 +144,12 @@ class EsafeDeliveryMapper(object):
         return delivery_orm
 
 
-class EsafeRfidMapper(object):
+class RfidMapper(object):
 
     @staticmethod
     def orm_to_dto(orm_object):
-        # type: (EsafeRFID) -> EsafeRfidDTO
-        rfid_dto = EsafeRfidDTO(orm_object.id,
+        # type: (RFID) -> RfidDTO
+        rfid_dto = RfidDTO(orm_object.id,
                                 orm_object.tag_string,
                                 orm_object.uid_manufacturer,
                                 orm_object.uid_extension,
@@ -167,14 +167,14 @@ class EsafeRfidMapper(object):
 
     @staticmethod
     def dto_to_orm(dto_object, fields):
-        # type: (EsafeRfidDTO, List[str]) -> EsafeRFID
-        esafe_rfid = EsafeRFID.get_or_none(tag_string=dto_object.tag_string)
-        if esafe_rfid is None:
+        # type: (RfidDTO, List[str]) -> RFID
+        rfid = RFID.get_or_none(tag_string=dto_object.tag_string)
+        if rfid is None:
             mandatory_fields = {'tag_string', 'uid_manufacturer', 'enter_count', 'label', 'user_id'}
             if not mandatory_fields.issubset(set(fields)):
                 raise ValueError('Cannot create rfid without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
 
-        rfid_orm = EsafeRFID()
+        rfid_orm = RFID()
         for field in fields:
             if getattr(rfid_orm, field, None) is None or getattr(rfid_orm, field, None) is None:
                 continue
@@ -184,31 +184,3 @@ class EsafeRfidMapper(object):
                 continue
             setattr(rfid_orm, field, getattr(dto_object, field))
         return rfid_orm
-
-
-class EsafeSystemMapper(object):
-
-    @staticmethod
-    def orm_to_dto(orm_object):
-        # type: (EsafeSystem) -> EsafeSystemDTO
-        system_dto = EsafeSystemDTO(orm_object.key,
-                                    orm_object.value)
-        return system_dto
-
-    @staticmethod
-    def dto_to_orm(dto_object, fields):
-        # type: (EsafeSystemDTO, List[str]) -> EsafeSystem
-        esafe_system = EsafeSystem.get_or_none(key=dto_object.key)
-        if esafe_system is None:
-            mandatory_fields = {'key'}
-            if not mandatory_fields.issubset(set(fields)):
-                raise ValueError('Cannot create system without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
-
-        system_orm = EsafeSystem()
-        for field in fields:
-            if getattr(system_orm, field, None) is None or getattr(system_orm, field, None) is None:
-                continue
-            setattr(system_orm, field, getattr(dto_object, field))
-        return system_orm
-
-

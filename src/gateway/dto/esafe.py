@@ -22,7 +22,7 @@ if False:  # MYPY
     from typing import Any, Optional
     import time
 
-class EsafeApartmentDTO(BaseDTO):
+class ApartmentDTO(BaseDTO):
     def __init__(self, id, name, mailbox_rebus_id, doorbell_rebus_id):
         self.id = id  # type: int
         self.name = name  # type: str
@@ -31,7 +31,7 @@ class EsafeApartmentDTO(BaseDTO):
 
     def __eq__(self, other):
         # type: (Any) -> bool
-        if not isinstance(other, EsafeApartmentDTO):
+        if not isinstance(other, ApartmentDTO):
             return False
         return (self.id == other.id and
                 self.name == other.name and
@@ -45,7 +45,7 @@ class EsafeUserDTO(BaseDTO):
         self.last_name = last_name  # type: str
         self.role = role  # type: str
         self.code = code  # type: str
-        self.apartment = apartment_dto  # type: EsafeApartmentDTO
+        self.apartment = apartment_dto  # type: ApartmentDTO
 
     def __eq__(self, other):
         # type: (Any) -> bool
@@ -58,20 +58,8 @@ class EsafeUserDTO(BaseDTO):
                 self.code == other.code and
                 self.apartment == other.apartment)
 
-class EsafeSystemDTO(BaseDTO):
-    def __init__(self, key, value):
-        self.key = key  # type: str
-        self.value = value  # type: str
 
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        if not isinstance(other, EsafeSystemDTO):
-            return False
-        return (self.key == other.key and
-                self.value == other.value)
-
-
-class EsafeRfidDTO(BaseDTO):
+class RfidDTO(BaseDTO):
     def __init__(self, id, tag_string, uid_manufacturer, uid_extension='', enter_count=-1, blacklisted=False, label='',
                  timestamp_created='', timestamp_last_used='', user_dto=None):
         self.id = id  # type: int
@@ -87,7 +75,7 @@ class EsafeRfidDTO(BaseDTO):
 
     def __eq__(self, other):
         # type: (Any) -> bool
-        if not isinstance(other, EsafeRfidDTO):
+        if not isinstance(other, RfidDTO):
             return False
         return (self.id == other.id and
                 self.tag_string == other.tag_string and
@@ -100,7 +88,7 @@ class EsafeRfidDTO(BaseDTO):
                 self.timestamp_last_used == other.timestamp_last_used and
                 self.user == other.user)
 
-class EsafeDeliveryDTO(BaseDTO):
+class DeliveryDTO(BaseDTO):
     def __init__(self, id, type, timestamp_delivery='', timestamp_pickup='', courier_firm='', signature_delivery='',
                  signature_pickup='', parcelbox_rebus_id=None, user_dto_delivery=None, user_dto_pickup=None):
         self.id = id  # type: int
@@ -111,12 +99,12 @@ class EsafeDeliveryDTO(BaseDTO):
         self.signature_delivery = signature_delivery  # type: str
         self.signature_pickup = signature_pickup  # type: str
         self.parcelbox_rebus_id = parcelbox_rebus_id  # type: int
-        self.user_delivery = user_dto_delivery  # type: EsafeUserDTO
-        self.user_pickup = user_dto_pickup  # type: EsafeUserDTO
+        self.user_delivery = user_dto_delivery  # type: UserDTO
+        self.user_pickup = user_dto_pickup  # type: UserDTO
 
     def __eq__(self, other):
         # type: (Any) -> bool
-        if not isinstance(other, EsafeDeliveryDTO):
+        if not isinstance(other, DeliveryDTO):
             return False
         return (self.id == other.id and
                 self.type == other.type and
