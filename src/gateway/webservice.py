@@ -47,7 +47,7 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer, \
     ThermostatGroupStatusSerializer, ThermostatGroupSerializer, \
     ThermostatAircoStatusSerializer, PumpGroupSerializer, \
-    GlobalRTD10Serializer, RTD10Serializer
+    GlobalRTD10Serializer, RTD10Serializer, GlobalFeedbackSerializer
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO, \
     GlobalRTD10DTO
 from gateway.enums import ShutterEnums, UserEnums
@@ -635,18 +635,14 @@ class WebInterface(object):
                 'mac_address': Hardware.get_mac_address()}
 
     @openmotics_api(auth=True, check=types(type=int, id=int))
-    def flash_leds(self, type, id):
+    def flash_leds(self, type, id):  # type: (int, int) -> Dict[str, str]
         """
         Flash the leds on the module for an output/input/sensor.
-
         :param type: The module type: output/dimmer (0), input (1), sensor/temperatur (2).
-        :type type: int
         :param id: The id of the output/input/sensor.
-        :type id: int
-        :returns: 'status': 'OK'.
-        :rtype: dict
         """
-        return self._gateway_api.flash_leds(type, id)
+        status = self._gateway_api.flash_leds(type, id)
+        return {'status': status}
 
     @openmotics_api(auth=True)
     def get_status(self):
@@ -1753,51 +1749,36 @@ class WebInterface(object):
         return {}
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
-    def get_can_led_configuration(self, id, fields=None):
+    def get_can_led_configuration(self, id, fields=None):  # type: (int, Optional[List[str]]) -> Dict[str, Any]
         """
         Get a specific can_led_configuration defined by its id.
-
         :param id: The id of the can_led_configuration
-        :type id: int
-        :param fields: The field of the can_led_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
-        :rtype: dict
+        :param fields: The field of the can_led_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_can_led_configuration(id, fields)}
+        return {'config': GlobalFeedbackSerializer.serialize(global_feedback_dto=self._output_controller.load_global_feedback(id),
+                                                             fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
-    def get_can_led_configurations(self, fields=None):
+    def get_can_led_configurations(self, fields=None):  # type: (Optional[List[str]]) -> Dict[str, Any]
         """
         Get all can_led_configurations.
-
-        :param fields: The field of the can_led_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
-        :rtype: dict
+        :param fields: The field of the can_led_configuration to get, None if all
         """
-        return {'config': self._gateway_api.get_can_led_configurations(fields)}
+        return {'config': [GlobalFeedbackSerializer.serialize(global_feedback_dto=global_feedback, fields=fields)
+                           for global_feedback in self._output_controller.load_global_feedbacks()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_can_led_configuration(self, config):
-        """
-        Set one can_led_configuration.
-
-        :param config: The can_led_configuration to set: can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
-        :type config: dict
-        """
-        self._gateway_api.set_can_led_configuration(config)
+    def set_can_led_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
+        """ Set one can_led_configuration. """
+        data = GlobalFeedbackSerializer.deserialize(config)
+        self._output_controller.save_global_feedbacks([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
-    def set_can_led_configurations(self, config):
-        """
-        Set multiple can_led_configurations.
-
-        :param config: The list of can_led_configurations to set: list of can_led_configuration dict: contains 'id' (Id), 'can_led_1_function' (Enum), 'can_led_1_id' (Byte), 'can_led_2_function' (Enum), 'can_led_2_id' (Byte), 'can_led_3_function' (Enum), 'can_led_3_id' (Byte), 'can_led_4_function' (Enum), 'can_led_4_id' (Byte), 'room' (Byte)
-        :type config: list
-        """
-        self._gateway_api.set_can_led_configurations(config)
+    def set_can_led_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
+        """ Set multiple can_led_configurations. """
+        data = [GlobalFeedbackSerializer.deserialize(entry) for entry in config]
+        self._output_controller.save_global_feedbacks(data)
         return {}
 
     # Room configurations
@@ -2084,31 +2065,47 @@ class WebInterface(object):
                 'version': version}
 
     @openmotics_api(auth=True, plugin_exposed=False)
-    def update_firmware(self, master=None, can=None):
+    def update_firmware(self, master=None, output=None, input=None, can=None, dimmer=None, temperature=None):
         if master:
             temp_file = self._download_firmware('master_classic', master)
             self._gateway_api.update_master_firmware(temp_file)
             shutil.move(temp_file, '/opt/openmotics/firmware.hex')
+        if output:
+            temp_file = self._download_firmware('output', output)
+            self._gateway_api.update_slave_firmware('O', temp_file)
+            shutil.move(temp_file, '/opt/openmotics/o_firmware.hex')
+        if input:
+            temp_file = self._download_firmware('input', input)
+            self._gateway_api.update_slave_firmware('I', temp_file)
+            shutil.move(temp_file, '/opt/openmotics/i_firmware.hex')
         if can:
             temp_file = self._download_firmware('can', can)
             self._gateway_api.update_slave_firmware('C', temp_file)
             shutil.move(temp_file, '/opt/openmotics/c_firmware.hex')
-
+        if dimmer:
+            temp_file = self._download_firmware('dimmer', dimmer)
+            self._gateway_api.update_slave_firmware('D', temp_file)
+            shutil.move(temp_file, '/opt/openmotics/d_firmware.hex')
+        if temperature:
+            temp_file = self._download_firmware('temperature', temperature)
+            self._gateway_api.update_slave_firmware('T', temp_file)
+            shutil.move(temp_file, '/opt/openmotics/t_firmware.hex')
         return {}
 
     @Inject
-    def _get_firmware_url(self, firmware, version, cloud_url=INJECTED, gateway_uuid=INJECTED):
+    def _get_firmware_url(self, firmware, version, firmware_url=INJECTED, gateway_uuid=INJECTED):
         # type: (str, str, str, str) -> str
-        uri = urlparse(cloud_url)
-        path = '/portal/firmware_metadata/{0}/{1}/'.format(firmware, version)
+        uri = urlparse(firmware_url)
+        path = '{0}/{1}/{2}/'.format(uri.path, firmware, version)
         query = 'uuid={0}'.format(gateway_uuid)
         return urlunparse((uri.scheme, uri.netloc, path, '', query, ''))
 
     def _download_firmware(self, firmware, version):
         # type: (str, str) -> str
-        response = requests.get(self._get_firmware_url(firmware, version))
+        url = self._get_firmware_url(firmware, version)
+        response = requests.get(url)
         if response.status_code != 200:
-            raise ValueError('failed to retrieve firmware')
+            raise ValueError('failed to retrieve firmware from {}, response {}'.format(url, response.status_code))
         data = response.json()
         temp_file = tempfile.mktemp('-firmware.hex')
         logger.info('downloading {}...'.format(data['url']))

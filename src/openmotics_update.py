@@ -28,16 +28,20 @@ import subprocess
 import sys
 import time
 import requests
+import traceback
 from datetime import datetime
 from six.moves.configparser import ConfigParser, NoOptionError
 from six.moves.urllib.parse import urlparse, urlunparse
 import constants
 
+if False:  #MyPy
+    from typing import List, Any, Union, Tuple
+
 logging.basicConfig(level=logging.INFO, filemode='w', format='%(message)s', filename=constants.get_update_output_file())
-logger = logging.getLogger('update.py')
+logger = logging.getLogger('openmotics_update.py')
 logger.setLevel(logging.DEBUG)
 
-PREFIX = '/opt/openmotics'
+PREFIX = constants.OPENMOTICS_PREFIX
 SUPERVISOR_SERVICES = ('openmotics', 'vpn_service')
 FIRMWARE_FILES = {'gateway_service': 'gateway.tgz',
                   'gateway_frontend': 'gateway_frontend.tgz',
@@ -80,22 +84,45 @@ EXIT_CODES = {'failed_generic': 1,
 
 
 def cmd(command, **kwargs):
+    # type: (Union[str, List[str]], Any) -> str
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             close_fds=True, **kwargs)
     output, ret = cmd_wait_output(proc)
     if ret != 0:
         raise Exception('Command {} failed'.format(command))
-    return output
+    return str(output)
 
 
 def cmd_wait_output(proc):
-    output = ''
+    # type: (Any) -> Tuple[bytes, bool]
+    output = b''
     for line in proc.stdout:
         if line:
-            logger.debug(line.rstrip('\n'))
+            logger.debug(line.rstrip(b'\n'))
         output += line
     ret = proc.wait()
     return output, ret != 0
+
+
+def run_python_cmd(command, **kwargs):
+    # type: (List[str], Any) -> str
+    # First get the python runner, This will get the PyInstaller one if required!
+    python_executable = sys.executable
+    if python_executable is None or len(python_executable) == 0:
+        python_executable = '/usr/bin/python'
+
+    full_cmd = [python_executable] + command
+    return cmd(full_cmd, **kwargs)
+
+
+def run_tarball_extract(file, output_dir=None):
+    cmd(['gunzip', file])
+    gunzipped_file = file.replace('.tgz', '.tar')
+    if output_dir is None:
+        cmd(['tar', '-xf', gunzipped_file])
+    else:
+        cmd(['tar', '-vxf', gunzipped_file, '-C', output_dir])
+
 
 
 def extract_legacy_update(update_file, expected_md5):
@@ -103,11 +130,13 @@ def extract_legacy_update(update_file, expected_md5):
     with open(update_file, 'rb') as fd:
         for chunk in iter(lambda: fd.read(128 * md5_hasher.block_size), ''):
             md5_hasher.update(chunk)
+            if len(chunk) == 0:
+                break
     calculated_md5 = md5_hasher.hexdigest()
     if calculated_md5 != expected_md5:
         raise ValueError('update.tgz md5:%s does not match expected md5:%s' % (calculated_md5, expected_md5))
 
-    cmd(['tar', 'xzf', update_file])
+    run_tarball_extract(update_file)
 
 
 def fetch_metadata(config, version, expected_md5):
@@ -140,6 +169,7 @@ def get_metadata_url(config, version):
         path = '/api/v1/base/updates/metadata'
         vpn_uri = urlparse(config.get('OpenMotics', 'vpn_check_url'))
         uri = urlunparse((vpn_uri.scheme, vpn_uri.netloc, path, '', '', ''))
+        uri = urlparse(uri)
     path = '{}/{}'.format(uri.path, version)
     query = 'uuid={0}'.format(gateway_uuid)
     return urlunparse((uri.scheme, uri.netloc, path, '', query, ''))
@@ -193,13 +223,14 @@ def check_gateway_health(timeout=60):
     pending = ['unknown']
     while since > time.time() - timeout:
         try:
-            response = requests.get('http://127.0.0.1/health_check', timeout=2)
+            http_port = Platform.http_port()
+            response = requests.get('http://127.0.0.1:{}/health_check'.format(http_port), timeout=2)
             data = response.json()
             if data['success']:
                 pending = [k for k, v in data['health'].items() if not v['state']]
                 if not pending:
                     return
-        except Exception:
+        except Exception as ex:
             pass
         time.sleep(10)
     message = 'health check failed {}'.format(pending)
@@ -317,12 +348,13 @@ def update_gateway_backend(tarball, date, version):
         etc_dir = os.path.join(PREFIX, 'etc')
         cmd(['mkdir', '-p', backup_dir])
 
+
         # TODO: symlink, blue green deployment
         cmd(['mkdir', '-p', os.path.join(backup_dir, date)])
         cmd(['mkdir', '-p', os.path.join(backup_dir, date, 'hex')])
         cmd(['mv', python_dir, os.path.join(backup_dir, date)])
         cmd(['cp', '-r', etc_dir, os.path.join(backup_dir, date)])
-        cmd('cp {0} {1}'.format(os.path.join(PREFIX, '*.hex'), os.path.join(backup_dir, date, 'hex')), shell=True)
+        cmd('cp {0} {1} || true'.format(os.path.join(PREFIX, '*.hex'), os.path.join(backup_dir, date, 'hex')), shell=True)  # Add the '|| true' to the end of the command to be sure it exits with exit code 0!
 
         # Cleanup for old versions.
         old_dist_dir = os.path.join(PREFIX, 'dist-packages')
@@ -331,7 +363,7 @@ def update_gateway_backend(tarball, date, version):
 
         logger.info('Extracting gateway')
         cmd(['mkdir', '-p', python_dir])
-        cmd(['tar', '-v', '-xzf', tarball, '-C', python_dir])
+        run_tarball_extract(tarball, python_dir)
         cmd(['sync'])
 
         plugins = glob.glob('{}/{}/python/plugins/*/'.format(backup_dir, date))
@@ -341,7 +373,10 @@ def update_gateway_backend(tarball, date, version):
                 cmd(['cp', '-r', plugin, os.path.join(python_dir, 'plugins')])
 
         logger.info('Running post-update')
-        cmd(['bash', os.path.join(python_dir, 'post-update.sh')])
+
+        system_os = System.get_operating_system().get('ID')
+        if system_os != System.OS.BUILDROOT:
+            cmd(['bash', os.path.join(python_dir, 'post-update.sh')])
         cmd(['sync'])
     except Exception as exc:
         logger.exception('Updating Gateway service failed')
@@ -362,7 +397,7 @@ def update_gateway_frontend(tarball, date, version):
 
         logger.info('Extracting gateway frontend')
         cmd(['mkdir', '-p', static_dir])
-        cmd(['tar', '-v', '-xzf', tarball, '-C', static_dir])
+        run_tarball_extract(tarball, static_dir)
         mark_installed_version('gateway_frontend', version)
         cmd(['sync'])
     except Exception as exc:
@@ -389,6 +424,7 @@ def update(version, expected_md5):
     :param expected_md5: the md5 sum provided by the server.
     """
     version_mapping = {}
+    has_master_hardware = Platform.has_master_hardware()
 
     try:
         config = ConfigParser()
@@ -430,13 +466,14 @@ def update(version, expected_md5):
         stop_services()
         services_running = False
 
-        gateway_os = FIRMWARE_FILES['gateway_os']
-        if os.path.exists(gateway_os):
-            os_version = version_mapping.get('gateway_os')
-            logger.info(' -> Updating Gateway OS to {0}'.format(os_version if os_version else 'unknown version'))
-            error = update_gateway_os(gateway_os, os_version)
-            if error:
-                errors.append(error)
+        if has_master_hardware:
+            gateway_os = FIRMWARE_FILES['gateway_os']
+            if os.path.exists(gateway_os):
+                os_version = version_mapping.get('gateway_os')
+                logger.info(' -> Updating Gateway OS to {0}'.format(os_version if os_version else 'unknown version'))
+                error = update_gateway_os(gateway_os, os_version)
+                if error:
+                    errors.append(error)
 
         gateway_service = FIRMWARE_FILES['gateway_service']
         if os.path.exists(gateway_service):
@@ -446,35 +483,36 @@ def update(version, expected_md5):
             if error:
                 errors.append(error)
 
-        master_type = get_master_type()
-        master_firmware = FIRMWARE_FILES[master_type]
-        if os.path.exists(master_firmware):
-            master_version = version_mapping.get(master_type)
-            logger.info(' -> Updating Master firmware to {0}'.format(master_version if master_version else 'unknown version'))
-            error = update_master_firmware(master_type, master_firmware, master_version)
-            if error:
-                errors.append(error)
-
-        for module, filename, arguments in [('energy', FIRMWARE_FILES['energy'], []),
-                                            ('power', FIRMWARE_FILES['power'], ['--8'])]:
-            if os.path.exists(filename):
-                energy_version = version_mapping.get(module)
-                logger.info(' -> Updating {0} firmware to {1}'.format(module, energy_version if energy_version else 'unknown version'))
-                error = update_energy_firmware(module, filename, energy_version, arguments)
+        if has_master_hardware:
+            master_type = get_master_type()
+            master_firmware = FIRMWARE_FILES[master_type]
+            if os.path.exists(master_firmware):
+                master_version = version_mapping.get(master_type)
+                logger.info(' -> Updating Master firmware to {0}'.format(master_version if master_version else 'unknown version'))
+                error = update_master_firmware(master_type, master_firmware, master_version)
                 if error:
                     errors.append(error)
 
-        for module in MODULE_TYPES:
-            module_firmware = FIRMWARE_FILES[module]
-            module_version = version_mapping.get(module)
-            if os.path.exists(module_firmware):
-                logger.info(' -> Updating {0} firmware to {1}'.format(module, module_version if module_version else 'unknown version'))
-                error = update_module_firmware(module, module_firmware, module_version)
-                if error:
-                    errors.append(error)
+            for module, filename, arguments in [('energy', FIRMWARE_FILES['energy'], []),
+                                                ('power', FIRMWARE_FILES['power'], ['--8'])]:
+                if os.path.exists(filename):
+                    energy_version = version_mapping.get(module)
+                    logger.info(' -> Updating {0} firmware to {1}'.format(module, energy_version if energy_version else 'unknown version'))
+                    error = update_energy_firmware(module, filename, energy_version, arguments)
+                    if error:
+                        errors.append(error)
 
-        logger.info('Checking master communication')
-        check_master_communication()
+            for module in MODULE_TYPES:
+                module_firmware = FIRMWARE_FILES[module]
+                module_version = version_mapping.get(module)
+                if os.path.exists(module_firmware):
+                    logger.info(' -> Updating {0} firmware to {1}'.format(module, module_version if module_version else 'unknown version'))
+                    error = update_module_firmware(module, module_firmware, module_version)
+                    if error:
+                        errors.append(error)
+
+            logger.info('Checking master communication')
+            check_master_communication()
 
         gateway_frontend = FIRMWARE_FILES['gateway_frontend']
         if os.path.exists(gateway_frontend):
@@ -514,7 +552,7 @@ def update(version, expected_md5):
 
         config.set('OpenMotics', 'version', version)
         temp_file = constants.get_config_file() + '.update'
-        with open(temp_file, 'wb') as configfile:
+        with open(temp_file, 'w') as configfile:
             config.write(configfile)
         shutil.move(temp_file, constants.get_config_file())
         cmd(['sync'])
@@ -539,7 +577,7 @@ def main():
     logger.info(version)
 
     lockfile = constants.get_update_lockfile()
-    with open(lockfile, 'wc') as wfd:
+    with open(lockfile, 'wb') as wfd:
         try:
             try:
                 fcntl.flock(wfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -549,10 +587,13 @@ def main():
             update(version, expected_md5)
         except SystemExit as sex:
             logger.error('FAILED')
-            logger.error('exit {}'.format(sex.code))
-        except Exception:
+            logger.error('exit ({}) : {}'.format(sex.code, sex))
+            logger.error(traceback.format_exc())
+        except Exception as ex:
             logger.error('FAILED')
+            logger.error('Exception occurred: {}'.format(ex))
             logger.error('exit {}'.format(EXIT_CODES['failed_generic']))
+            logger.error(traceback.format_exc())
         finally:
             fcntl.flock(wfd, fcntl.LOCK_UN)
             os.unlink(lockfile)

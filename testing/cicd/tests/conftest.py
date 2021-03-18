@@ -68,6 +68,7 @@ def software_update(toolbox_session):
             output = toolbox.dut.get('/get_update_output')['output']
             assert 'exit 0' in output
             assert 'DONE' in output
+            time.sleep(120)
 
     logger.info('gateway {}'.format(toolbox.get_gateway_version()))
 
@@ -81,30 +82,49 @@ def firmware_updates(toolbox_session):
         return
 
     versions = toolbox.get_firmware_versions()
+    logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in versions.items())))
     firmware = {}
     # TODO: Add support for Core+ firmwares
+    force_update = os.environ.get('OPENMOTICS_FORCE_UPDATE', '0') == '1'
     if TEST_PLATFORM != TestPlatform.CORE_PLUS:
         master_firmware = os.environ.get('OPENMOTICS_MASTER_FIRMWARE')
-        if master_firmware and master_firmware != versions['M']:
+        if master_firmware and (force_update or master_firmware != versions['M']):
             logger.info('master firmware {} -> {}...'.format(versions['M'], master_firmware))
             firmware['master'] = master_firmware
+        output_firmware = os.environ.get('OPENMOTICS_OUTPUT_FIRMWARE')
+        if output_firmware and (force_update or output_firmware != versions['O']):
+            logger.info('Output firmware {} -> {}...'.format(versions['O'], output_firmware))
+            firmware['output'] = output_firmware
+        dimmer_firmware = os.environ.get('OPENMOTICS_DIMMER_FIRMWARE')
+        if dimmer_firmware and (force_update or dimmer_firmware != versions['D']):
+            logger.info('Dimmer firmware {} -> {}...'.format(versions['D'], dimmer_firmware))
+            firmware['dimmer'] = dimmer_firmware
+        input_firmware = os.environ.get('OPENMOTICS_INPUT_FIRMWARE')
+        if input_firmware and (force_update or input_firmware != versions['I']):
+            logger.info('Input firmware {} -> {}...'.format(versions['I'], input_firmware))
+            firmware['input'] = input_firmware
+        temperature_firmware = os.environ.get('OPENMOTICS_TEMPERATURE_FIRMWARE')
+        if temperature_firmware and (force_update or temperature_firmware != versions['T']):
+            logger.info('Temperature firmware {} -> {}...'.format(versions['T'], temperature_firmware))
+            firmware['temperature'] = temperature_firmware
         can_firmware = os.environ.get('OPENMOTICS_CAN_FIRMWARE')
-        if can_firmware and can_firmware != versions['C']:
+        if can_firmware and (force_update or can_firmware != versions['C']):
             logger.info('CAN firmware {} -> {}...'.format(versions['C'], can_firmware))
             firmware['can'] = can_firmware
     if firmware:
-        logger.info('updating firmware...')
-        for _ in range(8):
-            try:
-                toolbox.health_check(timeout=120)
-                toolbox.dut.get('/update_firmware', firmware)
-                toolbox.health_check(timeout=120)
-                break
-            except Exception:
-                logger.error('update failed, retrying')
-                time.sleep(30)
-        versions = toolbox.get_firmware_versions()
-    logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in versions.items())))
+        for module, version in firmware.items():
+            logger.info('updating {} firmware...'.format(module))
+            for _ in range(8):
+                try:
+                    toolbox.health_check(timeout=120)
+                    toolbox.dut.get('/update_firmware', {module: version})
+                    time.sleep(5)
+                    toolbox.health_check(timeout=120)
+                    break
+                except Exception:
+                    logger.error('updating {} failed, retrying'.format(module))
+                    time.sleep(30)
+        logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in firmware.items())))
 
 
 @fixture
@@ -112,6 +132,7 @@ def toolbox(toolbox_session, software_update, firmware_updates):
     toolbox = toolbox_session
     toolbox.tester.get('/plugins/syslog_receiver/reset', success=False)
     toolbox.health_check(timeout=360)
+    toolbox.module_error_check()
     try:
         yield toolbox
     finally:

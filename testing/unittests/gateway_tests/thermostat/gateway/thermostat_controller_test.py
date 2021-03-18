@@ -280,10 +280,27 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
 
         self._thermostat_controller.set_per_thermostat_mode(thermostat_number=1,
-                                                            automatic=True,
-                                                            setpoint=16.0)
+                                                            automatic=False,
+                                                            setpoint=3)
         expected.statusses[0].setpoint_temperature = 16.0
+        expected.statusses[0].setpoint = 3
+        expected.statusses[0].automatic = False
+        expected.automatic = False
+        expected.setpoint = 3
         self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+
+        self._thermostat_controller.set_per_thermostat_mode(thermostat_number=1,
+                                                            automatic=True,
+                                                            setpoint=3)
+        expected.statusses[0].setpoint_temperature = 15.0
+        expected.statusses[0].setpoint = 0
+        expected.statusses[0].automatic = True
+        expected.automatic = True
+        expected.setpoint = 0
+        self.assertEqual(expected, self._thermostat_controller.get_thermostat_status())
+
+        self._thermostat_controller.set_current_setpoint(thermostat_number=1,
+                                                         heating_temperature=16.0)
 
         preset = self._thermostat_controller.get_current_preset(thermostat_number=1)
         self.assertTrue(preset.active)

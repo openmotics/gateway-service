@@ -28,8 +28,8 @@ class SvtTest(unittest.TestCase):
 
     def test_temperature(self):
         """ Test the temperature type. """
-        for temperature in range(-32, 95):
-            self.assertEqual(temperature, int(Svt.temp(temperature).get_temperature()))
+        for temperature in [-32, 0, 18.5, 95]:
+            self.assertEqual(temperature, Svt.temp(temperature).get_temperature())
 
         self.assertEqual(bytearray([104]), Svt.temp(20).get_byte())
 

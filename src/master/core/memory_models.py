@@ -52,6 +52,7 @@ class GlobalConfiguration(GlobalMemoryModelDefinition):
     groupaction_minutes_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 54))  # 0, 54-55
     groupaction_hours_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 56))  # 0, 56-57
     groupaction_day_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 58))  # 0, 58-59
+    groupaction_any_output_changed = MemoryWordField(MemoryTypes.EEPROM, address_spec=(0, 60))  # 0, 60-61
     startup_time = MemoryByteArrayField(MemoryTypes.FRAM, address_spec=(0, 64), length=3, read_only=True)  # 0, 64-66
     startup_date = MemoryByteArrayField(MemoryTypes.FRAM, address_spec=(0, 67), length=3, read_only=True)  # 0, 67-69
     uptime_hours = Memory3BytesField(MemoryTypes.FRAM, address_spec=(0, 70), read_only=True)  # 0, 70-72
@@ -174,7 +175,7 @@ class SensorConfiguration(MemoryModelDefinition):
     aqi_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 56 + (id % 8) * 2))  # 239-254, 56-71
     dali_mapping = _DALISensorComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 72 + (id % 8))))  # 239-254, 72-79
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (239 + id // 8, 128 + (id % 8) * 16), length=16)  # 239-254, 128-255
-    temperature_offset = MemoryTemperatureField(MemoryTypes.FRAM, address_spec=lambda id: (51, id * 2),
+    temperature_offset = MemoryTemperatureField(MemoryTypes.FRAM, address_spec=lambda id: (51, id * 2), limits=(-31.5, 95),
                                                 checksum=MemoryChecksum(field=MemoryByteField(MemoryTypes.FRAM, address_spec=lambda id: (51, (id * 2) + 1)),
                                                                         check=MemoryChecksum.Types.INVERTED, default=0))  # 51, 0-255
 

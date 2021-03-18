@@ -71,7 +71,7 @@ class OutputSerializer(object):
             function_field = '{0}_function'.format(base_field)
             if id_field in api_data and function_field in api_data:
                 loaded_fields.append(base_field)
-                setattr(output_dto, base_field, FeedbackLedDTO(id=api_data[id_field],
+                setattr(output_dto, base_field, FeedbackLedDTO(id=Toolbox.nonify(api_data[id_field], OutputSerializer.BYTE_MAX),
                                                                function=api_data[function_field]))
         return output_dto, loaded_fields
 
@@ -79,7 +79,7 @@ class OutputSerializer(object):
 class OutputStateSerializer(object):
     @staticmethod
     def serialize(output_state_dto, fields):
-    # type: (OutputStateDTO, Optional[List[str]]) -> Dict
+        # type: (OutputStateDTO, Optional[List[str]]) -> Dict
         data = {'id': output_state_dto.id,
                 'status': 1 if output_state_dto.status else 0,
                 'ctimer': output_state_dto.ctimer,

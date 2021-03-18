@@ -19,7 +19,7 @@ from __future__ import absolute_import
 
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatAircoStatusDTO, \
-    ThermostatDTO, ThermostatGroupDTO, ModuleDTO
+    ThermostatDTO, ThermostatGroupDTO, ModuleDTO, GlobalFeedbackDTO
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -407,7 +407,7 @@ class MasterController(object):
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
         raise NotImplementedError()
 
-    def flash_leds(self, led_type, led_id):
+    def flash_leds(self, led_type, led_id):  # type: (int, int) -> str
         raise NotImplementedError()
 
     def get_backup(self):
@@ -511,20 +511,16 @@ class MasterController(object):
 
     # Can Led functions
 
-    def load_can_led_configuration(self, can_led_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
+    def load_global_feedback(self, global_feedback_id):
+        # type: (int) -> GlobalFeedbackDTO
         raise NotImplementedError()
 
-    def load_can_led_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
+    def load_global_feedbacks(self):
+        # type: () -> List[GlobalFeedbackDTO]
         raise NotImplementedError()
 
-    def save_can_led_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        raise NotImplementedError()
-
-    def save_can_led_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
+    def save_global_feedbacks(self, global_feedbacks):
+        # type: (List[Tuple[GlobalFeedbackDTO, List[str]]]) -> None
         raise NotImplementedError()
 
     # All lights off

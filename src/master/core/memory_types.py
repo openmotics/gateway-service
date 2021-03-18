@@ -315,7 +315,7 @@ class MemoryField(object):
     # TODO: See if this can inherit from Field or use Fields internally so the implementations are unified
 
     def __init__(self, memory_type, address_spec, length, limits=None, read_only=False, checksum=None):
-        # type: (str, Union[Tuple[int, int], Callable[[int], Tuple[int, int]]], int, Optional[Tuple[int, int]], bool, Optional[MemoryChecksum]) -> None
+        # type: (str, Union[Tuple[int, int], Callable[[int], Tuple[int, int]]], int, Optional[Tuple[float, float]], bool, Optional[MemoryChecksum]) -> None
         """
         Create an instance of an MemoryDataType with an address or an address generator.
         """
@@ -363,9 +363,12 @@ class MemoryField(object):
         """ Decodes a bytearray into a high-level valuye shuch as a string or large integer """
         raise NotImplementedError()
 
-    def _check_limits(self, value, field_name):  # type: (Union[float, int], str) -> None
+    def _check_limits(self, value, field_name, raise_exception=True):  # type: (Optional[float], str, bool) -> bool
         if value is None or not (self.limits[0] <= value <= self.limits[1]):
-            raise ValueError('Field `{0}` value `{1}` out of limits: {2} <= value <= {3}'.format(field_name, value, self.limits[0], self.limits[1]))
+            if raise_exception:
+                raise ValueError('Field `{0}` value `{1}` out of limits: {2} <= value <= {3}'.format(field_name, value, self.limits[0], self.limits[1]))
+            return False
+        return True
 
 
 class MemoryStringField(MemoryField):
@@ -432,12 +435,12 @@ class MemoryBooleanField(MemoryField):
 
 
 class MemoryTemperatureField(MemoryField):
-    def __init__(self, memory_type, address_spec, read_only=False, checksum=None):
+    def __init__(self, memory_type, address_spec, limits=None, read_only=False, checksum=None):
         super(MemoryTemperatureField, self).__init__(memory_type=memory_type,
                                                      address_spec=address_spec,
                                                      read_only=read_only,
                                                      checksum=checksum,
-                                                     limits=(-32, 95),
+                                                     limits=limits if limits is not None else (-32, 95),
                                                      length=1)
 
     def encode(self, value, field_name):  # type: (Optional[float], str) -> bytearray
@@ -447,7 +450,10 @@ class MemoryTemperatureField(MemoryField):
         return bytearray([system_value])
 
     def decode(self, data):  # type: (bytearray) -> Optional[float]
-        return Temperature.system_value_to_temperature(data[0])
+        temperature = Temperature.system_value_to_temperature(data[0])
+        if not self._check_limits(temperature, '', raise_exception=False):
+            return None
+        return temperature
 
 
 class MemoryWordField(MemoryField):

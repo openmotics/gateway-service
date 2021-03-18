@@ -154,7 +154,7 @@ class InputCoreMapperTest(unittest.TestCase):
 
     def test_actions_invalid(self):
         with self.assertRaises(ValueError):
-            InputCoreMapperTest._dto_to_orm(action=240, basic_actions=[161, 1])
+            InputCoreMapperTest._dto_to_orm(action=240, basic_actions=[148, 1])
 
     def _validate_orm(self, orm, **kwargs):
         self.assertEqual(kwargs.get('has_direct_output_link', False), orm.has_direct_output_link)

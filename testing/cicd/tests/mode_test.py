@@ -154,13 +154,13 @@ def test_factory_reset(toolbox, authorized_mode, factory_reset):
 
     data = toolbox.dut.get('/get_modules')
     assert 'inputs' in data
-    assert ['I'] == data['inputs']
+    assert ['I', 'T'] == data['inputs']
     assert 'outputs' in data
-    assert ['O', 'o'] == data['outputs']
+    assert ['O', 'D', 'o'] == data['outputs']
 
     data = toolbox.dut.get('/get_modules_information')
     modules = list(data['modules']['master'].values())
     assert 'I' in set(x['type'] for x in modules)
     assert 'O' in set(x['type'] for x in modules)
     # Filter out CAN inputs since those are expected to not have a firmware version.
-    assert None not in [x['firmware'] for x in modules if x['type'] in {'I', 'O'} and not x.get('is_can', False)]
+    assert None not in [x['firmware'] for x in modules if x['type'] in {'I', 'O', 'D', 'T'} and not x.get('is_can', False)]

@@ -41,7 +41,8 @@ class GatewayEvent(object):
       {'id': str,      # Device ID
        'plugin': str,  # Target Plugin
        'mode': str,    # Auto/Manual
-       'level': int}
+       'level': int,
+       'connected': bool}
     """
 
     class Types(object):
