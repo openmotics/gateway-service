@@ -66,6 +66,7 @@ class MetricsCollector(object):
                            6: 'generic',
                            7: 'motor',
                            8: 'ventilation',
+                           9: 'heater',
                            255: 'light'}
 
     @Inject
