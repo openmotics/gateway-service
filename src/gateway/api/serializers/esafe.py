@@ -21,7 +21,8 @@ from __future__ import absolute_import
 import logging
 
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto.esafe import EsafeUserDTO, RfidDTO, DeliveryDTO, ApartmentDTO
+from gateway.api.serializers.user import UserSerializer
+from gateway.dto.esafe import RfidDTO, DeliveryDTO, ApartmentDTO
 from toolbox import Toolbox
 
 if False:  # MYPY
@@ -63,42 +64,6 @@ class ApartmentSerializer(object):
         return apartment_dto, loaded_fields
 
 
-class EsafeUserSerializer(object):
-    @staticmethod
-    def serialize(dto_object, fields=None):
-        # type: (EsafeUserDTO, Optional[List[str]]) -> Dict[str,Any]
-        data = {'id': dto_object.id,
-                'first_name': dto_object.first_name,
-                'last_name': dto_object.last_name,
-                'role': dto_object.role,
-                'code': dto_object.code,
-                'apartment': None}
-        if fields is not None:
-            if 'apartment' in fields:
-                apartment_data = ApartmentSerializer.serialize(dto_object.apartment)
-                data['apartment'] = apartment_data
-        return SerializerToolbox.filter_fields(data, fields)
-
-    @staticmethod
-    def deserialize(api_data):
-        # type: (Dict[str,Any]) -> Tuple[EsafeUserDTO, List[str]]
-        loaded_fields = []
-        user_id = None
-        if 'id' in api_data:
-            loaded_fields.append('id')
-            user_id = api_data['id']
-        user_dto = EsafeUserDTO(user_id)
-        for field in ['first_name', 'last_name', 'role', 'code']:
-            if field in api_data:
-                loaded_fields.append(field)
-                setattr(user_dto, field, api_data[field])
-        if 'apartment' in api_data:
-            apartment_dto, _ = ApartmentSerializer.deserialize(api_data['apartment'])
-            user_dto.apartment = apartment_dto
-            loaded_fields.append('apartment')
-        return user_dto, loaded_fields
-
-
 class RfidSerializer(object):
     @staticmethod
     def serialize(dto_object, fields=None):
@@ -113,7 +78,7 @@ class RfidSerializer(object):
                 'timestamp_created': dto_object.timestamp_created,
                 'timestamp_last_used': dto_object.timestamp_last_used,
                 'user': None}
-        user_data = EsafeUserSerializer.serialize(dto_object.user)
+        user_data = UserSerializer.serialize(dto_object.user)
         data['user'] = user_data
         return SerializerToolbox.filter_fields(data, fields)
 
@@ -140,7 +105,7 @@ class RfidSerializer(object):
                 setattr(rfid_dto, field, api_data[field])
         if 'user' in api_data:
             loaded_fields.append('user')
-            user_dto, _ = EsafeUserSerializer.deserialize(api_data['user'])
+            user_dto, _ = UserSerializer.deserialize(api_data['user'])
             rfid_dto.user = user_dto
         return rfid_dto, loaded_fields
 
@@ -158,9 +123,9 @@ class DeliverySerializer(object):
                 'parcelbox_rebus_id': dto_object.parcelbox_rebus_id,
                 'user_delivery': None,
                 'user_pickup': None}
-        user_data = EsafeUserSerializer.serialize(dto_object.user_delivery)
+        user_data = UserSerializer.serialize(dto_object.user_delivery)
         data['user_delivery'] = user_data
-        user_data = EsafeUserSerializer.serialize(dto_object.user_pickup)
+        user_data = UserSerializer.serialize(dto_object.user_pickup)
         data['user_pickup'] = user_data
         return SerializerToolbox.filter_fields(data, fields)
 
@@ -183,11 +148,11 @@ class DeliverySerializer(object):
                 setattr(delivery_dto, field, api_data[field])
         if 'user_delivery' in api_data:
             loaded_fields.append('user_delivery')
-            user_dto, _ = EsafeUserSerializer.deserialize(api_data['user_delivery'])
+            user_dto, _ = UserSerializer.deserialize(api_data['user_delivery'])
             delivery_dto.user_delivery = user_dto
         if 'user_pickup' in api_data:
             loaded_fields.append('user_pickup')
-            user_dto, _ = EsafeUserSerializer.deserialize(api_data['user_pickup'])
+            user_dto, _ = UserSerializer.deserialize(api_data['user_pickup'])
             delivery_dto.user_pickup = user_dto
         return delivery_dto, loaded_fields
 

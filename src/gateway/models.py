@@ -182,12 +182,6 @@ class Schedule(BaseModel):
     status = CharField()
 
 
-class User(BaseModel):
-    id = AutoField()
-    username = CharField(unique=True)
-    password = CharField()
-    accepted_terms = IntegerField(default=0)
-
 
 class Config(BaseModel):
     id = AutoField()
@@ -534,8 +528,6 @@ def on_thermostat_save_handler(model_class, instance, created):
                 day_schedule.save()
 
 
-# eSafe models
-
 class Apartment(BaseModel):
     id = AutoField()
     name = CharField(null=False)
@@ -543,8 +535,8 @@ class Apartment(BaseModel):
     doorbell_rebus_id = IntegerField(unique=True)
 
 
-class EsafeUser(BaseModel):
-    class EsafeUserRoles(object):
+class User(BaseModel):
+    class UserRoles(object):
         USER = 'USER'
         ADMIN = 'ADMIN'
         TECHNICIAN = 'TECHNICIAN'
@@ -553,10 +545,33 @@ class EsafeUser(BaseModel):
     id = AutoField()
     first_name = CharField()
     last_name = CharField()
-    role = CharField(default=EsafeUserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
-    code = CharField(null=False, unique=True)
+    username_old = CharField(unique=True)
+    role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
+    pin_code = CharField(null=False, unique=True)
+    password = CharField()
     apartment_id = ForeignKeyField(Apartment, backref='users', on_delete='SET NULL')
     is_active = BooleanField(default=True)
+    accepted_terms = IntegerField(default=0)
+
+    @property
+    def username(self):
+        # type: () -> str
+        separator = ''
+        if self.first_name != '' and self.last_name != '':
+            separator = ' '
+        return "{}{}{}".format(self.first_name, separator, self.last_name)
+
+    @username.setter
+    def username(self, username):
+        # type: (str) -> None
+        splits = username.split(' ')
+        if len(splits) > 1:
+            self.first_name = splits[0]
+            self.last_name = ' '.join(splits[1:])
+        else:
+            self.first_name = username
+            self.last_name = ''
+
 
 
 class RFID(BaseModel):
@@ -569,7 +584,7 @@ class RFID(BaseModel):
     label = CharField()
     timestamp_created = CharField()
     timestamp_last_used = CharField()
-    user_id = ForeignKeyField(EsafeUser, null=False, backref='rfids', on_delete='CASCADE')
+    user_id = ForeignKeyField(User, null=False, backref='rfids', on_delete='CASCADE')
 
 
 class Delivery(BaseModel):
@@ -581,6 +596,6 @@ class Delivery(BaseModel):
     signature_delivery = CharField(null=False)
     signature_pickup = CharField()
     parcelbox_rebus_id = IntegerField(null=False)
-    user_id_delivery = ForeignKeyField(EsafeUser, backref='deliveries', on_delete='NO ACTION', null=False)
-    user_id_pickup = ForeignKeyField(EsafeUser, backref='pickups', on_delete='NO ACTION')
+    user_id_delivery = ForeignKeyField(User, backref='deliveries', on_delete='NO ACTION', null=False)
+    user_id_pickup = ForeignKeyField(User, backref='pickups', on_delete='NO ACTION')
 

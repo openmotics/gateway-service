@@ -196,12 +196,6 @@ class Schedule(BaseModel):
     status: Literal['ACTIVE', 'COMPLETED']
 
 
-class User(BaseModel):
-    id: MixedPrimaryKeyField
-    username: MixedTextField
-    password: MixedTextField
-    accepted_terms: MixedIntegerField
-
 
 class Config(BaseModel):
     id: MixedPrimaryKeyField
@@ -401,35 +395,31 @@ class DaySchedule(BaseModel):
 
     def get_scheduled_temperature(self, seconds_in_day: int) -> float: ...
 
-# -------------
-# eSafe models
-# -------------
 
-class EsafeApartment(BaseModel):
+class Apartment(BaseModel):
     id: MixedPrimaryKeyField
     name: MixedCharField
     mailbox_rebus_id: MixedIntegerField
     doorbell_rebus_id: MixedIntegerField
 
-class EsafeApartmentForeignKeyField(EsafeApartment, ForeignKeyField): ...
+class ApartmentForeignKeyField(Apartment, ForeignKeyField): ...
 
 
-class EsafeUser(BaseModel):
-    user_id: MixedPrimaryKeyField
-    user_first_name: MixedCharField
-    user_last_name: MixedCharField
-    user_role: MixedCharField
-    user_code: MixedCharField
-    apartment_id: EsafeApartmentForeignKeyField
+class User(BaseModel):
+    id: MixedPrimaryKeyField
+    first_name: MixedCharField
+    last_name: MixedCharField
+    username_old: MixedCharField
+    password: MixedTextField
+    role: MixedCharField
+    pin_code: MixedCharField
+    apartment_id: ApartmentForeignKeyField
+    is_active: ApartmentForeignKeyField
+    accepted_terms: MixedBooleanField
+class UserForeignKeyField(User, ForeignKeyField): ...
 
-class EsafeUserForeignKeyField(EsafeUser, ForeignKeyField): ...
 
-class EsafeSystem(BaseModel):
-    key: MixedCharField
-    value: MixedCharField
-
-
-class EsafeRFID(BaseModel):
+class RFID(BaseModel):
     id: MixedPrimaryKeyField
     tag_string: MixedCharField
     uid_manufacturer: MixedCharField
@@ -439,10 +429,10 @@ class EsafeRFID(BaseModel):
     label: MixedCharField
     timestamp_created: MixedCharField
     timestamp_last_used: MixedCharField
-    user_id: EsafeUserForeignKeyField
+    user_id: UserForeignKeyField
 
 
-class EsafeDelivery(BaseModel):
+class Delivery(BaseModel):
     id: MixedPrimaryKeyField
     type: MixedCharField
     timestamp_delivery: MixedCharField
@@ -451,6 +441,6 @@ class EsafeDelivery(BaseModel):
     signature_delivery: MixedCharField
     signature_pickup: MixedCharField
     parcelbox_rebus_id: MixedIntegerField
-    user_id_delivery: EsafeUserForeignKeyField
-    user_id_pickup: EsafeUserForeignKeyField
+    user_id_delivery: UserForeignKeyField
+    user_id_pickup: UserForeignKeyField
 

@@ -10,9 +10,10 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.esafe.esafe_exception import EsafeParseError, EsafeTimeOutError, EsafeForbiddenError, EsafeStateError,\
     EsafeUnAuthorizedError, EsafeNotImplementedError, EsafeItemDoesNotExistError, EsafeInvalidOperationError,\
     EsafeWrongInputParametersError, EsafeError
-from gateway.esafe.esafe_user_controller import EsafeUserController
-from gateway.api.serializers.esafe import EsafeUserSerializer, ApartmentSerializer
+from gateway.api.serializers.esafe import ApartmentSerializer
+from gateway.api.serializers.user import UserSerializer
 from gateway.webservice import limit_floats
+from gateway.user_controller import UserController
 
 
 logger = logging.getLogger("openmotics")
@@ -97,9 +98,10 @@ class EsafeRestAPIEndpoint(object):
     API_ENDPOINT = None  # type: Optional[str]
 
     @Inject
-    def __init__(self, esafe_user_controller=INJECTED):
-        # type: (EsafeUserController) -> None
-        self.user_controller = esafe_user_controller
+    def __init__(self, user_controller=INJECTED):
+        # type: () -> None
+        self.user_controller = user_controller
+        pass
 
 
     def GET(self):
@@ -129,7 +131,7 @@ class EsafeUsers(EsafeRestAPIEndpoint):
     def GET(self, user_id=None):
         if user_id is None:
             users = self.user_controller.load_users()
-            users_serial = [EsafeUserSerializer.serialize(user) for user in users]
+            users_serial = [UserSerializer.serialize(user) for user in users]
             return json.dumps({'users': users_serial})
 
 
@@ -137,7 +139,7 @@ class EsafeUsers(EsafeRestAPIEndpoint):
         if user is None:
             cherrypy.response.status = 404
             return json.dumps({})
-        user_serial = EsafeUserSerializer.serialize(user)
+        user_serial = UserSerializer.serialize(user)
         return json.dumps(user_serial)
 
 

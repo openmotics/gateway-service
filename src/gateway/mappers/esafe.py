@@ -20,54 +20,14 @@ from __future__ import absolute_import
 
 import logging
 
-from gateway.dto.esafe import DeliveryDTO, RfidDTO, ApartmentDTO, EsafeUserDTO
-from gateway.models import Apartment, EsafeUser, RFID, Delivery
+from gateway.dto.esafe import DeliveryDTO, RfidDTO, ApartmentDTO
+from gateway.mappers.user import UserMapper
+from gateway.models import Apartment, User, RFID, Delivery
 
 if False:  # MYPY
     from typing import Any, Dict, List
 
 logger = logging.getLogger('openmotics')
-
-
-class EsafeUserMapper(object):
-
-    @staticmethod
-    def orm_to_dto(orm_object):
-        # type: (EsafeUser) -> EsafeUserDTO
-        apartment_orm = orm_object.apartment_id
-        user_dto = EsafeUserDTO(orm_object.id,
-                                orm_object.first_name,
-                                orm_object.last_name,
-                                orm_object.role,
-                                orm_object.code,
-                                None)
-        if apartment_orm is not None:
-            apartment_dto = ApartmentMapper.orm_to_dto(apartment_orm)
-            user_dto.apartment = apartment_dto
-
-        return user_dto
-
-    @staticmethod
-    def dto_to_orm(dto_object, fields):
-        # type: (EsafeUserDTO, List[str]) -> EsafeUser
-        user = EsafeUser.get_or_none(first_name=dto_object.first_name,
-                                     last_name=dto_object.last_name)
-        if user is None:
-            mandatory_fields = {'role', 'code', 'first_name', 'last_name'}
-            if not mandatory_fields.issubset(set(fields)):
-                raise ValueError('Cannot create eSafe user without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
-
-        user_orm = EsafeUser()
-        for field in fields:
-            if getattr(user_orm, field, None) is None or getattr(user_orm, field, None) is None:
-                continue
-            if field == 'apartment_id':
-                apartment_orm, _ = ApartmentMapper.dto_to_orm(dto_object.apartment, ['id', 'name', 'mailbox_rebus_id', 'doorbell_rebus_id'])
-                user_orm.apartment_id = apartment_orm
-                continue
-            setattr(user_orm, field, getattr(dto_object, field))
-        return user_orm
-
 
 
 class ApartmentMapper(object):
@@ -84,7 +44,7 @@ class ApartmentMapper(object):
     @staticmethod
     def dto_to_orm(dto_object, fields):
         # type: (ApartmentDTO, List[str]) -> Apartment
-        apartment = EsafeUser.get_or_none(name=dto_object.name,
+        apartment = User.get_or_none(name=dto_object.name,
                                           mailbox_rebus_id=dto_object.mailbox_rebus_id,
                                           doorbell_rebus_id=dto_object.doorbell_rebus_id)
         if apartment is None:
@@ -133,11 +93,11 @@ class DeliveryMapper(object):
             if getattr(delivery_orm, field, None) is None or getattr(delivery_orm, field, None) is None:
                 continue
             if field == 'user_id_delivery':
-                user_orm = EsafeUserMapper.dto_to_orm(dto_object.user_delivery, ['id', 'first_name', 'last_name', 'role', 'code', 'apartment_id'])
+                user_orm = UserMapper.dto_to_orm(dto_object.user_delivery, ['id', 'first_name', 'last_name', 'role', 'code', 'apartment_id'])
                 delivery_orm.user_id_delivery = user_orm
                 continue
             if field == 'user_id_pickup':
-                user_orm = EsafeUserMapper.dto_to_orm(dto_object.user_delivery, ['id', 'first_name', 'last_name', 'role', 'code', 'apartment_id'])
+                user_orm = UserMapper.dto_to_orm(dto_object.user_delivery, ['id', 'first_name', 'last_name', 'role', 'code', 'apartment_id'])
                 delivery_orm.user_id_pickup = user_orm
                 continue
             setattr(delivery_orm, field, getattr(dto_object, field))
@@ -161,7 +121,7 @@ class RfidMapper(object):
                                 None)
         user_orm=  orm_object.user_id
         if user_orm is not None:
-            user_dto = EsafeUserMapper.orm_to_dto(user_orm)
+            user_dto = UserMapper.orm_to_dto(user_orm)
             rfid_dto.user = user_dto
         return rfid_dto
 
@@ -179,7 +139,7 @@ class RfidMapper(object):
             if getattr(rfid_orm, field, None) is None or getattr(rfid_orm, field, None) is None:
                 continue
             if field == 'user_id':
-                user_orm = EsafeUserMapper.dto_to_orm(dto_object.user, ['id', 'first_name', 'last_name', 'role', 'code', 'apartment_id'])
+                user_orm = UserMapper.dto_to_orm(dto_object.user, ['id', 'first_name', 'last_name', 'role', 'code', 'apartment_id'])
                 rfid_orm.user_id = user_orm
                 continue
             setattr(rfid_orm, field, getattr(dto_object, field))

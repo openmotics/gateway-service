@@ -50,11 +50,14 @@ class UserController(object):
         # type: () -> None
         # Create the user for the cloud
         cloud_user_dto = UserDTO(
-            username=self._config['username'].lower(),
+            first_name=self._config['username'].lower(),
+            last_name='',
+            pin_code=self._config['username'].lower(),
+            role=User.UserRoles.ADMIN,
             accepted_terms=UserController.TERMS_VERSION
         )
         cloud_user_dto.set_password(self._config['password'])
-        self.save_users(users=[(cloud_user_dto, ['username', 'password', 'accepted_terms'])])
+        self.save_users(users=[(cloud_user_dto, ['first_name', 'last_name', 'password', 'accepted_terms', 'pin_code', 'role', 'pin_code'])])
 
     def stop(self):
         # type: () -> None
@@ -73,6 +76,15 @@ class UserController(object):
         """ Create or update a new user using a user DTO object """
         for user_dto, fields in users:
             self.save_user(user_dto, fields)
+
+    def load_user(self, user_id):
+        # type: (int) -> UserDTO
+        """  Returns a UserDTO of the requested user """
+        _ = self
+        user_orm = User.select().where( User.id == user_id ).first()
+        user_dto = UserMapper.orm_to_dto(user_orm)
+        user_dto.clear_password()
+        return user_dto
 
     def load_users(self):
         # type: () -> List[UserDTO]
@@ -124,7 +136,8 @@ class UserController(object):
             timeout = self._token_timeout
 
         user_orm = User.select().where(
-            User.username == user_dto.username.lower(),
+            User.first_name == user_dto.first_name.lower(),
+            User.last_name == user_dto.last_name.lower(),
             User.password == user_dto.hashed_password
         ).first()
 
@@ -171,9 +184,9 @@ class UserController(object):
         # type: (User) -> None
         """  Checks if the user object is a valid object to store  """
         if user.username is None or not isinstance(user.username, six.string_types) or user.username.strip() == '':
-            raise RuntimeError('A user must have a username')
+            raise RuntimeError('A user must have a username, value of type {} is provided'.format(type(user.username)))
         if user.password is None or not isinstance(user.password, six.string_types):
-            raise RuntimeError('A user must have a password')
+            raise RuntimeError('A user must have a password, value of type {} is provided'.format(type(user.password)))
         if user.accepted_terms is None or \
             not isinstance(user.accepted_terms, six.integer_types) or \
                 0 < user.accepted_terms < UserController.TERMS_VERSION:

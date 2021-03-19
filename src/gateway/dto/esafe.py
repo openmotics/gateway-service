@@ -38,27 +38,6 @@ class ApartmentDTO(BaseDTO):
                 self.mailbox_rebus_id == other.mailbox_rebus_id and
                 self.doorbell_rebus_id == other.doorbell_rebus_id)
 
-class EsafeUserDTO(BaseDTO):
-    def __init__(self, id, first_name='', last_name='', role='', code=None, apartment_dto=None):
-        self.id = id  # type: int
-        self.first_name = first_name  # type: str
-        self.last_name = last_name  # type: str
-        self.role = role  # type: str
-        self.code = code  # type: str
-        self.apartment = apartment_dto  # type: ApartmentDTO
-
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        if not isinstance(other, EsafeUserDTO):
-            return False
-        return (self.id == other.id and
-                self.first_name == other.first_name and
-                self.last_name == other.last_name and
-                self.role == other.role and
-                self.code == other.code and
-                self.apartment == other.apartment)
-
-
 class RfidDTO(BaseDTO):
     def __init__(self, id, tag_string, uid_manufacturer, uid_extension='', enter_count=-1, blacklisted=False, label='',
                  timestamp_created='', timestamp_last_used='', user_dto=None):
