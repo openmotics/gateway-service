@@ -18,3 +18,4 @@ vpn-service/package/**
 gw-service/package/**
 pytest.ini
 *.egg-info
+venv2.7/
