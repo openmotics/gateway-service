@@ -157,9 +157,6 @@ class SchedulingController(object):
         cron = croniter(schedule_dto.repeat,
                         datetime.fromtimestamp(base_time,
                                                pytz.timezone(SchedulingController.TIMEZONE)))
-        # DON't call cron.get_next because that shifts the next execution
-        # logger.debug('FELIX inside _get_next_execution: base_time {0} and next_execution(volgens cron) = {1} name = {2} action {3} last-executed {4} next exec (in schedule_dto) {5}'.
-        #              format(base_time, cron.get_next(ret_type=float), schedule_dto.name, schedule_dto.action, schedule_dto.last_executed, schedule_dto.next_execution))
         return cron.get_next(ret_type=float)
 
     def _execute_schedule(self, schedule_dto, schedule):
