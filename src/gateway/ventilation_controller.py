@@ -49,14 +49,21 @@ class VentilationController(object):
                                                    interval=30,
                                                    delay=15)
 
+        self.periodic_event_update_runner = DaemonThread('periodic_update',
+                                                   self._periodic_event_update,
+                                                   interval=900,
+                                                   delay=90)
+
     def start(self):
         # type: () -> None
         self._publish_config()
         self.check_connected_runner.start()
+        self.periodic_event_update_runner.start()
 
     def stop(self):
         # type: () -> None
         self.check_connected_runner.stop()
+        self.periodic_event_update_runner.stop()
 
     def _publish_config(self):
         # type: () -> None
@@ -67,7 +74,9 @@ class VentilationController(object):
         # type: (VentilationStatusDTO) -> None
         # if the timer or remaining time is set, the other value will not be set,
         # so cache the previous value so it does not get lost
-        if self.last_ventilation_status.get(state_dto.id) is not None and state_dto.mode == VentilationStatusDTO.Mode.MANUAL:
+        if self.last_ventilation_status.get(state_dto.id) is not None and \
+                state_dto.mode == VentilationStatusDTO.Mode.MANUAL and \
+                not (state_dto.timer is None and state_dto.remaining_time is None):
             if state_dto.timer is None:
                 state_dto.timer = self.last_ventilation_status[state_dto.id].timer
             if state_dto.remaining_time is None:
@@ -82,11 +91,26 @@ class VentilationController(object):
         gateway_event = GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE, event_data)
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
-    def _check_connected_timeout(self):
+    def _periodic_event_update(self):
         for ventilation_id, ventilation_status_dto in self.last_ventilation_status.items():
             # Send the notification on a regular basis
             # The cloud will handle these events correctly based on the connected flag.
             self._publish_state(ventilation_status_dto)
+
+    def _check_connected_timeout(self):
+        for ventilation_id, ventilation_status_dto in self.last_ventilation_status.items():
+            # Send the notification on a regular basis
+            # The cloud will handle these events correctly based on the connected flag.
+            if not ventilation_status_dto.is_connected and ventilation_status_dto.mode is not None:
+                ventilation_status_dto.mode = None
+                ventilation_status_dto.level = None
+                ventilation_status_dto.remaining_time = None
+                ventilation_status_dto.timer = None
+                # also update the instance in the dict
+                self.last_ventilation_status[ventilation_id] = ventilation_status_dto
+                # timeout has passed, send a disconnect event with all relevant fields as None.
+                # This will also update the is_connected flag to the cloud.
+                self._publish_state(ventilation_status_dto)
 
     def load_ventilations(self):
         # type: () -> List[VentilationDTO]
@@ -121,7 +145,7 @@ class VentilationController(object):
         # type: (VentilationStatusDTO) -> VentilationStatusDTO
         ventilation_dto = self.load_ventilation(status_dto.id)
         self._validate_state(ventilation_dto, status_dto)
-        if status_dto != self._status.get(status_dto.id):
+        if not(status_dto == self._status.get(status_dto.id)):
             self._publish_state(status_dto)
         self._status[status_dto.id] = status_dto
         return status_dto
@@ -130,7 +154,7 @@ class VentilationController(object):
         # type: (int) -> None
         _ = self.load_ventilation(ventilation_id)
         status_dto = VentilationStatusDTO(ventilation_id, mode=VentilationStatusDTO.Mode.AUTO)
-        if status_dto != self._status.get(ventilation_id):
+        if not (status_dto == self._status.get(ventilation_id)):
             self._status[ventilation_id] = status_dto
             self._publish_state(status_dto)
 
@@ -139,7 +163,7 @@ class VentilationController(object):
         ventilation_dto = self.load_ventilation(ventilation_id)
         status_dto = VentilationStatusDTO(ventilation_id, mode=VentilationStatusDTO.Mode.MANUAL, level=level, timer=timer)
         self._validate_state(ventilation_dto, status_dto)
-        if status_dto != self._status.get(ventilation_id):
+        if not (status_dto == self._status.get(ventilation_id)):
             self._status[ventilation_id] = status_dto
             self._publish_state(status_dto)
 
