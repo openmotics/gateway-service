@@ -143,6 +143,7 @@ class SchedulingControllerTest(unittest.TestCase):
             controller._validate(schedule)
 
     def test_group_action(self):
+        fakesleep.monkey_restore()
         controller = SchedulingControllerTest._get_controller()
 
         # New controller is empty
@@ -165,20 +166,23 @@ class SchedulingControllerTest(unittest.TestCase):
 
         # Normal
         SchedulingControllerTest._add_schedule(controller,
-                                               name='schedule', start=0, action='GROUP_ACTION', arguments=1)
+                                               name='schedule', start=time.time()+5, action='GROUP_ACTION', arguments=1)
         schedules = controller.load_schedules()
         self.assertEqual(1, len(schedules))
         schedule = schedules[0]
         self.assertEqual('schedule', schedule.name)
         self.assertEqual('ACTIVE', schedule.status)
         controller.start()
+        time.sleep(0.5)
         controller.stop()
         schedule = controller.load_schedules()[0]
-        self.assertIsNotNone(schedule.last_executed )
+        self.assertIsNotNone(schedule.last_executed)
         self.assertEqual(schedule.status, 'COMPLETED')
         self.assertEqual(1, SchedulingControllerTest.RETURN_DATA['do_group_action'])
+        fakesleep.monkey_patch()
 
     def test_basic_action(self):
+        fakesleep.monkey_restore()
         controller = SchedulingControllerTest._get_controller()
 
         # New controller is empty
@@ -205,8 +209,8 @@ class SchedulingControllerTest(unittest.TestCase):
         self.assertEqual(invalid_arguments_error, str(ctx.exception))
 
         # Normal
-        dto = ScheduleDTO(id=None, name='schedule', start=0, action='BASIC_ACTION', arguments={'action_type': 1,
-                                                                                               'action_number': 2})
+        dto = ScheduleDTO(id=None, name='schedule', start=time.time()+5, action='BASIC_ACTION',
+                          arguments={'action_type': 1, 'action_number': 2})
         controller.save_schedules([(dto, ['name', 'start', 'action', 'arguments'])])
         schedules = controller.load_schedules()
         self.assertEqual(1, len(schedules))
@@ -214,13 +218,16 @@ class SchedulingControllerTest(unittest.TestCase):
         self.assertEqual('schedule', schedule.name)
         self.assertEqual('ACTIVE', schedule.status)
         controller.start()
+        time.sleep(0.5)
         controller.stop()
         schedule = controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)
         self.assertEqual(schedule.status, 'COMPLETED')
         self.assertEqual((1, 2), SchedulingControllerTest.RETURN_DATA['do_basic_action'])
+        fakesleep.monkey_patch()
 
     def test_local_api(self):
+        fakesleep.monkey_restore()
         controller = SchedulingControllerTest._get_controller()
 
         # New controller is empty
@@ -262,7 +269,7 @@ class SchedulingControllerTest(unittest.TestCase):
 
         # Normal
         SchedulingControllerTest._add_schedule(controller,
-                                               name='schedule', start=0, action='LOCAL_API',
+                                               name='schedule', start=time.time()+5, action='LOCAL_API',
                                                arguments={'name': 'do_basic_action',
                                                           'parameters': {'action_type': 3,
                                                                          'action_number': 4}})
@@ -272,11 +279,13 @@ class SchedulingControllerTest(unittest.TestCase):
         self.assertEqual('schedule', schedule.name)
         self.assertEqual('ACTIVE', schedule.status)
         controller.start()
+        time.sleep(0.5)
         controller.stop()
         schedule = controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)
         self.assertEqual(schedule.status, 'COMPLETED')
         self.assertEqual((3, 4), SchedulingControllerTest.RETURN_DATA['do_basic_action'])
+        fakesleep.monkey_patch()
 
     def test_two_actions(self):
         controller = SchedulingControllerTest._get_controller()
@@ -421,25 +430,30 @@ class SchedulingControllerTest(unittest.TestCase):
 
     def test_next_exec(self):  # Fixed scheduling bug, where a GW reboot set the DTO's next_exec to when the
         # Schedule started, and the schedule never got reloaded
+        fakesleep.monkey_restore()
+        # Stop fakesleep, because of race conditions with the controllers's processing thread
 
         # Make a scheduleController object
         controller = SchedulingControllerTest._get_controller()
-        now_offset = 656871600  # 25/10/1990 04:20 am
-        fakesleep.reset(seconds=now_offset)
-
-        SchedulingControllerTest._add_schedule(controller, name='schedule', start=0, repeat='* * * * *', duration=None,
-                                               action='GROUP_ACTION', arguments=1)
-        offset_2020 = 1600000000  # Sunday, September 13, 2020 12:26:40 PM
-        fakesleep.reset(seconds=offset_2020)
-
+        scheduledto = ScheduleDTO(id=1,
+                               name='schedule',
+                               start=0,  # Thursday, January 1, 1970 1:03:20 AM
+                               repeat='* * * * *',  # every minute
+                               duration=None,
+                               action='GROUP_ACTION',
+                               arguments=1,
+                               status='ACTIVE')
+        scheduledto.next_execution = 56828400  # 1990
+        controller._schedules[1] = scheduledto , None
+        tmp2 = time.time()
         # Start the thread
         controller.start()
-        # controller._processor.request_single_run()
+        time.sleep(0.5)
         controller.stop()  # 20 seconds
         threadsleep = 20
         sched = controller.load_schedules()[0]
-        self.assertEqual(sched.next_execution, offset_2020 + threadsleep)
-
+        self.assertTrue(sched.next_execution < time.time() + 60 and sched.next_execution > time.time())
+        fakesleep.monkey_patch()
 
     @staticmethod
     def _add_schedule(controller, **kwargs):

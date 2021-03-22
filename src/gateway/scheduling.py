@@ -27,6 +27,7 @@ import threading
 import pytz
 import six
 from croniter import croniter
+from operator import itemgetter, attrgetter
 
 from gateway.daemon_thread import BaseThread, DaemonThread
 from gateway.dto import ScheduleDTO
@@ -105,7 +106,6 @@ class SchedulingController(object):
         schedule = self._schedules.get(schedule_id)
         if schedule is None:
             raise Schedule.DoesNotExist('Schedule {0} does not exist'.format(schedule_id))
-        # schedule_dto.next_execution = SchedulingController._get_next_execution(schedule_dto)
         return schedule[0]
 
     def load_schedules(self):  # type: () -> List[ScheduleDTO]
@@ -137,8 +137,10 @@ class SchedulingController(object):
 
     def get_sorted_next_sched(self):
         # type: () -> List[ScheduleDTO]
-        scheds =[s for s in self._schedules.values() if s.status != "COMPLETED" ]
-        return sorted(scheds, key = lambda s: s.next_execution)
+        scheds =[s for s, _ in self._schedules.values() if s.status != "COMPLETED"]
+        return sorted(scheds, key=attrgetter('next_execution'))
+
+
 
     def _process(self):
         self.refresh_schedules()  # Bug fix
@@ -154,13 +156,13 @@ class SchedulingController(object):
                 schedule.status = 'COMPLETED'
                 schedule.save()
                 continue
+        tmp = time.time()
 
-            sorted_sched = self.get_sorted_next_sched()
-
+        sorted_sched = self.get_sorted_next_sched()
+        if sorted_sched:
             together = []
             together.append(sorted_sched[0])
             delta = 60
-            for s in sorted_sched:
             for i in range(1,len(sorted_sched)):
                 if sorted_sched[i].next_execution - sorted_sched[i-1].next_execution < delta:
                     # If the time between the next two exec < 60 group them
@@ -185,7 +187,8 @@ class SchedulingController(object):
     def _get_next_execution(schedule_dto):
         # type: (ScheduleDTO) -> Optional[float]
         if schedule_dto.repeat is None:
-            return None
+            # Check if start has passed
+            return schedule_dto.start
         base_time = max(SchedulingController.NO_NTP_LOWER_LIMIT, schedule_dto.start, time.time())
         cron = croniter(schedule_dto.repeat,
                         datetime.fromtimestamp(base_time,
