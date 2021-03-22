@@ -95,7 +95,7 @@ class VentilationStatusDTO(BaseDTO):
         # type: (Any) -> bool
         if not isinstance(other, VentilationStatusDTO):
             return False
-         if self.timer:  # is write only
+        if self.timer:  # is write only
             return False
         return (self.id == other.id and
                 self.mode == other.mode and
