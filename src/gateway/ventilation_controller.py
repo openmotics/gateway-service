@@ -46,8 +46,8 @@ class VentilationController(object):
         self.last_ventilation_status = {}  # type: Dict[int, VentilationStatusDTO]  # id, ventilationStatusDTO
         self.check_connected_runner = DaemonThread('check_connected_thread',
                                                    self._check_connected_timeout,
-                                                   interval=10,
-                                                   delay=5)
+                                                   interval=30,
+                                                   delay=15)
 
     def start(self):
         # type: () -> None
@@ -84,17 +84,9 @@ class VentilationController(object):
 
     def _check_connected_timeout(self):
         for ventilation_id, ventilation_status_dto in self.last_ventilation_status.items():
-            if not ventilation_status_dto.is_connected and ventilation_status_dto.mode is not None:
-                ventilation_status_dto.mode = None
-                ventilation_status_dto.level = None
-                ventilation_status_dto.remaining_time = None
-                ventilation_status_dto.timer = None
-                # also update the instance in the dict
-                self.last_ventilation_status[ventilation_id] = ventilation_status_dto
-                # timeout has passed, send a disconnect event with all relevant fields as None.
-                # This will also update the is_connected flag to the cloud.
-                self._publish_state(ventilation_status_dto)
-
+            # Send the notification on a regular basis
+            # The cloud will handle these events correctly based on the connected flag.
+            self._publish_state(ventilation_status_dto)
 
     def load_ventilations(self):
         # type: () -> List[VentilationDTO]
