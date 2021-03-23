@@ -485,18 +485,20 @@ class VentilationControllerTest(unittest.TestCase):
             self.assertEqual(None, events[-1].data['remaining_time'])  # There has not been an update from the ventilation box or plugin
             self.assertEqual(30, events[-1].data['timer'])
 
-            # Clear all current events
-            events = []
+            for i in range(30, 0, -1):
+                # Clear all current events
+                events = []
 
-            # event from ventilation plugin
-            self.controller.set_status(VentilationStatusDTO(43, 'manual', level=1, timer=None, remaining_time=15,
-                                                            last_seen=time.time()))
-            self.pubsub._publish_all_events()
+                # event from ventilation plugin
+                mode = 'automatic' if i % 2 == 0 else 'manual'
+                self.controller.set_status(VentilationStatusDTO(43, mode, level=1, timer=None, remaining_time=i,
+                                                                last_seen=time.time()))
+                self.pubsub._publish_all_events()
 
-            self.assertEqual(1, len(events))
-            self.assertEqual(1, len(self.controller._status))
-            self.assertEqual(15, events[-1].data['remaining_time'])
-            self.assertEqual(30, events[-1].data['timer'])  # this value should be kept in cache
+                self.assertEqual(1, len(events))
+                self.assertEqual(1, len(self.controller._status))
+                self.assertEqual(i, events[-1].data['remaining_time'])
+                self.assertEqual(30, events[-1].data['timer'])  # this value should be kept in cache
 
             # Clear all current events
             events = []
