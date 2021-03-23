@@ -191,7 +191,7 @@ class SchedulingController(object):
         # type: (List[ScheduleDTO], Schedule) -> None
         for schedule_dto in schedules_to_execute:
             if schedule_dto.running:
-                return
+                continue
             try:
                 schedule_dto.running = True
                 logger.debug('Executing schedule {0} ({1})'.format(schedule_dto.name, schedule_dto.action))
