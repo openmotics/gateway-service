@@ -22,10 +22,12 @@ import json
 import logging
 import time
 from datetime import datetime
+import threading
 
 import pytz
 import six
 from croniter import croniter
+from operator import itemgetter, attrgetter
 
 from gateway.daemon_thread import BaseThread, DaemonThread
 from gateway.dto import ScheduleDTO
@@ -77,6 +79,7 @@ class SchedulingController(object):
         self._stop = False
         self._processor = None  # type: Optional[DaemonThread]
         self._schedules = {}  # type: Dict[int, Tuple[ScheduleDTO, Schedule]]
+        self._event = threading.Event()
 
         SchedulingController.TIMEZONE = gateway_api.get_timezone()
         self.reload_schedules()
@@ -95,6 +98,10 @@ class SchedulingController(object):
             if schedule_id not in found_ids:
                 self._schedules.pop(schedule_id, None)
 
+    def refresh_schedules(self):
+        for schedule, _ in self._schedules.values():
+            schedule.next_execution = SchedulingController._get_next_execution(schedule)
+
     def load_schedule(self, schedule_id):  # type: (int) -> ScheduleDTO
         schedule = self._schedules.get(schedule_id)
         if schedule is None:
@@ -110,6 +117,7 @@ class SchedulingController(object):
             self._validate(schedule)
             schedule.save()
         self.reload_schedules()
+        self._event.set()  # If a new schedule is saved, set an event to interrupt the hanging _process thread
 
     def remove_schedules(self, schedules):  # type: (List[ScheduleDTO]) -> None
         _ = self
@@ -120,14 +128,20 @@ class SchedulingController(object):
         self._stop = False
         self._processor = DaemonThread(target=self._process,
                                        name='schedulingctl',
-                                       interval=60)
+                                       interval=0.25)
         self._processor.start()
 
     def stop(self):
         if self._processor is not None:
             self._processor.stop()
 
+    def get_sorted_next_sched(self):
+        # type: () -> List[ScheduleDTO]
+        scheds = [s for s, _ in self._schedules.values() if s.status != "COMPLETED"]
+        return sorted(scheds, key=attrgetter('next_execution'))
+
     def _process(self):
+        self.refresh_schedules()  # Bug fix
         for schedule_id in list(self._schedules.keys()):
             schedule_tuple = self._schedules.get(schedule_id)
             if schedule_tuple is None:
@@ -140,57 +154,74 @@ class SchedulingController(object):
                 schedule.status = 'COMPLETED'
                 schedule.save()
                 continue
-            if schedule_dto.is_due:
-                thread = BaseThread(name='schedulingexc',
-                                    target=self._execute_schedule, args=(schedule_dto, schedule))
-                thread.daemon = True
-                thread.start()
+        # Sort the schedules according to their next_execution
+        sorted_sched = self.get_sorted_next_sched()
+        if not sorted_sched:
+            return
+
+        next_start = sorted_sched[0].next_execution
+        end = (next_start - (next_start % 60)) + 60  # One minute window in which executions will be grouped
+        schedules_to_execute = [schedule for schedule in sorted_sched
+                                if schedule.next_execution < end]
+        if not schedules_to_execute:
+            return
+        # Let this thread hang until it's time to execute the schedule
+        self._event.wait(time.time() - schedules_to_execute[0].next_execution)
+        if self._event.isSet():  # If a new schedule is saved, stop hanging and refresh the schedules
+            self._event.clear()
+            return
+        thread = BaseThread(name='schedulingexc',
+                            target=self._execute_schedule, args=(schedules_to_execute, schedule))
+        thread.daemon = True
+        thread.start()
 
     @staticmethod
     def _get_next_execution(schedule_dto):
         # type: (ScheduleDTO) -> Optional[float]
         if schedule_dto.repeat is None:
-            return None
+            # Check if start has passed
+            return schedule_dto.start
         base_time = max(SchedulingController.NO_NTP_LOWER_LIMIT, schedule_dto.start, time.time())
         cron = croniter(schedule_dto.repeat,
                         datetime.fromtimestamp(base_time,
                                                pytz.timezone(SchedulingController.TIMEZONE)))
         return cron.get_next(ret_type=float)
 
-    def _execute_schedule(self, schedule_dto, schedule):
-        # type: (ScheduleDTO, Schedule) -> None
-        if schedule_dto.running:
-            return
-        try:
-            schedule_dto.running = True
-            logger.debug('Executing schedule {0} ({1})'.format(schedule_dto.name, schedule_dto.action))
-            if schedule_dto.arguments is None:
-                raise ValueError('Invalid schedule arguments')
-            # Execute
-            if schedule_dto.action == 'GROUP_ACTION':
-                self._group_action_controller.do_group_action(schedule_dto.arguments)
-            elif schedule_dto.action == 'BASIC_ACTION':
-                self._gateway_api.do_basic_action(**schedule_dto.arguments)
-            elif schedule_dto.action == 'LOCAL_API':
-                func = getattr(self._web_interface, schedule_dto.arguments['name'])
-                func(**schedule_dto.arguments['parameters'])
-            else:
-                logger.warning('Did not process schedule_dto {0}'.format(schedule_dto.name))
+    def _execute_schedule(self, schedules_to_execute, schedule):
+        # type: (List[ScheduleDTO], Schedule) -> None
+        for schedule_dto in schedules_to_execute:
+            if schedule_dto.running:
+                continue
+            try:
+                schedule_dto.running = True
+                logger.debug('Executing schedule {0} ({1})'.format(schedule_dto.name, schedule_dto.action))
+                if schedule_dto.arguments is None:
+                    raise ValueError('Invalid schedule arguments')
+                # Execute
+                if schedule_dto.action == 'GROUP_ACTION':
+                    self._group_action_controller.do_group_action(schedule_dto.arguments)
+                elif schedule_dto.action == 'BASIC_ACTION':
+                    self._gateway_api.do_basic_action(**schedule_dto.arguments)
+                elif schedule_dto.action == 'LOCAL_API':
+                    func = getattr(self._web_interface, schedule_dto.arguments['name'])
+                    func(**schedule_dto.arguments['parameters'])
+                else:
+                    logger.warning('Did not process schedule_dto {0}'.format(schedule_dto.name))
 
-            # Cleanup or prepare for next run
-            schedule_dto.last_executed = time.time()
-            if schedule_dto.has_ended:
-                schedule_dto.status = 'COMPLETED'
-                schedule.status = 'COMPLETED'
-                schedule.save()
-        except CommunicationTimedOutException as ex:
-            logger.error('Got error while executing schedule: {0}'.format(ex))
-        except Exception as ex:
-            logger.error('Got error while executing schedule: {0}'.format(ex))
-            schedule_dto.last_executed = time.time()
-        finally:
-            schedule_dto.running = False
-            schedule_dto.next_execution = SchedulingController._get_next_execution(schedule_dto)
+                # Cleanup or prepare for next run
+                schedule_dto.last_executed = time.time()
+                if schedule_dto.has_ended:
+                    schedule_dto.status = 'COMPLETED'
+                    schedule.status = 'COMPLETED'
+                    schedule.save()
+            except CommunicationTimedOutException as ex:
+                logger.error('Got error while executing schedule: {0}'.format(ex))
+            except Exception as ex:
+                logger.error('Got error while executing schedule: {0}'.format(ex))
+                schedule_dto.last_executed = time.time()
+            finally:
+                schedule_dto.running = False
+                schedule_dto.next_execution = SchedulingController._get_next_execution(schedule_dto)
 
     def _validate(self, schedule):
         # type: (Schedule) -> None
@@ -209,7 +240,7 @@ class SchedulingController(object):
                 raise RuntimeError('Invalid `repeat`. Should be a cron-style string. See croniter documentation')
         if schedule.duration is not None and schedule.duration <= 60:
             raise RuntimeError('If a duration is specified, it should be at least more than 60s')
-        # Type specifc checks
+        # Type specific checks
         if schedule.action == 'BASIC_ACTION':
             if schedule.duration is not None:
                 raise RuntimeError('A schedule of type BASIC_ACTION does not have a duration. It is a one-time trigger')
