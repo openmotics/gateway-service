@@ -69,10 +69,7 @@ class VentilationController(object):
         gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'ventilation'})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
 
-    def _publish_state(self, state_dto):
-        # type: (VentilationStatusDTO) -> None
-        # if the timer or remaining time is set, the other value will not be set,
-        # so cache the previous value so it does not get lost
+    def _save_status_cache(self, state_dto):
         if self._status.get(state_dto.id) is not None and \
                 not (state_dto.timer is None and state_dto.remaining_time is None):
             if state_dto.timer is None:
@@ -80,6 +77,14 @@ class VentilationController(object):
             if state_dto.remaining_time is None:
                 state_dto.remaining_time = self._status[state_dto.id].remaining_time
         self._status[state_dto.id] = state_dto
+        return state_dto
+
+
+    def _publish_state(self, state_dto):
+        # type: (VentilationStatusDTO) -> None
+        # if the timer or remaining time is set, the other value will not be set,
+        # so cache the previous value so it does not get lost
+        state_dto = self._save_status_cache(state_dto)
         event_data = {'id': state_dto.id,
                       'mode': state_dto.mode,
                       'level': state_dto.level,
@@ -145,7 +150,7 @@ class VentilationController(object):
         self._validate_state(ventilation_dto, status_dto)
         if not(status_dto == self._status.get(status_dto.id)):
             self._publish_state(status_dto)
-        self._status[status_dto.id] = status_dto
+        self._save_status_cache(status_dto)
         return status_dto
 
     def set_mode_auto(self, ventilation_id):
@@ -153,7 +158,7 @@ class VentilationController(object):
         _ = self.load_ventilation(ventilation_id)
         status_dto = VentilationStatusDTO(ventilation_id, mode=VentilationStatusDTO.Mode.AUTO)
         if not (status_dto == self._status.get(ventilation_id)):
-            self._status[ventilation_id] = status_dto
+            self._save_status_cache(status_dto)
             self._publish_state(status_dto)
 
     def set_level(self, ventilation_id, level, timer=None):
@@ -162,7 +167,7 @@ class VentilationController(object):
         status_dto = VentilationStatusDTO(ventilation_id, mode=VentilationStatusDTO.Mode.MANUAL, level=level, timer=timer)
         self._validate_state(ventilation_dto, status_dto)
         if not (status_dto == self._status.get(ventilation_id)):
-            self._status[ventilation_id] = status_dto
+            self._save_status_cache(status_dto)
             self._publish_state(status_dto)
 
     def _validate_state(self, ventilation_dto, status_dto):

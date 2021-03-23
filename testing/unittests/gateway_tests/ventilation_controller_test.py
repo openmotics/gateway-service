@@ -424,13 +424,34 @@ class VentilationControllerTest(unittest.TestCase):
             events = []
 
             # event from ventilation plugin
-            self.controller.set_status(VentilationStatusDTO(43, 'manual', level=1, timer=None, remaining_time=15,
+            self.controller.set_status(VentilationStatusDTO(43, 'automatic', level=1, timer=None, remaining_time=15,
                                                             last_seen=time.time()))
             self.pubsub._publish_all_events()
 
             self.assertEqual(1, len(events))
             self.assertEqual(1, len(self.controller._status))
             self.assertEqual(15, events[-1].data['remaining_time'])  # this value should update from the event
+            self.assertEqual(30, events[-1].data['timer'])  # this value should be kept in cache
+
+            # Clear all current events
+            events = []
+
+            # event from ventilation plugin (same value)
+            self.controller.set_status(VentilationStatusDTO(43, 'automatic', level=1, timer=None, remaining_time=15,
+                                                            last_seen=time.time()))
+            self.pubsub._publish_all_events()
+
+            self.assertEqual(0, len(events))
+            self.assertEqual(1, len(self.controller._status))
+
+            # event from ventilation plugin
+            self.controller.set_status(VentilationStatusDTO(43, 'automatic', level=1, timer=None, remaining_time=14,
+                                                            last_seen=time.time()))
+            self.pubsub._publish_all_events()
+
+            self.assertEqual(1, len(events))
+            self.assertEqual(1, len(self.controller._status))
+            self.assertEqual(14, events[-1].data['remaining_time'])  # this value should update from the event
             self.assertEqual(30, events[-1].data['timer'])  # this value should be kept in cache
 
             # Clear all current events
@@ -495,6 +516,7 @@ class VentilationControllerTest(unittest.TestCase):
                                                                 last_seen=time.time()))
                 self.pubsub._publish_all_events()
 
+                print(events)
                 self.assertEqual(1, len(events))
                 self.assertEqual(1, len(self.controller._status))
                 self.assertEqual(i, events[-1].data['remaining_time'])
