@@ -22,8 +22,6 @@ import subprocess
 import sys
 import constants
 
-from six.moves.configparser import ConfigParser
-
 if False:  # MYPY
     from typing import Union, Dict
 
@@ -341,6 +339,7 @@ class Platform(object):
     def http_port():
         # type: () -> int
         try:
+            from six.moves.configparser import ConfigParser
             config = ConfigParser()
             config.read(constants.get_config_file())
             http_port = int(config.get('OpenMotics', 'http_port'))
@@ -354,6 +353,7 @@ class Platform(object):
     def https_port():
         # type: () -> int
         try:
+            from six.moves.configparser import ConfigParser
             config = ConfigParser()
             config.read(constants.get_config_file())
             https_port = int(config.get('OpenMotics', 'https_port'))
