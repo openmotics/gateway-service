@@ -48,8 +48,11 @@ class PlatformUtilsTest(unittest.TestCase):
                      .format(platform_utils_file_location)
 
             cmd = ['python', '-c', py_cmd]
-            ret = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            exit_code = ret.returncode
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            output = b''
+            for line in proc.stdout:
+                output += line
+            exit_code = proc.wait()
             self.assertEqual(0, exit_code)
         except Exception as e:
             self.fail('Could not import the platform utils. Make sure there are no dependencies in the platform'
