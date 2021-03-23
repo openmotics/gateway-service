@@ -325,12 +325,12 @@ class VentilationControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
 
             self.assertEqual(1, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
 
             self.controller._check_connected_timeout()
             self.pubsub._publish_all_events()
             self.assertEqual(2, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
 
             # Check that the last event that has been send is Null
             last_event = events[-1]
@@ -341,13 +341,13 @@ class VentilationControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
 
             self.assertEqual(3, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
 
             self.controller._check_connected_timeout()
             self.pubsub._publish_all_events()
             # Now there would no timeout occur
             self.assertEqual(3, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
 
     def test_ventilation_timer_expire_manual(self):
         plugin = Plugin(id=2, name='dummy', version='0.0.1')
@@ -371,7 +371,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
 
             self.assertEqual(1, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
 
             # This should not trigger an event
             self.controller._check_connected_timeout()
@@ -379,7 +379,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.controller._periodic_event_update()
             self.pubsub._publish_all_events()
             self.assertEqual(2, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
 
             # Clear all current events
             events = []
@@ -390,7 +390,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
 
             self.assertEqual(1, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
             self.assertEqual(None, events[-1].data['remaining_time'])
             self.assertEqual(None, events[-1].data['timer'])
 
@@ -403,7 +403,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
 
             self.assertEqual(1, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
             self.assertEqual(None, events[-1].data['remaining_time'])
             self.assertEqual(30, events[-1].data['timer'])
 
@@ -416,7 +416,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
 
             self.assertEqual(1, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
             self.assertEqual(29, events[-1].data['remaining_time'])
             self.assertEqual(30, events[-1].data['timer'])  # this value should be kept in cache
 
@@ -429,7 +429,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
 
             self.assertEqual(1, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
             self.assertEqual(15, events[-1].data['remaining_time'])  # this value should update from the event
             self.assertEqual(30, events[-1].data['timer'])  # this value should be kept in cache
 
@@ -442,7 +442,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
 
             self.assertEqual(1, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
             self.assertEqual(None, events[-1].data['remaining_time'])
             self.assertEqual(None, events[-1].data['timer'])  # this value should now be cleared when timer has done
 
@@ -468,7 +468,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
 
             self.assertEqual(1, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
             self.assertEqual(None, events[-1].data['remaining_time'])  # no timers running
             self.assertEqual(None, events[-1].data['timer'])  # no timers running
 
@@ -481,7 +481,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
 
             self.assertEqual(1, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
             self.assertEqual(None, events[-1].data['remaining_time'])  # There has not been an update from the ventilation box or plugin
             self.assertEqual(30, events[-1].data['timer'])
 
@@ -494,7 +494,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
 
             self.assertEqual(1, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
             self.assertEqual(15, events[-1].data['remaining_time'])
             self.assertEqual(30, events[-1].data['timer'])  # this value should be kept in cache
 
@@ -507,7 +507,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
 
             self.assertEqual(1, len(events))
-            self.assertEqual(1, len(self.controller.last_ventilation_status))
+            self.assertEqual(1, len(self.controller._status))
             self.assertEqual(None, events[-1].data['remaining_time'])
             self.assertEqual(None, events[-1].data['timer'])  # this value should now be cleared when timer has done
 
