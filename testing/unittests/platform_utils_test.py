@@ -14,13 +14,48 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
 
-import subprocess
-import unittest
+import sys
+before_imports = sys.modules
+
 import mock
-from platform_utils import System
+import unittest
+import subprocess
+
+
+from platform_utils import System, Platform, Hardware
+
 
 
 class PlatformUtilsTest(unittest.TestCase):
+
+    def test_import_dependencies(self):
+        """ Test if there are no imports in platform utils that are not built-in packages """
+        try:
+            import os
+            import subprocess
+
+            platform_utils_file_location = os.path.join(os.path.abspath(__file__), '../../../src')
+            platform_utils_file_location = os.path.abspath(platform_utils_file_location)  # This will clear all the ../
+
+            py_cmd = 'print("Running test code");' \
+                     'import os;' \
+                     'os.chdir("{0}");' \
+                     'print(os.getcwd());' \
+                     'import sys;' \
+                     'sys.path = [x for x in sys.path if "site-packages" not in x]; ' \
+                     'print(sys.path); ' \
+                     'import platform_utils' \
+                     .format(platform_utils_file_location)
+
+            cmd = ['python', '-c', py_cmd]
+            ret = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            exit_code = ret.returncode
+            self.assertEqual(0, exit_code)
+        except Exception as e:
+            self.fail('Could not import the platform utils. Make sure there are no dependencies in the platform'
+                      ' utils script other than the default python packages. Error: {}'.format(e))
+
+
 
     def test_get_ip_address(self):
         expected_ip_address = "192.168.0.126"
