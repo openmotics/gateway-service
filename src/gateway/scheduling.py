@@ -79,7 +79,7 @@ class SchedulingController(object):
         self._stop = False
         self._processor = None  # type: Optional[DaemonThread]
         self._schedules = {}  # type: Dict[int, Tuple[ScheduleDTO, Schedule]]
-        self.e = threading.Event()
+        self._event = threading.Event()
 
         SchedulingController.TIMEZONE = gateway_api.get_timezone()
         self.reload_schedules()
@@ -117,7 +117,7 @@ class SchedulingController(object):
             self._validate(schedule)
             schedule.save()
         self.reload_schedules()
-        self.e.set()
+        self._event.set()  # If a new schedule is saved, set an event to interrupt the hanging _process thread
 
     def remove_schedules(self, schedules):  # type: (List[ScheduleDTO]) -> None
         _ = self
@@ -128,7 +128,7 @@ class SchedulingController(object):
         self._stop = False
         self._processor = DaemonThread(target=self._process,
                                        name='schedulingctl',
-                                       interval=0)
+                                       interval=0.25)
         self._processor.start()
 
     def stop(self):
@@ -137,10 +137,8 @@ class SchedulingController(object):
 
     def get_sorted_next_sched(self):
         # type: () -> List[ScheduleDTO]
-        scheds =[s for s, _ in self._schedules.values() if s.status != "COMPLETED"]
+        scheds = [s for s, _ in self._schedules.values() if s.status != "COMPLETED"]
         return sorted(scheds, key=attrgetter('next_execution'))
-
-
 
     def _process(self):
         self.refresh_schedules()  # Bug fix
@@ -156,32 +154,26 @@ class SchedulingController(object):
                 schedule.status = 'COMPLETED'
                 schedule.save()
                 continue
-        tmp = time.time()
-
+        # Sort the schedules according to their next_execution
         sorted_sched = self.get_sorted_next_sched()
-        if sorted_sched:
-            together = []
-            together.append(sorted_sched[0])
-            delta = 60
-            for i in range(1,len(sorted_sched)):
-                if sorted_sched[i].next_execution - sorted_sched[i-1].next_execution < delta:
-                    # If the time between the next two exec < 60 group them
-                    together.append(sorted_sched[i])
+        if not sorted_sched:
+            return
 
-
-
-
-            now = time.time()
-            if together:
-                if now < together[0].next_execution:
-                    self.e.wait(now-together[0].next_execution)
-                    if self.e.isSet():
-                        self.e.clear()
-                        return
-                    thread = BaseThread(name='schedulingexc',
-                                        target=self._execute_schedule, args=(together, schedule))
-                    thread.daemon = True
-                    thread.start()
+        next_start = sorted_sched[0].next_execution
+        end = (next_start - (next_start % 60)) + 60  # One minute window in which executions will be grouped
+        schedules_to_execute = [schedule for schedule in sorted_sched
+                                if schedule.next_execution < end]
+        if not schedules_to_execute:
+            return
+        # Let this thread hang until it's time to execute the schedule
+        self._event.wait(time.time() - schedules_to_execute[0].next_execution)
+        if self._event.isSet():  # If a new schedule is saved, stop hanging and refresh the schedules
+            self._event.clear()
+            return
+        thread = BaseThread(name='schedulingexc',
+                            target=self._execute_schedule, args=(schedules_to_execute, schedule))
+        thread.daemon = True
+        thread.start()
 
     @staticmethod
     def _get_next_execution(schedule_dto):
@@ -195,9 +187,9 @@ class SchedulingController(object):
                                                pytz.timezone(SchedulingController.TIMEZONE)))
         return cron.get_next(ret_type=float)
 
-    def _execute_schedule(self, together, schedule):
+    def _execute_schedule(self, schedules_to_execute, schedule):
         # type: (List[ScheduleDTO], Schedule) -> None
-        for schedule_dto in together:
+        for schedule_dto in schedules_to_execute:
             if schedule_dto.running:
                 return
             try:
@@ -248,7 +240,7 @@ class SchedulingController(object):
                 raise RuntimeError('Invalid `repeat`. Should be a cron-style string. See croniter documentation')
         if schedule.duration is not None and schedule.duration <= 60:
             raise RuntimeError('If a duration is specified, it should be at least more than 60s')
-        # Type specifc checks
+        # Type specific checks
         if schedule.action == 'BASIC_ACTION':
             if schedule.duration is not None:
                 raise RuntimeError('A schedule of type BASIC_ACTION does not have a duration. It is a one-time trigger')

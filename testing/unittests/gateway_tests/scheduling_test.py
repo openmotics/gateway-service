@@ -368,7 +368,7 @@ class SchedulingControllerTest(unittest.TestCase):
     def test_midnight_crossover(self):
         now_offset = 1615939080  # 16/03/21 23:58
         minute = 60
-        fakesleep.reset(seconds=now_offset)  # tricks the system to be in the time we specified
+        fakesleep.reset(seconds=now_offset)  # Tricks the system to be in the time we specified
         SchedulingController.TIMEZONE = 'Europe/Brussels'
         schedule = ScheduleDTO(id=1,
                                name='schedule',
@@ -408,10 +408,10 @@ class SchedulingControllerTest(unittest.TestCase):
                                action='GROUP_ACTION',
                                arguments=1,
                                status='ACTIVE')
-        # should be 1616371020 + 60 = 1616371080
+        # Should be 1616371020 + 60 = 1616371080
         schedule.next_execution = SchedulingController._get_next_execution(schedule)
         self.assertFalse(schedule.is_due)
-        # should still be 1616371020 + 60 = 1616371080
+        # Should still be 1616371020 + 60 = 1616371080
         for i in range(1, 11):
             schedule.next_execution = SchedulingController._get_next_execution(schedule)
             self.assertEqual(now_offset + i * minute, schedule.next_execution)
@@ -429,10 +429,9 @@ class SchedulingControllerTest(unittest.TestCase):
             self.assertTrue(schedule.is_due)
 
     def test_next_exec(self):  # Fixed scheduling bug, where a GW reboot set the DTO's next_exec to when the
-        # Schedule started, and the schedule never got reloaded
+        # Schedule started (in the past), and the schedule never got reloaded
         fakesleep.monkey_restore()
         # Stop fakesleep, because of race conditions with the controllers's processing thread
-
         # Make a scheduleController object
         controller = SchedulingControllerTest._get_controller()
         scheduledto = ScheduleDTO(id=1,
@@ -444,15 +443,14 @@ class SchedulingControllerTest(unittest.TestCase):
                                arguments=1,
                                status='ACTIVE')
         scheduledto.next_execution = 56828400  # 1990
-        controller._schedules[1] = scheduledto , None
-        tmp2 = time.time()
+        # Manualy set the next_exec to avoid reloading the schedules
+        controller._schedules[1] = scheduledto, None
         # Start the thread
         controller.start()
         time.sleep(0.5)
-        controller.stop()  # 20 seconds
-        threadsleep = 20
+        controller.stop()
         sched = controller.load_schedules()[0]
-        self.assertTrue(sched.next_execution < time.time() + 60 and sched.next_execution > time.time())
+        self.assertTrue(time.time() + 60 > sched.next_execution > time.time())
         fakesleep.monkey_patch()
 
     @staticmethod
