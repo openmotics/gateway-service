@@ -22,7 +22,7 @@ import logging
 
 from gateway.api.serializers.base import SerializerToolbox
 from gateway.dto.user import UserDTO
-from gateway.api.serializers.esafe import ApartmentSerializer
+from gateway.api.serializers.apartment import ApartmentSerializer
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple

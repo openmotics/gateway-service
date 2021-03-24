@@ -10,7 +10,7 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.esafe.esafe_exception import EsafeParseError, EsafeTimeOutError, EsafeForbiddenError, EsafeStateError,\
     EsafeUnAuthorizedError, EsafeNotImplementedError, EsafeItemDoesNotExistError, EsafeInvalidOperationError,\
     EsafeWrongInputParametersError, EsafeError
-from gateway.api.serializers.esafe import ApartmentSerializer
+from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.api.serializers.user import UserSerializer
 from gateway.webservice import limit_floats
 from gateway.user_controller import UserController

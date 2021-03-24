@@ -20,7 +20,7 @@ from __future__ import absolute_import
 import json
 from gateway.dto import UserDTO
 from gateway.models import User
-from gateway.mappers.esafe import ApartmentMapper
+from gateway.mappers.apartment import ApartmentMapper
 
 if False:  # MYPY
     from typing import List, Optional, Any
