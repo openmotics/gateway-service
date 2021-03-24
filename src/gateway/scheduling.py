@@ -128,20 +128,17 @@ class SchedulingController(object):
         self._stop = False
         self._processor = DaemonThread(target=self._process,
                                        name='schedulingctl',
-                                       interval=0.25)
+                                       interval=30)
         self._processor.start()
 
     def stop(self):
         if self._processor is not None:
             self._processor.stop()
 
-    def get_sorted_next_sched(self):
-        # type: () -> List[ScheduleDTO]
-        scheds = [s for s, _ in self._schedules.values() if s.status != "COMPLETED"]
-        return sorted(scheds, key=attrgetter('next_execution'))
-
     def _process(self):
+        now = time.time()
         self.refresh_schedules()  # Bug fix
+        pending_schedules = []
         for schedule_id in list(self._schedules.keys()):
             schedule_tuple = self._schedules.get(schedule_id)
             if schedule_tuple is None:
@@ -154,19 +151,21 @@ class SchedulingController(object):
                 schedule.status = 'COMPLETED'
                 schedule.save()
                 continue
+            if schedule_dto.next_execution is not None and schedule_dto.next_execution < now - 60:
+                continue
+            pending_schedules.append(schedule_dto)
         # Sort the schedules according to their next_execution
-        sorted_sched = self.get_sorted_next_sched()
-        if not sorted_sched:
-            return
 
-        next_start = sorted_sched[0].next_execution
-        end = (next_start - (next_start % 60)) + 60  # One minute window in which executions will be grouped
-        schedules_to_execute = [schedule for schedule in sorted_sched
-                                if schedule.next_execution < end]
+        pending_schedules = list(sorted(pending_schedules, key=attrgetter('next_execution')))
+        if not pending_schedules:
+            return
+        next_start = pending_schedules[0].next_execution
+        schedules_to_execute = [schedule for schedule in pending_schedules if schedule.next_execution < next_start + 60]
         if not schedules_to_execute:
             return
         # Let this thread hang until it's time to execute the schedule
-        self._event.wait(time.time() - schedules_to_execute[0].next_execution)
+        logger.debug('next pending schedule %s, waiting %ss', datetime.fromtimestamp(next_start), next_start - now)
+        self._event.wait(next_start - now)
         if self._event.isSet():  # If a new schedule is saved, stop hanging and refresh the schedules
             self._event.clear()
             return
