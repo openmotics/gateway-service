@@ -55,16 +55,16 @@ class SlaveUpdater(object):
         def _default_if_255(value, default):
             return value if value != 255 else default
 
-        general_configuration = GlobalConfiguration()
+        global_configuration = GlobalConfiguration()
         executed_update = False
         success = True
 
         # Classic master slave modules: ['O', 'R', 'D', 'I', 'T', 'C']
-        update_map = {'I': (InputModuleConfiguration, _default_if_255(general_configuration.number_of_input_modules, 0)),
-                      'O': (OutputModuleConfiguration, _default_if_255(general_configuration.number_of_output_modules, 0)),
-                      'D': (OutputModuleConfiguration, _default_if_255(general_configuration.number_of_output_modules, 0)),
-                      'T': (SensorModuleConfiguration, _default_if_255(general_configuration.number_of_sensor_modules, 0)),
-                      'C': (CanControlModuleConfiguration, _default_if_255(general_configuration.number_of_can_control_modules, 0))}
+        update_map = {'I': (InputModuleConfiguration, _default_if_255(global_configuration.number_of_input_modules, 0)),
+                      'O': (OutputModuleConfiguration, _default_if_255(global_configuration.number_of_output_modules, 0)),
+                      'D': (OutputModuleConfiguration, _default_if_255(global_configuration.number_of_output_modules, 0)),
+                      'T': (SensorModuleConfiguration, _default_if_255(global_configuration.number_of_sensor_modules, 0)),
+                      'C': (CanControlModuleConfiguration, _default_if_255(global_configuration.number_of_can_control_modules, 0))}
         if module_type in update_map:
             module_configuration_class, number_of_modules = update_map[module_type]
             for module_id in range(number_of_modules):
@@ -82,7 +82,7 @@ class SlaveUpdater(object):
 
         # MicroCAN (uCAN)
         if module_type == 'UC':
-            number_of_ucs = _default_if_255(general_configuration.number_of_ucan_modules, 0)
+            number_of_ucs = _default_if_255(global_configuration.number_of_ucan_modules, 0)
             if number_of_ucs:
                 ucan_communicator = UCANCommunicator()
                 for module_id in range(number_of_ucs):
@@ -195,17 +195,22 @@ class SlaveUpdater(object):
                                 bytearray(firmware.tobinarray(start=0, end=7))  # Store jump address to the end of the flash space
                         )
 
-                    try:
-                        response = slave_communicator.do_command(address=address,
-                                                                 command=SlaveAPI.write_firmware_block(),
-                                                                 fields={'address': block, 'payload': payload},
-                                                                 timeout=SlaveUpdater.WRITE_FLASH_BLOCK_TIMEOUT)
-                        SlaveUpdater._validate_response(response)
-                        if block % int(blocks / 10) == 0 and block != 0:
-                            logger.info('{0} - Flashing... {1}%'.format(address, int(block * 100 / blocks)))
-                    except CommunicationTimedOutException:
-                        logger.info('{0} - Flashing... block {1} failed'.format(address, block))
-                        raise
+                    tries = 0
+                    while True:
+                        tries += 1
+                        try:
+                            response = slave_communicator.do_command(address=address,
+                                                                     command=SlaveAPI.write_firmware_block(),
+                                                                     fields={'address': block, 'payload': payload},
+                                                                     timeout=SlaveUpdater.WRITE_FLASH_BLOCK_TIMEOUT)
+                            SlaveUpdater._validate_response(response)
+                            if block % int(blocks / 10) == 0 and block != 0:
+                                logger.info('{0} - Flashing... {1}%'.format(address, int(block * 100 / blocks)))
+                            break
+                        except CommunicationTimedOutException as ex:
+                            logger.warning('{0} - Flashing... Block {1} failed: {2}'.format(address, block, ex))
+                            if tries >= 3:
+                                raise
 
                 logger.info('{0} - Flashing... Done'.format(address))
 

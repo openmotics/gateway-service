@@ -35,9 +35,10 @@ class Input(object):
         self.module = module
 
     def __str__(self):
-        return 'Input({0}#{1})'.format(
+        return 'Input({0}#{1}{2})'.format(
             '?' if self.module is None else self.module.mtype,
-            self.input_id
+            self.input_id,
+            ', ucan' if self.module.is_can else ''
         )
 
     def __repr__(self):
@@ -67,10 +68,11 @@ class Module(object):
         EMULATED = 'emulated'
         INTERNAL = 'internal'
 
-    def __init__(self, name, mtype, hardware_type, inputs=None, cts=None, outputs=None):
+    def __init__(self, name, mtype, hardware_type, is_can=False, inputs=None, cts=None, outputs=None, temps=None):
         self.name = name
         self.mtype = mtype
         self.hardware_type = hardware_type
+        self.is_can = is_can
         self.inputs = []
         for _input in (inputs or []):
             _input.module = self
@@ -83,6 +85,10 @@ class Module(object):
         for output in (outputs or []):
             output.module = self
             self.outputs.append(output)
+        self.temps = []
+        for temp in (temps or []):
+            temp.module = self
+            self.temps.append(temp)
 
 
 _OUTPUT_MODULE_LAYOUTS = {
@@ -121,16 +127,19 @@ _OUTPUT_MODULE_LAYOUTS = {
                         Output(output_id=5),
                         Output(output_id=6),
                         Output(output_id=7)]),
+        Module(name='dimmer module', mtype='D',
+               hardware_type=Module.HardwareType.PHYSICAL,
+               outputs=[]),
         Module(name='virtual output', mtype='o',
                hardware_type=Module.HardwareType.VIRTUAL,
-               outputs=[Output(output_id=8),
-                        Output(output_id=9),
-                        Output(output_id=10),
-                        Output(output_id=11),
-                        Output(output_id=12),
-                        Output(output_id=13),
-                        Output(output_id=14),
-                        Output(output_id=15)])
+               outputs=[Output(output_id=16),
+                        Output(output_id=17),
+                        Output(output_id=18),
+                        Output(output_id=19),
+                        Output(output_id=20),
+                        Output(output_id=21),
+                        Output(output_id=22),
+                        Output(output_id=23)])
     ]
 }
 OUTPUT_MODULE_LAYOUT = _OUTPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
@@ -156,7 +165,7 @@ _INPUT_MODULE_LAYOUTS = {
                        Input(input_id=6, tester_output_id=6),
                        Input(input_id=7, tester_output_id=7)]),
         # TODO: also test random order discovery?
-        Module(name='CAN control', mtype='I',
+        Module(name='CAN control', mtype='I', is_can=True,
                hardware_type=Module.HardwareType.EMULATED,
                inputs=[Input(input_id=16, tester_output_id=32),
                        Input(input_id=17, tester_output_id=33),
@@ -167,6 +176,19 @@ _INPUT_MODULE_LAYOUTS = {
     ]
 }
 INPUT_MODULE_LAYOUT = _INPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
+
+_TEMPERATURE_MODULE_LAYOUTS = {
+    TestPlatform.CORE_PLUS: [],
+    TestPlatform.DEBIAN: [
+        Module(name='CAN control', mtype='T', is_can=True,
+               hardware_type=Module.HardwareType.EMULATED,
+               temps=[]),
+        Module(name='temperature module', mtype='T',
+               hardware_type=Module.HardwareType.PHYSICAL,
+               temps=[])
+    ],
+}
+TEMPERATURE_MODULE_LAYOUT = _TEMPERATURE_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
 
 _ENERGY_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [

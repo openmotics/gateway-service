@@ -24,7 +24,7 @@ from peewee import JOIN
 
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import OutputDTO, OutputStateDTO
+from gateway.dto import OutputDTO, OutputStateDTO, GlobalFeedbackDTO
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
@@ -175,6 +175,17 @@ class OutputController(BaseController):
     def set_output_status(self, output_id, is_on, dimmer=None, timer=None):
         # type: (int, bool, Optional[int], Optional[int]) -> None
         self._master_controller.set_output(output_id=output_id, state=is_on, dimmer=dimmer, timer=timer)
+
+    # Global (led) feedback
+
+    def load_global_feedback(self, global_feedback_id):  # type: (int) -> GlobalFeedbackDTO
+        return self._master_controller.load_global_feedback(global_feedback_id=global_feedback_id)
+
+    def load_global_feedbacks(self):  # type: () -> List[GlobalFeedbackDTO]
+        return self._master_controller.load_global_feedbacks()
+
+    def save_global_feedbacks(self, global_feedbacks):  # type: (List[Tuple[GlobalFeedbackDTO, List[str]]]) -> None
+        self._master_controller.save_global_feedbacks(global_feedbacks)
 
 
 class OutputStateCache(object):

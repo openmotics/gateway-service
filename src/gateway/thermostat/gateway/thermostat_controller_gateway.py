@@ -74,7 +74,7 @@ class ThermostatControllerGateway(ThermostatController):
         # we could also use an in-memory store, but this allows us to detect 'missed' transitions
         # e.g. in case when gateway was rebooting during a scheduled transition
         db_filename = constants.get_thermostats_scheduler_database_file()
-        jobstores = {'default': SQLAlchemyJobStore(url='sqlite:///{})'.format(db_filename))}
+        jobstores = {'default': SQLAlchemyJobStore(url='sqlite:///{}'.format(db_filename))}
         self._scheduler = BackgroundScheduler(jobstores=jobstores, timezone=timezone)
 
     def start(self):  # type: () -> None
@@ -160,9 +160,9 @@ class ThermostatControllerGateway(ThermostatController):
                     m, s = divmod(int(seconds_of_day), 60)
                     h, m = divmod(m, 60)
                     if schedule.mode == 'heating':
-                        args = [thermostat_number, new_setpoint, None]
+                        args = [thermostat_number, None, new_setpoint, None]
                     else:
-                        args = [thermostat_number, None, new_setpoint]
+                        args = [thermostat_number, None, None, new_setpoint]
                     if schedule_length % 7 == 0:
                         self._scheduler.add_job(ThermostatControllerGateway.set_setpoint_from_scheduler, 'cron',
                                                 start_date=start_date,
@@ -292,7 +292,7 @@ class ThermostatControllerGateway(ThermostatController):
                                                               automatic=active_preset.type == Preset.Types.SCHEDULE,
                                                               setpoint=Preset.TYPE_TO_SETPOINT.get(active_preset.type, 0),
                                                               name=thermostat.name,
-                                                              sensor_id=thermostat.sensor.number,
+                                                              sensor_id=255 if thermostat.sensor is None else thermostat.sensor.number,
                                                               airco=0,  # TODO: Check if still used
                                                               output_0_level=get_output_level(output0),
                                                               output_1_level=get_output_level(output1)))
@@ -358,18 +358,17 @@ class ThermostatControllerGateway(ThermostatController):
         self._thermostat_config_changed()
 
     def set_per_thermostat_mode(self, thermostat_number, automatic, setpoint):
-        # type: (int, bool, float) -> None
+        # type: (int, bool, int) -> None
         thermostat_pid = self.thermostat_pids.get(thermostat_number)
         if thermostat_pid is not None:
             thermostat = thermostat_pid.thermostat
             thermostat.automatic = automatic
-            thermostat.save()
-            preset = thermostat.active_preset
-            if thermostat.thermostat_group.mode == ThermostatGroup.Modes.HEATING:
-                preset.heating_setpoint = setpoint
+            if automatic is False and setpoint is not None and 3 <= setpoint <= 5:
+                preset = thermostat.get_preset(preset_type=Preset.SETPOINT_TO_TYPE.get(setpoint, Preset.Types.SCHEDULE))
+                thermostat.active_preset = preset
             else:
-                preset.cooling_setpoint = setpoint
-            preset.save()
+                thermostat.active_preset = thermostat.get_preset(preset_type=Preset.Types.SCHEDULE)
+            thermostat.save()
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
 

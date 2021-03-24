@@ -26,15 +26,17 @@ import glob
 import logging
 import logging.handlers
 import os
+import signal
 import subprocess
 import time
+import traceback
 from collections import deque
 from threading import Lock
 
 import requests
 import six
 import ujson as json
-from six.moves.configparser import ConfigParser
+from six.moves.configparser import ConfigParser, NoOptionError
 
 import constants
 from bus.om_bus_client import MessageClient
@@ -126,10 +128,15 @@ class Cloud(object):
         if self._url is None:
             config = ConfigParser()
             config.read(constants.get_config_file())
-            self._url = config.get('OpenMotics', 'vpn_check_url') % config.get('OpenMotics', 'uuid')
+            try:
+                self._url = config.get('OpenMotics', 'vpn_check_url') % config.get('OpenMotics', 'uuid')
+            except NoOptionError:
+                pass
 
     def call_home(self, extra_data):
         """ Call home reporting our state, and optionally get new settings or other stuff """
+        if self._url is None:
+            logger.debug('Cloud not configured, skipping call home')
         try:
             request = requests.post(self._url,
                                     data={'extra_data': json.dumps(extra_data, sort_keys=True)},
@@ -455,6 +462,12 @@ class HeartbeatService(object):
                             'local_ip': DataCollector('ip address', System.get_ip_address, 1800)}
         self._debug_collector = DebugDumpDataCollector()
 
+    @staticmethod
+    def _handle_signal_alarm(signum, frame):
+        logger.error('Signal alarm ({0}) triggered:\n{1}'.format(signum, (''.join(traceback.format_stack(frame))).strip()))
+        logger.error('Exit(1)')
+        os._exit(1)
+
     def _check_state(self):
         return {'cloud_disabled': not self._cloud_enabled,
                 'cloud_last_connect': None if not self._cloud_enabled else self._last_successful_heartbeat,
@@ -471,9 +484,11 @@ class HeartbeatService(object):
 
     def run_heartbeat(self):
         # type: () -> None
+        signal.signal(signal.SIGALRM, HeartbeatService._handle_signal_alarm)
         while True:
             self._last_cycle = time.time()
             try:
+                signal.alarm(600)  # 10 minutes
                 start_time = time.time()
                 call_home_duration = self._beat()
                 beat_time = time.time() - start_time
@@ -482,6 +497,7 @@ class HeartbeatService(object):
                 if self._previous_sleep_time != self._sleep_time:
                     logger.info('Set sleep interval to {0}s'.format(self._sleep_time))
                     self._previous_sleep_time = self._sleep_time
+                signal.alarm(0)
                 time.sleep(self._sleep_time)
             except Exception as ex:
                 logger.error("Error during vpn check loop: {0}".format(ex))
@@ -534,7 +550,7 @@ class HeartbeatService(object):
         return call_home_duration
 
 
-if __name__ == '__main__':
+def main():
     Logs.setup_logger()
     setup_minimal_vpn_platform(message_client_name='vpn_service')
 
@@ -542,3 +558,7 @@ if __name__ == '__main__':
     heartbeat_service = HeartbeatService()
     heartbeat_service.start()
     heartbeat_service.run_heartbeat()
+
+
+if __name__ == '__main__':
+    main()

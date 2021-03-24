@@ -250,15 +250,15 @@ def start_plugin_runtime(plugin_path):
     start_runtime(plugin_path)
 
 
-if __name__ == "__main__":
+def main():
     Logs.setup_logger()
 
     # First check if there are some arguments given, if so, check if it is for starting the plugin runtime
     if len(sys.argv) > 1:
         # Delete the first argument since this will be this file name
         del sys.argv[0]
-        if sys.argv[1] == 'start_plugin':
-            plugin_path = sys.argv[2]
+        if sys.argv[0] == 'start_plugin':
+            plugin_path = sys.argv[1]
             start_plugin_runtime(plugin_path)
             # Explicit exit, do not continue and start the gateway code
             exit(0)
@@ -273,3 +273,7 @@ if __name__ == "__main__":
 
     OpenmoticsService.fix_dependencies()
     OpenmoticsService.start()
+
+
+if __name__ == "__main__":
+    main()

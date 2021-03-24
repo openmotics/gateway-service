@@ -61,7 +61,7 @@ class UCANCommunicatorTest(unittest.TestCase):
 
             # Send command to mocked Core communicator
             received_commands = []
-            ucan_communicator.do_command(cc_address, command, ucan_address, {'foo': 1, 'bar': 2}, timeout=None)
+            ucan_communicator.do_command(cc_address, command, ucan_address, {'foo': 1, 'bar': 2}, timeout=None, tx_timeout=None)
 
             # Validate whether the correct data was send to the Core
             self.assertEqual(len(received_commands), 2)

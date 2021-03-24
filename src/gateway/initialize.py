@@ -215,6 +215,13 @@ def setup_target_platform(target_platform, message_client_name):
     cloud_url = urlunparse((parsed_url.scheme, parsed_url.netloc, '', '', '', ''))
     Injectable.value(cloud_url=cloud_url or None)
 
+    try:
+        firmware_url = config.get('OpenMotics', 'firmware_url')
+    except NoOptionError:
+        path = '/portal/firmware_metadata'
+        firmware_url = urlunparse((parsed_url.scheme, parsed_url.netloc, path, '', '', ''))
+    Injectable.value(firmware_url=firmware_url or None)
+
     # User Controller
     Injectable.value(user_db=config_database_file)
     Injectable.value(user_db_lock=config_lock)

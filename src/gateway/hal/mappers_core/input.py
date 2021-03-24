@@ -18,6 +18,7 @@ Input Mapper
 """
 from __future__ import absolute_import
 from gateway.dto.input import InputDTO
+from gateway.hal.mappers_core.group_action import GroupActionMapper
 from master.core.basic_action import BasicAction
 from master.core.memory_models import InputConfiguration
 
@@ -29,7 +30,7 @@ class InputMapper(object):
     # Limitations:
     #  * Double press isn't supported on Classic
     #  * Core doesn't support actions after 3, 4, 5 seconds and Classic doesn't support actions after 1 second
-    #  * Currently no "basic actions" are supported except for long-press action types and "execute group action"
+    #  * Only simple "single instruction" basic actions are supported
 
     @staticmethod
     def orm_to_dto(orm_object):  # type: (InputConfiguration) -> InputDTO
@@ -51,7 +52,7 @@ class InputMapper(object):
             new_data['name'] = input_dto.name
         if 'action' in fields:
             direct_config = input_dto.action is None or input_dto.action == 255 or input_dto.action < 240
-            basic_actions_config = input_dto.action == 240 and 'basic_actions' in fields
+            basic_actions_config = input_dto.action in [241, 242] or (input_dto.action == 240 and 'basic_actions' in fields)
             if direct_config or basic_actions_config:
                 new_data.update(InputMapper.classic_actions_to_core_input_configuration(input_dto.action,
                                                                                         input_dto.basic_actions))
@@ -71,9 +72,9 @@ class InputMapper(object):
             # Press/release actions are enabled
             basic_actions = []
             if orm_object.basic_action_press.in_use:
-                if not orm_object.basic_action_press.is_execute_group_action:
-                    raise ValueError('Actions are limited to executing GroupActions')
-                basic_actions += [2, orm_object.basic_action_press.device_nr]
+                basic_actions += GroupActionMapper.core_actions_to_classic_actions([orm_object.basic_action_press])
+                if len(basic_actions) == 2 and basic_actions[0] in [163, 164]:
+                    return 242 if basic_actions[0] == 163 else 241, []
             if orm_object.basic_action_release.in_use:
                 if not orm_object.basic_action_release.is_execute_group_action:
                     raise ValueError('Actions are limited to executing GroupActions')
@@ -91,25 +92,52 @@ class InputMapper(object):
     @staticmethod
     def classic_actions_to_core_input_configuration(action, basic_actions):
         # type: (Optional[int], List[int]) -> Dict[str, Any]
+
+        # Default data
         data = {'input_link': {'output_id': 1023,
                                'dimming_up': True,
                                'enable_press_and_release': True,
                                'enable_1s_press': True,
                                'enable_2s_press': True,
                                'not_used': True,
-                               'enable_double_press': True}}  # type: Dict[str, Any]
+                               'enable_double_press': True},
+                'basic_action_press': BasicAction.empty(),
+                'basic_action_release': BasicAction.empty(),
+                'basic_action_1s_press': BasicAction.empty(),
+                'basic_action_2s_press': BasicAction.empty(),
+                'basic_action_double_press': BasicAction.empty()}  # type: Dict[str, Any]
+
+        # Disabled input
         if action is None or action == 255:
             return data
+
+        # Change default data
         data['input_link'].update({'dimming_up': False,
                                    'enable_press_and_release': False,
                                    'enable_1s_press': False,
                                    'enable_2s_press': False,
                                    'not_used': False,
                                    'enable_double_press': False})
-        if action < 240:  # 240 means "execute the list of basic actions"
+
+        # If theaction is < 240, it means that the input directly controls an output
+        if action < 240:
             data['input_link']['output_id'] = action
             return data
+
+        # If the action is 241 or 242
+        if action in [241, 242]:
+            data['input_link']['enable_press_and_release'] = True
+            data['basic_action_press'] = BasicAction(action_type=0, action=255,
+                                                     device_nr=2 if action == 241 else 1)
+            return data
+
+        # Otherwise, it means that the input is supposed to execute a list of basic actions
+        # but this is not supported anymore on the Core.
+        # TODO: Convert any list of actions to one or more group actions and use these instead
+
         action_types = set(basic_actions[i] for i in range(0, len(basic_actions), 2))
+
+        # Delayed action(s)
         if 207 in action_types:
             if len(basic_actions) != 2:
                 raise ValueError('Timing settings cannot be combined with other actions')
@@ -117,8 +145,17 @@ class InputMapper(object):
             data['basic_action_2s_press'] = BasicAction(action_type=19, action=0,
                                                         device_nr=basic_actions[1])
             return data
+
+        # Possible single on-press actions
         if action_types - {2, 236}:
-            raise ValueError('Only executing GroupActions is supported')
+            actions = GroupActionMapper.classic_actions_to_core_actions(basic_actions)
+            if len(actions) != 1:
+                raise ValueError('Only simple input configrations are supported')
+            data['input_link']['enable_press_and_release'] = True
+            data['basic_action_press'] = actions[0]
+            return data
+
+        # Press/release actions
         release_data = False
         release_action = None  # type: Optional[int]
         press_action = None  # type: Optional[int]

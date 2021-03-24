@@ -31,13 +31,13 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO, \
     ThermostatGroupDTO, ThermostatAircoStatusDTO, PumpGroupDTO, \
-    GlobalRTD10DTO, RTD10DTO
+    GlobalRTD10DTO, RTD10DTO, GlobalFeedbackDTO
 from gateway.enums import ShutterEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
     OutputMapper, PulseCounterMapper, SensorMapper, ShutterGroupMapper, \
     ShutterMapper, ThermostatMapper, ThermostatGroupMapper, PumpGroupMapper, \
-    GlobalRTD10Mapper, RTD10Mapper
+    GlobalRTD10Mapper, RTD10Mapper, GlobalFeedbackMapper
 from gateway.hal.master_controller import CommunicationFailure, \
     MasterController
 from gateway.hal.master_event import MasterEvent
@@ -1124,18 +1124,15 @@ class MasterClassicController(MasterController):
         raise RuntimeError('Could not correctly match modules {0} and {1}'.format(old_address, new_address))
 
     @communication_enabled
-    def flash_leds(self, led_type, led_id):
-        """ Flash the leds on the module for an output/input/sensor.
-
-        :type led_type: byte
-        :param led_type: The module type: output/dimmer (0), input (1), sensor/temperatur (2).
-        :type led_id: byte
+    def flash_leds(self, led_type, led_id):  # type: (int, int) -> str
+        """
+        Flash the leds on the module for an output/input/sensor.
+        :param led_type: The module type, see `IndicateType`.
         :param led_id: The id of the output/input/sensor.
-        :returns: dict with 'status' ('OK').
         """
         ret = self._master_communicator.do_command(master_api.indicate(),
                                                    {'type': led_type, 'id': led_id})
-        return {'status': ret['resp']}
+        return ret['resp']
 
     @communication_enabled
     def get_backup(self):
@@ -1192,6 +1189,7 @@ class MasterClassicController(MasterController):
         # type: (str, Serial) -> None
         try:
             self._communication_enabled = False
+            self._heartbeat.stop()
             self._master_communicator.update_mode_start()
 
             port = controller_serial.port  # type: ignore
@@ -1261,15 +1259,18 @@ class MasterClassicController(MasterController):
 
         finally:
             self._master_communicator.update_mode_stop()
+            self._heartbeat.start()
             self._communication_enabled = True
 
     @Inject
-    def update_slave_modules(self, module_type, hex_filename, controller_serial=INJECTED):
-        # type: (str, str, Serial) -> None
-        self._communication_enabled = False
+    def update_slave_modules(self, module_type, hex_filename):
+        # type: (str, str) -> None
         try:
-            bootload_modules(module_type, hex_filename)
+            self._communication_enabled = False
+            self._heartbeat.stop()
+            bootload_modules(module_type, hex_filename, None, None)
         finally:
+            self._heartbeat.start()
             self._communication_enabled = True
 
     @staticmethod
@@ -1467,7 +1468,7 @@ class MasterClassicController(MasterController):
     # (Group)Actions
 
     @communication_enabled
-    def do_basic_action(self, action_type, action_number, parameter=0, timeout=2):  # type: (int, int, int, int) -> None
+    def do_basic_action(self, action_type, action_number, parameter=None, timeout=2):  # type: (int, int, Optional[int], int) -> None
         """
         Execute a basic action.
 
@@ -1482,15 +1483,19 @@ class MasterClassicController(MasterController):
         if action_number < 0 or action_number > 254:
             raise ValueError('action_number not in [0, 254]: %d' % action_number)
 
-        if parameter < 0 or parameter > 240:
-            raise ValueError('parameter not in [0, 240]: %d' % parameter)
+        fields = {'action_type': action_type,
+                  'action_number': action_number}
 
-        logger.info('BA: Execute {0} {1} {2}'.format(action_type, action_number, parameter))
-        self._master_communicator.do_command(master_api.basic_action(self._master_version),
-                                             fields={'action_type': action_type,
-                                                     'action_number': action_number,
-                                                     'parameter': parameter},
-                                             timeout=timeout)
+        if parameter is None:
+            logger.info('BA: Execute {0} {1}'.format(action_type, action_number))
+            command_spec = master_api.basic_action(self._master_version)
+        else:
+            if parameter < 0 or parameter > 65535:
+                raise ValueError('parameter not in [0, 65535]: %d' % parameter)
+            fields.update({'parameter': parameter})
+            logger.info('BA: Execute {0} {1} P {2}'.format(action_type, action_number, parameter))
+            command_spec = master_api.basic_action(self._master_version, use_param=True)
+        self._master_communicator.do_command(command_spec, fields=fields, timeout=timeout)
 
     @communication_enabled
     def do_group_action(self, group_action_id):  # type: (int) -> None
@@ -1562,24 +1567,21 @@ class MasterClassicController(MasterController):
     # Can Led functions
 
     @communication_enabled
-    def load_can_led_configuration(self, can_led_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        return self._eeprom_controller.read(CanLedConfiguration, can_led_id, fields).serialize()
+    def load_global_feedback(self, global_feedback_id):  # type: (int) -> GlobalFeedbackDTO
+        classic_object = self._eeprom_controller.read(eeprom_models.CanLedConfiguration, global_feedback_id)
+        return GlobalFeedbackMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def load_can_led_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        return [o.serialize() for o in self._eeprom_controller.read_all(CanLedConfiguration, fields)]
+    def load_global_feedbacks(self):  # type: () -> List[GlobalFeedbackDTO]
+        return [GlobalFeedbackMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(eeprom_models.CanLedConfiguration)]
 
     @communication_enabled
-    def save_can_led_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(CanLedConfiguration.deserialize(config))
-
-    @communication_enabled
-    def save_can_led_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        self._eeprom_controller.write_batch([CanLedConfiguration.deserialize(o) for o in config])
+    def save_global_feedbacks(self, global_feedbacks):  # type: (List[Tuple[GlobalFeedbackDTO, List[str]]]) -> None
+        batch = []
+        for global_feedback, fields in global_feedbacks:
+            batch.append(GlobalFeedbackMapper.dto_to_orm(global_feedback, fields))
+        self._eeprom_controller.write_batch(batch)
 
     # All lights off functions
 

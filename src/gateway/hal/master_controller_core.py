@@ -27,8 +27,8 @@ from peewee import DoesNotExist
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
-    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO
-from gateway.enums import ShutterEnums
+    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, GlobalFeedbackDTO
+from gateway.enums import ShutterEnums, IndicateType
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
@@ -38,6 +38,7 @@ from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from master.core.basic_action import BasicAction
+from master.core.can_feedback import CANFeedbackController
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.core_updater import CoreUpdater
@@ -49,7 +50,7 @@ from master.core.memory_models import CanControlModuleConfiguration, \
     GlobalConfiguration, InputConfiguration, InputModuleConfiguration, \
     OutputConfiguration, OutputModuleConfiguration, SensorConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
-from master.core.memory_types import MemoryAddress
+from master.core.memory_types import MemoryAddress, MemoryActivator
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.system_value import Humidity, Temperature
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
@@ -85,11 +86,15 @@ class MasterCoreController(MasterController):
         self._shutter_status = {}  # type: Dict[int, Tuple[bool, bool]]
         self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
+        self._firmware_versions = {}  # type: Dict[str, Optional[str]]
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_eeprom_event)
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
+        )
+        self._master_communicator.register_consumer(
+            BackgroundConsumer(CoreAPI.firmware_information(), 0, self._handle_firmware_information)
         )
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.error_information(), 0, lambda e: logger.info('Got master error: {0}'.format(Error(e))))
@@ -282,34 +287,34 @@ class MasterCoreController(MasterController):
             return value if value != 255 else default
 
         max_specs = self._master_communicator.do_command(CoreAPI.general_configuration_max_specs(), {})
-        general_configuration = GlobalConfiguration()
+        global_configuration = GlobalConfiguration()
         logger.info('General core information:')
         logger.info('* Modules:')
-        logger.info('  * Auto discovery: {0}'.format(general_configuration.automatic_module_discovery))
-        logger.info('  * Output: {0}/{1}'.format(_default_if_255(general_configuration.number_of_output_modules, 0),
+        logger.info('  * Auto discovery: {0}'.format(global_configuration.automatic_module_discovery))
+        logger.info('  * Output: {0}/{1}'.format(_default_if_255(global_configuration.number_of_output_modules, 0),
                                                  max_specs['output']))
-        logger.info('  * Input: {0}/{1}'.format(_default_if_255(general_configuration.number_of_input_modules, 0),
+        logger.info('  * Input: {0}/{1}'.format(_default_if_255(global_configuration.number_of_input_modules, 0),
                                                 max_specs['input']))
-        logger.info('  * Sensor: {0}/{1}'.format(_default_if_255(general_configuration.number_of_sensor_modules, 0),
+        logger.info('  * Sensor: {0}/{1}'.format(_default_if_255(global_configuration.number_of_sensor_modules, 0),
                                                  max_specs['sensor']))
-        logger.info('  * uCAN: {0}/{1}'.format(_default_if_255(general_configuration.number_of_ucan_modules, 0),
+        logger.info('  * uCAN: {0}/{1}'.format(_default_if_255(global_configuration.number_of_ucan_modules, 0),
                                                max_specs['ucan']))
-        logger.info('  * CAN Control: {0}'.format(_default_if_255(general_configuration.number_of_can_control_modules, 0)))
+        logger.info('  * CAN Control: {0}'.format(_default_if_255(global_configuration.number_of_can_control_modules, 0)))
         logger.info('* CAN:')
-        logger.info('  * Inputs: {0}'.format(general_configuration.number_of_can_inputs))
-        logger.info('  * Sensors: {0}'.format(general_configuration.number_of_can_sensors))
-        logger.info('  * Termination: {0}'.format(general_configuration.can_bus_termination))
+        logger.info('  * Inputs: {0}'.format(global_configuration.number_of_can_inputs))
+        logger.info('  * Sensors: {0}'.format(global_configuration.number_of_can_sensors))
+        logger.info('  * Termination: {0}'.format(global_configuration.can_bus_termination))
         logger.info('* Scan times:')
-        logger.info('  * General bus: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_bus, 8)))
-        logger.info('  * Sensor modules: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_sensor_modules, 50) * 100))
-        logger.info('  * CAN Control modules: {0}ms'.format(_default_if_255(general_configuration.scan_time_rs485_can_control_modules, 50) * 100))
+        logger.info('  * General bus: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_bus, 8)))
+        logger.info('  * Sensor modules: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_sensor_modules, 50) * 100))
+        logger.info('  * CAN Control modules: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_can_control_modules, 50) * 100))
         logger.info('* Runtime stats:')
-        logger.info('  * Debug: {0}'.format(general_configuration.debug_mode))
-        logger.info('  * Uptime: {0}d {1}h'.format(general_configuration.uptime_hours / 24,
-                                                   general_configuration.uptime_hours % 24))
+        logger.info('  * Debug: {0}'.format(global_configuration.debug_mode))
+        logger.info('  * Uptime: {0}d {1}h'.format(global_configuration.uptime_hours / 24,
+                                                   global_configuration.uptime_hours % 24))
         # noinspection PyStringFormat
-        logger.info('  * Started at 20{0}/{1}/{2} {3}:{4}:{5}'.format(*(list(reversed(general_configuration.startup_date)) +
-                                                                        general_configuration.startup_time)))
+        logger.info('  * Started at 20{0}/{1}/{2} {3}:{4}:{5}'.format(*(list(reversed(global_configuration.startup_date)) +
+                                                                        global_configuration.startup_time)))
 
     ##############
     # Public API #
@@ -329,19 +334,24 @@ class MasterCoreController(MasterController):
         if len(calls_timedout) == 0:
             # If there are no timeouts at all
             return CommunicationStatus.SUCCESS
-        elif len(all_calls) <= 10:
+
+        if len(all_calls) <= 10:
             # Not enough calls made to have a decent view on what's going on
             logger.warning('Observed master communication failures, but not enough calls')
-            return CommunicationStatus.UNSTABLE
-        elif not any(t in calls_timedout for t in all_calls[-10:]):
-            logger.warning('Observed master communication failures, but recent calls recovered')
-            # The last X calls are successfull
             return CommunicationStatus.UNSTABLE
 
         calls_last_x_minutes = [t for t in all_calls if t > time.time() - 180]
         if len(calls_last_x_minutes) <= 5:
+            # Not enough calls in the last 3 minutes to have a decent view on what's going on
             logger.warning('Observed master communication failures, but not recent enough')
-            # Not enough recent calls
+            return CommunicationStatus.UNSTABLE
+
+        if len(all_calls) >= 30 and not any(t in calls_timedout for t in all_calls[-30:]):
+            # The last 30 calls are successfull, consider "recoverd"
+            return CommunicationStatus.SUCCESS
+        if not any(t in calls_timedout for t in all_calls[-10:]):
+            # The last 10 calls are successfull, consider "recovering"
+            logger.warning('Observed master communication failures, but recovering')
             return CommunicationStatus.UNSTABLE
 
         ratio = len([t for t in calls_last_x_minutes if t in calls_timedout]) / float(len(calls_last_x_minutes))
@@ -349,8 +359,8 @@ class MasterCoreController(MasterController):
             # Less than 25% of the calls fail, let's assume everything is just "fine"
             logger.warning('Observed master communication failures, but there\'s only a failure ratio of {:.2f}%'.format(ratio * 100))
             return CommunicationStatus.UNSTABLE
-        else:
-            return CommunicationStatus.FAILURE
+
+        return CommunicationStatus.FAILURE
 
     def get_firmware_version(self):
         version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
@@ -393,7 +403,8 @@ class MasterCoreController(MasterController):
     def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
         for input_dto, fields in inputs:
             input_ = InputMapper.dto_to_orm(input_dto, fields)
-            input_.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
+            input_.save(activate=False)
+        MemoryActivator.activate()
 
     def _refresh_input_states(self):
         # type: () -> bool
@@ -441,7 +452,9 @@ class MasterCoreController(MasterController):
         if output.is_shutter:
             # Outputs that are used by a shutter are returned as unconfigured (read-only) outputs
             return OutputDTO(id=output.id)
-        return OutputMapper.orm_to_dto(output)
+        output_dto = OutputMapper.orm_to_dto(output)
+        CANFeedbackController.load_output_led_feedback_configuration(output, output_dto)
+        return output_dto
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
         outputs = []
@@ -455,7 +468,9 @@ class MasterCoreController(MasterController):
             if output.is_shutter:
                 # Shutter outputs cannot be changed
                 continue
-            output.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
+            output.save(activate=False)
+            CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, fields, activate=False)
+        MemoryActivator.activate()
 
     def load_output_status(self):
         # type: () -> List[Dict[str,Any]]
@@ -470,16 +485,16 @@ class MasterCoreController(MasterController):
     def shutter_up(self, shutter_id, timer=None):
         if timer:
             raise NotImplementedError('Shutter timers are not supported')
-        self._master_communicator.do_basic_action(action_type=10,
-                                                  action=1,
-                                                  device_nr=shutter_id)
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=1,
+                                                              device_nr=shutter_id))
 
     def shutter_down(self, shutter_id, timer=None):
         if timer:
             raise NotImplementedError('Shutter timers are not supported')
-        self._master_communicator.do_basic_action(action_type=10,
-                                                  action=2,
-                                                  device_nr=shutter_id)
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=2,
+                                                              device_nr=shutter_id))
 
     def shutter_stop(self, shutter_id):
         self._master_communicator.do_basic_action(BasicAction(action_type=10,
@@ -512,8 +527,6 @@ class MasterCoreController(MasterController):
         return shutters
 
     def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
-        # TODO: Batch saving - postpone eeprom activate if relevant for the Core
-        # TODO: Atomic saving
         for shutter_dto, fields in shutters:
             # Validate whether output module exists
             output_module = OutputConfiguration(shutter_dto.id * 2).module
@@ -532,11 +545,12 @@ class MasterCoreController(MasterController):
                 self._output_shutter_map.pop(shutter.outputs.output_1, None)
                 shutter.outputs.output_0 = 255 * 2
                 is_configured = False
-            shutter.save()
+            shutter.save(activate=False)
             # Mark related Outputs as "occupied by shutter"
             setattr(output_module.shutter_config, 'are_{0}_outputs'.format(output_set), not is_configured)
             setattr(output_module.shutter_config, 'set_{0}_direction'.format(shutter.output_set), shutter_dto.up_down_config == 1)
-            output_module.save()
+            output_module.save(activate=False)
+        MemoryActivator.activate()
 
     def _refresh_shutter_states(self):
         status_data = {x['device_nr']: x for x in self.load_output_status()}
@@ -603,9 +617,16 @@ class MasterCoreController(MasterController):
 
     # Can Led functions
 
-    def load_can_led_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        return []  # TODO: implement
+    def load_global_feedback(self, global_feedback_id):  # type: (int) -> GlobalFeedbackDTO
+        global_feedbacks = CANFeedbackController.load_global_led_feedback_configuration()
+        return global_feedbacks.get(global_feedback_id, GlobalFeedbackDTO(id=global_feedback_id))
+
+    def load_global_feedbacks(self):  # type: () -> List[GlobalFeedbackDTO]
+        global_feedbacks = CANFeedbackController.load_global_led_feedback_configuration()
+        return [global_feedbacks.get(i, GlobalFeedbackDTO(id=i)) for i in range(32)]
+
+    def save_global_feedbacks(self, global_feedbacks):  # type: (List[Tuple[GlobalFeedbackDTO, List[str]]]) -> None
+        CANFeedbackController.save_global_led_feedback_configuration(global_feedbacks, activate=True)
 
     # Sensors
 
@@ -656,7 +677,8 @@ class MasterCoreController(MasterController):
     def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
         for sensor_dto, fields in sensors:
             sensor = SensorMapper.dto_to_orm(sensor_dto, fields)
-            sensor.save()  # TODO: Batch saving - postpone eeprom activate if relevant for the Core
+            sensor.save(activate=False)
+        MemoryActivator.activate()
 
     def _refresh_sensor_states(self):
         amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
@@ -725,7 +747,8 @@ class MasterCoreController(MasterController):
     def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
         for group_action_dto, fields in group_actions:
             group_action = GroupActionMapper.dto_to_orm(group_action_dto, fields)
-            GroupActionController.save_group_action(group_action, fields)
+            GroupActionController.save_group_action(group_action, fields, activate=False)
+        MemoryActivator.activate()
 
     # Module management
 
@@ -766,10 +789,10 @@ class MasterCoreController(MasterController):
         def _default_if_255(value, default):
             return value if value != 255 else default
 
-        general_configuration = GlobalConfiguration()
+        global_configuration = GlobalConfiguration()
 
         outputs = []
-        nr_of_output_modules = _default_if_255(general_configuration.number_of_output_modules, 0)
+        nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
@@ -784,9 +807,9 @@ class MasterCoreController(MasterController):
 
         inputs = []
         can_inputs = []
-        nr_of_input_modules = _default_if_255(general_configuration.number_of_input_modules, 0)
-        nr_of_sensor_modules = _default_if_255(general_configuration.number_of_sensor_modules, 0)
-        nr_of_can_controls = _default_if_255(general_configuration.number_of_can_control_modules, 0)
+        nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
+        nr_of_sensor_modules = _default_if_255(global_configuration.number_of_sensor_modules, 0)
+        nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
@@ -820,12 +843,18 @@ class MasterCoreController(MasterController):
         def _default_if_255(value, default):
             return value if value != 255 else default
 
-        def get_master_version(_module_address):
-            try:
-                # TODO: Implement call to load slave module version
-                return True, None, None
-            except CommunicationTimedOutException:
+        self._firmware_versions = {}
+        self._master_communicator.do_command(command=CoreAPI.request_slave_firmware_versions(),
+                                             fields={})
+
+        def _wait_for_version(address_, timeout=3):
+            threshold = time.time() + timeout
+            while address_ not in self._firmware_versions and time.time() < threshold:
+                time.sleep(0.1)
+            version_info = self._firmware_versions.get(address_)
+            if version_info is None:
                 return False, None, None
+            return True, None, version_info
 
         information = []
         module_type_lookup = {'c': ModuleDTO.ModuleType.CAN_CONTROL,
@@ -838,8 +867,8 @@ class MasterCoreController(MasterController):
                               'r': ModuleDTO.ModuleType.SHUTTER,
                               'd': ModuleDTO.ModuleType.DIM_CONTROL}
 
-        general_configuration = GlobalConfiguration()
-        nr_of_input_modules = _default_if_255(general_configuration.number_of_input_modules, 0)
+        global_configuration = GlobalConfiguration()
+        nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
@@ -853,14 +882,14 @@ class MasterCoreController(MasterController):
                 hardware_type = ModuleDTO.HardwareType.EMULATED
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=input_module_info.address,
-                            module_type=module_type_lookup.get(device_type),
+                            module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
             if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(input_module_info.address)
+                dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(input_module_info.address)
             information.append(dto)
 
-        nr_of_output_modules = _default_if_255(general_configuration.number_of_output_modules, 0)
+        nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
@@ -872,14 +901,14 @@ class MasterCoreController(MasterController):
                     hardware_type = ModuleDTO.HardwareType.VIRTUAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=output_module_info.address,
-                            module_type=module_type_lookup.get(device_type),
+                            module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
             if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(output_module_info.address)
+                dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(output_module_info.address)
             information.append(dto)
 
-        nr_of_sensor_modules = _default_if_255(general_configuration.number_of_sensor_modules, 0)
+        nr_of_sensor_modules = _default_if_255(global_configuration.number_of_sensor_modules, 0)
         for module_id in range(nr_of_sensor_modules):
             sensor_module_info = SensorModuleConfiguration(module_id)
             device_type = sensor_module_info.device_type
@@ -891,14 +920,14 @@ class MasterCoreController(MasterController):
                     hardware_type = ModuleDTO.HardwareType.VIRTUAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=sensor_module_info.address,
-                            module_type=module_type_lookup.get(device_type),
+                            module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
             if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(sensor_module_info.address)
+                dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(sensor_module_info.address)
             information.append(dto)
 
-        nr_of_can_controls = _default_if_255(general_configuration.number_of_can_control_modules, 0)
+        nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
         for module_id in range(nr_of_can_controls):
             can_control_module_info = CanControlModuleConfiguration(module_id)
             device_type = can_control_module_info.device_type
@@ -907,20 +936,45 @@ class MasterCoreController(MasterController):
                 hardware_type = ModuleDTO.HardwareType.INTERNAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=can_control_module_info.address,
-                            module_type=module_type_lookup.get(device_type),
+                            module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
             if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
-                dto.online, dto.hardware_version, dto.firmware_version = get_master_version(can_control_module_info.address)
+                dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(can_control_module_info.address)
             information.append(dto)
 
         return information
 
+    def _handle_firmware_information(self, information):  # type: (Dict[str, str]) -> None
+        raw_version = information['version']
+        version = None if raw_version == '0.0.0' else raw_version
+        self._firmware_versions[information['address']] = version
+
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
         raise NotImplementedError('Module replacement not supported')
 
-    def flash_leds(self, led_type, led_id):
-        raise NotImplementedError()
+    def flash_leds(self, led_type, led_id):  # type: (int, int) -> str
+        """
+        Flash the leds on the module for an output/input/sensor.
+        :param led_type: The module type, see `IndicateType`.
+        :param led_id: The id of the output/input/sensor.
+        """
+        all_types = [IndicateType.INPUT,
+                     IndicateType.OUTPUT,
+                     IndicateType.SENSOR]
+        if led_type not in all_types:
+            raise ValueError('Module indication can only be executed on types: {0}'.format(', '.join(str(t) for t in all_types)))
+        if led_type == IndicateType.OUTPUT:
+            output = OutputConfiguration(led_id)
+            if output.is_shutter:
+                self._master_communicator.do_basic_action(BasicAction(action_type=10, action=200, device_nr=led_id // 2))
+            else:
+                self._master_communicator.do_basic_action(BasicAction(action_type=0, action=200, device_nr=led_id))
+        elif led_type == IndicateType.INPUT:
+            self._master_communicator.do_basic_action(BasicAction(action_type=1, action=200, device_nr=led_id))
+        elif led_type == IndicateType.SENSOR:
+            self._master_communicator.do_basic_action(BasicAction(action_type=8, action=200, device_nr=led_id))
+        return 'OK'
 
     # Virtual modules
 
@@ -984,13 +1038,13 @@ class MasterCoreController(MasterController):
 
     def get_status(self):
         firmware_version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
-        bus_mode = self._master_communicator.do_command(CoreAPI.get_slave_bus_mode(), {})['mode']
+        rs485_mode = self._master_communicator.do_command(CoreAPI.get_master_modes(), {})['rs485_mode']
         date_time = self._master_communicator.do_command(CoreAPI.get_date_time(), {})
         return {'time': '{0:02}:{1:02}'.format(date_time['hours'], date_time['minutes']),
                 'date': '{0:02}/{1:02}/20{2:02}'.format(date_time['day'], date_time['month'], date_time['year']),
                 'mode': {CoreAPI.SlaveBusMode.INIT: 'I',
                          CoreAPI.SlaveBusMode.LIVE: 'L',
-                         CoreAPI.SlaveBusMode.TRANSPARENT: 'T'}[bus_mode],
+                         CoreAPI.SlaveBusMode.TRANSPARENT: 'T'}[rs485_mode],
                 'version': firmware_version,
                 'hw_version': 1}  # TODO: Hardware version
 
@@ -1065,7 +1119,7 @@ class MasterCoreController(MasterController):
         return []  # TODO: Implement
 
     def last_success(self):
-        return time.time()  # TODO: Implement
+        return 0.0  # TODO: Implement
 
     def clear_error_list(self):
         raise NotImplementedError()
