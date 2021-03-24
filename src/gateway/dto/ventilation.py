@@ -99,4 +99,5 @@ class VentilationStatusDTO(BaseDTO):
             return False
         return (self.id == other.id and
                 self.mode == other.mode and
-                self.level == other.level)
+                self.level == other.level and
+                self.remaining_time == other.remaining_time)
