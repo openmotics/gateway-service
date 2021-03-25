@@ -20,7 +20,7 @@ from __future__ import absolute_import
 
 import logging
 
-from gateway.dto.esafe import ApartmentDTO
+from gateway.dto.apartment import ApartmentDTO
 from gateway.models import Apartment, User
 
 if False:  # MYPY

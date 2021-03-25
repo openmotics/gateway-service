@@ -22,7 +22,7 @@ import logging
 
 from gateway.api.serializers.base import SerializerToolbox
 from gateway.api.serializers.user import UserSerializer
-from gateway.dto.esafe import RfidDTO
+from gateway.dto.rfid import RfidDTO
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple

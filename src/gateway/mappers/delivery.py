@@ -20,7 +20,7 @@ from __future__ import absolute_import
 
 import logging
 
-from gateway.dto.esafe import DeliveryDTO
+from gateway.dto.delivery import DeliveryDTO
 from gateway.mappers.user import UserMapper
 from gateway.models import Delivery
 

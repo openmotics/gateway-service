@@ -20,7 +20,7 @@ from __future__ import absolute_import
 
 import logging
 
-from gateway.dto.esafe import RfidDTO
+from gateway.dto.rfid import RfidDTO
 from gateway.mappers.user import UserMapper
 from gateway.models import RFID
 

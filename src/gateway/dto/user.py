@@ -23,7 +23,7 @@ from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Optional, Any
-    from gateway.dto.esafe import ApartmentDTO
+    from gateway.dto.apartment import ApartmentDTO
 
 
 class UserDTO(BaseDTO):

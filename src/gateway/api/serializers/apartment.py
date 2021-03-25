@@ -21,7 +21,7 @@ from __future__ import absolute_import
 import logging
 
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto.esafe import ApartmentDTO
+from gateway.dto.apartment import ApartmentDTO
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple

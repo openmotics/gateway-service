@@ -22,8 +22,7 @@ import logging
 
 from gateway.api.serializers.base import SerializerToolbox
 from gateway.api.serializers.user import UserSerializer
-from gateway.dto.esafe import RfidDTO, DeliveryDTO, ApartmentDTO
-from toolbox import Toolbox
+from gateway.dto.delivery import DeliveryDTO
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple
