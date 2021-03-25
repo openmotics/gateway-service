@@ -29,66 +29,66 @@ if False:  # MyPy
 # ------------------------
 
 # api decorator
-@decorator
-def _esafe_api(f, *args, **kwargs):
-    start = time.time()
-    timings = {}
-    status = 200  # OK
-    try:
-        data = f(*args, **kwargs)
-    except cherrypy.HTTPError as ex:
-        status = ex.status
-        data = json.dumps({'success': False, 'msg': ex._message})
-    except EsafeUnAuthorizedError as ex:
-        status = 401
-        data = ex.message
-    except EsafeForbiddenError as ex:
-        status = 400
-        data = ex.message
-    except EsafeItemDoesNotExistError as ex:
-        status = 404
-        data = ex.message
-    except EsafeWrongInputParametersError as ex:
-        status = 400
-        data = ex.message
-    except EsafeParseError as ex:
-        status = 400
-        data = ex.message
-    except EsafeTimeOutError as ex:
-        status = 500
-        data = ex.message
-    except EsafeInvalidOperationError as ex:
-        status = 409
-        data = ex.message
-    except EsafeNotImplementedError as ex:
-        status = 503
-        data = ex.message
-    except EsafeError as ex:
-        status = 500
-        data = ex.message
-
-    timings['process'] = ('Processing', time.time() - start)
-    serialization_start = time.time()
-    contents = data
-    timings['serialization'] = 'Serialization', time.time() - serialization_start
-    cherrypy.response.headers['Content-Type'] = 'application/json'
-    cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
-                                                           for key, value in timings.items()])
-    cherrypy.response.status = status
-    return contents.encode()
-
-
-def esafe_api(auth=False, check=None, pass_token=False):
-    def wrapper(func):
-        func = _esafe_api(func)
-        if auth is not None:
-            func = cherrypy.tools.authenticated(pass_token=pass_token)(func)
-        func = cherrypy.tools.params(**(check or {}))(func)
-        func.exposed = True
-        func.check = check
-        return func
-    return wrapper
-
+# @decorator
+# def _esafe_api(f, *args, **kwargs):
+#     start = time.time()
+#     timings = {}
+#     status = 200  # OK
+#     try:
+#         data = f(*args, **kwargs)
+#     except cherrypy.HTTPError as ex:
+#         status = ex.status
+#         data = ex._message
+#     except EsafeUnAuthorizedError as ex:
+#         status = 401
+#         data = ex.message
+#     except EsafeForbiddenError as ex:
+#         status = 400
+#         data = ex.message
+#     except EsafeItemDoesNotExistError as ex:
+#         status = 404
+#         data = ex.message
+#     except EsafeWrongInputParametersError as ex:
+#         status = 400
+#         data = ex.message
+#     except EsafeParseError as ex:
+#         status = 400
+#         data = ex.message
+#     except EsafeTimeOutError as ex:
+#         status = 500
+#         data = ex.message
+#     except EsafeInvalidOperationError as ex:
+#         status = 409
+#         data = ex.message
+#     except EsafeNotImplementedError as ex:
+#         status = 503
+#         data = ex.message
+#     except EsafeError as ex:
+#         status = 500
+#         data = ex.message
+#
+#     timings['process'] = ('Processing', time.time() - start)
+#     serialization_start = time.time()
+#     contents = data
+#     timings['serialization'] = 'Serialization', time.time() - serialization_start
+#     cherrypy.response.headers['Content-Type'] = 'application/json'
+#     cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
+#                                                            for key, value in timings.items()])
+#     cherrypy.response.status = status
+#     return contents.encode()
+#
+#
+# def esafe_api(auth=False, check=None, pass_token=False):
+#     def wrapper(func):
+#         func = _esafe_api(func)
+#         if auth is not None:
+#             func = cherrypy.tools.authenticated(pass_token=pass_token)(func)
+#         func = cherrypy.tools.params(**(check or {}))(func)
+#         func.exposed = True
+#         func.check = check
+#         return func
+#     return wrapper
+#
 
 # ----------------------------
 # eSafe API
@@ -127,14 +127,14 @@ class EsafeRestAPIEndpoint(object):
 class EsafeUsers(EsafeRestAPIEndpoint):
     API_ENDPOINT = '/api/v1/users'
 
-    @esafe_api(auth=True)
     def GET(self, user_id=None):
+        # return all users
         if user_id is None:
             users = self.user_controller.load_users()
             users_serial = [UserSerializer.serialize(user) for user in users]
-            return json.dumps({'users': users_serial})
+            return json.dumps(users_serial)
 
-
+        # return the requested user
         user = self.user_controller.load_user(user_id=user_id)
         if user is None:
             cherrypy.response.status = 404

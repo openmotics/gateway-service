@@ -61,6 +61,10 @@ class UserMapper(object):
         user_orm = User()
         user_orm.password = dto_object.hashed_password
         user_orm.username_old = dto_object.username
+        if dto_object.role is None:
+            dto_object.role = User.UserRoles.ADMIN  # set default role to admin when one is created
+        if dto_object.pin_code is None:
+            dto_object.pin_code = dto_object.first_name  # set the default pin code to the first name if no pin is provided
         for field in fields:
             if getattr(dto_object, field, None) is None:
                 continue
@@ -68,5 +72,6 @@ class UserMapper(object):
                 apartment_orm, _ = ApartmentMapper.dto_to_orm(dto_object.apartment, ['id', 'name', 'mailbox_rebus_id', 'doorbell_rebus_id'])
                 user_orm.apartment_id = apartment_orm
                 continue
-            setattr(user_orm, field, getattr(dto_object, field))
+            if field not in ['password']:
+                setattr(user_orm, field, getattr(dto_object, field))
         return user_orm

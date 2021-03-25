@@ -27,7 +27,7 @@ if False:  # MYPY
 
 
 class UserDTO(BaseDTO):
-    def __init__(self, id=None, first_name='', last_name='', role='',
+    def __init__(self, id=None, username='', first_name='', last_name='', role=None,
                  pin_code=None, apartment_dto=None, accepted_terms=0):
         self.id = id  # type: Optional[int]
         self.first_name = first_name  # type: str
@@ -37,6 +37,9 @@ class UserDTO(BaseDTO):
         self.apartment = apartment_dto  # type: ApartmentDTO
         self.hashed_password = ''
         self.accepted_terms = accepted_terms
+        # if no first and last name is given, allow to set to set the name to username
+        if first_name == '' and last_name == '':
+            self.username = username
 
     @property
     def username(self):

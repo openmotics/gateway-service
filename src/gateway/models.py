@@ -549,7 +549,7 @@ class User(BaseModel):
     role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
     pin_code = CharField(null=False, unique=True)
     password = CharField()
-    apartment_id = ForeignKeyField(Apartment, backref='users', on_delete='SET NULL')
+    apartment_id = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
     is_active = BooleanField(default=True)
     accepted_terms = IntegerField(default=0)
 
@@ -564,6 +564,7 @@ class User(BaseModel):
     @username.setter
     def username(self, username):
         # type: (str) -> None
+        self.username_old = username
         splits = username.split(' ')
         if len(splits) > 1:
             self.first_name = splits[0]
