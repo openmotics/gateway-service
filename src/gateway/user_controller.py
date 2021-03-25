@@ -18,6 +18,7 @@ and authenticating users.
 """
 
 from __future__ import absolute_import
+import logging
 import uuid
 import time
 import six
@@ -30,6 +31,7 @@ from gateway.enums import UserEnums
 if False:  # MYPY
     from typing import Tuple, List, Optional, Dict
 
+logger = logging.getLogger('openmotics')
 
 @Injectable.named('user_controller')
 @Singleton
@@ -49,6 +51,15 @@ class UserController(object):
     def start(self):
         # type: () -> None
         # Create the user for the cloud
+        first_name = self._config['username'].lower()
+        password = self._config['password']
+        hashed_password = UserDTO._hash_password(password)
+
+        if User.get((User.first_name == first_name) & (User.password == hashed_password)):
+            # If the cloud user is already in the DB, do not add it anymore
+            logger.debug('Cloud user already added, not adding it anymore')
+            return
+
         cloud_user_dto = UserDTO(
             first_name=self._config['username'].lower(),
             last_name='',
