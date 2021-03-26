@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-eSafe object Mapper
+Delivery Mapper
 """
 from __future__ import absolute_import
 
@@ -29,8 +29,8 @@ if False:  # MYPY
 
 logger = logging.getLogger('openmotics')
 
-class DeliveryMapper(object):
 
+class DeliveryMapper(object):
     @staticmethod
     def orm_to_dto(orm_object):
         # type: (Delivery) -> DeliveryDTO

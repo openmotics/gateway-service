@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-eSafe object Mapper
+Apartment Mapper
 """
 from __future__ import absolute_import
 
@@ -30,7 +30,6 @@ logger = logging.getLogger('openmotics')
 
 
 class ApartmentMapper(object):
-
     @staticmethod
     def orm_to_dto(orm_object):
         # type: (Apartment) -> ApartmentDTO
