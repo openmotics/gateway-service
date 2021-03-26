@@ -23,14 +23,42 @@ from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Optional, Any
+    from gateway.dto.apartment import ApartmentDTO
 
 
 class UserDTO(BaseDTO):
-    def __init__(self, username, accepted_terms=0):
-        # type: (str, int) -> None
-        self.username = username
+    def __init__(self, id=None, username='', first_name='', last_name='', role=None,
+                 pin_code=None, apartment_dto=None, accepted_terms=0):
+        self.id = id  # type: Optional[int]
+        self.first_name = first_name  # type: str
+        self.last_name = last_name  # type: str
+        self.role = role  # type: str
+        self.pin_code = pin_code  # type: str
+        self.apartment = apartment_dto  # type: ApartmentDTO
         self.hashed_password = ''
         self.accepted_terms = accepted_terms
+        # if no first and last name is given, allow to set to set the name to username
+        if first_name == '' and last_name == '':
+            self.username = username
+
+    @property
+    def username(self):
+        # type: () -> str
+        separator = ''
+        if self.first_name != '' and self.last_name != '':
+            separator = ' '
+        return "{}{}{}".format(self.first_name, separator, self.last_name)
+
+    @username.setter
+    def username(self, username):
+        # type: (str) -> None
+        splits = username.split(' ')
+        if len(splits) > 1:
+            self.first_name = splits[0]
+            self.last_name = ' '.join(splits[1:])
+        else:
+            self.first_name = username
+            self.last_name = ''
 
     @staticmethod
     def _hash_password(password):
@@ -53,7 +81,7 @@ class UserDTO(BaseDTO):
     def set_password(self, password):
         # type: (str) -> None
         """
-        Sets the hashed password field of the UserDTO object, this way no cleartext passwords are used.
+        Sets the hashed password field of the UserDTO object, this way no clear-text passwords are used.
         """
         if password == '':
             raise ValueError("Password cannot be empty")
@@ -61,9 +89,17 @@ class UserDTO(BaseDTO):
         self.hashed_password = UserDTO._hash_password(password)
 
     def __str__(self):
-        return "UserDTO: {}".format(vars(self))
+        return "UserDTO: first_name: {}, last_name: {}, role: {}".format(self.first_name, self.last_name, self.role)
 
     def __eq__(self, other):
+        # type: (Any) -> bool
         if not isinstance(other, UserDTO):
             return False
-        return self.username.lower() == other.username.lower()
+        return (self.id == other.id and
+                self.first_name == other.first_name and
+                self.last_name == other.last_name and
+                self.role == other.role and
+                self.pin_code == other.pin_code and
+                self.apartment == other.apartment and
+                self.accepted_terms == other.accepted_terms)
+

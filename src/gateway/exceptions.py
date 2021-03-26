@@ -15,12 +15,61 @@
 
 
 class GatewayException(Exception):
-    pass
+    DESC = 'General Gateway Exception'
+    def __init__(self, msg=None, *args):
+        self.extra_message = msg
+
+    @property
+    def message(self):
+        result = self.__class__.DESC
+        if self.extra_message is not None:
+            result += ': {}'.format(self.extra_message)
+        return result
 
 
 class UnsupportedException(GatewayException):
-    pass
+    DESC = 'action is not supported'
 
 
 class ServiceUnavailableException(GatewayException):
-    pass
+    DESC = 'Service is unavailable'
+
+
+class TermsNotAcceptedException(GatewayException):
+    DESC = 'Terms are not accepted'
+
+
+class ItemDoesNotExistException(GatewayException):
+    DESC = 'Item does not exist'
+
+
+class StateException(GatewayException):
+    DESC = 'State Exception'
+
+
+class WrongInputParametersException(GatewayException):
+    DESC = 'Wrong input parameter'
+
+
+class ParseException(GatewayException):
+    DESC = 'Could not parse input'
+
+
+class TimeOutException(GatewayException):
+    DESC = 'Timeout Exception'
+
+
+class InvalidOperationException(GatewayException):
+    DESC = 'Invalid Operation'
+
+
+class UnAuthorizedException(GatewayException):
+    DESC = 'Unauthorized operation'
+
+
+class NotImplementedException(GatewayException):
+    DESC = 'Not implemented'
+
+
+class ForbiddenException(GatewayException):
+    DESC = 'Action forbidden'

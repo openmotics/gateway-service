@@ -50,8 +50,7 @@ still an issue
 from typing import Optional, Literal, List, Tuple, Set, Dict, Any, TypeVar
 from playhouse.signals import Model
 from peewee import (
-    CharField,
-    FloatField, ForeignKeyField, IntegerField, PrimaryKeyField,
+    CharField, FloatField, ForeignKeyField, IntegerField, PrimaryKeyField, BooleanField,
     SqliteDatabase, TextField
 )
 
@@ -62,6 +61,7 @@ class MixedCharField(str, CharField): ...
 class MixedFloatField(float, FloatField): ...
 class MixedPrimaryKeyField(int, PrimaryKeyField): ...
 class MixedTextField(str, TextField): ...
+class MixedBooleanField(str, BooleanField): ...
 
 
 class Database(object):
@@ -195,12 +195,6 @@ class Schedule(BaseModel):
     arguments: Optional[str]
     status: Literal['ACTIVE', 'COMPLETED']
 
-
-class User(BaseModel):
-    id: MixedPrimaryKeyField
-    username: MixedTextField
-    password: MixedTextField
-    accepted_terms: MixedIntegerField
 
 
 class Config(BaseModel):
@@ -400,3 +394,53 @@ class DaySchedule(BaseModel):
     def schedule_data(self, value: Dict[int, float]) -> None: ...
 
     def get_scheduled_temperature(self, seconds_in_day: int) -> float: ...
+
+
+class Apartment(BaseModel):
+    id: MixedPrimaryKeyField
+    name: MixedCharField
+    mailbox_rebus_id: MixedIntegerField
+    doorbell_rebus_id: MixedIntegerField
+
+class ApartmentForeignKeyField(Apartment, ForeignKeyField): ...
+
+
+class User(BaseModel):
+    id: MixedPrimaryKeyField
+    first_name: MixedCharField
+    last_name: MixedCharField
+    username_old: MixedCharField
+    password: MixedTextField
+    role: MixedCharField
+    pin_code: MixedCharField
+    apartment_id: ApartmentForeignKeyField
+    is_active: ApartmentForeignKeyField
+    accepted_terms: MixedIntegerField
+class UserForeignKeyField(User, ForeignKeyField): ...
+
+
+class RFID(BaseModel):
+    id: MixedPrimaryKeyField
+    tag_string: MixedCharField
+    uid_manufacturer: MixedCharField
+    uid_extension: MixedCharField
+    enter_count: MixedIntegerField
+    blacklisted: MixedBooleanField
+    label: MixedCharField
+    timestamp_created: MixedCharField
+    timestamp_last_used: MixedCharField
+    user_id: UserForeignKeyField
+
+
+class Delivery(BaseModel):
+    id: MixedPrimaryKeyField
+    type: MixedCharField
+    timestamp_delivery: MixedCharField
+    timestamp_pickup: MixedCharField
+    courier_firm: MixedCharField
+    signature_delivery: MixedCharField
+    signature_pickup: MixedCharField
+    parcelbox_rebus_id: MixedIntegerField
+    user_id_delivery: UserForeignKeyField
+    user_id_pickup: UserForeignKeyField
+

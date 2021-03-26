@@ -185,12 +185,14 @@ def setup_target_platform(target_platform, message_client_name):
     from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
                          maintenance_controller, user_controller, pulse_counter_controller,
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
-                         shutter_controller, group_action_controller, module_controller, ventilation_controller)
+                         shutter_controller, group_action_controller, module_controller, ventilation_controller,
+                         webservice_v1)
     from cloud import events
     _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
          maintenance_controller, base, events, user_controller,
          pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
-         sensor_controller, shutter_controller, group_action_controller, module_controller, ventilation_controller)
+         sensor_controller, shutter_controller, group_action_controller, module_controller, ventilation_controller,
+         webservice_v1)
 
     # IPC
     message_client = None
@@ -269,6 +271,9 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(eeprom_db=None)
         from gateway.hal.master_controller_dummy import DummyEepromObject
         Injectable.value(eeprom_extension=DummyEepromObject())
+        # Add a eSafe api service when the platform is eSafe
+        if target_platform == Platform.Type.ESAFE:
+            Injectable.value(esafe_endpoints=[webservice_v1.EsafeUsers(), webservice_v1.Apartment()])
     elif target_platform in Platform.CoreTypes:
         # FIXME don't create singleton for optional controller?
         from master.core import ucan_communicator, slave_communicator
