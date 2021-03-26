@@ -51,7 +51,7 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO, \
     GlobalRTD10DTO
 from gateway.enums import ShutterEnums, UserEnums
-from gateway.exceptions import UnsupportedException, ItemDoesNotExistException
+from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
@@ -189,21 +189,18 @@ def cors_handler():
     cherrypy.response.headers['Access-Control-Allow-Methods'] = 'GET'
 
 
-def authentication_handler(pass_token=False, pass_role=False):
+def authentication_handler(pass_token=False):
     request = cherrypy.request
     if request.method == 'OPTIONS':
         return
     try:
         token = None
-        # check if token is passed with the params
         if 'token' in request.params:
             token = request.params.pop('token')
-        # check if the token is passed as a Bearer token in the headers
         if token is None:
             header = request.headers.get('Authorization')
             if header is not None and 'Bearer ' in header:
                 token = header.replace('Bearer ', '')
-        # check if hte token is passed as a web-socket Bearer token
         if token is None:
             header = request.headers.get('Sec-WebSocket-Protocol')
             if header is not None and 'authorization.bearer.' in header:
@@ -214,16 +211,12 @@ def authentication_handler(pass_token=False, pass_role=False):
                 except Exception:
                     pass
         _self = request.handler.callable.__self__
-        # check if the call is done from localhost, and then verify the token
         if request.remote.ip != '127.0.0.1':
-            # Fetch the checkToken function that is placed under the main webservice or under the plugin webinterface.
             check_token = _self._user_controller.check_token if hasattr(_self, '_user_controller') else _self.webinterface.check_token
             if not check_token(token):
                 raise RuntimeError()
         if pass_token is True:
             request.params['token'] = token
-        if pass_role is True:
-            request.params['role'] = 'ADMIN'
     except Exception:
         cherrypy.response.headers['Content-Type'] = 'application/json'
         cherrypy.response.status = 401  # Unauthorized
@@ -448,8 +441,7 @@ class WebInterface(object):
         :returns: Authentication token
         :rtype: str
         """
-        user_dto = UserDTO()
-        user_dto.username = username
+        user_dto = UserDTO(username=username)
         user_dto.set_password(password)
         success, data = self._user_controller.login(user_dto, accept_terms, timeout)
         if success is True:
@@ -466,10 +458,7 @@ class WebInterface(object):
         :returns: 'status': 'OK'
         :rtype: str
         """
-        try:
-            self._user_controller.logout(token)
-        except ItemDoesNotExistException:
-            return {'status': 'Could not log out successfully'}
+        self._user_controller.logout(token)
         return {'status': 'OK'}
 
     @openmotics_api(plugin_exposed=False)
