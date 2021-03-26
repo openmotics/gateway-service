@@ -61,12 +61,12 @@ class MemoryFileTest(unittest.TestCase):
         memory_file = mocked_core.memory_file
 
         memory[5] = bytearray([255] * 256)
-        memory[5][2] = 0
-        address_0 = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=5, offset=0, length=3)
-        address_1 = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=5, offset=2, length=3)  # Overlap on byte 2
+        memory[5][129] = 0
+        address_0 = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=5, offset=126, length=4)
+        address_1 = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=5, offset=129, length=4)  # Overlap on byte 2
 
-        self.assertEqual({address_0: bytearray([255, 255, 0]),
-                          address_1: bytearray([0, 255, 255])},
+        self.assertEqual({address_0: bytearray([255, 255, 255, 0]),
+                          address_1: bytearray([0, 255, 255, 255])},
                          memory_file.read([address_0, address_1]))
 
         # Prepare thread mocks
@@ -79,29 +79,40 @@ class MemoryFileTest(unittest.TestCase):
 
         # Execute two simultaneous writes
         with mock.patch.object(threading, 'current_thread', thread_0):
-            memory_file.write({address_0: bytearray([10, 11, 12])})
+            memory_file.write({address_0: bytearray([10, 11, 12, 13])})
         with mock.patch.object(threading, 'current_thread', thread_1):
-            memory_file.write({address_1: bytearray([20, 21, 22])})
+            memory_file.write({address_1: bytearray([20, 21, 22, 23])})
 
         # Activate should only activate the current thread's write cache - nothing in this case
         memory_file.activate()
-        self.assertEqual({address_0: bytearray([255, 255, 0]),
-                          address_1: bytearray([0, 255, 255])},
+        self.assertEqual({address_0: bytearray([255, 255, 255, 0]),
+                          address_1: bytearray([0, 255, 255, 255])},
                          memory_file.read([address_0, address_1]))
 
         # Activate from within thread 0
+        mocked_core.write_log = []
         with mock.patch.object(threading, 'current_thread', thread_0):
             memory_file.activate()
-        self.assertEqual({address_0: bytearray([10, 11, 12]),
-                          address_1: bytearray([12, 255, 255])},
+        self.assertEqual({address_0: bytearray([10, 11, 12, 13]),
+                          address_1: bytearray([13, 255, 255, 255])},
                          memory_file.read([address_0, address_1]))
 
+        # Validate write log, since thread_0 wrote over the 127/128 byte boundary
+        self.assertEqual([{'type': MemoryTypes.EEPROM, 'page': 5, 'start': 126, 'data': bytearray([10, 11])},
+                          {'type': MemoryTypes.EEPROM, 'page': 5, 'start': 128, 'data': bytearray([12, 13])}],
+                         mocked_core.write_log)
+
         # Activate from within thread 1
+        mocked_core.write_log = []
         with mock.patch.object(threading, 'current_thread', thread_1):
             memory_file.activate()
-        self.assertEqual({address_0: bytearray([10, 11, 20]),
-                          address_1: bytearray([20, 21, 22])},
+        self.assertEqual({address_0: bytearray([10, 11, 12, 20]),
+                          address_1: bytearray([20, 21, 22, 23])},
                          memory_file.read([address_0, address_1]))
+
+        # Validate write log, since thread_1 did not write over the 127/128 boundary
+        self.assertEqual([{'type': MemoryTypes.EEPROM, 'page': 5, 'start': 129, 'data': bytearray([20, 21, 22, 23])}],
+                         mocked_core.write_log)
 
 
 if __name__ == "__main__":

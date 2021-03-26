@@ -136,7 +136,7 @@ class InputConfiguration(MemoryModelDefinition):
     input_link = _InputLink(field=MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, id % 8 * 2)))  # 81-238, 0-15
     basic_action_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 16 + id % 8 * 6))  # 81-238, 16-63
     basic_action_release = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 64 + id % 8 * 6))  # 81-238, 64-111
-    basic_action_1s_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 112 + id % 8 * 6))  # 81-238, 112-159
+    basic_action_1s_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 32 + id % 8 * 6))  # 81-238, 32-79
     basic_action_2s_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 160 + id % 8 * 6))  # 81-238, 160-207
     basic_action_double_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 208 + id % 8 * 6))  # 81-238, 208-255
 
@@ -277,4 +277,4 @@ class GroupActionConfiguration(MemoryModelDefinition):
 
 class GroupActionBasicAction(MemoryModelDefinition):
     id = IdField(limits=(0, 4199))
-    basic_action = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (281 + id // 42, (id % 42) * 6))  # 281-380, 0-251
+    basic_action = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (281 + id // 42, ((id % 42) * 6) + (0 if (id % 42) < 21 else 2)))  # 281-380, 0-253
