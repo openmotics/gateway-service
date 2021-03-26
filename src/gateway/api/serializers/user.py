@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-eSafe (de)serializer
+user (de)serializer
 """
 from __future__ import absolute_import
 
@@ -25,7 +25,7 @@ from gateway.dto.user import UserDTO
 from gateway.api.serializers.apartment import ApartmentSerializer
 
 if False:  # MYPY
-    from typing import Any, Dict, Optional, List, Tuple
+    from typing import Any, Dict, Optional, List, Tuple, Union
 
 logger = logging.getLogger('openmotics')
 
@@ -40,11 +40,10 @@ class UserSerializer(object):
                 'role': dto_object.role,
                 # 'pin_code': dto_object.pin_code,  # Hide the pin code for the api
                 'apartment': None,
-                'accepted_terms': dto_object.accepted_terms}
-        if fields is not None:
-            if 'apartment' in fields:
-                apartment_data = ApartmentSerializer.serialize(dto_object.apartment)
-                data['apartment'] = apartment_data
+                'accepted_terms': dto_object.accepted_terms}  # type: Dict[str, Any]
+        if fields is not None and 'apartment' in fields:
+            apartment_data = ApartmentSerializer.serialize(dto_object.apartment)
+            data['apartment'] = apartment_data
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod

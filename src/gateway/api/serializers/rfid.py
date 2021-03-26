@@ -63,13 +63,17 @@ class RfidSerializer(object):
         if 'uid_manufacturer' in api_data:
             loaded_fields.append('uid_manufacturer')
             uid_manu = api_data['uid_manufacturer']
-        rfid_dto = RfidDTO(id, tag_string, uid_manu)
-        for field in ['uid_extension', 'enter_count', 'blacklisted', 'label', 'timestamp_created', 'timestamp_last_used']:
-            if field in api_data:
-                loaded_fields.append(field)
-                setattr(rfid_dto, field, api_data[field])
+        time_created = None
+        if 'timestamp_created' in api_data:
+            loaded_fields.append('timestamp_created')
+            time_created = api_data['timestamp_created']
+        user_dto = None
         if 'user' in api_data:
             loaded_fields.append('user')
             user_dto, _ = UserSerializer.deserialize(api_data['user'])
-            rfid_dto.user = user_dto
+        rfid_dto = RfidDTO(id, tag_string, uid_manu, time_created, user_dto)
+        for field in ['uid_extension', 'enter_count', 'blacklisted', 'label', 'timestamp_last_used']:
+            if field in api_data:
+                loaded_fields.append(field)
+                setattr(rfid_dto, field, api_data[field])
         return rfid_dto, loaded_fields

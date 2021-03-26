@@ -45,8 +45,9 @@ class DeliverySerializer(object):
                 'user_pickup': None}
         user_data = UserSerializer.serialize(dto_object.user_delivery)
         data['user_delivery'] = user_data
-        user_data = UserSerializer.serialize(dto_object.user_pickup)
-        data['user_pickup'] = user_data
+        if dto_object.user_pickup is not None:
+            user_data = UserSerializer.serialize(dto_object.user_pickup)
+            data['user_pickup'] = user_data
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
@@ -61,15 +62,19 @@ class DeliverySerializer(object):
         if 'type' in api_data:
             loaded_fields.append('type')
             type = api_data['type']
-        delivery_dto = DeliveryDTO(id, type)
-        for field in ['timestamp_delivery', 'timestamp_pickup', 'courier_firm', 'signature_delivery', 'signature_pickup', 'parcelbox_rebus_id']:
+        timestamp_delivery = ''
+        if 'timestamp_delivery' in api_data:
+            loaded_fields.append('timestamp_delivery')
+            timestamp_delivery = api_data['timestamp_delivery']
+        user_delivery_dto = None
+        if 'user_delivery' in api_data:
+            loaded_fields.append('user_delivery')
+            user_delivery_dto, _ = UserSerializer.deserialize(api_data['user_delivery'])
+        delivery_dto = DeliveryDTO(id, type, timestamp_delivery, user_delivery_dto)
+        for field in ['timestamp_pickup', 'courier_firm', 'signature_delivery', 'signature_pickup', 'parcelbox_rebus_id']:
             if field in api_data:
                 loaded_fields.append(field)
                 setattr(delivery_dto, field, api_data[field])
-        if 'user_delivery' in api_data:
-            loaded_fields.append('user_delivery')
-            user_dto, _ = UserSerializer.deserialize(api_data['user_delivery'])
-            delivery_dto.user_delivery = user_dto
         if 'user_pickup' in api_data:
             loaded_fields.append('user_pickup')
             user_dto, _ = UserSerializer.deserialize(api_data['user_pickup'])

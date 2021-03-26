@@ -24,8 +24,8 @@ if False:  # MYPY
 
 
 class DeliveryDTO(BaseDTO):
-    def __init__(self, id, type, timestamp_delivery, timestamp_pickup=None, courier_firm='', signature_delivery='',
-                 signature_pickup='', parcelbox_rebus_id=None, user_dto_delivery=None, user_dto_pickup=None):
+    def __init__(self, id, type, timestamp_delivery, user_dto_delivery, timestamp_pickup=None, courier_firm='',
+                 signature_delivery='', signature_pickup='', parcelbox_rebus_id=None, user_dto_pickup=None):
         self.id = id  # type: int
         self.type = type  # type: str
         self.timestamp_delivery = timestamp_delivery  # type: int
@@ -34,7 +34,7 @@ class DeliveryDTO(BaseDTO):
         self.signature_delivery = signature_delivery  # type: str
         self.signature_pickup = signature_pickup  # type: str
         self.parcelbox_rebus_id = parcelbox_rebus_id  # type: int
-        self.user_delivery = user_dto_delivery  # type: Optional[UserDTO]
+        self.user_delivery = user_dto_delivery  # type: UserDTO
         self.user_pickup = user_dto_pickup  # type: Optional[UserDTO]
 
     def __eq__(self, other):

@@ -35,8 +35,8 @@ class UserDTO(BaseDTO):
         self.role = role  # type: str
         self.pin_code = pin_code  # type: str
         self.apartment = apartment_dto  # type: ApartmentDTO
-        self.hashed_password = ''
-        self.accepted_terms = accepted_terms
+        self.hashed_password = ''  # type: str
+        self.accepted_terms = accepted_terms  # type: int
         # if no first and last name is given, allow to set to set the name to username
         if first_name == '' and last_name == '':
             self.username = username
