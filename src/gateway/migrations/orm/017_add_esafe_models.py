@@ -43,7 +43,10 @@ def migrate(migrator, database, fake=False, **kwargs):
 
     # CURRENT USER MODEL
     # -------------------
-    class User(BaseModel):
+    class UserOld(BaseModel):
+        class Meta:
+            table_name = '_user_old'
+
         class UserRoles(object):
             USER = 'USER'
             ADMIN = 'ADMIN'
@@ -56,23 +59,32 @@ def migrate(migrator, database, fake=False, **kwargs):
 
     # USER TARGET MODEL:
     # ---------------------
-    # class User(BaseModel):
-    #     class EsafeUserRoles(object):
-    #         USER = 'USER'
-    #         ADMIN = 'ADMIN'
-    #         TECHNICIAN = 'TECHNICIAN'
-    #         COURIER = 'COURIER'
-    #
-    #     id = AutoField()
-    #     first_name = CharField()
-    #     last_name = CharField()
-    #     username_old = CharField()
-    #     role = CharField(default=EsafeUserRoles.USER, null=False, )  # options USER, ADMIN, TECHNICAN, COURIER
-    #     pin_code = CharField(null=False, unique=True)
-    #     password = CharField()
-    #     apartment_id = ForeignKeyField(Apartment, backref='users', on_delete='SET NULL')
-    #     is_active = BooleanField(default=True)
-    #     accepted_terms = IntegerField(default=0)
+    class User(BaseModel):
+        class Meta:
+            table_name = 'user'
+
+        class UserRoles(object):
+            USER = 'USER'
+            ADMIN = 'ADMIN'
+            TECHNICIAN = 'TECHNICIAN'
+            COURIER = 'COURIER'
+
+        class UserLanguages(object):
+            EN = 'English'
+            DE = 'Deutsh'
+            NL = 'Nederlands'
+            FR = 'Français'
+
+        id = AutoField()
+        first_name = CharField(null=False)
+        last_name = CharField(null=False, default='')
+        role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
+        pin_code = CharField(null=False, unique=True)
+        language = CharField(null=False, default='English')  # options: See Userlanguages
+        password = CharField()
+        apartment_id = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
+        is_active = BooleanField(default=True)
+        accepted_terms = IntegerField(default=0)
 
 
     class RFID(BaseModel):
@@ -104,29 +116,11 @@ def migrate(migrator, database, fake=False, **kwargs):
     migrator.create_model(RFID)
     migrator.create_model(Delivery)
 
-
-    print('current user table:')
-    for user in User.select():
-        print(user)
-        print('---')
-    migrator.add_columns(User,
-                         first_name=CharField(null=False, default=User.username),
-                         last_name=CharField(null=True),
-                         role=CharField(default=User.UserRoles.USER, null=False),
-                         pin_code=CharField(null=False, default=User.username),
-                         apartment_id=ForeignKeyField(Apartment, backref='users', on_delete='SET NULL', null=True, default=None),
-                         is_active=BooleanField(default=True),
-                         )
-    migrator.rename_column(User,
-                           old_name='username',
-                           new_name='username_old')
-
-    # Change the pin code field after the fact since it will not allow to be set unique when adding the column
-    # The pin_code is by definition unique since it is a copy of username for the existing users,
-    # (making the pin code unusable for the most part) which is also unique.
-    migrator.change_columns(User,
-                            pin_code=CharField(null=False, unique=True))
-
+    # Since there is a bug in peewee_migrate, just run the raw sql form of the table rename.
+    # Updating to a newer version of peewee_migrate is not applicable since the current version
+    # is the latest one supported by Python 2.7
+    migrator.sql('ALTER TABLE user RENAME TO _user_old')
+    migrator.create_model(User)
 
 def rollback(migrator, database, fake=False, **kwargs):
     # type: (Migrator, Database, bool, Dict[Any, Any]) -> None

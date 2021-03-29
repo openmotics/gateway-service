@@ -35,6 +35,7 @@ from gateway.migrations.inputs import InputMigrator
 from gateway.migrations.schedules import ScheduleMigrator
 from gateway.migrations.users import UserMigrator
 from gateway.migrations.config import ConfigMigrator
+from gateway.migrations.users_2 import Users2Migrator
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from logs import Logs
@@ -168,6 +169,7 @@ class OpenmoticsService(object):
         ScheduleMigrator.migrate()
         UserMigrator.migrate()
         ConfigMigrator.migrate()
+        Users2Migrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()

@@ -542,12 +542,18 @@ class User(BaseModel):
         TECHNICIAN = 'TECHNICIAN'
         COURIER = 'COURIER'
 
+    class UserLanguages(object):
+        EN = 'English'
+        DE = 'Deutsh'
+        NL = 'Nederlands'
+        FR = 'Français'
+
     id = AutoField()
-    first_name = CharField()
-    last_name = CharField()
-    username_old = CharField(unique=True)
+    first_name = CharField(null=False)
+    last_name = CharField(null=False, default='')
     role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
     pin_code = CharField(null=False, unique=True)
+    language = CharField(null=False, default='English')  # options: See Userlanguages
     password = CharField()
     apartment_id = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
     is_active = BooleanField(default=True)

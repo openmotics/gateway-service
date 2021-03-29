@@ -409,10 +409,10 @@ class User(BaseModel):
     id: MixedPrimaryKeyField
     first_name: MixedCharField
     last_name: MixedCharField
-    username_old: MixedCharField
     password: MixedTextField
     role: MixedCharField
     pin_code: MixedCharField
+    language: MixedCharField
     apartment_id: ApartmentForeignKeyField
     is_active: ApartmentForeignKeyField
     accepted_terms: MixedIntegerField
