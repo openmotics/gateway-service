@@ -56,6 +56,7 @@ if False:  # MYPY
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.ventilation_controller import VentilationController
     from gateway.webservice import WebInterface, WebService
+    from gateway.webservice_v1 import WebServiceV1
     from gateway.watchdog import Watchdog
     from gateway.module_controller import ModuleController
     from gateway.user_controller import UserController
@@ -147,7 +148,8 @@ class OpenmoticsService(object):
                 module_controller=INJECTED,  # type: ModuleController
                 user_controller=INJECTED,  # type: UserController
                 ventilation_controller=INJECTED,  # type: VentilationController
-                pubsub=INJECTED  # type: PubSub
+                pubsub=INJECTED,  # type: PubSub
+                web_service_v1=INJECTED  # type: WebServiceV1
     ):
         """ Main function. """
         logger.info('Starting OM core service...')
@@ -186,6 +188,7 @@ class OpenmoticsService(object):
         ventilation_controller.start()
         metrics_collector.start()
         web_service.start()
+        web_service_v1.start()
         if frontpanel_controller:
             frontpanel_controller.start()
         event_sender.start()

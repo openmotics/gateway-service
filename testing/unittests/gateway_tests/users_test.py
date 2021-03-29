@@ -27,6 +27,7 @@ import unittest
 from peewee import SqliteDatabase
 from pytest import mark
 
+from gateway.authentication_controller import AuthenticationController, TokenStore
 from gateway.dto import UserDTO
 from gateway.enums import UserEnums
 from gateway.mappers.user import UserMapper
@@ -59,6 +60,8 @@ class UserControllerTest(unittest.TestCase):
         self.test_db.create_tables(MODELS)
         SetUpTestInjections(config={'username': 'om', 'password': 'pass'},
                             token_timeout=UserControllerTest.TOKEN_TIMEOUT)
+        SetUpTestInjections(token_store = TokenStore())
+        SetUpTestInjections(authentication_controller=AuthenticationController())
         self.controller = UserController()
         self.controller.start()
 
