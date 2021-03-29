@@ -88,9 +88,6 @@ class UserDTO(BaseDTO):
 
         self.hashed_password = UserDTO._hash_password(password)
 
-    def __str__(self):
-        return "UserDTO: first_name: {}, last_name: {}, role: {}".format(self.first_name, self.last_name, self.role)
-
     def __eq__(self, other):
         # type: (Any) -> bool
         if not isinstance(other, UserDTO):
