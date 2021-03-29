@@ -48,11 +48,6 @@ class Users2Migrator(BaseMigrator):
             class Meta:
                 table_name = '_user_old'
 
-            class UserRoles(object):
-                USER = 'USER'
-                ADMIN = 'ADMIN'
-                TECHNICIAN = 'TECHNICIAN'
-                COURIER = 'COURIER'
             id = AutoField()
             username = CharField(unique=True)
             password = CharField()

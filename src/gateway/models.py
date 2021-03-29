@@ -546,7 +546,7 @@ class User(BaseModel):
         EN = 'English'
         DE = 'Deutsh'
         NL = 'Nederlands'
-        FR = 'Français'
+        FR = 'Francais'
 
     id = AutoField()
     first_name = CharField(null=False)
@@ -578,7 +578,6 @@ class User(BaseModel):
         else:
             self.first_name = username
             self.last_name = ''
-
 
 
 class RFID(BaseModel):

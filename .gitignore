@@ -1,5 +1,6 @@
 # Testing artifacts
 .coverage
+.coverage**
 coverage.xml
 testing/gw-unit-reports
 testing/gw-unit-reports-3

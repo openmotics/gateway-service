@@ -43,19 +43,13 @@ def migrate(migrator, database, fake=False, **kwargs):
 
     # CURRENT USER MODEL
     # -------------------
-    class UserOld(BaseModel):
-        class Meta:
-            table_name = '_user_old'
-
-        class UserRoles(object):
-            USER = 'USER'
-            ADMIN = 'ADMIN'
-            TECHNICIAN = 'TECHNICIAN'
-            COURIER = 'COURIER'
-        id = AutoField()
-        username = CharField(unique=True)
-        password = CharField()
-        accepted_terms = IntegerField(default=0)
+    # class UserOld(BaseModel):
+    #     class Meta:
+    #         table_name = '_user_old'
+    #     id = AutoField()
+    #     username = CharField(unique=True)
+    #     password = CharField()
+    #     accepted_terms = IntegerField(default=0)
 
     # USER TARGET MODEL:
     # ---------------------
