@@ -51,6 +51,7 @@ class UserController(object):
     def start(self):
         # type: () -> None
         # Create the user for the cloud
+        logger.info('Adding the cloud user')
         first_name = self._config['username'].lower()
         password = self._config['password']
         hashed_password = UserDTO._hash_password(password)
@@ -61,8 +62,7 @@ class UserController(object):
             return
 
         cloud_user_dto = UserDTO(
-            first_name=self._config['username'].lower(),
-            last_name='',
+            username=self._config['username'].lower(),
             pin_code=self._config['username'].lower(),
             role=User.UserRoles.ADMIN,
             accepted_terms=UserController.TERMS_VERSION
@@ -70,7 +70,7 @@ class UserController(object):
         cloud_user_dto.set_password(self._config['password'])
         # Save the user to the DB
         self.save_user(user_dto=cloud_user_dto,
-                       fields=['first_name', 'last_name', 'password', 'accepted_terms', 'pin_code', 'role', 'pin_code'])
+                       fields=['first_name', 'last_name', 'password', 'accepted_terms', 'pin_code', 'role'])
 
     def stop(self):
         # type: () -> None
@@ -80,7 +80,9 @@ class UserController(object):
         # type: (UserDTO, List[str]) -> None
         """ Saves one instance of a user with the defined fields in param fields """
         _ = self
+        logger.info('Saving user: {}'.format(user_dto))
         user_orm = UserMapper.dto_to_orm(user_dto, fields)
+        logger.info('Saving user: {}'.format(user_orm))
         UserController._validate(user_orm)
         user_orm.save()
 

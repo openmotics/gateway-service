@@ -41,22 +41,16 @@ class ApartmentSerializer(object):
     @staticmethod
     def deserialize(api_data):
         # type: (Dict[str,Any]) -> Tuple[ApartmentDTO, List[str]]
-        loaded_fields = []
-        apartment_id = None
-        if 'id' in api_data:
-            loaded_fields.append('id')
-            apartment_id = api_data['id']
-        name = ''
-        if 'name' in api_data:
-            loaded_fields.append('name')
-            name = api_data['name']
-        mailbox_rebus_id = None
-        if 'mailbox_rebus_id' in api_data:
-            loaded_fields.append('mailbox_rebus_id')
-            mailbox_rebus_id = api_data['mailbox_rebus_id']
-        doorbell_rebus_id = None
-        if 'doorbell_rebus_id' in api_data:
-            loaded_fields.append('doorbell_rebus_id')
-            doorbell_rebus_id = api_data['doorbell_rebus_id']
-        apartment_dto = ApartmentDTO(apartment_id, name, mailbox_rebus_id, doorbell_rebus_id)
+        apartment_dto = ApartmentDTO(None, '', None, None)
+        loaded_fields = SerializerToolbox.deserialize(
+            dto=apartment_dto,
+            api_data=api_data,
+            mapping={
+                'id': ('id', None),
+                'name': ('name', None),
+                'mailbox_rebus_id': ('mailbox_rebus_id', None),
+                'doorbell_rebus_id': ('doorbell_rebus_id', None)
+            }
+        )
+
         return apartment_dto, loaded_fields

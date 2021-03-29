@@ -102,14 +102,6 @@ class UserControllerTest(unittest.TestCase):
         user_dto = UserDTO(username="om")
         user_dto.set_password("pass")
 
-        print('printing users')
-        fields = ['first_name', 'last_name', 'password', 'role', 'pin_code']
-        for u in User.select():
-            user_str = ', '.join(['{}: {}'.format(x, getattr(u, x)) for x in fields])
-            print('user: {}'.format(user_str))
-
-        print(user_dto)
-
         # verify that the cloud user can login
         success, data = self.controller.login(user_dto)
         self.assertTrue(success)
@@ -401,8 +393,6 @@ class UserControllerTest(unittest.TestCase):
         fields = ['role', 'pin_code', 'first_name', 'last_name', 'password']
         user_orm = UserMapper.dto_to_orm(user_dto, fields)
 
-        print(vars(user_orm))
-        print(user_orm.pin_code)
         self.assertEqual(True, hasattr(user_orm, "username"))
         self.assertEqual(True, hasattr(user_orm, "password"))
         self.assertEqual(True, hasattr(user_orm, "accepted_terms"))

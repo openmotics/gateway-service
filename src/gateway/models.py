@@ -549,6 +549,7 @@ class User(BaseModel):
         FR = 'Francais'
 
     id = AutoField()
+    username_old = CharField(unique=True)
     first_name = CharField(null=False)
     last_name = CharField(null=False, default='')
     role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
