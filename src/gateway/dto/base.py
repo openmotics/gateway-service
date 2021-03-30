@@ -16,14 +16,42 @@
 """
 Base DTO
 """
+from functools import wraps
+from toolbox import Toolbox
 
 
 class BaseDTO(object):
+    _loaded_fields = set()
+    _init_done = False
+
     def __str__(self):
-        return str(self.__dict__)
+        return '<{} {}>'.format(self.__class__.__name__,
+                                {field: self.__dict__[field] for field in self._loaded_fields})
 
     def __repr__(self):
-        return '<{} {}>'.format(self.__class__.__name__, self.__dict__)
+        return str(self)
 
     def __ne__(self, other):
         return not (self == other)
+
+    def __setattr__(self, key, value):
+        if self._init_done and key in self.__dict__:
+            self._loaded_fields.add(key)
+        object.__setattr__(self, key, value)
+
+    @property
+    def loaded_fields(self):
+        return list(self._loaded_fields)
+
+
+def capture_fields(func):
+    field_names = Toolbox.get_parameter_names(func)
+    field_names.pop(0)  # Remove `self`
+
+    @wraps(func)
+    def new_init(self, *args, **kwargs):
+        self._loaded_fields = set(field_names[:len(args)] + list(kwargs.keys()))
+        self._init_done = True
+        func(self, *args, **kwargs)
+
+    return new_init
