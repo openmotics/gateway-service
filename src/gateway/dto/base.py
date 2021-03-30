@@ -19,9 +19,12 @@ Base DTO
 from functools import wraps
 from toolbox import Toolbox
 
+if False:  # MYPY
+    from typing import Set
+
 
 class BaseDTO(object):
-    _loaded_fields = set()
+    _loaded_fields = set()  # type: Set[str]
     _init_done = False
 
     def __str__(self):
