@@ -141,7 +141,7 @@ class MemoryModelsTest(unittest.TestCase):
             if print_overview:
                 print('{0}:'.format(memory_type_name))
                 for page, values in overview.items():
-                    print('  {0}: {1}'.format(page, ''.join(values)))
+                    print('  {0:03d}: {1}'.format(page, ''.join(values)))
         if print_overview:
             print('Legend:')
             for code, specs in MemoryModelsTest.TEST_MATRIX.items():
