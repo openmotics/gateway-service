@@ -16,7 +16,7 @@
 """
 Output DTO
 """
-from gateway.dto.base import BaseDTO
+from gateway.dto.base import BaseDTO, capture_fields
 from gateway.dto.feedback_led import FeedbackLedDTO
 
 if False:  # MYPY
@@ -24,6 +24,7 @@ if False:  # MYPY
 
 
 class OutputDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, name='', module_type='O', timer=None, floor=None, output_type=None,
                  can_led_1=None,  # type: Optional[FeedbackLedDTO]
                  can_led_2=None,  # type: Optional[FeedbackLedDTO]
@@ -66,6 +67,7 @@ class OutputDTO(BaseDTO):
 
 
 class OutputStateDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, status=False, ctimer=0, dimmer=0, locked=False):
         # type: (int, bool, int, int, bool) -> None
         self.id = id  # type: int
