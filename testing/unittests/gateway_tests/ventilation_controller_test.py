@@ -516,7 +516,6 @@ class VentilationControllerTest(unittest.TestCase):
                                                                 last_seen=time.time()))
                 self.pubsub._publish_all_events()
 
-                print(events)
                 self.assertEqual(1, len(events))
                 self.assertEqual(1, len(self.controller._status))
                 self.assertEqual(i, events[-1].data['remaining_time'])
