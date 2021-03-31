@@ -35,7 +35,7 @@ from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Optional, Tuple
+    from typing import Dict, List, Optional, Tuple
     from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger('openmotics')
@@ -78,23 +78,22 @@ class OutputController(BaseController):
             if self._sync_state_thread:
                 self._sync_state_thread.request_single_run()
         if master_event.type == MasterEvent.Types.OUTPUT_STATUS:
-            self._handle_output_status(master_event.data)
+            self._handle_output_status(master_event.data['state'])
 
-    def _handle_output_status(self, change_data):
-        # type: (Dict[str,Any]) -> None
-        changed, output_dto = self._cache.handle_change(change_data['id'], change_data)
+    def _handle_output_status(self, state_dto):
+        # type: (OutputStateDTO) -> None
+        changed, output_dto = self._cache.handle_change(state_dto)
         if changed and output_dto is not None:
             self._publish_output_change(output_dto)
 
     def _sync_state(self):
         try:
             self.load_outputs()
-            for state_data in self._master_controller.load_output_status():
-                if 'id' in state_data:
-                    _, output_dto = self._cache.handle_change(state_data['id'], state_data)
-                    if output_dto is not None:
-                        # Always send events on the background sync
-                        self._publish_output_change(output_dto)
+            for state_dto in self._master_controller.load_output_status():
+                _, output_dto = self._cache.handle_change(state_dto)
+                if output_dto is not None:
+                    # Always send events on the background sync
+                    self._publish_output_change(output_dto)
         except CommunicationTimedOutException:
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
             raise DaemonThreadWait
@@ -212,8 +211,8 @@ class OutputStateCache(object):
             self._cache = new_state
             self._loaded = True
 
-    def handle_change(self, output_id, change_data):
-        # type: (int, Dict[str,Any]) -> Tuple[bool, Optional[OutputDTO]]
+    def handle_change(self, state_dto):
+        # type: (OutputStateDTO) -> Tuple[bool, Optional[OutputDTO]]
         """
         Cache output state and detect changes.
         The classic master will send multiple status events when an output changes,
@@ -222,23 +221,24 @@ class OutputStateCache(object):
         with self._lock:
             if not self._loaded:
                 return False, None
+            output_id = state_dto.id
             if output_id not in self._cache:
-                logger.warning('Received change for unknown output {0}: {1}'.format(output_id, change_data))
+                logger.warning('Received change for unknown output {0}: {1}'.format(output_id, state_dto))
                 return False, None
             changed = False
             state = self._cache[output_id].state
-            if 'status' in change_data:
-                status = bool(change_data['status'])
+            if 'status' in state_dto.loaded_fields:
+                status = state_dto.status
                 changed |= state.status != status
                 state.status = status
-            if 'ctimer' in change_data:
-                state.ctimer = int(change_data['ctimer'])
-            if 'dimmer' in change_data:
-                dimmer = int(change_data['dimmer'])
+            if 'ctimer' in state_dto.loaded_fields:
+                state.ctimer = state_dto.ctimer
+            if 'dimmer' in state_dto.loaded_fields:
+                dimmer = state_dto.dimmer
                 changed |= state.dimmer != dimmer
                 state.dimmer = dimmer
-            if 'locked' in change_data:
-                locked = bool(change_data['locked'])
+            if 'locked' in state_dto.loaded_fields:
+                locked = state_dto.locked
                 changed |= state.locked != locked
                 state.locked = locked
             return changed, self._cache[output_id]

@@ -21,7 +21,7 @@ import logging
 
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
     PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, \
-    ThermostatAircoStatusDTO, PumpGroupDTO, GlobalFeedbackDTO
+    ThermostatAircoStatusDTO, PumpGroupDTO, GlobalFeedbackDTO, OutputStateDTO
 from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import MasterController
 
@@ -129,7 +129,7 @@ class MasterDummyController(MasterController):
         return []
 
     def load_output_status(self):
-        # type: () -> List[Dict[str,Any]]
+        # type: () -> List[OutputStateDTO]
         return []
 
     def load_shutters(self):
