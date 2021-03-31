@@ -71,7 +71,11 @@ class MemoryModelsTest(unittest.TestCase):
                      ['O.address', 'O.device_type'],
                      ['S.address', 'S.device_type'],
                      ['C.address', 'C.device_type'],
-                     ['c.address', 'c.device_type']]
+                     ['c.address', 'c.device_type'],
+                     ['o.status', 'o.status', 'o.status', 'o.status',  # 8 bits in one byte
+                      'o.status', 'o.status', 'o.status', 'o.status'],
+                     ['o.locking', 'o.locking', 'o.locking', 'o.locking',  # 8 bits in one byte
+                      'o.locking', 'o.locking', 'o.locking', 'o.locking']]
 
     @classmethod
     def setUpClass(cls):
@@ -141,7 +145,7 @@ class MemoryModelsTest(unittest.TestCase):
             if print_overview:
                 print('{0}:'.format(memory_type_name))
                 for page, values in overview.items():
-                    print('  {0}: {1}'.format(page, ''.join(values)))
+                    print('  {0:03d}: {1}'.format(page, ''.join(values)))
         if print_overview:
             print('Legend:')
             for code, specs in MemoryModelsTest.TEST_MATRIX.items():

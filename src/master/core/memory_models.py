@@ -87,6 +87,12 @@ class OutputConfiguration(MemoryModelDefinition):
         dali_output_id = CompositeNumberField(start_bit=0, width=8, max_value=63)
         dali_group_id = CompositeNumberField(start_bit=0, width=8, max_value=15, value_offset=64)
 
+    class _OutputStatus(CompositeMemoryModelDefinition):
+        state = CompositeBitField(bit=lambda id: id % 8)
+
+    class _OutputLocking(CompositeMemoryModelDefinition):
+        locked = CompositeBitField(bit=lambda id: id % 8)
+
     id = IdField(limits=lambda f: (0, f * 8 - 1), field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)))
     module = MemoryRelation(OutputModuleConfiguration, id_spec=lambda id: id // 8)
     timer_value = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 7 + id % 8 * 2))  # 1-80, 7-22
@@ -97,6 +103,8 @@ class OutputConfiguration(MemoryModelDefinition):
     output_groupaction_follow = MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 55 + (id % 8) * 2))  # 1-80, 55-70
     dali_mapping = _DALIOutputComposition(field=MemoryByteField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 71 + id % 8)))  # 1-80, 71-78
     name = MemoryStringField(MemoryTypes.EEPROM, address_spec=lambda id: (1 + id // 8, 128 + (id % 8) * 16), length=16)  # 1-80, 128-255
+    status = _OutputStatus(field=MemoryByteField(MemoryTypes.FRAM, address_spec=lambda id: (id // 64 + 1, id // 8 * 32 & 255)))  # 1-10, 0 or 32 or 64 or ...
+    locking = _OutputLocking(field=MemoryByteField(MemoryTypes.FRAM, address_spec=lambda id: (id // 64 + 1, (id // 8 * 32 & 255) + 9)))  # 1-10, 9 or 41 or 73 or ...
 
     @property
     def is_shutter(self):
@@ -136,7 +144,7 @@ class InputConfiguration(MemoryModelDefinition):
     input_link = _InputLink(field=MemoryWordField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, id % 8 * 2)))  # 81-238, 0-15
     basic_action_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 16 + id % 8 * 6))  # 81-238, 16-63
     basic_action_release = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 64 + id % 8 * 6))  # 81-238, 64-111
-    basic_action_1s_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 112 + id % 8 * 6))  # 81-238, 112-159
+    basic_action_1s_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (81 + (id // 8) * 2, 32 + id % 8 * 6))  # 81-238, 32-79
     basic_action_2s_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 160 + id % 8 * 6))  # 81-238, 160-207
     basic_action_double_press = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (82 + (id // 8) * 2, 208 + id % 8 * 6))  # 81-238, 208-255
 
@@ -277,4 +285,4 @@ class GroupActionConfiguration(MemoryModelDefinition):
 
 class GroupActionBasicAction(MemoryModelDefinition):
     id = IdField(limits=(0, 4199))
-    basic_action = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (281 + id // 42, (id % 42) * 6))  # 281-380, 0-251
+    basic_action = MemoryBasicActionField(MemoryTypes.EEPROM, address_spec=lambda id: (281 + id // 42, ((id % 42) * 6) + (0 if (id % 42) < 21 else 2)))  # 281-380, 0-253

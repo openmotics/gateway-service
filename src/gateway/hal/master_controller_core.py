@@ -27,7 +27,8 @@ from peewee import DoesNotExist
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
-    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, GlobalFeedbackDTO
+    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, \
+    GlobalFeedbackDTO, OutputStateDTO
 from gateway.enums import ShutterEnums, IndicateType
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
@@ -52,12 +53,11 @@ from master.core.memory_models import CanControlModuleConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
 from master.core.memory_types import MemoryAddress, MemoryActivator
 from master.core.slave_communicator import SlaveCommunicator
-from master.core.system_value import Humidity, Temperature
+from master.core.system_value import Humidity, Temperature, Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union
-    from gateway.dto import OutputStateDTO
     HEALTH = Literal['success', 'unstable', 'failure']
 
 logger = logging.getLogger("openmotics")
@@ -130,14 +130,11 @@ class MasterCoreController(MasterController):
         if core_event.type == MasterCoreEvent.Types.OUTPUT:
             # Update internal state cache
             output_id = core_event.data['output']
-            timer_value = core_event.data['timer_value']
-            if timer_value is not None:
-                timer_value *= core_event.data['timer_factor']
-            event_data = {'id': output_id,
-                          'status': core_event.data['status'],
-                          'dimmer': core_event.data['dimmer_value'],
-                          'ctimer': 0 if timer_value is None else timer_value}
-            self._handle_output(output_id, event_data)
+            state_dto = OutputStateDTO(id=output_id,
+                                       status=core_event.data['status'],
+                                       dimmer=core_event.data['dimmer_value'],
+                                       ctimer=core_event.data['timer'])
+            self._handle_output_state(output_id, state_dto)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             master_event = self._input_state.handle_event(core_event)
             self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
@@ -146,19 +143,33 @@ class MasterCoreController(MasterController):
             if sensor_id not in self._sensor_states:
                 return
             self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
+        elif core_event.type == MasterCoreEvent.Types.EXECUTED_BA:
+            # Relies on BA logging being enabled on the master - to be replaced in the future
+            basic_action = core_event.data['basic_action']  # type: BasicAction
+            if basic_action.action_type == 0 and basic_action.action == 250:
+                output_id = basic_action.device_nr
+                state_dto = OutputStateDTO(id=output_id,
+                                           locked=basic_action.extra_parameter == 1)
+                self._handle_output_state(output_id, state_dto)
+        # TODO: Handle `OUTPUT_LOCK` event instead of `EXECUTED_BA` event
+        # elif core_event.type == MasterCoreEvent.Types.OUTPUT_LOCK:
+        #     output_id = core_event.data['output']
+        #     state_dto = OutputStateDTO(id=output_id,
+        #                                locked=core_event.data['locked'])
+        #     self._handle_output_state(output_id, state_dto)
 
-    def _handle_output(self, output_id, event_data):
-        # type: (int ,Dict[str,Any]) -> None
-        master_event = MasterEvent(MasterEvent.Types.OUTPUT_STATUS, event_data)
+    def _handle_output_state(self, output_id, state_dto):
+        # type: (int, OutputStateDTO) -> None
+        master_event = MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': state_dto})
         self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)
         shutter_id = self._output_shutter_map.get(output_id)
         if shutter_id:
             shutter = ShutterConfiguration(shutter_id)
             output_0_on, output_1_on = (None, None)
             if output_id == shutter.outputs.output_0:
-                output_0_on = event_data['status']
+                output_0_on = state_dto.status
             if output_id == shutter.outputs.output_1:
-                output_1_on = event_data['status']
+                output_1_on = state_dto.status
             self._handle_shutter(shutter, output_0_on, output_1_on)
 
     def _handle_shutter(self, shutter, output_0_on, output_1_on):
@@ -473,11 +484,17 @@ class MasterCoreController(MasterController):
         MemoryActivator.activate()
 
     def load_output_status(self):
-        # type: () -> List[Dict[str,Any]]
+        # type: () -> List[OutputStateDTO]
         output_status = []
         for i in self._enumerate_io_modules('output'):
-            state_data = self._master_communicator.do_command(CoreAPI.output_detail(), {'device_nr': i})
-            output_status.append(state_data)
+            data = self._master_communicator.do_command(CoreAPI.output_detail(), {'device_nr': i})
+            timer = SVTTimer.event_timer_type_to_seconds(data['timer_type'], data['timer'])
+            output = OutputConfiguration(i)
+            output_status.append(OutputStateDTO(id=i,
+                                                status=bool(data['status']),
+                                                ctimer=timer,
+                                                dimmer=int(data['dimmer']),
+                                                locked=output.locking.locked))
         return output_status
 
     # Shutters
@@ -553,7 +570,7 @@ class MasterCoreController(MasterController):
         MemoryActivator.activate()
 
     def _refresh_shutter_states(self):
-        status_data = {x['device_nr']: x for x in self.load_output_status()}
+        status_data = {x.id: x for x in self.load_output_status()}  # type: Dict[int, OutputStateDTO]
         for shutter_id in range(len(status_data) // 2):
             shutter = ShutterConfiguration(shutter_id)
             output_0 = status_data.get(shutter.outputs.output_0)
@@ -561,7 +578,7 @@ class MasterCoreController(MasterController):
             if output_0 and output_1:
                 self._output_shutter_map[shutter.outputs.output_0] = shutter.id
                 self._output_shutter_map[shutter.outputs.output_1] = shutter.id
-                self._handle_shutter(shutter, output_0['status'], output_1['status'])
+                self._handle_shutter(shutter, output_0.status, output_1.status)
             else:
                 self._shutter_status.pop(shutter.id, None)
                 self._output_shutter_map.pop(shutter.outputs.output_0, None)

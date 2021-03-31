@@ -47,3 +47,21 @@ class Humidity(object):
         if system_value == 255:
             return None
         return float(system_value) / 2
+
+
+class Timer(object):
+    class EventTimerType(object):
+        INACTIVE = 0
+        PER_100_MS = 1
+        PER_1_S = 2
+        PER_1_M = 3
+
+    @staticmethod
+    def event_timer_type_to_seconds(timer_type, timer_value):  # type: (int, int) -> Optional[int]
+        if timer_type == Timer.EventTimerType.PER_1_S:
+            return timer_value
+        if timer_type == Timer.EventTimerType.PER_100_MS:
+            return int(timer_value / 10.0)
+        if timer_type == Timer.EventTimerType.PER_1_M:
+            return timer_value * 60
+        return 0

@@ -31,7 +31,7 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO, \
     ThermostatGroupDTO, ThermostatAircoStatusDTO, PumpGroupDTO, \
-    GlobalRTD10DTO, RTD10DTO, GlobalFeedbackDTO
+    GlobalRTD10DTO, RTD10DTO, GlobalFeedbackDTO, OutputStateDTO
 from gateway.enums import ShutterEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
@@ -45,10 +45,9 @@ from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from master.classic import eeprom_models, master_api
 from master.classic.eeprom_controller import EepromAddress, EepromController
-from master.classic.eeprom_models import CanLedConfiguration, \
-    CoolingPumpGroupConfiguration, DimmerConfiguration, \
-    GlobalRTD10Configuration, GlobalThermostatConfiguration, \
-    PumpGroupConfiguration, RTD10CoolingConfiguration, \
+from master.classic.eeprom_models import CoolingPumpGroupConfiguration, \
+    DimmerConfiguration, GlobalRTD10Configuration, \
+    GlobalThermostatConfiguration, PumpGroupConfiguration, RTD10CoolingConfiguration, \
     RTD10HeatingConfiguration, ScheduledActionConfiguration, \
     StartupActionConfiguration, ThermostatConfiguration, CoolingConfiguration
 from master.classic.inputs import InputStatus
@@ -61,7 +60,7 @@ from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+    from typing import Any, Dict, List, Literal, Optional, Tuple
     from serial import Serial
 
     HEALTH = Literal['success', 'unstable', 'failure']
@@ -326,10 +325,13 @@ class MasterClassicController(MasterController):
         for output_id, dimmer in data['outputs']:
             state[output_id] = (True, dimmer)
         for output_id, (status, dimmer) in state.items():
-            event_data = {'id': output_id, 'status': status}
+            extra_kwargs = {}
             if dimmer is not None:
-                event_data['dimmer'] = dimmer
-            master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data)
+                extra_kwargs['dimmer'] = dimmer
+            state_dto = OutputStateDTO(id=output_id,
+                                       status=status,
+                                       **extra_kwargs)
+            master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data={'state': state_dto})
             self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)
 
     def _invalidate_caches(self):
@@ -523,14 +525,16 @@ class MasterClassicController(MasterController):
 
     @communication_enabled
     def load_output_status(self):
-        # type: () -> List[Dict[str,Any]]
+        # type: () -> List[OutputStateDTO]
         number_of_outputs = self._master_communicator.do_command(master_api.number_of_io_modules())['out'] * 8
         output_status = []
         for i in range(number_of_outputs):
-            state_data = self._master_communicator.do_command(master_api.read_output(), {'id': i})
-            # Add output locked status via the validation bits
-            state_data['locked'] = self._is_output_locked(state_data['id'])
-            output_status.append(state_data)
+            data = self._master_communicator.do_command(master_api.read_output(), {'id': i})
+            output_status.append(OutputStateDTO(id=i,
+                                                status=bool(data['status']),
+                                                ctimer=int(data['ctimer']),
+                                                dimmer=int(data['dimmer']),
+                                                locked=self._is_output_locked(data['id'])))
         return output_status
 
     def _input_changed(self, input_id, status):
@@ -1744,7 +1748,7 @@ class MasterClassicController(MasterController):
         # loop over all outputs and update the locked status if the bit_nr is associated with this output
         for output_id, output_dto in six.iteritems(self._output_config):
             if output_dto.lock_bit_id == bit_nr:
-                locked = value  # the bit is set, the output is locked
-                event_data = {'id': output_id, 'locked': locked}
-                master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data)
+                master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS,
+                                           data={'state': OutputStateDTO(id=output_id,
+                                                                         locked=value)})
                 self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)
