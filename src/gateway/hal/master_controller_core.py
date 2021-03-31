@@ -143,7 +143,15 @@ class MasterCoreController(MasterController):
             if sensor_id not in self._sensor_states:
                 return
             self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
-        # TODO: Handle event for Output lock state change
+        elif core_event.type == MasterCoreEvent.Types.EXECUTED_BA:
+            # Relies on BA logging being enabled on the master - to be replaced in the future
+            basic_action = core_event.data['basic_action']  # type: BasicAction
+            if basic_action.action_type == 0 and basic_action.action == 250:
+                output_id = basic_action.device_nr
+                state_dto = OutputStateDTO(id=output_id,
+                                           locked=basic_action.extra_parameter == 1)
+                self._handle_output_state(output_id, state_dto)
+        # TODO: Handle `OUTPUT_LOCK` event instead of `EXECUTED_BA` event
         # elif core_event.type == MasterCoreEvent.Types.OUTPUT_LOCK:
         #     output_id = core_event.data['output']
         #     state_dto = OutputStateDTO(id=output_id,
