@@ -16,145 +16,195 @@
 """ Includes the WebService_v1 class """
 
 from __future__ import absolute_import
+import base64
 import cherrypy
-from decorator import decorator
+import logging
 import ujson as json
 import time
-
-import logging
 
 from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.api.serializers.user import UserSerializer
+from gateway.exceptions import *
 
+if False:  # MyPy
+    from gateway.authentication_controller import AuthenticationToken
+    from gateway.webservice import WebService
+    from typing import Optional, List, Dict
 
 logger = logging.getLogger("openmotics")
 
-
-if False:  # MyPy
-    from gateway.webservice import WebService, WebInterface
-    from typing import Optional, List, Dict
-
-
 # ------------------------
-# eSafe api decorator
+#  api decorator
 # ------------------------
 
 # api decorator
-# @decorator
-# def _esafe_api(f, *args, **kwargs):
-#     start = time.time()
-#     timings = {}
-#     status = 200  # OK
-#     try:
-#         data = f(*args, **kwargs)
-#     except cherrypy.HTTPError as ex:
-#         status = ex.status
-#         data = ex._message
-#     except EsafeUnAuthorizedError as ex:
-#         status = 401
-#         data = ex.message
-#     except EsafeForbiddenError as ex:
-#         status = 400
-#         data = ex.message
-#     except EsafeItemDoesNotExistError as ex:
-#         status = 404
-#         data = ex.message
-#     except EsafeWrongInputParametersError as ex:
-#         status = 400
-#         data = ex.message
-#     except EsafeParseError as ex:
-#         status = 400
-#         data = ex.message
-#     except EsafeTimeOutError as ex:
-#         status = 500
-#         data = ex.message
-#     except EsafeInvalidOperationError as ex:
-#         status = 409
-#         data = ex.message
-#     except EsafeNotImplementedError as ex:
-#         status = 503
-#         data = ex.message
-#     except EsafeError as ex:
-#         status = 500
-#         data = ex.message
-#
-#     timings['process'] = ('Processing', time.time() - start)
-#     serialization_start = time.time()
-#     contents = data
-#     timings['serialization'] = 'Serialization', time.time() - serialization_start
-#     cherrypy.response.headers['Content-Type'] = 'application/json'
-#     cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
-#                                                            for key, value in timings.items()])
-#     cherrypy.response.status = status
-#     return contents.encode()
-#
-#
-# def esafe_api(auth=False, check=None, pass_token=False):
-#     def wrapper(func):
-#         func = _esafe_api(func)
-#         if auth is not None:
-#             func = cherrypy.tools.authenticated(pass_token=pass_token)(func)
-#         func = cherrypy.tools.params(**(check or {}))(func)
-#         func.exposed = True
-#         func.check = check
-#         return func
-#     return wrapper
-#
+def _openmotics_api_v1(f):
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        timings = {}
+        status = 200  # OK
+        try:
+            data = f(*args, **kwargs)
+        except cherrypy.HTTPError as ex:
+            status = ex.status
+            data = ex._message
+        except UnAuthorizedException as ex:
+            status = 401
+            data = ex.message
+        except ForbiddenException as ex:
+            status = 400
+            data = ex.message
+        except ItemDoesNotExistException as ex:
+            status = 404
+            data = ex.message
+        except WrongInputParametersException as ex:
+            status = 400
+            data = ex.message
+        except ParseException as ex:
+            status = 400
+            data = ex.message
+        except TimeOutException as ex:
+            status = 500
+            data = ex.message
+        except InvalidOperationException as ex:
+            status = 409
+            data = ex.message
+        except NotImplementedException as ex:
+            status = 503
+            data = ex.message
+        except Exception as ex:
+            status = 500
+            data = ex
+            logger.error('General Error occurred during api call: {}'.format(data))
+
+        timings['process'] = ('Processing', time.time() - start)
+        serialization_start = time.time()
+        contents = str(data)
+        timings['serialization'] = 'Serialization', time.time() - serialization_start
+        cherrypy.response.headers['Content-Type'] = 'application/json'
+        cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
+                                                               for key, value in timings.items()])
+        cherrypy.response.status = status
+        return contents.encode()
+    return wrapper
+
+
+def authentication_handler_v1(pass_token=False, pass_role=False):
+    request = cherrypy.request
+    if request.method == 'OPTIONS':
+        return
+    try:
+        token = None
+        # check if token is passed with the params
+        if 'token' in request.params:
+            token = request.params.pop('token')
+        # check if the token is passed as a Bearer token in the headers
+        if token is None:
+            header = request.headers.get('Authorization')
+            if header is not None and 'Bearer ' in header:
+                token = header.replace('Bearer ', '')
+        # check if hte token is passed as a web-socket Bearer token
+        if token is None:
+            header = request.headers.get('Sec-WebSocket-Protocol')
+            if header is not None and 'authorization.bearer.' in header:
+                unpadded_base64_token = header.replace('authorization.bearer.', '')
+                base64_token = unpadded_base64_token + '=' * (-len(unpadded_base64_token) % 4)
+                try:
+                    token = base64.decodestring(base64_token).decode('utf-8')
+                except Exception:
+                    pass
+        _self = request.handler.callable.__self__
+        # Fetch the checkToken function that is placed under the main webservice or under the plugin webinterface.
+        check_token = _self._user_controller.authentication_controller.check_token
+        checked_token = check_token(token)  # type: Optional[AuthenticationToken]
+        if checked_token is None:
+            raise UnAuthorizedException('Unauthorized API call')
+        if pass_token is True:
+            request.params['token'] = checked_token
+        if pass_role is True:
+            request.params['role'] = checked_token.user.role
+    except UnAuthorizedException as ex:
+        cherrypy.response.headers['Content-Type'] = 'application/json'
+        cherrypy.response.status = 401  # Unauthorized
+        contents = ex.message
+        cherrypy.response.body = contents.encode()
+        # do not handle the request, just return the unauthorized message
+        request.handler = None
+
+
+# Assign the v1 authentication handler
+cherrypy.tools.authenticated_v1 = cherrypy.Tool('before_handler', authentication_handler_v1)
+
+
+def openmotics_api_v1(_func=None, auth=False, pass_token=False, pass_role=False):
+    def decorator_openmotics_api_v1(func):
+        updated_func = func
+        updated_func = _openmotics_api_v1(updated_func)  # First layer decorator
+        if auth is True:
+            # Second layer decorator
+            updated_func = cherrypy.tools.authenticated_v1(pass_token=pass_token, pass_role=pass_role)(updated_func)
+        return updated_func
+    if _func is None:
+        return decorator_openmotics_api_v1
+    else:
+        return decorator_openmotics_api_v1(_func)
+
 
 # ----------------------------
 # eSafe API
 # ----------------------------
 
-class EsafeRestAPIEndpoint(object):
+class RestAPIEndpoint(object):
     API_ENDPOINT = None  # type: Optional[str]
 
     @Inject
     def __init__(self, user_controller=INJECTED):
         # type: () -> None
-        self.user_controller = user_controller
+        self._user_controller = user_controller
         pass
 
 
     def GET(self):
-        raise NotImplementedError
+        raise NotImplementedException
 
     def POST(self):
-        raise NotImplementedError
+        raise NotImplementedException
 
     def PUT(self):
-        raise NotImplementedError
+        raise NotImplementedException
 
     def DELETE(self):
-        raise NotImplementedError
+        raise NotImplementedException
 
     def __repr__(self):
         return self.__str__()
 
     def __str__(self):
-        return 'Esafe Rest Endpoint class: "{}"'.format(self.__class__.__name__)
+        return 'Rest Endpoint class: "{}"'.format(self.__class__.__name__)
 
 
 @cherrypy.expose
-class EsafeUsers(EsafeRestAPIEndpoint):
+class Users(RestAPIEndpoint):
     API_ENDPOINT = '/api/v1/users'
 
-    def GET(self, user_id=None):
+    @openmotics_api_v1(auth=True, pass_role=True)
+    def GET(self, role, user_id=None):
         # return all users
         if user_id is None:
-            users = self.user_controller.load_users()
+            users = self._user_controller.load_users()
             users_serial = [UserSerializer.serialize(user) for user in users]
             return json.dumps(users_serial)
 
         # return the requested user
-        user = self.user_controller.load_user(user_id=user_id)
+        user = self._user_controller.load_user(user_id=user_id)
         if user is None:
             cherrypy.response.status = 404
             return json.dumps({})
         user_serial = UserSerializer.serialize(user)
         return json.dumps(user_serial)
 
-
+    @openmotics_api_v1(auth=True, pass_token=True, pass_role=True)
     def POST(self, testpar=None):
         request_body = cherrypy.request.body.read(int(cherrypy.request.headers['Content-Length']))
         if request_body is None:
@@ -173,7 +223,7 @@ class EsafeUsers(EsafeRestAPIEndpoint):
 
 
 @cherrypy.expose
-class Apartment(EsafeRestAPIEndpoint):
+class Apartment(RestAPIEndpoint):
     API_ENDPOINT = '/api/v1/apartments'
 
     def GET(self):

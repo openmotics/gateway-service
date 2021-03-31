@@ -119,7 +119,7 @@ def migrate(migrator, database, fake=False, **kwargs):
     # Add columns to user table
     migrator.add_columns(User,
                          first_name=CharField(null=True),
-                         last_name=CharField(null=True),
+                         last_name=CharField(null=False, default=''),
                          role=CharField(default=UserRoles.USER, null=False),
                          language=CharField(null=False, default='English'),
                          pin_code=CharField(null=True),

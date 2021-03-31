@@ -23,7 +23,7 @@ import uuid
 import time
 import six
 from ioc import Injectable, Inject, Singleton, INJECTED
-from gateway.authentication_controller import AuthenticationController
+from gateway.authentication_controller import AuthenticationController, AuthenticationToken
 from gateway.exceptions import ItemDoesNotExistException
 from gateway.models import User
 from gateway.mappers.user import UserMapper
@@ -31,7 +31,7 @@ from gateway.dto.user import UserDTO
 from gateway.enums import UserEnums
 
 if False:  # MYPY
-    from typing import Tuple, List, Optional, Dict
+    from typing import Tuple, List, Optional, Dict, Union
 
 logger = logging.getLogger('openmotics')
 
@@ -135,15 +135,11 @@ class UserController(object):
             raise Exception(UserEnums.DeleteErrors.LAST_ACCOUNT)
         User.delete().where((User.first_name == first_name) & (User.last_name == last_name)).execute()
 
-
     def login(self, user_dto, accept_terms=False, timeout=None):
-        # type: (UserDTO, Optional[bool], Optional[float]) -> Tuple[bool, str]
+        # type: (UserDTO, Optional[bool], Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a UserDTO """
         success, token = self.authentication_controller.login(user_dto, accept_terms, timeout)
-        if success:
-            return success, token.token
         return success, token
-
 
     def logout(self, token):
         # type: (str) -> None

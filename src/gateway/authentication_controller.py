@@ -77,11 +77,11 @@ class AuthenticationController(object):
             return True, token
         return False, UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED
 
-    def logout(self, token_str):
-        self.token_store.remove_token_str(token_str)
+    def logout(self, token):
+        self.token_store.remove_token(token)
 
-    def check_token(self, token_str):
-        return self.token_store.check_token_str(token_str)
+    def check_token(self, token):
+        return self.token_store.check_token(token)
 
     def remove_token_for_user(self, user_dto):
         self.token_store.remove_token_for_user(user_dto)
@@ -96,16 +96,16 @@ class TokenStore(object):
         self.token_timeout = token_timeout
         self.tokens = {}  # type: Dict[int, AuthenticationToken]  # user_id, authToken
 
-    def add_token(self, token):
-        # type: (AuthenticationToken) -> None
-        user_id = token.user.id
-        if user_id not in self.tokens:
-            self.tokens[user_id] = token
-
     def has_user_token(self, user_id):
         return user_id in self.tokens
 
     def remove_token(self, token):
+        if isinstance(token, AuthenticationToken):
+            self._remove_token(token)
+        else:
+            self._remove_token_str(token)
+
+    def _remove_token(self, token):
         # type: (AuthenticationToken) -> None
         user_id = token.user.id
         if user_id in self.tokens:
@@ -113,7 +113,7 @@ class TokenStore(object):
         else:
             raise ItemDoesNotExistException('Token does not exist in the token store')
 
-    def remove_token_str(self, token):
+    def _remove_token_str(self, token):
         # type: (str) -> None
         found = False
         for user_id, auth_token in dict(self.tokens).items():
@@ -143,7 +143,12 @@ class TokenStore(object):
             self.tokens[user_id] = AuthenticationToken.generate(full_user)
         return self.tokens[user_id]
 
-    def check_token_str(self, token_str):
+    def check_token(self, token):
+        if isinstance(token, AuthenticationToken):
+            return self._check_token_str(token.token)
+        return self._check_token_str(token)
+
+    def _check_token_str(self, token_str):
         # type: (str) -> Optional[AuthenticationToken]
         for user_id, token in dict(self.tokens).items():
             if token.token == token_str:
@@ -175,8 +180,9 @@ class AuthenticationToken(object):
         # type: (UserDTO, int) -> AuthenticationToken
         """ Creates an authentication token """
         user_id = user_dto.id
-        token_postfix = uuid.uuid4().hex[:14]
-        token = "{}-{}".format(user_id, token_postfix)
+        # token_postfix = uuid.uuid4().hex[:14]
+        # token = "{}-{}".format(user_id, token_postfix)
+        token = uuid.uuid4().hex
         auth_token = AuthenticationToken(user_dto, token, int(time.time()) + token_timeout)
         return auth_token
 
