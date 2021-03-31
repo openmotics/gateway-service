@@ -76,6 +76,12 @@ class OutputConfiguration(MemoryModelDefinition):
         dali_output_id: int
         dali_group_id: int
 
+    class _OutputStatus(CompositeMemoryModelDefinition):
+        state: bool
+
+    class _OutputLocking(CompositeMemoryModelDefinition):
+        locked: bool
+
     id: int
     module: OutputModuleConfiguration
     timer_value: int
@@ -86,6 +92,8 @@ class OutputConfiguration(MemoryModelDefinition):
     output_groupaction_follow: int
     dali_mapping: _DALIOutputComposition
     name: str
+    status: _OutputStatus
+    locking: _OutputLocking
 
     @property
     def is_shutter(self) -> bool: ...

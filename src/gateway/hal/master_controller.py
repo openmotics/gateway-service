@@ -19,7 +19,8 @@ from __future__ import absolute_import
 
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatAircoStatusDTO, \
-    ThermostatDTO, ThermostatGroupDTO, ModuleDTO, GlobalFeedbackDTO
+    ThermostatDTO, ThermostatGroupDTO, ModuleDTO, GlobalFeedbackDTO, \
+    OutputStateDTO
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -115,7 +116,7 @@ class MasterController(object):
         raise NotImplementedError()
 
     def load_output_status(self):
-        # type: () -> List[Dict[str,Any]]
+        # type: () -> List[OutputStateDTO]
         raise NotImplementedError()
 
     # Shutters

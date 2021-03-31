@@ -55,8 +55,9 @@ class MasterCoreControllerTest(unittest.TestCase):
         self.controller._handle_event({'type': 0, 'device_nr': 0, 'action': 0, 'data': bytearray([255, 0, 0, 0])})
         self.controller._handle_event({'type': 0, 'device_nr': 2, 'action': 1, 'data': bytearray([100, 2, 0xff, 0xfe])})
         self.pubsub._publish_all_events()
-        self.assertEqual([MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'id': 0, 'status': False, 'dimmer': 255, 'ctimer': 0}),
-                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'id': 2, 'status': True, 'dimmer': 100, 'ctimer': 65534})], events)
+        self.assertEqual(events,
+                         [MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=0, status=False, dimmer=255, ctimer=0)}),
+                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=2, status=True, dimmer=100, ctimer=65534)})])
 
     def test_master_shutter_event(self):
         events = []
@@ -109,10 +110,10 @@ class MasterCoreControllerTest(unittest.TestCase):
 
         self.pubsub.subscribe_master_events(PubSub.MasterTopics.SHUTTER, _on_event)
 
-        output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
-                         {'device_nr': 1, 'status': False, 'dimmer': 0},
-                         {'device_nr': 10, 'status': False, 'dimmer': 0},
-                         {'device_nr': 11, 'status': False, 'dimmer': 0}]
+        output_status = [OutputStateDTO(id=0, status=False, dimmer=0),
+                         OutputStateDTO(id=1, status=False, dimmer=0),
+                         OutputStateDTO(id=10, status=False, dimmer=0),
+                         OutputStateDTO(id=11, status=False, dimmer=0)]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
@@ -121,10 +122,10 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
-        output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
-                         {'device_nr': 1, 'status': True, 'dimmer': 0},
-                         {'device_nr': 10, 'status': True, 'dimmer': 0},
-                         {'device_nr': 11, 'status': False, 'dimmer': 0}]
+        output_status = [OutputStateDTO(id=0, status=False, dimmer=0),
+                         OutputStateDTO(id=1, status=True, dimmer=0),
+                         OutputStateDTO(id=10, status=True, dimmer=0),
+                         OutputStateDTO(id=11, status=False, dimmer=0)]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
@@ -133,10 +134,10 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_up', 'location': {'room_id': 255}})] == events
 
-        output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
-                         {'device_nr': 1, 'status': True, 'dimmer': 0},
-                         {'device_nr': 10, 'status': False, 'dimmer': 0},
-                         {'device_nr': 11, 'status': True, 'dimmer': 0}]
+        output_status = [OutputStateDTO(id=0, status=False, dimmer=0),
+                         OutputStateDTO(id=1, status=True, dimmer=0),
+                         OutputStateDTO(id=10, status=False, dimmer=0),
+                         OutputStateDTO(id=11, status=True, dimmer=0)]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
