@@ -40,9 +40,9 @@ class ApartmentSerializer(object):
 
     @staticmethod
     def deserialize(api_data):
-        # type: (Dict[str,Any]) -> Tuple[ApartmentDTO, List[str]]
+        # type: (Dict[str,Any]) -> ApartmentDTO
         apartment_dto = ApartmentDTO(None, '', None, None)
-        loaded_fields = SerializerToolbox.deserialize(
+        SerializerToolbox.deserialize(
             dto=apartment_dto,
             api_data=api_data,
             mapping={
@@ -53,4 +53,4 @@ class ApartmentSerializer(object):
             }
         )
 
-        return apartment_dto, loaded_fields
+        return apartment_dto

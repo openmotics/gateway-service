@@ -22,6 +22,7 @@ run-tests.sh
 
 # Artifacts for running gateway locally
 etc/
+etc**
 static/
 
 # Terms
@@ -37,3 +38,7 @@ venv2.7/
 
 # Package artifacts
 *.egg-info
+
+# Local scripts (makes it possible to add local bash scripts for easier development)
+**-ignore.sh
+**-ignore.py

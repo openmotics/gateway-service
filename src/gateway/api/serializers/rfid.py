@@ -49,31 +49,15 @@ class RfidSerializer(object):
 
     @staticmethod
     def deserialize(api_data):
-        # type: (Dict[str,Any]) -> Tuple[RfidDTO, List[str]]
-        loaded_fields = []
-        id = None
-        if 'id' in api_data:
-            loaded_fields.append('id')
-            id = api_data['id']
-        tag_string = ''
-        if 'tag_string' in api_data:
-            loaded_fields.append('tag_string')
-            key = api_data['tag_string']
-        uid_manu = None
-        if 'uid_manufacturer' in api_data:
-            loaded_fields.append('uid_manufacturer')
-            uid_manu = api_data['uid_manufacturer']
-        time_created = None
-        if 'timestamp_created' in api_data:
-            loaded_fields.append('timestamp_created')
-            time_created = api_data['timestamp_created']
-        user_dto = None
-        if 'user' in api_data:
-            loaded_fields.append('user')
-            user_dto, _ = UserSerializer.deserialize(api_data['user'])
-        rfid_dto = RfidDTO(id, tag_string, uid_manu, time_created, user_dto)
+        # type: (Dict[str,Any]) -> RfidDTO
+        id = api_data['id'] if 'id' in api_data else None
+        tag_string = api_data['tag_string'] if 'tag_string' in api_data else None
+        uid_manufacturer = api_data['uid_manufacturer'] if 'uid_manufacturer' in api_data else None
+        time_created = api_data['time_created'] if 'time_created' in api_data else None
+        user_dto = UserSerializer.deserialize(api_data['user']) if 'user' in api_data else None
+
+        rfid_dto = RfidDTO(id, tag_string, uid_manufacturer, time_created, user_dto)
         for field in ['uid_extension', 'enter_count', 'blacklisted', 'label', 'timestamp_last_used']:
             if field in api_data:
-                loaded_fields.append(field)
                 setattr(rfid_dto, field, api_data[field])
-        return rfid_dto, loaded_fields
+        return rfid_dto

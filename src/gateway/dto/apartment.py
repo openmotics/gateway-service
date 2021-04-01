@@ -16,13 +16,14 @@
 """
 apartment DTO
 """
-from gateway.dto.base import BaseDTO
+from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
     from typing import Any
 
 
 class ApartmentDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, name, mailbox_rebus_id, doorbell_rebus_id):
         self.id = id  # type: int
         self.name = name  # type: str
