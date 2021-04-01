@@ -144,7 +144,7 @@ class ThermostatControllerMaster(ThermostatController):
     def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
         return self._master_controller.load_heating_thermostats()
 
-    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+    def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         self._master_controller.save_heating_thermostats(thermostats)
         self.invalidate_cache(THERMOSTATS)
 
@@ -154,7 +154,7 @@ class ThermostatControllerMaster(ThermostatController):
     def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
         return self._master_controller.load_cooling_thermostats()
 
-    def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+    def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         self._master_controller.save_cooling_thermostats(thermostats)
         self.invalidate_cache(THERMOSTATS)
 
@@ -164,13 +164,13 @@ class ThermostatControllerMaster(ThermostatController):
     def load_cooling_pump_groups(self):  # type: () -> List[PumpGroupDTO]
         return self._master_controller.load_cooling_pump_groups()
 
-    def save_cooling_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
+    def save_cooling_pump_groups(self, pump_groups):  # type: (List[PumpGroupDTO]) -> None
         self._master_controller.save_cooling_pump_groups(pump_groups)
 
     def load_global_rtd10(self):  # type: () -> GlobalRTD10DTO
         return self._master_controller.load_global_rtd10()
 
-    def save_global_rtd10(self, global_rtd10):  # type: (Tuple[GlobalRTD10DTO, List[str]]) -> None
+    def save_global_rtd10(self, global_rtd10):  # type: (GlobalRTD10DTO) -> None
         self._master_controller.save_global_rtd10(global_rtd10)
 
     def load_heating_rtd10(self, rtd10_id):  # type: (int) -> RTD10DTO
@@ -179,7 +179,7 @@ class ThermostatControllerMaster(ThermostatController):
     def load_heating_rtd10s(self):  # type: () -> List[RTD10DTO]
         return self._master_controller.load_heating_rtd10s()
 
-    def save_heating_rtd10s(self, rtd10s):  # type: (List[Tuple[RTD10DTO, List[str]]]) -> None
+    def save_heating_rtd10s(self, rtd10s):  # type: (List[RTD10DTO]) -> None
         self._master_controller.save_heating_rtd10s(rtd10s)
 
     def load_cooling_rtd10(self, rtd10_id):  # type: (int) -> RTD10DTO
@@ -188,15 +188,14 @@ class ThermostatControllerMaster(ThermostatController):
     def load_cooling_rtd10s(self):  # type: () -> List[RTD10DTO]
         return self._master_controller.load_cooling_rtd10s()
 
-    def save_cooling_rtd10s(self, rtd10s):  # type: (List[Tuple[RTD10DTO, List[str]]]) -> None
+    def save_cooling_rtd10s(self, rtd10s):  # type: (List[RTD10DTO]) -> None
         self._master_controller.save_cooling_rtd10s(rtd10s)
 
     def load_thermostat_group(self):
         # type: () -> ThermostatGroupDTO
         return self._master_controller.load_thermostat_group()
 
-    def save_thermostat_group(self, thermostat_group):
-        # type: (Tuple[ThermostatGroupDTO, List[str]]) -> None
+    def save_thermostat_group(self, thermostat_group):  # type: (ThermostatGroupDTO) -> None
         self._master_controller.save_thermostat_group(thermostat_group)
         self.invalidate_cache(THERMOSTATS)
 
@@ -206,7 +205,7 @@ class ThermostatControllerMaster(ThermostatController):
     def load_heating_pump_groups(self):  # type: () -> List[PumpGroupDTO]
         return self._master_controller.load_heating_pump_groups()
 
-    def save_heating_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
+    def save_heating_pump_groups(self, pump_groups):  # type: (List[PumpGroupDTO]) -> None
         self._master_controller.save_heating_pump_groups(pump_groups)
 
     def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):

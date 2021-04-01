@@ -17,7 +17,7 @@
 
 from __future__ import absolute_import
 
-import base64
+import binascii
 import hashlib
 import logging
 import os
@@ -207,7 +207,7 @@ def authentication_handler(pass_token=False):
                 unpadded_base64_token = header.replace('authorization.bearer.', '')
                 base64_token = unpadded_base64_token + '=' * (-len(unpadded_base64_token) % 4)
                 try:
-                    token = base64.decodestring(base64_token).decode('utf-8')
+                    token = binascii.a2b_base64(base64_token).decode('utf-8')
                 except Exception:
                     pass
         _self = request.handler.callable.__self__
@@ -473,10 +473,10 @@ class WebInterface(object):
         """
         if not self.in_authorized_mode():
             raise cherrypy.HTTPError(401, "unauthorized")
-        user_dto = UserDTO(username=username)
+        user_dto = UserDTO(username=username,
+                           accepted_terms=0)
         user_dto.set_password(password)
-        fields = ['username', 'password', 'accepted_terms']
-        self._user_controller.save_user(user_dto, fields)
+        self._user_controller.save_user(user_dto)
         return {}
 
     @openmotics_api(plugin_exposed=False)
@@ -882,10 +882,9 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(config='json'))
     def set_ventilation_configuration(self, config):
         # type: (Dict[str,Any]) -> Dict[str, Any]
-        ventilation_dto, fields = VentilationSerializer.deserialize(config)
-        self._ventilation_controller.save_ventilation(ventilation_dto, fields)
-        fields.append('id')
-        return {'config': VentilationSerializer.serialize(ventilation_dto, fields)}
+        ventilation_dto = VentilationSerializer.deserialize(config)
+        self._ventilation_controller.save_ventilation(ventilation_dto)
+        return {'config': VentilationSerializer.serialize(ventilation_dto, fields=None)}
 
     # methods=['GET']
     @openmotics_api(auth=True, check=types(fields='json'))
@@ -903,9 +902,9 @@ class WebInterface(object):
         Update the current ventilation status, used by plugins to report the current
         status of devices.
         """
-        status_dto, fields = VentilationStatusSerializer.deserialize(status)
+        status_dto = VentilationStatusSerializer.deserialize(status)
         status_dto = self._ventilation_controller.set_status(status_dto)
-        return {'status': VentilationStatusSerializer.serialize(status_dto, fields)}
+        return {'status': VentilationStatusSerializer.serialize(status_dto, fields=None)}
 
     # methods=['POST']
     @openmotics_api(auth=True, check=types(ventilation_id=int))
@@ -2235,8 +2234,7 @@ class WebInterface(object):
                                    duration=duration,
                                    end=end,
                                    arguments=arguments)
-        fields = ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']
-        self._scheduling_controller.save_schedules([(schedule_dto, fields)])
+        self._scheduling_controller.save_schedules([schedule_dto])
         return {}
 
     @openmotics_api(auth=True, deprecated='list_schedules')

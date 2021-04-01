@@ -57,17 +57,17 @@ class SensorController(BaseController):
             sensor_dtos.append(sensor_dto)
         return sensor_dtos
 
-    def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
+    def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> None
         sensors_to_save = []
-        for sensor_dto, fields in sensors:
+        for sensor_dto in sensors:
             sensor_ = Sensor.get_or_none(number=sensor_dto.id)  # type: Sensor
             if sensor_ is None:
                 logger.info('Ignored saving non-existing Sensor {0}'.format(sensor_dto.id))
-            if 'room' in fields:
+            if 'room' in sensor_dto.loaded_fields:
                 if sensor_dto.room is None:
                     sensor_.room = None
                 elif 0 <= sensor_dto.room <= 100:
                     sensor_.room, _ = Room.get_or_create(number=sensor_dto.room)
                 sensor_.save()
-            sensors_to_save.append((sensor_dto, fields))
+            sensors_to_save.append(sensor_dto)
         self._master_controller.save_sensors(sensors_to_save)

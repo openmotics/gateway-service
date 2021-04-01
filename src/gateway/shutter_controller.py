@@ -173,19 +173,19 @@ class ShutterController(BaseController):
             shutter_dtos.append(shutter_dto)
         return shutter_dtos
 
-    def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
+    def save_shutters(self, shutters):  # type: (List[ShutterDTO]) -> None
         shutters_to_save = []
-        for shutter_dto, fields in shutters:
+        for shutter_dto in shutters:
             shutter = Shutter.get_or_none(number=shutter_dto.id)  # type: Shutter
             if shutter is None:
                 logger.info('Ignored saving non-existing Shutter {0}'.format(shutter_dto.id))
-            if 'room' in fields:
+            if 'room' in shutter_dto.loaded_fields:
                 if shutter_dto.room is None:
                     shutter.room = None
                 elif 0 <= shutter_dto.room <= 100:
                     shutter.room, _ = Room.get_or_create(number=shutter_dto.room)
                 shutter.save()
-            shutters_to_save.append((shutter_dto, fields))
+            shutters_to_save.append(shutter_dto)
         self._master_controller.save_shutters(shutters_to_save)
         self.update_config(self.load_shutters())
 
@@ -207,19 +207,19 @@ class ShutterController(BaseController):
             shutter_group_dtos.append(shutter_group_dto)
         return shutter_group_dtos
 
-    def save_shutter_groups(self, shutter_groups):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
+    def save_shutter_groups(self, shutter_groups):  # type: (List[ShutterGroupDTO]) -> None
         shutter_groups_to_save = []
-        for shutter_group_dto, fields in shutter_groups:
+        for shutter_group_dto in shutter_groups:
             shutter_group = ShutterGroup.get_or_none(number=shutter_group_dto.id)  # type: ShutterGroup
             if shutter_group is None:
                 continue
-            if 'room' in fields:
+            if 'room' in shutter_group_dto.loaded_fields:
                 if shutter_group_dto.room is None:
                     shutter_group.room = None
                 elif 0 <= shutter_group_dto.room <= 100:
                     shutter_group.room, _ = Room.get_or_create(number=shutter_group_dto.room)
                 shutter_group.save()
-            shutter_groups_to_save.append((shutter_group_dto, fields))
+            shutter_groups_to_save.append(shutter_group_dto)
         self._master_controller.save_shutter_groups(shutter_groups_to_save)
 
     # Control shutters

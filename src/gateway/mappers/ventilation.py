@@ -48,8 +48,7 @@ class VentilationMapper(object):
                               device_serial=orm_object.device_serial)
 
     @staticmethod
-    def dto_to_orm(ventilation_dto, fields):
-        # type: (VentilationDTO, List[str]) -> Ventilation
+    def dto_to_orm(ventilation_dto):  # type: (VentilationDTO) -> Ventilation
         lookup_kwargs = {}  # type: Dict[str,Any]
         if ventilation_dto.id:
             lookup_kwargs.update({'id': ventilation_dto.id})
@@ -61,11 +60,11 @@ class VentilationMapper(object):
         ventilation = Ventilation.get_or_none(**lookup_kwargs)
         if ventilation is None:
             ventilation = Ventilation(**lookup_kwargs)
-        if 'name' in fields:
+        if 'name' in ventilation_dto.loaded_fields:
             ventilation.name = ventilation_dto.name
-        if 'amount_of_levels' in fields:
+        if 'amount_of_levels' in ventilation_dto.loaded_fields:
             ventilation.amount_of_levels = ventilation_dto.amount_of_levels
-        if 'device' in fields:
+        if 'device_vendor' in ventilation_dto.loaded_fields and 'device_type' in ventilation_dto.loaded_fields:
             ventilation.device_vendor = ventilation_dto.device_vendor
             ventilation.device_type = ventilation_dto.device_type
             if ventilation_dto.device_serial:

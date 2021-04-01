@@ -48,7 +48,7 @@ class ThermostatController(object):
     def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
         raise NotImplementedError()
 
-    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+    def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         raise NotImplementedError()
 
     def set_thermostat_mode(self, thermostat_on, cooling_mode=False, cooling_on=False, automatic=None, setpoint=None):
@@ -61,7 +61,7 @@ class ThermostatController(object):
     def load_heating_pump_groups(self):  # type: () -> List[PumpGroupDTO]
         raise NotImplementedError()
 
-    def save_heating_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
+    def save_heating_pump_groups(self, pump_groups):  # type: (List[PumpGroupDTO]) -> None
         raise NotImplementedError()
 
     def set_per_thermostat_mode(self, thermostat_id, automatic, setpoint):
@@ -71,7 +71,7 @@ class ThermostatController(object):
     def load_thermostat_group(self):  # type: () -> ThermostatGroupDTO
         raise NotImplementedError()
 
-    def save_thermostat_group(self, thermostat_group):  # type: (Tuple[ThermostatGroupDTO, List[str]]) -> None
+    def save_thermostat_group(self, thermostat_group):  # type: (ThermostatGroupDTO) -> None
         raise NotImplementedError()
 
     def get_thermostat_status(self):  # type: () -> ThermostatGroupStatusDTO
@@ -83,7 +83,7 @@ class ThermostatController(object):
     def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
         raise NotImplementedError()
 
-    def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+    def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         raise NotImplementedError()
 
     def load_cooling_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
@@ -92,13 +92,13 @@ class ThermostatController(object):
     def load_cooling_pump_groups(self):  # type: () -> List[PumpGroupDTO]
         raise NotImplementedError()
 
-    def save_cooling_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
+    def save_cooling_pump_groups(self, pump_groups):  # type: (List[PumpGroupDTO]) -> None
         raise NotImplementedError()
 
     def load_global_rtd10(self):  # type: () -> GlobalRTD10DTO
         raise NotImplementedError()
 
-    def save_global_rtd10(self, global_rtd10):  # type: (Tuple[GlobalRTD10DTO, List[str]]) -> None
+    def save_global_rtd10(self, global_rtd10):  # type: (GlobalRTD10DTO) -> None
         raise NotImplementedError()
 
     def load_heating_rtd10(self, rtd10_id):  # type: (int) -> RTD10DTO
@@ -107,7 +107,7 @@ class ThermostatController(object):
     def load_heating_rtd10s(self):  # type: () -> List[RTD10DTO]
         raise NotImplementedError()
 
-    def save_heating_rtd10s(self, rtd10s):  # type: (List[Tuple[RTD10DTO, List[str]]]) -> None
+    def save_heating_rtd10s(self, rtd10s):  # type: (List[RTD10DTO]) -> None
         raise NotImplementedError()
 
     def load_cooling_rtd10(self, rtd10_id):  # type: (int) -> RTD10DTO
@@ -116,7 +116,7 @@ class ThermostatController(object):
     def load_cooling_rtd10s(self):  # type: () -> List[RTD10DTO]
         raise NotImplementedError()
 
-    def save_cooling_rtd10s(self, rtd10s):  # type: (List[Tuple[RTD10DTO, List[str]]]) -> None
+    def save_cooling_rtd10s(self, rtd10s):  # type: (List[RTD10DTO]) -> None
         raise NotImplementedError()
 
     def set_airco_status(self, thermostat_id, airco_on):  # type: (int, bool) -> None

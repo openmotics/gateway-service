@@ -16,13 +16,14 @@
 """
 Floor DTO
 """
-from gateway.dto.base import BaseDTO
+from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
     from typing import Optional
 
 
 class FloorDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, name=None):
         self.id = id  # type: int
         self.name = name  # type: Optional[str]

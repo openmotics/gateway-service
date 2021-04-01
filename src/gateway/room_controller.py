@@ -59,16 +59,16 @@ class RoomController(object):
             room_dtos.append(room_dto)
         return room_dtos
 
-    def save_rooms(self, rooms):  # type: (List[Tuple[RoomDTO, List[str]]]) -> None
+    def save_rooms(self, rooms):  # type: (List[RoomDTO]) -> None
         _ = self
         with Database.get_db().atomic():
-            for room_dto, fields in rooms:
+            for room_dto in rooms:
                 if room_dto.in_use:
-                    room = RoomMapper.dto_to_orm(room_dto, fields)
-                    if 'floor' in fields:
+                    room = RoomMapper.dto_to_orm(room_dto)
+                    if 'floor' in room_dto.loaded_fields:
                         floor = None
                         if room_dto.floor is not None:
-                            floor = FloorMapper.dto_to_orm(room_dto.floor, ['id'])
+                            floor = FloorMapper.dto_to_orm(room_dto.floor)
                             floor.save()
                         room.floor = floor
                     room.save()

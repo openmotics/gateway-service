@@ -50,9 +50,9 @@ class ShutterMapper(object):
                           **kwargs)
 
     @staticmethod
-    def dto_to_orm(shutter_dto, fields):  # type: (ShutterDTO, List[str]) -> ShutterConfiguration
+    def dto_to_orm(shutter_dto):  # type: (ShutterDTO) -> ShutterConfiguration
         new_data = {'id': shutter_dto.id}  # type: Dict[str, Any]
-        if 'name' in fields:
+        if 'name' in shutter_dto.loaded_fields:
             new_data['name'] = shutter_dto.name
         for field in ['timer_up', 'timer_down']:
             # TODO: Currently denonify as byte, since high-level code most likely assumes this is a byte

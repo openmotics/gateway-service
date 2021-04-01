@@ -45,7 +45,7 @@ class CANFeedbackTest(unittest.TestCase):
                                can_led_3=FeedbackLedDTO(id=7, function=FeedbackLedDTO.Functions.MB_B8_INVERTED))
 
         # Save led feedback config
-        CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, ['can_led_1', 'can_led_3'])
+        CANFeedbackController.save_output_led_feedback_configuration(output, output_dto)
 
         # Validate correct data in created GA
         self.assertEqual(0, output.output_groupaction_follow)
@@ -68,7 +68,7 @@ class CANFeedbackTest(unittest.TestCase):
 
         # Change led feedback config
         output_dto.can_led_2.function = FeedbackLedDTO.Functions.ON_B8_INVERTED
-        CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, ['can_led_1', 'can_led_2'])
+        CANFeedbackController.save_output_led_feedback_configuration(output, output_dto)
 
         # Validate stored led feedback data
         output_dto = OutputDTO(id=0)
@@ -85,7 +85,6 @@ class CANFeedbackTest(unittest.TestCase):
 
     def test_global_feedback_leds(self):
         global_configuration = GlobalConfiguration()
-        all_default_global_feedbacks = [GlobalFeedbackDTO(id=i) for i in range(32)]
 
         # Verify base
         self.assertEqual(65535, global_configuration.groupaction_any_output_changed)
@@ -96,7 +95,7 @@ class CANFeedbackTest(unittest.TestCase):
                                               can_led_1=FeedbackLedDTO(id=5, function=FeedbackLedDTO.Functions.ON_B16_NORMAL),
                                               can_led_3=FeedbackLedDTO(id=7, function=FeedbackLedDTO.Functions.ON_B8_INVERTED),
                                               can_led_4=FeedbackLedDTO(id=9, function=FeedbackLedDTO.Functions.FB_B8_NORMAL))
-        CANFeedbackController.save_global_led_feedback_configuration([(global_feedback_0, ['can_led_1', 'can_led_3', 'can_led_4'])])
+        CANFeedbackController.save_global_led_feedback_configuration([global_feedback_0])
 
         #                                                                                                 +- 256 = MSB is 1 = lights
         # Validate                                                                                        |   +- 0 = Solid on, 1 = Fast blinking
@@ -117,8 +116,7 @@ class CANFeedbackTest(unittest.TestCase):
         # Prepare feedback "3" (nr of lights > 2)
         global_feedback_3 = GlobalFeedbackDTO(id=3,
                                               can_led_1=FeedbackLedDTO(id=11, function=FeedbackLedDTO.Functions.ON_B16_NORMAL),
-                                              can_led_3=FeedbackLedDTO(id=13, function=FeedbackLedDTO.Functions.FB_B8_INVERTED),
-                                              can_led_4=FeedbackLedDTO(id=15, function=FeedbackLedDTO.Functions.ON_B8_INVERTED))
+                                              can_led_3=FeedbackLedDTO(id=13, function=FeedbackLedDTO.Functions.FB_B8_INVERTED))
         expected_global_feedback_3 = GlobalFeedbackDTO(id=3,
                                                        can_led_1=FeedbackLedDTO(id=11, function=FeedbackLedDTO.Functions.ON_B16_NORMAL),
                                                        can_led_2=FeedbackLedDTO(id=13, function=FeedbackLedDTO.Functions.FB_B16_NORMAL))
@@ -128,8 +126,8 @@ class CANFeedbackTest(unittest.TestCase):
         #                                                                                                +- 512 = MSB is 2 = nr of lights
 
         # Store in various scenarios, all should yield the same response
-        save_scenarios = [[(global_feedback_3, ['can_led_1', 'can_led_3'])],
-                          [(global_feedback_0, ['can_led_1', 'can_led_3', 'can_led_4']), (global_feedback_3, ['can_led_1', 'can_led_3'])]]
+        save_scenarios = [[global_feedback_3],
+                          [global_feedback_0, global_feedback_3]]
         for save_scenario in save_scenarios:
             CANFeedbackController.save_global_led_feedback_configuration(save_scenario)
 
@@ -167,10 +165,8 @@ class CANFeedbackTest(unittest.TestCase):
         expected_basic_actions_20 = [BasicAction(action_type=20, action=70, device_nr=17, extra_parameter=768 + 0)]  # 768 = MSB is 3 = nr of outputs
 
         # Store
-        CANFeedbackController.save_global_led_feedback_configuration([(global_feedback_0, ['can_led_1', 'can_led_3', 'can_led_4']),
-                                                                      (global_feedback_3, ['can_led_1', 'can_led_3']),
-                                                                      (global_feedback_16, ['can_led_1']),
-                                                                      (global_feedback_20, ['can_led_1'])])
+        CANFeedbackController.save_global_led_feedback_configuration([global_feedback_0, global_feedback_3,
+                                                                      global_feedback_16, global_feedback_20])
 
         # Validate
         global_configuration = GlobalConfiguration()
@@ -187,9 +183,8 @@ class CANFeedbackTest(unittest.TestCase):
                           20: expected_global_feedback_20}, CANFeedbackController.load_global_led_feedback_configuration())
 
         # Remove 3
-        empty_global_feedback_3 = GlobalFeedbackDTO(id=3)
-        CANFeedbackController.save_global_led_feedback_configuration([(empty_global_feedback_3, ['can_led_1', 'can_led_2']),
-                                                                      (global_feedback_20, ['can_led_1'])])
+        empty_global_feedback_3 = GlobalFeedbackDTO(id=3, can_led_1=None, can_led_2=None, can_led_3=None, can_led_4=None)
+        CANFeedbackController.save_global_led_feedback_configuration([empty_global_feedback_3, global_feedback_20])
 
         # Validate
         global_configuration = GlobalConfiguration()

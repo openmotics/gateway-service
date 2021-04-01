@@ -16,13 +16,14 @@
 """
 GroupAction DTO
 """
-from gateway.dto.base import BaseDTO
+from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
-    from typing import Optional, List
+    from typing import List
 
 
 class GroupActionDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, name='', actions=None):
         # The argument `actions` is None since you should not set a reference type as default value
         self.id = id  # type: int

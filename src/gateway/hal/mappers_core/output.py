@@ -44,13 +44,13 @@ class OutputMapper(object):
                          output_type=orm_object.output_type)
 
     @staticmethod
-    def dto_to_orm(output_dto, fields):  # type: (OutputDTO, List[str]) -> OutputConfiguration
+    def dto_to_orm(output_dto):  # type: (OutputDTO) -> OutputConfiguration
         data = {'id': output_dto.id}  # type: Dict[str, Any]
         for dto_field, data_field in {'name': 'name',
                                       'output_type': 'output_type'}.items():
-            if dto_field in fields:
+            if dto_field in output_dto.loaded_fields:
                 data[data_field] = getattr(output_dto, dto_field)
-        if 'timer' in fields:
+        if 'timer' in output_dto.loaded_fields:
             timer = output_dto.timer
             if timer is None or timer <= 0 or timer == 65535:
                 data['timer_type'] = OutputConfiguration.TimerType.INACTIVE
