@@ -86,6 +86,7 @@ class MemoryModelDefinition(object):
         for field_name, composition in self.__class__._get_composite_fields().items():
             setattr(self, '_{0}'.format(field_name), CompositionContainer(composite_definition=composition,
                                                                           composition_width=composition._field.length * 8,
+                                                                          field_id=self._id,
                                                                           field_container=MemoryFieldContainer(name=field_name,
                                                                                                                memory_field=composition._field,
                                                                                                                memory_address=composition._field.get_address(self._id))))
@@ -757,21 +758,21 @@ class MemoryChecksumContainer(object):
 
 
 class CompositeField(object):
-    def decompose(self, value):  # type: (int) -> Any
+    def decompose(self, value, field_id):  # type: (int, Optional[int]) -> Any
         """ Decomposes a value out of the given composite value """
         raise NotImplementedError()
 
-    def compose(self, base_value, value, composition_width):  # type: (int, Any, int) -> Any
+    def compose(self, base_value, value, composition_width, field_id):  # type: (int, Any, int, Optional[int]) -> Any
         """ Composes a value onto a base (current) value """
         raise NotImplementedError()
 
 
 class CompositeNumberField(CompositeField):
     def __init__(self, start_bit, width, value_offset=0, value_factor=1, max_value=None):
-        # type: (int, int, int, int, Optional[int]) -> None
+        # type: (Union[int, Callable[[int], int]], int, int, int, Optional[int]) -> None
         super(CompositeNumberField, self).__init__()
-        self._mask = 2 ** width - 1 << start_bit
         self._start_bit = start_bit
+        self._width = width
         if max_value is None:
             self._max_value = 2 ** width - 1
         else:
@@ -779,41 +780,55 @@ class CompositeNumberField(CompositeField):
         self._value_offset = value_offset
         self._value_factor = value_factor
 
-    def decompose(self, value):  # type: (int) -> Optional[Any]
-        return self._decompose(value)
+    def decompose(self, value, field_id):  # type: (int, Optional[int]) -> Optional[Any]
+        return self._decompose(value, field_id)
 
-    def _decompose(self, value):  # type: (int) -> Optional[Any]
-        value = (value & self._mask) >> self._start_bit
+    def _decompose(self, value, field_id):  # type: (int, Optional[int]) -> Optional[Any]
+        """ Receives `value`, which is the decoded value from the MemoryField """
+        start_bit, mask = self._get_dynamic_properties(field_id)
+        value = (value & mask) >> start_bit
         if self._max_value is None or 0 <= value <= self._max_value:
             return (value * self._value_factor) - self._value_offset
         return None
 
-    def compose(self, current_composition, value, composition_width):  # type: (int, Any, int) -> int
-        return self._compose(current_composition, value, composition_width)
+    def compose(self, current_composition, value, composition_width, field_id):  # type: (int, Any, int, Optional[int]) -> int
+        return self._compose(current_composition, value, composition_width, field_id)
 
-    def _compose(self, current_composition, value, composition_width):  # type: (int, Any, int) -> int
-        current_value = self._decompose(current_composition)
+    def _compose(self, current_composition, value, composition_width, field_id):  # type: (int, Any, int, Optional[int]) -> int
+        """ Composes `value` onto `current_composition` which is the decoded value from the MemoryField `"""
+        current_value = self._decompose(current_composition, field_id)
         if value == current_value:
             return current_composition
         processed_value = (value + self._value_offset) // self._value_factor
         if self._max_value is not None and not (0 <= processed_value <= self._max_value):
             raise ValueError('Value `{0}` (original `{1}`) out of limits: 0 <= value <= {2}'.format(processed_value, value, self._max_value))
-        composing_value = (processed_value << self._start_bit) & self._mask
-        current_composition = current_composition & ~self._mask & (2 ** composition_width - 1)
+        start_bit, mask = self._get_dynamic_properties(field_id)
+        composing_value = (processed_value << start_bit) & mask
+        current_composition = current_composition & ~mask & (2 ** composition_width - 1)
         return current_composition | composing_value
+
+    def _get_dynamic_properties(self, field_id):
+        if callable(self._start_bit):
+            if field_id is None:
+                raise ValueError('And id is required for a dynamic composition')
+            start_bit = self._start_bit(field_id)
+        else:
+            start_bit = self._start_bit
+        mask = 2 ** self._width - 1 << start_bit
+        return start_bit, mask
 
 
 class CompositeBitField(CompositeNumberField):
-    def __init__(self, bit):
+    def __init__(self, bit):  # type (Union[int, Callable[[int], int]]) -> None
         super(CompositeBitField, self).__init__(bit, 1)
 
-    def decompose(self, value):  # type: (int) -> bool
-        decomposed_value = super(CompositeBitField, self)._decompose(value)
+    def decompose(self, value, field_id):  # type: (int, Optional[int]) -> bool
+        decomposed_value = super(CompositeBitField, self)._decompose(value, field_id)
         return decomposed_value == 1
 
-    def compose(self, current_composition, value, composition_width):  # type: (int, bool, int) -> int
+    def compose(self, current_composition, value, composition_width, field_id):  # type: (int, bool, int, Optional[int]) -> int
         value_to_compose = 1 if value else 0
-        return super(CompositeBitField, self)._compose(current_composition, value_to_compose, composition_width)
+        return super(CompositeBitField, self)._compose(current_composition, value_to_compose, composition_width, field_id)
 
 
 class CompositeMemoryModelDefinition(object):
@@ -839,10 +854,11 @@ class CompositionContainer(object):
     This object holds the MemoryField and the data.
     """
 
-    def __init__(self, composite_definition, composition_width, field_container):
-        # type: (CompositeMemoryModelDefinition, int, MemoryFieldContainer) -> None
+    def __init__(self, composite_definition, composition_width, field_id, field_container):
+        # type: (CompositeMemoryModelDefinition, int, Optional[int], MemoryFieldContainer) -> None
         self._composite_definition = composite_definition
         self._composition_width = composition_width
+        self._field_id = field_id
         self._field_container = field_container
         self._fields = []
         for field_name in self._composite_definition.__class__._get_field_names():
@@ -855,12 +871,12 @@ class CompositionContainer(object):
 
     def _get_property(self, field_name):  # type: (str) -> Any
         field = getattr(self._composite_definition, field_name)
-        return field.decompose(self._field_container.decode())
+        return field.decompose(self._field_container.decode(), self._field_id)
 
     def _set_property(self, field_name, value):  # type: (str, Any) -> None
         field = getattr(self._composite_definition, field_name)
         current_composition = self._field_container.decode()
-        self._field_container.encode(field.compose(current_composition, value, self._composition_width))
+        self._field_container.encode(field.compose(current_composition, value, self._composition_width, self._field_id))
 
     def _load(self, data):  # type: (Dict[str, Any]) -> None
         for field_name, value in data.items():

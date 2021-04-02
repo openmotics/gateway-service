@@ -53,12 +53,12 @@ class GroupActionController(BaseController):
             group_action_dtos.append(group_action_dto)
         return group_action_dtos
 
-    def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
+    def save_group_actions(self, group_actions):  # type: (List[GroupActionDTO]) -> None
         group_actions_to_save = []
-        for group_action_dto, fields in group_actions:
+        for group_action_dto in group_actions:
             group_action = GroupAction.get_or_none(number=group_action_dto.id)  # type: GroupAction
             if group_action is None:
                 logger.info('Ignored saving non-existing GroupAction {0}'.format(group_action_dto.id))
                 continue
-            group_actions_to_save.append((group_action_dto, fields))
+            group_actions_to_save.append(group_action_dto)
         self._master_controller.save_group_actions(group_actions_to_save)

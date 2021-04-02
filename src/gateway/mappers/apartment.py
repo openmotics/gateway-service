@@ -23,9 +23,6 @@ import logging
 from gateway.dto.apartment import ApartmentDTO
 from gateway.models import Apartment, User
 
-if False:  # MYPY
-    from typing import List
-
 logger = logging.getLogger('openmotics')
 
 
@@ -40,18 +37,18 @@ class ApartmentMapper(object):
         return apartment_dto
 
     @staticmethod
-    def dto_to_orm(dto_object, fields):
-        # type: (ApartmentDTO, List[str]) -> Apartment
-        apartment = User.get_or_none(name=dto_object.name,
+    def dto_to_orm(dto_object):
+        # type: (ApartmentDTO) -> Apartment
+        apartment = Apartment.get_or_none(name=dto_object.name,
                                      mailbox_rebus_id=dto_object.mailbox_rebus_id,
                                      doorbell_rebus_id=dto_object.doorbell_rebus_id)
         if apartment is None:
             mandatory_fields = {'name', 'mailbox_rebus_id', 'doorbell_rebus_id'}
-            if not mandatory_fields.issubset(set(fields)):
+            if not mandatory_fields.issubset(set(dto_object.loaded_fields)):
                 raise ValueError('Cannot create apartment without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
         apartment_orm = Apartment()
-        for field in fields:
-            if getattr(apartment_orm, field, None) is None or getattr(apartment_orm, field, None) is None:
+        for field in dto_object.loaded_fields:
+            if getattr(dto_object, field, None) is None:
                 continue
             setattr(apartment_orm, field, getattr(dto_object, field))
         return apartment_orm

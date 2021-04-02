@@ -31,7 +31,7 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO, \
     ThermostatGroupDTO, ThermostatAircoStatusDTO, PumpGroupDTO, \
-    GlobalRTD10DTO, RTD10DTO, GlobalFeedbackDTO
+    GlobalRTD10DTO, RTD10DTO, GlobalFeedbackDTO, OutputStateDTO
 from gateway.enums import ShutterEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
@@ -45,10 +45,9 @@ from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from master.classic import eeprom_models, master_api
 from master.classic.eeprom_controller import EepromAddress, EepromController
-from master.classic.eeprom_models import CanLedConfiguration, \
-    CoolingPumpGroupConfiguration, DimmerConfiguration, \
-    GlobalRTD10Configuration, GlobalThermostatConfiguration, \
-    PumpGroupConfiguration, RTD10CoolingConfiguration, \
+from master.classic.eeprom_models import CoolingPumpGroupConfiguration, \
+    DimmerConfiguration, GlobalRTD10Configuration, \
+    GlobalThermostatConfiguration, PumpGroupConfiguration, RTD10CoolingConfiguration, \
     RTD10HeatingConfiguration, ScheduledActionConfiguration, \
     StartupActionConfiguration, ThermostatConfiguration, CoolingConfiguration
 from master.classic.inputs import InputStatus
@@ -61,7 +60,7 @@ from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+    from typing import Any, Dict, List, Literal, Optional, Tuple
     from serial import Serial
 
     HEALTH = Literal['success', 'unstable', 'failure']
@@ -326,10 +325,13 @@ class MasterClassicController(MasterController):
         for output_id, dimmer in data['outputs']:
             state[output_id] = (True, dimmer)
         for output_id, (status, dimmer) in state.items():
-            event_data = {'id': output_id, 'status': status}
+            extra_kwargs = {}
             if dimmer is not None:
-                event_data['dimmer'] = dimmer
-            master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data)
+                extra_kwargs['dimmer'] = dimmer
+            state_dto = OutputStateDTO(id=output_id,
+                                       status=status,
+                                       **extra_kwargs)
+            master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data={'state': state_dto})
             self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)
 
     def _invalidate_caches(self):
@@ -409,10 +411,10 @@ class MasterClassicController(MasterController):
                 if o.module_type in ['i', 'I']]  # Only return 'real' inputs
 
     @communication_enabled
-    def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
+    def save_inputs(self, inputs):  # type: (List[InputDTO]) -> None
         batch = []
-        for input_, fields in inputs:
-            batch.append(InputMapper.dto_to_orm(input_, fields))
+        for input_ in inputs:
+            batch.append(InputMapper.dto_to_orm(input_))
         self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
@@ -509,28 +511,30 @@ class MasterClassicController(MasterController):
         return output_dtos
 
     @communication_enabled
-    def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
+    def save_outputs(self, outputs):  # type: (List[OutputDTO]) -> None
         batch = []
-        for output, fields in outputs:
-            batch.append(OutputMapper.dto_to_orm(output, fields))
+        for output_dto in outputs:
+            batch.append(OutputMapper.dto_to_orm(output_dto))
         self._eeprom_controller.write_batch(batch)
-        for output, _ in outputs:
-            if output.timer is not None:
+        for output_dto in outputs:
+            if output_dto.timer is not None:
                 self._master_communicator.do_command(
                     master_api.write_timer(),
-                    {'id': output.id, 'timer': output.timer}
+                    {'id': output_dto.id, 'timer': output_dto.timer}
                 )
 
     @communication_enabled
     def load_output_status(self):
-        # type: () -> List[Dict[str,Any]]
+        # type: () -> List[OutputStateDTO]
         number_of_outputs = self._master_communicator.do_command(master_api.number_of_io_modules())['out'] * 8
         output_status = []
         for i in range(number_of_outputs):
-            state_data = self._master_communicator.do_command(master_api.read_output(), {'id': i})
-            # Add output locked status via the validation bits
-            state_data['locked'] = self._is_output_locked(state_data['id'])
-            output_status.append(state_data)
+            data = self._master_communicator.do_command(master_api.read_output(), {'id': i})
+            output_status.append(OutputStateDTO(id=i,
+                                                status=bool(data['status']),
+                                                ctimer=int(data['ctimer']),
+                                                dimmer=int(data['dimmer']),
+                                                locked=self._is_output_locked(data['id'])))
         return output_status
 
     def _input_changed(self, input_id, status):
@@ -595,10 +599,10 @@ class MasterClassicController(MasterController):
                 for o in self._eeprom_controller.read_all(eeprom_models.ShutterConfiguration)]
 
     @communication_enabled
-    def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
+    def save_shutters(self, shutters):  # type: (List[ShutterDTO]) -> None
         batch = []
-        for shutter, fields in shutters:
-            batch.append(ShutterMapper.dto_to_orm(shutter, fields))
+        for shutter in shutters:
+            batch.append(ShutterMapper.dto_to_orm(shutter))
         self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
@@ -695,10 +699,10 @@ class MasterClassicController(MasterController):
                 for o in self._eeprom_controller.read_all(eeprom_models.ShutterGroupConfiguration)]
 
     @communication_enabled
-    def save_shutter_groups(self, shutter_groups):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
+    def save_shutter_groups(self, shutter_groups):  # type: (List[ShutterGroupDTO]) -> None
         batch = []
-        for shutter_group, fields in shutter_groups:
-            batch.append(ShutterGroupMapper.dto_to_orm(shutter_group, fields))
+        for shutter_group in shutter_groups:
+            batch.append(ShutterGroupMapper.dto_to_orm(shutter_group))
         self._eeprom_controller.write_batch(batch)
 
     # Thermostats
@@ -786,10 +790,10 @@ class MasterClassicController(MasterController):
                 for o in self._eeprom_controller.read_all(eeprom_models.ThermostatConfiguration)]
 
     @communication_enabled
-    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+    def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         batch = []
-        for thermostat, fields in thermostats:
-            batch.append(ThermostatMapper.dto_to_orm(ThermostatConfiguration, thermostat, fields))
+        for thermostat in thermostats:
+            batch.append(ThermostatMapper.dto_to_orm(ThermostatConfiguration, thermostat))
         self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
@@ -803,10 +807,10 @@ class MasterClassicController(MasterController):
                 for o in self._eeprom_controller.read_all(eeprom_models.CoolingConfiguration)]
 
     @communication_enabled
-    def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+    def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         batch = []
-        for thermostat, fields in thermostats:
-            batch.append(ThermostatMapper.dto_to_orm(CoolingConfiguration, thermostat, fields))
+        for thermostat in thermostats:
+            batch.append(ThermostatMapper.dto_to_orm(CoolingConfiguration, thermostat))
         self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
@@ -820,10 +824,10 @@ class MasterClassicController(MasterController):
                 for o in self._eeprom_controller.read_all(CoolingPumpGroupConfiguration)]
 
     @communication_enabled
-    def save_cooling_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
+    def save_cooling_pump_groups(self, pump_groups):  # type: (List[PumpGroupDTO]) -> None
         batch = []
-        for pump_group, fields in pump_groups:
-            batch.append(PumpGroupMapper.dto_to_orm(CoolingPumpGroupConfiguration, pump_group, fields))
+        for pump_group in pump_groups:
+            batch.append(PumpGroupMapper.dto_to_orm(CoolingPumpGroupConfiguration, pump_group))
         self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
@@ -832,9 +836,8 @@ class MasterClassicController(MasterController):
         return GlobalRTD10Mapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def save_global_rtd10(self, global_rtd10):  # type: (Tuple[GlobalRTD10DTO, List[str]]) -> None
-        global_rtd10_dto, fields = global_rtd10
-        classic_object = GlobalRTD10Mapper.dto_to_orm(global_rtd10_dto, fields)
+    def save_global_rtd10(self, global_rtd10):  # type: (GlobalRTD10DTO) -> None
+        classic_object = GlobalRTD10Mapper.dto_to_orm(global_rtd10)
         self._eeprom_controller.write(classic_object)
 
     @communication_enabled
@@ -848,10 +851,10 @@ class MasterClassicController(MasterController):
                 for o in self._eeprom_controller.read_all(RTD10HeatingConfiguration)]
 
     @communication_enabled
-    def save_heating_rtd10s(self, rtd10s):  # type: (List[Tuple[RTD10DTO, List[str]]]) -> None
+    def save_heating_rtd10s(self, rtd10s):  # type: (List[RTD10DTO]) -> None
         batch = []
-        for rtd10_dto, fields in rtd10s:
-            batch.append(RTD10Mapper.dto_to_orm(RTD10HeatingConfiguration, rtd10_dto, fields))
+        for rtd10_dto in rtd10s:
+            batch.append(RTD10Mapper.dto_to_orm(RTD10HeatingConfiguration, rtd10_dto))
         self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
@@ -865,10 +868,10 @@ class MasterClassicController(MasterController):
                 for o in self._eeprom_controller.read_all(RTD10CoolingConfiguration)]
 
     @communication_enabled
-    def save_cooling_rtd10s(self, rtd10s):  # type: (List[Tuple[RTD10DTO, List[str]]]) -> None
+    def save_cooling_rtd10s(self, rtd10s):  # type: (List[RTD10DTO]) -> None
         batch = []
-        for rtd10_dto, fields in rtd10s:
-            batch.append(RTD10Mapper.dto_to_orm(RTD10CoolingConfiguration, rtd10_dto, fields))
+        for rtd10_dto in rtd10s:
+            batch.append(RTD10Mapper.dto_to_orm(RTD10CoolingConfiguration, rtd10_dto))
         self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
@@ -878,13 +881,11 @@ class MasterClassicController(MasterController):
         return ThermostatGroupMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def save_thermostat_group(self, thermostat_group):
-        # type: (Tuple[ThermostatGroupDTO, List[str]]) -> None
-        thermostat_group_dto, fields = thermostat_group
-        if thermostat_group_dto.outside_sensor_id is None:
+    def save_thermostat_group(self, thermostat_group):  # type: (ThermostatGroupDTO) -> None
+        if thermostat_group.outside_sensor_id is None:
             # Works around a master issue where the thermostat would be turned off in case there is no outside sensor.
-            thermostat_group_dto.threshold_temperature = 50
-        classic_object = ThermostatGroupMapper.dto_to_orm(thermostat_group_dto, fields)
+            thermostat_group.threshold_temperature = 50
+        classic_object = ThermostatGroupMapper.dto_to_orm(thermostat_group)
         self._eeprom_controller.write(classic_object)
 
     @communication_enabled
@@ -898,10 +899,10 @@ class MasterClassicController(MasterController):
                 for o in self._eeprom_controller.read_all(PumpGroupConfiguration)]
 
     @communication_enabled
-    def save_heating_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
+    def save_heating_pump_groups(self, pump_groups):  # type: (List[PumpGroupDTO]) -> None
         batch = []
-        for pump_group, fields in pump_groups:
-            batch.append(PumpGroupMapper.dto_to_orm(PumpGroupConfiguration, pump_group, fields))
+        for pump_group in pump_groups:
+            batch.append(PumpGroupMapper.dto_to_orm(PumpGroupConfiguration, pump_group))
         self._eeprom_controller.write_batch(batch)
 
     # Virtual modules
@@ -1268,7 +1269,7 @@ class MasterClassicController(MasterController):
         try:
             self._communication_enabled = False
             self._heartbeat.stop()
-            bootload_modules(module_type, hex_filename, None, None)
+            bootload_modules(module_type, hex_filename, False, None)
         finally:
             self._heartbeat.start()
             self._communication_enabled = True
@@ -1514,10 +1515,10 @@ class MasterClassicController(MasterController):
                 for o in self._eeprom_controller.read_all(eeprom_models.GroupActionConfiguration)]
 
     @communication_enabled
-    def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
+    def save_group_actions(self, group_actions):  # type: (List[GroupActionDTO]) -> None
         batch = []
-        for group_action, fields in group_actions:
-            batch.append(GroupActionMapper.dto_to_orm(group_action, fields))
+        for group_action in group_actions:
+            batch.append(GroupActionMapper.dto_to_orm(group_action))
         self._eeprom_controller.write_batch(batch)
 
     # Schedules
@@ -1577,10 +1578,10 @@ class MasterClassicController(MasterController):
                 for o in self._eeprom_controller.read_all(eeprom_models.CanLedConfiguration)]
 
     @communication_enabled
-    def save_global_feedbacks(self, global_feedbacks):  # type: (List[Tuple[GlobalFeedbackDTO, List[str]]]) -> None
+    def save_global_feedbacks(self, global_feedbacks):  # type: (List[GlobalFeedbackDTO]) -> None
         batch = []
-        for global_feedback, fields in global_feedbacks:
-            batch.append(GlobalFeedbackMapper.dto_to_orm(global_feedback, fields))
+        for global_feedback in global_feedbacks:
+            batch.append(GlobalFeedbackMapper.dto_to_orm(global_feedback))
         self._eeprom_controller.write_batch(batch)
 
     # All lights off functions
@@ -1669,10 +1670,10 @@ class MasterClassicController(MasterController):
                 for o in self._eeprom_controller.read_all(eeprom_models.SensorConfiguration)]
 
     @communication_enabled
-    def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
+    def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> None
         batch = []
-        for sensor, fields in sensors:
-            batch.append(SensorMapper.dto_to_orm(sensor, fields))
+        for sensor in sensors:
+            batch.append(SensorMapper.dto_to_orm(sensor))
         self._eeprom_controller.write_batch(batch)
 
     # PulseCounters
@@ -1688,10 +1689,10 @@ class MasterClassicController(MasterController):
                 for o in self._eeprom_controller.read_all(eeprom_models.PulseCounterConfiguration)]
 
     @communication_enabled
-    def save_pulse_counters(self, pulse_counters):  # type: (List[Tuple[PulseCounterDTO, List[str]]]) -> None
+    def save_pulse_counters(self, pulse_counters):  # type: (List[PulseCounterDTO]) -> None
         batch = []
-        for pulse_counter, fields in pulse_counters:
-            batch.append(PulseCounterMapper.dto_to_orm(pulse_counter, fields))
+        for pulse_counter in pulse_counters:
+            batch.append(PulseCounterMapper.dto_to_orm(pulse_counter))
         self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
@@ -1744,7 +1745,7 @@ class MasterClassicController(MasterController):
         # loop over all outputs and update the locked status if the bit_nr is associated with this output
         for output_id, output_dto in six.iteritems(self._output_config):
             if output_dto.lock_bit_id == bit_nr:
-                locked = value  # the bit is set, the output is locked
-                event_data = {'id': output_id, 'locked': locked}
-                master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data=event_data)
+                master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS,
+                                           data={'state': OutputStateDTO(id=output_id,
+                                                                         locked=value)})
                 self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)

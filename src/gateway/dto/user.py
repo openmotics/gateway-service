@@ -19,7 +19,7 @@ User DTO
 
 import hashlib
 
-from gateway.dto.base import BaseDTO
+from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
     from typing import Optional, Any
@@ -27,14 +27,15 @@ if False:  # MYPY
 
 
 class UserDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id=None, username='', first_name='', last_name='', role=None,
-                 pin_code=None, apartment_dto=None, accepted_terms=0):
+                 pin_code=None, apartment=None, accepted_terms=0):
         self.id = id  # type: Optional[int]
         self.first_name = first_name  # type: str
         self.last_name = last_name  # type: str
         self.role = role  # type: str
         self.pin_code = pin_code  # type: str
-        self.apartment = apartment_dto  # type: ApartmentDTO
+        self.apartment = apartment  # type: ApartmentDTO
         self.hashed_password = ''  # type: str
         self.accepted_terms = accepted_terms  # type: int
         # if no first and last name is given, allow to set to set the name to username
@@ -59,6 +60,10 @@ class UserDTO(BaseDTO):
         else:
             self.first_name = username
             self.last_name = ''
+        self._loaded_fields.add('first_name')
+        self._loaded_fields.add('last_name')
+        if 'username' in self._loaded_fields:
+            self._loaded_fields.remove('username')
 
     @staticmethod
     def _hash_password(password):
@@ -87,6 +92,9 @@ class UserDTO(BaseDTO):
             raise ValueError("Password cannot be empty")
 
         self.hashed_password = UserDTO._hash_password(password)
+        self._loaded_fields.add('password')
+        if '_hashed_password' in self._loaded_fields:
+            self._loaded_fields.remove('_hashed_password')
 
     def __eq__(self, other):
         # type: (Any) -> bool

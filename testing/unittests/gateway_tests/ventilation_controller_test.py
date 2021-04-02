@@ -145,7 +145,7 @@ class VentilationControllerTest(unittest.TestCase):
                                              device_vendor='example',
                                              device_type='model-0',
                                              device_serial='device-000001')
-            self.controller.save_ventilation(ventilation_dto, [])
+            self.controller.save_ventilation(ventilation_dto)
             get_or_none.assert_called_with(source='plugin', plugin=plugin, external_id='device-000001')
             save.assert_called()
 
@@ -175,7 +175,7 @@ class VentilationControllerTest(unittest.TestCase):
                                              device_vendor='example',
                                              device_type='model-0',
                                              device_serial='device-000001')
-            self.controller.save_ventilation(ventilation_dto, [])
+            self.controller.save_ventilation(ventilation_dto)
             get_or_none.assert_called_with(source='plugin', plugin=plugin, external_id='device-000001')
             save.assert_called()
 
@@ -204,7 +204,7 @@ class VentilationControllerTest(unittest.TestCase):
                                              device_vendor='example',
                                              device_type='model-0',
                                              device_serial='device-000001')
-            self.controller.save_ventilation(ventilation_dto, [])
+            self.controller.save_ventilation(ventilation_dto)
             get_or_none.assert_called_with(id=42, source='plugin', plugin=plugin, external_id='device-000001')
             save.assert_called()
 
@@ -241,12 +241,12 @@ class VentilationControllerTest(unittest.TestCase):
                                              device_vendor='example',
                                              device_type='model-0',
                                              device_serial='device-000001')
-            self.controller.save_ventilation(ventilation_dto, [])
+            self.controller.save_ventilation(ventilation_dto)
             self.pubsub._publish_all_events()
             assert len(events) == 0, events  # No change
 
             ventilation_dto.name = 'bar'
-            self.controller.save_ventilation(ventilation_dto, [])
+            self.controller.save_ventilation(ventilation_dto)
             self.pubsub._publish_all_events()
             assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'ventilation'}) in events
             assert len(events) == 1, events

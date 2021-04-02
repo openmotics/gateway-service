@@ -28,9 +28,11 @@ class InputCoreMapperTest(unittest.TestCase):
 
     def test_mapping_basic(self):
         orm = GlobalFeedbackMapper.dto_to_orm(GlobalFeedbackDTO(id=0,
+                                                                can_led_1=None,
                                                                 can_led_2=FeedbackLedDTO(id=10,
-                                                                                         function=FeedbackLedDTO.Functions.FB_B5_NORMAL)),
-                                              ['id', 'can_led_1', 'can_led_2', 'can_led_3', 'can_led_4'])
+                                                                                         function=FeedbackLedDTO.Functions.FB_B5_NORMAL),
+                                                                can_led_3=None,
+                                                                can_led_4=None))
         self.assertEqual(0, orm.id)
         self.assertEqual(255, orm.can_led_1_id)
         self.assertEqual('UNKNOWN', orm.can_led_1_function)

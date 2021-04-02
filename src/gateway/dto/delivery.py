@@ -16,7 +16,7 @@
 """
 Delivery DTO
 """
-from gateway.dto.base import BaseDTO
+from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
     from typing import Any, Optional
@@ -24,8 +24,9 @@ if False:  # MYPY
 
 
 class DeliveryDTO(BaseDTO):
-    def __init__(self, id, type, timestamp_delivery, user_dto_delivery, timestamp_pickup=None, courier_firm='',
-                 signature_delivery='', signature_pickup='', parcelbox_rebus_id=None, user_dto_pickup=None):
+    @capture_fields
+    def __init__(self, id, type, timestamp_delivery, user_delivery, timestamp_pickup=None, courier_firm='',
+                 signature_delivery='', signature_pickup='', parcelbox_rebus_id=None, user_pickup=None):
         self.id = id  # type: int
         self.type = type  # type: str
         self.timestamp_delivery = timestamp_delivery  # type: int
@@ -34,8 +35,27 @@ class DeliveryDTO(BaseDTO):
         self.signature_delivery = signature_delivery  # type: str
         self.signature_pickup = signature_pickup  # type: str
         self.parcelbox_rebus_id = parcelbox_rebus_id  # type: int
-        self.user_delivery = user_dto_delivery  # type: UserDTO
-        self.user_pickup = user_dto_pickup  # type: Optional[UserDTO]
+        self.user_delivery = user_delivery  # type: UserDTO
+        self.user_pickup = user_pickup  # type: Optional[UserDTO]
+
+        self._loaded_fields.remove('user_delivery')
+        self._loaded_fields.add('user_id_delivery')
+        if user_pickup is not None:
+            self._loaded_fields.add('user_id_pickup')
+            self._loaded_fields.remove('user_pickup')
+
+    @property
+    def user_id_delivery(self):
+        if self.user_delivery is not None:
+            return self.user_delivery.id
+        return None
+
+
+    @property
+    def user_id_pickup(self):
+        if self.user_pickup is not None:
+            return self.user_pickup.id
+        return None
 
     def __eq__(self, other):
         # type: (Any) -> bool

@@ -24,7 +24,7 @@ import mock
 import gateway.hal.master_controller_classic
 import master.classic.master_api
 import master.classic.master_communicator
-from gateway.dto import InputDTO, OutputDTO
+from gateway.dto import InputDTO, OutputDTO, OutputStateDTO
 from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
@@ -158,9 +158,9 @@ class MasterClassicControllerTest(unittest.TestCase):
         events = []
         classic._on_master_output_event({'outputs': [(0, 0), (2, 5)]})
         pubsub._publish_all_events()
-        assert [MasterEvent('OUTPUT_STATUS', {'id': 0, 'status': True, 'dimmer': 0}),
-                MasterEvent('OUTPUT_STATUS', {'id': 1, 'status': False}),
-                MasterEvent('OUTPUT_STATUS', {'id': 2, 'status': True, 'dimmer': 5})] == events
+        self.assertEqual(events, [MasterEvent('OUTPUT_STATUS', {'state': OutputStateDTO(id=0, status=True, dimmer=0)}),
+                                  MasterEvent('OUTPUT_STATUS', {'state': OutputStateDTO(id=1, status=False)}),
+                                  MasterEvent('OUTPUT_STATUS', {'state': OutputStateDTO(id=2, status=True, dimmer=5)})])
 
     def test_validation_bits_passthrough(self):
         # Important note: bits are ordened per byte, so the sequence is like:
@@ -210,9 +210,9 @@ class MasterClassicControllerTest(unittest.TestCase):
         classic._on_master_validation_bit_change(6, True)
         classic._on_master_validation_bit_change(5, False)
         pubsub._publish_all_events()
-        self.assertEqual([{'id': 0, 'locked': False},
-                          {'id': 0, 'locked': True},
-                          {'id': 0, 'locked': False}], events)
+        self.assertEqual(events, [{'state': OutputStateDTO(id=0, locked=False)},
+                                  {'state': OutputStateDTO(id=0, locked=True)},
+                                  {'state': OutputStateDTO(id=0, locked=False)}])
 
     def test_module_discover(self):
         subscriber = mock.Mock()

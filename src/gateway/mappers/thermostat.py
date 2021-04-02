@@ -120,7 +120,7 @@ class ThermostatMapper(object):
         return ThermostatScheduleDTO(**kwargs)
 
     @staticmethod
-    def dto_to_orm(thermostat_dto, fields, mode):  # type: (ThermostatDTO, List[str], Literal['cooling', 'heating']) -> Thermostat
+    def dto_to_orm(thermostat_dto, mode):  # type: (ThermostatDTO, Literal['cooling', 'heating']) -> Thermostat
         # TODO: A mapper should not alter the database, but instead give an in-memory
         #       structure back to the caller to process
 
@@ -149,7 +149,7 @@ class ThermostatMapper(object):
                                                 'pid_{0}_p'.format(mode): ('pid_p', float),
                                                 'pid_{0}_i'.format(mode): ('pid_i', float),
                                                 'pid_{0}_d'.format(mode): ('pid_d', float)}.items():
-            if dto_field not in fields:
+            if dto_field not in thermostat_dto.loaded_fields:
                 continue
             value = getattr(thermostat_dto, dto_field)
             if value is None:
@@ -162,7 +162,7 @@ class ThermostatMapper(object):
         thermostat.save()
 
         # Update/save output configuration
-        output_config_present = 'output0' in fields or 'output1' in fields
+        output_config_present = 'output0' in thermostat_dto.loaded_fields or 'output1' in thermostat_dto.loaded_fields
         if output_config_present:
             # Unlink all previously linked valve_ids, we are resetting this with the new outputs we got from the API
             deleted = ValveToThermostat \
@@ -212,7 +212,7 @@ class ThermostatMapper(object):
                                (6, 'auto_sun')]:
             if day_index not in day_schedules:
                 raise RuntimeError('Could not find schedule `{0}`'.format(key))
-            if key not in fields:
+            if key not in thermostat_dto.loaded_fields:
                 continue
             dto_data = getattr(thermostat_dto, key)
             if dto_data is None:
@@ -229,7 +229,7 @@ class ThermostatMapper(object):
                                    ('setp5', Preset.Types.PARTY)]:
             if preset_type not in presets:
                 raise RuntimeError('Could not find preset `{0}`'.format(preset_type))
-            if field not in fields:
+            if field not in thermostat_dto.loaded_fields:
                 continue
             dto_data = getattr(thermostat_dto, field)
             try:

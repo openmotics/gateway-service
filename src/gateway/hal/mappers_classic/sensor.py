@@ -37,11 +37,11 @@ class SensorMapper(object):
                          virtual=data['virtual'])
 
     @staticmethod
-    def dto_to_orm(sensor_dto, fields):  # type: (SensorDTO, List[str]) -> EepromModel
+    def dto_to_orm(sensor_dto):  # type: (SensorDTO) -> EepromModel
         data = {'id': sensor_dto.id}  # type: Dict[str, Any]
         for dto_field, data_field in {'name': 'name',
                                       'offset': 'offset',
                                       'virtual': 'virtual'}.items():
-            if dto_field in fields:
+            if dto_field in sensor_dto.loaded_fields:
                 data[data_field] = getattr(sensor_dto, dto_field)
         return SensorConfiguration.deserialize(data)

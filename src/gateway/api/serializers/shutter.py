@@ -43,10 +43,9 @@ class ShutterSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[ShutterDTO, List[str]]
-        loaded_fields = ['id']
+    def deserialize(api_data):  # type: (Dict) -> ShutterDTO
         shutter_dto = ShutterDTO(api_data['id'])
-        loaded_fields += SerializerToolbox.deserialize(
+        SerializerToolbox.deserialize(
             dto=shutter_dto,  # Referenced
             api_data=api_data,
             mapping={'name': ('name', None),
@@ -58,4 +57,4 @@ class ShutterSerializer(object):
                      'room': ('room', ShutterSerializer.BYTE_MAX),
                      'steps': ('steps', ShutterSerializer.WORD_MAX)}
         )
-        return shutter_dto, loaded_fields
+        return shutter_dto

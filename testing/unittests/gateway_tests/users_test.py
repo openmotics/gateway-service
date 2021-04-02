@@ -40,7 +40,7 @@ MODELS = [User]
 
 class UserControllerTest(unittest.TestCase):
     """ Tests for UserController. """
-    TOKEN_TIMEOUT=3
+    TOKEN_TIMEOUT = 3
 
     @classmethod
     def setUpClass(cls):
@@ -81,8 +81,7 @@ class UserControllerTest(unittest.TestCase):
                            role=User.UserRoles.ADMIN,
                            pin_code='1234')
         user_dto.set_password("test")
-        fields = ['role', 'pin_code', 'first_name', 'last_name', 'password']
-        self.controller.save_user(user_dto, fields)
+        self.controller.save_user(user_dto)
 
         num_users = self.controller.get_number_of_users()
         self.assertEqual(2, num_users)
@@ -151,7 +150,7 @@ class UserControllerTest(unittest.TestCase):
         # create a new user to test with
         user_dto = UserDTO(username='fred', pin_code='1234', role=User.UserRoles.ADMIN)
         user_dto.set_password('test')
-        self.controller.save_users([(user_dto, fields)])
+        self.controller.save_users([user_dto])
 
         # check if the user has been added to the list
         users_in_controller = self.controller.load_users()
@@ -207,8 +206,7 @@ class UserControllerTest(unittest.TestCase):
         user_dto = UserDTO(username='test', pin_code='9876', role=User.UserRoles.ADMIN)
         user_dto.set_password('test')
         users_dto.append(user_dto)
-        to_save_users = [(ud, fields) for ud in users_dto]
-        self.controller.save_users(to_save_users)
+        self.controller.save_users(users_dto)
 
         # check if the user has been deleted
         users_in_controller = self.controller.load_users()
@@ -363,7 +361,7 @@ class UserControllerTest(unittest.TestCase):
         # create a new user to test with
         user_dto = UserDTO(username='test', pin_code='1234', role=User.UserRoles.ADMIN)
         user_dto.set_password('test')
-        self.controller.save_users([(user_dto, fields)])
+        self.controller.save_users([user_dto])
 
         # verify that the user can log in with regular username
         success, token = self.controller.login(user_dto, accept_terms=True)
@@ -390,25 +388,27 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual(2, self.controller.get_number_of_users())
 
     def test_usermapper(self):
-        user_dto = UserDTO(username='test', accepted_terms=1)
+        user_dto = UserDTO(username='test',
+                           role=User.UserRoles.USER,
+                           pin_code='1234',
+                           accepted_terms=1)
         user_dto.set_password('test')
 
-        fields = ['role', 'pin_code', 'first_name', 'last_name', 'password']
-        user_orm = UserMapper.dto_to_orm(user_dto, fields)
+        user_orm = UserMapper.dto_to_orm(user_dto)
 
         self.assertEqual(True, hasattr(user_orm, "username"))
         self.assertEqual(True, hasattr(user_orm, "password"))
         self.assertEqual(True, hasattr(user_orm, "accepted_terms"))
         self.assertEqual(True, hasattr(user_orm, "role"))
 
-        self.assertEqual(User.UserRoles.ADMIN, user_orm.role)
-        self.assertEqual('test', user_orm.pin_code)
+        self.assertEqual(User.UserRoles.USER, user_orm.role)
+        self.assertEqual('1234', user_orm.pin_code)
 
         self.assertEqual('test', user_orm.username)
         self.assertEqual(UserDTO._hash_password('test'), user_orm.password)
-        self.assertEqual(0, user_orm.accepted_terms)
+        self.assertEqual(1, user_orm.accepted_terms)
 
         user_dto = UserMapper.orm_to_dto(user_orm)
         self.assertEqual('test', user_dto.username)
         self.assertEqual(user_orm.password, user_dto.hashed_password)
-        self.assertEqual(0, user_dto.accepted_terms)
+        self.assertEqual(1, user_dto.accepted_terms)

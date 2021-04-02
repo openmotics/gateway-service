@@ -38,10 +38,9 @@ class SensorSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[SensorDTO, List[str]]
-        loaded_fields = ['id']
+    def deserialize(api_data):  # type: (Dict) -> SensorDTO
         sensor_dto = SensorDTO(api_data['id'])
-        loaded_fields += SerializerToolbox.deserialize(
+        SerializerToolbox.deserialize(
             dto=sensor_dto,  # Referenced
             api_data=api_data,
             mapping={'name': ('name', None),
@@ -49,4 +48,4 @@ class SensorSerializer(object):
                      'room': ('room', SensorSerializer.BYTE_MAX),
                      'virtual': ('virtual', None)}
         )
-        return sensor_dto, loaded_fields
+        return sensor_dto

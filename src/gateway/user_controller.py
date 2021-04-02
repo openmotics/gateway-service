@@ -68,28 +68,25 @@ class UserController(object):
         )
         cloud_user_dto.set_password(self._config['password'])
         # Save the user to the DB
-        self.save_user(user_dto=cloud_user_dto,
-                       fields=['first_name', 'last_name', 'password', 'accepted_terms', 'pin_code', 'role'])
+        self.save_user(user_dto=cloud_user_dto)
 
     def stop(self):
         # type: () -> None
         pass
 
-    def save_user(self, user_dto, fields):
-        # type: (UserDTO, List[str]) -> None
+    def save_user(self, user_dto):
+        # type: (UserDTO) -> None
         """ Saves one instance of a user with the defined fields in param fields """
         _ = self
-        logger.info('Saving user: {}'.format(user_dto))
-        user_orm = UserMapper.dto_to_orm(user_dto, fields)
-        logger.info('Saving user: {}'.format(user_orm))
+        user_orm = UserMapper.dto_to_orm(user_dto)
         UserController._validate(user_orm)
         user_orm.save()
 
     def save_users(self, users):
-        # type: (List[Tuple[UserDTO, List[str]]]) -> None
+        # type: (List[UserDTO]) -> None
         """ Create or update a new user using a user DTO object """
-        for user_dto, fields in users:
-            self.save_user(user_dto, fields)
+        for user_dto in users:
+            self.save_user(user_dto)
 
     def load_user(self, user_id):
         # type: (int) -> UserDTO

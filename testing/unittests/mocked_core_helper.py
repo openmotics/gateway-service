@@ -47,6 +47,7 @@ class MockedCore(object):
                             ucan_communicator=UCANCommunicator(),
                             slave_communicator=SlaveCommunicator())
         self.controller = MasterCoreController()
+        self.write_log = []
 
     def _do_command(self, command, fields, timeout=None):
         _ = timeout
@@ -62,6 +63,7 @@ class MockedCore(object):
             page = fields['page']
             start = fields['start']
             page_data = self.memory.setdefault(mtype, {}).setdefault(page, bytearray([255] * 256))
+            self.write_log.append(fields)
             for index, data_byte in enumerate(fields['data']):
                 page_data[start + index] = data_byte
         elif instruction in self.return_data:

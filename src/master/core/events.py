@@ -19,7 +19,7 @@ Module to handle Events from the Core
 from __future__ import absolute_import
 import logging
 from master.core.fields import WordField, AddressField
-from master.core.system_value import Temperature, Humidity
+from master.core.system_value import Temperature, Humidity, Timer
 from master.core.basic_action import BasicAction
 
 if False:  # MYPY
@@ -129,21 +129,13 @@ class Event(object):
     @property
     def data(self):
         if self.type == Event.Types.OUTPUT:
-            timer_factor = None
-            timer_value = self._word_decode(self._data[2:])  # type: Optional[int]
-            if self._data[1] == 0:
-                timer_value = None
-            elif self._data[1] == 1:
-                timer_factor = 0.1
-            elif self._data[1] == 2:
-                timer_factor = 1
-            elif self._data[2] == 3:
-                timer_factor = 60
+            timer_type = self._data[1]  # type: int
+            timer_value = self._word_decode(self._data[2:]) or 0  # type: int
+            timer = Timer.event_timer_type_to_seconds(timer_type, timer_value)
             return {'output': self._device_nr,
                     'status': self._action == 1,
                     'dimmer_value': self._data[0],
-                    'timer_factor': timer_factor,
-                    'timer_value': timer_value}
+                    'timer': timer}
         if self.type == Event.Types.INPUT:
             return {'input': self._device_nr,
                     'status': self._action == 1}

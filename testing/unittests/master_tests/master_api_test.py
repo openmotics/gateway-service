@@ -23,6 +23,7 @@ import unittest
 import xmlrunner
 from master.classic.master_api import Svt
 
+
 class SvtTest(unittest.TestCase):
     """ Tests for :class`Svt`. """
 

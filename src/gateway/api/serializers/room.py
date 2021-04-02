@@ -35,15 +35,12 @@ class RoomSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[RoomDTO, List[str]]
-        loaded_fields = ['id']
+    def deserialize(api_data):  # type: (Dict) -> RoomDTO
         room_dto = RoomDTO(id=api_data['id'])
         if 'name' in api_data:
-            loaded_fields.append('name')
             room_dto.name = Toolbox.nonify(api_data['name'], '')
         if 'floor' in api_data:
-            loaded_fields.append('floor')
             floor_id = api_data['floor']
             if floor_id != 255:
                 room_dto.floor = FloorDTO(id=floor_id)
-        return room_dto, loaded_fields
+        return room_dto
