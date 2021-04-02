@@ -576,13 +576,22 @@ class MasterCoreController(MasterController):
         self._shutters_last_updated = time.time()
 
     def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
-        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+        device_nr = shutter_group_id + 256
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=1,
+                                                              device_nr=device_nr))
 
     def shutter_group_down(self, shutter_group_id):  # type: (int) -> None
-        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+        device_nr = shutter_group_id + 256
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=2,
+                                                              device_nr=device_nr))
 
     def shutter_group_stop(self, shutter_group_id):  # type: (int) -> None
-        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+        device_nr = shutter_group_id + 256
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=0,
+                                                              device_nr=device_nr))
 
     def load_shutter_group(self, shutter_group_id):  # type: (int) -> ShutterGroupDTO
         return ShutterGroupDTO(id=shutter_group_id)
@@ -594,7 +603,7 @@ class MasterCoreController(MasterController):
         return shutter_groups
 
     def save_shutter_groups(self, shutter_groups):  # type: (List[ShutterGroupDTO]) -> None
-        pass  # TODO: Implement when/if ShutterGroups get actual properties
+        raise UnsupportedException()
 
     # Thermostats
 
