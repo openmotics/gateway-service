@@ -65,7 +65,10 @@ class GroupActionMapper(object):
                     classic_actions += [75 if action.device_nr else 76, 255]
             elif action.action_type == 10:
                 if 0 <= action.action <= 5:
-                    classic_actions += [{0: 102, 1: 100, 2: 101, 3: 108, 4: 109, 5: 103}[action.action], action.device_nr]
+                    if action.device_nr <= 255:
+                        classic_actions += [{0: 102, 1: 100, 2: 101, 3: 108, 4: 109, 5: 103}[action.action], action.device_nr]
+                    else:
+                        classic_actions += [{0: 106, 1: 104, 2: 105, 3: 110, 4: 111, 5: 107}[action.action], action.device_nr - 256]
             elif action.action_type == 0:
                 if action.action in [0, 1, 16]:
                     classic_actions += [{0: 160, 1: 161, 16: 162}[action.action], action.device_nr]
@@ -156,18 +159,30 @@ class GroupActionMapper(object):
             elif action_type == 103:
                 # 103: Roller/Shutter x up/stop/down/stop... (only to be used in Large Installation mode, x<120)
                 actions.append(BasicAction(action_type=10, action=5, device_nr=action_number))
-            # 104: All Roller/Shutters of group x up (only to be used in Large Installation mode, x<30)
-            # 105: All Roller/Shutters of group x down (only to be used in Large Installation mode, x<30)
-            # 106: All Roller/Shutters of group x stop (only to be used in Large Installation mode, x<30)
-            # 107: All Roller/Shutters of group x up/stop/down/stop... (only to be used in Large Installation mode, x<30)
+            elif action_type == 104:
+                # 104: All Roller/Shutters of group x up (only to be used in Large Installation mode, x<30)
+                actions.append(BasicAction(action_type=10, action=1, device_nr=action_number + 256))
+            elif action_type == 105:
+                # 105: All Roller/Shutters of group x down (only to be used in Large Installation mode, x<30)
+                actions.append(BasicAction(action_type=10, action=2, device_nr=action_number + 256))
+            elif action_type == 106:
+                # 106: All Roller/Shutters of group x stop (only to be used in Large Installation mode, x<30)
+                actions.append(BasicAction(action_type=10, action=0, device_nr=action_number + 256))
+            elif action_type == 107:
+                # 107: All Roller/Shutters of group x up/stop/down/stop... (only to be used in Large Installation mode, x<30)
+                actions.append(BasicAction(action_type=10, action=5, device_nr=action_number + 256))
             elif action_type == 108:
                 # 108: Roller/Shutter x up/stop/up/stop... (only to be used in Large Installation mode, x<120)
                 actions.append(BasicAction(action_type=10, action=3, device_nr=action_number))
             elif action_type == 109:
                 # 109: Roller/Shutter x down/stop/down/stop... (only to be used in Large Installation mode, x<120)
                 actions.append(BasicAction(action_type=10, action=4, device_nr=action_number))
-            # 110: All Roller/Shutters of group x up/stop/up/stop... (only to be used in Large Installation mode, x<30)
-            # 111: All Roller/Shutters of group x down/stop/down/stop... (only to be used in Large Installation mode, x<30)
+            elif action_type == 110:
+                # 110: All Roller/Shutters of group x up/stop/up/stop... (only to be used in Large Installation mode, x<30)
+                actions.append(BasicAction(action_type=10, action=3, device_nr=action_number + 256))
+            elif action_type == 111:
+                # 111: All Roller/Shutters of group x down/stop/down/stop... (only to be used in Large Installation mode, x<30)
+                actions.append(BasicAction(action_type=10, action=4, device_nr=action_number + 256))
             # 112: The Timer of all Roller/Shutters will be disabled (x=0) or enabled (x=1)
             # 113: Enable/disable automatic Roller/Shutter Lock functionality for all Roller/Shutters: When x=0, the roller/shutters will work normally. When x>0, the Roller/shutters will be locked and the normal BA's to stop, up or down a shutter (or group) will be disabled. When a timer was activated to stop a Roller/shutter, even when the automatic Roller/shutter functionality is enabled, will still be executed.
             # 116: Disable input x (0-239)
