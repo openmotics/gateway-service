@@ -43,6 +43,10 @@ class Event(object):
         UCAN = 'UCAN'
         UNKNOWN = 'UNKNOWN'
 
+    class OutputEventTypes(object):
+        STATUS = 'STATUS'
+        LOCKING = 'LOCKING'
+
     class SensorType(object):
         TEMPERATURE = 'TEMPERATURE'
         HUMIDITY = 'HUMIDITY'
@@ -129,13 +133,19 @@ class Event(object):
     @property
     def data(self):
         if self.type == Event.Types.OUTPUT:
-            timer_type = self._data[1]  # type: int
-            timer_value = self._word_decode(self._data[2:]) or 0  # type: int
-            timer = Timer.event_timer_type_to_seconds(timer_type, timer_value)
-            return {'output': self._device_nr,
-                    'status': self._action == 1,
-                    'dimmer_value': self._data[0],
-                    'timer': timer}
+            data = {'output': self._device_nr}
+            if self._action in [0, 1]:
+                timer_type = self._data[1]  # type: int
+                timer_value = self._word_decode(self._data[2:]) or 0  # type: int
+                timer = Timer.event_timer_type_to_seconds(timer_type, timer_value)
+                data.update({'type': Event.OutputEventTypes.STATUS,
+                             'status': self._action == 1,
+                             'dimmer_value': self._data[0],
+                             'timer': timer})
+            else:
+                data.update({'type': Event.OutputEventTypes.LOCKING,
+                             'locked': self._data[0] == 1})
+            return data
         if self.type == Event.Types.INPUT:
             return {'input': self._device_nr,
                     'status': self._action == 1}

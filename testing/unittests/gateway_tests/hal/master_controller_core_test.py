@@ -54,10 +54,14 @@ class MasterCoreControllerTest(unittest.TestCase):
         events = []
         self.controller._handle_event({'type': 0, 'device_nr': 0, 'action': 0, 'data': bytearray([255, 0, 0, 0])})
         self.controller._handle_event({'type': 0, 'device_nr': 2, 'action': 1, 'data': bytearray([100, 2, 0xff, 0xfe])})
+        self.controller._handle_event({'type': 0, 'device_nr': 4, 'action': 2, 'data': bytearray([1, 0, 0, 0])})
+        self.controller._handle_event({'type': 0, 'device_nr': 6, 'action': 2, 'data': bytearray([0, 0, 0, 0])})
         self.pubsub._publish_all_events()
-        self.assertEqual(events,
-                         [MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=0, status=False, dimmer=255, ctimer=0)}),
-                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=2, status=True, dimmer=100, ctimer=65534)})])
+        self.assertEqual([MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=0, status=False, dimmer=255, ctimer=0)}),
+                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=2, status=True, dimmer=100, ctimer=65534)}),
+                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=4, locked=True)}),
+                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=6, locked=False)})],
+                         events)
 
     def test_master_shutter_event(self):
         events = []
