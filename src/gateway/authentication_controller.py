@@ -31,7 +31,7 @@ from gateway.models import User
 
 
 if False:  # MYPY
-    from typing import Tuple, List, Optional, Dict
+    from typing import Tuple, List, Optional, Dict, Union
     from gateway.user_controller import UserController
 
 
@@ -47,7 +47,7 @@ class AuthenticationController(object):
         self.token_store = token_store  # type: TokenStore
 
     def login(self, user_dto, accept_terms=False, timeout=None):
-        # type: (UserDTO, Optional[float]) -> AuthenticationToken
+        # type: (UserDTO, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a UserDTO """
         if timeout is not None:
             try:

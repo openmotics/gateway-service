@@ -29,6 +29,7 @@ from gateway.exceptions import *
 
 if False:  # MyPy
     from gateway.authentication_controller import AuthenticationToken
+    from gateway.user_controller import UserController
     from gateway.webservice import WebService
     from typing import Optional, List, Dict
 
@@ -160,7 +161,7 @@ class RestAPIEndpoint(object):
 
     @Inject
     def __init__(self, user_controller=INJECTED):
-        # type: () -> None
+        # type: (UserController) -> None
         self._user_controller = user_controller
         pass
 
@@ -242,7 +243,7 @@ class Apartment(RestAPIEndpoint):
 @Singleton
 class WebServiceV1(object):
     def __init__(self, esafe_endpoints=INJECTED, web_service=INJECTED):
-        # type: (List[EsafeRestAPIEndpoint], Optional[WebService]) -> None
+        # type: (List[RestAPIEndpoint], Optional[WebService]) -> None
         self.web_service = web_service
         self.esafe_endpoints = esafe_endpoints
 

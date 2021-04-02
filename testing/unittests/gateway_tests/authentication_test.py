@@ -59,7 +59,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             username='tester',
             role='ADMIN',
             pin_code='1234',
-            apartment_dto=None,
+            apartment=None,
             accepted_terms=1
         )
         with mock.patch.object(self.token_store, '_get_full_user_dto', return_value=user_dto):
@@ -76,7 +76,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             username='tester',
             role='ADMIN',
             pin_code='1234',
-            apartment_dto=None,
+            apartment=None,
             accepted_terms=1
         )
         with mock.patch.object(self.token_store, '_get_full_user_dto', return_value=user_dto):
@@ -97,7 +97,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             username='tester',
             role='ADMIN',
             pin_code='1234',
-            apartment_dto=None,
+            apartment=None,
             accepted_terms=1
         )
         with mock.patch.object(self.token_store, '_get_full_user_dto', return_value=user_dto):
@@ -128,7 +128,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             username='tester',
             role='ADMIN',
             pin_code='1234',
-            apartment_dto=None,
+            apartment=None,
             accepted_terms=1
         )
 
@@ -137,7 +137,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             username='tester',
             role='ADMIN',
             pin_code='1234',
-            apartment_dto=None,
+            apartment=None,
             accepted_terms=1
         )
 

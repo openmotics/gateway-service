@@ -133,7 +133,7 @@ class UserController(object):
         User.delete().where((User.first_name == first_name) & (User.last_name == last_name)).execute()
 
     def login(self, user_dto, accept_terms=False, timeout=None):
-        # type: (UserDTO, Optional[bool], Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
+        # type: (UserDTO, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a UserDTO """
         success, token = self.authentication_controller.login(user_dto, accept_terms, timeout)
         return success, token
