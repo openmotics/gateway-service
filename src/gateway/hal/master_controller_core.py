@@ -603,7 +603,7 @@ class MasterCoreController(MasterController):
         return shutter_groups
 
     def save_shutter_groups(self, shutter_groups):  # type: (List[ShutterGroupDTO]) -> None
-        pass  # ShutterGroups have no properties on the Core
+        raise UnsupportedException()
 
     # Thermostats
 
