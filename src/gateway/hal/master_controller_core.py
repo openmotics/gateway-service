@@ -128,12 +128,16 @@ class MasterCoreController(MasterController):
             # Interesting for debug purposes, but not for everything
             logger.info('Got master event: {0}'.format(core_event))
         if core_event.type == MasterCoreEvent.Types.OUTPUT:
-            # Update internal state cache
             output_id = core_event.data['output']
-            state_dto = OutputStateDTO(id=output_id,
-                                       status=core_event.data['status'],
-                                       dimmer=core_event.data['dimmer_value'],
-                                       ctimer=core_event.data['timer'])
+            if core_event.data['type'] == MasterCoreEvent.OutputEventTypes.STATUS:
+                # Update internal state cache
+                state_dto = OutputStateDTO(id=output_id,
+                                           status=core_event.data['status'],
+                                           dimmer=core_event.data['dimmer_value'],
+                                           ctimer=core_event.data['timer'])
+            else:  # elif core_event.data['type'] == MasterCoreEvent.OutputEventTypes.LOCKING:
+                state_dto = OutputStateDTO(id=output_id,
+                                           locked=core_event.data['locked'])
             self._handle_output_state(output_id, state_dto)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             master_event = self._input_state.handle_event(core_event)
@@ -143,20 +147,6 @@ class MasterCoreController(MasterController):
             if sensor_id not in self._sensor_states:
                 return
             self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
-        elif core_event.type == MasterCoreEvent.Types.EXECUTED_BA:
-            # Relies on BA logging being enabled on the master - to be replaced in the future
-            basic_action = core_event.data['basic_action']  # type: BasicAction
-            if basic_action.action_type == 0 and basic_action.action == 250:
-                output_id = basic_action.device_nr
-                state_dto = OutputStateDTO(id=output_id,
-                                           locked=basic_action.extra_parameter == 1)
-                self._handle_output_state(output_id, state_dto)
-        # TODO: Handle `OUTPUT_LOCK` event instead of `EXECUTED_BA` event
-        # elif core_event.type == MasterCoreEvent.Types.OUTPUT_LOCK:
-        #     output_id = core_event.data['output']
-        #     state_dto = OutputStateDTO(id=output_id,
-        #                                locked=core_event.data['locked'])
-        #     self._handle_output_state(output_id, state_dto)
 
     def _handle_output_state(self, output_id, state_dto):
         # type: (int, OutputStateDTO) -> None
