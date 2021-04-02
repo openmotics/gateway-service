@@ -78,8 +78,7 @@ class UserControllerTest(unittest.TestCase):
                            role=User.UserRoles.ADMIN,
                            pin_code='1234')
         user_dto.set_password("test")
-        fields = ['role', 'pin_code', 'first_name', 'last_name', 'password']
-        self.controller.save_user(user_dto, fields)
+        self.controller.save_user(user_dto)
 
         num_users = self.controller.get_number_of_users()
         self.assertEqual(2, num_users)
