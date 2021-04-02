@@ -61,5 +61,5 @@ class ModuleSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[ModuleDTO, List[str]]
+    def deserialize(api_data):  # type: (Dict) -> ModuleDTO
         raise NotImplementedError()  # Not supported

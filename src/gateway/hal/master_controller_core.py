@@ -411,9 +411,9 @@ class MasterCoreController(MasterController):
             inputs.append(self.load_input(i))
         return inputs
 
-    def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
-        for input_dto, fields in inputs:
-            input_ = InputMapper.dto_to_orm(input_dto, fields)
+    def save_inputs(self, inputs):  # type: (List[InputDTO]) -> None
+        for input_dto in inputs:
+            input_ = InputMapper.dto_to_orm(input_dto)
             input_.save(activate=False)
         MemoryActivator.activate()
 
@@ -473,14 +473,14 @@ class MasterCoreController(MasterController):
             outputs.append(self.load_output(i))
         return outputs
 
-    def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
-        for output_dto, fields in outputs:
-            output = OutputMapper.dto_to_orm(output_dto, fields)
+    def save_outputs(self, outputs):  # type: (List[OutputDTO]) -> None
+        for output_dto in outputs:
+            output = OutputMapper.dto_to_orm(output_dto)
             if output.is_shutter:
                 # Shutter outputs cannot be changed
                 continue
             output.save(activate=False)
-            CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, fields, activate=False)
+            CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, activate=False)
         MemoryActivator.activate()
 
     def load_output_status(self):
@@ -543,12 +543,12 @@ class MasterCoreController(MasterController):
             shutters.append(self.load_shutter(shutter_id))
         return shutters
 
-    def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
-        for shutter_dto, fields in shutters:
+    def save_shutters(self, shutters):  # type: (List[ShutterDTO]) -> None
+        for shutter_dto in shutters:
             # Validate whether output module exists
             output_module = OutputConfiguration(shutter_dto.id * 2).module
             # Configure shutter
-            shutter = ShutterMapper.dto_to_orm(shutter_dto, fields)
+            shutter = ShutterMapper.dto_to_orm(shutter_dto)
             if shutter.timer_down not in [0, 65535] and shutter.timer_up not in [0, 65535]:
                 # Shutter is "configured"
                 shutter.outputs.output_0 = shutter.id * 2
@@ -603,7 +603,7 @@ class MasterCoreController(MasterController):
             shutter_groups.append(ShutterGroupDTO(id=i))
         return shutter_groups
 
-    def save_shutter_groups(self, shutter_groups):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
+    def save_shutter_groups(self, shutter_groups):  # type: (List[ShutterGroupDTO]) -> None
         pass  # TODO: Implement when/if ShutterGroups get actual properties
 
     # Thermostats
@@ -642,7 +642,7 @@ class MasterCoreController(MasterController):
         global_feedbacks = CANFeedbackController.load_global_led_feedback_configuration()
         return [global_feedbacks.get(i, GlobalFeedbackDTO(id=i)) for i in range(32)]
 
-    def save_global_feedbacks(self, global_feedbacks):  # type: (List[Tuple[GlobalFeedbackDTO, List[str]]]) -> None
+    def save_global_feedbacks(self, global_feedbacks):  # type: (List[GlobalFeedbackDTO]) -> None
         CANFeedbackController.save_global_led_feedback_configuration(global_feedbacks, activate=True)
 
     # Sensors
@@ -691,9 +691,9 @@ class MasterCoreController(MasterController):
             sensors.append(self.load_sensor(i))
         return sensors
 
-    def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
-        for sensor_dto, fields in sensors:
-            sensor = SensorMapper.dto_to_orm(sensor_dto, fields)
+    def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> None
+        for sensor_dto in sensors:
+            sensor = SensorMapper.dto_to_orm(sensor_dto)
             sensor.save(activate=False)
         MemoryActivator.activate()
 
@@ -736,7 +736,7 @@ class MasterCoreController(MasterController):
         # TODO: Implement PulseCounters
         return []
 
-    def save_pulse_counters(self, pulse_counters):  # type: (List[Tuple[PulseCounterDTO, List[str]]]) -> None
+    def save_pulse_counters(self, pulse_counters):  # type: (List[PulseCounterDTO]) -> None
         # TODO: Implement PulseCounters
         return
 
@@ -761,10 +761,10 @@ class MasterCoreController(MasterController):
         return [GroupActionMapper.orm_to_dto(o)
                 for o in GroupActionController.load_group_actions()]
 
-    def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
-        for group_action_dto, fields in group_actions:
-            group_action = GroupActionMapper.dto_to_orm(group_action_dto, fields)
-            GroupActionController.save_group_action(group_action, fields, activate=False)
+    def save_group_actions(self, group_actions):  # type: (List[GroupActionDTO]) -> None
+        for group_action_dto in group_actions:
+            group_action = GroupActionMapper.dto_to_orm(group_action_dto)
+            GroupActionController.save_group_action(group_action, group_action_dto.loaded_fields, activate=False)
         MemoryActivator.activate()
 
     # Module management

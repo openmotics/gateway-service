@@ -32,10 +32,10 @@ class SensorMapper(object):
                          offset=orm_object.temperature_offset)
 
     @staticmethod
-    def dto_to_orm(sensor_dto, fields):  # type: (SensorDTO, List[str]) -> SensorConfiguration
+    def dto_to_orm(sensor_dto):  # type: (SensorDTO) -> SensorConfiguration
         new_data = {'id': sensor_dto.id}  # type: Dict[str, Any]
-        if 'name' in fields:
+        if 'name' in sensor_dto.loaded_fields:
             new_data['name'] = sensor_dto.name
-        if 'offset' in fields:
+        if 'offset' in sensor_dto.loaded_fields:
             new_data['temperature_offset'] = sensor_dto.offset
         return SensorConfiguration.deserialize(new_data)

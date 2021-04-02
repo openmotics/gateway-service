@@ -51,10 +51,9 @@ class OutputSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[OutputDTO, List[str]]
-        loaded_fields = ['id']
+    def deserialize(api_data):  # type: (Dict) -> OutputDTO
         output_dto = OutputDTO(api_data['id'])
-        loaded_fields += SerializerToolbox.deserialize(
+        SerializerToolbox.deserialize(
             dto=output_dto,  # Referenced
             api_data=api_data,
             mapping={'module_type': ('module_type', None),
@@ -70,10 +69,9 @@ class OutputSerializer(object):
             id_field = '{0}_id'.format(base_field)
             function_field = '{0}_function'.format(base_field)
             if id_field in api_data and function_field in api_data:
-                loaded_fields.append(base_field)
                 setattr(output_dto, base_field, FeedbackLedDTO(id=Toolbox.nonify(api_data[id_field], OutputSerializer.BYTE_MAX),
                                                                function=api_data[function_field]))
-        return output_dto, loaded_fields
+        return output_dto
 
 
 class OutputStateSerializer(object):
@@ -89,10 +87,9 @@ class OutputStateSerializer(object):
 
     @staticmethod
     def deserialize(api_data):
-        # type: (Dict) -> Tuple[OutputStateDTO, List[str]]
-        loaded_fields = ['id']
+        # type: (Dict) -> OutputStateDTO
         output_state_dto = OutputStateDTO(api_data['id'])
-        loaded_fields += SerializerToolbox.deserialize(
+        SerializerToolbox.deserialize(
             dto=output_state_dto,  # Referenced
             api_data=api_data,
             mapping={'status': ('status', bool),
@@ -100,4 +97,4 @@ class OutputStateSerializer(object):
                      'dimmer': ('dimmer', lambda x: x or 0),
                      'locked': ('locked', lambda x: x or False)}
         )
-        return output_state_dto, loaded_fields
+        return output_state_dto

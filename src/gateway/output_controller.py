@@ -144,19 +144,19 @@ class OutputController(BaseController):
         self._cache.update_outputs(output_dtos)
         return output_dtos
 
-    def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
+    def save_outputs(self, outputs):  # type: (List[OutputDTO]) -> None
         outputs_to_save = []
-        for output_dto, fields in outputs:
+        for output_dto in outputs:
             output = Output.get_or_none(number=output_dto.id)  # type: Output
             if output is None:
                 logger.info('Ignored saving non-existing Output {0}'.format(output_dto.id))
-            if 'room' in fields:
+            if 'room' in output_dto.loaded_fields:
                 if output_dto.room is None:
                     output.room = None
                 elif 0 <= output_dto.room <= 100:
                     output.room, _ = Room.get_or_create(number=output_dto.room)
                 output.save()
-            outputs_to_save.append((output_dto, fields))
+            outputs_to_save.append(output_dto)
         self._master_controller.save_outputs(outputs_to_save)
 
     def set_all_lights_off(self):
@@ -183,7 +183,7 @@ class OutputController(BaseController):
     def load_global_feedbacks(self):  # type: () -> List[GlobalFeedbackDTO]
         return self._master_controller.load_global_feedbacks()
 
-    def save_global_feedbacks(self, global_feedbacks):  # type: (List[Tuple[GlobalFeedbackDTO, List[str]]]) -> None
+    def save_global_feedbacks(self, global_feedbacks):  # type: (List[GlobalFeedbackDTO]) -> None
         self._master_controller.save_global_feedbacks(global_feedbacks)
 
 

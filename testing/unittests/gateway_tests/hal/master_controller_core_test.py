@@ -165,8 +165,8 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.assertEqual([x.id for x in inputs], list(range(1, 17)))
 
     def test_save_inputs(self):
-        data = [(InputDTO(id=1, name='foo', module_type='I'), ['id', 'name', 'module_type']),
-                (InputDTO(id=2, name='bar', module_type='I'), ['id', 'name', 'module_type'])]
+        data = [InputDTO(id=1, name='foo', module_type='I'),
+                InputDTO(id=2, name='bar', module_type='I')]
         input_mock = mock.Mock(InputConfiguration)
         with mock.patch.object(InputConfiguration, 'deserialize', return_value=input_mock) as deserialize, \
                 mock.patch.object(input_mock, 'save', return_value=None) as save:
@@ -277,7 +277,7 @@ class MasterCoreControllerTest(unittest.TestCase):
             call.assert_called_once()
 
         with mock.patch.object(CANFeedbackController, 'save_output_led_feedback_configuration') as call:
-            self.controller.save_outputs([(OutputDTO(id=0), [])])
+            self.controller.save_outputs([OutputDTO(id=0)])
             call.assert_called_once()
 
 

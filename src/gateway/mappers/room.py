@@ -32,10 +32,10 @@ class RoomMapper(object):
                        name=orm_object.name)
 
     @staticmethod
-    def dto_to_orm(room_dto, fields):  # type: (RoomDTO, List[str]) -> Room
+    def dto_to_orm(room_dto):  # type: (RoomDTO) -> Room
         room = Room.get_or_none(number=room_dto.id)
         if room is None:
             room = Room(number=room_dto.id)
-        if 'name' in fields:
+        if 'name' in room_dto.loaded_fields:
             room.name = room_dto.name
         return room

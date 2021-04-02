@@ -38,10 +38,9 @@ class PulseCounterSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[PulseCounterDTO, List[str]]
-        loaded_fields = ['id']
+    def deserialize(api_data):  # type: (Dict) -> PulseCounterDTO
         pulse_counter_dto = PulseCounterDTO(api_data['id'])
-        loaded_fields += SerializerToolbox.deserialize(
+        SerializerToolbox.deserialize(
             dto=pulse_counter_dto,  # Referenced
             api_data=api_data,
             mapping={'name': ('name', None),
@@ -49,4 +48,4 @@ class PulseCounterSerializer(object):
                      'input': ('input_id', PulseCounterSerializer.BYTE_MAX),
                      'room': ('room', PulseCounterSerializer.BYTE_MAX)}
         )
-        return pulse_counter_dto, loaded_fields
+        return pulse_counter_dto

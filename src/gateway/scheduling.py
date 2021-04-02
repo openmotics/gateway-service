@@ -111,9 +111,9 @@ class SchedulingController(object):
     def load_schedules(self):  # type: () -> List[ScheduleDTO]
         return [dto for dto, _ in self._schedules.values()]
 
-    def save_schedules(self, schedules):  # type: (List[Tuple[ScheduleDTO, List[str]]]) -> None
-        for schedule_dto, fields in schedules:
-            schedule = ScheduleMapper.dto_to_orm(schedule_dto, fields)
+    def save_schedules(self, schedules):  # type: (List[ScheduleDTO]) -> None
+        for schedule_dto in schedules:
+            schedule = ScheduleMapper.dto_to_orm(schedule_dto)
             self._validate(schedule)
             schedule.save()
         self.reload_schedules()

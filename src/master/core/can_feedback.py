@@ -61,9 +61,9 @@ class CANFeedbackController(object):
                     break
 
     @staticmethod
-    def save_output_led_feedback_configuration(output, output_dto, fields, activate=True):
-        # type: (OutputConfiguration, OutputDTO, List[str], bool) -> None
-        holds_data, holds_configuration = CANFeedbackController._available_led_data(output_dto, fields)
+    def save_output_led_feedback_configuration(output, output_dto, activate=True):
+        # type: (OutputConfiguration, OutputDTO, bool) -> None
+        holds_data, holds_configuration = CANFeedbackController._available_led_data(output_dto)
         if not holds_data:
             return  # No change required
         group_action_id = output.output_groupaction_follow
@@ -81,7 +81,7 @@ class CANFeedbackController(object):
                 raise ValueError('No GroupAction available to store LED feedback configuration')
         for field in CANFeedbackController.FIELDS:
             feedback_led_dto = getattr(output_dto, field)
-            if field in fields and feedback_led_dto.id is not None:
+            if field in output_dto.loaded_fields and feedback_led_dto.id is not None:
                 action = CANFeedbackController._inverted_string_to_action(feedback_led_dto.function)
                 basic_action = BasicAction(action_type=20,
                                            action=action,
@@ -143,7 +143,7 @@ class CANFeedbackController(object):
         return global_feedbacks
 
     @staticmethod
-    def save_global_led_feedback_configuration(global_feedbacks, activate=True):  # type: (List[Tuple[GlobalFeedbackDTO, List[str]]], bool) -> None
+    def save_global_led_feedback_configuration(global_feedbacks, activate=True):  # type: (List[GlobalFeedbackDTO], bool) -> None
         # Important assumption in the below code to make this strategy solvable: If any of the 4 feedbacks is
         # given, they all are assumed to be given.
         global_configuration = GlobalConfiguration()
@@ -154,8 +154,8 @@ class CANFeedbackController(object):
         else:
             group_action = GroupActionController.load_group_action(global_configuration.groupaction_any_output_changed)
 
-        for global_feedback_dto, fields in global_feedbacks:
-            holds_data, holds_configuration = CANFeedbackController._available_led_data(global_feedback_dto, fields)
+        for global_feedback_dto in global_feedbacks:
+            holds_data, holds_configuration = CANFeedbackController._available_led_data(global_feedback_dto)
             if not holds_data:
                 continue  # No change required
             # First, delete everything related to this global_feedback_dto
@@ -173,7 +173,7 @@ class CANFeedbackController(object):
             if holds_configuration:
                 for field in CANFeedbackController.FIELDS:
                     feedback_led_dto = getattr(global_feedback_dto, field)
-                    if field in fields and feedback_led_dto.id is not None:
+                    if field in global_feedback_dto.loaded_fields and feedback_led_dto.id is not None:
                         basic_action = BasicAction(action_type=20,
                                                    action=action,
                                                    device_nr=feedback_led_dto.id)
@@ -194,8 +194,8 @@ class CANFeedbackController(object):
             MemoryActivator.activate()
 
     @staticmethod
-    def _available_led_data(dto, fields):  # type: (Union[OutputDTO, GlobalFeedbackDTO], List[str]) -> Tuple[bool, bool]
-        holds_data = any(field in fields for field in CANFeedbackController.FIELDS)
+    def _available_led_data(dto):  # type: (Union[OutputDTO, GlobalFeedbackDTO]) -> Tuple[bool, bool]
+        holds_data = any(field in dto.loaded_fields for field in CANFeedbackController.FIELDS)
         holds_configuration = any(getattr(dto, field).id is not None for field in CANFeedbackController.FIELDS)
         return holds_data, holds_configuration
 

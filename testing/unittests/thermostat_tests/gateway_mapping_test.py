@@ -22,7 +22,7 @@ from mock import Mock
 
 from ioc import SetTestMode, SetUpTestInjections
 from gateway.models import (
-    Sensor, Feature, Output,
+    Sensor, Feature, Output, Room,
     ThermostatGroup, OutputToThermostatGroup, Pump,
     Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule
 )
@@ -31,7 +31,8 @@ from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatC
 from logs import Logs
 
 MODELS = [Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump, Sensor,
-          Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule]
+          Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule,
+          Room]
 
 
 class GatewayThermostatMappingTests(unittest.TestCase):
@@ -163,6 +164,9 @@ class GatewayThermostatMappingTests(unittest.TestCase):
 
         controller = GatewayThermostatMappingTests._create_controller(get_sensor_temperature_status=_get_temperature)
 
+        room = Room(number=5)
+        room.save()
+
         thermostat_group = ThermostatGroup(number=0,
                                            name='global')
         thermostat_group.save()
@@ -186,7 +190,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
 
         Sensor.create(number=15)
 
-        dto.room = 5  # This field won't be saved
+        dto.room = 5
         dto.sensor = 15
         dto.output0 = 5
         dto.name = 'changed'
@@ -199,7 +203,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                              end_day_2='18:45')
 
         temperatures[15] = 5.0
-        controller.save_heating_thermostats([(dto, ['sensor', 'output0', 'name', 'auto_thu'])])
+        controller.save_heating_thermostats([dto])
 
         heating_thermostats = controller.load_heating_thermostats()
         self.assertEqual(1, len(heating_thermostats))
@@ -214,7 +218,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                        pid_p=120.0,
                                        pid_i=0.0,
                                        pid_d=0.0,
-                                       room=None,  # Unchanged
+                                       room=5,
                                        output0=5,
                                        permanent_manual=True,
                                        auto_mon=default_schedule_dto,

@@ -124,6 +124,7 @@ class WebInterfaceTest(unittest.TestCase):
             response = self.web.set_ventilation_configuration(config=config)
             self.assertEqual({
                 'id': 1,
+                'amount_of_levels': 0,
                 'source': {'type': 'plugin', 'name': 'dummy'},
                 'external_id': 'device-00001',
                 'name': 'test',
@@ -143,8 +144,10 @@ class WebInterfaceTest(unittest.TestCase):
             response = self.web.set_ventilation_status(status=status)
             self.assertEqual({
                 'id': 1,
+                'connected': True,
                 'mode': 'manual',
                 'level': 2,
-                'remaining_time': 60.0
+                'remaining_time': 60.0,
+                'timer': None
             }, json.loads(response)['status'])
             set_status.assert_called()

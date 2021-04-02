@@ -22,7 +22,7 @@ from master.classic.eeprom_controller import EepromModel
 from master.classic.eeprom_models import GroupActionConfiguration
 
 if False:  # MYPY
-    from typing import List, Dict, Any
+    from typing import Dict, Any
 
 
 class GroupActionMapper(object):
@@ -36,11 +36,11 @@ class GroupActionMapper(object):
                               actions=[] if data['actions'] == '' else [int(i) for i in data['actions'].split(',')])
 
     @staticmethod
-    def dto_to_orm(group_action_dto, fields):  # type: (GroupActionDTO, List[str]) -> EepromModel
+    def dto_to_orm(group_action_dto):  # type: (GroupActionDTO) -> EepromModel
         data = {'id': group_action_dto.id}  # type: Dict[str, Any]
         for dto_field, data_field in {'name': 'name'}.items():
-            if dto_field in fields:
+            if dto_field in group_action_dto.loaded_fields:
                 data[data_field] = getattr(group_action_dto, dto_field)
-        if 'actions' in fields:
+        if 'actions' in group_action_dto.loaded_fields:
             data['actions'] = ','.join([str(action) for action in group_action_dto.actions])
         return GroupActionConfiguration.deserialize(data)

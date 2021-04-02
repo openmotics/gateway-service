@@ -44,15 +44,13 @@ class GlobalRTD10Mapper(object):
                               cooling_values=cooling_values)
 
     @staticmethod
-    def dto_to_orm(global_rtd10_dto, fields):  # type: (GlobalRTD10DTO, List[str]) -> EepromModel
+    def dto_to_orm(global_rtd10_dto):  # type: (GlobalRTD10DTO) -> EepromModel
         data = {}
         for temperature in GlobalRTD10DTO.TEMPERATURES:
             field = 'output_value_heating_{0}'.format(GlobalRTD10Mapper._temp_to_str(temperature))
-            if field in fields:
-                data[field] = global_rtd10_dto.heating_values[temperature]
+            data[field] = global_rtd10_dto.heating_values[temperature]
             field = 'output_value_cooling_{0}'.format(GlobalRTD10Mapper._temp_to_str(temperature))
-            if field in fields:
-                data[field] = global_rtd10_dto.cooling_values[temperature]
+            data[field] = global_rtd10_dto.cooling_values[temperature]
         return GlobalRTD10Configuration.deserialize(data)
 
 
@@ -70,11 +68,11 @@ class RTD10Mapper(object):
         return RTD10DTO(id=data['id'], **kwargs)
 
     @staticmethod
-    def dto_to_orm(model_type, rtd10_dto, fields):  # type: (Type[EepromModel], RTD10DTO, List[str]) -> EepromModel
+    def dto_to_orm(model_type, rtd10_dto):  # type: (Type[EepromModel], RTD10DTO) -> EepromModel
         data = {'id': rtd10_dto.id}
         for field in ['temp_setpoint_output', 'ventilation_speed_output', 'ventilation_speed_value',
                       'mode_output', 'mode_value', 'on_off_output', 'poke_angle_output',
                       'poke_angle_value', 'room']:
-            if field in fields:
+            if field in rtd10_dto.loaded_fields:
                 data[field] = Toolbox.denonify(getattr(rtd10_dto, field), RTD10Mapper.BYTE_MAX)
         return model_type.deserialize(data)

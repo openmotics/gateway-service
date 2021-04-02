@@ -142,10 +142,9 @@ class ThermostatControllerTest(unittest.TestCase):
                                        room_id=None)], pump_groups)
 
         self._thermostat_controller._save_pump_groups(ThermostatGroup.Modes.HEATING,
-                                                      [(PumpGroupDTO(id=pump.id,
-                                                                     pump_output_id=pump_output.id,
-                                                                     valve_output_ids=[valve_1_output.id, valve_3_output.id]),
-                                                        ['pump_output_id', 'valve_output_ids'])])
+                                                      [PumpGroupDTO(id=pump.id,
+                                                                    pump_output_id=pump_output.id,
+                                                                    valve_output_ids=[valve_1_output.id, valve_3_output.id])])
         pump_groups = self._thermostat_controller.load_heating_pump_groups()
         self.assertEqual([PumpGroupDTO(id=pump.id,
                                        pump_output_id=pump_output.id,
@@ -188,16 +187,13 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertEqual(0, OutputToThermostatGroup.select()
                                                    .where(OutputToThermostatGroup.thermostat_group == thermostat_group)
                                                    .count())
-        self._thermostat_controller.save_thermostat_group((ThermostatGroupDTO(id=0,
-                                                                              outside_sensor_id=1,
-                                                                              pump_delay=30,
-                                                                              threshold_temperature=15,
-                                                                              switch_to_heating_0=(1, 0),
-                                                                              switch_to_heating_1=(2, 100),
-                                                                              switch_to_cooling_0=(1, 100)),
-                                                           ['outside_sensor_id', 'pump_delay', 'threshold_temperature',
-                                                            'switch_to_heating_0', 'switch_to_heating_1',
-                                                            'switch_to_cooling_0']))
+        self._thermostat_controller.save_thermostat_group(ThermostatGroupDTO(id=0,
+                                                                             outside_sensor_id=1,
+                                                                             pump_delay=30,
+                                                                             threshold_temperature=15,
+                                                                             switch_to_heating_0=(1, 0),
+                                                                             switch_to_heating_1=(2, 100),
+                                                                             switch_to_cooling_0=(1, 100)))
         thermostat_group = ThermostatGroup.get(number=0)
         self.assertEqual(15.0, thermostat_group.threshold_temperature)
         links = [{'index': link.index, 'value': link.value, 'mode': link.mode, 'output': link.output_id}
@@ -213,10 +209,10 @@ class ThermostatControllerTest(unittest.TestCase):
                                                       pump_delay=60,
                                                       threshold_temperature=10,
                                                       switch_to_heating_0=(1, 50),
-                                                      switch_to_cooling_0=(2, 0))
-        self._thermostat_controller.save_thermostat_group((new_thermostat_group_dto,
-                                                           ['outside_sensor_id', 'pump_delay', 'threshold_temperature',
-                                                            'switch_to_heating_0', 'switch_to_heating_1', 'switch_to_cooling_0']))
+                                                      switch_to_heating_1=None,
+                                                      switch_to_cooling_0=(2, 0),
+                                                      switch_to_cooling_1=None)
+        self._thermostat_controller.save_thermostat_group(new_thermostat_group_dto)
         thermostat_group = ThermostatGroup.get(number=0)
         self.assertEqual(10.0, thermostat_group.threshold_temperature)
         links = [{'index': link.index, 'value': link.value, 'mode': link.mode, 'output': link.output_id}

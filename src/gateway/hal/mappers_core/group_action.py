@@ -35,12 +35,12 @@ class GroupActionMapper(object):
                               actions=GroupActionMapper.core_actions_to_classic_actions(orm_object.actions))
 
     @staticmethod
-    def dto_to_orm(group_action_dto, fields):  # type: (GroupActionDTO, List[str]) -> GroupAction
+    def dto_to_orm(group_action_dto):  # type: (GroupActionDTO) -> GroupAction
         data = {'id': group_action_dto.id}  # type: Dict[str, Any]
         for dto_field, data_field in {'name': 'name'}.items():
-            if dto_field in fields:
+            if dto_field in group_action_dto.loaded_fields:
                 data[data_field] = getattr(group_action_dto, dto_field)
-        if 'actions' in fields:
+        if 'actions' in group_action_dto.loaded_fields:
             data['actions'] = GroupActionMapper.classic_actions_to_core_actions(group_action_dto.actions)
         return GroupAction(**data)
 

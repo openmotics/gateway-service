@@ -333,10 +333,10 @@ class ThermostatControllerGateway(ThermostatController):
         return [ThermostatMapper.orm_to_dto(thermostat, mode)
                 for thermostat in Thermostat.select()]
 
-    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+    def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         mode = 'heating'  # type: Literal['heating']
-        for thermostat_dto, fields in thermostats:
-            thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, mode)
+        for thermostat_dto in thermostats:
+            thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, mode)
             self.refresh_set_configuration(thermostat)
         self._thermostat_config_changed()
 
@@ -350,10 +350,10 @@ class ThermostatControllerGateway(ThermostatController):
         return [ThermostatMapper.orm_to_dto(thermostat, mode)
                 for thermostat in Thermostat.select()]
 
-    def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+    def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         mode = 'cooling'  # type: Literal['cooling']
-        for thermostat_dto, fields in thermostats:
-            thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, fields, mode)
+        for thermostat_dto in thermostats:
+            thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, mode)
             self.refresh_set_configuration(thermostat)
         self._thermostat_config_changed()
 
@@ -394,16 +394,13 @@ class ThermostatControllerGateway(ThermostatController):
             setattr(thermostat_group_dto, field, (link.output.number, link.value))
         return thermostat_group_dto
 
-    def save_thermostat_group(self, thermostat_group):
-        # type: (Tuple[ThermostatGroupDTO, List[str]]) -> None
-        thermostat_group_dto, fields = thermostat_group
-
+    def save_thermostat_group(self, thermostat_group):  # type: (ThermostatGroupDTO) -> None
         # Update thermostat group configuration
         orm_object = ThermostatGroup.get(number=0)  # type: ThermostatGroup
-        if 'outside_sensor_id' in fields:
-            orm_object.sensor = Sensor.get(number=thermostat_group_dto.outside_sensor_id)
-        if 'threshold_temperature' in fields:
-            orm_object.threshold_temperature = thermostat_group_dto.threshold_temperature  # type: ignore
+        if 'outside_sensor_id' in thermostat_group.loaded_fields:
+            orm_object.sensor = Sensor.get(number=thermostat_group.outside_sensor_id)
+        if 'threshold_temperature' in thermostat_group.loaded_fields:
+            orm_object.threshold_temperature = thermostat_group.threshold_temperature  # type: ignore
         orm_object.save()
 
         # Link configuration outputs to global thermostat config
@@ -415,11 +412,11 @@ class ThermostatControllerGateway(ThermostatController):
                                 (OutputToThermostatGroup.mode == mode))}
             for i in range(4):
                 field = 'switch_to_{0}_{1}'.format(mode, i)
-                if field not in fields:
+                if field not in thermostat_group.loaded_fields:
                     continue
 
                 link = links.get(i)
-                data = getattr(thermostat_group_dto, field)
+                data = getattr(thermostat_group, field)
                 if data is None:
                     if link is not None:
                         link.delete_instance()
@@ -437,11 +434,11 @@ class ThermostatControllerGateway(ThermostatController):
                         link.value = value
                         link.save()
 
-        if 'pump_delay' in fields:
+        if 'pump_delay' in thermostat_group.loaded_fields:
             # Set valve delay for all valves in this group
             for thermostat in orm_object.thermostats:
                 for valve in thermostat.valves:
-                    valve.delay = thermostat_group_dto.pump_delay  # type: ignore
+                    valve.delay = thermostat_group.pump_delay  # type: ignore
                     valve.save()
 
         self._thermostat_config_changed()
@@ -462,7 +459,7 @@ class ThermostatControllerGateway(ThermostatController):
                                             room_id=None))
         return pump_groups
 
-    def save_heating_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
+    def save_heating_pump_groups(self, pump_groups):  # type: (List[PumpGroupDTO]) -> None
         return self._save_pump_groups(ThermostatGroup.Modes.HEATING, pump_groups)
 
     def load_cooling_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
@@ -481,12 +478,12 @@ class ThermostatControllerGateway(ThermostatController):
                                             room_id=None))
         return pump_groups
 
-    def save_cooling_pump_groups(self, pump_groups):  # type: (List[Tuple[PumpGroupDTO, List[str]]]) -> None
+    def save_cooling_pump_groups(self, pump_groups):  # type: (List[PumpGroupDTO]) -> None
         return self._save_pump_groups(ThermostatGroup.Modes.COOLING, pump_groups)
 
-    def _save_pump_groups(self, mode, pump_groups):  # type: (str, List[Tuple[PumpGroupDTO, List[str]]]) -> None
-        for pump_group_dto, fields in pump_groups:
-            if 'pump_output_id' in fields and 'valve_output_ids' in fields:
+    def _save_pump_groups(self, mode, pump_groups):  # type: (str, List[PumpGroupDTO]) -> None
+        for pump_group_dto in pump_groups:
+            if 'pump_output_id' in pump_group_dto.loaded_fields and 'valve_output_ids' in pump_group_dto.loaded_fields:
                 valve_output_ids = pump_group_dto.valve_output_ids
                 pump = Pump.get(id=pump_group_dto.id)  # type: Pump
                 pump.output = Output.get(number=pump_group_dto.pump_output_id)
@@ -558,7 +555,7 @@ class ThermostatControllerGateway(ThermostatController):
 
     # Obsolete unsupported calls
 
-    def save_global_rtd10(self, rtd10):  # type: (Tuple[GlobalRTD10DTO, List[str]]) -> None
+    def save_global_rtd10(self, rtd10):  # type: (GlobalRTD10DTO) -> None
         raise UnsupportedException()
 
     def load_heating_rtd10(self, rtd10_id):  # type: (int) -> RTD10DTO
@@ -567,7 +564,7 @@ class ThermostatControllerGateway(ThermostatController):
     def load_heating_rtd10s(self):  # type: () -> List[RTD10DTO]
         raise UnsupportedException()
 
-    def save_heating_rtd10s(self, rtd10s):  # type: (List[Tuple[RTD10DTO, List[str]]]) -> None
+    def save_heating_rtd10s(self, rtd10s):  # type: (List[RTD10DTO]) -> None
         raise UnsupportedException()
 
     def load_cooling_rtd10(self, rtd10_id):  # type: (int) -> RTD10DTO
@@ -576,7 +573,7 @@ class ThermostatControllerGateway(ThermostatController):
     def load_cooling_rtd10s(self):  # type: () -> List[RTD10DTO]
         raise UnsupportedException()
 
-    def save_cooling_rtd10s(self, rtd10s):  # type: (List[Tuple[RTD10DTO, List[str]]]) -> None
+    def save_cooling_rtd10s(self, rtd10s):  # type: (List[RTD10DTO]) -> None
         raise UnsupportedException()
 
     def set_airco_status(self, thermostat_id, airco_on):

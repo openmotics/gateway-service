@@ -43,5 +43,5 @@ class ScheduleSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[ScheduleDTO, List[str]]
+    def deserialize(api_data):  # type: (Dict) -> ScheduleDTO
         raise NotImplementedError()

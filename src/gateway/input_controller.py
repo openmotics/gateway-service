@@ -59,23 +59,23 @@ class InputController(BaseController):
             inputs_dtos.append(input_dto)
         return inputs_dtos
 
-    def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
+    def save_inputs(self, inputs):  # type: (List[InputDTO]) -> None
         inputs_to_save = []
-        for input_dto, fields in inputs:
+        for input_dto in inputs:
             input_ = Input.get_or_none(number=input_dto.id)  # type: Input
             if input_ is None:
                 logger.info('Ignored saving non-existing Input {0}'.format(input_dto.id))
-            if 'event_enabled' in fields:
+            if 'event_enabled' in input_dto.loaded_fields:
                 input_.event_enabled = input_dto.event_enabled
                 input_.save()
-            if 'room' in fields:
+            if 'room' in input_dto.loaded_fields:
                 if input_dto.room is None:
                     input_.room = None
                 elif 0 <= input_dto.room <= 100:
                     # TODO: Validation should happen on API layer
                     input_.room, _ = Room.get_or_create(number=input_dto.room)
                 input_.save()
-            inputs_to_save.append((input_dto, fields))
+            inputs_to_save.append(input_dto)
         self._master_controller.save_inputs(inputs_to_save)
 
     @staticmethod

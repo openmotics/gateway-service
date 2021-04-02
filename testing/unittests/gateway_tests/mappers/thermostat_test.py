@@ -24,28 +24,26 @@ from master.classic.eeprom_models import PumpGroupConfiguration
 class ThermostatClassicMapperTest(unittest.TestCase):
 
     def test_pump_group(self):
-        fields = ['valve_output_ids', 'pump_output_id', 'room_id']
-
         raw = {'id': 0, 'outputs': '', 'output': 255, 'room': 255}
         orm = PumpGroupConfiguration.deserialize(raw)
         dto = PumpGroupMapper.orm_to_dto(orm)
         self.assertEqual(PumpGroupDTO(id=0, valve_output_ids=[], pump_output_id=None, room_id=None), dto)
-        self.assertEqual(raw, PumpGroupMapper.dto_to_orm(PumpGroupConfiguration, dto, fields).serialize())
+        self.assertEqual(raw, PumpGroupMapper.dto_to_orm(PumpGroupConfiguration, dto).serialize())
 
         raw = {'id': 0, 'outputs': '10', 'output': 255, 'room': 255}
         orm = PumpGroupConfiguration.deserialize(raw)
         dto = PumpGroupMapper.orm_to_dto(orm)
         self.assertEqual(PumpGroupDTO(id=0, valve_output_ids=[10], pump_output_id=None, room_id=None), dto)
-        self.assertEqual(raw, PumpGroupMapper.dto_to_orm(PumpGroupConfiguration, dto, fields).serialize())
+        self.assertEqual(raw, PumpGroupMapper.dto_to_orm(PumpGroupConfiguration, dto).serialize())
 
         raw = {'id': 0, 'outputs': '10,15', 'output': 255, 'room': 255}
         orm = PumpGroupConfiguration.deserialize(raw)
         dto = PumpGroupMapper.orm_to_dto(orm)
         self.assertEqual(PumpGroupDTO(id=0, valve_output_ids=[10, 15], pump_output_id=None, room_id=None), dto)
-        self.assertEqual(raw, PumpGroupMapper.dto_to_orm(PumpGroupConfiguration, dto, fields).serialize())
+        self.assertEqual(raw, PumpGroupMapper.dto_to_orm(PumpGroupConfiguration, dto).serialize())
 
         raw = {'id': 0, 'outputs': '', 'output': 15, 'room': 10}
         orm = PumpGroupConfiguration.deserialize(raw)
         dto = PumpGroupMapper.orm_to_dto(orm)
         self.assertEqual(PumpGroupDTO(id=0, valve_output_ids=[], pump_output_id=15, room_id=10), dto)
-        self.assertEqual(raw, PumpGroupMapper.dto_to_orm(PumpGroupConfiguration, dto, fields).serialize())
+        self.assertEqual(raw, PumpGroupMapper.dto_to_orm(PumpGroupConfiguration, dto).serialize())

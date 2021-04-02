@@ -37,5 +37,5 @@ class ModuleMapper(object):
                          order=orm_object.order)
 
     @staticmethod
-    def dto_to_orm(module_dto, fields):  # type: (ModuleDTO, List[str]) -> Module
+    def dto_to_orm(module_dto):  # type: (ModuleDTO) -> Module
         raise NotImplementedError('Updating modules is not supported (represent physical state)')
