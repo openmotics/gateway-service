@@ -53,10 +53,13 @@ class DeliverySerializer(object):
     @staticmethod
     def deserialize(api_data):
         # type: (Dict[str,Any]) -> DeliveryDTO
-        id = api_data['id'] if 'id' in api_data else None
-        type = api_data['type'] if 'type' in api_data else None
-        timestamp_delivery = api_data['timestamp_delivery'] if 'timestamp_delivery' in api_data else None
-        user_delivery_dto = UserSerializer.deserialize(api_data['user_delivery']) if 'user_delivery' in api_data and api_data['user_delivery'] is not None else None
+        id = api_data.get('id')
+        type = api_data.get('type')
+        timestamp_delivery = api_data.get('timestamp_delivery')
+        user_delivery_serial = api_data.get('user_delivery')
+        user_delivery_dto = None
+        if user_delivery_serial is not None:
+            user_delivery_dto = UserSerializer.deserialize(user_delivery_serial)
 
         delivery_dto = DeliveryDTO(id, type, timestamp_delivery, user_delivery_dto)
 

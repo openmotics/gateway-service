@@ -43,9 +43,9 @@ def migrate(migrator, database, fake=False, **kwargs):
 
     # CURRENT USER MODEL
     # -------------------
-    class User(BaseModel):
-        # class Meta:
-        #     table_name = '_user_old'
+    class UserOld(BaseModel):
+        class Meta:
+            table_name = 'user'
         id = AutoField()
         username = CharField(unique=True)
         password = CharField()
@@ -59,32 +59,29 @@ def migrate(migrator, database, fake=False, **kwargs):
 
     # USER TARGET MODEL:
     # ---------------------
-    # class User(BaseModel):
-    #     class Meta:
-    #         table_name = 'user'
-    #
-    #     class UserRoles(object):
-    #         USER = 'USER'
-    #         ADMIN = 'ADMIN'
-    #         TECHNICIAN = 'TECHNICIAN'
-    #         COURIER = 'COURIER'
-    #
-    #     class UserLanguages(object):
-    #         EN = 'English'
-    #         DE = 'Deutsh'
-    #         NL = 'Nederlands'
-    #         FR = 'Français'
-    #
-    #     id = AutoField()
-    #     first_name = CharField(null=False)
-    #     last_name = CharField(null=False, default='')
-    #     role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
-    #     pin_code = CharField(null=False, unique=True)
-    #     language = CharField(null=False, default='English')  # options: See Userlanguages
-    #     password = CharField()
-    #     apartment_id = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
-    #     is_active = BooleanField(default=True)
-    #     accepted_terms = IntegerField(default=0)
+    class User(BaseModel):
+        class UserRoles(object):
+            USER = 'USER'
+            ADMIN = 'ADMIN'
+            TECHNICIAN = 'TECHNICIAN'
+            COURIER = 'COURIER'
+
+        class UserLanguages(object):
+            EN = 'English'
+            DE = 'Deutsh'
+            NL = 'Nederlands'
+            FR = 'Francais'
+
+        id = AutoField()
+        first_name = CharField(null=False)
+        last_name = CharField(null=False, default='')
+        role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
+        pin_code = CharField(null=False, unique=True)
+        language = CharField(null=False, default='English')  # options: See Userlanguages
+        password = CharField()
+        apartment_id = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
+        is_active = BooleanField(default=True)
+        accepted_terms = IntegerField(default=0)
 
 
     class RFID(BaseModel):
@@ -116,20 +113,23 @@ def migrate(migrator, database, fake=False, **kwargs):
     migrator.create_model(RFID)
     migrator.create_model(Delivery)
 
-    # Add columns to user table
-    migrator.add_columns(User,
-                         first_name=CharField(null=True),
-                         last_name=CharField(null=False, default=''),
-                         role=CharField(default=UserRoles.USER, null=False),
-                         language=CharField(null=False, default='English'),
-                         pin_code=CharField(null=True),
-                         apartment_id=ForeignKeyField(Apartment, backref='users', on_delete='SET NULL', null=True,
-                                                      default=None),
-                         is_active=BooleanField(default=True),
-                         )
-    migrator.rename_column(User,
-                           old_name='username',
-                           new_name='username_old')
+    # Since there is a bug in peewee_migrate, just run the raw sql form of the table rename.
+    # Updating to a newer version of peewee_migrate is not applicable here since the current version
+    # is the latest one supported by Python 2.7
+    migrator.sql('ALTER TABLE user RENAME TO _user_old')
+    # This might look like very funky stuff, and it is... But this is all needed to keep the migrator
+    # object happy and let it continue on with the migrations. The reason why this is done manually is
+    # due to the bug mentioned above in the peewee_migrate library. It is a straight copy of part of the
+    # body from the `rename_table` function in the migrator class.
+    del migrator.orm['user']
+    UserOld._meta.table_name = '_user_old'
+    migrator.orm['_user_old'] = UserOld
+    # migrator.rename_table(UserOld, '_user_old')  # -> This would have been a lot cleaner if the function
+    # did actually work...
+
+    # And now create the new user table. The next migration will populate this table based on the now called
+    # '_user_old' table and delete the table afterwards.
+    migrator.create_model(User)
 
 
 def rollback(migrator, database, fake=False, **kwargs):

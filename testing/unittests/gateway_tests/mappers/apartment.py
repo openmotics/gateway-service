@@ -20,7 +20,7 @@ from gateway.mappers import ApartmentMapper
 from gateway.api.serializers.apartment import ApartmentSerializer
 
 
-class OutputMapperTest(unittest.TestCase):
+class ApartmentMapperTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         pass

@@ -41,7 +41,7 @@ class ApartmentSerializer(object):
     @staticmethod
     def deserialize(api_data):
         # type: (Dict[str,Any]) -> ApartmentDTO
-        apartment_dto = ApartmentDTO(None, '', None, None)
+        apartment_dto = ApartmentDTO()
         SerializerToolbox.deserialize(
             dto=apartment_dto,
             api_data=api_data,
