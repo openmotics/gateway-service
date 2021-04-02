@@ -22,9 +22,6 @@ from gateway.dto.shutter_group import ShutterGroupDTO
 from master.classic.eeprom_controller import EepromModel
 from master.classic.eeprom_models import ShutterGroupConfiguration
 
-if False:  # MYPY
-    from typing import List
-
 
 class ShutterGroupMapper(object):
     WORD_MAX = 2 ** 16 - 1
@@ -40,9 +37,9 @@ class ShutterGroupMapper(object):
                                **kwargs)
 
     @staticmethod
-    def dto_to_orm(shutter_dto, fields):  # type: (ShutterGroupDTO, List[str]) -> EepromModel
+    def dto_to_orm(shutter_dto):  # type: (ShutterGroupDTO) -> EepromModel
         data = {'id': shutter_dto.id}
         for field in ['timer_up', 'timer_down']:
-            if field in fields:
+            if field in shutter_dto.loaded_fields:
                 data[field] = Toolbox.denonify(getattr(shutter_dto, field), ShutterGroupMapper.BYTE_MAX)
         return ShutterGroupConfiguration.deserialize(data)

@@ -48,12 +48,9 @@ class VentilationSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):
-        # type: (Dict[str,Any]) -> Tuple[VentilationDTO, List[str]]
-        loaded_fields = ['source']
+    def deserialize(api_data):  # type: (Dict[str,Any]) -> VentilationDTO
         ventilation_id = None  # type: Optional[int]
         if 'id' in api_data:
-            loaded_fields.append('id')
             ventilation_id = api_data['id']
         source_dto = None  # type: Optional[VentilationSourceDTO]
         if 'source' in api_data:
@@ -62,23 +59,19 @@ class VentilationSerializer(object):
                                               type=api_data['source']['type'])
         ventilation_dto = VentilationDTO(id=ventilation_id, source=source_dto)
         if 'external_id' in api_data:
-            loaded_fields.append('external_id')
             ventilation_dto.external_id = Toolbox.nonify(api_data['external_id'], '')
         if 'name' in api_data:
-            loaded_fields.append('name')
             ventilation_dto.name = Toolbox.nonify(api_data['name'], '')
         if 'amount_of_levels' in api_data:
-            loaded_fields.append('amount_of_levels')
             ventilation_dto.amount_of_levels = Toolbox.nonify(api_data['amount_of_levels'], '')
         if 'device' in api_data:
-            loaded_fields.append('device')
             if 'type' in api_data['device']:
                 ventilation_dto.device_type = Toolbox.nonify(api_data['device']['type'], '')
             if 'vendor' in api_data['device']:
                 ventilation_dto.device_vendor = Toolbox.nonify(api_data['device']['vendor'], '')
             if 'serial' in api_data['device']:
                 ventilation_dto.device_serial = Toolbox.nonify(api_data['device']['serial'], '')
-        return ventilation_dto, loaded_fields
+        return ventilation_dto
 
 
 class VentilationStatusSerializer(object):
@@ -94,17 +87,13 @@ class VentilationStatusSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):
-        # type: (Dict[str,Any]) -> Tuple[VentilationStatusDTO, List[str]]
-        loaded_fields = ['id', 'mode']
-        status_dto = VentilationStatusDTO(api_data['id'], api_data['mode'])
+    def deserialize(api_data):  # type: (Dict[str,Any]) -> VentilationStatusDTO
+        status_dto = VentilationStatusDTO(id=api_data['id'],
+                                          mode=api_data['mode'])
         if 'level' in api_data:
-            loaded_fields.append('level')
             status_dto.level = Toolbox.nonify(api_data['level'], 0)
         if 'timer' in api_data:
-            loaded_fields.append('timer')
             status_dto.timer = Toolbox.nonify(api_data['timer'], 0)
         if 'remaining_time' in api_data:
-            loaded_fields.append('remaining_time')
             status_dto.remaining_time = Toolbox.nonify(api_data['remaining_time'], 0)
-        return status_dto, loaded_fields
+        return status_dto

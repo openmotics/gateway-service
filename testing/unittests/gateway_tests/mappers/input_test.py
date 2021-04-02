@@ -42,8 +42,7 @@ class InputCoreMapperTest(unittest.TestCase):
         orm = InputMapper.dto_to_orm(InputDTO(id=0,
                                               name='input 0',
                                               event_enabled=True,
-                                              invert=True),
-                                     fields=['name', 'event_enabled', 'invert'])
+                                              invert=True))
         self.assertEqual(0, orm.id)
         self.assertEqual('input 0', orm.name)
         self.assertFalse(orm.input_config.normal_open)
@@ -175,8 +174,7 @@ class InputCoreMapperTest(unittest.TestCase):
         return InputMapper.dto_to_orm(InputDTO(id=0,
                                                name='input 0',
                                                action=action,
-                                               basic_actions=basic_actions),
-                                      fields=['name', 'action', 'basic_actions'])
+                                               basic_actions=basic_actions))
 
     @staticmethod
     def _orm_to_dto(**kwargs):

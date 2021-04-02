@@ -46,17 +46,18 @@ class InputMapper(object):
                         can=orm_object.module.device_type == 'b')
 
     @staticmethod
-    def dto_to_orm(input_dto, fields):  # type: (InputDTO, List[str]) -> InputConfiguration
+    def dto_to_orm(input_dto):  # type: (InputDTO) -> InputConfiguration
         new_data = {'id': input_dto.id}  # type: Dict[str, Any]
-        if 'name' in fields:
+        if 'name' in input_dto.loaded_fields:
             new_data['name'] = input_dto.name
-        if 'action' in fields:
+        if 'action' in input_dto.loaded_fields:
             direct_config = input_dto.action is None or input_dto.action == 255 or input_dto.action < 240
-            basic_actions_config = input_dto.action in [241, 242] or (input_dto.action == 240 and 'basic_actions' in fields)
+            basic_actions_config = input_dto.action in [241, 242] or (input_dto.action == 240 and
+                                                                      'basic_actions' in input_dto.loaded_fields)
             if direct_config or basic_actions_config:
                 new_data.update(InputMapper.classic_actions_to_core_input_configuration(input_dto.action,
                                                                                         input_dto.basic_actions))
-        if 'invert' in fields:
+        if 'invert' in input_dto.loaded_fields:
             new_data['input_config'] = {'normal_open': not input_dto.invert}
         return InputConfiguration.deserialize(new_data)
 

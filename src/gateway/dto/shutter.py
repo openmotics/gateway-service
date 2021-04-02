@@ -16,13 +16,14 @@
 """
 Shutter DTO
 """
-from gateway.dto.base import BaseDTO
+from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
     from typing import Optional
 
 
 class ShutterDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, name='', timer_up=None, timer_down=None, up_down_config=None,
                  group_1=None, group_2=None, room=None, steps=None):
         self.id = id  # type: int

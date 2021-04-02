@@ -41,22 +41,17 @@ class GlobalRTD10Serializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[GlobalRTD10DTO, List[str]]
-        loaded_fields = []
+    def deserialize(api_data):  # type: (Dict) -> GlobalRTD10DTO
         heating_values = {}
         cooling_values = {}
         for temperature in GlobalRTD10DTO.TEMPERATURES:
             field = 'output_value_heating_{0}'.format(GlobalRTD10Serializer._temp_to_str(temperature))
-            if field in api_data:
-                loaded_fields.append(field)
-                heating_values[temperature] = api_data[field]
+            heating_values[temperature] = api_data[field]
             field = 'output_value_cooling_{0}'.format(GlobalRTD10Serializer._temp_to_str(temperature))
-            if field in api_data:
-                loaded_fields.append(field)
-                cooling_values[temperature] = api_data[field]
+            cooling_values[temperature] = api_data[field]
         pump_group_dto = GlobalRTD10DTO(heating_values=heating_values,
                                         cooling_values=cooling_values)
-        return pump_group_dto, loaded_fields
+        return pump_group_dto
 
 
 class RTD10Serializer(object):
@@ -72,10 +67,9 @@ class RTD10Serializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[RTD10DTO, List[str]]
-        loaded_fields = ['id']
+    def deserialize(api_data):  # type: (Dict) -> RTD10DTO
         shutter_dto = RTD10DTO(api_data['id'])
-        loaded_fields += SerializerToolbox.deserialize(
+        SerializerToolbox.deserialize(
             dto=shutter_dto,  # Referenced
             api_data=api_data,
             mapping={field: (field, RTD10Serializer.BYTE_MAX)
@@ -83,4 +77,4 @@ class RTD10Serializer(object):
                                    'mode_output', 'mode_value', 'on_off_output', 'poke_angle_output',
                                    'poke_angle_value', 'room']}
         )
-        return shutter_dto, loaded_fields
+        return shutter_dto

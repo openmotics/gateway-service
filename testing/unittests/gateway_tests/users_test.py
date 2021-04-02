@@ -120,7 +120,7 @@ class UserControllerTest(unittest.TestCase):
         # create a new user to test with
         user_dto = UserDTO(username='fred')
         user_dto.set_password('test')
-        self.controller.save_users([(user_dto, fields)])
+        self.controller.save_users([user_dto])
 
         # check if the user has been added to the list
         users_in_controller = self.controller.load_users()
@@ -176,8 +176,7 @@ class UserControllerTest(unittest.TestCase):
         user_dto = UserDTO(username='test')
         user_dto.set_password('test')
         users_dto.append(user_dto)
-        to_save_users = [(ud, fields) for ud in users_dto]
-        self.controller.save_users(to_save_users)
+        self.controller.save_users(users_dto)
 
         # check if the user has been deleted
         users_in_controller = self.controller.load_users()
@@ -329,7 +328,7 @@ class UserControllerTest(unittest.TestCase):
         # create a new user to test with
         user_dto = UserDTO(username='test')
         user_dto.set_password('test')
-        self.controller.save_users([(user_dto, fields)])
+        self.controller.save_users([user_dto])
 
         # verify that the user can log in with regular username
         success, token = self.controller.login(user_dto, accept_terms=True)
@@ -359,7 +358,7 @@ class UserControllerTest(unittest.TestCase):
         user_dto = UserDTO(username='test', accepted_terms=1)
         user_dto.set_password('test')
 
-        user_orm = UserMapper.dto_to_orm(user_dto, ['username', 'password'])
+        user_orm = UserMapper.dto_to_orm(user_dto)
 
         self.assertEqual(True, hasattr(user_orm, "username"))
         self.assertEqual(True, hasattr(user_orm, "password"))
@@ -367,9 +366,9 @@ class UserControllerTest(unittest.TestCase):
 
         self.assertEqual('test', user_orm.username)
         self.assertEqual(UserDTO._hash_password('test'), user_orm.password)
-        self.assertEqual(0, user_orm.accepted_terms)
+        self.assertEqual(1, user_orm.accepted_terms)
 
         user_dto = UserMapper.orm_to_dto(user_orm)
         self.assertEqual('test', user_dto.username)
         self.assertEqual(user_orm.password, user_dto.hashed_password)
-        self.assertEqual(0, user_dto.accepted_terms)
+        self.assertEqual(1, user_dto.accepted_terms)
