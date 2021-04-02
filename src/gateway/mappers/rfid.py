@@ -24,9 +24,6 @@ from gateway.dto.rfid import RfidDTO
 from gateway.mappers.user import UserMapper
 from gateway.models import RFID
 
-if False:  # MYPY
-    from typing import List
-
 logger = logging.getLogger('openmotics')
 
 
@@ -51,20 +48,20 @@ class RfidMapper(object):
         return rfid_dto
 
     @staticmethod
-    def dto_to_orm(dto_object, fields):
-        # type: (RfidDTO, List[str]) -> RFID
+    def dto_to_orm(dto_object):
+        # type: (RfidDTO) -> RFID
         rfid = RFID.get_or_none(tag_string=dto_object.tag_string)
         if rfid is None:
             mandatory_fields = {'tag_string', 'uid_manufacturer', 'enter_count', 'label', 'user_id'}
-            if not mandatory_fields.issubset(set(fields)):
+            if not mandatory_fields.issubset(set(dto_object.loaded_fields)):
                 raise ValueError('Cannot create rfid without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
 
         rfid_orm = RFID()
-        for field in fields:
+        for field in dto_object.loaded_fields:
             if getattr(rfid_orm, field, None) is None or getattr(rfid_orm, field, None) is None:
                 continue
             if field == 'user_id':
-                user_orm = UserMapper.dto_to_orm(dto_object.user, ['id', 'first_name', 'last_name', 'role', 'code', 'apartment_id'])
+                user_orm = UserMapper.dto_to_orm(dto_object.user)
                 rfid_orm.user_id = user_orm
                 continue
             setattr(rfid_orm, field, getattr(dto_object, field))

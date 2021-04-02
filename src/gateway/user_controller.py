@@ -80,7 +80,7 @@ class UserController(object):
         # type: (UserDTO, List[str]) -> None
         """ Saves one instance of a user with the defined fields in param fields """
         _ = self
-        user_orm = UserMapper.dto_to_orm(user_dto, fields)
+        user_orm = UserMapper.dto_to_orm(user_dto)
         UserController._validate(user_orm)
         user_orm.save()
 

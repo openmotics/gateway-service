@@ -29,7 +29,7 @@ class BaseDTO(object):
 
     def __str__(self):
         return '<{} {}>'.format(self.__class__.__name__,
-                                {field: self.__dict__[field] for field in self._loaded_fields})
+                                {field: getattr(self, field) for field in self._loaded_fields})
 
     def __repr__(self):
         return str(self)

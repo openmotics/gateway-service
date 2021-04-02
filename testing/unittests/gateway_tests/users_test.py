@@ -39,7 +39,7 @@ MODELS = [User]
 
 class UserControllerTest(unittest.TestCase):
     """ Tests for UserController. """
-    TOKEN_TIMEOUT=3
+    TOKEN_TIMEOUT = 3
 
     @classmethod
     def setUpClass(cls):
@@ -387,25 +387,27 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual(2, self.controller.get_number_of_users())
 
     def test_usermapper(self):
-        user_dto = UserDTO(username='test', accepted_terms=1)
+        user_dto = UserDTO(username='test',
+                           role=User.UserRoles.USER,
+                           pin_code='1234',
+                           accepted_terms=1)
         user_dto.set_password('test')
 
-        fields = ['role', 'pin_code', 'first_name', 'last_name', 'password']
-        user_orm = UserMapper.dto_to_orm(user_dto, fields)
+        user_orm = UserMapper.dto_to_orm(user_dto)
 
         self.assertEqual(True, hasattr(user_orm, "username"))
         self.assertEqual(True, hasattr(user_orm, "password"))
         self.assertEqual(True, hasattr(user_orm, "accepted_terms"))
         self.assertEqual(True, hasattr(user_orm, "role"))
 
-        self.assertEqual(User.UserRoles.ADMIN, user_orm.role)
-        self.assertEqual('test', user_orm.pin_code)
+        self.assertEqual(User.UserRoles.USER, user_orm.role)
+        self.assertEqual('1234', user_orm.pin_code)
 
         self.assertEqual('test', user_orm.username)
         self.assertEqual(UserDTO._hash_password('test'), user_orm.password)
-        self.assertEqual(0, user_orm.accepted_terms)
+        self.assertEqual(1, user_orm.accepted_terms)
 
         user_dto = UserMapper.orm_to_dto(user_orm)
         self.assertEqual('test', user_dto.username)
         self.assertEqual(user_orm.password, user_dto.hashed_password)
-        self.assertEqual(0, user_dto.accepted_terms)
+        self.assertEqual(1, user_dto.accepted_terms)

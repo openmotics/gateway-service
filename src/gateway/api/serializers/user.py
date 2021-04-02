@@ -51,13 +51,15 @@ class UserSerializer(object):
         # type: (Dict[str,Any]) -> UserDTO
         user_id = api_data['id'] if 'id' in api_data else None
         user_dto = UserDTO(user_id)
-        for field in ['first_name', 'last_name', 'role', 'pin_code']:
+        for field in ['first_name', 'last_name', 'role', 'pin_code', 'accepted_terms']:
             if field in api_data:
                 setattr(user_dto, field, api_data[field])
+        apartment_dto = None
         if 'apartment' in api_data:
-            apartment_dto = ApartmentSerializer.deserialize(api_data['apartment'])
+            if api_data['apartment'] is not None:
+                apartment_dto = ApartmentSerializer.deserialize(api_data['apartment'])
             user_dto.apartment = apartment_dto
         if 'password' in api_data:
-            user_dto.set_password(api_data['apartment'])
+            user_dto.set_password(api_data['password'])
         return user_dto
 

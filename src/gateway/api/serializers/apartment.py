@@ -52,5 +52,4 @@ class ApartmentSerializer(object):
                 'doorbell_rebus_id': ('doorbell_rebus_id', None)
             }
         )
-
         return apartment_dto

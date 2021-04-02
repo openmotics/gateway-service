@@ -56,7 +56,7 @@ class DeliverySerializer(object):
         id = api_data['id'] if 'id' in api_data else None
         type = api_data['type'] if 'type' in api_data else None
         timestamp_delivery = api_data['timestamp_delivery'] if 'timestamp_delivery' in api_data else None
-        user_delivery_dto = UserSerializer.deserialize(api_data['user_delivery']) if 'user_delivery' in api_data else None
+        user_delivery_dto = UserSerializer.deserialize(api_data['user_delivery']) if 'user_delivery' in api_data and api_data['user_delivery'] is not None else None
 
         delivery_dto = DeliveryDTO(id, type, timestamp_delivery, user_delivery_dto)
 
@@ -64,8 +64,8 @@ class DeliverySerializer(object):
             if field in api_data:
                 # loaded_fields.append(field)
                 setattr(delivery_dto, field, api_data[field])
-        if 'user_pickup' in api_data:
-            user_dto, _ = UserSerializer.deserialize(api_data['user_pickup'])
+        if 'user_pickup' in api_data and api_data['user_pickup'] is not None:
+            user_dto = UserSerializer.deserialize(api_data['user_pickup'])
             delivery_dto.user_pickup = user_dto
         return delivery_dto
 
