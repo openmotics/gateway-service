@@ -148,7 +148,7 @@ class UserControllerTest(unittest.TestCase):
         # create a new user to test with
         user_dto = UserDTO(username='fred', pin_code='1234', role=User.UserRoles.ADMIN)
         user_dto.set_password('test')
-        self.controller.save_users([(user_dto, fields)])
+        self.controller.save_users([user_dto])
 
         # check if the user has been added to the list
         users_in_controller = self.controller.load_users()
@@ -204,8 +204,7 @@ class UserControllerTest(unittest.TestCase):
         user_dto = UserDTO(username='test', pin_code='9876', role=User.UserRoles.ADMIN)
         user_dto.set_password('test')
         users_dto.append(user_dto)
-        to_save_users = [(ud, fields) for ud in users_dto]
-        self.controller.save_users(to_save_users)
+        self.controller.save_users(users_dto)
 
         # check if the user has been deleted
         users_in_controller = self.controller.load_users()
@@ -360,7 +359,7 @@ class UserControllerTest(unittest.TestCase):
         # create a new user to test with
         user_dto = UserDTO(username='test', pin_code='1234', role=User.UserRoles.ADMIN)
         user_dto.set_password('test')
-        self.controller.save_users([(user_dto, fields)])
+        self.controller.save_users([user_dto])
 
         # verify that the user can log in with regular username
         success, token = self.controller.login(user_dto, accept_terms=True)

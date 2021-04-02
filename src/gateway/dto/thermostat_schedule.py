@@ -16,13 +16,14 @@
 """
 ThermostatSchedule DTO
 """
-from gateway.dto.base import BaseDTO
+from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
     from typing import Optional
 
 
 class ThermostatScheduleDTO(BaseDTO):
+    @capture_fields
     def __init__(self,
                  temp_night, temp_day_1, temp_day_2,
                  start_day_1, end_day_1,

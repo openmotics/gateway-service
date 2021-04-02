@@ -63,10 +63,9 @@ class ThermostatSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[ThermostatDTO, List[str]]
-        loaded_fields = ['id']
+    def deserialize(api_data):  # type: (Dict) -> ThermostatDTO
         thermostat_dto = ThermostatDTO(api_data['id'])
-        loaded_fields += SerializerToolbox.deserialize(
+        SerializerToolbox.deserialize(
             dto=thermostat_dto,  # Referenced
             api_data=api_data,
             mapping={'name': ('name', None),
@@ -90,7 +89,6 @@ class ThermostatSerializer(object):
             field = 'auto_{0}'.format(day)
             if field not in api_data:
                 continue
-            loaded_fields.append(field)
             field_dto = ThermostatScheduleDTO(temp_night=api_data[field][0],
                                               start_day_1=api_data[field][1],
                                               end_day_1=api_data[field][2],
@@ -99,7 +97,7 @@ class ThermostatSerializer(object):
                                               end_day_2=api_data[field][5],
                                               temp_day_2=api_data[field][6])
             setattr(thermostat_dto, field, field_dto)
-        return thermostat_dto, loaded_fields
+        return thermostat_dto
 
 
 class ThermostatGroupSerializer(object):
@@ -122,10 +120,9 @@ class ThermostatGroupSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[ThermostatGroupDTO, List[str]]
-        loaded_fields = []
+    def deserialize(api_data):  # type: (Dict) -> ThermostatGroupDTO
         thermostat_group_dto = ThermostatGroupDTO(id=0)
-        loaded_fields += SerializerToolbox.deserialize(
+        SerializerToolbox.deserialize(
             dto=thermostat_group_dto,  # Referenced
             api_data=api_data,
             mapping={'outside_sensor': ('outside_sensor_id', ThermostatGroupSerializer.BYTE_MAX),
@@ -138,14 +135,13 @@ class ThermostatGroupSerializer(object):
                 value_field = 'switch_to_{0}_value_{1}'.format(mode, i)
                 dto_field = 'switch_to_{0}_{1}'.format(mode, i)
                 if output_field in api_data and value_field in api_data:
-                    loaded_fields.append(dto_field)
                     output = Toolbox.nonify(api_data[output_field], ThermostatGroupSerializer.BYTE_MAX)
                     value = api_data[value_field]
                     if output is None:
                         setattr(thermostat_group_dto, dto_field, None)
                     else:
                         setattr(thermostat_group_dto, dto_field, [output, value])
-        return thermostat_group_dto, loaded_fields
+        return thermostat_group_dto
 
 
 class ThermostatGroupStatusSerializer(object):
@@ -189,16 +185,14 @@ class PumpGroupSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[PumpGroupDTO, List[str]]
-        loaded_fields = []
+    def deserialize(api_data):  # type: (Dict) -> PumpGroupDTO
         pump_group_dto = PumpGroupDTO(id=0)
-        loaded_fields += SerializerToolbox.deserialize(
+        SerializerToolbox.deserialize(
             dto=pump_group_dto,  # Referenced
             api_data=api_data,
             mapping={'output': ('pump_output_id', PumpGroupSerializer.BYTE_MAX),
                      'rooom': ('room_id', PumpGroupSerializer.BYTE_MAX)}
         )
         if 'outputs' in api_data:
-            loaded_fields.append('valve_output_ids')
             pump_group_dto.valve_output_ids = [int(output_id) for output_id in api_data['outputs'].split(',')]
-        return pump_group_dto, loaded_fields
+        return pump_group_dto

@@ -17,13 +17,14 @@
 Output DTO
 """
 import time
-from gateway.dto.base import BaseDTO
+from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
     from typing import Any, Optional
 
 
 class VentilationDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, source, external_id='', name='', amount_of_levels=0,
                  device_vendor='', device_type='', device_serial=''):
         self.id = id  # type: int
@@ -50,9 +51,10 @@ class VentilationDTO(BaseDTO):
 
 
 class VentilationSourceDTO(BaseDTO):
-    class Type:
+    class Type(object):
         PLUGIN = 'plugin'
 
+    @capture_fields
     def __init__(self, id, type='', name=''):
         self.id = id  # type: int
         self.type = type  # type: str
@@ -73,10 +75,11 @@ class VentilationSourceDTO(BaseDTO):
 
 class VentilationStatusDTO(BaseDTO):
     STATUS_TIMEOUT = 300  # Seconds until the last status is invalid
-    class Mode:
+    class Mode(object):
         AUTO = 'auto'
         MANUAL = 'manual'
 
+    @capture_fields
     def __init__(self, id, mode, level=None, timer=None, remaining_time=None, last_seen=None):
         # type: (int, str, Optional[int], Optional[float], Optional[float], Optional[float]) -> None
         self.id = id

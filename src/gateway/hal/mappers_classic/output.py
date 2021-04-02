@@ -51,21 +51,21 @@ class OutputMapper(object):
                                                   function=data['can_led_4_function']))
 
     @staticmethod
-    def dto_to_orm(output_dto, fields):  # type: (OutputDTO, List[str]) -> EepromModel
+    def dto_to_orm(output_dto):  # type: (OutputDTO) -> EepromModel
         data = {'id': output_dto.id}
         for dto_field, data_field in {'module_type': 'module_type',
                                       'name': 'name',
                                       'output_type': 'type'}.items():
-            if dto_field in fields:
+            if dto_field in output_dto.loaded_fields:
                 data[data_field] = getattr(output_dto, dto_field)
         for dto_field, (data_field, default) in {'timer': ('timer', OutputMapper.WORD_MAX),
                                                  'floor': ('floor', OutputMapper.BYTE_MAX),
                                                  'lock_bit_id': ('lock_bit_id', OutputMapper.BYTE_MAX)}.items():
-            if dto_field in fields:
+            if dto_field in output_dto.loaded_fields:
                 data[data_field] = Toolbox.denonify(getattr(output_dto, dto_field), default)
         for i in range(4):
             base_field = 'can_led_{0}'.format(i + 1)
-            if base_field in fields:
+            if base_field in output_dto.loaded_fields:
                 id_field = '{0}_id'.format(base_field)
                 function_field = '{0}_function'.format(base_field)
                 data[id_field] = getattr(output_dto, base_field).id

@@ -41,19 +41,19 @@ class SensorSerializerTest(unittest.TestCase):
 
     def test_deserialize(self):
         # Valid room
-        dto, fields = SensorSerializer.deserialize({'id': 5,
-                                                    'name': 'bar',
-                                                    'room': 10})
+        dto = SensorSerializer.deserialize({'id': 5,
+                                            'name': 'bar',
+                                            'room': 10})
         self.assertEqual(SensorDTO(id=5, name='bar', room=10), dto)
-        self.assertEqual(['id', 'name', 'room'], sorted(fields))
+        self.assertEqual(['id', 'name', 'room'], sorted(dto.loaded_fields))
         # Empty room
-        dto, fields = SensorSerializer.deserialize({'id': 5,
-                                                    'name': 'bar',
-                                                    'room': 255})
+        dto = SensorSerializer.deserialize({'id': 5,
+                                            'name': 'bar',
+                                            'room': 255})
         self.assertEqual(SensorDTO(id=5, name='bar'), dto)
-        self.assertEqual(['id', 'name', 'room'], sorted(fields))
+        self.assertEqual(['id', 'name', 'room'], sorted(dto.loaded_fields))
         # No room
-        dto, fields = SensorSerializer.deserialize({'id': 5,
-                                                    'name': 'bar'})
+        dto = SensorSerializer.deserialize({'id': 5,
+                                            'name': 'bar'})
         self.assertEqual(SensorDTO(id=5, name='bar'), dto)
-        self.assertEqual(['id', 'name'], sorted(fields))
+        self.assertEqual(['id', 'name'], sorted(dto.loaded_fields))

@@ -46,7 +46,7 @@ class OutputMapperTest(unittest.TestCase):
         memory_file_mock.read = _read
         memory_file_mock.write = _write
 
-        SetUpTestInjections(memory_files={MemoryTypes.EEPROM: memory_file_mock})
+        SetUpTestInjections(memory_file=memory_file_mock)
 
         # Remove read-only flags from device_type for testing purposes below
         if hasattr(OutputModuleConfiguration, '_device_type'):
@@ -57,8 +57,7 @@ class OutputMapperTest(unittest.TestCase):
     def test_output_mapper_timer(self):
         # Inactive
         orm = OutputMapper.dto_to_orm(OutputDTO(id=0,
-                                                timer=0),
-                                      fields=['timer'])
+                                                timer=0))
         self.assertEqual(OutputConfiguration.TimerType.INACTIVE, orm.timer_type)
         self.assertEqual(0, orm.timer_value)
         dto = OutputMapper.orm_to_dto(OutputConfiguration.deserialize({'id': 0,
@@ -87,8 +86,7 @@ class OutputMapperTest(unittest.TestCase):
                                    module_type='O'), dto)
         # In seconds
         orm = OutputMapper.dto_to_orm(OutputDTO(id=0,
-                                                timer=123),
-                                      fields=['timer'])
+                                                timer=123))
         self.assertEqual(OutputConfiguration.TimerType.PER_1_S, orm.timer_type)
         self.assertEqual(123, orm.timer_value)
         dto = OutputMapper.orm_to_dto(OutputConfiguration.deserialize({'id': 0,

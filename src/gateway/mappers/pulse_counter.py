@@ -34,15 +34,15 @@ class PulseCounterMapper(object):
                                room=None if orm_object.room is None else orm_object.room.number)
 
     @staticmethod
-    def dto_to_orm(pulse_counter_dto, fields):  # type: (PulseCounterDTO, List[str]) -> PulseCounter
+    def dto_to_orm(pulse_counter_dto):  # type: (PulseCounterDTO) -> PulseCounter
         pulse_counter = PulseCounter.get_or_none(number=pulse_counter_dto.id)
         if pulse_counter is None:
             pulse_counter = PulseCounter(number=pulse_counter_dto.id,
                                          name='',
                                          source='gateway',
                                          persistent=False)
-        if 'name' in fields:
+        if 'name' in pulse_counter_dto.loaded_fields:
             pulse_counter.name = pulse_counter_dto.name
-        if 'persistent' in fields:
+        if 'persistent' in pulse_counter_dto.loaded_fields:
             pulse_counter.persistent = pulse_counter_dto.persistent
         return pulse_counter

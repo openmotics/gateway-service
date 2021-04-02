@@ -87,7 +87,7 @@ class MasterController(object):
     def load_inputs(self):  # type: () -> List[InputDTO]
         raise NotImplementedError()
 
-    def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
+    def save_inputs(self, inputs):  # type: (List[InputDTO]) -> None
         raise NotImplementedError()
 
     def get_inputs_with_status(self):
@@ -112,7 +112,7 @@ class MasterController(object):
     def load_outputs(self):  # type: () -> List[OutputDTO]
         raise NotImplementedError()
 
-    def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
+    def save_outputs(self, outputs):  # type: (List[OutputDTO]) -> None
         raise NotImplementedError()
 
     def load_output_status(self):
@@ -136,7 +136,7 @@ class MasterController(object):
     def load_shutters(self):  # type: () -> List[ShutterDTO]
         raise NotImplementedError()
 
-    def save_shutters(self, config):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
+    def save_shutters(self, config):  # type: (List[ShutterDTO]) -> None
         raise NotImplementedError()
 
     def shutter_group_down(self, group_id):
@@ -154,7 +154,7 @@ class MasterController(object):
     def load_shutter_groups(self):  # type: () -> List[ShutterGroupDTO]
         raise NotImplementedError()
 
-    def save_shutter_groups(self, config):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
+    def save_shutter_groups(self, config):  # type: (List[ShutterGroupDTO]) -> None
         raise NotImplementedError()
 
     # Thermostats
@@ -213,7 +213,7 @@ class MasterController(object):
     def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
         raise NotImplementedError()
 
-    def save_heating_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+    def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         raise NotImplementedError()
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
@@ -222,7 +222,7 @@ class MasterController(object):
     def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
         raise NotImplementedError()
 
-    def save_cooling_thermostats(self, thermostats):  # type: (List[Tuple[ThermostatDTO, List[str]]]) -> None
+    def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         raise NotImplementedError()
 
     def get_cooling_pump_group_configuration(self, pump_group_id, fields=None):
@@ -286,7 +286,7 @@ class MasterController(object):
         raise NotImplementedError()
 
     def save_thermostat_group(self, thermostat_group):
-        # type: (Tuple[ThermostatGroupDTO, List[str]]) -> None
+        # type: (ThermostatGroupDTO) -> None
         raise NotImplementedError()
 
     def get_pump_group_configuration(self, pump_group_id, fields=None):
@@ -337,7 +337,7 @@ class MasterController(object):
     def load_sensors(self):  # type: () -> List[SensorDTO]
         raise NotImplementedError()
 
-    def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
+    def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> None
         raise NotImplementedError()
 
     # PulseCounters
@@ -348,7 +348,7 @@ class MasterController(object):
     def load_pulse_counters(self):  # type: () -> List[PulseCounterDTO]
         raise NotImplementedError()
 
-    def save_pulse_counters(self, pulse_counters):  # type: (List[Tuple[PulseCounterDTO, List[str]]]) -> None
+    def save_pulse_counters(self, pulse_counters):  # type: (List[PulseCounterDTO]) -> None
         raise NotImplementedError()
 
     def get_pulse_counter_values(self):  # type: () -> Dict[int, int]
@@ -471,7 +471,7 @@ class MasterController(object):
     def load_group_actions(self):  # type: () -> List[GroupActionDTO]
         raise NotImplementedError()
 
-    def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
+    def save_group_actions(self, group_actions):  # type: (List[GroupActionDTO]) -> None
         raise NotImplementedError()
 
     # Schedule
@@ -521,7 +521,7 @@ class MasterController(object):
         raise NotImplementedError()
 
     def save_global_feedbacks(self, global_feedbacks):
-        # type: (List[Tuple[GlobalFeedbackDTO, List[str]]]) -> None
+        # type: (List[GlobalFeedbackDTO]) -> None
         raise NotImplementedError()
 
     # All lights off

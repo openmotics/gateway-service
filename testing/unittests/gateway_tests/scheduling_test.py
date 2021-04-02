@@ -65,6 +65,7 @@ class BaseSchedulingTest(unittest.TestCase):
         self.test_db.drop_tables(MODELS)
         self.test_db.close()
 
+
 class SchedulingTest(BaseSchedulingTest):
     @classmethod
     def setUpClass(cls):
@@ -166,6 +167,7 @@ class SchedulingTest(BaseSchedulingTest):
             time.sleep(minute)
             self.assertTrue(schedule.is_due)
 
+
 class SchedulingControllerTest(BaseSchedulingTest):
     @staticmethod
     def _get_controller():
@@ -208,7 +210,7 @@ class SchedulingControllerTest(BaseSchedulingTest):
     def test_save_load(self):
         controller = SchedulingControllerTest._get_controller()
         dto = ScheduleDTO(id=None, name='schedule', start=0, action='GROUP_ACTION', arguments=0)
-        controller.save_schedules([(dto, ['name', 'start', 'action', 'arguments'])])
+        controller.save_schedules([dto])
         loaded_dto = controller.load_schedule(schedule_id=1)
         for field in ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']:
             self.assertEqual(getattr(dto, field), getattr(loaded_dto, field))
@@ -308,7 +310,7 @@ class SchedulingControllerTest(BaseSchedulingTest):
         # Normal
         dto = ScheduleDTO(id=None, name='schedule', start=time.time()+5, action='BASIC_ACTION',
                           arguments={'action_type': 1, 'action_number': 2})
-        controller.save_schedules([(dto, ['name', 'start', 'action', 'arguments'])])
+        controller.save_schedules([dto])
         schedules = controller.load_schedules()
         self.assertEqual(1, len(schedules))
         schedule = schedules[0]
@@ -404,13 +406,13 @@ class SchedulingControllerTest(BaseSchedulingTest):
         # Make a scheduleController object
         controller = SchedulingControllerTest._get_controller()
         scheduledto = ScheduleDTO(id=1,
-                               name='schedule',
-                               start=0,  # Thursday, January 1, 1970 1:03:20 AM
-                               repeat='* * * * *',  # every minute
-                               duration=None,
-                               action='GROUP_ACTION',
-                               arguments=1,
-                               status='ACTIVE')
+                                  name='schedule',
+                                  start=0,  # Thursday, January 1, 1970 1:03:20 AM
+                                  repeat='* * * * *',  # every minute
+                                  duration=None,
+                                  action='GROUP_ACTION',
+                                  arguments=1,
+                                  status='ACTIVE')
         scheduledto.next_execution = 56828400  # 1990
         # Manualy set the next_exec to avoid reloading the schedules
         controller._schedules[1] = scheduledto, None
@@ -424,7 +426,8 @@ class SchedulingControllerTest(BaseSchedulingTest):
     @staticmethod
     def _add_schedule(controller, **kwargs):
         dto = ScheduleDTO(id=None, **kwargs)
-        controller.save_schedules([(dto, list(kwargs.keys()))])
+        controller.save_schedules([dto])
+
 
 if __name__ == "__main__":
     unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))

@@ -17,7 +17,7 @@
 HeatingThermostat DTO
 """
 
-from gateway.dto.base import BaseDTO
+from gateway.dto.base import BaseDTO, capture_fields
 from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
 
 if False:
@@ -25,6 +25,7 @@ if False:
 
 
 class ThermostatDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id,
                  name='', permanent_manual=False,
                  setp0=None, setp1=None, setp2=None, setp3=None, setp4=None, setp5=None,
@@ -94,6 +95,7 @@ class ThermostatDTO(BaseDTO):
 
 
 class ThermostatGroupDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, outside_sensor_id=None, pump_delay=None, threshold_temperature=None,
                  switch_to_heating_0=None, switch_to_heating_1=None, switch_to_heating_2=None, switch_to_heating_3=None,
                  switch_to_cooling_0=None, switch_to_cooling_1=None, switch_to_cooling_2=None, switch_to_cooling_3=None):
@@ -128,6 +130,7 @@ class ThermostatGroupDTO(BaseDTO):
 
 
 class ThermostatStatusDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, actual_temperature, setpoint_temperature, automatic, setpoint, sensor_id, mode,
                  outside_temperature=None, name='', airco=None, output_0_level=None, output_1_level=None):
         # type: (int, float, float, bool, int, int, int, Optional[float], str, Optional[int], Optional[int], Optional[int]) -> None
@@ -162,6 +165,7 @@ class ThermostatStatusDTO(BaseDTO):
 
 
 class ThermostatGroupStatusDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, on, automatic, cooling, setpoint=None, statusses=None):
         # type: (int, bool, bool, bool, Optional[int], Optional[List[ThermostatStatusDTO]]) -> None
         self.id = id
@@ -183,6 +187,7 @@ class ThermostatGroupStatusDTO(BaseDTO):
 
 
 class ThermostatAircoStatusDTO(BaseDTO):
+    @capture_fields
     def __init__(self, status):
         # type: (Dict[int, bool]) -> None
         self.status = status
@@ -194,6 +199,7 @@ class ThermostatAircoStatusDTO(BaseDTO):
 
 
 class PumpGroupDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, pump_output_id=None, valve_output_ids=None, room_id=None):
         # type: (int, Optional[int], Optional[List[int]], Optional[int]) -> None
         self.id = id

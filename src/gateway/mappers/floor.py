@@ -32,10 +32,10 @@ class FloorMapper(object):
                         name=orm_object.name)
 
     @staticmethod
-    def dto_to_orm(floor_dto, fields):  # type: (FloorDTO, List[str]) -> Floor
+    def dto_to_orm(floor_dto):  # type: (FloorDTO) -> Floor
         floor = Floor.get_or_none(number=floor_dto.id)
         if floor is None:
             floor = Floor(number=floor_dto.id)
-        if 'name' in fields:
+        if 'name' in floor_dto.loaded_fields:
             floor.name = floor_dto.name
         return floor
