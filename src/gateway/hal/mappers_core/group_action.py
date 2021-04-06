@@ -50,26 +50,7 @@ class GroupActionMapper(object):
         for action in actions:
             # This mapping is based on the comments in the function below, since mapping back often only makes sense
             # for calls that can be mapped forward as well. It has some extras though.
-            if action.action_type == 19:
-                if action.action == 0:
-                    classic_actions += [2, action.device_nr]
-            elif action.action_type == 1:
-                if action.action == 0:
-                    classic_actions += [68, action.device_nr]
-                elif action.action == 1:
-                    classic_actions += [69, action.device_nr]
-            elif action.action_type == 253:
-                if action.action == 0:
-                    classic_actions += [72, 255]
-                elif action.action == 1:
-                    classic_actions += [75 if action.device_nr else 76, 255]
-            elif action.action_type == 10:
-                if 0 <= action.action <= 5:
-                    if action.device_nr <= 255:
-                        classic_actions += [{0: 102, 1: 100, 2: 101, 3: 108, 4: 109, 5: 103}[action.action], action.device_nr]
-                    else:
-                        classic_actions += [{0: 106, 1: 104, 2: 105, 3: 110, 4: 111, 5: 107}[action.action], action.device_nr - 256]
-            elif action.action_type == 0:
+            if action.action_type == 0:
                 if action.action in [0, 1, 16]:
                     classic_actions += [{0: 160, 1: 161, 16: 162}[action.action], action.device_nr]
                 elif action.action == 255:
@@ -87,6 +68,22 @@ class GroupActionMapper(object):
                             value = map_0[action.action][key]
                     if value is not None:
                         classic_actions += [value, action.device_nr]
+            elif action.action_type == 1:
+                if action.action == 0:
+                    classic_actions += [68, action.device_nr]
+                elif action.action == 1:
+                    classic_actions += [69, action.device_nr]
+            elif action.action_type == 10:
+                if 0 <= action.action <= 5:
+                    if action.device_nr <= 255:
+                        classic_actions += [{0: 102, 1: 100, 2: 101, 3: 108, 4: 109, 5: 103}[action.action], action.device_nr]
+                    else:
+                        classic_actions += [{0: 106, 1: 104, 2: 105, 3: 110, 4: 111, 5: 107}[action.action], action.device_nr - 256]
+            elif action.action_type == 19:
+                if action.action == 0:
+                    classic_actions += [2, action.device_nr]
+            elif action.action_type == 80:
+                classic_actions += [{0: 238, 1: 237, 2: 239}[action.action], action.device_nr]
             elif action.action_type == 100:
                 map_100_0 = {0: 0, 90: 1, 91: 2, 150: 10, 200: 20, 255: 255}
                 map_100_1 = {10: 243, 11: 244, 12: 241, 13: 242, 14: 245, 15: 246}
@@ -94,6 +91,11 @@ class GroupActionMapper(object):
                     classic_actions += [240, map_100_0[action.action]]
                 elif action.action in map_100_1:
                     classic_actions += [map_100_1[action.action], action.device_nr]
+            elif action.action_type == 253:
+                if action.action == 0:
+                    classic_actions += [72, 255]
+                elif action.action == 1:
+                    classic_actions += [75 if action.device_nr else 76, 255]
             elif action.action_type == 254:
                 if action.action == 0:
                     classic_actions += [254, 255]
@@ -293,9 +295,15 @@ class GroupActionMapper(object):
                 raise ValueError('Cannot convert multi-instructions')
             # 235: Delay all next instructions with x seconds (x>0 and <249), x=255 -> All next instruction will be executed normally (see #Delaying Instructions and see BA79)
             # 236: Execute all next actions at button release (x=0), x=255 -> All next instructions will be executed normally (see #Additional Actions)
-            # 237: Set the freely assigned validation bit x to 1 (x=0 to 255)
-            # 238: Set the freely assigned validation bit x to 0 (x=0 to 255)
-            # 239: Toggle the freely assigned validation bit x (x=0 to 255)
+            elif action_type == 237:
+                # 237: Set the freely assigned validation bit x to 1 (x=0 to 255)
+                actions.append(BasicAction(action_type=80, action=1, device_nr=action_number))
+            elif action_type == 238:
+                # 238: Set the freely assigned validation bit x to 0 (x=0 to 255)
+                actions.append(BasicAction(action_type=80, action=0, device_nr=action_number))
+            elif action_type == 239:
+                # 239: Toggle the freely assigned validation bit x (x=0 to 255)
+                actions.append(BasicAction(action_type=80, action=2, device_nr=action_number))
             elif action_type == 240:
                 # 240: IF THEN ELSE ENDIF
                 if action_number == 0:  # X=0 -> IF
