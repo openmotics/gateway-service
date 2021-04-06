@@ -47,6 +47,14 @@ class Event(object):
         STATUS = 'STATUS'
         LOCKING = 'LOCKING'
 
+    class UCANEventTypes(object):
+        POWER_OUT_ERROR = 'POWER_OUT_ERROR'
+        POWER_OUT_RESTORED = 'POWER_OUT_RESTORED'
+        POWER_OUT_ON = 'POWER_OUT_ON'
+        POWER_OUT_OFF = 'POWER_OUT_OFF'
+        I2C_ERROR = 'I2C_ERROR'
+        UNKNOWN = 'UNKNOWN'
+
     class SensorType(object):
         TEMPERATURE = 'TEMPERATURE'
         HUMIDITY = 'HUMIDITY'
@@ -209,8 +217,22 @@ class Event(object):
                 event_data['temperature'] = self._data[0]
             return event_data
         if self.type == Event.Types.UCAN:
-            return {'address': self._address_helper.decode(bytearray([self._device_nr & 0xFF]) + self._data[0:2]),
-                    'data': self._data[2:4]}
+            event_data = {'address': self._address_helper.decode(bytearray([self._device_nr & 0xFF]) + self._data[0:2])}
+            if self._data[2] == 0 and self._data[3] == 0:
+                event_data['type'] = Event.UCANEventTypes.POWER_OUT_ERROR
+            elif self._data[2] == 0 and self._data[3] == 1:
+                event_data['type'] = Event.UCANEventTypes.POWER_OUT_RESTORED
+            elif self._data[2] == 0 and self._data[3] == 2:
+                event_data['type'] = Event.UCANEventTypes.POWER_OUT_OFF
+            elif self._data[2] == 2 and self._data[3] == 3:
+                event_data['type'] = Event.UCANEventTypes.POWER_OUT_ON
+            elif self._data[2] == 1:
+                event_data.update({'type': Event.UCANEventTypes.I2C_ERROR,
+                                   'i2c_address': self._data[3]})
+            else:
+                event_data.update({'type': Event.UCANEventTypes.UNKNOWN,
+                                   'data': self._data[2:4]})
+            return event_data
         if self.type == Event.Types.EXECUTED_BA:
             return {'basic_action': BasicAction(action_type=self._data[0],
                                                 action=self._data[1],
