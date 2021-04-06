@@ -265,14 +265,16 @@ class SchedulingControllerTest(BaseSchedulingTest):
 
         # Normal
         SchedulingControllerTest._add_schedule(controller,
-                                               name='schedule', start=time.time()+5, action='GROUP_ACTION', arguments=1)
+                                               name='schedule', start=time.time()+0.5, action='GROUP_ACTION', arguments=1)
         schedules = controller.load_schedules()
         self.assertEqual(1, len(schedules))
         schedule = schedules[0]
         self.assertEqual('schedule', schedule.name)
         self.assertEqual('ACTIVE', schedule.status)
-        controller.start()
-        time.sleep(0.5)
+
+        controller.start(0.5)  # Set the interval of the DaemonThread really low
+        while schedule.last_executed is None:
+            time.sleep(0.1)
         controller.stop()
         schedule = controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)
@@ -306,7 +308,7 @@ class SchedulingControllerTest(BaseSchedulingTest):
         self.assertEqual(invalid_arguments_error, str(ctx.exception))
 
         # Normal
-        dto = ScheduleDTO(id=None, name='schedule', start=time.time()+5, action='BASIC_ACTION',
+        dto = ScheduleDTO(id=None, name='schedule', start=time.time()+0.5, action='BASIC_ACTION',
                           arguments={'action_type': 1, 'action_number': 2})
         controller.save_schedules([(dto, ['name', 'start', 'action', 'arguments'])])
         schedules = controller.load_schedules()
@@ -314,8 +316,9 @@ class SchedulingControllerTest(BaseSchedulingTest):
         schedule = schedules[0]
         self.assertEqual('schedule', schedule.name)
         self.assertEqual('ACTIVE', schedule.status)
-        controller.start()
-        time.sleep(0.5)
+        controller.start(0.5)
+        while schedule.last_executed is None:
+            time.sleep(0.1)
         controller.stop()
         schedule = controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)
@@ -364,7 +367,7 @@ class SchedulingControllerTest(BaseSchedulingTest):
 
         # Normal
         SchedulingControllerTest._add_schedule(controller,
-                                               name='schedule', start=time.time()+5, action='LOCAL_API',
+                                               name='schedule', start=time.time()+0.5, action='LOCAL_API',
                                                arguments={'name': 'do_basic_action',
                                                           'parameters': {'action_type': 3,
                                                                          'action_number': 4}})
@@ -373,8 +376,9 @@ class SchedulingControllerTest(BaseSchedulingTest):
         schedule = schedules[0]
         self.assertEqual('schedule', schedule.name)
         self.assertEqual('ACTIVE', schedule.status)
-        controller.start()
-        time.sleep(0.5)
+        controller.start(0.5)
+        while schedule.last_executed is None:
+            time.sleep(0.1)
         controller.stop()
         schedule = controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)

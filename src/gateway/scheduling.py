@@ -124,11 +124,11 @@ class SchedulingController(object):
         Schedule.delete().where(Schedule.id.in_([s.id for s in schedules])).execute()
         self.reload_schedules()
 
-    def start(self):
+    def start(self, custom_interval=30):  # Adding custom interval to pass the tests faster
         self._stop = False
         self._processor = DaemonThread(target=self._process,
                                        name='schedulingctl',
-                                       interval=30)
+                                       interval=custom_interval)
         self._processor.start()
 
     def stop(self):
