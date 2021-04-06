@@ -85,12 +85,24 @@ class GroupActionMapper(object):
             elif action.action_type == 80:
                 classic_actions += [{0: 238, 1: 237, 2: 239}[action.action], action.device_nr]
             elif action.action_type == 100:
-                map_100_0 = {0: 0, 90: 1, 91: 2, 150: 10, 200: 20, 255: 255}
-                map_100_1 = {10: 243, 11: 244, 12: 241, 13: 242, 14: 245, 15: 246}
-                if action.action in map_100_0:
-                    classic_actions += [240, map_100_0[action.action]]
-                elif action.action in map_100_1:
-                    classic_actions += [map_100_1[action.action], action.device_nr]
+                map_100 = {0: 0, 90: 1, 91: 2, 150: 10, 200: 20, 255: 255}
+                if action.action in map_100:
+                    classic_actions += [240, map_100[action.action]]
+                map_100 = {10: 243, 11: 244, 12: 241, 13: 242, 14: 245, 15: 246}
+                if action.action in map_100:
+                    classic_actions += [map_100[action.action], action.device_nr]
+                map_100_t = {19: (249, 0), 20: (248, 0), 21: (250, 0),
+                             22: (249, 32), 23: (248, 32), 24: (250, 32),
+                             25: (249, 64), 26: (248, 64), 27: (250, 64)}
+                if action.action in map_100_t:
+                    classic_actions += [247, action.device_nr + map_100_t[action.action][1],
+                                        map_100_t[action.action][0], action.extra_parameter]
+                map_100_t = {40: (249, 228), 31: (248, 228), 42: (250, 228),
+                             43: (249, 229), 44: (248, 229), 45: (250, 229),
+                             46: (249, 230), 47: (249, 230), 48: (250, 230)}
+                if action.action in map_100_t:
+                    classic_actions += [247, map_100_t[action.action][1],
+                                        map_100_t[action.action][0], action.device_nr]
             elif action.action_type == 253:
                 if action.action == 0:
                     classic_actions += [72, 255]
@@ -109,6 +121,12 @@ class GroupActionMapper(object):
         for i in range(0, len(classic_actions), 2):
             action_type = classic_actions[i]
             action_number = classic_actions[i + 1]
+            next_action_type = None  # type: Optional[int]
+            next_action_number = None  # type: Optional[int]
+            if len(classic_actions) > i + 2:
+                next_action_type = classic_actions[i + 2]
+                next_action_number = classic_actions[i + 3]
+
             #   0: Simple Action (Old instruction set, please do not use anymore)
             #   1: Simple Decision, ignore THEN/ELSE action, ignore previous decision (Old instruction set, please do not use anymore)
             if action_type == 2:
@@ -339,13 +357,48 @@ class GroupActionMapper(object):
             elif action_type == 246:
                 # 246: Check if Validation bit x is OFF (To be used with IF THEN ELSE instruction)
                 actions.append(BasicAction(action_type=100, action=15, device_nr=action_number))
-            elif 247 <= action_type <= 250:
-                # TODO: Need multi instruction parsing
+            elif action_type == 247:
                 # 247: Check if temperature sensor 0-31 (x=0-31) or if humidity sensor 0-31 (x=32-63) or if light sensor 0-31 (x=64-95) or if temperature setpoint 0-23 (x=96-119) or if free variable 0-31 (x=128-159) or if time hour (x=228) or if time minute (x=229) or if day (x=230) is or if thermostat mode (x=235)  (always to be followed by action type 248 or 249 or 250) (see #Additional Input Values). All environmental parameters are written in System Value
+                if next_action_type not in [248, 249, 250] or next_action_number is None:
+                    raise ValueError('Action type 247 must be followed by action type 248, 249 or 250')
                 # 248: is equal to x (to be used always with action type 247) (see #Additional Input Values)
                 # 249: is higher than x (to be used always with action type 247) (see #Additional Input Values)
                 # 250: is lower than x (to be used always with action type 247) (see #Additional Input Values)
-                raise ValueError('Cannot convert multi-instructions')
+                extra_parameter = None  # type: Optional[int]
+                if action_number < 32:
+                    # ... if temperature sensor 0-31 (x=0-31)
+                    action_map = {248: 20, 249: 19, 250: 21}
+                    device_nr = action_number
+                    extra_parameter = next_action_number
+                elif action_number < 64:
+                    # ... if humidity sensor 0-31 (x=32-63)
+                    action_map = {248: 23, 249: 22, 250: 24}
+                    device_nr = action_number - 32
+                    extra_parameter = next_action_number
+                elif action_number < 96:
+                    # ... if light sensor 0-31 (x=64-95)
+                    action_map = {248: 26, 249: 25, 250: 27}
+                    device_nr = action_number - 64
+                    extra_parameter = next_action_number
+                elif action_number == 228:
+                    # ... if time hour (x=228)
+                    action_map = {248: 41, 249: 40, 250: 42}
+                    device_nr = next_action_number
+                elif action_number == 229:
+                    # ... if time minute (x=229)
+                    action_map = {248: 44, 249: 43, 250: 45}
+                    device_nr = next_action_number
+                elif action_number == 230:
+                    # ... if day (x=230)
+                    action_map = {248: 47, 249: 46, 250: 48}
+                    device_nr = next_action_number
+                else:
+                    # ... if temperature setpoint 0-23 (x=96-119)
+                    # ... if free variable 0-31 (x=128-159)
+                    # ... if thermostat mode (x=235)
+                    raise ValueError('Cannot convert comparison')
+                actions.append(BasicAction(action_type=100, action=action_map[next_action_type],
+                                           device_nr=device_nr, extra_parameter=extra_parameter))
             elif action_type == 254:
                 # 254: Reset the Master
                 actions.append(BasicAction(action_type=254, action=0))
