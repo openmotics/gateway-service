@@ -103,6 +103,9 @@ class GroupActionMapper(object):
                 if action.action in map_100_t:
                     classic_actions += [247, map_100_t[action.action][1],
                                         map_100_t[action.action][0], action.device_nr]
+            elif action.action_type == 251:
+                if action.action == 0:
+                    classic_actions += [{0: 171, 1: 172, 2: 173}[action.extra_parameter], min(255, action.device_nr)]
             elif action.action_type == 253:
                 if action.action == 0:
                     classic_actions += [72, 255]
@@ -254,9 +257,13 @@ class GroupActionMapper(object):
             elif action_type == 170:
                 # 170: Set Dimmer value x at maximum (leaving the output at the current state)
                 actions.append(BasicAction(action_type=0, action=9, device_nr=action_number, extra_parameter=255))
-            # 171: All lights OFF of a certain floor level or group (x=floor level or group, x=0..254, when x=255 then all lights are selected)
-            # 172: All lights ON of a certain floor level or group (x=floor level or group, x=0..254, when x=255 then all lights are selected)
-            # 173: Toggle all lights of a certain floor or group (x=floor level or group, x=0..254, when x=255 then all lights are selected), see #Toggling a Floor
+            elif action_type in [171, 172, 173]:
+                # 171: All lights OFF of a certain floor level or group (x=floor level or group, x=0..254, when x=255 then all lights are selected)
+                # 172: All lights ON of a certain floor level or group (x=floor level or group, x=0..254, when x=255 then all lights are selected)
+                # 173: Toggle all lights of a certain floor or group (x=floor level or group, x=0..254, when x=255 then all lights are selected), see #Toggling a Floor
+                device_nr = action_number if action_number != 255 else 65535
+                actions.append(BasicAction(action_type=251, action=0, device_nr=device_nr,
+                                           extra_parameter={171: 0, 172: 1, 173: 2}[action_type]))
             # 174: Toggle Follow function ON (see #Toggling Lights), action number not used but must be < 240
             # 175: Toggle Follow function OFF (see #Toggling Lights), action number not used but must be < 240
             elif 176 <= action_type <= 184:

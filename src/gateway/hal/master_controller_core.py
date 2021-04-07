@@ -147,6 +147,24 @@ class MasterCoreController(MasterController):
             if sensor_id not in self._sensor_states:
                 return
             self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
+        elif core_event.type == MasterCoreEvent.Types.OFFLOAD_TO_GATEWAY:
+            self._handle_offload_event(action=core_event.data['action'],
+                                       device_nr=core_event.data['device_nr'],
+                                       extra_parameter=core_event.data['extra_parameter'])
+
+    def _handle_offload_event(self, action, device_nr, extra_parameter):  # type: (int, int, int) -> None
+        if action == 0:
+            if extra_parameter not in [0, 1, 2]:
+                return
+            floor_id = None  # type: Optional[int]
+            if device_nr != 65535:
+                floor_id = device_nr
+            event_action = {0: 'OFF', 1: 'ON', 2: 'TOGGLE'}[extra_parameter]
+            self._pubsub.publish_master_event(topic=PubSub.MasterTopics.OUTPUT,
+                                              master_event=MasterEvent(event_type=MasterEvent.Types.OFFLOAD_TO_GATEWAY,
+                                                                       data={'type': MasterEvent.OffloadTypes.SET_LIGHTS,
+                                                                             'data': {'action': event_action,
+                                                                                      'floor_id': floor_id}}))
 
     def _handle_output_state(self, output_id, state_dto):
         # type: (int, OutputStateDTO) -> None
@@ -1143,19 +1161,42 @@ class MasterCoreController(MasterController):
     def set_status_leds(self, status):
         raise NotImplementedError()
 
-    def set_all_lights_off(self):
-        # type: () -> None
-        self._master_communicator.do_basic_action(BasicAction(action_type=0,
-                                                              action=255,
-                                                              device_nr=1))
+    # All lights actions
 
-    def set_all_lights_floor_off(self, floor):
-        # type: (int) -> None
-        raise NotImplementedError()
+    def set_all_lights(self, action):  # type: (Literal['ON', 'OFF', 'TOGGLE']) -> None
+        if action == 'OFF':
+            self._master_communicator.do_basic_action(BasicAction(action_type=0,
+                                                                  action=255,
+                                                                  device_nr=1))
+            return
 
-    def set_all_lights_floor_on(self, floor):
-        # type: (int) -> None
-        raise NotImplementedError()
+        output_ids = list(self._enumerate_io_modules('output'))
+        self.set_all_lights_floor(action=action,
+                                  floor_id=0,  # Not used in the MasterCoreController
+                                  output_ids=output_ids)
+
+    def set_all_lights_floor(self, action, floor_id, output_ids):  # type: (Literal['ON', 'OFF', 'TOGGLE'], int, List[int]) -> None
+        _ = floor_id  # Ignored, the Core Master does not know about floors
+        ba_action = {'ON': 1, 'OFF': 0, 'TOGGLE': 16}[action]
+
+        # Filter the given ids as the caller might not know about the output type at this moment
+        filtered_output_ids = []
+        for output_id in output_ids:
+            output = OutputConfiguration(output_id)
+            if not output.is_shutter and output.output_type >= 128:
+                filtered_output_ids.append(output.id)
+
+        # Execute action in batch; either a single BA (for 1 device) or a BA series (for 2 to 40 devices)
+        for i in range(0, len(output_ids), 40):
+            chunk_output_ids = output_ids[i:i + 40]
+            if len(chunk_output_ids) == 1:
+                self._master_communicator.do_basic_action(BasicAction(action_type=0,
+                                                                      action=ba_action,
+                                                                      device_nr=chunk_output_ids[0]))
+            else:
+                self._master_communicator.do_command(command=CoreAPI.execute_basic_action_series(len(chunk_output_ids)),
+                                                     fields={'type': 0, 'action': ba_action, 'extra_parameter': 0,
+                                                             'device_nrs': chunk_output_ids})
 
     def get_configuration_dirty_flag(self):
         return False  # TODO: Implement

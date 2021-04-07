@@ -689,19 +689,19 @@ class WebInterface(object):
     @openmotics_api(auth=True)
     def set_all_lights_off(self):
         """ Turn all lights off. """
-        self._output_controller.set_all_lights_off()
+        self._output_controller.set_all_lights_floor(action='OFF')
         return {}
 
     @openmotics_api(auth=True, check=types(floor=int))
     def set_all_lights_floor_off(self, floor):
         """ Turn all lights on a given floor off. """
-        self._output_controller.set_all_lights_floor_off(floor)
+        self._output_controller.set_all_lights_floor(action='OFF', floor_id=floor)
         return {}
 
     @openmotics_api(auth=True, check=types(floor=int))
     def set_all_lights_floor_on(self, floor):
         """ Turn all lights on a given floor on. """
-        self._output_controller.set_all_lights_floor_on(floor)
+        self._output_controller.set_all_lights_floor(action='ON', floor_id=floor)
         return {}
 
     @openmotics_api(auth=True)

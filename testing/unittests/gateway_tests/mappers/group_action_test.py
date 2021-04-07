@@ -39,7 +39,13 @@ class GroupActionCoreMapperTest(unittest.TestCase):
                      ([240, 0, 247, 69, 250, 10, 240, 255], [(100, 0), (100, 27, 5, 10), (100, 255)]),  # If brightness sensor 5 < 10
                      ([240, 0, 247, 228, 249, 10, 240, 255], [(100, 0), (100, 40, 10), (100, 255)]),  # If hour > 10
                      ([240, 0, 247, 229, 248, 10, 240, 255], [(100, 0), (100, 44, 10), (100, 255)]),  # If minutes == 10
-                     ([240, 0, 247, 230, 250, 3, 240, 255], [(100, 0), (100, 48, 3), (100, 255)])]  # If day < 3
+                     ([240, 0, 247, 230, 250, 3, 240, 255], [(100, 0), (100, 48, 3), (100, 255)]),  # If day < 3
+                     ([171, 5], [(251, 0, 5, 0)]),  # Turn off all lights on floor 5
+                     ([172, 5], [(251, 0, 5, 1)]),  # Turn on all lights on floor 5
+                     ([173, 5], [(251, 0, 5, 2)]),   # Toggle all lights on floor 5
+                     ([171, 255], [(251, 0, 65535, 0)]),  # Turn off all lights (on all floors)
+                     ([172, 255], [(251, 0, 65535, 1)]),  # Turn on all lights (on all floors)
+                     ([173, 255], [(251, 0, 65535, 2)])]  # Toggle all lights (on all floors)
         for classic, core in scenarios:
             core_expected = [BasicAction(*entry) for entry in core]
             core_result = GroupActionMapper.classic_actions_to_core_actions(classic)

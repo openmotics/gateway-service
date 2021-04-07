@@ -25,12 +25,12 @@ from gateway.events import GatewayEvent
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_controller import MaintenanceController
-from gateway.models import Output, Room
+from gateway.models import Output, Room, Floor
 from gateway.output_controller import OutputController, OutputStateCache
 from gateway.pubsub import PubSub
 from ioc import SetTestMode, SetUpTestInjections
 
-MODELS = [Output]
+MODELS = [Output, Room, Floor]
 
 
 class OutputControllerTest(unittest.TestCase):
@@ -191,15 +191,23 @@ class OutputControllerTest(unittest.TestCase):
             load.assert_called_with(output_id=42)
 
     def test_output_actions(self):
-        with mock.patch.object(self.master_controller, 'set_all_lights_off') as call:
-            self.controller.set_all_lights_off()
+        floor = Floor.create(number=5)
+        room = Room.create(number=10, floor=floor)
+        Output.create(number=2, room=room)
+        Output.create(number=3)
+
+        with mock.patch.object(self.master_controller, 'set_all_lights') as call:
+            self.controller.set_all_lights_floor(action='OFF')
             call.assert_called_once()
-        with mock.patch.object(self.master_controller, 'set_all_lights_floor_off') as call:
-            self.controller.set_all_lights_floor_off(1)
-            call.assert_called_once_with(floor=1)
-        with mock.patch.object(self.master_controller, 'set_all_lights_floor_on') as call:
-            self.controller.set_all_lights_floor_on(1)
-            call.assert_called_once_with(floor=1)
+        with mock.patch.object(self.master_controller, 'set_all_lights_floor') as call:
+            self.controller.set_all_lights_floor(action='OFF', floor_id=1)
+            call.assert_called_once_with(action='OFF', floor_id=1, output_ids=[])
+        with mock.patch.object(self.master_controller, 'set_all_lights_floor') as call:
+            self.controller.set_all_lights_floor(action='OFF', floor_id=5)
+            call.assert_called_once_with(action='OFF', floor_id=5, output_ids=[2])
+        with mock.patch.object(self.master_controller, 'set_all_lights_floor') as call:
+            self.controller.set_all_lights_floor(action='ON', floor_id=5)
+            call.assert_called_once_with(action='ON', floor_id=5, output_ids=[2])
 
 
 class OutputStateCacheTest(unittest.TestCase):

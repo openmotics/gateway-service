@@ -40,6 +40,12 @@ class MasterEvent(object):
       {'id': int,                     # Input ID
        'status': bool,                # Pressed or not
        'location': {'room_id': int}}  # Room ID
+    * OFFLOAD_TO_GATEWAY
+      {'type': str,                   # OffloadTypes
+       'data': {...}}
+      * SET_LIGHTS
+        {'action': 'ON/OFF/TOGGLE',
+         'floor_id': Optional[int]}
     """
 
     class Types(object):
@@ -51,6 +57,10 @@ class MasterEvent(object):
         OUTPUT_CHANGE = 'OUTPUT_CHANGE'
         OUTPUT_STATUS = 'OUTPUT_STATUS'
         SHUTTER_CHANGE = 'SHUTTER_CHANGE'
+        OFFLOAD_TO_GATEWAY = 'OFFLOAD_TO_GATEWAY'
+
+    class OffloadTypes(object):
+        SET_LIGHTS = 'SET_LIGHTS'
 
     def __init__(self, event_type, data):
         # type: (str, Dict[str,Any]) -> None
