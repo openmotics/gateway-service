@@ -274,7 +274,7 @@ class SchedulingControllerTest(BaseSchedulingTest):
 
         controller.start(0.5)  # Set the interval of the DaemonThread really low
         while schedule.last_executed is None:
-            time.sleep(0.1)
+            time.sleep(0.1)  # Wait until the schedule has been executed
         controller.stop()
         schedule = controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)
@@ -316,9 +316,9 @@ class SchedulingControllerTest(BaseSchedulingTest):
         schedule = schedules[0]
         self.assertEqual('schedule', schedule.name)
         self.assertEqual('ACTIVE', schedule.status)
-        controller.start(0.5)
+        controller.start(0.5)  # Set the interval of the DaemonThread really low
         while schedule.last_executed is None:
-            time.sleep(0.1)
+            time.sleep(0.1)  # Wait until the schedule has been executed
         controller.stop()
         schedule = controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)
@@ -376,9 +376,9 @@ class SchedulingControllerTest(BaseSchedulingTest):
         schedule = schedules[0]
         self.assertEqual('schedule', schedule.name)
         self.assertEqual('ACTIVE', schedule.status)
-        controller.start(0.5)
+        controller.start(0.5)  # Set the interval of the DaemonThread really low
         while schedule.last_executed is None:
-            time.sleep(0.1)
+            time.sleep(0.1)  # Wait until the schedule has been executed
         controller.stop()
         schedule = controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)
