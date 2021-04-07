@@ -28,14 +28,14 @@ from gateway.dto import OutputDTO, OutputStateDTO, GlobalFeedbackDTO
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
-from gateway.models import Output, Room
+from gateway.models import Output, Room, Floor
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Dict, List, Optional, Tuple
+    from typing import Dict, List, Optional, Tuple, Literal
     from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger('openmotics')
@@ -74,11 +74,13 @@ class OutputController(BaseController):
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
         super(OutputController, self)._handle_master_event(master_event)
-        if master_event.type == MasterEvent.Types.MODULE_DISCOVERY:
-            if self._sync_state_thread:
-                self._sync_state_thread.request_single_run()
         if master_event.type == MasterEvent.Types.OUTPUT_STATUS:
             self._handle_output_status(master_event.data['state'])
+        if master_event.type == MasterEvent.Types.EXECUTE_GATEWAY_API:
+            if master_event.data['type'] == MasterEvent.APITypes.SET_LIGHTS:
+                action = master_event.data['data']['action']  # type: Literal['ON', 'OFF', 'TOGGLE']
+                floor_id = master_event.data['data']['floor_id']  # type: Optional[int]
+                self.set_all_lights(action=action, floor_id=floor_id)
 
     def _handle_output_status(self, state_dto):
         # type: (OutputStateDTO) -> None
@@ -159,17 +161,24 @@ class OutputController(BaseController):
             outputs_to_save.append(output_dto)
         self._master_controller.save_outputs(outputs_to_save)
 
-    def set_all_lights_off(self):
-        # type: () -> None
-        return self._master_controller.set_all_lights_off()
+    def set_all_lights(self, action, floor_id=None):  # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int]) -> None
+        # TODO: Also include other sources (e.g. plugins) once implemented
+        if floor_id is None:
+            self._master_controller.set_all_lights(action=action)
+            return
 
-    def set_all_lights_floor_off(self, floor):
-        # type: (int) -> None
-        return self._master_controller.set_all_lights_floor_off(floor=floor)
+        # TODO: Filter on output type "light" once available
+        query = Output.select(Output.number) \
+                      .join_from(Output, Room, join_type=JOIN.INNER) \
+                      .join_from(Room, Floor, join_type=JOIN.INNER) \
+                      .where(Floor.number == floor_id)
+        output_ids = [output['number'] for output in query.dicts()]
 
-    def set_all_lights_floor_on(self, floor):
-        # type: (int) -> None
-        return self._master_controller.set_all_lights_floor_on(floor=floor)
+        # It is unknown whether `floor` is known to the Master implementation. So pass both the floor_id
+        # and the list of Output ids to the MasterController
+        self._master_controller.set_all_lights(action=action,
+                                               floor_id=floor_id,
+                                               output_ids=output_ids)
 
     def set_output_status(self, output_id, is_on, dimmer=None, timer=None):
         # type: (int, bool, Optional[int], Optional[int]) -> None

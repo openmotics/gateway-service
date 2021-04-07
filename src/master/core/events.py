@@ -41,6 +41,7 @@ class Event(object):
         LED_ON = 'LED_ON'
         LED_BLINK = 'LED_BLINK'
         UCAN = 'UCAN'
+        EXECUTE_GATEWAY_API = 'EXECUTE_GATEWAY_API'
         UNKNOWN = 'UNKNOWN'
 
     class OutputEventTypes(object):
@@ -131,6 +132,7 @@ class Event(object):
                     20: Event.Types.THERMOSTAT,
                     21: Event.Types.UCAN,
                     22: Event.Types.EXECUTED_BA,
+                    249: Event.Types.EXECUTE_GATEWAY_API,
                     250: Event.Types.BUTTON_PRESS,
                     251: Event.Types.LED_BLINK,
                     252: Event.Types.LED_ON,
@@ -238,6 +240,10 @@ class Event(object):
                                                 action=self._data[1],
                                                 device_nr=self._device_nr,
                                                 extra_parameter=self._word_decode(self._data[2:4]))}
+        if self.type == Event.Types.EXECUTE_GATEWAY_API:
+            return {'action': self._data[3],
+                    'device_nr': self._device_nr,
+                    'extra_parameter': self._word_decode(self._data[0:2])}
         return None
 
     def _word_decode(self, data):  # type: (List[int]) -> int

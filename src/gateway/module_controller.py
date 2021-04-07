@@ -28,7 +28,7 @@ from gateway.mappers.module import ModuleMapper
 
 if False:  # MYPY
     from typing import Dict, List, Optional
-    from master.hal.master_controller import MasterController
+    from gateway.hal.master_controller import MasterController
     from power.power_controller import PowerController
 
 logger = logging.getLogger("openmotics")

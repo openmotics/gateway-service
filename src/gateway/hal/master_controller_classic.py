@@ -1584,25 +1584,22 @@ class MasterClassicController(MasterController):
             batch.append(GlobalFeedbackMapper.dto_to_orm(global_feedback))
         self._eeprom_controller.write_batch(batch)
 
-    # All lights off functions
+    # All lights functions
 
     @communication_enabled
-    def set_all_lights_off(self):
-        # type: () -> None
-        """ Turn all lights off. """
-        self.do_basic_action(master_api.BA_ALL_LIGHTS_OFF, 0)
-
-    @communication_enabled
-    def set_all_lights_floor_off(self, floor):
-        # type: (int) -> None
-        """ Turn all lights on a given floor off. """
-        self.do_basic_action(master_api.BA_LIGHTS_OFF_FLOOR, floor)
-
-    @communication_enabled
-    def set_all_lights_floor_on(self, floor):
-        # type: (int) -> None
-        """ Turn all lights on a given floor on. """
-        self.do_basic_action(master_api.BA_LIGHTS_ON_FLOOR, floor)
+    def set_all_lights(self, action, floor_id=None, output_ids=None):
+        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int], Optional[List[int]]) -> None
+        _ = output_ids  # Ignored, as the Classic Master knows about the floor
+        floor_id_byte = floor_id if floor_id is not None else 255
+        if action == 'OFF':
+            if floor_id == 255:
+                self.do_basic_action(master_api.BA_ALL_LIGHTS_OFF, 0)
+            else:
+                self.do_basic_action(master_api.BA_LIGHTS_OFF_FLOOR, floor_id_byte)
+        elif action == 'ON':
+            self.do_basic_action(master_api.BA_LIGHTS_ON_FLOOR, floor_id_byte)
+        elif action == 'TOGGLE':
+            self.do_basic_action(master_api.BA_LIGHTS_TOGGLE_FLOOR, floor_id_byte)
 
     # Sensors
 
