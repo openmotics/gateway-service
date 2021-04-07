@@ -147,12 +147,12 @@ class MasterCoreController(MasterController):
             if sensor_id not in self._sensor_states:
                 return
             self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
-        elif core_event.type == MasterCoreEvent.Types.OFFLOAD_TO_GATEWAY:
-            self._handle_offload_event(action=core_event.data['action'],
+        elif core_event.type == MasterCoreEvent.Types.EXECUTE_GATEWAY_API:
+            self._handle_execute_event(action=core_event.data['action'],
                                        device_nr=core_event.data['device_nr'],
                                        extra_parameter=core_event.data['extra_parameter'])
 
-    def _handle_offload_event(self, action, device_nr, extra_parameter):  # type: (int, int, int) -> None
+    def _handle_execute_event(self, action, device_nr, extra_parameter):  # type: (int, int, int) -> None
         if action == 0:
             if extra_parameter not in [0, 1, 2]:
                 return
@@ -161,8 +161,8 @@ class MasterCoreController(MasterController):
                 floor_id = device_nr
             event_action = {0: 'OFF', 1: 'ON', 2: 'TOGGLE'}[extra_parameter]
             self._pubsub.publish_master_event(topic=PubSub.MasterTopics.OUTPUT,
-                                              master_event=MasterEvent(event_type=MasterEvent.Types.OFFLOAD_TO_GATEWAY,
-                                                                       data={'type': MasterEvent.OffloadTypes.SET_LIGHTS,
+                                              master_event=MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+                                                                       data={'type': MasterEvent.APITypes.SET_LIGHTS,
                                                                              'data': {'action': event_action,
                                                                                       'floor_id': floor_id}}))
 
@@ -1163,23 +1163,22 @@ class MasterCoreController(MasterController):
 
     # All lights actions
 
-    def set_all_lights(self, action):  # type: (Literal['ON', 'OFF', 'TOGGLE']) -> None
-        if action == 'OFF':
+    def set_all_lights(self, action, floor_id=None, output_ids=None):
+        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int], Optional[List[int]]) -> None
+        _ = floor_id  # Ignored, the Core Master does not know about floors
+
+        if output_ids is None and action == 'OFF':
+            # All lights off
             self._master_communicator.do_basic_action(BasicAction(action_type=0,
                                                                   action=255,
                                                                   device_nr=1))
             return
 
-        output_ids = list(self._enumerate_io_modules('output'))
-        self.set_all_lights_floor(action=action,
-                                  floor_id=0,  # Not used in the MasterCoreController
-                                  output_ids=output_ids)
-
-    def set_all_lights_floor(self, action, floor_id, output_ids):  # type: (Literal['ON', 'OFF', 'TOGGLE'], int, List[int]) -> None
-        _ = floor_id  # Ignored, the Core Master does not know about floors
         ba_action = {'ON': 1, 'OFF': 0, 'TOGGLE': 16}[action]
 
-        # Filter the given ids as the caller might not know about the output type at this moment
+        if output_ids is None:
+            # None means "all lights"
+            output_ids = list(self._enumerate_io_modules('output'))
         filtered_output_ids = []
         for output_id in output_ids:
             output = OutputConfiguration(output_id)

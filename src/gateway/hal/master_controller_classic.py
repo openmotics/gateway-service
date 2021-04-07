@@ -1587,25 +1587,19 @@ class MasterClassicController(MasterController):
     # All lights functions
 
     @communication_enabled
-    def set_all_lights(self, action):
-        # type: (Literal['ON', 'OFF', 'TOGGLE']) -> None
-        if action == 'OFF':
-            self.do_basic_action(master_api.BA_ALL_LIGHTS_OFF, 0)
-        elif action == 'ON':
-            self.do_basic_action(master_api.BA_LIGHTS_ON_FLOOR, 255)
-        elif action == 'TOGGLE':
-            self.do_basic_action(master_api.BA_LIGHTS_TOGGLE_FLOOR, 255)
-
-    @communication_enabled
-    def set_all_lights_floor(self, action, floor_id, output_ids):
-        # type: (Literal['ON', 'OFF', 'TOGGLE'], int, List[int]) -> None
+    def set_all_lights(self, action, floor_id=None, output_ids=None):
+        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int], Optional[List[int]]) -> None
         _ = output_ids  # Ignored, as the Classic Master knows about the floor
+        floor_id_byte = floor_id if floor_id is not None else 255
         if action == 'OFF':
-            self.do_basic_action(master_api.BA_LIGHTS_OFF_FLOOR, floor_id)
+            if floor_id == 255:
+                self.do_basic_action(master_api.BA_ALL_LIGHTS_OFF, 0)
+            else:
+                self.do_basic_action(master_api.BA_LIGHTS_OFF_FLOOR, floor_id_byte)
         elif action == 'ON':
-            self.do_basic_action(master_api.BA_LIGHTS_ON_FLOOR, floor_id)
+            self.do_basic_action(master_api.BA_LIGHTS_ON_FLOOR, floor_id_byte)
         elif action == 'TOGGLE':
-            self.do_basic_action(master_api.BA_LIGHTS_TOGGLE_FLOOR, floor_id)
+            self.do_basic_action(master_api.BA_LIGHTS_TOGGLE_FLOOR, floor_id_byte)
 
     # Sensors
 

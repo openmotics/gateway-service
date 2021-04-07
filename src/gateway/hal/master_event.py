@@ -40,8 +40,8 @@ class MasterEvent(object):
       {'id': int,                     # Input ID
        'status': bool,                # Pressed or not
        'location': {'room_id': int}}  # Room ID
-    * OFFLOAD_TO_GATEWAY
-      {'type': str,                   # OffloadTypes
+    * EXECUTE_GATEWAY_API
+      {'type': str,                   # APITypes
        'data': {...}}
       * SET_LIGHTS
         {'action': 'ON/OFF/TOGGLE',
@@ -57,9 +57,9 @@ class MasterEvent(object):
         OUTPUT_CHANGE = 'OUTPUT_CHANGE'
         OUTPUT_STATUS = 'OUTPUT_STATUS'
         SHUTTER_CHANGE = 'SHUTTER_CHANGE'
-        OFFLOAD_TO_GATEWAY = 'OFFLOAD_TO_GATEWAY'
+        EXECUTE_GATEWAY_API = 'EXECUTE_GATEWAY_API'
 
-    class OffloadTypes(object):
+    class APITypes(object):
         SET_LIGHTS = 'SET_LIGHTS'
 
     def __init__(self, event_type, data):

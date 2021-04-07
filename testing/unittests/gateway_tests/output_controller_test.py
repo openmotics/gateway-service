@@ -197,16 +197,19 @@ class OutputControllerTest(unittest.TestCase):
         Output.create(number=3)
 
         with mock.patch.object(self.master_controller, 'set_all_lights') as call:
-            self.controller.set_all_lights_floor(action='OFF')
-            call.assert_called_once()
-        with mock.patch.object(self.master_controller, 'set_all_lights_floor') as call:
-            self.controller.set_all_lights_floor(action='OFF', floor_id=1)
+            self.controller.set_all_lights(action='OFF')
+            call.assert_called_once_with(action='OFF')
+        with mock.patch.object(self.master_controller, 'set_all_lights') as call:
+            self.controller.set_all_lights(action='ON')
+            call.assert_called_once_with(action='ON')
+        with mock.patch.object(self.master_controller, 'set_all_lights') as call:
+            self.controller.set_all_lights(action='OFF', floor_id=1)
             call.assert_called_once_with(action='OFF', floor_id=1, output_ids=[])
-        with mock.patch.object(self.master_controller, 'set_all_lights_floor') as call:
-            self.controller.set_all_lights_floor(action='OFF', floor_id=5)
+        with mock.patch.object(self.master_controller, 'set_all_lights') as call:
+            self.controller.set_all_lights(action='OFF', floor_id=5)
             call.assert_called_once_with(action='OFF', floor_id=5, output_ids=[2])
-        with mock.patch.object(self.master_controller, 'set_all_lights_floor') as call:
-            self.controller.set_all_lights_floor(action='ON', floor_id=5)
+        with mock.patch.object(self.master_controller, 'set_all_lights') as call:
+            self.controller.set_all_lights(action='ON', floor_id=5)
             call.assert_called_once_with(action='ON', floor_id=5, output_ids=[2])
 
 
