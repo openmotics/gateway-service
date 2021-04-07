@@ -42,10 +42,9 @@ class InputSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[InputDTO, List[str]]
-        loaded_fields = ['id']
+    def deserialize(api_data):  # type: (Dict) -> InputDTO
         input_dto = InputDTO(api_data['id'])
-        loaded_fields += SerializerToolbox.deserialize(
+        SerializerToolbox.deserialize(
             dto=input_dto,  # Referenced
             api_data=api_data,
             mapping={'module_type': ('module_type', None),
@@ -57,4 +56,4 @@ class InputSerializer(object):
                      'event_enabled': ('event_enabled', None),
                      'room': ('room', InputSerializer.BYTE_MAX)}
         )
-        return input_dto, loaded_fields
+        return input_dto

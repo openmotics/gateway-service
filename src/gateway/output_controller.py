@@ -28,14 +28,14 @@ from gateway.dto import OutputDTO, OutputStateDTO, GlobalFeedbackDTO
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
-from gateway.models import Output, Room
+from gateway.models import Output, Room, Floor
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Optional, Tuple
+    from typing import Dict, List, Optional, Tuple, Literal
     from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger('openmotics')
@@ -74,27 +74,28 @@ class OutputController(BaseController):
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
         super(OutputController, self)._handle_master_event(master_event)
-        if master_event.type == MasterEvent.Types.MODULE_DISCOVERY:
-            if self._sync_state_thread:
-                self._sync_state_thread.request_single_run()
         if master_event.type == MasterEvent.Types.OUTPUT_STATUS:
-            self._handle_output_status(master_event.data)
+            self._handle_output_status(master_event.data['state'])
+        if master_event.type == MasterEvent.Types.EXECUTE_GATEWAY_API:
+            if master_event.data['type'] == MasterEvent.APITypes.SET_LIGHTS:
+                action = master_event.data['data']['action']  # type: Literal['ON', 'OFF', 'TOGGLE']
+                floor_id = master_event.data['data']['floor_id']  # type: Optional[int]
+                self.set_all_lights(action=action, floor_id=floor_id)
 
-    def _handle_output_status(self, change_data):
-        # type: (Dict[str,Any]) -> None
-        changed, output_dto = self._cache.handle_change(change_data['id'], change_data)
+    def _handle_output_status(self, state_dto):
+        # type: (OutputStateDTO) -> None
+        changed, output_dto = self._cache.handle_change(state_dto)
         if changed and output_dto is not None:
             self._publish_output_change(output_dto)
 
     def _sync_state(self):
         try:
             self.load_outputs()
-            for state_data in self._master_controller.load_output_status():
-                if 'id' in state_data:
-                    _, output_dto = self._cache.handle_change(state_data['id'], state_data)
-                    if output_dto is not None:
-                        # Always send events on the background sync
-                        self._publish_output_change(output_dto)
+            for state_dto in self._master_controller.load_output_status():
+                _, output_dto = self._cache.handle_change(state_dto)
+                if output_dto is not None:
+                    # Always send events on the background sync
+                    self._publish_output_change(output_dto)
         except CommunicationTimedOutException:
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
             raise DaemonThreadWait
@@ -145,32 +146,39 @@ class OutputController(BaseController):
         self._cache.update_outputs(output_dtos)
         return output_dtos
 
-    def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
+    def save_outputs(self, outputs):  # type: (List[OutputDTO]) -> None
         outputs_to_save = []
-        for output_dto, fields in outputs:
+        for output_dto in outputs:
             output = Output.get_or_none(number=output_dto.id)  # type: Output
             if output is None:
                 logger.info('Ignored saving non-existing Output {0}'.format(output_dto.id))
-            if 'room' in fields:
+            if 'room' in output_dto.loaded_fields:
                 if output_dto.room is None:
                     output.room = None
                 elif 0 <= output_dto.room <= 100:
                     output.room, _ = Room.get_or_create(number=output_dto.room)
                 output.save()
-            outputs_to_save.append((output_dto, fields))
+            outputs_to_save.append(output_dto)
         self._master_controller.save_outputs(outputs_to_save)
 
-    def set_all_lights_off(self):
-        # type: () -> None
-        return self._master_controller.set_all_lights_off()
+    def set_all_lights(self, action, floor_id=None):  # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int]) -> None
+        # TODO: Also include other sources (e.g. plugins) once implemented
+        if floor_id is None:
+            self._master_controller.set_all_lights(action=action)
+            return
 
-    def set_all_lights_floor_off(self, floor):
-        # type: (int) -> None
-        return self._master_controller.set_all_lights_floor_off(floor=floor)
+        # TODO: Filter on output type "light" once available
+        query = Output.select(Output.number) \
+                      .join_from(Output, Room, join_type=JOIN.INNER) \
+                      .join_from(Room, Floor, join_type=JOIN.INNER) \
+                      .where(Floor.number == floor_id)
+        output_ids = [output['number'] for output in query.dicts()]
 
-    def set_all_lights_floor_on(self, floor):
-        # type: (int) -> None
-        return self._master_controller.set_all_lights_floor_on(floor=floor)
+        # It is unknown whether `floor` is known to the Master implementation. So pass both the floor_id
+        # and the list of Output ids to the MasterController
+        self._master_controller.set_all_lights(action=action,
+                                               floor_id=floor_id,
+                                               output_ids=output_ids)
 
     def set_output_status(self, output_id, is_on, dimmer=None, timer=None):
         # type: (int, bool, Optional[int], Optional[int]) -> None
@@ -184,7 +192,7 @@ class OutputController(BaseController):
     def load_global_feedbacks(self):  # type: () -> List[GlobalFeedbackDTO]
         return self._master_controller.load_global_feedbacks()
 
-    def save_global_feedbacks(self, global_feedbacks):  # type: (List[Tuple[GlobalFeedbackDTO, List[str]]]) -> None
+    def save_global_feedbacks(self, global_feedbacks):  # type: (List[GlobalFeedbackDTO]) -> None
         self._master_controller.save_global_feedbacks(global_feedbacks)
 
 
@@ -212,8 +220,8 @@ class OutputStateCache(object):
             self._cache = new_state
             self._loaded = True
 
-    def handle_change(self, output_id, change_data):
-        # type: (int, Dict[str,Any]) -> Tuple[bool, Optional[OutputDTO]]
+    def handle_change(self, state_dto):
+        # type: (OutputStateDTO) -> Tuple[bool, Optional[OutputDTO]]
         """
         Cache output state and detect changes.
         The classic master will send multiple status events when an output changes,
@@ -222,23 +230,24 @@ class OutputStateCache(object):
         with self._lock:
             if not self._loaded:
                 return False, None
+            output_id = state_dto.id
             if output_id not in self._cache:
-                logger.warning('Received change for unknown output {0}: {1}'.format(output_id, change_data))
+                logger.warning('Received change for unknown output {0}: {1}'.format(output_id, state_dto))
                 return False, None
             changed = False
             state = self._cache[output_id].state
-            if 'status' in change_data:
-                status = bool(change_data['status'])
+            if 'status' in state_dto.loaded_fields:
+                status = state_dto.status
                 changed |= state.status != status
                 state.status = status
-            if 'ctimer' in change_data:
-                state.ctimer = int(change_data['ctimer'])
-            if 'dimmer' in change_data:
-                dimmer = int(change_data['dimmer'])
+            if 'ctimer' in state_dto.loaded_fields:
+                state.ctimer = state_dto.ctimer
+            if 'dimmer' in state_dto.loaded_fields:
+                dimmer = state_dto.dimmer
                 changed |= state.dimmer != dimmer
                 state.dimmer = dimmer
-            if 'locked' in change_data:
-                locked = bool(change_data['locked'])
+            if 'locked' in state_dto.loaded_fields:
+                locked = state_dto.locked
                 changed |= state.locked != locked
                 state.locked = locked
             return changed, self._cache[output_id]

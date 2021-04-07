@@ -131,7 +131,7 @@ class PulseCounterControllerTest(unittest.TestCase):
         master_pulse_counters = {}
 
         def _save_pulse_counters(data):
-            for dto, fields in data:
+            for dto in data:
                 master_pulse_counters[dto.id] = dto
 
         master_controller_mock = Mock()
@@ -149,9 +149,9 @@ class PulseCounterControllerTest(unittest.TestCase):
 
         controller.set_amount_of_pulse_counters(26)
         controller.save_pulse_counters([
-            (PulseCounterDTO(id=1, name='Water', input_id=10, room=1), ['name', 'input', 'room']),
-            (PulseCounterDTO(id=4, name='Gas', input_id=11, room=2), ['name', 'input', 'room']),
-            (PulseCounterDTO(id=25, name='Electricity', input_id=None, room=3, persistent=True), ['name', 'input', 'room', 'persistent'])
+            PulseCounterDTO(id=1, name='Water', input_id=10, room=1),
+            PulseCounterDTO(id=4, name='Gas', input_id=11, room=2),
+            PulseCounterDTO(id=25, name='Electricity', input_id=None, room=3, persistent=True)
         ])
         received_dtos = controller.load_pulse_counters()
         expected_dtos = [PulseCounterDTO(id=i, name=u'PulseCounter {0}'.format(i))
@@ -163,7 +163,7 @@ class PulseCounterControllerTest(unittest.TestCase):
         self.assertEqual(expected_dtos, received_dtos)
 
         # Try to set input on virtual pulse counter
-        controller.save_pulse_counters([(PulseCounterDTO(id=25, name='Electricity', input_id=22, room=3), ['name', 'input_id'])])
+        controller.save_pulse_counters([PulseCounterDTO(id=25, name='Electricity', input_id=22, room=3)])
         self.assertEqual(PulseCounterDTO(id=25, name='Electricity', room=3, persistent=True), controller.load_pulse_counter(25))
 
         # Get configuration for existing master pulse counter
@@ -171,7 +171,7 @@ class PulseCounterControllerTest(unittest.TestCase):
 
         # Get configuration for unexisting pulse counter
         with self.assertRaises(DoesNotExist):
-            controller.save_pulse_counters([(PulseCounterDTO(id=26, name='Electricity'), ['name'])])
+            controller.save_pulse_counters([PulseCounterDTO(id=26, name='Electricity')])
 
         # Set configuration for unexisting pulse counter
         with self.assertRaises(DoesNotExist):

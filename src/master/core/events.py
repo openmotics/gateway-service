@@ -19,7 +19,7 @@ Module to handle Events from the Core
 from __future__ import absolute_import
 import logging
 from master.core.fields import WordField, AddressField
-from master.core.system_value import Temperature, Humidity
+from master.core.system_value import Temperature, Humidity, Timer
 from master.core.basic_action import BasicAction
 
 if False:  # MYPY
@@ -41,6 +41,19 @@ class Event(object):
         LED_ON = 'LED_ON'
         LED_BLINK = 'LED_BLINK'
         UCAN = 'UCAN'
+        EXECUTE_GATEWAY_API = 'EXECUTE_GATEWAY_API'
+        UNKNOWN = 'UNKNOWN'
+
+    class OutputEventTypes(object):
+        STATUS = 'STATUS'
+        LOCKING = 'LOCKING'
+
+    class UCANEventTypes(object):
+        POWER_OUT_ERROR = 'POWER_OUT_ERROR'
+        POWER_OUT_RESTORED = 'POWER_OUT_RESTORED'
+        POWER_OUT_ON = 'POWER_OUT_ON'
+        POWER_OUT_OFF = 'POWER_OUT_OFF'
+        I2C_ERROR = 'I2C_ERROR'
         UNKNOWN = 'UNKNOWN'
 
     class SensorType(object):
@@ -119,6 +132,7 @@ class Event(object):
                     20: Event.Types.THERMOSTAT,
                     21: Event.Types.UCAN,
                     22: Event.Types.EXECUTED_BA,
+                    249: Event.Types.EXECUTE_GATEWAY_API,
                     250: Event.Types.BUTTON_PRESS,
                     251: Event.Types.LED_BLINK,
                     252: Event.Types.LED_ON,
@@ -129,21 +143,19 @@ class Event(object):
     @property
     def data(self):
         if self.type == Event.Types.OUTPUT:
-            timer_factor = None
-            timer_value = self._word_decode(self._data[2:])  # type: Optional[int]
-            if self._data[1] == 0:
-                timer_value = None
-            elif self._data[1] == 1:
-                timer_factor = 0.1
-            elif self._data[1] == 2:
-                timer_factor = 1
-            elif self._data[2] == 3:
-                timer_factor = 60
-            return {'output': self._device_nr,
-                    'status': self._action == 1,
-                    'dimmer_value': self._data[0],
-                    'timer_factor': timer_factor,
-                    'timer_value': timer_value}
+            data = {'output': self._device_nr}
+            if self._action in [0, 1]:
+                timer_type = self._data[1]  # type: int
+                timer_value = self._word_decode(self._data[2:]) or 0  # type: int
+                timer = Timer.event_timer_type_to_seconds(timer_type, timer_value)
+                data.update({'type': Event.OutputEventTypes.STATUS,
+                             'status': self._action == 1,
+                             'dimmer_value': self._data[0],
+                             'timer': timer})
+            else:
+                data.update({'type': Event.OutputEventTypes.LOCKING,
+                             'locked': self._data[0] == 1})
+            return data
         if self.type == Event.Types.INPUT:
             return {'input': self._device_nr,
                     'status': self._action == 1}
@@ -207,13 +219,31 @@ class Event(object):
                 event_data['temperature'] = self._data[0]
             return event_data
         if self.type == Event.Types.UCAN:
-            return {'address': self._address_helper.decode(bytearray([self._device_nr & 0xFF]) + self._data[0:2]),
-                    'data': self._data[2:4]}
+            event_data = {'address': self._address_helper.decode(bytearray([self._device_nr & 0xFF]) + self._data[0:2])}
+            if self._data[2] == 0 and self._data[3] == 0:
+                event_data['type'] = Event.UCANEventTypes.POWER_OUT_ERROR
+            elif self._data[2] == 0 and self._data[3] == 1:
+                event_data['type'] = Event.UCANEventTypes.POWER_OUT_RESTORED
+            elif self._data[2] == 0 and self._data[3] == 2:
+                event_data['type'] = Event.UCANEventTypes.POWER_OUT_OFF
+            elif self._data[2] == 2 and self._data[3] == 3:
+                event_data['type'] = Event.UCANEventTypes.POWER_OUT_ON
+            elif self._data[2] == 1:
+                event_data.update({'type': Event.UCANEventTypes.I2C_ERROR,
+                                   'i2c_address': self._data[3]})
+            else:
+                event_data.update({'type': Event.UCANEventTypes.UNKNOWN,
+                                   'data': self._data[2:4]})
+            return event_data
         if self.type == Event.Types.EXECUTED_BA:
             return {'basic_action': BasicAction(action_type=self._data[0],
                                                 action=self._data[1],
                                                 device_nr=self._device_nr,
                                                 extra_parameter=self._word_decode(self._data[2:4]))}
+        if self.type == Event.Types.EXECUTE_GATEWAY_API:
+            return {'action': self._data[3],
+                    'device_nr': self._device_nr,
+                    'extra_parameter': self._word_decode(self._data[0:2])}
         return None
 
     def _word_decode(self, data):  # type: (List[int]) -> int

@@ -173,6 +173,9 @@ class MemoryFile(object):
                     # Get contiguous series of bytes
                     start = min(byte_numbers)
                     end = max(byte_numbers)
+                    if start <= 127:
+                        # Prevent writing over the 127/128 byte boundary
+                        end = min(127, end)
                     data = bytearray()
                     for byte_number in range(start, end + 1):
                         if byte_number in page_data:

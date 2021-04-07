@@ -96,23 +96,23 @@ class PulseCounterController(BaseController):
             pulse_counter_dtos.append(pulse_counter_dto)
         return pulse_counter_dtos
 
-    def save_pulse_counters(self, pulse_counters):  # type: (List[Tuple[PulseCounterDTO, List[str]]]) -> None
+    def save_pulse_counters(self, pulse_counters):  # type: (List[PulseCounterDTO]) -> None
         pulse_counters_to_save = []
-        for pulse_counter_dto, fields in pulse_counters:
+        for pulse_counter_dto in pulse_counters:
             pulse_counter = PulseCounter.get_or_none(number=pulse_counter_dto.id)  # type: PulseCounter
             if pulse_counter is None:
                 raise DoesNotExist('A PulseCounter with id {0} could not be found'.format(pulse_counter_dto.id))
             if pulse_counter.source == 'master':
                 # Only master pulse counters will be passed to the MasterController batch save
-                pulse_counters_to_save.append((pulse_counter_dto, fields))
-                if 'name' in fields:
+                pulse_counters_to_save.append(pulse_counter_dto)
+                if 'name' in pulse_counter_dto.loaded_fields:
                     pulse_counter.name = pulse_counter_dto.name
             elif pulse_counter.source == 'gateway':
-                pulse_counter = PulseCounterMapper.dto_to_orm(pulse_counter_dto, fields)
+                pulse_counter = PulseCounterMapper.dto_to_orm(pulse_counter_dto)
             else:
                 logger.warning('Trying to save a PulseCounter with unknown source {0}'.format(pulse_counter.source))
                 continue
-            if 'room' in fields:
+            if 'room' in pulse_counter_dto.loaded_fields:
                 if pulse_counter_dto.room is None:
                     pulse_counter.room = None
                 elif 0 <= pulse_counter_dto.room <= 100:

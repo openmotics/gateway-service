@@ -17,13 +17,14 @@
 Schedule DTO
 """
 import time
-from gateway.dto.base import BaseDTO
+from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
     from typing import Optional, Any
 
 
 class ScheduleDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, name, start, action, status=None, repeat=None, duration=None, end=None, arguments=None):
         self.id = id  # type: Optional[int]
         self.name = name  # type: str

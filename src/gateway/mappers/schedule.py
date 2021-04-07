@@ -43,18 +43,18 @@ class ScheduleMapper(object):
                            arguments=arguments)
 
     @staticmethod
-    def dto_to_orm(schedule_dto, fields):  # type: (ScheduleDTO, List[str]) -> Schedule
+    def dto_to_orm(schedule_dto):  # type: (ScheduleDTO) -> Schedule
         schedule = Schedule.get_or_none(id=schedule_dto.id)
         if schedule is None:
             mandatory_fields = {'name', 'start', 'action'}
-            if not mandatory_fields.issubset(set(fields)):
+            if not mandatory_fields.issubset(set(schedule_dto.loaded_fields)):
                 raise ValueError('Cannot create schedule without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
             schedule = Schedule(status='ACTIVE', **{field: getattr(schedule_dto, field)
                                                     for field in mandatory_fields})
         for field in ['name', 'start', 'action', 'status', 'repeat', 'duration', 'end']:
-            if field in fields:
+            if field in schedule_dto.loaded_fields:
                 setattr(schedule, field, getattr(schedule_dto, field))
-        if 'arguments' in fields:
+        if 'arguments' in schedule_dto.loaded_fields:
             arguments = None
             if schedule_dto.arguments is not None:
                 arguments = json.dumps(schedule_dto.arguments)

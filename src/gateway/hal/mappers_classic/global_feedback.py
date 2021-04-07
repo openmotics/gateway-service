@@ -43,11 +43,11 @@ class GlobalFeedbackMapper(object):
                                                           function=data['can_led_4_function']))
 
     @staticmethod
-    def dto_to_orm(global_feedback_dto, fields):  # type: (GlobalFeedbackDTO, List[str]) -> EepromModel
+    def dto_to_orm(global_feedback_dto):  # type: (GlobalFeedbackDTO) -> EepromModel
         data = {'id': global_feedback_dto.id}
         for i in range(4):
             base_field = 'can_led_{0}'.format(i + 1)
-            if base_field in fields:
+            if base_field in global_feedback_dto.loaded_fields:
                 id_field = '{0}_id'.format(base_field)
                 function_field = '{0}_function'.format(base_field)
                 data[id_field] = getattr(global_feedback_dto, base_field).id

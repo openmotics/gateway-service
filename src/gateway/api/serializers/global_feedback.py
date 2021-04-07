@@ -43,15 +43,13 @@ class GlobalFeedbackSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[GlobalFeedbackDTO, List[str]]
-        loaded_fields = ['id']
+    def deserialize(api_data):  # type: (Dict) -> GlobalFeedbackDTO
         global_feedback_dto = GlobalFeedbackDTO(api_data['id'])
         for i in range(4):
             base_field = 'can_led_{0}'.format(i + 1)
             id_field = '{0}_id'.format(base_field)
             function_field = '{0}_function'.format(base_field)
             if id_field in api_data and function_field in api_data:
-                loaded_fields.append(base_field)
                 setattr(global_feedback_dto, base_field, FeedbackLedDTO(id=Toolbox.nonify(api_data[id_field], GlobalFeedbackSerializer.BYTE_MAX),
                                                                         function=api_data[function_field]))
-        return global_feedback_dto, loaded_fields
+        return global_feedback_dto

@@ -16,13 +16,14 @@
 """
 Input DTO
 """
-from gateway.dto.base import BaseDTO
+from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
     from typing import Optional, List
 
 
 class InputDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, name='', module_type='I', action=None, basic_actions=None, invert=False, can=False, room=None, event_enabled=False):
         # The argument `basic_actions` is None since you should not set a reference type as default value
         self.id = id  # type: int

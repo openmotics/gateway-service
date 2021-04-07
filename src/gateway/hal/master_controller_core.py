@@ -27,7 +27,8 @@ from peewee import DoesNotExist
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
-    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, GlobalFeedbackDTO
+    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, \
+    GlobalFeedbackDTO, OutputStateDTO
 from gateway.enums import ShutterEnums, IndicateType
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
@@ -52,12 +53,11 @@ from master.core.memory_models import CanControlModuleConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
 from master.core.memory_types import MemoryAddress, MemoryActivator
 from master.core.slave_communicator import SlaveCommunicator
-from master.core.system_value import Humidity, Temperature
+from master.core.system_value import Humidity, Temperature, Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union
-    from gateway.dto import OutputStateDTO
     HEALTH = Literal['success', 'unstable', 'failure']
 
 logger = logging.getLogger("openmotics")
@@ -128,16 +128,17 @@ class MasterCoreController(MasterController):
             # Interesting for debug purposes, but not for everything
             logger.info('Got master event: {0}'.format(core_event))
         if core_event.type == MasterCoreEvent.Types.OUTPUT:
-            # Update internal state cache
             output_id = core_event.data['output']
-            timer_value = core_event.data['timer_value']
-            if timer_value is not None:
-                timer_value *= core_event.data['timer_factor']
-            event_data = {'id': output_id,
-                          'status': core_event.data['status'],
-                          'dimmer': core_event.data['dimmer_value'],
-                          'ctimer': 0 if timer_value is None else timer_value}
-            self._handle_output(output_id, event_data)
+            if core_event.data['type'] == MasterCoreEvent.OutputEventTypes.STATUS:
+                # Update internal state cache
+                state_dto = OutputStateDTO(id=output_id,
+                                           status=core_event.data['status'],
+                                           dimmer=core_event.data['dimmer_value'],
+                                           ctimer=core_event.data['timer'])
+            else:  # elif core_event.data['type'] == MasterCoreEvent.OutputEventTypes.LOCKING:
+                state_dto = OutputStateDTO(id=output_id,
+                                           locked=core_event.data['locked'])
+            self._handle_output_state(output_id, state_dto)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             master_event = self._input_state.handle_event(core_event)
             self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
@@ -146,19 +147,37 @@ class MasterCoreController(MasterController):
             if sensor_id not in self._sensor_states:
                 return
             self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
+        elif core_event.type == MasterCoreEvent.Types.EXECUTE_GATEWAY_API:
+            self._handle_execute_event(action=core_event.data['action'],
+                                       device_nr=core_event.data['device_nr'],
+                                       extra_parameter=core_event.data['extra_parameter'])
 
-    def _handle_output(self, output_id, event_data):
-        # type: (int ,Dict[str,Any]) -> None
-        master_event = MasterEvent(MasterEvent.Types.OUTPUT_STATUS, event_data)
+    def _handle_execute_event(self, action, device_nr, extra_parameter):  # type: (int, int, int) -> None
+        if action == 0:
+            if extra_parameter not in [0, 1, 2]:
+                return
+            floor_id = None  # type: Optional[int]
+            if device_nr != 65535:
+                floor_id = device_nr
+            event_action = {0: 'OFF', 1: 'ON', 2: 'TOGGLE'}[extra_parameter]
+            self._pubsub.publish_master_event(topic=PubSub.MasterTopics.OUTPUT,
+                                              master_event=MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+                                                                       data={'type': MasterEvent.APITypes.SET_LIGHTS,
+                                                                             'data': {'action': event_action,
+                                                                                      'floor_id': floor_id}}))
+
+    def _handle_output_state(self, output_id, state_dto):
+        # type: (int, OutputStateDTO) -> None
+        master_event = MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': state_dto})
         self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)
         shutter_id = self._output_shutter_map.get(output_id)
         if shutter_id:
             shutter = ShutterConfiguration(shutter_id)
             output_0_on, output_1_on = (None, None)
             if output_id == shutter.outputs.output_0:
-                output_0_on = event_data['status']
+                output_0_on = state_dto.status
             if output_id == shutter.outputs.output_1:
-                output_1_on = event_data['status']
+                output_1_on = state_dto.status
             self._handle_shutter(shutter, output_0_on, output_1_on)
 
     def _handle_shutter(self, shutter, output_0_on, output_1_on):
@@ -400,9 +419,9 @@ class MasterCoreController(MasterController):
             inputs.append(self.load_input(i))
         return inputs
 
-    def save_inputs(self, inputs):  # type: (List[Tuple[InputDTO, List[str]]]) -> None
-        for input_dto, fields in inputs:
-            input_ = InputMapper.dto_to_orm(input_dto, fields)
+    def save_inputs(self, inputs):  # type: (List[InputDTO]) -> None
+        for input_dto in inputs:
+            input_ = InputMapper.dto_to_orm(input_dto)
             input_.save(activate=False)
         MemoryActivator.activate()
 
@@ -462,22 +481,28 @@ class MasterCoreController(MasterController):
             outputs.append(self.load_output(i))
         return outputs
 
-    def save_outputs(self, outputs):  # type: (List[Tuple[OutputDTO, List[str]]]) -> None
-        for output_dto, fields in outputs:
-            output = OutputMapper.dto_to_orm(output_dto, fields)
+    def save_outputs(self, outputs):  # type: (List[OutputDTO]) -> None
+        for output_dto in outputs:
+            output = OutputMapper.dto_to_orm(output_dto)
             if output.is_shutter:
                 # Shutter outputs cannot be changed
                 continue
             output.save(activate=False)
-            CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, fields, activate=False)
+            CANFeedbackController.save_output_led_feedback_configuration(output, output_dto, activate=False)
         MemoryActivator.activate()
 
     def load_output_status(self):
-        # type: () -> List[Dict[str,Any]]
+        # type: () -> List[OutputStateDTO]
         output_status = []
         for i in self._enumerate_io_modules('output'):
-            state_data = self._master_communicator.do_command(CoreAPI.output_detail(), {'device_nr': i})
-            output_status.append(state_data)
+            data = self._master_communicator.do_command(CoreAPI.output_detail(), {'device_nr': i})
+            timer = SVTTimer.event_timer_type_to_seconds(data['timer_type'], data['timer'])
+            output = OutputConfiguration(i)
+            output_status.append(OutputStateDTO(id=i,
+                                                status=bool(data['status']),
+                                                ctimer=timer,
+                                                dimmer=int(data['dimmer']),
+                                                locked=output.locking.locked))
         return output_status
 
     # Shutters
@@ -526,12 +551,12 @@ class MasterCoreController(MasterController):
             shutters.append(self.load_shutter(shutter_id))
         return shutters
 
-    def save_shutters(self, shutters):  # type: (List[Tuple[ShutterDTO, List[str]]]) -> None
-        for shutter_dto, fields in shutters:
+    def save_shutters(self, shutters):  # type: (List[ShutterDTO]) -> None
+        for shutter_dto in shutters:
             # Validate whether output module exists
             output_module = OutputConfiguration(shutter_dto.id * 2).module
             # Configure shutter
-            shutter = ShutterMapper.dto_to_orm(shutter_dto, fields)
+            shutter = ShutterMapper.dto_to_orm(shutter_dto)
             if shutter.timer_down not in [0, 65535] and shutter.timer_up not in [0, 65535]:
                 # Shutter is "configured"
                 shutter.outputs.output_0 = shutter.id * 2
@@ -553,7 +578,7 @@ class MasterCoreController(MasterController):
         MemoryActivator.activate()
 
     def _refresh_shutter_states(self):
-        status_data = {x['device_nr']: x for x in self.load_output_status()}
+        status_data = {x.id: x for x in self.load_output_status()}  # type: Dict[int, OutputStateDTO]
         for shutter_id in range(len(status_data) // 2):
             shutter = ShutterConfiguration(shutter_id)
             output_0 = status_data.get(shutter.outputs.output_0)
@@ -561,7 +586,7 @@ class MasterCoreController(MasterController):
             if output_0 and output_1:
                 self._output_shutter_map[shutter.outputs.output_0] = shutter.id
                 self._output_shutter_map[shutter.outputs.output_1] = shutter.id
-                self._handle_shutter(shutter, output_0['status'], output_1['status'])
+                self._handle_shutter(shutter, output_0.status, output_1.status)
             else:
                 self._shutter_status.pop(shutter.id, None)
                 self._output_shutter_map.pop(shutter.outputs.output_0, None)
@@ -569,13 +594,22 @@ class MasterCoreController(MasterController):
         self._shutters_last_updated = time.time()
 
     def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
-        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+        device_nr = shutter_group_id + 256
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=1,
+                                                              device_nr=device_nr))
 
     def shutter_group_down(self, shutter_group_id):  # type: (int) -> None
-        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+        device_nr = shutter_group_id + 256
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=2,
+                                                              device_nr=device_nr))
 
     def shutter_group_stop(self, shutter_group_id):  # type: (int) -> None
-        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+        device_nr = shutter_group_id + 256
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=0,
+                                                              device_nr=device_nr))
 
     def load_shutter_group(self, shutter_group_id):  # type: (int) -> ShutterGroupDTO
         return ShutterGroupDTO(id=shutter_group_id)
@@ -586,8 +620,8 @@ class MasterCoreController(MasterController):
             shutter_groups.append(ShutterGroupDTO(id=i))
         return shutter_groups
 
-    def save_shutter_groups(self, shutter_groups):  # type: (List[Tuple[ShutterGroupDTO, List[str]]]) -> None
-        pass  # TODO: Implement when/if ShutterGroups get actual properties
+    def save_shutter_groups(self, shutter_groups):  # type: (List[ShutterGroupDTO]) -> None
+        raise UnsupportedException()
 
     # Thermostats
 
@@ -625,7 +659,7 @@ class MasterCoreController(MasterController):
         global_feedbacks = CANFeedbackController.load_global_led_feedback_configuration()
         return [global_feedbacks.get(i, GlobalFeedbackDTO(id=i)) for i in range(32)]
 
-    def save_global_feedbacks(self, global_feedbacks):  # type: (List[Tuple[GlobalFeedbackDTO, List[str]]]) -> None
+    def save_global_feedbacks(self, global_feedbacks):  # type: (List[GlobalFeedbackDTO]) -> None
         CANFeedbackController.save_global_led_feedback_configuration(global_feedbacks, activate=True)
 
     # Sensors
@@ -674,9 +708,9 @@ class MasterCoreController(MasterController):
             sensors.append(self.load_sensor(i))
         return sensors
 
-    def save_sensors(self, sensors):  # type: (List[Tuple[SensorDTO, List[str]]]) -> None
-        for sensor_dto, fields in sensors:
-            sensor = SensorMapper.dto_to_orm(sensor_dto, fields)
+    def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> None
+        for sensor_dto in sensors:
+            sensor = SensorMapper.dto_to_orm(sensor_dto)
             sensor.save(activate=False)
         MemoryActivator.activate()
 
@@ -719,7 +753,7 @@ class MasterCoreController(MasterController):
         # TODO: Implement PulseCounters
         return []
 
-    def save_pulse_counters(self, pulse_counters):  # type: (List[Tuple[PulseCounterDTO, List[str]]]) -> None
+    def save_pulse_counters(self, pulse_counters):  # type: (List[PulseCounterDTO]) -> None
         # TODO: Implement PulseCounters
         return
 
@@ -744,10 +778,10 @@ class MasterCoreController(MasterController):
         return [GroupActionMapper.orm_to_dto(o)
                 for o in GroupActionController.load_group_actions()]
 
-    def save_group_actions(self, group_actions):  # type: (List[Tuple[GroupActionDTO, List[str]]]) -> None
-        for group_action_dto, fields in group_actions:
-            group_action = GroupActionMapper.dto_to_orm(group_action_dto, fields)
-            GroupActionController.save_group_action(group_action, fields, activate=False)
+    def save_group_actions(self, group_actions):  # type: (List[GroupActionDTO]) -> None
+        for group_action_dto in group_actions:
+            group_action = GroupActionMapper.dto_to_orm(group_action_dto)
+            GroupActionController.save_group_action(group_action, group_action_dto.loaded_fields, activate=False)
         MemoryActivator.activate()
 
     # Module management
@@ -1127,19 +1161,41 @@ class MasterCoreController(MasterController):
     def set_status_leds(self, status):
         raise NotImplementedError()
 
-    def set_all_lights_off(self):
-        # type: () -> None
-        self._master_communicator.do_basic_action(BasicAction(action_type=0,
-                                                              action=255,
-                                                              device_nr=1))
+    # All lights actions
 
-    def set_all_lights_floor_off(self, floor):
-        # type: (int) -> None
-        raise NotImplementedError()
+    def set_all_lights(self, action, floor_id=None, output_ids=None):
+        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int], Optional[List[int]]) -> None
+        _ = floor_id  # Ignored, the Core Master does not know about floors
 
-    def set_all_lights_floor_on(self, floor):
-        # type: (int) -> None
-        raise NotImplementedError()
+        if output_ids is None and action == 'OFF':
+            # All lights off
+            self._master_communicator.do_basic_action(BasicAction(action_type=0,
+                                                                  action=255,
+                                                                  device_nr=1))
+            return
+
+        ba_action = {'ON': 1, 'OFF': 0, 'TOGGLE': 16}[action]
+
+        if output_ids is None:
+            # None means "all lights"
+            output_ids = list(self._enumerate_io_modules('output'))
+        filtered_output_ids = []
+        for output_id in output_ids:
+            output = OutputConfiguration(output_id)
+            if not output.is_shutter and output.output_type >= 128:
+                filtered_output_ids.append(output.id)
+
+        # Execute action in batch; either a single BA (for 1 device) or a BA series (for 2 to 40 devices)
+        for i in range(0, len(output_ids), 40):
+            chunk_output_ids = output_ids[i:i + 40]
+            if len(chunk_output_ids) == 1:
+                self._master_communicator.do_basic_action(BasicAction(action_type=0,
+                                                                      action=ba_action,
+                                                                      device_nr=chunk_output_ids[0]))
+            else:
+                self._master_communicator.do_command(command=CoreAPI.execute_basic_action_series(len(chunk_output_ids)),
+                                                     fields={'type': 0, 'action': ba_action, 'extra_parameter': 0,
+                                                             'device_nrs': chunk_output_ids})
 
     def get_configuration_dirty_flag(self):
         return False  # TODO: Implement

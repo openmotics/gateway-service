@@ -16,13 +16,14 @@
 """
 Sensor DTO
 """
-from gateway.dto.base import BaseDTO
+from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
     from typing import Optional
 
 
 class SensorDTO(BaseDTO):
+    @capture_fields
     def __init__(self, id, name='', room=None, offset=None, virtual=False):
         self.id = id  # type: int
         self.name = name  # type: str

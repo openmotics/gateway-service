@@ -36,13 +36,12 @@ class GroupActionSerializer(object):
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
-    def deserialize(api_data):  # type: (Dict) -> Tuple[GroupActionDTO, List[str]]
-        loaded_fields = ['id']
+    def deserialize(api_data):  # type: (Dict) -> GroupActionDTO
         group_action_dto = GroupActionDTO(api_data['id'])
-        loaded_fields += SerializerToolbox.deserialize(
+        SerializerToolbox.deserialize(
             dto=group_action_dto,  # Referenced
             api_data=api_data,
             mapping={'name': ('name', None),
                      'actions': ('actions', lambda s: [] if s == '' else [int(a) for a in s.split(',')])}
         )
-        return group_action_dto, loaded_fields
+        return group_action_dto

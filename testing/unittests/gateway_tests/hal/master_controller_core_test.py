@@ -54,9 +54,14 @@ class MasterCoreControllerTest(unittest.TestCase):
         events = []
         self.controller._handle_event({'type': 0, 'device_nr': 0, 'action': 0, 'data': bytearray([255, 0, 0, 0])})
         self.controller._handle_event({'type': 0, 'device_nr': 2, 'action': 1, 'data': bytearray([100, 2, 0xff, 0xfe])})
+        self.controller._handle_event({'type': 0, 'device_nr': 4, 'action': 2, 'data': bytearray([1, 0, 0, 0])})
+        self.controller._handle_event({'type': 0, 'device_nr': 6, 'action': 2, 'data': bytearray([0, 0, 0, 0])})
         self.pubsub._publish_all_events()
-        self.assertEqual([MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'id': 0, 'status': False, 'dimmer': 255, 'ctimer': 0}),
-                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'id': 2, 'status': True, 'dimmer': 100, 'ctimer': 65534})], events)
+        self.assertEqual([MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=0, status=False, dimmer=255, ctimer=0)}),
+                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=2, status=True, dimmer=100, ctimer=65534)}),
+                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=4, locked=True)}),
+                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=6, locked=False)})],
+                         events)
 
     def test_master_shutter_event(self):
         events = []
@@ -109,10 +114,10 @@ class MasterCoreControllerTest(unittest.TestCase):
 
         self.pubsub.subscribe_master_events(PubSub.MasterTopics.SHUTTER, _on_event)
 
-        output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
-                         {'device_nr': 1, 'status': False, 'dimmer': 0},
-                         {'device_nr': 10, 'status': False, 'dimmer': 0},
-                         {'device_nr': 11, 'status': False, 'dimmer': 0}]
+        output_status = [OutputStateDTO(id=0, status=False, dimmer=0),
+                         OutputStateDTO(id=1, status=False, dimmer=0),
+                         OutputStateDTO(id=10, status=False, dimmer=0),
+                         OutputStateDTO(id=11, status=False, dimmer=0)]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
@@ -121,10 +126,10 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
-        output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
-                         {'device_nr': 1, 'status': True, 'dimmer': 0},
-                         {'device_nr': 10, 'status': True, 'dimmer': 0},
-                         {'device_nr': 11, 'status': False, 'dimmer': 0}]
+        output_status = [OutputStateDTO(id=0, status=False, dimmer=0),
+                         OutputStateDTO(id=1, status=True, dimmer=0),
+                         OutputStateDTO(id=10, status=True, dimmer=0),
+                         OutputStateDTO(id=11, status=False, dimmer=0)]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
@@ -133,10 +138,10 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_up', 'location': {'room_id': 255}})] == events
 
-        output_status = [{'device_nr': 0, 'status': False, 'dimmer': 0},
-                         {'device_nr': 1, 'status': True, 'dimmer': 0},
-                         {'device_nr': 10, 'status': False, 'dimmer': 0},
-                         {'device_nr': 11, 'status': True, 'dimmer': 0}]
+        output_status = [OutputStateDTO(id=0, status=False, dimmer=0),
+                         OutputStateDTO(id=1, status=True, dimmer=0),
+                         OutputStateDTO(id=10, status=False, dimmer=0),
+                         OutputStateDTO(id=11, status=True, dimmer=0)]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
@@ -164,8 +169,8 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.assertEqual([x.id for x in inputs], list(range(1, 17)))
 
     def test_save_inputs(self):
-        data = [(InputDTO(id=1, name='foo', module_type='I'), ['id', 'name', 'module_type']),
-                (InputDTO(id=2, name='bar', module_type='I'), ['id', 'name', 'module_type'])]
+        data = [InputDTO(id=1, name='foo', module_type='I'),
+                InputDTO(id=2, name='bar', module_type='I')]
         input_mock = mock.Mock(InputConfiguration)
         with mock.patch.object(InputConfiguration, 'deserialize', return_value=input_mock) as deserialize, \
                 mock.patch.object(input_mock, 'save', return_value=None) as save:
@@ -276,7 +281,7 @@ class MasterCoreControllerTest(unittest.TestCase):
             call.assert_called_once()
 
         with mock.patch.object(CANFeedbackController, 'save_output_led_feedback_configuration') as call:
-            self.controller.save_outputs([(OutputDTO(id=0), [])])
+            self.controller.save_outputs([OutputDTO(id=0)])
             call.assert_called_once()
 
 
