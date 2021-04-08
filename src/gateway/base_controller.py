@@ -102,22 +102,9 @@ class BaseController(object):
             for structure in self.SYNC_STRUCTURES:
                 orm_model = structure.orm_model
                 try:
-                    name = structure.name
-                    skip = structure.skip
-
                     start = time.time()
                     logger.info('ORM sync ({0})'.format(orm_model.__name__))
-
-                    ids = []
-                    for dto in getattr(self._master_controller, 'load_{0}s'.format(name))():
-                        if skip is not None and skip(dto):
-                            continue
-                        id_ = dto.id
-                        ids.append(id_)
-                        if not orm_model.select().where(orm_model.number == id_).exists():
-                            orm_model.create(number=id_)
-                    orm_model.delete().where(orm_model.number.not_in(ids)).execute()
-
+                    self._sync_orm_structure(structure)
                     duration = time.time() - start
                     logger.info('ORM sync ({0}): completed after {1:.1f}s'.format(orm_model.__name__, duration))
                 except CommunicationTimedOutException as ex:
@@ -133,3 +120,19 @@ class BaseController(object):
         finally:
             self._sync_running = False
         return True
+
+    def _sync_orm_structure(self, structure):
+        # type: (SyncStructure) -> None
+        orm_model = structure.orm_model
+        name = structure.name
+        skip = structure.skip
+
+        ids = []
+        for dto in getattr(self._master_controller, 'load_{0}s'.format(name))():
+            if skip is not None and skip(dto):
+                continue
+            id_ = dto.id
+            ids.append(id_)
+            if not orm_model.select().where(orm_model.number == id_).exists():
+                orm_model.create(number=id_)
+        orm_model.delete().where(orm_model.number.not_in(ids)).execute()
