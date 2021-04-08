@@ -41,11 +41,9 @@ class BaseThread(threading.Thread):
 
 class DaemonThread(object):
     def __init__(self, name, target, interval=10, delay=None):
-        # type: (str, Callable[[],Any], float, Optional[float]) -> None
+        # type: (str, Callable[[],Any], Optional[float], Optional[float]) -> None
         self._interval = interval
-        self._delay = self._interval * 2
-        if delay is not None:
-            self._delay = delay
+        self._delay = delay
         self._name = name
         self._target = target
         self._tick = threading.Event()
@@ -66,11 +64,13 @@ class DaemonThread(object):
         self._thread.join(2)
 
     def sleep(self, timeout):
-        # type: (float) -> None
+        # type: (Optional[float]) -> None
+        if timeout == 0:
+            return  # Don't sleep
         self._tick.wait(timeout)
 
     def set_interval(self, interval):
-        # type: (float) -> None
+        # type: (Optional[float]) -> None
         changed = self._interval != interval
         self._interval = interval
         if changed:
@@ -79,6 +79,19 @@ class DaemonThread(object):
     def request_single_run(self):
         self._tick.set()
 
+    def _get_sleep_interval(self, start):  # type: (float) -> Optional[float]
+        if self._interval in [0, None]:
+            return self._interval
+        min_wait_time = 0.1 if self._interval > 0.5 else 0.05
+        return max(min_wait_time, self._interval - (time.time() - start))
+
+    def _get_delay(self):  # type: () -> float
+        if self._delay is not None:
+            return self._delay
+        if self._interval is None:
+            return 20.0
+        return self._interval * 2
+
     def _run(self):
         # type: () -> None
         try:
@@ -86,7 +99,7 @@ class DaemonThread(object):
             prctl.set_name(self._name)
         except ImportError:
             pass
-        backoff = 0
+        backoff = 0.0
         while not self._stop.is_set():
             start = time.time()
             if not self._parent.is_alive():
@@ -95,15 +108,13 @@ class DaemonThread(object):
             try:
                 self._tick.clear()
                 self._target()
-                if self._interval > 0:
-                    min_wait_time = 0.1 if self._interval >= 0.5 else 0.05
-                    self.sleep(max(min_wait_time, self._interval - (time.time() - start)))
-                backoff = 0
+                self.sleep(self._get_sleep_interval(start))
+                backoff = 0.0
             except DaemonThreadWait:
                 logger.debug('Waiting {} seconds'.format(self._delay))
-                self.sleep(self._delay)
+                self.sleep(self._get_delay())
             except Exception as ex:
                 logger.exception('Unexpected error in daemon {}: {}'.format(self._name, ex))
-                backoff += 1
-                self.sleep(self._delay * backoff)
+                backoff += 1.0
+                self.sleep(min(5.0, self._get_delay() * backoff))
         logger.info('Stopping daemon {}... Done'.format(self._name))
