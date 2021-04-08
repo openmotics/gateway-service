@@ -67,6 +67,7 @@ class DaemonThread(object):
         # type: (Optional[float]) -> None
         if timeout == 0:
             return  # Don't sleep
+        # If `timeout` is `None`, this will wait forever until `self._tick` is set
         self._tick.wait(timeout)
 
     def set_interval(self, interval):
@@ -81,7 +82,11 @@ class DaemonThread(object):
 
     def _get_sleep_interval(self, start):  # type: (float) -> Optional[float]
         if self._interval == 0 or self._interval is None:
+            # A sleep interval of `0` will cause `self.sleep(0)` to immediately return (so no sleep
+            # at all). A sleep interval of `None` will cause `self.sleep(None)` to never return
+            # until `self._tick` is explicitly set (e.g. via `request_single_run()`)
             return self._interval
+        # In any other case, return a reasonable sleep time, to prevent unexpected tight loops
         min_wait_time = 0.1 if self._interval > 0.5 else 0.05
         return max(min_wait_time, self._interval - (time.time() - start))
 
