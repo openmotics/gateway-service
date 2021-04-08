@@ -80,7 +80,7 @@ class DaemonThread(object):
         self._tick.set()
 
     def _get_sleep_interval(self, start):  # type: (float) -> Optional[float]
-        if self._interval in [0, None]:
+        if self._interval == 0 or self._interval is None:
             return self._interval
         min_wait_time = 0.1 if self._interval > 0.5 else 0.05
         return max(min_wait_time, self._interval - (time.time() - start))
