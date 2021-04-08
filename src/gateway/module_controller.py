@@ -41,7 +41,7 @@ class ModuleController(BaseController):
     @Inject
     def __init__(self, master_controller=INJECTED, power_controller=INJECTED):
         # type: (MasterController, Optional[PowerController]) -> None
-        super(ModuleController, self).__init__(master_controller, sync_interval=24 * 60 * 60)
+        super(ModuleController, self).__init__(master_controller, sync_interval=None)
         self._power_controller = power_controller
 
     def _sync_orm(self):
