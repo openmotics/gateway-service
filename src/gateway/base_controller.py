@@ -49,7 +49,7 @@ class BaseController(object):
 
     @Inject
     def __init__(self, master_controller, maintenance_controller=INJECTED, pubsub=INJECTED, sync_interval=900):
-        # type: (MasterController, MaintenanceController, PubSub, float) -> None
+        # type: (MasterController, MaintenanceController, PubSub, Optional[float]) -> None
         self._master_controller = master_controller
         self._maintenance_controller = maintenance_controller
         self._pubsub = pubsub
