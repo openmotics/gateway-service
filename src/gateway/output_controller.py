@@ -74,6 +74,9 @@ class OutputController(BaseController):
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
         super(OutputController, self)._handle_master_event(master_event)
+        if master_event.type == MasterEvent.Types.MODULE_DISCOVERY:
+            if self._sync_state_thread:
+                self._sync_state_thread.request_single_run()
         if master_event.type == MasterEvent.Types.OUTPUT_STATUS:
             self._handle_output_status(master_event.data['state'])
         if master_event.type == MasterEvent.Types.EXECUTE_GATEWAY_API:
