@@ -40,12 +40,19 @@ def migrate(migrator, database, fake=False, **kwargs):
         mailbox_rebus_id = IntegerField(unique=True)
         doorbell_rebus_id = IntegerField(unique=True)
 
-    # USER Intermediate MODEL:
-    # ---------------------
-    class User(BaseModel):
+    # User old table
+    # -----------------------
+    class UserOld(BaseModel):
         class Meta:
-            table_name = 'user'
+            table_name = '_user_old'
+        id = AutoField()
+        username = CharField(unique=True)
+        password = CharField()
+        accepted_terms = IntegerField(default=0)
 
+    # User definitive model
+    # ------------------------
+    class User(BaseModel):
         class UserRoles(object):
             USER = 'USER'
             ADMIN = 'ADMIN'
@@ -56,32 +63,55 @@ def migrate(migrator, database, fake=False, **kwargs):
             EN = 'English'
             DE = 'Deutsh'
             NL = 'Nederlands'
-            FR = 'Français'
+            FR = 'Francais'
 
         id = AutoField()
-        username_old = CharField(unique=True)
-        first_name = CharField(null=True)  # Allow null values for this migration, set it back afterwards
+        first_name = CharField(null=False)
         last_name = CharField(null=False, default='')
-        role = CharField(default=UserRoles.USER, null=False)
-        pin_code = CharField(null=False, default='', unique=False)  # Allow null values for this migration, set it back afterwards
-        language = CharField(null=False, default='English')
+        role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
+        pin_code = CharField(null=False, unique=True)
+        language = CharField(null=False, default='English')  # options: See Userlanguages
         password = CharField()
         apartment_id = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
         is_active = BooleanField(default=True)
         accepted_terms = IntegerField(default=0)
 
-    for user in User.select():
-        user.first_name = user.username_old
-        user.pin_code = user.username_old
-        user.role = User.UserRoles.ADMIN  # Set all existing users as admin users
-        user.save()
+        # Keep these here to use as reference functions to populate the first_name and last_name fields
+        # consistent with the implementation used in models.py at the moment of creating the migration
+        @property
+        def username(self):
+            # type: () -> str
+            separator = ''
+            if self.first_name != '' and self.last_name != '':
+                separator = ' '
+            return "{}{}{}".format(self.first_name, separator, self.last_name)
 
-    # Change the first name back to non null values
-    migrator.change_fields(User, first_name=CharField(null=False))
-    # Change the pin code field after the fact since it will not allow to be set unique when adding the column
-    # The pin_code is by definition unique since it is a copy of username for the existing users,
-    # (making the pin code unusable for the most part) which is also unique.
-    migrator.change_fields(User, pin_code=CharField(null=False, unique=True))
+        @username.setter
+        def username(self, username):
+            # type: (str) -> None
+            splits = username.split(' ')
+            if len(splits) > 1:
+                self.first_name = splits[0]
+                self.last_name = ' '.join(splits[1:])
+            else:
+                self.first_name = username
+                self.last_name = ''
+
+    # copy over the data from the old table to the new one
+    for user in UserOld.select():
+        print('Migrating user: {}'.format(user))
+        user_orm = User()
+        user_orm.username = user.username
+        user_orm.role = User.UserRoles.ADMIN
+        user_orm.pin_code = user.username
+        user_orm.id = user.id
+        user_orm.is_active = True
+        user_orm.apartment_id = None
+        user_orm.language = User.UserLanguages.EN
+        user_orm.save()
+
+    # remove the old user table since it is not needed anymore
+    migrator.drop_table(UserOld)
 
 
 def rollback(migrator, database, fake=False, **kwargs):

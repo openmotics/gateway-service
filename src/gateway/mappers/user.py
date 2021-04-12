@@ -59,7 +59,7 @@ class UserMapper(object):
                                          dto_object.loaded_fields,
                                          mandatory_fields - set(dto_object.loaded_fields)))
 
-        user_orm = User(password=dto_object.hashed_password, username_old=dto_object.username)
+        user_orm = User(password=dto_object.hashed_password)
         if dto_object.role is None:
             dto_object.role = User.UserRoles.ADMIN  # set default role to admin when one is created
         if dto_object.pin_code is None:

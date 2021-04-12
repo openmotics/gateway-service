@@ -19,16 +19,17 @@ apartment DTO
 from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
-    from typing import Any
+    from typing import Any, Optional
 
 
 class ApartmentDTO(BaseDTO):
     @capture_fields
-    def __init__(self, id, name, mailbox_rebus_id, doorbell_rebus_id):
-        self.id = id  # type: int
-        self.name = name  # type: str
-        self.mailbox_rebus_id = mailbox_rebus_id  # type: int
-        self.doorbell_rebus_id = doorbell_rebus_id  # type: int
+    def __init__(self, id=None, name=None, mailbox_rebus_id=None, doorbell_rebus_id=None):
+        # type: (Optional[int], Optional[str], Optional[int], Optional[int]) -> None
+        self.id = id
+        self.name = name
+        self.mailbox_rebus_id = mailbox_rebus_id
+        self.doorbell_rebus_id = doorbell_rebus_id
 
     def __eq__(self, other):
         # type: (Any) -> bool
