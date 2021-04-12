@@ -26,11 +26,11 @@ from threading import Timer
 from peewee import DoesNotExist
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
-    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, \
-    GlobalFeedbackDTO, OutputStateDTO, LegacyStartupActionDTO, \
-    LegacyScheduleDTO, DimmerConfigurationDTO
-from gateway.enums import ShutterEnums, IndicateType
+from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
+    GroupActionDTO, InputDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
+    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStateDTO, PulseCounterDTO, \
+    ShutterDTO, ShutterGroupDTO
+from gateway.enums import IndicateType, ShutterEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
@@ -52,9 +52,10 @@ from master.core.memory_models import CanControlModuleConfiguration, \
     GlobalConfiguration, InputConfiguration, InputModuleConfiguration, \
     OutputConfiguration, OutputModuleConfiguration, SensorConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
-from master.core.memory_types import MemoryAddress, MemoryActivator
+from master.core.memory_types import MemoryActivator, MemoryAddress
 from master.core.slave_communicator import SlaveCommunicator
-from master.core.system_value import Humidity, Temperature, Timer as SVTTimer
+from master.core.system_value import Humidity, Temperature
+from master.core.system_value import Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 
 if False:  # MYPY
@@ -702,17 +703,17 @@ class MasterCoreController(MasterController):
             brightnesses.append(self.get_sensor_brightness(sensor_id))
         return brightnesses
 
-    def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
+    def load_sensor(self, sensor_id):  # type: (int) -> MasterSensorDTO
         sensor = SensorConfiguration(sensor_id)
         return SensorMapper.orm_to_dto(sensor)
 
-    def load_sensors(self):  # type: () -> List[SensorDTO]
+    def load_sensors(self):  # type: () -> List[MasterSensorDTO]
         sensors = []
         for i in self._enumerate_io_modules('sensor'):
             sensors.append(self.load_sensor(i))
         return sensors
 
-    def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> None
+    def save_sensors(self, sensors):  # type: (List[MasterSensorDTO]) -> None
         for sensor_dto in sensors:
             sensor = SensorMapper.dto_to_orm(sensor_dto)
             sensor.save(activate=False)

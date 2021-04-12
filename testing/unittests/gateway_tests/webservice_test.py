@@ -20,9 +20,10 @@ import unittest
 import mock
 
 from bus.om_bus_client import MessageClient
-from gateway.dto import OutputStateDTO, ScheduleDTO, VentilationDTO, \
-    VentilationSourceDTO, VentilationStatusDTO, ModuleDTO, UserDTO, \
-    LegacyScheduleDTO, DimmerConfigurationDTO, LegacyStartupActionDTO
+from gateway.dto import DimmerConfigurationDTO, LegacyScheduleDTO, \
+    LegacyStartupActionDTO, ModuleDTO, OutputStateDTO, ScheduleDTO, \
+    SensorDTO, UserDTO, VentilationDTO, VentilationSourceDTO, \
+    VentilationStatusDTO
 from gateway.gateway_api import GatewayApi
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
@@ -38,7 +39,6 @@ from gateway.shutter_controller import ShutterController
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.user_controller import UserController
 from gateway.ventilation_controller import VentilationController
-from gateway.scheduling_controller import SchedulingController
 from gateway.webservice import WebInterface
 from ioc import SetTestMode, SetUpTestInjections
 
@@ -53,6 +53,7 @@ class WebInterfaceTest(unittest.TestCase):
         self.user_controller = mock.Mock(UserController)
         self.output_controller = mock.Mock(OutputController)
         self.scheduling_controller = mock.Mock(SchedulingController)
+        self.sensor_controller = mock.Mock(SensorController)
         self.ventilation_controller = mock.Mock(VentilationController)
         self.gateway_api = mock.Mock(GatewayApi)
         self.module_controller = mock.Mock(ModuleController)
@@ -64,9 +65,9 @@ class WebInterfaceTest(unittest.TestCase):
                             message_client=mock.Mock(MessageClient),
                             output_controller=self.output_controller,
                             pulse_counter_controller=mock.Mock(PulseCounterController),
-                            room_controller =mock.Mock(RoomController),
+                            room_controller=mock.Mock(RoomController),
                             scheduling_controller=self.scheduling_controller,
-                            sensor_controller=mock.Mock(SensorController),
+                            sensor_controller=self.sensor_controller,
                             shutter_controller=mock.Mock(ShutterController),
                             system_controller=mock.Mock(),
                             thermostat_controller=mock.Mock(ThermostatController),
@@ -151,6 +152,40 @@ class WebInterfaceTest(unittest.TestCase):
                                'schedule_type': 'BASIC_ACTION',
                                'start': 0,
                                'status': None}], json.loads(response)['schedules'])
+
+    def test_sensor_configurations(self):
+        with mock.patch.object(self.sensor_controller, 'load_sensors',
+                               return_value=[SensorDTO(id=2,
+                                                       external_id='0',
+                                                       name='foo')]):
+            response = self.web.get_sensor_configurations()
+            self.assertEqual([{
+                'id': 2,
+                'name': 'foo',
+                'room': 255,
+                'offset': 0,
+                'virtual': False,
+            }], json.loads(response)['config'])
+
+    def test_set_sensor_configurations(self):
+        with mock.patch.object(self.sensor_controller, 'save_sensors',
+                               return_value=None) as save:
+            config = {'id': 2,
+                      'name': 'foo',
+                      'room': 255,
+                      'offset': 0,
+                      'virtual': False}
+            response = self.web.set_sensor_configuration(config=config)
+            save.assert_called()
+
+    def test_get_sensors_temperature(self):
+        with mock.patch.object(self.sensor_controller, 'get_temperature_status',
+                               return_value=[None, None, 21.0]):
+            response = self.web.get_sensor_temperature_status()
+            expected_status = [
+                None, None, 21.0
+            ]
+            self.assertEqual(expected_status, json.loads(response)['status'])
 
     def test_ventilation_configurations(self):
         with mock.patch.object(self.ventilation_controller, 'load_ventilations',

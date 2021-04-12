@@ -79,7 +79,6 @@ class VentilationController(object):
         self._status[state_dto.id] = state_dto
         return state_dto
 
-
     def _publish_state(self, state_dto):
         # type: (VentilationStatusDTO) -> None
         # if the timer or remaining time is set, the other value will not be set,

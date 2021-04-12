@@ -17,9 +17,10 @@
 Sensor (de)serializer
 """
 from __future__ import absolute_import
-from toolbox import Toolbox
+
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto import SensorDTO
+from gateway.dto import SensorDTO, SensorStatusDTO
+from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Dict, Optional, List, Tuple
@@ -49,3 +50,21 @@ class SensorSerializer(object):
                      'virtual': ('virtual', None)}
         )
         return sensor_dto
+
+
+class SensorStatusSerializer(object):
+    @staticmethod
+    def serialize(status_dto, fields):  # type: (SensorStatusDTO, Optional[List[str]]) -> Dict
+        data = {'id': status_dto.id,
+                'value': status_dto.value}
+        return SerializerToolbox.filter_fields(data, fields)
+
+    @staticmethod
+    def deserialize(api_data):  # type: (Dict) -> SensorStatusDTO
+        status_dto = SensorStatusDTO(api_data['id'])
+        SerializerToolbox.deserialize(
+            dto=status_dto,
+            api_data=api_data,
+            mapping={'value': ('value', None)}
+        )
+        return status_dto

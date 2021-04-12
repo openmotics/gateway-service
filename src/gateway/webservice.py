@@ -40,28 +40,29 @@ from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
 import gateway
-from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
+from gateway.api.serializers import DimmerConfigurationSerializer, \
+    GlobalFeedbackSerializer, GlobalRTD10Serializer, GroupActionSerializer, \
+    InputSerializer, LegacyScheduleSerializer, LegacyStartupActionSerializer, \
     ModuleSerializer, OutputSerializer, OutputStateSerializer, \
-    PulseCounterSerializer, RoomSerializer, ScheduleSerializer, \
-    SensorSerializer, ShutterGroupSerializer, ShutterSerializer, \
-    ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer, \
-    ThermostatGroupStatusSerializer, ThermostatGroupSerializer, \
-    ThermostatAircoStatusSerializer, PumpGroupSerializer, \
-    GlobalRTD10Serializer, RTD10Serializer, GlobalFeedbackSerializer, \
-    LegacyStartupActionSerializer, LegacyScheduleSerializer, \
-    DimmerConfigurationSerializer
+    PulseCounterSerializer, PumpGroupSerializer, RoomSerializer, \
+    RTD10Serializer, ScheduleSerializer, SensorSerializer, \
+    SensorStatusSerializer, ShutterGroupSerializer, ShutterSerializer, \
+    ThermostatAircoStatusSerializer, ThermostatGroupSerializer, \
+    ThermostatGroupStatusSerializer, ThermostatSerializer, \
+    VentilationSerializer, VentilationStatusSerializer
 from gateway.authentication_controller import AuthenticationToken
-from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO, \
-    GlobalRTD10DTO
+from gateway.dto import GlobalRTD10DTO, ModuleDTO, RoomDTO, ScheduleDTO, \
+    UserDTO
 from gateway.enums import ShutterEnums, UserEnums
-from gateway.exceptions import UnsupportedException, FeatureUnavailableException, ItemDoesNotExistException
+from gateway.exceptions import FeatureUnavailableException, \
+    ItemDoesNotExistException, UnsupportedException
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
-from gateway.models import Database, Feature, Config, User
+from gateway.models import Config, Database, Feature, User
+from gateway.uart_controller import UARTController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
-from gateway.uart_controller import UARTController
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Hardware, Platform, System
 from power.power_communicator import InAddressModeException
@@ -71,7 +72,6 @@ from toolbox import Toolbox
 if False:  # MYPY
     from typing import Dict, Optional, Any, List, Literal
     from bus.om_bus_client import MessageClient
-    from gateway.authentication_controller import AuthenticationController, AuthenticationToken
     from gateway.gateway_api import GatewayApi
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.frontpanel_controller import FrontpanelController
@@ -965,26 +965,47 @@ class WebInterface(object):
         self._ventilation_controller.set_level(ventilation_id, level, timer)
         return {}
 
+    # methods=['GET']
     @openmotics_api(auth=True)
+    def get_sensor_status(self, fields=None):
+        # type: (Optional[List[str]]) -> Dict[str, Any]
+        """
+        Get the status of all sensors.
+        """
+        return {'status': [SensorStatusSerializer.serialize(status_dto, fields)
+                           for status_dto in self._sensor_controller.get_sensors_status()]}
+
+    # methods=['PUT']
+    @openmotics_api(auth=True, check=types(status='json'))
+    def set_sensor_status(self, status):
+        # type: (Dict[str,Any]) -> Dict[str, Any]
+        """
+        Update the status of a gateway sensor, used by plugins.
+        """
+        status_dto = SensorStatusSerializer.deserialize(status)
+        status_dto = self._sensor_controller.set_sensor_status(status_dto)
+        return {'status': SensorStatusSerializer.serialize(status_dto, fields=None)}
+
+    @openmotics_api(auth=True, deprecated='get_sensor_status')
     def get_sensor_temperature_status(self):  # type: () -> Dict[str, Any]
         """
         Get the current temperature of all sensors as a list of N values, one for each sensor
         """
-        return {'status': self._gateway_api.get_sensors_temperature_status()}
+        return {'status': self._sensor_controller.get_temperature_status()}
 
-    @openmotics_api(auth=True)
+    @openmotics_api(auth=True, deprecated='get_sensor_status')
     def get_sensor_humidity_status(self):  # type: () -> Dict[str, Any]
         """
         Get the current humidity of all sensors as a list of N values, one for each sensor
         """
-        return {'status': self._gateway_api.get_sensors_humidity_status()}
+        return {'status': self._sensor_controller.get_humidity_status()}
 
-    @openmotics_api(auth=True)
+    @openmotics_api(auth=True, deprecated='get_sensor_status')
     def get_sensor_brightness_status(self):  # type: () -> Dict[str, Any]
         """
         Get the current brightness of all sensors as a list of N values, one for each sensor
         """
-        return {'status': self._gateway_api.get_sensors_brightness_status()}
+        return {'status': self._sensor_controller.get_brightness_status()}
 
     @openmotics_api(auth=True, check=types(sensor_id=int, temperature=float, humidity=float, brightness=int))
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):

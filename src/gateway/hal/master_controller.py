@@ -17,11 +17,11 @@ Module for communicating with the Master
 """
 from __future__ import absolute_import
 
-from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
+from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
+    GroupActionDTO, InputDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
+    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStateDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatAircoStatusDTO, \
-    ThermostatDTO, ThermostatGroupDTO, ModuleDTO, GlobalFeedbackDTO, \
-    OutputStateDTO, LegacyStartupActionDTO, LegacyScheduleDTO, \
-    DimmerConfigurationDTO
+    ThermostatDTO, ThermostatGroupDTO
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -335,13 +335,13 @@ class MasterController(object):
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         raise NotImplementedError()
 
-    def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
+    def load_sensor(self, sensor_id):  # type: (int) -> MasterSensorDTO
         raise NotImplementedError()
 
-    def load_sensors(self):  # type: () -> List[SensorDTO]
+    def load_sensors(self):  # type: () -> List[MasterSensorDTO]
         raise NotImplementedError()
 
-    def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> None
+    def save_sensors(self, sensors):  # type: (List[MasterSensorDTO]) -> None
         raise NotImplementedError()
 
     # PulseCounters

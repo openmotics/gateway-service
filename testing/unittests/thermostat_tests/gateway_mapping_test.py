@@ -13,21 +13,24 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import unittest
-import xmlrunner
 import logging
+import unittest
 
-from peewee import SqliteDatabase
+import xmlrunner
 from mock import Mock
+from peewee import SqliteDatabase
 
+from gateway.dto import ThermostatDTO, ThermostatScheduleDTO, SensorStatusDTO
+from gateway.gateway_api import GatewayApi
+from gateway.models import DaySchedule, Feature, Output, \
+    OutputToThermostatGroup, Preset, Pump, PumpToValve, Room, Sensor, \
+    Thermostat, ThermostatGroup, Valve, ValveToThermostat
+from gateway.output_controller import OutputController
+from gateway.pubsub import PubSub
+from gateway.sensor_controller import SensorController
+from gateway.thermostat.gateway.thermostat_controller_gateway import \
+    ThermostatControllerGateway
 from ioc import SetTestMode, SetUpTestInjections
-from gateway.models import (
-    Sensor, Feature, Output, Room,
-    ThermostatGroup, OutputToThermostatGroup, Pump,
-    Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule
-)
-from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
-from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatControllerGateway
 from logs import Logs
 
 MODELS = [Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump, Sensor,
@@ -53,14 +56,18 @@ class GatewayThermostatMappingTests(unittest.TestCase):
 
     @staticmethod
     def _create_controller(get_sensor_temperature_status=None):
-        gateway_api = Mock()
+        gateway_api = Mock(GatewayApi)
         gateway_api.get_timezone = lambda: 'Europe/Brussels'
         gateway_api.get_sensor_temperature_status = get_sensor_temperature_status
 
+        sensor_controller = Mock(SensorController)
+        sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(x, value=10.0)
+
         SetUpTestInjections(gateway_api=gateway_api,
                             message_client=Mock(),
-                            output_controller=Mock(),
-                            pubsub=Mock())
+                            output_controller=Mock(OutputController),
+                            sensor_controller=sensor_controller,
+                            pubsub=Mock(PubSub))
         thermostat_controller = ThermostatControllerGateway()
         SetUpTestInjections(thermostat_controller=thermostat_controller)
         return thermostat_controller
@@ -188,10 +195,10 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                                      end_day_2='22:00',
                                                      temp_night=16.0)
 
-        Sensor.create(number=15)
+        sensor = Sensor.create(id=15, source='master', external_id='0', physical_quantity='temperature', name='')
 
         dto.room = 5
-        dto.sensor = 15
+        dto.sensor = sensor.id
         dto.output0 = 5
         dto.name = 'changed'
         dto.auto_thu = ThermostatScheduleDTO(temp_night=10,
@@ -209,6 +216,31 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         self.assertEqual(1, len(heating_thermostats))
         dto = heating_thermostats[0]  # type: ThermostatDTO
 
+        assert ThermostatDTO(id=10,
+                             name='changed',
+                             setp3=16.0,
+                             setp4=15.0,
+                             setp5=22.0,
+                             sensor=15,
+                             pid_p=120.0,
+                             pid_i=0.0,
+                             pid_d=0.0,
+                             room=5,
+                             output0=5,
+                             permanent_manual=True,
+                             auto_mon=default_schedule_dto,
+                             auto_tue=default_schedule_dto,
+                             auto_wed=default_schedule_dto,
+                             auto_thu=ThermostatScheduleDTO(temp_night=10.0,
+                                                            temp_day_1=15.0,
+                                                            temp_day_2=30.0,
+                                                            start_day_1='08:00',
+                                                            end_day_1='10:30',
+                                                            start_day_2='16:00',
+                                                            end_day_2='18:45'),
+                             auto_fri=default_schedule_dto,
+                             auto_sat=default_schedule_dto,
+                             auto_sun=default_schedule_dto) == dto
         self.assertEqual(ThermostatDTO(id=10,
                                        name='changed',
                                        setp3=16.0,

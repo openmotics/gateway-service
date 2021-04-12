@@ -25,22 +25,23 @@ from gateway.events import GatewayEvent
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.models import BaseModel
+from gateway.dto.base import BaseDTO
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Optional, Callable, Type, List
+    from typing import Any, Callable, List, Optional, Type, TypeVar
     from gateway.maintenance_controller import MaintenanceController
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('openmotics')
 
 
 class SyncStructure(object):
-    def __init__(self, orm_model, name, skip=None):  # type: (Type[BaseModel], str, Optional[Callable[[BaseModel], bool]]) -> None
+    def __init__(self, orm_model, name, skip=None):  # type: (Type[BaseModel], str, Optional[Callable[[Any], bool]]) -> None
         self.orm_model = orm_model  # type: Type[BaseModel]
         self.name = name  # type: str
-        self.skip = skip  # type: Optional[Callable[[BaseModel], bool]]
+        self.skip = skip  # type: Optional[Callable[[Any], bool]]
 
 
 class BaseController(object):
