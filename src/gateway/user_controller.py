@@ -21,6 +21,7 @@ from __future__ import absolute_import
 import logging
 import uuid
 import time
+import random
 import six
 from ioc import Injectable, Inject, Singleton, INJECTED
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken
@@ -46,6 +47,8 @@ class UserController(object):
         """ Constructor a new UserController. """
         self._config = config
         self.authentication_controller = authentication_controller
+        self.user_cache = []  # type: List[UserDTO]
+        self.load_users()
 
     def start(self):
         # type: () -> None
@@ -78,9 +81,25 @@ class UserController(object):
         # type: (UserDTO) -> None
         """ Saves one instance of a user with the defined fields in param fields """
         _ = self
+
+        for cached_user in self.user_cache:
+            if cached_user.username == user_dto.username:
+                raise RuntimeError('Cannot save the requested user: User already exists')
+        # set some default values
+        if 'role' not in user_dto.loaded_fields:
+            user_dto.role = User.UserRoles.USER
+        if 'pin_code' not in user_dto.loaded_fields:
+            user_dto.pin_code = str(self.generate_new_pin_code()).zfill(4)
+        elif self.check_if_pin_exists(user_dto.pin_code):
+            raise RuntimeError('The requested pin code already exists, Cannot save a user with the same pin code')
+        # to keep it backwards compatible, save the password as the pin code
+        if 'password' not in user_dto.loaded_fields:
+            user_dto.set_password(user_dto.pin_code)
+
         user_orm = UserMapper.dto_to_orm(user_dto)
         UserController._validate(user_orm)
         user_orm.save()
+        self.user_cache.append(user_dto)
 
     def save_users(self, users):
         # type: (List[UserDTO]) -> None
@@ -106,6 +125,7 @@ class UserController(object):
             user_dto = UserMapper.orm_to_dto(user_orm)
             user_dto.clear_password()
             users.append(user_dto)
+        self.user_cache = users
         return users
 
     @staticmethod
@@ -146,6 +166,19 @@ class UserController(object):
     def check_token(self, token):
         result = self.authentication_controller.check_token(token)
         return result is not None
+
+    def generate_new_pin_code(self):
+        # loads the users in the self.users_cache
+        current_pin_codes = [x.pin_code for x in self.user_cache if x.pin_code.isdigit()]
+        while True:
+            new_pin = random.randint(0, 9999)
+            if new_pin not in current_pin_codes:
+                break
+        return new_pin
+
+    def check_if_pin_exists(self, pin):
+        current_pin_codes = [x.pin_code for x in self.user_cache]
+        return pin in current_pin_codes
 
     @staticmethod
     def _validate(user):

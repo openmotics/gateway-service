@@ -200,3 +200,6 @@ class AuthenticationToken(object):
         except Exception as ex:
             raise RuntimeError('Could not get user id from token: {}'.format(ex))
 
+    def __repr__(self):
+        return '<Auth Token: {}, username: {}, Expire_timestamp: {}>'.format(self.token, self.user.username, self.expire_timestamp)
+

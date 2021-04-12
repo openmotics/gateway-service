@@ -48,6 +48,7 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     ThermostatGroupStatusSerializer, ThermostatGroupSerializer, \
     ThermostatAircoStatusSerializer, PumpGroupSerializer, \
     GlobalRTD10Serializer, RTD10Serializer, GlobalFeedbackSerializer
+from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO, \
     GlobalRTD10DTO
 from gateway.enums import ShutterEnums, UserEnums

@@ -26,6 +26,8 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.api.serializers.user import UserSerializer
 from gateway.exceptions import *
+from gateway.models import User
+from gateway.webservice import params_handler
 
 if False:  # MyPy
     from gateway.authentication_controller import AuthenticationToken
@@ -136,15 +138,17 @@ def authentication_handler_v1(pass_token=False, pass_role=False):
 
 # Assign the v1 authentication handler
 cherrypy.tools.authenticated_v1 = cherrypy.Tool('before_handler', authentication_handler_v1)
+cherrypy.tools.params_v1 = cherrypy.Tool('before_handler', params_handler)
 
 
-def openmotics_api_v1(_func=None, auth=False, pass_token=False, pass_role=False):
+def openmotics_api_v1(_func=None, check=None, auth=False, pass_token=False, pass_role=False):
     def decorator_openmotics_api_v1(func):
         updated_func = func
         updated_func = _openmotics_api_v1(updated_func)  # First layer decorator
         if auth is True:
             # Second layer decorator
             updated_func = cherrypy.tools.authenticated_v1(pass_token=pass_token, pass_role=pass_role)(updated_func)
+        updated_func = cherrypy.tools.params(**(check or {}))(updated_func)
         return updated_func
     if _func is None:
         return decorator_openmotics_api_v1
@@ -206,12 +210,29 @@ class Users(RestAPIEndpoint):
         return json.dumps(user_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True, pass_role=True)
-    def POST(self, testpar=None):
-        request_body = cherrypy.request.body.read(int(cherrypy.request.headers['Content-Length']))
+    def POST(self, request_body=None, token=None, role=None):
+        # Authentication:
+        # only ADMIN & TECHNICIAN can create new USER, ADMIN, TECHNICIAN user types,
+        # anyone can create a new COURIER
         if request_body is None:
-            return json.dumps({'user': 'Pass a user body with your post request'})
-        else:
-            return request_body
+            raise WrongInputParametersException('The request body is empty')
+        try:
+            user_json = json.loads(request_body)
+            user_dto = UserSerializer.deserialize(user_json)
+        except Exception:
+            raise ParseException('Could not parse the user json input')
+
+        if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            # Authenticated as a technician or admin, creating the user
+            # if the user is not an admin or technician, check if the user to create is a COURIER
+            if user_dto.role != User.UserRoles.COURIER:
+                raise PermissionError('As a normal user, you can only create a COURIER user')
+
+        try:
+            self._user_controller.save_user(user_dto)
+        except RuntimeError as e:
+            raise WrongInputParametersException('The user could not be saved: {}'.format(e))
+        return UserSerializer.serialize(user_dto)
 
     def PUT(self, user_json=None):
         if user_json is None:
