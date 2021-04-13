@@ -151,3 +151,22 @@ class WebInterfaceTest(unittest.TestCase):
                 'timer': None
             }, json.loads(response)['status'])
             set_status.assert_called()
+
+    def test_set_all_lights_off(self):
+        with mock.patch.object(self.output_controller, 'set_all_lights',
+                               return_value={}) as set_status:
+            self.web.set_all_lights_off()
+            set_status.assert_called_with(action='OFF')
+
+            floor_expectations = [(255, None), (2, 2), (0, 0)]
+            for expectation in floor_expectations:
+                self.web.set_all_lights_floor_off(floor=expectation[0])
+                set_status.assert_called_with(action='OFF', floor_id=expectation[1])
+
+    def test_set_all_lights_on(self):
+        expectations = [(255, None), (2, 2), (0, 0)]
+        with mock.patch.object(self.output_controller, 'set_all_lights',
+                               return_value={}) as set_status:
+            for expectation in expectations:
+                self.web.set_all_lights_floor_on(floor=expectation[0])
+                set_status.assert_called_with(action='ON', floor_id=expectation[1])
