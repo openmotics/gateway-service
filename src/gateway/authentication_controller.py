@@ -18,10 +18,11 @@ authentication manager manages logged in users in the system.
 
 from __future__ import absolute_import
 
+import json
 import time
 import uuid
 
-
+import constants
 from ioc import Injectable, Inject, Singleton, INJECTED
 from gateway.dto import UserDTO
 from gateway.enums import UserEnums
@@ -39,12 +40,23 @@ if False:  # MYPY
 class AuthenticationController(object):
     TERMS_VERSION = 1
 
-
     @Inject
     def __init__(self, token_timeout=INJECTED, token_store=INJECTED):
         # type: (int, TokenStore) -> None
         self._token_timeout = token_timeout
         self.token_store = token_store  # type: TokenStore
+        self.api_secret = AuthenticationController._retrieve_api_secret()
+
+    @staticmethod
+    def _retrieve_api_secret():
+        conf_file = constants.get_renson_main_config_file()
+        try:
+            with open(conf_file, 'rb') as conf_file_stream:
+                conf_json = json.load(conf_file_stream)
+                secret = conf_json['secret']
+            return secret
+        except Exception:
+            return None
 
     def login(self, user_dto, accept_terms=False, timeout=None):
         # type: (UserDTO, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
@@ -85,6 +97,9 @@ class AuthenticationController(object):
 
     def remove_token_for_user(self, user_dto):
         self.token_store.remove_token_for_user(user_dto)
+
+    def check_api_secret(self, api_secret):
+        return self.api_secret == api_secret
 
 
 @Injectable.named('token_store')

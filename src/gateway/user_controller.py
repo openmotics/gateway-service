@@ -108,10 +108,12 @@ class UserController(object):
             self.save_user(user_dto)
 
     def load_user(self, user_id):
-        # type: (int) -> UserDTO
+        # type: (int) -> Optional[UserDTO]
         """  Returns a UserDTO of the requested user """
         _ = self
         user_orm = User.select().where(User.id == user_id).first()
+        if user_orm is None:
+            return None
         user_dto = UserMapper.orm_to_dto(user_orm)
         user_dto.clear_password()
         return user_dto
@@ -128,6 +130,28 @@ class UserController(object):
         self.user_cache = users
         return users
 
+    def activate_user(self, user_id):
+        _ = self
+        try:
+            user_orm = User.select().where(User.id == user_id).first()
+            user_orm.is_active = True
+            user_orm.save()
+        except Exception as e:
+            raise RuntimeError('Could not save the is_active flag to the database: {}'.format(e))
+
+    def update_user(self, user_dto):
+        # type: (UserDTO) -> None
+        _ = self
+        try:
+            user_orm = User.select().where(User.id == user_dto.id).first()
+            for field in user_dto.loaded_fields:
+                if hasattr(user_orm, field):
+                    setattr(user_orm, field, getattr(user_dto, field))
+            user_orm.save()
+        except Exception as e:
+            raise RuntimeError('Could not update the user: {}'.format(e))
+
+
     @staticmethod
     def get_number_of_users():
         # type: () -> int
@@ -143,14 +167,15 @@ class UserController(object):
         except:
             pass
 
-        # set username to lowercase to compare on username
-        first_name = user_dto.first_name.lower()
-        last_name = user_dto.last_name.lower()
+        first_name = user_dto.first_name
+        last_name = user_dto.last_name
 
         # check if the removed user is not the last admin user of the system
         if UserController.get_number_of_users() <= 1:
             raise Exception(UserEnums.DeleteErrors.LAST_ACCOUNT)
-        User.delete().where((User.first_name == first_name) & (User.last_name == last_name)).execute()
+        query = User.delete().where((User.first_name == first_name) & (User.last_name == last_name))
+        print(' -*- Delete query: {}'.format(query))
+        query.execute()
 
     def login(self, user_dto, accept_terms=False, timeout=None):
         # type: (UserDTO, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
