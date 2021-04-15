@@ -165,6 +165,7 @@ def openmotics_api_v1(_func=None, check=None, auth=False, pass_token=False, pass
 # ----------------------------
 
 class RestAPIEndpoint(object):
+    exposed = True
     API_ENDPOINT = None  # type: Optional[str]
 
     @Inject
@@ -193,7 +194,6 @@ class RestAPIEndpoint(object):
         return 'Rest Endpoint class: "{}"'.format(self.__class__.__name__)
 
 
-@cherrypy.expose
 class Users(RestAPIEndpoint):
     API_ENDPOINT = '/api/v1/users'
 
@@ -260,7 +260,7 @@ class Users(RestAPIEndpoint):
         if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
             # if the user is not an admin or technician, check if the user to create is a COURIER
             if user_dto.role != User.UserRoles.COURIER:
-                raise PermissionError('As a normal user, you can only create a COURIER user')
+                raise UnAuthorizedException('As a normal user, you can only create a COURIER user')
 
         try:
             self._user_controller.save_user(user_dto)
@@ -370,7 +370,6 @@ class Users(RestAPIEndpoint):
             raise ItemDoesNotExistException('endpoint does not exist')
 
 
-@cherrypy.expose
 class Apartment(RestAPIEndpoint):
     API_ENDPOINT = '/api/v1/apartments'
 
