@@ -33,6 +33,7 @@ class UserMapper(object):
                            last_name=orm_object.last_name,
                            role=orm_object.role,
                            pin_code=orm_object.pin_code,
+                           language=orm_object.language,
                            apartment=None,
                            accepted_terms=orm_object.accepted_terms)
         try:

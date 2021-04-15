@@ -547,6 +547,12 @@ class User(BaseModel):
         DE = 'Deutsh'
         NL = 'Nederlands'
         FR = 'Francais'
+        ALL = [
+            EN,
+            DE,
+            NL,
+            FR,
+        ]
 
     id = AutoField()
     first_name = CharField(null=False)

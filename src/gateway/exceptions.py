@@ -26,6 +26,12 @@ class GatewayException(Exception):
             result += ': {}'.format(self.extra_message)
         return result
 
+    @classmethod
+    def bytes_message(cls):
+        result = cls.DESC
+        result_bytes = bytes(result.encode('utf-8'))
+        return result_bytes
+
 
 class UnsupportedException(GatewayException):
     DESC = 'action is not supported'

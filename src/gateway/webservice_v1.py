@@ -252,7 +252,17 @@ class Users(RestAPIEndpoint):
             raise WrongInputParametersException('The request body is empty')
         try:
             user_json = json.loads(request_body)
+            tmp_password = None
+            if 'password' in user_json:
+                tmp_password = user_json['password']
+                del user_json['password']
             user_dto = UserSerializer.deserialize(user_json)
+            if tmp_password is not None:
+                user_dto.set_password(tmp_password)
+
+            if 'pin_code' in user_dto.loaded_fields:
+                user_dto.pin_code = None
+                user_dto.loaded_fields.remove('pin_code')
         except Exception:
             raise ParseException('Could not parse the user json input')
 

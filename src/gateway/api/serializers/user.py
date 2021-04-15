@@ -38,6 +38,7 @@ class UserSerializer(object):
                 'first_name': dto_object.first_name,
                 'last_name': dto_object.last_name,
                 'role': dto_object.role,
+                'language': dto_object.language,
                 # 'pin_code': dto_object.pin_code,  # Hide the pin code for the api
                 'apartment': None,
                 'accepted_terms': dto_object.accepted_terms}  # type: Dict[str, Any]
@@ -51,7 +52,7 @@ class UserSerializer(object):
         # type: (Dict[str,Any]) -> UserDTO
         user_id = api_data['id'] if 'id' in api_data else None
         user_dto = UserDTO(user_id)
-        for field in ['first_name', 'last_name', 'role', 'pin_code', 'accepted_terms']:
+        for field in ['first_name', 'last_name', 'role', 'pin_code', 'language', 'accepted_terms']:
             if field in api_data:
                 setattr(user_dto, field, api_data[field])
         apartment_dto = None

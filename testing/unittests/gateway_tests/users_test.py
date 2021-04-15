@@ -86,6 +86,17 @@ class UserControllerTest(unittest.TestCase):
         num_users = self.controller.get_number_of_users()
         self.assertEqual(2, num_users)
 
+        # setup test credentials
+        user_dto = UserDTO(username='TEST',
+                           role=User.UserRoles.USER,
+                           pin_code='1234',
+                           language='TEST')
+        user_dto.set_password("test")
+        self.assertRaises(RuntimeError, self.controller.save_user, user_dto)
+
+        num_users = self.controller.get_number_of_users()
+        self.assertEqual(2, num_users)
+
     def test_empty(self):
         """ Test an empty database. """
         # setup test credentials

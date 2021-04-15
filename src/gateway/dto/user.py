@@ -29,7 +29,7 @@ if False:  # MYPY
 class UserDTO(BaseDTO):
     @capture_fields
     def __init__(self, id=None, username='', first_name='', last_name='', role=None,
-                 pin_code=None, apartment=None, accepted_terms=0):
+                 pin_code=None, apartment=None, language='English', accepted_terms=0):
         self.id = id  # type: Optional[int]
         self.first_name = first_name  # type: str
         self.last_name = last_name  # type: str
@@ -37,6 +37,7 @@ class UserDTO(BaseDTO):
         self.pin_code = pin_code  # type: str
         self.apartment = apartment  # type: ApartmentDTO
         self.hashed_password = ''  # type: str
+        self.language = language  # type: str
         self.accepted_terms = accepted_terms  # type: int
         # if no first and last name is given, allow to set to set the name to username
         if first_name == '' and last_name == '':
@@ -82,6 +83,10 @@ class UserDTO(BaseDTO):
         Clears the hashed password field so that it is hidden for future reference.
         """
         self.hashed_password = ''
+        if '_hashed_password' in self._loaded_fields:
+            self._loaded_fields.remove('_hashed_password')
+        if 'password' in self._loaded_fields:
+            self._loaded_fields.remove('password')
 
     def set_password(self, password):
         # type: (str) -> None

@@ -96,6 +96,10 @@ class UserController(object):
         if 'password' not in user_dto.loaded_fields:
             user_dto.set_password(user_dto.pin_code)
 
+        if 'language' in user_dto.loaded_fields:
+            if user_dto.language not in User.UserLanguages.ALL:
+                raise RuntimeError('Could not save the user with an unknown language: {}'.format(user_dto.language))
+
         user_orm = UserMapper.dto_to_orm(user_dto)
         UserController._validate(user_orm)
         user_orm.save()
