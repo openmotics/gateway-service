@@ -56,6 +56,7 @@ class ApiUsersTests(unittest.TestCase):
             role='USER',
             pin_code='1111',
             apartment=None,
+            language='English',
             accepted_terms=1
         )
         self.normal_user_2 = UserDTO(
@@ -64,6 +65,7 @@ class ApiUsersTests(unittest.TestCase):
             role='USER',
             pin_code='2222',
             apartment=None,
+            language='Nederlands',
             accepted_terms=0
         )
         self.normal_user_3 = UserDTO(
@@ -72,6 +74,7 @@ class ApiUsersTests(unittest.TestCase):
             role='USER',
             pin_code='some_random_string',
             apartment=None,
+            language='Francais',
             accepted_terms=1
         )
 
@@ -280,16 +283,101 @@ class ApiUsersTests(unittest.TestCase):
             save_user_func.assert_called_once_with(user_dto_to_save)
 
     def test_activate_user(self):
-        user_code = {'code': '1234'}
-        with mock.patch.object(self.users_controller, 'activate_user') as save_user_func:
+        user_code = {'code': self.normal_user_2.pin_code}
+        with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
+                mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.POST('activate',
+                                     '2',
                                      token=auth_token,
                                      role=auth_token.user.role,
                                      request_body=json.dumps(user_code))
+            self.assertEqual(b'OK', response)
 
+    def test_activate_user_wrong_code(self):
+        user_code = {'code': 'WRONG_CODE'}
+        with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
+                mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            response = self.web.POST('activate',
+                                     '2',
+                                     token=auth_token,
+                                     role=auth_token.user.role,
+                                     request_body=json.dumps(user_code))
+            self.assertTrue(UnAuthorizedException.bytes_message() in response)
+
+    def test_activate_user_no_body(self):
+        with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
+                mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            response = self.web.POST('activate',
+                                     '2',
+                                     token=auth_token,
+                                     role=auth_token.user.role,
+                                     request_body=None)
+            self.assertTrue(WrongInputParametersException.bytes_message() in response)
 
     # ----------------------------------------------------------------
     # --- PUT
     # ----------------------------------------------------------------
 
+    def test_update_user(self):
+        user_to_update = {
+            'first_name': 'CHANGED'
+        }
+        # Change the user so that it will be correctly loaded
+        self.normal_user_2.first_name = user_to_update['first_name']
+        with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
+                mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2) as load_user_func:
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            response = self.web.PUT('2',
+                                    token=auth_token,
+                                    role=auth_token.user.role,
+                                    request_body=json.dumps(user_to_update))
+
+            resp_dict = json.loads(response)
+
+            self.assertNotIn('password', resp_dict)
+            user_dto_response = UserDTO(**resp_dict)
+            self.assertNotIn('pin_code', resp_dict)  # Do check that the pin code is not passed to the end user
+            user_dto_response.pin_code = self.normal_user_2.pin_code  # Manually set the pin code since this is filtered out in the api
+            self.assertEqual(self.normal_user_2, user_dto_response)
+
+    def test_update_user_wrong_permission(self):
+        user_to_update = {
+            'first_name': 'CHANGED'
+        }
+        # Change the user so that it will be correctly loaded
+        self.normal_user_2.first_name = user_to_update['first_name']
+        with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
+                mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2) as load_user_func:
+            auth_token = AuthenticationToken(user=self.normal_user_3, token='test-token', expire_timestamp=int(time.time() + 3600))
+            response = self.web.PUT('2',
+                                    token=auth_token,
+                                    role=auth_token.user.role,
+                                    request_body=json.dumps(user_to_update))
+
+            self.assertTrue(UnAuthorizedException.bytes_message() in response)
+
+    # ----------------------------------------------------------------
+    # --- DELETE
+    # ----------------------------------------------------------------
+
+    def test_delete_user(self):
+        with mock.patch.object(self.users_controller, 'remove_user') as save_user_func, \
+                mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2) as load_user_func:
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            response = self.web.DELETE('2',
+                                       token=auth_token,
+                                       role=auth_token.user.role)
+            self.assertEqual(b'OK', response)
+
+    def test_delete_user_unauthorized(self):
+        with mock.patch.object(self.users_controller, 'remove_user') as save_user_func, \
+                mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2) as load_user_func:
+            auth_token = None
+            auth_role = None
+            response = self.web.DELETE('2',
+                                       token=auth_token,
+                                       role=auth_role)
+            self.assertTrue(UnAuthorizedException.bytes_message() in response)

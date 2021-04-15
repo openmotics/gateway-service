@@ -303,6 +303,7 @@ class Users(RestAPIEndpoint):
             raise NotImplementedException('Rfid token check not implemented yet')
         # if all checks are passed, activate the user
         self._user_controller.activate_user(user_id)
+        return 'OK'
 
     @openmotics_api_v1(auth=False, pass_role=True)
     def POST(self, *args, **kwargs):
@@ -341,7 +342,7 @@ class Users(RestAPIEndpoint):
         user_dto.id = user_id
         self._user_controller.update_user(user_dto)
         user_loaded = self._user_controller.load_user(user_id)
-        return UserSerializer.serialize(user_loaded)
+        return json.dumps(UserSerializer.serialize(user_loaded))
 
     @openmotics_api_v1(auth=False, pass_role=True, pass_token=True)
     def PUT(self, *args, **kwargs):
@@ -367,7 +368,7 @@ class Users(RestAPIEndpoint):
                 raise UnAuthorizedException('As a non admin or technician user, you cannot delete another user')
 
         self._user_controller.remove_user(user_to_delete_dto)
-        return
+        return 'OK'
 
     @openmotics_api_v1(auth=False, pass_role=True, pass_token=True)
     def DELETE(self, *args, **kwargs):

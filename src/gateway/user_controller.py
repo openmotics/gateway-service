@@ -178,7 +178,6 @@ class UserController(object):
         if UserController.get_number_of_users() <= 1:
             raise Exception(UserEnums.DeleteErrors.LAST_ACCOUNT)
         query = User.delete().where((User.first_name == first_name) & (User.last_name == last_name))
-        print(' -*- Delete query: {}'.format(query))
         query.execute()
 
     def login(self, user_dto, accept_terms=False, timeout=None):
