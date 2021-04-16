@@ -21,7 +21,7 @@ import mock
 
 from bus.om_bus_client import MessageClient
 from gateway.dto import OutputStateDTO, ScheduleDTO, VentilationDTO, \
-    VentilationSourceDTO, VentilationStatusDTO
+    VentilationSourceDTO, VentilationStatusDTO, ModuleDTO
 from gateway.gateway_api import GatewayApi
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
@@ -47,10 +47,12 @@ class WebInterfaceTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
+        self.maxDiff = None
         self.output_controller = mock.Mock(OutputController)
         self.scheduling_controller = mock.Mock(SchedulingController)
         self.ventilation_controller = mock.Mock(VentilationController)
         self.gateway_api = mock.Mock(GatewayApi)
+        self.module_controller = mock.Mock(ModuleController)
         SetUpTestInjections(frontpanel_controller=mock.Mock(FrontpanelController),
                             gateway_api=self.gateway_api,
                             group_action_controller=mock.Mock(GroupActionController),
@@ -66,7 +68,7 @@ class WebInterfaceTest(unittest.TestCase):
                             thermostat_controller=mock.Mock(ThermostatController),
                             user_controller=mock.Mock(UserController),
                             ventilation_controller=self.ventilation_controller,
-                            module_controller=mock.Mock(ModuleController))
+                            module_controller=self.module_controller)
         self.web = WebInterface()
 
     def test_output_status(self):
@@ -170,3 +172,36 @@ class WebInterfaceTest(unittest.TestCase):
             for expectation in expectations:
                 self.web.set_all_lights_floor_on(floor=expectation[0])
                 set_status.assert_called_with(action='ON', floor_id=expectation[1])
+
+    def test_get_modules_information(self):
+        master_modules = [ModuleDTO(source=ModuleDTO.Source.MASTER,
+                                    module_type=ModuleDTO.ModuleType.OUTPUT,
+                                    address='079.000.000.001',
+                                    hardware_type=ModuleDTO.HardwareType.INTERNAL,
+                                    firmware_version='3.1.0',
+                                    hardware_version='4',
+                                    order=0,
+                                    online=True)]
+        energy_modules = [ModuleDTO(source=ModuleDTO.Source.GATEWAY,
+                                    module_type=ModuleDTO.ModuleType.ENERGY,
+                                    address='2',
+                                    hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                                    firmware_version='1.2.3',
+                                    order=0)]
+        with mock.patch.object(self.module_controller, 'load_master_modules', return_value=master_modules) as load_master_modules, \
+                mock.patch.object(self.module_controller, 'load_energy_modules', return_value=energy_modules) as load_energy_modules:
+            api_response = json.loads(self.web.get_modules_information())
+            load_master_modules.assert_called()
+            load_energy_modules.assert_called()
+            self.assertDictEqual(api_response, {"modules": {"energy": {'2': {'address': '2',
+                                                                             'firmware': '1.2.3',
+                                                                             'id': 0,
+                                                                             'type': 'E'}},
+                                                            "master": {"079.000.000.001": {"category": "OUTPUT",
+                                                                                           "is_can": False,
+                                                                                           "hardware_type": "internal",
+                                                                                           "module_nr": 0,
+                                                                                           "is_virtual": False,
+                                                                                           "address": "079.000.000.001",
+                                                                                           "type": "O"}}},
+                                                "success": True})
