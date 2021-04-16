@@ -165,15 +165,13 @@ def openmotics_api_v1(_func=None, check=None, auth=False, pass_token=False, pass
 # ----------------------------
 
 class RestAPIEndpoint(object):
-    exposed = True
+    exposed = True  # Cherrypy specific flag to set the class as exposed
     API_ENDPOINT = None  # type: Optional[str]
 
     @Inject
     def __init__(self, user_controller=INJECTED):
         # type: (UserController) -> None
         self._user_controller = user_controller
-        pass
-
 
     def GET(self):
         raise NotImplementedException
@@ -197,8 +195,40 @@ class RestAPIEndpoint(object):
 class Users(RestAPIEndpoint):
     API_ENDPOINT = '/api/v1/users'
 
-    def get_users(self, **kwargs):
-        role = kwargs.get('role')
+    def __init__(self):
+        # type: () -> None
+        super(Users, self).__init__()
+        # Set a custom route dispatcher in the class so that you have full
+        # control over how the routes are defined.
+        self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
+        # --- GET ---
+        self.route_dispatcher.connect('get_users', '',
+                                      controller=self, action='get_users',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_user', '/:user_id',
+                                      controller=self, action='get_user',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_available_code', '/available_code',
+                                      controller=self, action='get_available_code',
+                                      conditions={'method': ['GET']})
+        # --- POST ---
+        self.route_dispatcher.connect('post_user', '',
+                                      controller=self, action='post_user',
+                                      conditions={'method': ['POST']})
+        self.route_dispatcher.connect('post_activate_user', '/activate/:user_id',
+                                      controller=self, action='post_activate_user',
+                                      conditions={'method': ['POST']})
+        # --- PUT ---
+        self.route_dispatcher.connect('put_user', '/:user_id',
+                                      controller=self, action='put_update_user',
+                                      conditions={'method': ['PUT']})
+        # --- DELETE ---
+        self.route_dispatcher.connect('delete_user', '/:user_id',
+                                      controller=self, action='delete_user',
+                                      conditions={'method': ['DELETE']})
+
+    @openmotics_api_v1(auth=False, pass_role=True)
+    def get_users(self, role=None):
         users = self._user_controller.load_users()
         # Filter the users when no role is provided or when the role is not admin
         if role is None or role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
@@ -206,12 +236,11 @@ class Users(RestAPIEndpoint):
         users_serial = [UserSerializer.serialize(user) for user in users]
         return json.dumps(users_serial)
 
-    def get_user(self, **kwargs):
+    @openmotics_api_v1(auth=False, pass_role=True)
+    def get_user(self, user_id, role=None):
         # return the requested user
-        user_id = kwargs.get('user_id')
         if user_id is None:
             raise WrongInputParametersException('Could not get the user_id from the request')
-        role = kwargs.get('role')
         user = self._user_controller.load_user(user_id=user_id)
         if user is None:
             raise ItemDoesNotExistException('User with id {} does not exists'.format(user_id))
@@ -222,6 +251,7 @@ class Users(RestAPIEndpoint):
         user_serial = UserSerializer.serialize(user)
         return json.dumps(user_serial)
 
+    @openmotics_api_v1(auth=False, pass_role=False)
     def get_available_code(self, **kwargs):
         api_secret = kwargs.get('X-API-Secret')
         if api_secret is None:
@@ -231,23 +261,10 @@ class Users(RestAPIEndpoint):
         return str(self._user_controller.generate_new_pin_code())
 
     @openmotics_api_v1(auth=False, pass_role=True)
-    def GET(self, *args, **kwargs):
-        if not args:  # empty, just return all the users
-            return self.get_users(**kwargs)
-        elif len(args) == 1 and args[0].isdigit():
-            kwargs['user_id'] = int(args[0])
-            return self.get_user(**kwargs)
-        elif len(args) == 1 and args[0] == 'available_code':
-            return self.get_available_code(**kwargs)
-
-    # ===========================================================================
-
-    def post_user(self, **kwargs):
+    def post_user(self, role=None, request_body=None):
         # Authentication:
         # only ADMIN & TECHNICIAN can create new USER, ADMIN, TECHNICIAN user types,
         # anyone can create a new COURIER
-        request_body = kwargs.get('request_body')
-        role = kwargs.get('role')
         if request_body is None:
             raise WrongInputParametersException('The request body is empty')
         try:
@@ -276,12 +293,11 @@ class Users(RestAPIEndpoint):
             self._user_controller.save_user(user_dto)
         except RuntimeError as e:
             raise WrongInputParametersException('The user could not be saved: {}'.format(e))
-        return UserSerializer.serialize(user_dto)
+        return json.dumps(UserSerializer.serialize(user_dto))
 
-    def post_activate_user(self, **kwargs):
+    @openmotics_api_v1(auth=False, pass_role=False)
+    def post_activate_user(self, user_id, request_body=None):
         # request to activate a certain user
-        user_id = kwargs.get('user_id')
-        request_body = kwargs.get('request_body')
         if request_body is None:
             raise WrongInputParametersException('Body expected when calling the activate function')
 
@@ -305,20 +321,10 @@ class Users(RestAPIEndpoint):
         self._user_controller.activate_user(user_id)
         return 'OK'
 
-    @openmotics_api_v1(auth=False, pass_role=True)
-    def POST(self, *args, **kwargs):
-        if not args:  # empty, just create a new user
-            return self.post_user(**kwargs)
-        elif len(args) == 2 and args[0] == 'activate':
-            kwargs['user_id'] = int(args[1])
-            return self.post_activate_user(**kwargs)
-
-    def put_update_user(self, **kwargs):
-        request_body = kwargs.get('request_body')
-        token = kwargs.get('token')
+    @openmotics_api_v1(auth=False, pass_role=False, pass_token=True)
+    def put_update_user(self, user_id, token=None, request_body=None, **kwargs):
         if token is None:
             raise UnAuthorizedException('Cannot change a user without being logged in')
-        user_id = kwargs.get('user_id')
         if request_body is None:
             raise WrongInputParametersException('The request body is empty')
         try:
@@ -344,18 +350,8 @@ class Users(RestAPIEndpoint):
         user_loaded = self._user_controller.load_user(user_id)
         return json.dumps(UserSerializer.serialize(user_loaded))
 
-    @openmotics_api_v1(auth=False, pass_role=True, pass_token=True)
-    def PUT(self, *args, **kwargs):
-        if not args:  # empty, just return all the users
-            raise ItemDoesNotExistException('No user ID is present in the request')
-        elif len(args) == 1 and args[0].isdigit():
-            kwargs['user_id'] = int(args[0])
-            return self.put_update_user(**kwargs)
-
-    def delete_user(self, **kwargs):
-        token = kwargs.get('token')
-        user_id = kwargs.get('user_id')
-
+    @openmotics_api_v1(auth=False, pass_role=False, pass_token=True)
+    def delete_user(self, user_id, token=None):
         user_to_delete_dto = self._user_controller.load_user(user_id)
         if user_to_delete_dto is None:
             raise ItemDoesNotExistException('Cannot delete an user that does not exists')
@@ -369,16 +365,6 @@ class Users(RestAPIEndpoint):
 
         self._user_controller.remove_user(user_to_delete_dto)
         return 'OK'
-
-    @openmotics_api_v1(auth=False, pass_role=True, pass_token=True)
-    def DELETE(self, *args, **kwargs):
-        if not args:  # empty, just return all the users
-            raise ItemDoesNotExistException('No user ID is present in the request')
-        elif len(args) == 1 and args[0].isdigit():
-            kwargs['user_id'] = int(args[0])
-            return self.delete_user(**kwargs)
-        else:
-            raise ItemDoesNotExistException('endpoint does not exist')
 
 
 class Apartment(RestAPIEndpoint):
@@ -399,10 +385,13 @@ class Apartment(RestAPIEndpoint):
 @Injectable.named('web_service_v1')
 @Singleton
 class WebServiceV1(object):
-    def __init__(self, esafe_endpoints=INJECTED, web_service=INJECTED):
-        # type: (List[RestAPIEndpoint], Optional[WebService]) -> None
+    def __init__(self, web_service=INJECTED):
+        # type: (Optional[WebService]) -> None
         self.web_service = web_service
-        self.esafe_endpoints = esafe_endpoints
+        self.endpoints = [
+            Users(),
+            Apartment()
+        ]
 
     def start(self):
         self.add_api_tree()
@@ -416,16 +405,17 @@ class WebServiceV1(object):
 
     def add_api_tree(self):
         mounts = []
-        if self.esafe_endpoints is None:
+        if self.endpoints is None:
             raise AttributeError('No esafe endpoints defined at this stage, could not add them to the api tree')
-        for endpoint in self.esafe_endpoints:
+        for endpoint in self.endpoints:
             if endpoint.API_ENDPOINT is None:
                 logger.error('Could not add endpoint {}: No "ENDPOINT" variable defined in the endpoint object.'.format(endpoint))
                 continue
             root = endpoint
             script_name = endpoint.API_ENDPOINT
+            dispatcher = getattr(endpoint, 'route_dispatcher', cherrypy.dispatch.MethodDispatcher())
             config = {
-                '/': {'request.dispatch': cherrypy.dispatch.MethodDispatcher()}
+                '/': {'request.dispatch': dispatcher}
             }
             mounts.append({
                 'root': root,
