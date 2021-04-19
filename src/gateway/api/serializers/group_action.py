@@ -32,7 +32,8 @@ class GroupActionSerializer(object):
     def serialize(group_action_dto, fields):  # type: (GroupActionDTO, Optional[List[str]]) -> Dict
         data = {'id': group_action_dto.id,
                 'name': group_action_dto.name,
-                'actions': ','.join([str(action) for action in group_action_dto.actions])}
+                'actions': ','.join([str(action) for action in group_action_dto.actions]),
+                'internal': group_action_dto.internal}
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod

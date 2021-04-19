@@ -22,7 +22,7 @@ from master.core.group_action import GroupAction
 from master.core.basic_action import BasicAction
 
 if False:  # MYPY
-    from typing import List, Dict, Any, Optional
+    from typing import List, Dict, Any, Optional, Tuple
 
 
 class GroupActionMapper(object):
@@ -30,9 +30,11 @@ class GroupActionMapper(object):
 
     @staticmethod
     def orm_to_dto(orm_object):  # type: (GroupAction) -> GroupActionDTO
+        complete, classic_actions = GroupActionMapper.core_actions_to_classic_actions(orm_object.actions)
         return GroupActionDTO(id=orm_object.id,
                               name=orm_object.name,
-                              actions=GroupActionMapper.core_actions_to_classic_actions(orm_object.actions))
+                              actions=classic_actions,
+                              internal=not complete)  # Mark incomplete as internal to discourage editing
 
     @staticmethod
     def dto_to_orm(group_action_dto):  # type: (GroupActionDTO) -> GroupAction
@@ -45,18 +47,20 @@ class GroupActionMapper(object):
         return GroupAction(**data)
 
     @staticmethod
-    def core_actions_to_classic_actions(actions):  # type: (List[BasicAction]) -> List[int]
+    def core_actions_to_classic_actions(actions):  # type: (List[BasicAction]) -> Tuple[bool, List[int]]
         classic_actions = []
+        complete = True
         for action in actions:
             # This mapping is based on the comments in the function below, since mapping back often only makes sense
             # for calls that can be mapped forward as well. It has some extras though.
+            new_classic_actions = []
             if action.action_type == 0:
                 if action.action in [0, 1, 16]:
-                    classic_actions += [{0: 160, 1: 161, 16: 162}[action.action], action.device_nr]
+                    new_classic_actions += [{0: 160, 1: 161, 16: 162}[action.action], action.device_nr]
                 elif action.action == 255:
-                    classic_actions += [163 if action.device_nr == 1 else 164, 255]
+                    new_classic_actions += [163 if action.device_nr == 1 else 164, 255]
                 elif action.action == 9:
-                    classic_actions += [169 if action.extra_parameter == 1 else 170, action.device_nr]
+                    new_classic_actions += [169 if action.extra_parameter == 1 else 170, action.device_nr]
                 map_0 = {2: {1: 165, 25: 176, 51: 177, 76: 178, 102: 179, 127: 180, 153: 181, 178: 182, 204: 183, 229: 184, 255: 166},
                          4: {150: 195, 450: 196, 900: 197, 1500: 198, 2220: 199, 3120: 200},
                          7: {150: 201, 450: 202, 900: 203, 1500: 204, 2220: 205, 3120: 206},
@@ -67,54 +71,57 @@ class GroupActionMapper(object):
                         if action.extra_parameter >= key:
                             value = map_0[action.action][key]
                     if value is not None:
-                        classic_actions += [value, action.device_nr]
+                        new_classic_actions += [value, action.device_nr]
             elif action.action_type == 1:
                 if action.action == 0:
-                    classic_actions += [68, action.device_nr]
+                    new_classic_actions += [68, action.device_nr]
                 elif action.action == 1:
-                    classic_actions += [69, action.device_nr]
+                    new_classic_actions += [69, action.device_nr]
             elif action.action_type == 10:
                 if 0 <= action.action <= 5:
                     if action.device_nr <= 255:
-                        classic_actions += [{0: 102, 1: 100, 2: 101, 3: 108, 4: 109, 5: 103}[action.action], action.device_nr]
+                        new_classic_actions += [{0: 102, 1: 100, 2: 101, 3: 108, 4: 109, 5: 103}[action.action], action.device_nr]
                     else:
-                        classic_actions += [{0: 106, 1: 104, 2: 105, 3: 110, 4: 111, 5: 107}[action.action], action.device_nr - 256]
+                        new_classic_actions += [{0: 106, 1: 104, 2: 105, 3: 110, 4: 111, 5: 107}[action.action], action.device_nr - 256]
             elif action.action_type == 19:
                 if action.action == 0:
-                    classic_actions += [2, action.device_nr]
+                    new_classic_actions += [2, action.device_nr]
             elif action.action_type == 80:
-                classic_actions += [{0: 238, 1: 237, 2: 239}[action.action], action.device_nr]
+                new_classic_actions += [{0: 238, 1: 237, 2: 239}[action.action], action.device_nr]
             elif action.action_type == 100:
                 map_100 = {0: 0, 90: 1, 91: 2, 150: 10, 200: 20, 255: 255}
                 if action.action in map_100:
-                    classic_actions += [240, map_100[action.action]]
+                    new_classic_actions += [240, map_100[action.action]]
                 map_100 = {10: 243, 11: 244, 12: 241, 13: 242, 14: 245, 15: 246}
                 if action.action in map_100:
-                    classic_actions += [map_100[action.action], action.device_nr]
+                    new_classic_actions += [map_100[action.action], action.device_nr]
                 map_100_t = {19: (249, 0), 20: (248, 0), 21: (250, 0),
                              22: (249, 32), 23: (248, 32), 24: (250, 32),
                              25: (249, 64), 26: (248, 64), 27: (250, 64)}
                 if action.action in map_100_t:
-                    classic_actions += [247, action.device_nr + map_100_t[action.action][1],
-                                        map_100_t[action.action][0], action.extra_parameter]
+                    new_classic_actions += [247, action.device_nr + map_100_t[action.action][1],
+                                            map_100_t[action.action][0], action.extra_parameter]
                 map_100_t = {40: (249, 228), 31: (248, 228), 42: (250, 228),
                              43: (249, 229), 44: (248, 229), 45: (250, 229),
                              46: (249, 230), 47: (249, 230), 48: (250, 230)}
                 if action.action in map_100_t:
-                    classic_actions += [247, map_100_t[action.action][1],
-                                        map_100_t[action.action][0], action.device_nr]
+                    new_classic_actions += [247, map_100_t[action.action][1],
+                                            map_100_t[action.action][0], action.device_nr]
             elif action.action_type == 251:
                 if action.action == 0:
-                    classic_actions += [{0: 171, 1: 172, 2: 173}[action.extra_parameter], min(255, action.device_nr)]
+                    new_classic_actions += [{0: 171, 1: 172, 2: 173}[action.extra_parameter], min(255, action.device_nr)]
             elif action.action_type == 253:
                 if action.action == 0:
-                    classic_actions += [72, 255]
+                    new_classic_actions += [72, 255]
                 elif action.action == 1:
-                    classic_actions += [75 if action.device_nr else 76, 255]
+                    new_classic_actions += [75 if action.device_nr else 76, 255]
             elif action.action_type == 254:
                 if action.action == 0:
-                    classic_actions += [254, 255]
-        return classic_actions
+                    new_classic_actions += [254, 255]
+            if not new_classic_actions:
+                complete = False
+            classic_actions += new_classic_actions
+        return complete, classic_actions
 
     @staticmethod
     def classic_actions_to_core_actions(classic_actions):  # type: (List[int]) -> List[BasicAction]
