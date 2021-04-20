@@ -40,7 +40,7 @@ class FrontpanelController(object):
     MAIN_INTERFACE = Hardware.get_main_interface()
 
     class Leds(object):
-        RS485 = 'RS485'
+        EXPANSION = 'EXPANSION'
         STATUS_GREEN = 'STATUS_GREEN'
         STATUS_RED = 'STATUS_RED'
         CAN_STATUS_GREEN = 'CAN_STATUS_GREEN'
@@ -53,10 +53,10 @@ class FrontpanelController(object):
         SETUP = 'SETUP'
         RELAYS_1_8 = 'RELAYS_1_8'
         RELAYS_9_16 = 'RELAYS_9_16'
-        OUTPUTS_DIG_1_5 = 'OUTPUTS_DIG_1_5'
-        OUTPUTS_DIG_6_8 = 'OUTPUTS_DIG_6_8'
+        OUTPUTS_DIG_1_4 = 'OUTPUTS_DIG_1_4'
+        OUTPUTS_DIG_5_7 = 'OUTPUTS_DIG_5_7'
         OUTPUTS_ANA_1_4 = 'OUTPUTS_ANA_1_4'
-        INPUTS_1_4 = 'INPUTS_1_4'
+        INPUTS = 'INPUTS'
         POWER = 'POWER'
         ALIVE = 'ALIVE'
         VPN = 'VPN'
