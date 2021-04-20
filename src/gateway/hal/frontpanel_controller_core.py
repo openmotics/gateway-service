@@ -107,7 +107,6 @@ class FrontpanelCoreController(FrontpanelController):
         core_event = MasterCoreEvent(data)
         if core_event.type == MasterCoreEvent.Types.LED_BLINK:
             with self._led_event_lock:
-                logger.info(core_event)
                 chip = core_event.data['chip']
                 if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[self._platform]:
                     for led_id in range(16):
@@ -121,7 +120,6 @@ class FrontpanelCoreController(FrontpanelController):
                             logger.info('Led {0} state: {1}'.format(led_name, state))
         elif core_event.type == MasterCoreEvent.Types.LED_ON:
             with self._led_event_lock:
-                logger.info(core_event)
                 chip = core_event.data['chip']
                 if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[self._platform]:
                     for led_id in range(16):
