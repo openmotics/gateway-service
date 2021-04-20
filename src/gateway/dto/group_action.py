@@ -19,20 +19,23 @@ GroupAction DTO
 from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
-    from typing import List
+    from typing import Optional, List
 
 
 class GroupActionDTO(BaseDTO):
     @capture_fields
-    def __init__(self, id, name='', actions=None):
+    def __init__(self, id, name='', actions=None, internal=False):
+        # type: (int, str, Optional[List[int]], bool) -> None
         # The argument `actions` is None since you should not set a reference type as default value
-        self.id = id  # type: int
-        self.name = name  # type: str
+        self.id = id
+        self.name = name
         self.actions = [] if actions is None else actions  # type: List[int]
+        self.internal = internal
 
     def __eq__(self, other):
         if not isinstance(other, GroupActionDTO):
             return False
         return (self.id == other.id and
                 self.name == other.name and
-                self.actions == other.actions)
+                self.actions == other.actions and
+                self.internal == other.internal)
