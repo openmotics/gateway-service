@@ -45,7 +45,9 @@ class GroupActionCoreMapperTest(unittest.TestCase):
                      ([173, 5], [(251, 0, 5, 2)]),   # Toggle all lights on floor 5
                      ([171, 255], [(251, 0, 65535, 0)]),  # Turn off all lights (on all floors)
                      ([172, 255], [(251, 0, 65535, 1)]),  # Turn on all lights (on all floors)
-                     ([173, 255], [(251, 0, 65535, 2)])]  # Toggle all lights (on all floors)
+                     ([173, 255], [(251, 0, 65535, 2)]),  # Toggle all lights (on all floors)
+                     ([116, 5], [(1, 250, 5, 1)]),  # Disable input 5
+                     ([117, 5], [(1, 250, 5, 0)])]  # Enable input 5
         for classic, core in scenarios:
             core_expected = [BasicAction(*entry) for entry in core]
             core_result = GroupActionMapper.classic_actions_to_core_actions(classic)
