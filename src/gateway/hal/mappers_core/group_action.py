@@ -77,6 +77,8 @@ class GroupActionMapper(object):
                     new_classic_actions += [68, action.device_nr]
                 elif action.action == 1:
                     new_classic_actions += [69, action.device_nr]
+                elif action.action == 250:
+                    new_classic_actions += [116 if action.extra_parameter == 1 else 117, action.device_nr]
             elif action.action_type == 10:
                 if 0 <= action.action <= 5:
                     if action.device_nr <= 255:
@@ -215,8 +217,12 @@ class GroupActionMapper(object):
                 actions.append(BasicAction(action_type=10, action=4, device_nr=action_number + 256))
             # 112: The Timer of all Roller/Shutters will be disabled (x=0) or enabled (x=1)
             # 113: Enable/disable automatic Roller/Shutter Lock functionality for all Roller/Shutters: When x=0, the roller/shutters will work normally. When x>0, the Roller/shutters will be locked and the normal BA's to stop, up or down a shutter (or group) will be disabled. When a timer was activated to stop a Roller/shutter, even when the automatic Roller/shutter functionality is enabled, will still be executed.
-            # 116: Disable input x (0-239)
-            # 117: Enable input x (0-239)
+            elif action_type == 116:
+                # 116: Disable input x (0-239)
+                actions.append(BasicAction(action_type=1, action=250, device_nr=action_number, extra_parameter=1))
+            elif action_type == 117:
+                # 117: Enable input x (0-239)
+                actions.append(BasicAction(action_type=1, action=250, device_nr=action_number, extra_parameter=0))
             # 118: Reset Pulse Counters of all Modules
             # 120: Put free variable x (0-31) at zero
             # 121: Decrease free variable x (0-31) with 1
