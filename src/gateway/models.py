@@ -247,6 +247,7 @@ class Sensor(BaseModel):
 
     class Sources(object):
         MASTER = 'master'
+        PLUGIN = 'plugin'
 
     class PhysicalQuanitites(object):
         BRIGHTNESS = 'brightness'

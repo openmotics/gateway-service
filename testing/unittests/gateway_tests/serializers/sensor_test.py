@@ -15,7 +15,7 @@
 from __future__ import absolute_import
 
 import unittest
-from gateway.dto import SensorDTO
+from gateway.dto import SensorDTO, SensorSourceDTO
 from gateway.api.serializers import SensorSerializer
 
 
@@ -42,10 +42,22 @@ class SensorSerializerTest(unittest.TestCase):
     def test_deserialize(self):
         # Valid room
         dto = SensorSerializer.deserialize({'id': 5,
+                                            'external_id': '0',
+                                            'source': {'type': 'master'},
+                                            'physical_quantity': 'temperature',
+                                            'unit': 'celcius',
                                             'name': 'bar',
                                             'room': 10})
-        self.assertEqual(SensorDTO(id=5, name='bar', room=10), dto)
-        self.assertEqual(['id', 'name', 'room'], sorted(dto.loaded_fields))
+        expected_dto = SensorDTO(id=5,
+                                 external_id='0',
+                                 source=SensorSourceDTO(None, type='master', name=None),
+                                 physical_quantity='temperature',
+                                 unit='celcius',
+                                 name='bar',
+                                 room=10)
+        assert expected_dto == dto
+        self.assertEqual(expected_dto, dto)
+        self.assertEqual(['external_id', 'id', 'name', 'physical_quantity', 'room', 'source', 'unit'], sorted(dto.loaded_fields))
         # Empty room
         dto = SensorSerializer.deserialize({'id': 5,
                                             'name': 'bar',

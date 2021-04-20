@@ -24,10 +24,10 @@ if False:  # MYPY
 
 class SensorDTO(BaseDTO):
     @capture_fields
-    def __init__(self, id, source=None, external_id=None, physical_quantity=None, unit=None, name='', room=None, offset=None, virtual=False):
+    def __init__(self, id, external_id=None, source=None, physical_quantity=None, unit=None, name='', room=None, offset=None, virtual=False):
         self.id = id  # type: int
-        self.source = source  # type: str
         self.external_id = external_id  # type: str
+        self.source = source  # type: Optional[SensorSourceDTO]
         self.physical_quantity = physical_quantity  # type: Optional[str]
         self.unit = unit  # type: Optional[str]
         self.name = name  # type: str
@@ -39,14 +39,31 @@ class SensorDTO(BaseDTO):
         if not isinstance(other, SensorDTO):
             return False
         return (self.id == other.id and
-                self.source == other.source and
                 self.external_id == other.external_id and
+                self.source == other.source and
                 self.physical_quantity == other.physical_quantity and
                 self.unit == other.unit and
                 self.name == other.name and
                 self.offset == other.offset and
                 self.room == other.room and
                 self.virtual == other.virtual)
+
+
+class SensorSourceDTO(BaseDTO):
+    @capture_fields
+    def __init__(self, id, type=None, name=None):
+        # type: (int, str, str) -> None
+        self.id = id
+        self.type = type
+        self.name = name
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        if not isinstance(other, SensorSourceDTO):
+            return False
+        return (self.id == other.id and
+                self.type == other.type and
+                self.name == other.name)
 
 
 class SensorStatusDTO(BaseDTO):

@@ -22,8 +22,8 @@ import mock
 from bus.om_bus_client import MessageClient
 from gateway.dto import DimmerConfigurationDTO, LegacyScheduleDTO, \
     LegacyStartupActionDTO, ModuleDTO, OutputStateDTO, ScheduleDTO, \
-    SensorDTO, UserDTO, VentilationDTO, VentilationSourceDTO, \
-    VentilationStatusDTO
+    SensorDTO, SensorSourceDTO, SensorStatusDTO, UserDTO, VentilationDTO, \
+    VentilationSourceDTO, VentilationStatusDTO
 from gateway.gateway_api import GatewayApi
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
@@ -154,13 +154,21 @@ class WebInterfaceTest(unittest.TestCase):
                                'status': None}], json.loads(response)['schedules'])
 
     def test_sensor_configurations(self):
+        sensor_dto = SensorDTO(id=2,
+                               source=SensorSourceDTO(None, type='master'),
+                               external_id='0',
+                               physical_quantity='temperature',
+                               unit='celcius',
+                               name='foo')
         with mock.patch.object(self.sensor_controller, 'load_sensors',
-                               return_value=[SensorDTO(id=2,
-                                                       external_id='0',
-                                                       name='foo')]):
+                               return_value=[sensor_dto]):
             response = self.web.get_sensor_configurations()
             self.assertEqual([{
                 'id': 2,
+                'source': {'type': 'master', 'name': None},
+                'external_id': '0',
+                'physical_quantity': 'temperature',
+                'unit': 'celcius',
                 'name': 'foo',
                 'room': 255,
                 'offset': 0,
@@ -175,8 +183,26 @@ class WebInterfaceTest(unittest.TestCase):
                       'room': 255,
                       'offset': 0,
                       'virtual': False}
-            response = self.web.set_sensor_configuration(config=config)
+            self.web.set_sensor_configuration(config=config)
             save.assert_called()
+
+    def test_sensor_status(self):
+        status_dto = SensorStatusDTO(id=2, value=21.0)
+        with mock.patch.object(self.sensor_controller, 'get_sensors_status',
+                               return_value=[status_dto]):
+            response = self.web.get_sensor_status()
+            self.assertEqual([{
+                'id': 2,
+                'value': 21.0,
+            }], json.loads(response)['status'])
+
+    def test_set_sensor_status(self):
+        with mock.patch.object(self.sensor_controller, 'set_sensor_status',
+                               return_value=None) as set_status:
+            status = {'id': 2,
+                      'value': 21.0}
+            self.web.set_sensor_status(status=status)
+            set_status.assert_called()
 
     def test_get_sensors_temperature(self):
         with mock.patch.object(self.sensor_controller, 'get_temperature_status',
