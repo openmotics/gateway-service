@@ -156,7 +156,7 @@ class SensorControllerTest(unittest.TestCase):
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
             self.controller.save_sensors([sensor_dto])
             self.pubsub._publish_all_events()
-            save.assert_called()
+            save.assert_called_with([MasterSensorDTO(id=0, name='foo')])
 
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
         assert len(events) == 1
@@ -226,6 +226,35 @@ class SensorControllerTest(unittest.TestCase):
         assert sensor.source == 'plugin'
         assert sensor.plugin.id == plugin.id
         assert sensor.external_id == 'foo'
+        assert sensor.unit == 'celcius'
+        assert sensor.name == 'foo'
+
+    def test_save_sensors_master_virtual(self):
+        events = []
+
+        def handle_event(gateway_event):
+            events.append(gateway_event)
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
+
+        sensor_dto = SensorDTO(id=None,
+                               source=SensorSourceDTO(None, type='master'),
+                               external_id='31',
+                               physical_quantity='temperature',
+                               unit='celcius',
+                               name='foo',
+                               virtual=True)
+        with mock.patch.object(self.master_controller, 'save_sensors') as save:
+            self.controller.save_sensors([sensor_dto])
+            self.pubsub._publish_all_events()
+            save.assert_called_with([MasterSensorDTO(id=31, name='foo', virtual=True)])
+
+        assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
+        assert len(events) == 1
+
+        sensor = Sensor.select().where(Sensor.physical_quantity == 'temperature').get()
+        assert sensor.id < 200
+        assert sensor.source == 'master'
+        assert sensor.external_id == '31'
         assert sensor.unit == 'celcius'
         assert sensor.name == 'foo'
 

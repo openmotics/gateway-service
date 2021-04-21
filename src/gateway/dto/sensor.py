@@ -90,7 +90,7 @@ class MasterSensorDTO(BaseDTO):
         self.virtual = virtual  # type: bool
 
     def __eq__(self, other):
-        if not isinstance(other, SensorDTO):
+        if not isinstance(other, MasterSensorDTO):
             return False
         return (self.id == other.id and
                 self.name == other.name and

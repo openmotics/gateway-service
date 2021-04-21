@@ -192,13 +192,15 @@ class SensorController(BaseController):
             if sensor_dto.id is not None:
                 sensor = Sensor.get_or_none(id=sensor_dto.id)  # type: Sensor
             elif 'source' in sensor_dto.loaded_fields and 'external_id' in sensor_dto.loaded_fields and 'physical_quantity' in sensor_dto.loaded_fields:
-                plugin = None if sensor_dto.source.type == Sensor.Sources.PLUGIN is None else Plugin.get(name=sensor_dto.source.name)
+                plugin = Plugin.get(name=sensor_dto.source.name) if sensor_dto.source.type == Sensor.Sources.PLUGIN else None
                 sensor = Sensor.select() \
                     .where(Sensor.source == sensor_dto.source.type) \
                     .where(Sensor.external_id == sensor_dto.external_id) \
                     .where(Sensor.physical_quantity == sensor_dto.physical_quantity) \
                     .where(Sensor.plugin == plugin) \
                     .first()
+            else:
+                sensor = None
             if sensor is None:
                 if sensor_dto.id is not None:
                     raise ValueError('Sensor {0} does not exist'.format(sensor_dto.id))
@@ -212,7 +214,7 @@ class SensorController(BaseController):
                             room = None
                         elif 0 <= sensor_dto.room <= 100:
                             room, _ = Room.get_or_create(number=sensor_dto.room)
-                    plugin = None if sensor_dto.source.type == Sensor.Sources.PLUGIN is None else Plugin.get(name=sensor_dto.source.name)
+                    plugin = Plugin.get(name=sensor_dto.source.name) if sensor_dto.source.type == Sensor.Sources.PLUGIN else None
                     sensor = Sensor.create(id=sensor_id,
                                            source=sensor_dto.source.type,
                                            plugin=plugin,
@@ -221,6 +223,29 @@ class SensorController(BaseController):
                                            unit=sensor_dto.unit,
                                            name=sensor_dto.name,
                                            room=room)
+                elif 'virtual' in sensor_dto.loaded_fields and sensor_dto.source and sensor_dto.source.type == Sensor.Sources.MASTER:
+                    query = Sensor.select(Sensor.id).where(Sensor.source == Sensor.Sources.MASTER)
+                    try:
+                        sensor_max = max(x for (x,) in query.tuples())
+                    except ValueError:
+                        sensor_max = 0
+                    room = None
+                    if 'room' in sensor_dto.loaded_fields:
+                        if sensor_dto.room is None:
+                            room = None
+                        elif 0 <= sensor_dto.room <= 100:
+                            room, _ = Room.get_or_create(number=sensor_dto.room)
+                    sensor = Sensor.create(id=sensor_max + 1,
+                                           source=sensor_dto.source.type,
+                                           plugin=plugin,
+                                           external_id=sensor_dto.external_id,
+                                           physical_quantity=sensor_dto.physical_quantity,
+                                           unit=sensor_dto.unit,
+                                           name=sensor_dto.name,
+                                           room=room)
+                    if sensor.id > 200:
+                        Sensor.delete().where(Sensor.id == sensor.id).execute()
+                        logger.warning('Sensor id %s out of range, removed', sensor.id)
                 else:
                     raise ValueError('Sensor {0} is invalid'.format(sensor_dto))
             changed = False
@@ -243,10 +268,10 @@ class SensorController(BaseController):
             if changed:
                 sensor.save()
             if sensor.source == Sensor.Sources.MASTER:
-                dto = MasterSensorDTO(id=int(sensor.external_id),
-                                      name=sensor.name,
-                                      virtual=sensor_dto.virtual)
-                if sensor.physical_quantity == Sensor.PhysicalQuanitites.TEMPERATURE:
+                dto = MasterSensorDTO(id=int(sensor.external_id), name=sensor.name)
+                if 'virtual' in sensor_dto.loaded_fields:
+                    dto.virtual = sensor_dto.virtual
+                if 'offset' in sensor_dto.loaded_fields and sensor.physical_quantity == Sensor.PhysicalQuanitites.TEMPERATURE:
                     dto.offset = sensor_dto.offset
                 master_sensors.append(dto)
         if master_sensors:

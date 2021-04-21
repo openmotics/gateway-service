@@ -198,7 +198,7 @@ class WebInterfaceTest(unittest.TestCase):
 
     def test_set_sensor_status(self):
         with mock.patch.object(self.sensor_controller, 'set_sensor_status',
-                               return_value=None) as set_status:
+                               side_effect=lambda x: x) as set_status:
             status = {'id': 2,
                       'value': 21.0}
             self.web.set_sensor_status(status=status)
