@@ -110,7 +110,7 @@ class ShutterController(BaseController):
             try:
                 self._publish_shutter_state(shutter_id, shutter_dto, self._states[shutter_id])
             except KeyError:
-                self.error('No state found for shutter {}'.format(shutter_id))
+                logger.error('No state found for shutter {}'.format(shutter_id))
 
     def _handle_master_event(self, event):  # type: (MasterEvent) -> None
         super(ShutterController, self)._handle_master_event(event)
