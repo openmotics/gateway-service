@@ -448,6 +448,7 @@ class MasterClassicController(MasterController):
         # type: (Dict[str,Any]) -> None
         """ Triggers when the master informs us of an Input state change """
         # Update status tracker
+        logger.debug('Got input event data from master {}'.format(data))
         self._input_status.set_input(data)
 
     # Outputs
@@ -540,9 +541,11 @@ class MasterClassicController(MasterController):
     def _input_changed(self, input_id, status):
         # type: (int, str) -> None
         """ Executed by the Input Status tracker when an input changed state """
+        logger.debug('Input {} changed'.format(input_id))
         input_configuration = self._input_config.get(input_id)
         if input_configuration is None:
-            # An event was received from an input for which the configuration was not yet loaded. As
+            logger.warning('No input configuration found for {}'.format(input_id))
+            # An event was received from an inp
             # configuraion should not be loaded inside an event handler, the event is discarded.
             # TODO: Detach input even processing from event handler so it can load the configuration if needed
             return
@@ -550,6 +553,7 @@ class MasterClassicController(MasterController):
                       'status': status,
                       'location': {'room_id': Toolbox.denonify(input_configuration.room, 255)}}
         master_event = MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data)
+        logger.debug('Publishing input {} event'.format(master_event))
         self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
 
     def _is_output_locked(self, output_id):
