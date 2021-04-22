@@ -30,6 +30,7 @@ from gateway.models import User
 from gateway.webservice import params_handler
 
 if False:  # MyPy
+    from gateway.apartment_controller import ApartmentController
     from gateway.authentication_controller import AuthenticationToken
     from gateway.user_controller import UserController
     from gateway.webservice import WebService
@@ -80,6 +81,9 @@ def _openmotics_api_v1(f):
             status = 500
             data = ex
             logger.error('General Error occurred during api call: {}'.format(data))
+            import traceback
+            tb = traceback.format_exc()
+            print(tb)
 
         timings['process'] = ('Processing', time.time() - start)
         serialization_start = time.time()
@@ -370,16 +374,82 @@ class Users(RestAPIEndpoint):
 class Apartment(RestAPIEndpoint):
     API_ENDPOINT = '/api/v1/apartments'
 
-    def GET(self):
-        return json.dumps({'apartment': 'testApartment'})
+    @Inject
+    def __init__(self, apartment_controller=INJECTED):
+        # type: (ApartmentController) -> None
+        super(Apartment, self).__init__()
+        self.apartment_controller = apartment_controller
+        # Set a custom route dispatcher in the class so that you have full
+        # control over how the routes are defined.
+        self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
+        # --- GET ---
+        self.route_dispatcher.connect('get_apartment', '',
+                                      controller=self, action='get_apartments',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_apartment', '/:apartment_id',
+                                      controller=self, action='get_apartment',
+                                      conditions={'method': ['GET']})
+        # --- POST ---
+        self.route_dispatcher.connect('post_apartment', '',
+                                      controller=self, action='post_apartment',
+                                      conditions={'method': ['POST']})
+        self.route_dispatcher.connect('post_apartment_list', '/:apartment_id',
+                                      controller=self, action='post_apartments',
+                                      conditions={'method': ['POST']})
 
-    def POST(self, list=None):
-        request_body = cherrypy.request.body.read(int(cherrypy.request.headers['Content-Length']))
+    @openmotics_api_v1(auth=False, pass_role=False, pass_token=False)
+    def get_apartments(self):
+        apartments = self.apartment_controller.load_apartments()
+        apartments_serial = []
+        for apartment in apartments:
+            apartments_serial.append(ApartmentSerializer.serialize(apartment))
+        return json.dumps(apartments_serial)
+
+    @openmotics_api_v1(auth=False, pass_role=False, pass_token=False)
+    def get_apartment(self, apartment_id):
+        apartment_dto = self.apartment_controller.load_apartment(apartment_id)
+        if apartment_dto is None:
+            raise ItemDoesNotExistException('Apartment with id {} does not exists'.format(apartment_id))
+        apartment_serial = ApartmentSerializer.serialize(apartment_dto)
+        return json.dumps(apartment_serial)
+
+    @openmotics_api_v1(auth=False, pass_role=False, pass_token=False)
+    def post_apartments(self, request_body=None):
         if request_body is None:
-            return json.dumps({'apartment': 'Pass a apartment body with your post request', 'testparam': list})
-        else:
-            request_body = json.loads(request_body)
-            return json.dumps({'body': request_body, 'testparam': list})
+            raise WrongInputParametersException('Body is empty')
+
+        try:
+            body_dict = json.loads(request_body)
+        except:
+            raise WrongInputParametersException('Could not parse the json body')
+
+        # First save the apartments in a list to create them later
+        # this will prevent that some apartments are created when there is a parse error in the middle of the json structure
+        to_create_apartments = []
+        for apartment in body_dict:
+            apartment_dto = ApartmentSerializer.deserialize(apartment)
+            to_create_apartments.append(apartment_dto)
+
+        for apartment in to_create_apartments:
+            self.apartment_controller.save_apartment(apartment)
+
+        return
+
+    @openmotics_api_v1(auth=False, pass_role=False, pass_token=False)
+    def post_apartment(self, request_body=None):
+        if request_body is None:
+            raise WrongInputParametersException('Body is empty')
+
+        try:
+            body_dict = json.loads(request_body)
+        except:
+            raise WrongInputParametersException('Could not parse the json body')
+        apartment_deserialized = ApartmentSerializer.deserialize(body_dict)
+        apartment_dto = self.apartment_controller.save_apartment(apartment_deserialized)
+        if apartment_dto is None:
+            raise ItemDoesNotExistException('Could not create the apartment: Could not load after creation')
+        apartment_serial = ApartmentSerializer.serialize(apartment_dto)
+        return json.dumps(apartment_serial)
 
 
 @Injectable.named('web_service_v1')
