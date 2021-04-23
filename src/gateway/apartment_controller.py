@@ -70,7 +70,7 @@ class ApartmentController(object):
         # type: (ApartmentDTO) -> Optional[ApartmentDTO]
         _ = self
         # TODO: Check if the rebus id's actually exists
-        if 'id' not in apartment_dto.loaded_fields:
+        if 'id' not in apartment_dto.loaded_fields or apartment_dto.id is None:
             raise RuntimeError('cannot update an apartment without the id being set')
         try:
             apartment_orm = Apartment.select().where(Apartment.id == apartment_dto.id).first()
@@ -82,7 +82,7 @@ class ApartmentController(object):
             apartment_orm.save()
         except Exception as e:
             raise RuntimeError('Could not update the user: {}'.format(e))
-        return self.load_apartment(apartment_dto.id)  # type: ignore
+        return self.load_apartment(apartment_dto.id)
 
     def delete_apartment(self, apartment_dto):
         # type: (ApartmentDTO) -> None
