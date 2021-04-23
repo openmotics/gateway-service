@@ -85,6 +85,37 @@ def migrate(migrator, database, fake=False, **kwargs):
                         name=CharField(default=''))
     migrator.add_index(Sensor, 'source', 'plugin_id', 'external_id', 'physical_quantity', unique=True)
 
+    class ThermostatGroup(BaseModel):
+        id = AutoField()
+        number = IntegerField(unique=True)
+        name = CharField()
+        on = BooleanField(default=True)
+        threshold_temperature = FloatField(null=True, default=None)
+        sensor = ForeignKeyField(Sensor, null=True, backref='thermostat_groups', on_delete='SET NULL')
+        mode = CharField(default='heating')
+
+    class Thermostat(BaseModel):
+        id = AutoField()
+        number = IntegerField(unique=True)
+        name = CharField(default='Thermostat')
+        sensor = ForeignKeyField(Sensor, null=True, backref='thermostats', on_delete='SET NULL')
+        pid_heating_p = FloatField(default=120)
+        pid_heating_i = FloatField(default=0)
+        pid_heating_d = FloatField(default=0)
+        pid_cooling_p = FloatField(default=120)
+        pid_cooling_i = FloatField(default=0)
+        pid_cooling_d = FloatField(default=0)
+        automatic = BooleanField(default=True)
+        room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='thermostats')
+        start = IntegerField()
+        valve_config = CharField(default='cascade')
+        thermostat_group = ForeignKeyField(ThermostatGroup, backref='thermostats', on_delete='CASCADE')
+
+    # Sensors used by thermostat should be temperature, so register any sensor with a reference.
+    for thermostat in Thermostat.select().where(~Thermostat.sensor.is_null()):
+        thermostat.sensor.physical_quantity = 'temperature'
+        thermostat.sensor.save()
+
 
 def rollback(migrator, database, fake=False, **kwargs):
     # type: (Migrator, Database, bool, Dict[Any, Any]) -> None
