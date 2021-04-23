@@ -128,7 +128,10 @@ class ThermostatMapper(object):
         objects = {}  # type: Dict[str, Dict[int, Any]]
 
         def _load_sensor(pk):
-            return Sensor.get_or_none(id=pk)
+            sensor = Sensor.get_or_none(id=pk)
+            if sensor and sensor.physical_quantity != Sensor.PhysicalQuanitites.TEMPERATURE:
+                raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor.id, sensor.physical_quantity))
+            return sensor
 
         def _load_object(orm_type, number):
             if number is None:
