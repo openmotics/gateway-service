@@ -71,9 +71,10 @@ class InputMapper(object):
             return orm_object.input_link.output_id, []
         if orm_object.input_link.enable_press_and_release:
             # Press/release actions are enabled
-            basic_actions = []
+            basic_actions = []  # type: List[int]
             if orm_object.basic_action_press.in_use:
-                basic_actions += GroupActionMapper.core_actions_to_classic_actions([orm_object.basic_action_press])
+                _, actions = GroupActionMapper.core_actions_to_classic_actions([orm_object.basic_action_press])
+                basic_actions += actions
                 if len(basic_actions) == 2 and basic_actions[0] in [163, 164]:
                     return 242 if basic_actions[0] == 163 else 241, []
             if orm_object.basic_action_release.in_use:

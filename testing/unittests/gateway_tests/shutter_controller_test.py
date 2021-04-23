@@ -20,11 +20,11 @@ from __future__ import absolute_import
 import copy
 import time
 import unittest
-
+import mock
 import xmlrunner
+from gateway.events import GatewayEvent
 from mock import Mock
 from peewee import SqliteDatabase
-
 import fakesleep
 from gateway.dto import ShutterDTO
 from gateway.enums import ShutterEnums
@@ -515,6 +515,37 @@ class ShutterControllerTest(unittest.TestCase):
 
         # Got data for an unconfigured shutter. This should not raise.
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00000000})
+
+    def test_shutter_sync_state(self):
+        master_controller = Mock()
+        master_controller.load_shutters = lambda: []
+        SetUpTestInjections(master_controller=master_controller,
+                            maintenance_controller=Mock())
+        controller = ShutterController()
+
+        # Basic configuration
+        controller.update_config(ShutterControllerTest.SHUTTER_CONFIG)
+        self.assertEqual(len(controller._shutters), 4)
+
+        events = []
+
+        def on_change(gateway_event):
+            events.append(gateway_event)
+
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, on_change)
+        controller.start()
+        self.pubsub._publish_all_events()
+        self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
+                          GatewayEvent('SHUTTER_CHANGE', {'id': 1, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
+                          GatewayEvent('SHUTTER_CHANGE', {'id': 2, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}}),
+                          GatewayEvent('SHUTTER_CHANGE', {'id': 3, 'status': {'state': 'STOPPED', 'position': None, 'last_change': 0.0}, 'location': {'room_id': None}})], events)
+
+        events = []
+        fakesleep.reset(100)
+        controller.report_shutter_position(0, 89, 'UP')
+        self.pubsub._publish_all_events()
+        self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'GOING_UP', 'position': 89, 'last_change': 100.0}, 'location': {'room_id': None}})], events)
+        controller.stop()
 
 
 if __name__ == '__main__':
