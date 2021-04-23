@@ -163,9 +163,7 @@ def params_handler(**kwargs):
     response = cherrypy.response
     try:
         if request.method in request.methods_with_bodies:
-            print(' -*****- Reading out request body')
             body = request.body.read()
-            print(' -*****- Body: {}'.format(body))
             if body:
                 request.params['request_body'] = body
     except Exception:

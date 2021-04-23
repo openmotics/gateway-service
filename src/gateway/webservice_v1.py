@@ -25,6 +25,7 @@ import time
 from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.api.serializers.user import UserSerializer
+from gateway.dto import ApartmentDTO
 from gateway.exceptions import *
 from gateway.models import User
 from gateway.webservice import params_handler
@@ -81,9 +82,6 @@ def _openmotics_api_v1(f):
             status = 500
             data = ex
             logger.error('General Error occurred during api call: {}'.format(data))
-            import traceback
-            tb = traceback.format_exc()
-            print(tb)
 
         timings['process'] = ('Processing', time.time() - start)
         serialization_start = time.time()
@@ -371,13 +369,13 @@ class Users(RestAPIEndpoint):
         return 'OK'
 
 
-class Apartment(RestAPIEndpoint):
+class Apartments(RestAPIEndpoint):
     API_ENDPOINT = '/api/v1/apartments'
 
     @Inject
     def __init__(self, apartment_controller=INJECTED):
         # type: (ApartmentController) -> None
-        super(Apartment, self).__init__()
+        super(Apartments, self).__init__()
         self.apartment_controller = apartment_controller
         # Set a custom route dispatcher in the class so that you have full
         # control over how the routes are defined.
@@ -393,9 +391,20 @@ class Apartment(RestAPIEndpoint):
         self.route_dispatcher.connect('post_apartment', '',
                                       controller=self, action='post_apartment',
                                       conditions={'method': ['POST']})
-        self.route_dispatcher.connect('post_apartment_list', '/:apartment_id',
+        self.route_dispatcher.connect('post_apartment_list', '/list',
                                       controller=self, action='post_apartments',
                                       conditions={'method': ['POST']})
+        # --- PUT ---
+        self.route_dispatcher.connect('put_apartments', '',
+                                      controller=self, action='put_apartments',
+                                      conditions={'method': ['PUT']})
+        self.route_dispatcher.connect('put_apartment', '/:apartment_id',
+                                      controller=self, action='put_apartment',
+                                      conditions={'method': ['PUT']})
+        # --- DELETE ---
+        self.route_dispatcher.connect('delete_apartment', '/:apartment_id',
+                                      controller=self, action='delete_apartment',
+                                      conditions={'method': ['DELETE']})
 
     @openmotics_api_v1(auth=False, pass_role=False, pass_token=False)
     def get_apartments(self):
@@ -413,14 +422,19 @@ class Apartment(RestAPIEndpoint):
         apartment_serial = ApartmentSerializer.serialize(apartment_dto)
         return json.dumps(apartment_serial)
 
-    @openmotics_api_v1(auth=False, pass_role=False, pass_token=False)
-    def post_apartments(self, request_body=None):
+    @openmotics_api_v1(auth=True, pass_role=True, pass_token=False)
+    def post_apartments(self, request_body=None, role=None):
+        if role is None:
+            raise UnAuthorizedException('Authentication is needed when creating an apartment')
+        if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            raise UnAuthorizedException('You need to be logged in as an admin or technician to create an apartment')
+
         if request_body is None:
             raise WrongInputParametersException('Body is empty')
 
         try:
             body_dict = json.loads(request_body)
-        except:
+        except Exception:
             raise WrongInputParametersException('Could not parse the json body')
 
         # First save the apartments in a list to create them later
@@ -428,21 +442,29 @@ class Apartment(RestAPIEndpoint):
         to_create_apartments = []
         for apartment in body_dict:
             apartment_dto = ApartmentSerializer.deserialize(apartment)
+            if apartment_dto is None:
+                raise WrongInputParametersException('Could not parse the json body: Could not parse apartment: {}'.format(apartment))
             to_create_apartments.append(apartment_dto)
 
+        apartments_serial = []
         for apartment in to_create_apartments:
-            self.apartment_controller.save_apartment(apartment)
+            apartment_dto = self.apartment_controller.save_apartment(apartment)
+            apartments_serial.append(ApartmentSerializer.serialize(apartment_dto))
+        return apartments_serial
 
-        return
+    @openmotics_api_v1(auth=True, pass_role=True, pass_token=False)
+    def post_apartment(self, request_body=None, role=None):
+        if role is None:
+            raise UnAuthorizedException('Authentication is needed when creating an apartment')
+        if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            raise UnAuthorizedException('You need to be logged in as an admin or technician to create an apartment')
 
-    @openmotics_api_v1(auth=False, pass_role=False, pass_token=False)
-    def post_apartment(self, request_body=None):
         if request_body is None:
             raise WrongInputParametersException('Body is empty')
 
         try:
             body_dict = json.loads(request_body)
-        except:
+        except Exception:
             raise WrongInputParametersException('Could not parse the json body')
         apartment_deserialized = ApartmentSerializer.deserialize(body_dict)
         apartment_dto = self.apartment_controller.save_apartment(apartment_deserialized)
@@ -450,6 +472,62 @@ class Apartment(RestAPIEndpoint):
             raise ItemDoesNotExistException('Could not create the apartment: Could not load after creation')
         apartment_serial = ApartmentSerializer.serialize(apartment_dto)
         return json.dumps(apartment_serial)
+
+    @openmotics_api_v1(auth=True, pass_role=True, pass_token=False)
+    def put_apartment(self, apartment_id, request_body=None, role=None):
+        if role is None:
+            raise UnAuthorizedException('Authentication is needed when updating an apartment')
+        if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            raise UnAuthorizedException('You need to be logged in as an admin or technician to update an apartment')
+
+        if request_body is None:
+            raise WrongInputParametersException('Body is empty')
+
+        try:
+            body_dict = json.loads(request_body)
+            apartment_dto = ApartmentSerializer.deserialize(body_dict)
+            apartment_dto.id = apartment_id
+        except Exception:
+            raise WrongInputParametersException('Could not parse the json body')
+        apartment_dto = self.apartment_controller.update_apartment(apartment_dto)
+        return json.dumps(ApartmentSerializer.serialize(apartment_dto))
+
+    @openmotics_api_v1(auth=True, pass_role=True, pass_token=False)
+    def put_apartments(self, request_body=None, role=None):
+        if role is None:
+            raise UnAuthorizedException('Authentication is needed when updating an apartment')
+        if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            raise UnAuthorizedException('You need to be logged in as an admin or technician to update an apartment')
+
+        if request_body is None:
+            raise WrongInputParametersException('Body is empty')
+
+        apartments_to_update = []
+        try:
+            body_dict = json.loads(request_body)
+        except Exception:
+            raise WrongInputParametersException('Could not parse the json body')
+        for apartment in body_dict:
+            apartment_dto = ApartmentSerializer.deserialize(apartment)
+            if 'id' not in apartment_dto.loaded_fields:
+                raise WrongInputParametersException('The ID is needed to know which apartment to update.')
+            apartments_to_update.append(apartment_dto)
+
+        updated_apartments = []
+        for apartment in apartments_to_update:
+            apartment_dto = self.apartment_controller.update_apartment(apartment)
+            updated_apartments.append(apartment_dto)
+        return json.dumps([ApartmentSerializer.serialize(apartment_dto) for apartment_dto in updated_apartments])
+
+    @openmotics_api_v1(auth=True, pass_role=True, pass_token=False)
+    def delete_apartment(self, apartment_id, role=None):
+        if role is None:
+            raise UnAuthorizedException('Authentication is needed when updating an apartment')
+        if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            raise UnAuthorizedException('You need to be logged in as an admin or technician to update an apartment')
+        apartment_dto = ApartmentDTO(id=apartment_id)
+        self.apartment_controller.delete_apartment(apartment_dto)
+        return 'OK'
 
 
 @Injectable.named('web_service_v1')
@@ -460,7 +538,7 @@ class WebServiceV1(object):
         self.web_service = web_service
         self.endpoints = [
             Users(),
-            Apartment()
+            Apartments()
         ]
 
     def start(self):

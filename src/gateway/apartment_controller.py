@@ -40,7 +40,7 @@ class ApartmentController(object):
         _ = self
         apartment_orm = Apartment.select().where(Apartment.id == apartment_id).first()
         if apartment_orm is None:
-            return
+            return None
         apartment_dto = ApartmentMapper.orm_to_dto(apartment_orm)
         return apartment_dto
 
@@ -52,13 +52,50 @@ class ApartmentController(object):
             apartment_dto = ApartmentMapper.orm_to_dto(apartment_orm)
             apartments.append(apartment_dto)
         return apartments
-        apartment_orm = Apartment.select().where(Apartment.id == apartment_id).first()
+
+    def get_apartment_count(self):
+        # type: () -> int
+        _ = self
+        return Apartment.select().count()
 
     def save_apartment(self, apartment_dto):
-        # type: (ApartmentDTO) -> ApartmentDTO
+        # type: (ApartmentDTO) -> Optional[ApartmentDTO]
         _ = self
+        # TODO: Check if the rebus id's actually exists
         apartment_orm = ApartmentMapper.dto_to_orm(apartment_dto)
         apartment_orm.save()
         return self.load_apartment(apartment_orm.id)
 
+    def update_apartment(self, apartment_dto):
+        # type: (ApartmentDTO) -> Optional[ApartmentDTO]
+        _ = self
+        # TODO: Check if the rebus id's actually exists
+        if 'id' not in apartment_dto.loaded_fields:
+            raise RuntimeError('cannot update an apartment without the id being set')
+        try:
+            apartment_orm = Apartment.select().where(Apartment.id == apartment_dto.id).first()
+            for field in apartment_dto.loaded_fields:
+                if field == 'id':
+                    continue
+                if hasattr(apartment_orm, field):
+                    setattr(apartment_orm, field, getattr(apartment_dto, field))
+            apartment_orm.save()
+        except Exception as e:
+            raise RuntimeError('Could not update the user: {}'.format(e))
+        return self.load_apartment(apartment_dto.id)  # type: ignore
+
+    def delete_apartment(self, apartment_dto):
+        # type: (ApartmentDTO) -> None
+        _ = self
+        if "id" in apartment_dto.loaded_fields:
+            Apartment.delete_by_id(apartment_dto.id)
+        elif "name" in apartment_dto.loaded_fields:
+            # First check if there is only one:
+            if Apartment.select().where(Apartment.name == apartment_dto.name).count() <= 1:
+                Apartment.delete().where(Apartment.name == apartment_dto.name).execute()
+            else:
+                raise RuntimeError('More than one apartment with the given name: {}'.format(apartment_dto.name))
+        else:
+            raise RuntimeError('Could not find an apartment with the name {} to delete'.format(apartment_dto.name))
+        return
 
