@@ -254,8 +254,8 @@ class Users(RestAPIEndpoint):
         return json.dumps(user_serial)
 
     @openmotics_api_v1(auth=False, pass_role=False)
-    def get_available_code(self, **kwargs):
-        api_secret = kwargs.get('X-API-Secret')
+    def get_available_code(self):
+        api_secret = cherrypy.request.headers.get('X-API-Secret')
         if api_secret is None:
             raise UnAuthorizedException('Cannot create a new available code without the X-API-Secret')
         elif not self._user_controller.authentication_controller.check_api_secret(api_secret):
@@ -292,10 +292,10 @@ class Users(RestAPIEndpoint):
                 raise UnAuthorizedException('As a normal user, you can only create a COURIER user')
 
         try:
-            self._user_controller.save_user(user_dto)
+            user_dto_saved = self._user_controller.save_user(user_dto)
         except RuntimeError as e:
             raise WrongInputParametersException('The user could not be saved: {}'.format(e))
-        return json.dumps(UserSerializer.serialize(user_dto))
+        return json.dumps(UserSerializer.serialize(user_dto_saved))
 
     @openmotics_api_v1(auth=False, pass_role=False)
     def post_activate_user(self, user_id, request_body=None):
