@@ -223,3 +223,4 @@ class UserController(object):
             not isinstance(user.accepted_terms, six.integer_types) or \
                 0 < user.accepted_terms < AuthenticationController.TERMS_VERSION:
             raise RuntimeError('A user must have a valid "accepted_terms" fields')
+
