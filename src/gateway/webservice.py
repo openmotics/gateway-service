@@ -63,6 +63,7 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Hardware, Platform, System
 from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
+from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Dict, Optional, Any, List, Literal
@@ -712,19 +713,21 @@ class WebInterface(object):
     @openmotics_api(auth=True)
     def set_all_lights_off(self):
         """ Turn all lights off. """
-        self._output_controller.set_all_lights_off()
+        self._output_controller.set_all_lights(action='OFF')
         return {}
 
     @openmotics_api(auth=True, check=types(floor=int))
     def set_all_lights_floor_off(self, floor):
         """ Turn all lights on a given floor off. """
-        self._output_controller.set_all_lights_floor_off(floor)
+        floor = Toolbox.nonify(floor, 255)
+        self._output_controller.set_all_lights(action='OFF', floor_id=floor)
         return {}
 
     @openmotics_api(auth=True, check=types(floor=int))
     def set_all_lights_floor_on(self, floor):
         """ Turn all lights on a given floor on. """
-        self._output_controller.set_all_lights_floor_on(floor)
+        floor = Toolbox.nonify(floor, 255)
+        self._output_controller.set_all_lights(action='ON', floor_id=floor)
         return {}
 
     @openmotics_api(auth=True)

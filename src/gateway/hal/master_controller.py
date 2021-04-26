@@ -524,18 +524,10 @@ class MasterController(object):
         # type: (List[GlobalFeedbackDTO]) -> None
         raise NotImplementedError()
 
-    # All lights off
+    # All lights
 
-    def set_all_lights_off(self):
-        # type: () -> None
-        raise NotImplementedError()
-
-    def set_all_lights_floor_off(self, floor):
-        # type: (int) -> None
-        raise NotImplementedError()
-
-    def set_all_lights_floor_on(self, floor):
-        # type: (int) -> None
+    def set_all_lights(self, action, floor_id=None, output_ids=None):
+        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int], Optional[List[int]]) -> None
         raise NotImplementedError()
 
     # Validation bits

@@ -41,6 +41,15 @@ class CoreAPI(object):
                                request_fields=[ByteField('type'), ByteField('action'), WordField('device_nr'), WordField('extra_parameter')],
                                response_fields=[ByteField('type'), ByteField('action'), WordField('device_nr'), WordField('extra_parameter')])
 
+    @staticmethod
+    def execute_basic_action_series(length):  # type: (int) -> CoreCommandSpec
+        """ Executes a Basic action on multiple devices """
+        if not 2 <= length <= 40:
+            raise ValueError('Amount of device numbers should be 2 <= n <= 40')
+        return CoreCommandSpec(instruction='ES',
+                               request_fields=[ByteField('type'), ByteField('action'), WordField('extra_parameter'), WordArrayField('device_nrs', length)],
+                               response_fields=[ByteField('type'), ByteField('action'), WordField('extra_parameter')])
+
     # Events and other messages from Core to Gateway
 
     @staticmethod

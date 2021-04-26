@@ -28,6 +28,7 @@ from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer
 from master.core.events import Event as MasterCoreEvent
 from master.core.basic_action import BasicAction
+from platform_utils import Platform
 
 if False:  # MYPY
     from typing import Any, Dict, Tuple, Optional
@@ -37,33 +38,33 @@ logger = logging.getLogger("openmotics")
 
 
 class FrontpanelCoreController(FrontpanelController):
-    LED_MAPPING_ID_TO_ENUM = {0: {0: FrontpanelController.Leds.INPUTS_1_4,
-                                  1: FrontpanelController.Leds.RS485,
-                                  2: FrontpanelController.Leds.STATUS_RED,
-                                  3: FrontpanelController.Leds.STATUS_GREEN,
-                                  5: FrontpanelController.Leds.LAN_RED,
-                                  6: FrontpanelController.Leds.CLOUD,
-                                  7: FrontpanelController.Leds.SETUP,
-                                  8: FrontpanelController.Leds.LAN_GREEN,
-                                  9: FrontpanelController.Leds.P1,
-                                  10: FrontpanelController.Leds.CAN_COMMUNICATION,
-                                  11: FrontpanelController.Leds.CAN_STATUS_RED,
-                                  12: FrontpanelController.Leds.CAN_STATUS_GREEN,
-                                  13: FrontpanelController.Leds.OUTPUTS_DIG_1_5,
-                                  15: FrontpanelController.Leds.RELAYS_9_16},
-                              1: {2: FrontpanelController.Leds.CAN_STATUS_RED,
-                                  3: FrontpanelController.Leds.CAN_STATUS_GREEN,
-                                  4: FrontpanelController.Leds.CAN_COMMUNICATION,
-                                  5: FrontpanelController.Leds.P1,
-                                  6: FrontpanelController.Leds.RELAYS_1_8,
-                                  7: FrontpanelController.Leds.OUTPUTS_DIG_6_8,
-                                  8: FrontpanelController.Leds.STATUS_GREEN,
-                                  9: FrontpanelController.Leds.STATUS_RED,
-                                  10: FrontpanelController.Leds.RS485,
-                                  11: FrontpanelController.Leds.SETUP,
-                                  12: FrontpanelController.Leds.CLOUD,
-                                  14: FrontpanelController.Leds.LAN_GREEN,
-                                  15: FrontpanelController.Leds.LAN_RED}}
+    LED_MAPPING_ID_TO_ENUM = {Platform.Type.CORE: {0: {4: FrontpanelController.Leds.STATUS_RED,
+                                                       5: FrontpanelController.Leds.STATUS_GREEN,
+                                                       13: FrontpanelController.Leds.SETUP,
+                                                       14: FrontpanelController.Leds.CLOUD},
+                                                   1: {4: FrontpanelController.Leds.CAN_STATUS_GREEN,
+                                                       5: FrontpanelController.Leds.CAN_STATUS_RED,
+                                                       11: FrontpanelController.Leds.LAN_RED,
+                                                       12: FrontpanelController.Leds.LAN_GREEN,
+                                                       13: FrontpanelController.Leds.P1,
+                                                       15: FrontpanelController.Leds.CAN_COMMUNICATION}},
+                              Platform.Type.CORE_PLUS: {0: {0: FrontpanelController.Leds.INPUTS,
+                                                            1: FrontpanelController.Leds.EXPANSION,
+                                                            2: FrontpanelController.Leds.STATUS_RED,
+                                                            3: FrontpanelController.Leds.STATUS_GREEN,
+                                                            5: FrontpanelController.Leds.LAN_RED,
+                                                            6: FrontpanelController.Leds.CLOUD,
+                                                            7: FrontpanelController.Leds.SETUP,
+                                                            8: FrontpanelController.Leds.LAN_GREEN,
+                                                            9: FrontpanelController.Leds.P1,
+                                                            10: FrontpanelController.Leds.CAN_COMMUNICATION,
+                                                            11: FrontpanelController.Leds.CAN_STATUS_RED,
+                                                            12: FrontpanelController.Leds.CAN_STATUS_GREEN,
+                                                            13: FrontpanelController.Leds.OUTPUTS_DIG_5_7,
+                                                            14: FrontpanelController.Leds.OUTPUTS_ANA_1_4,
+                                                            15: FrontpanelController.Leds.RELAYS_9_16},
+                                                        1: {6: FrontpanelController.Leds.RELAYS_1_8,
+                                                            7: FrontpanelController.Leds.OUTPUTS_DIG_1_4}}}
     LED_TO_BA = {FrontpanelController.Leds.P1: 6,
                  FrontpanelController.Leds.LAN_GREEN: 7,
                  FrontpanelController.Leds.LAN_RED: 8,
@@ -98,6 +99,7 @@ class FrontpanelCoreController(FrontpanelController):
         self._authorized_mode_buttons = [False, False]
         self._authorized_mode_buttons_pressed_since = None  # type: Optional[float]
         self._authorized_mode_buttons_released = False
+        self._platform = Platform.get_platform()
 
     def _handle_event(self, data):
         # type: (Dict[str, Any]) -> None
@@ -106,9 +108,9 @@ class FrontpanelCoreController(FrontpanelController):
         if core_event.type == MasterCoreEvent.Types.LED_BLINK:
             with self._led_event_lock:
                 chip = core_event.data['chip']
-                if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM:
+                if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[self._platform]:
                     for led_id in range(16):
-                        led_name = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[chip].get(led_id)
+                        led_name = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[self._platform][chip].get(led_id)
                         if led_name is None:
                             continue
                         state_tracker = self._led_states.setdefault(led_name, LedStateTracker(led_name))
@@ -119,9 +121,9 @@ class FrontpanelCoreController(FrontpanelController):
         elif core_event.type == MasterCoreEvent.Types.LED_ON:
             with self._led_event_lock:
                 chip = core_event.data['chip']
-                if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM:
+                if chip in FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[self._platform]:
                     for led_id in range(16):
-                        led_name = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[chip].get(led_id)
+                        led_name = FrontpanelCoreController.LED_MAPPING_ID_TO_ENUM[self._platform][chip].get(led_id)
                         if led_name is None:
                             continue
                         state_tracker = self._led_states.setdefault(led_name, LedStateTracker(led_name))

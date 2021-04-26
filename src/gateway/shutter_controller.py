@@ -20,6 +20,8 @@ from __future__ import absolute_import
 import logging
 import time
 from threading import Lock
+
+from gateway.daemon_thread import DaemonThread
 from peewee import JOIN
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.dto import ShutterDTO, ShutterGroupDTO
@@ -82,9 +84,33 @@ class ShutterController(BaseController):
         self._verbose = verbose
         self._config_lock = Lock()
 
+        self._sync_state_thread = None  # type: Optional[DaemonThread]
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.SHUTTER, self._handle_master_event)
 
     # Update internal shutter configuration cache
+
+    def start(self):
+        # type: () -> None
+        super(ShutterController, self).start()
+        self._sync_state_thread = DaemonThread(name='shuttersyncstate',
+                                               target=self._sync_state,
+                                               interval=600, delay=10)
+        self._sync_state_thread.start()
+
+    def stop(self):
+        # type: () -> None
+        super(ShutterController, self).stop()
+        if self._sync_state_thread:
+            self._sync_state_thread.stop()
+            self._sync_state_thread = None
+
+    def _sync_state(self):
+        # this is not syncing the shutter state with the master, but is used to publish the state periodically
+        for shutter_id, shutter_dto in self._shutters.items():
+            try:
+                self._publish_shutter_state(shutter_id, shutter_dto, self._states[shutter_id])
+            except KeyError:
+                logger.error('No state found for shutter {}'.format(shutter_id))
 
     def _handle_master_event(self, event):  # type: (MasterEvent) -> None
         super(ShutterController, self)._handle_master_event(event)
@@ -436,7 +462,7 @@ class ShutterController(BaseController):
             if force_report:
                 logger.debug('Shutter {0} force reported new state {1}'.format(shutter_id, new_state))
                 self._states[shutter_id] = (time.time(), new_state)
-                self._publish_shutter_change(shutter_id, shutter, self._states[shutter_id])
+                self._publish_shutter_state(shutter_id, shutter, self._states[shutter_id])
             else:
                 logger.debug('Shutter {0} new state {1} ignored since it equals {2}'.format(shutter_id, new_state, current_state))
             return  # State didn't change, nothing to do
@@ -491,7 +517,7 @@ class ShutterController(BaseController):
                     new_state = ShutterEnums.State.STOPPED
             self._states[shutter_id] = (now, new_state)
 
-        self._publish_shutter_change(shutter_id, shutter, self._states[shutter_id])
+        self._publish_shutter_state(shutter_id, shutter, self._states[shutter_id])
 
     def get_states(self):  # type: () -> Dict[str, Any]
         all_states = []
@@ -504,7 +530,7 @@ class ShutterController(BaseController):
                                         'last_change': self._states[shutter_id][0]}
                            for shutter_id in self._shutters}}
 
-    def _publish_shutter_change(self, shutter_id, shutter_data, shutter_state):  # type: (int, ShutterDTO, Tuple[float, str]) -> None
+    def _publish_shutter_state(self, shutter_id, shutter_data, shutter_state):  # type: (int, ShutterDTO, Tuple[float, str]) -> None
         gateway_event = GatewayEvent(event_type=GatewayEvent.Types.SHUTTER_CHANGE,
                                      data={'id': shutter_id,
                                            'status': {'state': shutter_state[1].upper(),
