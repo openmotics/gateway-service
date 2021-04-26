@@ -168,12 +168,31 @@ class ApiApartmentsTests(unittest.TestCase):
                                                request_body=json.dumps(apartment_to_create))
             self.assertTrue(bytes(exception_message.encode('utf-8')) in response)
 
+    def test_create_apartment_empty_list(self):
+        apartment_to_create = []
+        with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
+            exception_message = 'TEST_EXCEPTION'
+            save_apartment_func.side_effect = RuntimeError(exception_message)
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            response = self.web.post_apartments(role=auth_token.user.role,
+                                               request_body=json.dumps(apartment_to_create))
+            self.assertEqual('[]', response)
+
     def test_create_apartment_no_body(self):
         with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
             exception_message = 'TEST_EXCEPTION'
             save_apartment_func.side_effect = RuntimeError(exception_message)
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_apartment(role=auth_token.user.role,
+                                               request_body=None)
+            self.assertTrue(WrongInputParametersException.bytes_message() in response)
+
+    def test_create_apartment_no_body_list(self):
+        with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
+            exception_message = 'TEST_EXCEPTION'
+            save_apartment_func.side_effect = RuntimeError(exception_message)
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            response = self.web.post_apartments(role=auth_token.user.role,
                                                request_body=None)
             self.assertTrue(WrongInputParametersException.bytes_message() in response)
 
@@ -190,6 +209,38 @@ class ApiApartmentsTests(unittest.TestCase):
             response = self.web.post_apartment(role=auth_token.user.role,
                                                request_body=json.dumps(apartment_to_create))
             self.assertTrue(UnAuthorizedException.bytes_message() in response)
+
+    def test_create_apartment_id_filled_in(self):
+        apartment_to_create = {
+            'id': 5,
+            'name': 'Test',
+            'mailbox_rebus_id': 37,
+            'doorbell_rebus_id': 38,
+        }
+        with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
+            apartment_dto_to_save = ApartmentDTO(**apartment_to_create)
+            save_apartment_func.return_value = apartment_dto_to_save
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            response = self.web.post_apartment(role=auth_token.user.role,
+                                               request_body=json.dumps(apartment_to_create))
+            print(response)
+            self.assertTrue(WrongInputParametersException.bytes_message() in response)
+
+    def test_create_apartment_id_filled_in_list(self):
+        apartment_to_create = [{
+            'id': 5,
+            'name': 'Test',
+            'mailbox_rebus_id': 37,
+            'doorbell_rebus_id': 38,
+        }]
+        with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
+            apartment_dto_to_save = ApartmentDTO(**apartment_to_create[0])
+            save_apartment_func.return_value = apartment_dto_to_save
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            response = self.web.post_apartments(role=auth_token.user.role,
+                                               request_body=json.dumps(apartment_to_create))
+            print(response)
+            self.assertTrue(WrongInputParametersException.bytes_message() in response)
 
     # ----------------------------------------------------------------
     # --- PUT

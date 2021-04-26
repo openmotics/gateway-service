@@ -442,6 +442,8 @@ class Apartments(RestAPIEndpoint):
         to_create_apartments = []
         for apartment in body_dict:
             apartment_dto = ApartmentSerializer.deserialize(apartment)
+            if 'id' in apartment_dto.loaded_fields:
+                raise WrongInputParametersException('The apartments cannot have an ID set when creating a new apartment')
             if apartment_dto is None:
                 raise WrongInputParametersException('Could not parse the json body: Could not parse apartment: {}'.format(apartment))
             to_create_apartments.append(apartment_dto)
@@ -450,7 +452,7 @@ class Apartments(RestAPIEndpoint):
         for apartment in to_create_apartments:
             apartment_dto = self.apartment_controller.save_apartment(apartment)
             apartments_serial.append(ApartmentSerializer.serialize(apartment_dto))
-        return apartments_serial
+        return json.dumps(apartments_serial)
 
     @openmotics_api_v1(auth=True, pass_role=True, pass_token=False)
     def post_apartment(self, request_body=None, role=None):
@@ -468,6 +470,8 @@ class Apartments(RestAPIEndpoint):
             raise WrongInputParametersException('Could not parse the json body')
         apartment_deserialized = ApartmentSerializer.deserialize(body_dict)
         apartment_dto = self.apartment_controller.save_apartment(apartment_deserialized)
+        if 'id' in apartment_dto.loaded_fields:
+            raise WrongInputParametersException('The apartments cannot have an ID set when creating a new apartment')
         if apartment_dto is None:
             raise ItemDoesNotExistException('Could not create the apartment: Could not load after creation')
         apartment_serial = ApartmentSerializer.serialize(apartment_dto)
