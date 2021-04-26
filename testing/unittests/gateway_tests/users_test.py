@@ -20,6 +20,7 @@ Tests for the users module.
 
 from __future__ import absolute_import
 
+import fakesleep
 import time
 import unittest
 
@@ -38,18 +39,26 @@ MODELS = [User]
 
 class UserControllerTest(unittest.TestCase):
     """ Tests for UserController. """
+    TOKEN_TIMEOUT = 3
 
     @classmethod
     def setUpClass(cls):
+        super(UserControllerTest, cls).setUpClass()
         SetTestMode()
         cls.test_db = SqliteDatabase(':memory:')
+        fakesleep.monkey_patch()
+
+    @classmethod
+    def tearDownClass(cls):
+        super(UserControllerTest, cls).tearDownClass()
+        fakesleep.monkey_restore()
 
     def setUp(self):
         self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
         SetUpTestInjections(config={'username': 'om', 'password': 'pass'},
-                            token_timeout=3)
+                            token_timeout=UserControllerTest.TOKEN_TIMEOUT)
         self.controller = UserController()
         self.controller.start()
 
@@ -57,6 +66,22 @@ class UserControllerTest(unittest.TestCase):
         self.controller.stop()
         self.test_db.drop_tables(MODELS)
         self.test_db.close()
+
+    def test_save_user(self):
+        """ Test that the users are saved correctly """
+        # first test that the cloud user has been saved
+        num_users = self.controller.get_number_of_users()
+        self.assertEqual(1, num_users)
+
+        # setup test credentials
+        user_dto = UserDTO(username='fred',
+                           role=User.UserRoles.ADMIN,
+                           pin_code='1234')
+        user_dto.set_password("test")
+        self.controller.save_user(user_dto)
+
+        num_users = self.controller.get_number_of_users()
+        self.assertEqual(2, num_users)
 
     def test_empty(self):
         """ Test an empty database. """
@@ -73,10 +98,10 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual(False, self.controller.check_token('some token 123'))
 
         # create the cloud user credentials
-        user_dto = UserDTO("om")
+        user_dto = UserDTO(username="om")
         user_dto.set_password("pass")
 
-        # verfify that the cloud user can login
+        # verify that the cloud user can login
         success, data = self.controller.login(user_dto)
         self.assertTrue(success)
         self.assertNotEqual(None, data)
@@ -90,7 +115,9 @@ class UserControllerTest(unittest.TestCase):
         user_to_add = User(
             username='test',
             password=UserDTO._hash_password('test'),
-            accepted_terms=False
+            accepted_terms=False,
+            pin_code='1234',
+            role=User.UserRoles.ADMIN
         )
         user_to_add.save()
 
@@ -115,10 +142,10 @@ class UserControllerTest(unittest.TestCase):
 
     def test_all(self):
         """ Test all methods of UserController. """
-        fields = ['username', 'password', 'accepted_terms']
+        fields = ['role', 'pin_code', 'first_name', 'last_name', 'password']
 
         # create a new user to test with
-        user_dto = UserDTO(username='fred')
+        user_dto = UserDTO(username='fred', pin_code='1234', role=User.UserRoles.ADMIN)
         user_dto.set_password('test')
         self.controller.save_users([user_dto])
 
@@ -170,10 +197,10 @@ class UserControllerTest(unittest.TestCase):
 
         # create multiple new users
         users_dto = []
-        user_dto = UserDTO(username='simon')
+        user_dto = UserDTO(username='simon', pin_code='5678', role=User.UserRoles.ADMIN)
         user_dto.set_password('test')
         users_dto.append(user_dto)
-        user_dto = UserDTO(username='test')
+        user_dto = UserDTO(username='test', pin_code='9876', role=User.UserRoles.ADMIN)
         user_dto.set_password('test')
         users_dto.append(user_dto)
         self.controller.save_users(users_dto)
@@ -197,7 +224,6 @@ class UserControllerTest(unittest.TestCase):
         self.controller.logout(token)
         self.assertFalse(self.controller.check_token(token))
 
-    @mark.slow
     def test_token_timeout(self):
         """ Test the timeout on the tokens. """
 
@@ -249,6 +275,8 @@ class UserControllerTest(unittest.TestCase):
         user_to_add = User(
             username='test',
             password=UserDTO._hash_password('test'),
+            pin_code='1234',
+            role=User.UserRoles.ADMIN,
             accepted_terms=True
         )
         user_to_add.save()
@@ -276,6 +304,8 @@ class UserControllerTest(unittest.TestCase):
         user_to_add = User(
             username='test',
             password=UserDTO._hash_password('test'),
+            pin_code='1234',
+            role=User.UserRoles.ADMIN,
             accepted_terms=True
         )
         user_to_add.save()
@@ -318,7 +348,7 @@ class UserControllerTest(unittest.TestCase):
 
     def test_case_insensitive(self):
         """ Test the case insensitivity of the username. """
-        fields = ['username', 'password', 'accepted_terms']
+        fields = ['role', 'pin_code', 'first_name', 'last_name', 'password']
 
         # check that there is only one user in the system
         users_in_controller = self.controller.load_users()
@@ -326,7 +356,7 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual('om', users_in_controller[0].username)
 
         # create a new user to test with
-        user_dto = UserDTO(username='test')
+        user_dto = UserDTO(username='test', pin_code='1234', role=User.UserRoles.ADMIN)
         user_dto.set_password('test')
         self.controller.save_users([user_dto])
 
@@ -355,7 +385,10 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual(2, self.controller.get_number_of_users())
 
     def test_usermapper(self):
-        user_dto = UserDTO(username='test', accepted_terms=1)
+        user_dto = UserDTO(username='test',
+                           role=User.UserRoles.USER,
+                           pin_code='1234',
+                           accepted_terms=1)
         user_dto.set_password('test')
 
         user_orm = UserMapper.dto_to_orm(user_dto)
@@ -363,6 +396,10 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual(True, hasattr(user_orm, "username"))
         self.assertEqual(True, hasattr(user_orm, "password"))
         self.assertEqual(True, hasattr(user_orm, "accepted_terms"))
+        self.assertEqual(True, hasattr(user_orm, "role"))
+
+        self.assertEqual(User.UserRoles.USER, user_orm.role)
+        self.assertEqual('1234', user_orm.pin_code)
 
         self.assertEqual('test', user_orm.username)
         self.assertEqual(UserDTO._hash_password('test'), user_orm.password)

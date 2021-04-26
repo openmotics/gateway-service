@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from gateway.dto.apartment import ApartmentDTO
+from gateway.dto.delivery import DeliveryDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
 from gateway.dto.floor import FloorDTO
 from gateway.dto.global_feedback import GlobalFeedbackDTO
@@ -21,6 +23,7 @@ from gateway.dto.input import InputDTO
 from gateway.dto.module import ModuleDTO
 from gateway.dto.output import OutputDTO, OutputStateDTO
 from gateway.dto.pulse_counter import PulseCounterDTO
+from gateway.dto.rfid import RfidDTO
 from gateway.dto.room import RoomDTO
 from gateway.dto.rtd10 import GlobalRTD10DTO, RTD10DTO
 from gateway.dto.schedule import ScheduleDTO

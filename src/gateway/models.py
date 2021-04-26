@@ -182,12 +182,6 @@ class Schedule(BaseModel):
     status = CharField()
 
 
-class User(BaseModel):
-    id = AutoField()
-    username = CharField(unique=True)
-    password = CharField()
-    accepted_terms = IntegerField(default=0)
-
 
 class Config(BaseModel):
     id = AutoField()
@@ -532,3 +526,81 @@ def on_thermostat_save_handler(model_class, instance, created):
                 day_schedule = DaySchedule(thermostat=instance, index=day_index, mode=mode)
                 day_schedule.schedule_data = DaySchedule.DEFAULT_SCHEDULE[mode]
                 day_schedule.save()
+
+
+class Apartment(BaseModel):
+    id = AutoField()
+    name = CharField(null=False)
+    mailbox_rebus_id = IntegerField(unique=True)
+    doorbell_rebus_id = IntegerField(unique=True)
+
+
+class User(BaseModel):
+    class UserRoles(object):
+        USER = 'USER'
+        ADMIN = 'ADMIN'
+        TECHNICIAN = 'TECHNICIAN'
+        COURIER = 'COURIER'
+
+    class UserLanguages(object):
+        EN = 'English'
+        DE = 'Deutsh'
+        NL = 'Nederlands'
+        FR = 'Francais'
+
+    id = AutoField()
+    first_name = CharField(null=False)
+    last_name = CharField(null=False, default='')
+    role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
+    pin_code = CharField(null=False, unique=True)
+    language = CharField(null=False, default='English')  # options: See Userlanguages
+    password = CharField()
+    apartment_id = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
+    is_active = BooleanField(default=True)
+    accepted_terms = IntegerField(default=0)
+
+    @property
+    def username(self):
+        # type: () -> str
+        separator = ''
+        if self.first_name != '' and self.last_name != '':
+            separator = ' '
+        return "{}{}{}".format(self.first_name, separator, self.last_name)
+
+    @username.setter
+    def username(self, username):
+        # type: (str) -> None
+        splits = username.split(' ')
+        if len(splits) > 1:
+            self.first_name = splits[0]
+            self.last_name = ' '.join(splits[1:])
+        else:
+            self.first_name = username
+            self.last_name = ''
+
+
+class RFID(BaseModel):
+    id = AutoField()
+    tag_string = CharField(null=False, unique=True)
+    uid_manufacturer = CharField(null=False, unique=True)
+    uid_extension = CharField()
+    enter_count = IntegerField(null=False)
+    blacklisted = BooleanField(null=False, default=False)
+    label = CharField()
+    timestamp_created = CharField()
+    timestamp_last_used = CharField()
+    user_id = ForeignKeyField(User, null=False, backref='rfids', on_delete='CASCADE')
+
+
+class Delivery(BaseModel):
+    id = AutoField()
+    type = CharField(null=False)
+    timestamp_delivery = CharField(null=False)
+    timestamp_pickup = CharField()
+    courier_firm = CharField()
+    signature_delivery = CharField(null=False)
+    signature_pickup = CharField()
+    parcelbox_rebus_id = IntegerField(null=False)
+    user_id_delivery = ForeignKeyField(User, backref='deliveries', on_delete='NO ACTION', null=False)
+    user_id_pickup = ForeignKeyField(User, backref='pickups', on_delete='NO ACTION')
+

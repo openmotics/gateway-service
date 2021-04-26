@@ -18,6 +18,7 @@ and authenticating users.
 """
 
 from __future__ import absolute_import
+import logging
 import uuid
 import time
 import six
@@ -30,6 +31,7 @@ from gateway.enums import UserEnums
 if False:  # MYPY
     from typing import Tuple, List, Optional, Dict
 
+logger = logging.getLogger('openmotics')
 
 @Injectable.named('user_controller')
 @Singleton
@@ -49,12 +51,25 @@ class UserController(object):
     def start(self):
         # type: () -> None
         # Create the user for the cloud
+        logger.info('Adding the cloud user')
+        first_name = self._config['username'].lower()
+        password = self._config['password']
+        hashed_password = UserDTO._hash_password(password)
+
+        if User.select().where((User.first_name == first_name) & (User.password == hashed_password)).first():
+            # If the cloud user is already in the DB, do not add it anymore
+            logger.debug('Cloud user already added, not adding it anymore')
+            return
+
         cloud_user_dto = UserDTO(
             username=self._config['username'].lower(),
+            pin_code=self._config['username'].lower(),
+            role=User.UserRoles.ADMIN,
             accepted_terms=UserController.TERMS_VERSION
         )
         cloud_user_dto.set_password(self._config['password'])
-        self.save_users(users=[cloud_user_dto])
+        # Save the user to the DB
+        self.save_user(user_dto=cloud_user_dto)
 
     def stop(self):
         # type: () -> None
@@ -96,11 +111,13 @@ class UserController(object):
         """  Remove a user. """
         # set username to lowercase to compare on username
         username = user_dto.username.lower()
+        first_name = user_dto.first_name.lower()
+        last_name = user_dto.last_name.lower()
 
         # check if the removed user is not the last admin user of the system
         if UserController.get_number_of_users() <= 1:
             raise Exception(UserEnums.DeleteErrors.LAST_ACCOUNT)
-        User.delete().where(User.username == username).execute()
+        User.delete().where((User.first_name == first_name) & (User.last_name == last_name)).execute()
 
         to_remove = []
         for token in self._tokens:
@@ -124,8 +141,9 @@ class UserController(object):
             timeout = self._token_timeout
 
         user_orm = User.select().where(
-            User.username == user_dto.username.lower(),
-            User.password == user_dto.hashed_password
+            (User.first_name == user_dto.first_name.lower()) &
+            (User.last_name == user_dto.last_name.lower()) &
+            (User.password == user_dto.hashed_password)
         ).first()
 
         if user_orm is None:
