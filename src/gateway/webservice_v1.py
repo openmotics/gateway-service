@@ -509,7 +509,7 @@ class Apartments(RestAPIEndpoint):
             raise WrongInputParametersException('Could not parse the json body')
         for apartment in body_dict:
             apartment_dto = ApartmentSerializer.deserialize(apartment)
-            if 'id' not in apartment_dto.loaded_fields:
+            if 'id' not in apartment_dto.loaded_fields or apartment_dto.id is None:
                 raise WrongInputParametersException('The ID is needed to know which apartment to update.')
             apartments_to_update.append(apartment_dto)
 

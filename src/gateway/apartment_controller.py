@@ -87,7 +87,7 @@ class ApartmentController(object):
     def delete_apartment(self, apartment_dto):
         # type: (ApartmentDTO) -> None
         _ = self
-        if "id" in apartment_dto.loaded_fields:
+        if "id" in apartment_dto.loaded_fields and apartment_dto.id is not None:
             Apartment.delete_by_id(apartment_dto.id)
         elif "name" in apartment_dto.loaded_fields:
             # First check if there is only one:
