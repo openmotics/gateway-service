@@ -179,14 +179,13 @@ class ApiUsersTests(unittest.TestCase):
     # ----------------------------------------------------------------
     # --- POST
     # ----------------------------------------------------------------
-
     def verify_user_created(self, user_to_create, response):
         resp_dict = json.loads(response)
         for field in user_to_create:
             self.assertIn(field, resp_dict)
             user_to_create_field = user_to_create[field]
             resp_user_field = resp_dict[field]
-            self.assertEqual(user_to_create_field, resp_user_field)
+            self.assertEqual(user_to_create_field, resp_user_field, "values are not equal for field: {}".format(field))
 
     def test_create_user_only_name(self):
         user_to_create = {
@@ -194,6 +193,12 @@ class ApiUsersTests(unittest.TestCase):
             'last_name': 'User',
         }
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
+            user_to_create_return = user_to_create.copy()
+            user_to_create_return['id'] = 5
+            user_dto_to_return = UserDTO(**user_to_create_return)
+            user_dto_to_return.set_password('Test')
+            save_user_func.return_value = user_dto_to_return
+
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
                                           request_body=json.dumps(user_to_create))
@@ -219,6 +224,14 @@ class ApiUsersTests(unittest.TestCase):
             'password': 'Test',
         }
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
+            user_to_create_return = user_to_create.copy()
+            del user_to_create_return['pin_code']
+            del user_to_create_return['password']
+            user_to_create_return['id'] = 5
+            user_dto_to_return = UserDTO(**user_to_create_return)
+            user_dto_to_return.set_password('Test')
+            save_user_func.return_value = user_dto_to_return
+
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
                                           request_body=json.dumps(user_to_create))
@@ -252,6 +265,12 @@ class ApiUsersTests(unittest.TestCase):
             'apartment': None
         }
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
+            user_to_create_return = user_to_create.copy()
+            user_to_create_return['id'] = 5
+            user_dto_to_return = UserDTO(**user_to_create_return)
+            user_dto_to_return.set_password('Test')
+            save_user_func.return_value = user_dto_to_return
+
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
                                           request_body=json.dumps(user_to_create))
@@ -270,13 +289,20 @@ class ApiUsersTests(unittest.TestCase):
             'accepted_terms': 1
         }
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
+            user_to_create_return = user_to_create.copy()
+            del user_to_create_return['pin_code']
+            del user_to_create_return['password']
+            user_to_create_return['id'] = 5
+            user_dto_to_return = UserDTO(**user_to_create_return)
+            user_dto_to_return.set_password('Test')
+            save_user_func.return_value = user_dto_to_return
+
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
                                           request_body=json.dumps(user_to_create))
             del user_to_create['pin_code']
             del user_to_create['password']
             user_dto_to_save = UserDTO(**user_to_create)
-            user_dto_to_save.set_password('Test')
             save_user_func.assert_called_once_with(user_dto_to_save)
             self.verify_user_created(user_to_create, response)
 

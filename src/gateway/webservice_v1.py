@@ -290,10 +290,10 @@ class Users(RestAPIEndpoint):
                 raise UnAuthorizedException('As a normal user, you can only create a COURIER user')
 
         try:
-            self._user_controller.save_user(user_dto)
+            user_dto_saved = self._user_controller.save_user(user_dto)
         except RuntimeError as e:
             raise WrongInputParametersException('The user could not be saved: {}'.format(e))
-        return json.dumps(UserSerializer.serialize(user_dto))
+        return json.dumps(UserSerializer.serialize(user_dto_saved))
 
     @openmotics_api_v1(auth=False, pass_role=False)
     def post_activate_user(self, user_id, request_body=None):

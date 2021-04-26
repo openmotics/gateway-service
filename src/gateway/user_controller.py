@@ -78,7 +78,7 @@ class UserController(object):
         pass
 
     def save_user(self, user_dto):
-        # type: (UserDTO) -> None
+        # type: (UserDTO) -> UserDTO
         """ Saves one instance of a user with the defined fields in param fields """
         _ = self
 
@@ -103,7 +103,10 @@ class UserController(object):
         user_orm = UserMapper.dto_to_orm(user_dto)
         UserController._validate(user_orm)
         user_orm.save()
-        self.user_cache.append(user_dto)
+        user_dto_saved = UserMapper.orm_to_dto(user_orm)
+        self.user_cache.append(user_dto_saved)
+        return user_dto_saved
+
 
     def save_users(self, users):
         # type: (List[UserDTO]) -> None
