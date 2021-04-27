@@ -118,9 +118,9 @@ class WebInterfaceTest(unittest.TestCase):
         to_remove_user = UserDTO(
             username='test',
         )
-        with mock.patch.object(self.user_controller, 'remove_user') as save_user_func:
+        with mock.patch.object(self.user_controller, 'remove_user') as remove_user_func:
             response = self.web.remove_user(username='test')
-            save_user_func.assert_called_once_with(to_remove_user)
+            remove_user_func.assert_called_once_with(to_remove_user)
             self.assertEqual(
                 {'success': True},
                 json.loads(response)
