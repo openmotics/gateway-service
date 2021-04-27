@@ -597,6 +597,12 @@ class WebInterface(object):
         return {'old_module': ModuleSerializer.serialize(old_module, fields=None),
                 'new_module': ModuleSerializer.serialize(new_module, fields=None)}
 
+    # For testing purposes - to avoid having to run the entire factory-reset test
+    @openmotics_api(auth=True)
+    def can_reset(self):
+        self._gateway_api.can_reset()
+        return {}
+
     @openmotics_api(auth=True)
     def get_features(self):
         """

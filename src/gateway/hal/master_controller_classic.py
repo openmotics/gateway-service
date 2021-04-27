@@ -1166,9 +1166,47 @@ class MasterClassicController(MasterController):
 
     def factory_reset(self):
         # type: () -> None
+        # Wipe CAN EEPROM
+        # https://wiki.openmotics.com/index.php/API_Reference_Guide#FX_-.3E_Erase_external_Eeprom_slave_modules_and_perform_factory_reset
+        # Erasing CAN EEPROM first because the master needs to have the module information
+        mods = self._master_communicator.do_command(master_api.number_of_io_modules())
+        for i in range(mods['in']):
+            is_can = self._eeprom_controller.read_address(EepromAddress(2 + i, 252, 1)).bytes == bytearray(b'C')
+            if is_can:
+                module_address = self._eeprom_controller.read_address(EepromAddress(2 + i, 0, 4))
+                module_type_letter = chr(module_address.bytes[0]).lower()
+                is_virtual = chr(module_address.bytes[0]).islower()
+                formatted_address = MasterClassicController._format_address(module_address.bytes)
+                if not is_virtual and module_type_letter == 'c':
+                    try:
+                        logging.info("Resetting CAN EEPROM, adress: {0} ".format(formatted_address))
+                        self._master_communicator.do_command(master_api.erase_can_eeprom(),
+                                                             {'addr': module_address.bytes, 'instr': 0},
+                                                             extended_crc=True, timeout=5)
+                    except CommunicationTimedOutException:
+                        logger.error('Got communication timeout during FX call')
+
         # Wipe master EEPROM
         data = chr(255) * (256 * 256)
         self.restore(data)
+
+    def can_reset(self):
+        mods = self._master_communicator.do_command(master_api.number_of_io_modules())
+        for i in range(mods['in']):
+            is_can = self._eeprom_controller.read_address(EepromAddress(2 + i, 252, 1)).bytes == bytearray(b'C')
+            if is_can:
+                module_address = self._eeprom_controller.read_address(EepromAddress(2 + i, 0, 4))
+                module_type_letter = chr(module_address.bytes[0]).lower()
+                is_virtual = chr(module_address.bytes[0]).islower()
+                formatted_address = MasterClassicController._format_address(module_address.bytes)
+                if not is_virtual and module_type_letter == 'c':
+                    try:
+                        logging.info("Resetting CAN EEPROM, adress: {0} ".format(formatted_address))
+                        self._master_communicator.do_command(master_api.erase_can_eeprom(),
+                                                             {'addr': module_address.bytes, 'instr': 0},
+                                                             extended_crc=True, timeout=5)
+                    except CommunicationTimedOutException:
+                        logger.error('Got communication timeout during FX call')
 
     def cold_reset(self, power_on=True):
         # type: (bool) -> None

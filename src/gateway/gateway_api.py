@@ -236,6 +236,10 @@ class GatewayApi(object):
             values += [None] * (32 - len(values))
         return values
 
+    # For testing purposes - to avoid having to run the entire factory-reset test
+    def can_reset(self):
+        self.__master_controller.can_reset()
+
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         # TODO: work with sensor controller
         # TODO: add other sensors too (e.g. from database <-- plugins)

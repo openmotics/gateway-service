@@ -415,7 +415,8 @@ class Toolbox(object):
         # TODO: Does not work yet for the Core(+) as they don't have this call implemented.
         logger.debug('Discovering modules')
         since = time.time()
-
+        # [WIP] tried to disable ucan logic for the factory reset test (CAN FX call)
+        # but it did not enable us to check the behaviour
         if ucans:
             ucan_inputs = []
             for module in INPUT_MODULE_LAYOUT:
