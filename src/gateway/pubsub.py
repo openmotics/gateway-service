@@ -124,6 +124,7 @@ class PubSub(object):
 
     def _publish_gateway_event(self, topic, gateway_event):
         # type: (GATEWAY_TOPIC, GatewayEvent) -> None
+        logger.debug('Publishing gateway event {} {}'.format(topic, gateway_event))
         callbacks = self._gateway_topics[topic]
         if callbacks:
             logger.debug('Received gateway event %s on topic "%s"', gateway_event.type, topic)
