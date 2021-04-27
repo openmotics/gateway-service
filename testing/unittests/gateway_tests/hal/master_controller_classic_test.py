@@ -283,6 +283,16 @@ class MasterClassicControllerTest(unittest.TestCase):
                                                                       fields={'action_type': 173, 'action_number': 1},
                                                                       timeout=2)
 
+    def test_set_input(self):
+        controller = get_classic_controller_dummy()
+        controller.set_input(100, True)
+        controller._master_communicator.do_command.assert_called_with(mock.ANY,
+                                                                      fields={'action_type': 68, 'action_number': 100},
+                                                                      timeout=2)
+        controller.set_input(100, False)
+        controller._master_communicator.do_command.assert_called_with(mock.ANY,
+                                                                      fields={'action_type': 69, 'action_number': 100},
+                                                                      timeout=2)
 
 @Scope
 def get_classic_controller_dummy(inputs=None):

@@ -665,6 +665,16 @@ class WebInterface(object):
         """
         return {'status': self._gateway_api.get_input_status()}
 
+    @openmotics_api(auth=True, check=types(id=int, is_on=bool))
+    def set_input(self, id, is_on):  # type: (int, bool) -> Dict
+        """
+        Set the status of a virtual input.
+        :param id: The id of the input to set
+        :param is_on: Whether the input is on (pressed)
+        """
+        self._gateway_api.set_input_status(id, is_on)
+        return {}
+
     @openmotics_api(auth=True)
     def get_output_status(self):
         """

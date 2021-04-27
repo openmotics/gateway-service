@@ -435,6 +435,9 @@ class MasterCoreController(MasterController):
                 for master_event in self._input_state.refresh(data['information']):
                     self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
         return refresh
+    
+    def set_input(self, input_id, state):
+        raise NotImplementedError()
 
     # Outputs
 

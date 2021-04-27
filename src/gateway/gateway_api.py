@@ -191,6 +191,10 @@ class GatewayApi(object):
         inputs = self.__observer.get_inputs()
         return [{'id': input_port['id'], 'status': input_port['status']} for input_port in inputs]
 
+    def set_input_status(self, input_id, status):
+        # TODO: work with input controller
+        self.__master_controller.set_input(input_id, status)
+
     def get_last_inputs(self):
         """ Get the X last pressed inputs during the last Y seconds.
         :returns: a list of tuples (input, output).
