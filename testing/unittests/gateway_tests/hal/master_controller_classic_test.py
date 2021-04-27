@@ -294,6 +294,9 @@ class MasterClassicControllerTest(unittest.TestCase):
                                                                       fields={'action_type': 69, 'action_number': 100},
                                                                       timeout=2)
 
+        with self.assertRaises(ValueError):
+            controller.set_input(255, True)
+
 @Scope
 def get_classic_controller_dummy(inputs=None):
     communicator_mock = mock.Mock(spec=MasterCommunicator)
