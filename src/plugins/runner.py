@@ -246,7 +246,7 @@ class PluginRunner(object):
 
     def process_input_status(self, input_event):
         event_json = input_event.serialize()
-        self._do_async(action='input_status', payload={'event': event_json}, should_filter=True)
+        self._do_async(action='input_status', payload={'event': event_json}, should_filter=False)
 
     def process_output_status(self, data, action_version=1):
         if action_version in [1, 2]:
