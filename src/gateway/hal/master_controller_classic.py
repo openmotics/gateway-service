@@ -451,6 +451,17 @@ class MasterClassicController(MasterController):
         logger.debug('Got input event data from master {}'.format(data))
         self._input_status.set_input(data)
 
+    @communication_enabled
+    def set_input(self, input_id, state):
+        # type: (int, bool) -> None
+        # https://wiki.openmotics.com/index.php/Virtual_Inputs
+        if input_id is None or input_id < 0 or input_id > 240:
+            raise ValueError('Input ID {0} not in range 0 <= id <= 240'.format(input_id))
+        if state:
+            self.do_basic_action(master_api.BA_INPUT_PRESS, input_id)
+        else:
+            self.do_basic_action(master_api.BA_INPUT_RELEASE, input_id)
+
     # Outputs
 
     @communication_enabled
