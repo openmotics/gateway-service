@@ -103,7 +103,7 @@ class WebInterfaceTest(unittest.TestCase):
         to_save_user = UserDTO(
             username='test',
             role='ADMIN',
-            pin_code=''
+            pin_code=None
         )
         to_save_user.set_password('test')
         with mock.patch.object(self.user_controller, 'save_user') as save_user_func:

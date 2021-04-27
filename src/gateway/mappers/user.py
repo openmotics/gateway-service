@@ -62,8 +62,6 @@ class UserMapper(object):
         user_orm = User(password=dto_object.hashed_password)
         if dto_object.role is None:
             dto_object.role = User.UserRoles.ADMIN  # set default role to admin when one is created
-        if dto_object.pin_code is None:
-            dto_object.pin_code = dto_object.first_name  # set the default pin code to the first name if no pin is provided
         for field in dto_object.loaded_fields:
             if getattr(dto_object, field, None) is None:
                 continue

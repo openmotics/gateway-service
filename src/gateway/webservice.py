@@ -476,7 +476,7 @@ class WebInterface(object):
             raise cherrypy.HTTPError(401, "unauthorized")
         user_dto = UserDTO(username=username,
                            role=User.UserRoles.ADMIN,
-                           pin_code='',
+                           pin_code=None,
                            accepted_terms=0)
         user_dto.set_password(password)
         self._user_controller.save_user(user_dto)

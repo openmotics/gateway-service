@@ -76,7 +76,7 @@ def migrate(migrator, database, fake=False, **kwargs):
         first_name = CharField(null=False)
         last_name = CharField(null=False, default='')
         role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
-        pin_code = CharField(null=False, unique=True)
+        pin_code = CharField(null=True, unique=True)
         language = CharField(null=False, default='English')  # options: See Userlanguages
         password = CharField()
         apartment_id = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')

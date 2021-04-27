@@ -63,7 +63,7 @@ class UserController(object):
 
         cloud_user_dto = UserDTO(
             username=self._config['username'].lower(),
-            pin_code=self._config['username'].lower(),
+            pin_code=None,
             role=User.UserRoles.ADMIN,
             accepted_terms=UserController.TERMS_VERSION
         )
@@ -79,6 +79,10 @@ class UserController(object):
         # type: (UserDTO) -> None
         """ Saves one instance of a user with the defined fields in param fields """
         _ = self
+        current_users = self.load_users()
+        for user in current_users:
+            if user.username == user_dto.username:
+                raise RuntimeError('Cannot save user with duplicate usernames')
         user_orm = UserMapper.dto_to_orm(user_dto)
         UserController._validate(user_orm)
         user_orm.save()
