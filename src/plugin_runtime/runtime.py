@@ -276,7 +276,7 @@ class PluginRuntime(object):
                         self._writer.with_catch('input status', decorated_method, [(input_id, None)])
                 elif decorator_version == 2:
                     # Version 2 will send ALL input status changes AND in a dict format
-                    self._writer.with_catch('input status', decorated_method, [event.data])
+                    self._writer.with_catch('input status', decorated_method, [{'input_id': input_id, 'status': status}])
 
     def _handle_output_status(self, data, data_type='status'):
         event = GatewayEvent.deserialize(data) if data_type == 'event' else None
