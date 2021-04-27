@@ -55,7 +55,7 @@ from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
-from gateway.models import Database, Feature, Config
+from gateway.models import Database, Feature, Config, User
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -475,6 +475,8 @@ class WebInterface(object):
         if not self.in_authorized_mode():
             raise cherrypy.HTTPError(401, "unauthorized")
         user_dto = UserDTO(username=username,
+                           role=User.UserRoles.ADMIN,
+                           pin_code='',
                            accepted_terms=0)
         user_dto.set_password(password)
         self._user_controller.save_user(user_dto)

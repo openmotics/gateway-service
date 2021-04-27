@@ -21,7 +21,7 @@ import mock
 
 from bus.om_bus_client import MessageClient
 from gateway.dto import OutputStateDTO, ScheduleDTO, VentilationDTO, \
-    VentilationSourceDTO, VentilationStatusDTO, ModuleDTO
+    VentilationSourceDTO, VentilationStatusDTO, ModuleDTO, UserDTO
 from gateway.gateway_api import GatewayApi
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
@@ -48,6 +48,7 @@ class WebInterfaceTest(unittest.TestCase):
 
     def setUp(self):
         self.maxDiff = None
+        self.user_controller = mock.Mock(UserController)
         self.output_controller = mock.Mock(OutputController)
         self.scheduling_controller = mock.Mock(SchedulingController)
         self.ventilation_controller = mock.Mock(VentilationController)
@@ -66,10 +67,64 @@ class WebInterfaceTest(unittest.TestCase):
                             sensor_controller=mock.Mock(SensorController),
                             shutter_controller=mock.Mock(ShutterController),
                             thermostat_controller=mock.Mock(ThermostatController),
-                            user_controller=mock.Mock(UserController),
+                            user_controller=self.user_controller,
                             ventilation_controller=self.ventilation_controller,
                             module_controller=self.module_controller)
         self.web = WebInterface()
+
+    def test_get_usernames(self):
+        loaded_users = [
+            UserDTO(
+                id=1,
+                username='test user_1',
+                role='ADMIN',
+                pin_code='1234',
+                apartment=None,
+                accepted_terms=1
+            ),
+            UserDTO(
+                id=2,
+                username='test user_2',
+                role='USER',
+                pin_code='',
+                apartment=None,
+                accepted_terms=1
+            )
+        ]
+        with mock.patch.object(self.user_controller, 'load_users',
+                               return_value=loaded_users):
+            response = self.web.get_usernames()
+            self.assertEqual(
+                {'usernames': ['test user_1', 'test user_2'], 'success': True},
+                json.loads(response)
+            )
+
+    def test_create_user(self):
+        to_save_user = UserDTO(
+            username='test',
+            role='ADMIN',
+            pin_code=''
+        )
+        to_save_user.set_password('test')
+        with mock.patch.object(self.user_controller, 'save_user') as save_user_func:
+            response = self.web.create_user(username='test', password='test')
+            save_user_func.assert_called_once_with(to_save_user)
+            self.assertEqual(
+                {'success': True},
+                json.loads(response)
+            )
+
+    def test_remove_user(self):
+        to_remove_user = UserDTO(
+            username='test',
+        )
+        with mock.patch.object(self.user_controller, 'remove_user') as save_user_func:
+            response = self.web.remove_user(username='test')
+            save_user_func.assert_called_once_with(to_remove_user)
+            self.assertEqual(
+                {'success': True},
+                json.loads(response)
+            )
 
     def test_output_status(self):
         with mock.patch.object(self.output_controller, 'get_output_statuses',
