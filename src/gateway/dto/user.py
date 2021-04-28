@@ -31,6 +31,10 @@ class UserDTO(BaseDTO):
     def __init__(self, id=None, username='', first_name='', last_name='', role=None,
                  pin_code=None, apartment=None, accepted_terms=0):
         self.id = id  # type: Optional[int]
+        if username != '':
+            self._username = username  # type: Optional[str]
+        else:
+            self._username = None
         self.first_name = first_name  # type: str
         self.last_name = last_name  # type: str
         self.role = role  # type: str
@@ -53,6 +57,7 @@ class UserDTO(BaseDTO):
     @username.setter
     def username(self, username):
         # type: (str) -> None
+        self._username = username
         splits = username.split(' ')
         if len(splits) > 1:
             self.first_name = splits[0]

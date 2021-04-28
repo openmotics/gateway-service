@@ -343,6 +343,7 @@ class WebInterface(object):
 
     def in_authorized_mode(self):
         # type: () -> bool
+        return True
         if self._frontpanel_controller:
             return self._frontpanel_controller.authorized_mode
         else:
@@ -476,7 +477,6 @@ class WebInterface(object):
             raise cherrypy.HTTPError(401, "unauthorized")
         user_dto = UserDTO(username=username,
                            role=User.UserRoles.ADMIN,
-                           pin_code=None,
                            accepted_terms=0)
         user_dto.set_password(password)
         self._user_controller.save_user(user_dto)

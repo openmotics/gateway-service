@@ -310,16 +310,25 @@ class UserControllerTest(unittest.TestCase):
         )
         user_to_add.save()
 
+        user_to_add = User(
+            username='test2',
+            password=UserDTO._hash_password('test'),
+            pin_code=None,
+            role=User.UserRoles.USER,
+            accepted_terms=True
+        )
+        user_to_add.save()
+
         # creating equal credentials to use
         user_dto = UserDTO(username='test')
         user_dto.set_password('test')
 
         # verify that the user has been added
         users_in_controller = self.controller.load_users()
-        self.assertEqual(2, len(users_in_controller))
+        self.assertEqual(3, len(users_in_controller))
         self.assertEqual('om', users_in_controller[0].username)
         self.assertEqual('test', users_in_controller[1].username)
-        self.assertEqual(2, self.controller.get_number_of_users())
+        self.assertEqual(3, self.controller.get_number_of_users())
 
         # verify that the new user can log in to the system
         success, token = self.controller.login(user_dto, accept_terms=True)
@@ -332,6 +341,17 @@ class UserControllerTest(unittest.TestCase):
         # Verify that the user is logged out of the system
         self.assertFalse(self.controller.check_token(token))
 
+        # verify that the user is deleted from the system
+        users_in_controller = self.controller.load_users()
+        self.assertEqual(2, len(users_in_controller))
+        self.assertEqual('om', users_in_controller[0].username)
+        self.assertEqual(2, self.controller.get_number_of_users())
+
+        # Delete the user with capitals in the username, should not matter
+        user_dto_2 = UserDTO(username='teST2')
+
+        # remove the newly created user
+        self.controller.remove_user(user_dto_2)
         # verify that the user is deleted from the system
         users_in_controller = self.controller.load_users()
         self.assertEqual(1, len(users_in_controller))
@@ -348,8 +368,6 @@ class UserControllerTest(unittest.TestCase):
 
     def test_case_insensitive(self):
         """ Test the case insensitivity of the username. """
-        fields = ['role', 'pin_code', 'first_name', 'last_name', 'password']
-
         # check that there is only one user in the system
         users_in_controller = self.controller.load_users()
         self.assertEqual(1, len(users_in_controller))
@@ -385,27 +403,37 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual(2, self.controller.get_number_of_users())
 
     def test_usermapper(self):
+
+        def convert_back_and_forth(user_dto):
+            user_orm = UserMapper.dto_to_orm(user_dto)
+
+            self.assertEqual(True, hasattr(user_orm, "username"))
+            self.assertEqual(True, hasattr(user_orm, "password"))
+            self.assertEqual(True, hasattr(user_orm, "accepted_terms"))
+            self.assertEqual(True, hasattr(user_orm, "role"))
+
+            self.assertEqual(User.UserRoles.USER, user_orm.role)
+            self.assertEqual('1234', user_orm.pin_code)
+
+            self.assertEqual('test', user_orm.username)
+            self.assertEqual(UserDTO._hash_password('test'), user_orm.password)
+            self.assertEqual(1, user_orm.accepted_terms)
+
+            user_dto = UserMapper.orm_to_dto(user_orm)
+            self.assertEqual('test', user_dto.username)
+            self.assertEqual(user_orm.password, user_dto.hashed_password)
+            self.assertEqual(1, user_dto.accepted_terms)
+
         user_dto = UserDTO(username='test',
                            role=User.UserRoles.USER,
                            pin_code='1234',
                            accepted_terms=1)
         user_dto.set_password('test')
 
-        user_orm = UserMapper.dto_to_orm(user_dto)
+        convert_back_and_forth(user_dto)
 
-        self.assertEqual(True, hasattr(user_orm, "username"))
-        self.assertEqual(True, hasattr(user_orm, "password"))
-        self.assertEqual(True, hasattr(user_orm, "accepted_terms"))
-        self.assertEqual(True, hasattr(user_orm, "role"))
-
-        self.assertEqual(User.UserRoles.USER, user_orm.role)
-        self.assertEqual('1234', user_orm.pin_code)
-
-        self.assertEqual('test', user_orm.username)
-        self.assertEqual(UserDTO._hash_password('test'), user_orm.password)
-        self.assertEqual(1, user_orm.accepted_terms)
-
-        user_dto = UserMapper.orm_to_dto(user_orm)
-        self.assertEqual('test', user_dto.username)
-        self.assertEqual(user_orm.password, user_dto.hashed_password)
-        self.assertEqual(1, user_dto.accepted_terms)
+        user_dto = UserDTO(first_name='first',
+                           last_name='last',
+                           accepted_terms=1)
+        user_dto.set_password('test')
+        convert_back_and_forth(user_dto)

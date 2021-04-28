@@ -29,6 +29,7 @@ class UserMapper(object):
     def orm_to_dto(orm_object):
         # type: (User) -> UserDTO
         user_dto = UserDTO(id=orm_object.id,
+                           username=orm_object._username,
                            first_name=orm_object.first_name,
                            last_name=orm_object.last_name,
                            role=orm_object.role,
@@ -52,7 +53,7 @@ class UserMapper(object):
         user = User.get_or_none(first_name=dto_object.first_name,
                                 last_name=dto_object.last_name)
         if user is None:
-            mandatory_fields = {'role', 'pin_code', 'first_name', 'last_name', 'password'}
+            mandatory_fields = {'role', 'first_name', 'last_name', 'password'}
             if not mandatory_fields.issubset(set(dto_object.loaded_fields)):
                 raise ValueError('Cannot create user without mandatory fields `{0}`\nGot fields: {1}\nDifference: {2}'
                                  .format('`, `'.join(mandatory_fields),
@@ -60,15 +61,19 @@ class UserMapper(object):
                                          mandatory_fields - set(dto_object.loaded_fields)))
 
         user_orm = User(password=dto_object.hashed_password)
+        # Set the username of the orm object as standard since the
+        user_orm.username = dto_object._username if dto_object._username is not None else dto_object.username
+
         if dto_object.role is None:
             dto_object.role = User.UserRoles.ADMIN  # set default role to admin when one is created
         for field in dto_object.loaded_fields:
             if getattr(dto_object, field, None) is None:
                 continue
-            if field == 'apartment_id' and dto_object.apartment is not None:
+            elif field == 'apartment_id' and dto_object.apartment is not None:
                 apartment_orm = ApartmentMapper.dto_to_orm(dto_object.apartment)
                 user_orm.apartment_id = apartment_orm
-                continue
-            if field not in ['password']:
+            elif field == 'username':
+                user_orm.username = dto_object._username
+            elif field not in ['password']:
                 setattr(user_orm, field, getattr(dto_object, field))
         return user_orm

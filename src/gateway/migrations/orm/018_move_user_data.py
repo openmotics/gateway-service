@@ -66,8 +66,9 @@ def migrate(migrator, database, fake=False, **kwargs):
             FR = 'Francais'
 
         id = AutoField()
-        first_name = CharField(null=False)
-        last_name = CharField(null=False, default='')
+        _username = CharField(null=False, unique=True)
+        first_name = CharField(null=True)
+        last_name = CharField(null=True)
         role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
         pin_code = CharField(null=True, unique=True)
         language = CharField(null=False, default='English')  # options: See Userlanguages
