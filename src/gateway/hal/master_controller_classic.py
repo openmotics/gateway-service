@@ -100,7 +100,7 @@ class MasterClassicController(MasterController):
         self._time_last_updated = 0.0
         self._synchronization_thread = DaemonThread(name='mastersync',
                                                     target=self._synchronize,
-                                                    interval=30, delay=10)
+                                                    interval=5, delay=10)
         self._master_version = None  # type: Optional[Tuple[int, int, int]]
         self._communication_enabled = True
         self._input_interval = 300
@@ -110,6 +110,8 @@ class MasterClassicController(MasterController):
         self._shutters_interval = 600
         self._shutters_last_updated = 0.0
         self._shutter_config = {}  # type: Dict[int, ShutterDTO]
+        self._sensor_last_updated = 0.0
+        self._sensors_interval = 10
         self._validation_bits_interval = 1800
         self._validation_bits_last_updated = 0.0
 
@@ -156,6 +158,8 @@ class MasterClassicController(MasterController):
                 self._refresh_inputs()
             if self._shutters_last_updated + self._shutters_interval < now:
                 self._refresh_shutter_states()
+            if self._sensor_last_updated + self._sensors_interval < now:
+                self._refresh_sensor_values()
         except CommunicationTimedOutException:
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
             raise DaemonThreadWait
@@ -1643,6 +1647,32 @@ class MasterClassicController(MasterController):
             self.do_basic_action(master_api.BA_LIGHTS_TOGGLE_FLOOR, floor_id)
 
     # Sensors
+
+    @communication_enabled
+    def _refresh_sensor_values(self):  # type: () -> None
+        try:
+            # poll for latest sensor values
+            for i, value in enumerate(self.get_sensors_temperature()):
+                if value is None:
+                    continue
+                master_event = MasterEvent(event_type=MasterEvent.Types.SENSOR_VALUE,
+                                           data={'id': i, 'type': 'temperature', 'value': value})
+                self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+            for i, value in enumerate(self.get_sensors_humidity()):
+                if value is None:
+                    continue
+                master_event = MasterEvent(event_type=MasterEvent.Types.SENSOR_VALUE,
+                                           data={'id': i, 'type': 'humidity', 'value': value})
+                self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+            for i, value in enumerate(self.get_sensors_brightness()):
+                if value is None:
+                    continue
+                master_event = MasterEvent(event_type=MasterEvent.Types.SENSOR_VALUE,
+                                           data={'id': i, 'type': 'brighness', 'value': value})
+                self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+        except NotImplementedError as e:
+            logger.error('Cannot refresh sensors: {}'.format(e))
+        self._sensor_last_updated = time.time()
 
     def get_sensor_temperature(self, sensor_id):
         if sensor_id is None or sensor_id < 0 or sensor_id > 31:

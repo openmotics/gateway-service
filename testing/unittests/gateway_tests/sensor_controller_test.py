@@ -24,6 +24,7 @@ from gateway.dto import MasterSensorDTO, SensorDTO, SensorSourceDTO, \
     SensorStatusDTO
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import MasterController
+from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_controller import MaintenanceController
 from gateway.models import Floor, Plugin, Room, Sensor
 from gateway.pubsub import PubSub
@@ -56,6 +57,35 @@ class SensorControllerTest(unittest.TestCase):
     def tearDown(self):
         self.test_db.drop_tables(MODELS)
         self.test_db.close()
+
+    def test_master_event(self):
+        events = []
+
+        def handle_event(gateway_event):
+            events.append(gateway_event)
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, handle_event)
+
+        Sensor.create(id=42, source='master', external_id='1', name='')  # unused
+
+        master_sensors = [MasterSensorDTO(id=0, name='foo'),
+                          MasterSensorDTO(id=1, name='bar'),
+                          MasterSensorDTO(id=2, name='baz')]
+        with mock.patch.object(self.master_controller, 'load_sensors', return_value=master_sensors), \
+             mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[None]), \
+             mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None]), \
+             mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[None, 21.0, None]):
+            self.controller.run_sync_orm()
+            self.pubsub._publish_all_events()
+        assert GatewayEvent('SENSOR_CHANGE', {'id': 42, 'value': 21.0}) in events
+        assert len(events) == 1
+        events.pop()
+
+        master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, {'id': 1, 'type': 'temperature', 'value': 22.5})
+        self.pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+        self.pubsub._publish_all_events()
+
+        assert GatewayEvent('SENSOR_CHANGE', {'id': 42, 'value': 22.5}) in events
+        assert len(events) == 1
 
     def test_sync(self):
         events = []
@@ -287,6 +317,17 @@ class SensorControllerTest(unittest.TestCase):
         assert values[sensor.id].value == 21.0
         assert GatewayEvent('SENSOR_CHANGE', {'id': sensor.id, 'value': 21.0}) in events
         assert len(events) == 3
+
+    def test_sensor_status_expire(self):
+        sensor = Sensor.create(id=512, source='master', external_id='0', physical_quantity='brightness', name='')
+        with mock.patch.object(self.master_controller, 'load_sensors', return_value=[]), \
+             mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[]), \
+             mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[]), \
+             mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[]):
+            self.controller.set_sensor_status(SensorStatusDTO(sensor.id, value=21))
+            self.controller._status[sensor.id].last_value = 0.0
+            values = {s.id: s for s in self.controller.get_sensors_status()}
+        assert values == {}
 
     def test_set_sensor_status(self):
         sensor = Sensor.create(id=512, source='master', external_id='0', physical_quantity='brightness', name='')
