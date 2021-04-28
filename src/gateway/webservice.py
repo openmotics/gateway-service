@@ -639,6 +639,7 @@ class WebInterface(object):
             'dirty_flag',  # A dirty flag that can be used to trigger syncs on power & master
             'scheduling',  # Gateway backed scheduling
             'factory_reset',  # The gateway can be complete reset to factory standard
+            'gateway_sensors',  # Gateway based sensors
             'isolated_plugins',  # Plugins run in a separate process, so allow fine-graded control
             'websocket_maintenance',  # Maintenance over websockets
             'shutter_positions',  # Shutter positions
