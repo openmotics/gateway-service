@@ -28,13 +28,14 @@ if False:  # MYPY
 
 class UserDTO(BaseDTO):
     @capture_fields
-    def __init__(self, id=None, username='', first_name='', last_name='', role=None,
+    def __init__(self, id=None, username=None, first_name='', last_name='', role=None,
                  pin_code=None, apartment=None, accepted_terms=0):
         self.id = id  # type: Optional[int]
-        if username != '':
-            self._username = username  # type: Optional[str]
-        else:
-            self._username = None
+        self.username = username  # type: str
+        # if there is no username, but one can be created from the first and last name, create it as well
+        if username is None and (first_name != '' or last_name != ''):
+            self.username = '{}.{}'.format(first_name.replace(' ', '.').lower(), last_name.replace(' ', '.').lower())  # type: str
+            self.loaded_fields.append('username')  # Append username to the loaded fields
         self.first_name = first_name  # type: str
         self.last_name = last_name  # type: str
         self.role = role  # type: str
@@ -45,30 +46,6 @@ class UserDTO(BaseDTO):
         # if no first and last name is given, allow to set to set the name to username
         if first_name == '' and last_name == '':
             self.username = username
-
-    @property
-    def username(self):
-        # type: () -> str
-        separator = ''
-        if self.first_name != '' and self.last_name != '':
-            separator = ' '
-        return "{}{}{}".format(self.first_name, separator, self.last_name)
-
-    @username.setter
-    def username(self, username):
-        # type: (str) -> None
-        self._username = username
-        splits = username.split(' ')
-        if len(splits) > 1:
-            self.first_name = splits[0]
-            self.last_name = ' '.join(splits[1:])
-        else:
-            self.first_name = username
-            self.last_name = ''
-        self._loaded_fields.add('first_name')
-        self._loaded_fields.add('last_name')
-        if 'username' in self._loaded_fields:
-            self._loaded_fields.remove('username')
 
     @staticmethod
     def _hash_password(password):
@@ -97,15 +74,14 @@ class UserDTO(BaseDTO):
             raise ValueError("Password cannot be empty")
 
         self.hashed_password = UserDTO._hash_password(password)
-        self._loaded_fields.add('password')
-        if '_hashed_password' in self._loaded_fields:
-            self._loaded_fields.remove('_hashed_password')
+        self.loaded_fields.append('hashed_password')
 
     def __eq__(self, other):
         # type: (Any) -> bool
         if not isinstance(other, UserDTO):
             return False
         return (self.id == other.id and
+                self.username == other.username and
                 self.first_name == other.first_name and
                 self.last_name == other.last_name and
                 self.role == other.role and

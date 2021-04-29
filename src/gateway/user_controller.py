@@ -115,13 +115,11 @@ class UserController(object):
         """  Remove a user. """
         # set username to lowercase to compare on username
         username = user_dto.username.lower()
-        first_name = user_dto.first_name.lower()
-        last_name = user_dto.last_name.lower()
 
         # check if the removed user is not the last admin user of the system
         if UserController.get_number_of_users() <= 1:
             raise Exception(UserEnums.DeleteErrors.LAST_ACCOUNT)
-        User.delete().where((User.first_name == first_name) & (User.last_name == last_name)).execute()
+        User.delete().where(User.username == username).execute()
 
         to_remove = []
         for token in self._tokens:
@@ -145,8 +143,7 @@ class UserController(object):
             timeout = self._token_timeout
 
         user_orm = User.select().where(
-            (User.first_name == user_dto.first_name.lower()) &
-            (User.last_name == user_dto.last_name.lower()) &
+            (User.username == user_dto.username.lower()) &
             (User.password == user_dto.hashed_password)
         ).first()
 

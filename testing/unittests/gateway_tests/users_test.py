@@ -86,7 +86,7 @@ class UserControllerTest(unittest.TestCase):
     def test_empty(self):
         """ Test an empty database. """
         # setup test credentials
-        user_dto = UserDTO("fred")
+        user_dto = UserDTO(username="fred")
         user_dto.set_password("test")
 
         # verify that the test credentials do not work
@@ -402,7 +402,14 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual('test', users_in_controller[1].username)
         self.assertEqual(2, self.controller.get_number_of_users())
 
-    def test_usermapper(self):
+    def test_user_mapper(self):
+
+        def validate_two_way(user_dto):
+            user_orm = UserMapper.dto_to_orm(user_dto)
+            user_dto_converted = UserMapper.orm_to_dto(user_orm)
+            for field in user_dto.loaded_fields:
+                if field != 'password':
+                    self.assertEqual(getattr(user_dto, field), getattr(user_dto_converted, field))
 
         def convert_back_and_forth(user_dto):
             user_orm = UserMapper.dto_to_orm(user_dto)
@@ -413,16 +420,16 @@ class UserControllerTest(unittest.TestCase):
             self.assertEqual(True, hasattr(user_orm, "role"))
 
             self.assertEqual(User.UserRoles.USER, user_orm.role)
-            self.assertEqual('1234', user_orm.pin_code)
+            self.assertEqual(user_dto.pin_code, user_orm.pin_code)
 
-            self.assertEqual('test', user_orm.username)
+            self.assertEqual(user_dto.username, user_orm.username)
             self.assertEqual(UserDTO._hash_password('test'), user_orm.password)
-            self.assertEqual(1, user_orm.accepted_terms)
+            self.assertEqual(user_dto.accepted_terms, user_orm.accepted_terms)
 
-            user_dto = UserMapper.orm_to_dto(user_orm)
-            self.assertEqual('test', user_dto.username)
-            self.assertEqual(user_orm.password, user_dto.hashed_password)
-            self.assertEqual(1, user_dto.accepted_terms)
+            user_dto_converted = UserMapper.orm_to_dto(user_orm)
+            self.assertEqual(user_dto.username, user_dto_converted.username)
+            self.assertEqual(user_orm.password, user_dto_converted.hashed_password)
+            self.assertEqual(user_dto.accepted_terms, user_dto_converted.accepted_terms)
 
         user_dto = UserDTO(username='test',
                            role=User.UserRoles.USER,
@@ -431,9 +438,19 @@ class UserControllerTest(unittest.TestCase):
         user_dto.set_password('test')
 
         convert_back_and_forth(user_dto)
+        validate_two_way(user_dto)
+
+        user_dto = UserDTO(first_name='first',
+                           last_name='last',
+                           role='USER',
+                           accepted_terms=1)
+        user_dto.set_password('test')
+        convert_back_and_forth(user_dto)
+        validate_two_way(user_dto)
 
         user_dto = UserDTO(first_name='first',
                            last_name='last',
                            accepted_terms=1)
         user_dto.set_password('test')
         convert_back_and_forth(user_dto)
+        validate_two_way(user_dto)

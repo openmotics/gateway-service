@@ -23,7 +23,7 @@ import time
 
 from peewee import AutoField, BooleanField, CharField, \
     DoesNotExist, FloatField, ForeignKeyField, IntegerField, SqliteDatabase, \
-    TextField
+    TextField, SQL
 from playhouse.signals import Model, post_save
 
 import constants
@@ -529,7 +529,7 @@ def on_thermostat_save_handler(model_class, instance, created):
 
 
 class Apartment(BaseModel):
-    id = AutoField()
+    id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
     name = CharField(null=False)
     mailbox_rebus_id = IntegerField(unique=True)
     doorbell_rebus_id = IntegerField(unique=True)
@@ -548,8 +548,8 @@ class User(BaseModel):
         NL = 'Nederlands'
         FR = 'Francais'
 
-    id = AutoField()
-    _username = CharField(null=False, unique=True)
+    id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
+    username = CharField(null=False, unique=True)
     first_name = CharField(null=True)
     last_name = CharField(null=True)
     role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
@@ -559,26 +559,6 @@ class User(BaseModel):
     apartment_id = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
     is_active = BooleanField(default=True)
     accepted_terms = IntegerField(default=0)
-
-    @property
-    def username(self):
-        # type: () -> str
-        separator = ''
-        if self.first_name != '' and self.last_name != '':
-            separator = ' '
-        return "{}{}{}".format(self.first_name, separator, self.last_name)
-
-    @username.setter
-    def username(self, username):
-        # type: (str) -> None
-        self._username = username
-        splits = username.split(' ')
-        if len(splits) > 1:
-            self.first_name = splits[0]
-            self.last_name = ' '.join(splits[1:])
-        else:
-            self.first_name = username
-            self.last_name = ''
 
 
 class RFID(BaseModel):
