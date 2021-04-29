@@ -155,7 +155,7 @@ class WebInterfaceTest(unittest.TestCase):
 
     def test_sensor_configurations(self):
         sensor_dto = SensorDTO(id=2,
-                               source=SensorSourceDTO(None, type='master'),
+                               source=SensorSourceDTO('master'),
                                external_id='0',
                                physical_quantity='temperature',
                                unit='celcius',

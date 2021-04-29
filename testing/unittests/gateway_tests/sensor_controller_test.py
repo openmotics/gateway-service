@@ -152,7 +152,7 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'load_sensors', return_value=[]):
             sensor_dto = self.controller.load_sensor(42)
         assert sensor_dto.id == 42
-        assert sensor_dto.source == SensorSourceDTO(None, type='master')
+        assert sensor_dto.source == SensorSourceDTO('master')
         assert sensor_dto.external_id == '0'
         assert sensor_dto.physical_quantity == 'temperature'
         assert sensor_dto.name == 'foo'
@@ -168,7 +168,7 @@ class SensorControllerTest(unittest.TestCase):
         assert len(sensor_dtos) == 1
         sensor_dto = sensor_dtos[0]
         assert sensor_dto.id == 42
-        assert sensor_dto.source == SensorSourceDTO(None, type='master')
+        assert sensor_dto.source == SensorSourceDTO('master')
         assert sensor_dto.external_id == '0'
         assert sensor_dto.physical_quantity == 'temperature'
         assert sensor_dto.name == 'foo'
@@ -207,7 +207,7 @@ class SensorControllerTest(unittest.TestCase):
 
         plugin = Plugin.create(id=10, name='dummy', version='0.0.1')
         sensor_dto = SensorDTO(id=None,
-                               source=SensorSourceDTO(None, type='plugin', name='dummy'),
+                               source=SensorSourceDTO('plugin', name='dummy'),
                                external_id='foo',
                                physical_quantity='temperature',
                                unit='celcius',
@@ -238,7 +238,7 @@ class SensorControllerTest(unittest.TestCase):
         plugin = Plugin.create(id=10, name='dummy', version='0.0.1')
         Sensor.create(id=512, plugin=plugin, source='plugin', external_id='foo', physical_quantity='temperature', name='')
         sensor_dto = SensorDTO(id=None,
-                               source=SensorSourceDTO(None, type='plugin', name='dummy'),
+                               source=SensorSourceDTO('plugin', name='dummy'),
                                external_id='foo',
                                physical_quantity='temperature',
                                unit='celcius',
@@ -267,7 +267,7 @@ class SensorControllerTest(unittest.TestCase):
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
 
         sensor_dto = SensorDTO(id=None,
-                               source=SensorSourceDTO(None, type='master'),
+                               source=SensorSourceDTO('master'),
                                external_id='31',
                                physical_quantity='temperature',
                                unit='celcius',
@@ -319,7 +319,7 @@ class SensorControllerTest(unittest.TestCase):
         assert len(events) == 3
 
     def test_sensor_status_expire(self):
-        sensor = Sensor.create(id=512, source='master', external_id='0', physical_quantity='brightness', name='')
+        sensor = Sensor.create(id=512, source='plugin', external_id='0', physical_quantity='brightness', name='')
         with mock.patch.object(self.master_controller, 'load_sensors', return_value=[]), \
              mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[]), \
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[]), \
@@ -330,7 +330,7 @@ class SensorControllerTest(unittest.TestCase):
         assert values == {}
 
     def test_set_sensor_status(self):
-        sensor = Sensor.create(id=512, source='master', external_id='0', physical_quantity='brightness', name='')
+        sensor = Sensor.create(id=512, source='plugin', external_id='0', physical_quantity='brightness', name='')
         with mock.patch.object(self.master_controller, 'load_sensors', return_value=[]), \
              mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[]), \
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[]), \

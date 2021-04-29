@@ -27,6 +27,7 @@ from gateway.dto import MasterSensorDTO, SensorDTO, SensorSourceDTO, \
     SensorStatusDTO
 from gateway.events import GatewayEvent
 from gateway.hal.master_event import MasterEvent
+from gateway.mappers.sensor import SensorMapper
 from gateway.models import Plugin, Room, Sensor
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -106,64 +107,30 @@ class SensorController(BaseController):
 
     def _sync_orm_master(self, physical_quantity, unit, values, master_orm_mapping):
         # type: (str, str, List[Optional[float]], Dict[int,MasterSensorDTO]) -> Set[str]
-        source = Sensor.Sources.MASTER
+        source = SensorSourceDTO(Sensor.Sources.MASTER)
         ids = set()
         now = time.time()
         for i, value in enumerate(values):
             if i not in master_orm_mapping:
                 continue
             # Keep if a corresponding master sensor exists
-            logger.debug('Sync S#%s %s value=%s', i, physical_quantity, value)
             external_id = str(i)
             ids.add(external_id)
             if value is None:
                 continue
             master_sensor_dto = master_orm_mapping[i]
-            query = Sensor.select(Sensor.id).where(Sensor.source == source)
-            try:
-                sensor_max = max(x for (x,) in query.tuples())
-            except ValueError:
-                sensor_max = 0
 
-            query = Sensor.select() \
-                .where(Sensor.source == source) \
-                .where(Sensor.external_id == external_id)
-            sensor = query.where(Sensor.physical_quantity == physical_quantity) \
-                .first()
-            if sensor is None:
-                sensor = query.where(Sensor.physical_quantity.is_null()) \
-                    .first()
-            fields = {'id': sensor_max + 1,
-                      'source': source,
-                      'external_id': external_id,
-                      'physical_quantity': physical_quantity,
-                      'unit': unit,
-                      'name': master_sensor_dto.name}
-            if sensor is None:
-                sensor = Sensor.create(**fields)
-            elif sensor.physical_quantity is None:
-                sensor.physical_quantity = physical_quantity
-                sensor.unit = unit
-                sensor.name = master_sensor_dto.name
-                sensor.save()
-            else:
-                pass  # no changes
-            if sensor.id > 200:
-                self._status.pop(sensor.id, None)
-                Sensor.delete().where(Sensor.id == sensor.id).execute()
-                logger.warning('Sensor id %s out of range, removed', sensor.id)
-            room = sensor.room.number if sensor.room is not None else None
-            source_name = None if sensor.plugin is None else sensor.plugin.name
-            sensor_dto = SensorDTO(id=sensor.id,
-                                   source=SensorSourceDTO(None,
-                                                          type=sensor.source,
-                                                          name=source_name),
-                                   external_id=sensor.external_id,
-                                   physical_quantity=sensor.physical_quantity,
-                                   unit=sensor.unit,
-                                   name=sensor.name,
-                                   room=room)
+            sensor_dto = SensorDTO(None,
+                                   source=source,
+                                   external_id=external_id,
+                                   physical_quantity=physical_quantity,
+                                   unit=unit,
+                                   name=master_sensor_dto.name)
+            sensor, _ = self._create_or_update_sensor(sensor_dto)
+
+            sensor_dto.id = sensor.id
             self._master_cache[(physical_quantity, i)] = sensor_dto
+
             status_dto = SensorStatusDTO(sensor.id, value=float(value))
             if not (status_dto == self._status.get(status_dto.id)):
                 self._status[sensor.id] = status_dto
@@ -179,9 +146,7 @@ class SensorController(BaseController):
         room = sensor.room.number if sensor.room is not None else None
         source_name = None if sensor.plugin is None else sensor.plugin.name
         sensor_dto = SensorDTO(id=sensor.id,
-                               source=SensorSourceDTO(None,
-                                                      type=sensor.source,
-                                                      name=source_name),
+                               source=SensorSourceDTO(sensor.source, name=source_name),
                                external_id=sensor.external_id,
                                physical_quantity=sensor.physical_quantity,
                                unit=sensor.unit,
@@ -203,9 +168,7 @@ class SensorController(BaseController):
             source_name = None if sensor.plugin is None else sensor.plugin.name
             room = sensor.room.number if sensor.room is not None else None
             sensor_dto = SensorDTO(id=sensor.id,
-                                   source=SensorSourceDTO(None,
-                                                          type=sensor.source,
-                                                          name=source_name),
+                                   source=SensorSourceDTO(sensor.source, name=source_name),
                                    external_id=sensor.external_id,
                                    physical_quantity=sensor.physical_quantity,
                                    unit=sensor.unit,
@@ -220,100 +183,50 @@ class SensorController(BaseController):
         return sensor_dtos
 
     def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> None
-        any_changed = False
+        publish = False
         master_sensors = []
         for sensor_dto in sensors:
-            plugin = None
-            if sensor_dto.id is not None:
-                sensor = Sensor.get_or_none(id=sensor_dto.id)  # type: Sensor
-            elif 'source' in sensor_dto.loaded_fields and 'external_id' in sensor_dto.loaded_fields and 'physical_quantity' in sensor_dto.loaded_fields:
-                plugin = Plugin.get(name=sensor_dto.source.name) if sensor_dto.source.type == Sensor.Sources.PLUGIN else None
-                sensor = Sensor.select() \
-                    .where(Sensor.source == sensor_dto.source.type) \
-                    .where(Sensor.external_id == sensor_dto.external_id) \
-                    .where(Sensor.physical_quantity == sensor_dto.physical_quantity) \
-                    .where(Sensor.plugin == plugin) \
-                    .first()
-            else:
-                sensor = None
-            if sensor is None:
-                if sensor_dto.id is not None:
-                    raise ValueError('Sensor {0} does not exist'.format(sensor_dto.id))
-                if sensor_dto.source and sensor_dto.source.type == Sensor.Sources.PLUGIN:
-                    sensor_id = None  # type: Optional[int]
-                    if Sensor.select().where(Sensor.id > 255).count() == 0:
-                        sensor_id = 510
-                    room = None
-                    if 'room' in sensor_dto.loaded_fields:
-                        if sensor_dto.room is None:
-                            room = None
-                        elif 0 <= sensor_dto.room <= 100:
-                            room, _ = Room.get_or_create(number=sensor_dto.room)
-                    plugin = Plugin.get(name=sensor_dto.source.name) if sensor_dto.source.type == Sensor.Sources.PLUGIN else None
-                    sensor = Sensor.create(id=sensor_id,
-                                           source=sensor_dto.source.type,
-                                           plugin=plugin,
-                                           external_id=sensor_dto.external_id,
-                                           physical_quantity=sensor_dto.physical_quantity,
-                                           unit=sensor_dto.unit,
-                                           name=sensor_dto.name,
-                                           room=room)
-                elif 'virtual' in sensor_dto.loaded_fields and sensor_dto.source and sensor_dto.source.type == Sensor.Sources.MASTER:
-                    query = Sensor.select(Sensor.id).where(Sensor.source == Sensor.Sources.MASTER)
-                    try:
-                        sensor_max = max(x for (x,) in query.tuples())
-                    except ValueError:
-                        sensor_max = 0
-                    room = None
-                    if 'room' in sensor_dto.loaded_fields:
-                        if sensor_dto.room is None:
-                            room = None
-                        elif 0 <= sensor_dto.room <= 100:
-                            room, _ = Room.get_or_create(number=sensor_dto.room)
-                    sensor = Sensor.create(id=sensor_max + 1,
-                                           source=sensor_dto.source.type,
-                                           plugin=plugin,
-                                           external_id=sensor_dto.external_id,
-                                           physical_quantity=sensor_dto.physical_quantity,
-                                           unit=sensor_dto.unit,
-                                           name=sensor_dto.name,
-                                           room=room)
-                    if sensor.id > 200:
-                        Sensor.delete().where(Sensor.id == sensor.id).execute()
-                        logger.warning('Sensor id %s out of range, removed', sensor.id)
-                else:
-                    raise ValueError('Sensor {0} is invalid'.format(sensor_dto))
+            sensor, changed = self._create_or_update_sensor(sensor_dto)
+            publish |= changed
+
             sensor_dto.id = sensor.id
-            changed = False
-            if 'physical_quantity' in sensor_dto.loaded_fields:
-                sensor.physical_quantity = sensor_dto.physical_quantity
-                changed = True
-            if 'unit' in sensor_dto.loaded_fields:
-                sensor.unit = sensor_dto.unit
-                changed = True
-            if 'name' in sensor_dto.loaded_fields:
-                sensor.name = sensor_dto.name
-                changed = True
-            if 'room' in sensor_dto.loaded_fields:
-                if sensor_dto.room is None:
-                    sensor.room = None
-                elif 0 <= sensor_dto.room <= 100:
-                    sensor.room, _ = Room.get_or_create(number=sensor_dto.room)
-                changed = True
-            any_changed |= changed
-            if changed:
-                sensor.save()
-            if sensor.source == Sensor.Sources.MASTER:
-                dto = MasterSensorDTO(id=int(sensor.external_id), name=sensor.name)
-                if 'virtual' in sensor_dto.loaded_fields:
-                    dto.virtual = sensor_dto.virtual
-                if 'offset' in sensor_dto.loaded_fields and sensor.physical_quantity == Sensor.PhysicalQuanitites.TEMPERATURE:
-                    dto.offset = sensor_dto.offset
-                master_sensors.append(dto)
+            sensor_dto.external_id = sensor.external_id
+            if sensor_dto.source is None:
+                source_name = None if sensor.plugin is None else sensor.plugin.name
+                sensor_dto.source = SensorSourceDTO(sensor.source, name=source_name)
+
+            master_dto = SensorMapper.dto_to_master_dto(sensor_dto)
+            if master_dto:
+                master_sensors.append(master_dto)
         if master_sensors:
             self._master_controller.save_sensors(master_sensors)
-        if any_changed:
+        if publish:
             self._publish_config()
+
+    def _create_or_update_sensor(self, sensor_dto):  # type: (SensorDTO) -> Tuple[Sensor, bool]
+        changed = False
+        sensor = SensorMapper.dto_to_orm(sensor_dto)
+        if sensor.id is None:
+            orm_id = get_sensor_orm_id(sensor.source)
+            sensor = Sensor.create(id=orm_id,
+                                   source=sensor.source,
+                                   plugin=sensor.plugin,
+                                   external_id=sensor.external_id,
+                                   physical_quantity=sensor.physical_quantity,
+                                   unit=sensor.unit,
+                                   name=sensor.name,
+                                   room=sensor.room)
+            changed = True
+        else:
+            if sensor.save() > 0:
+                changed = True
+        if sensor.source == Sensor.Sources.MASTER and sensor.id > 200:
+            Sensor.delete().where(Sensor.id == sensor.id).execute()
+            raise ValueError('Master sensor id {} out of range'.format(sensor.id))
+        if sensor.source == Sensor.Sources.PLUGIN and sensor.id < 500:
+            Sensor.delete().where(Sensor.id == sensor.id).execute()
+            raise ValueError('Plugin sensor id {} is invalid'.format(sensor.id))
+        return sensor, changed
 
     def get_sensors_status(self):  # type: () -> List[SensorStatusDTO]
         """ Get the current status of all sensors.
@@ -375,3 +288,20 @@ class SensorController(BaseController):
     def get_brightness_status(self):  # type: () -> List[Optional[float]]
         """ Get the current brightness of all sensors. """
         return self._translate_legacy_statuses(Sensor.PhysicalQuanitites.BRIGHTNESS)
+
+
+def get_sensor_orm_id(source):  # type: (str) -> Optional[int]
+    if source == Sensor.Sources.PLUGIN:
+        # Plugins sensors use 510 or auto increment
+        if Sensor.select().where(Sensor.id > 255).count() == 0:
+            return 510
+    if source == Sensor.Sources.MASTER:
+        # Master sensors use 1-200
+        query = Sensor.select(Sensor.id) \
+            .where(Sensor.source == Sensor.Sources.MASTER) \
+            .where(Sensor.id < 200)
+        try:
+            return max(x for (x,) in query.tuples()) + 1
+        except ValueError:
+            return 0
+    return None

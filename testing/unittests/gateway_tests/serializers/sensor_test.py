@@ -50,7 +50,7 @@ class SensorSerializerTest(unittest.TestCase):
                                             'room': 10})
         expected_dto = SensorDTO(id=5,
                                  external_id='0',
-                                 source=SensorSourceDTO(None, type='master', name=None),
+                                 source=SensorSourceDTO('master', name=None),
                                  physical_quantity='temperature',
                                  unit='celcius',
                                  name='bar',

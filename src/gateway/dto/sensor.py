@@ -17,6 +17,7 @@
 Sensor DTO
 """
 from gateway.dto.base import BaseDTO, capture_fields
+from gateway.models import Sensor
 
 if False:  # MYPY
     from typing import Any, Optional
@@ -27,7 +28,7 @@ class SensorDTO(BaseDTO):
     def __init__(self, id, external_id=None, source=None, physical_quantity=None, unit=None, name='', room=None, offset=None, virtual=False):
         self.id = id  # type: int
         self.external_id = external_id  # type: str
-        self.source = source  # type: Optional[SensorSourceDTO]
+        self.source = source  # type: SensorSourceDTO
         self.physical_quantity = physical_quantity  # type: Optional[str]
         self.unit = unit  # type: Optional[str]
         self.name = name  # type: str
@@ -51,18 +52,24 @@ class SensorDTO(BaseDTO):
 
 class SensorSourceDTO(BaseDTO):
     @capture_fields
-    def __init__(self, id, type=None, name=None):
-        # type: (int, str, str) -> None
-        self.id = id
+    def __init__(self, type, name=None):
+        # type: (str, str) -> None
         self.type = type
         self.name = name
+
+    @property
+    def is_master(self):
+        return self.type == Sensor.Sources.MASTER
+
+    @property
+    def is_plugin(self):
+        return self.type == Sensor.Sources.PLUGIN
 
     def __eq__(self, other):
         # type: (Any) -> bool
         if not isinstance(other, SensorSourceDTO):
             return False
-        return (self.id == other.id and
-                self.type == other.type and
+        return (self.type == other.type and
                 self.name == other.name)
 
 

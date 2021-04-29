@@ -54,8 +54,7 @@ class SensorSerializer(object):
         sensor_dto = SensorDTO(sensor_id)
         if 'source' in api_data:
             source_name = api_data['source'].get('name') or None
-            sensor_dto.source = SensorSourceDTO(None,
-                                                type=api_data['source']['type'],
+            sensor_dto.source = SensorSourceDTO(api_data['source']['type'],
                                                 name=source_name)
         SerializerToolbox.deserialize(
             dto=sensor_dto,  # Referenced
