@@ -34,7 +34,7 @@ class UserDTO(BaseDTO):
         self.username = username  # type: str
         # if there is no username, but one can be created from the first and last name, create it as well
         if username is None and (first_name != '' or last_name != ''):
-            self.username = '{}.{}'.format(first_name.replace(' ', '.').lower(), last_name.replace(' ', '.').lower())  # type: str
+            self.username = '{}.{}'.format(first_name.replace(' ', '.').lower(), last_name.replace(' ', '.').lower())
             self.loaded_fields.append('username')  # Append username to the loaded fields
         self.first_name = first_name  # type: str
         self.last_name = last_name  # type: str

@@ -78,27 +78,6 @@ def migrate(migrator, database, fake=False, **kwargs):
         is_active = BooleanField(default=True)
         accepted_terms = IntegerField(default=0)
 
-        # Keep these here to use as reference functions to populate the first_name and last_name fields
-        # consistent with the implementation used in models.py at the moment of creating the migration
-        @property
-        def username(self):
-            # type: () -> str
-            separator = ''
-            if self.first_name != '' and self.last_name != '':
-                separator = ' '
-            return "{}{}{}".format(self.first_name, separator, self.last_name)
-
-        @username.setter
-        def username(self, username):
-            # type: (str) -> None
-            splits = username.split(' ')
-            if len(splits) > 1:
-                self.first_name = splits[0]
-                self.last_name = ' '.join(splits[1:])
-            else:
-                self.first_name = username
-                self.last_name = ''
-
     # copy over the data from the old table to the new one
     for user in UserOld.select():
         print('Migrating user: {}'.format(user))
