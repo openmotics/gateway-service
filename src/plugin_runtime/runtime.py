@@ -185,7 +185,11 @@ class PluginRuntime(object):
                 elif action == 'stop':
                     ret = self._handle_stop()
                 elif action == 'input_status':
-                    ret = self._handle_input_status(command['event'])
+                    # v1 = state, v2 = event
+                    if action_version == 1:
+                        ret = self._handle_input_status(command['status'], data_type='status')
+                    else:
+                        ret = self._handle_input_status(command['event'], data_type='event')
                 elif action == 'output_status':
                     # v1 = state, v2 = event
                     if action_version == 1:
@@ -259,22 +263,20 @@ class PluginRuntime(object):
 
         self._stopped = True
 
-    def _handle_input_status(self, data):
-        event = GatewayEvent.deserialize(data)
-        # get relevant event details
-        input_id = event.data['id']
-        status = event.data['status']
+    def _handle_input_status(self, data, data_type='status'):
+        event = GatewayEvent.deserialize(data) if data_type == 'event' else None
         for decorated_method in self._decorated_methods['input_status']:
             decorator_version = decorated_method.input_status.get('version', 1)
             if decorator_version not in PluginRuntime.SUPPORTED_DECORATOR_VERSIONS['input_status']:
                 error = NotImplementedError('Version {} is not supported for input status decorators'.format(decorator_version))
                 self._writer.log_exception('input status', error)
             else:
-                if decorator_version == 1:
-                    # Backwards compatibility: only send rising edges of the input (no input releases)
-                    if status:
-                        self._writer.with_catch('input status', decorated_method, [(input_id, None)])
-                elif decorator_version == 2:
+                if decorator_version == 1 and data_type == 'status':
+                    self._writer.with_catch('input status', decorated_method, [data])
+                elif decorator_version == 2 and event is not None:
+                    # get relevant event details
+                    input_id = event.data['id']
+                    status = event.data['status']
                     # Version 2 will send ALL input status changes AND in a dict format
                     self._writer.with_catch('input status', decorated_method, [{'input_id': input_id, 'status': status}])
 
@@ -288,7 +290,7 @@ class PluginRuntime(object):
             else:
                 if decorator_version == 1 and data_type == 'status':
                     self._writer.with_catch('output status', decorated_method, [data])
-                elif decorator_version == 2 and event:
+                elif decorator_version == 2 and event is not None:
                     self._writer.with_catch('output status', decorated_method, [event.data])
 
     def _handle_ventilation_status(self, data):
