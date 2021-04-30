@@ -48,7 +48,7 @@ class UCANUpdater(object):
     MAX_FLASH_BYTES = 41
 
     # Bootloader timeouts
-    BOOTLOADER_TIMEOUT_UPDATE = 255
+    BOOTLOADER_TIMEOUT_UPDATE = 60
     BOOTLOADER_TIMEOUT_RUNTIME = 0  # Currently needed to switch to application mode
 
     @staticmethod
