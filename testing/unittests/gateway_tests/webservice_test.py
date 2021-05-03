@@ -68,7 +68,8 @@ class WebInterfaceTest(unittest.TestCase):
                             thermostat_controller=mock.Mock(ThermostatController),
                             user_controller=mock.Mock(UserController),
                             ventilation_controller=self.ventilation_controller,
-                            module_controller=self.module_controller)
+                            module_controller=self.module_controller,
+                            uart_controller=mock.Mock())
         self.web = WebInterface()
 
     def test_output_status(self):
