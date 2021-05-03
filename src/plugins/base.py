@@ -394,8 +394,12 @@ class PluginController(object):
     def process_observer_event(self, event):
         if event.type == GatewayEvent.Types.INPUT_CHANGE:
             # Should be called when the input status changes, notifies all plugins.
+            input_id = event.data['id']
+            input_status = event.data['status']
             for runner in self._iter_running_runners():
-                runner.process_input_status(event)
+                if input_status:  # Backwards compatibility: only send rising edges of the input for v1
+                    runner.process_input_status(data=(input_id, None), action_version=1)
+                runner.process_input_status(data=event, action_version=2)
         if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             # TODO: deprecate old versions that use state and move to events
             states = [(state.id, state.dimmer) for state in self._output_controller.get_output_statuses() if state.status]
