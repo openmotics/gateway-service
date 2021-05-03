@@ -72,11 +72,9 @@ class UARTController(object):
     class Mode(object):
         NONE = 'NONE'
         P1 = 'P1'
-        RS232 = 'RS232'
-        RS485 = 'RS485'
         MODBUS = 'MODBUS'
 
-    MODES = [Mode.NONE, Mode.P1, Mode.RS232, Mode.RS485, Mode.MODBUS]
+    MODES = [Mode.NONE, Mode.P1, Mode.MODBUS]
     SUPPORTED_MODES = [Mode.NONE, Mode.MODBUS]
 
     def __init__(self, uart_port):

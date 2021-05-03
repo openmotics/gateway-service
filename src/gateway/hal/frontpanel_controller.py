@@ -217,9 +217,9 @@ class FrontpanelController(object):
             p1_activity = None  # type: Optional[bool]
             exp_activity = None  # type: Optional[bool]
             if self._uart_controller is not None:
-                if self._uart_controller.mode in [UARTController.Mode.MODBUS, UARTController.Mode.RS485]:
+                if self._uart_controller.mode in [UARTController.Mode.MODBUS]:
                     exp_activity = self._uart_controller.activity
-                elif self._uart_controller.mode in [UARTController.Mode.P1, UARTController.Mode.RS232]:
+                elif self._uart_controller.mode in [UARTController.Mode.P1]:
                     p1_activity = self._uart_controller.activity
             self._report_serial_activity(FrontpanelController.SerialPorts.P1, p1_activity)
             self._report_serial_activity(FrontpanelController.SerialPorts.EXPANSION, exp_activity)

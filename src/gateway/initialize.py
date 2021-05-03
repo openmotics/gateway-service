@@ -255,13 +255,9 @@ def setup_target_platform(target_platform, message_client_name):
     # UART Controller
     try:
         uart_serial_port = config.get('OpenMotics', 'uart_serial')
-        uart_controller = UARTController(uart_port=uart_serial_port)
-        Injectable.value(uart_controller=uart_controller)
+        Injectable.value(uart_controller=UARTController(uart_port=uart_serial_port))
     except NoOptionError:
         Injectable.value(uart_controller=None)
-    except Exception as ex:
-        Injectable.value(uart_controller=None)
-        logger.error('Could not initialize UARTController: {0}'.format(ex))
 
     # Pulse Controller
     Injectable.value(pulse_db=constants.get_pulse_counter_database_file())
