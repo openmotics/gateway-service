@@ -52,17 +52,17 @@ class UserController(object):
         # type: () -> None
         # Create the user for the cloud
         logger.info('Adding the cloud user')
-        first_name = self._config['username'].lower()
+        username = self._config['username'].lower()
         password = self._config['password']
         hashed_password = UserDTO._hash_password(password)
 
-        if User.select().where((User.first_name == first_name) & (User.password == hashed_password)).first():
+        if User.select().where((User.username == username) & (User.password == hashed_password)).first():
             # If the cloud user is already in the DB, do not add it anymore
             logger.debug('Cloud user already added, not adding it anymore')
             return
 
         cloud_user_dto = UserDTO(
-            username=self._config['username'].lower(),
+            username=username,
             pin_code=None,
             role=User.UserRoles.ADMIN,
             accepted_terms=UserController.TERMS_VERSION

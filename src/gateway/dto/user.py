@@ -72,9 +72,7 @@ class UserDTO(BaseDTO):
         """
         if password == '':
             raise ValueError("Password cannot be empty")
-
         self.hashed_password = UserDTO._hash_password(password)
-        self.loaded_fields.append('hashed_password')
 
     def __eq__(self, other):
         # type: (Any) -> bool
