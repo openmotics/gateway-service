@@ -17,7 +17,7 @@ from peewee import (
     Model, Database, SqliteDatabase,
     AutoField, CharField, IntegerField,
     ForeignKeyField, BooleanField, FloatField,
-    TextField
+    TextField, SQL
 )
 from peewee_migrate import Migrator
 import constants
@@ -36,7 +36,7 @@ def migrate(migrator, database, fake=False, **kwargs):
 
 
     class Apartment(BaseModel):
-        id = AutoField()
+        id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
         name = CharField(null=False)
         mailbox_rebus_id = IntegerField(unique=True)
         doorbell_rebus_id = IntegerField(unique=True)
@@ -72,11 +72,13 @@ def migrate(migrator, database, fake=False, **kwargs):
             NL = 'Nederlands'
             FR = 'Francais'
 
-        id = AutoField()
-        first_name = CharField(null=False)
-        last_name = CharField(null=False, default='')
+        # id = AutoField()
+        id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
+        username = CharField(null=False, unique=True)
+        first_name = CharField(null=True)
+        last_name = CharField(null=True)
         role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
-        pin_code = CharField(null=False, unique=True)
+        pin_code = CharField(null=True, unique=True)
         language = CharField(null=False, default='English')  # options: See Userlanguages
         password = CharField()
         apartment_id = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
