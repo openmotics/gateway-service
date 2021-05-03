@@ -175,8 +175,8 @@ class ApiApartmentsTests(unittest.TestCase):
             save_apartment_func.side_effect = RuntimeError(exception_message)
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_apartments(role=auth_token.user.role,
-                                               request_body=json.dumps(apartment_to_create))
-            self.assertEqual('[]', response)
+                                                request_body=json.dumps(apartment_to_create))
+            self.assertEqual(b'[]', response)
 
     def test_create_apartment_no_body(self):
         with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
