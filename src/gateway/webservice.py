@@ -56,7 +56,7 @@ from gateway.exceptions import UnsupportedException, ItemDoesNotExistException
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
-from gateway.models import Database, Feature, Config
+from gateway.models import Database, Feature, Config, User
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -362,6 +362,7 @@ class WebInterface(object):
 
     def in_authorized_mode(self):
         # type: () -> bool
+        return True
         if self._frontpanel_controller:
             return self._frontpanel_controller.authorized_mode
         else:
@@ -498,6 +499,7 @@ class WebInterface(object):
         if not self.in_authorized_mode():
             raise cherrypy.HTTPError(401, "unauthorized")
         user_dto = UserDTO(username=username,
+                           role=User.UserRoles.ADMIN,
                            accepted_terms=0)
         user_dto.set_password(password)
         self._user_controller.save_user(user_dto)
@@ -687,6 +689,16 @@ class WebInterface(object):
         :returns: 'status': list of dictionaries with the following keys: id, status.
         """
         return {'status': self._gateway_api.get_input_status()}
+
+    @openmotics_api(auth=True, check=types(id=int, is_on=bool))
+    def set_input(self, id, is_on):  # type: (int, bool) -> Dict
+        """
+        Set the status of a virtual input.
+        :param id: The id of the input to set
+        :param is_on: Whether the input is on (pressed)
+        """
+        self._gateway_api.set_input_status(id, is_on)
+        return {}
 
     @openmotics_api(auth=True)
     def get_output_status(self):

@@ -407,6 +407,7 @@ class ApartmentForeignKeyField(Apartment, ForeignKeyField): ...
 
 class User(BaseModel):
     id: MixedPrimaryKeyField
+    username: MixedCharField
     first_name: MixedCharField
     last_name: MixedCharField
     password: MixedTextField

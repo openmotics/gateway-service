@@ -98,6 +98,9 @@ class MasterController(object):
         # type: () -> List[int]
         raise NotImplementedError()
 
+    def set_input(self, input_id, state):
+        raise NotImplementedError()
+
     # Outputs
 
     def set_output(self, output_id, state, dimmer=None, timer=None):

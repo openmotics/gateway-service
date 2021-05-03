@@ -17,7 +17,7 @@ from peewee import (
     Model, Database, SqliteDatabase,
     AutoField, CharField, IntegerField,
     ForeignKeyField, BooleanField, FloatField,
-    TextField
+    TextField, SQL
 )
 from peewee_migrate import Migrator
 import constants
@@ -35,7 +35,7 @@ def migrate(migrator, database, fake=False, **kwargs):
                                       pragmas={'foreign_keys': 1})
 
     class Apartment(BaseModel):
-        id = AutoField()
+        id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
         name = CharField(null=False)
         mailbox_rebus_id = IntegerField(unique=True)
         doorbell_rebus_id = IntegerField(unique=True)
@@ -65,37 +65,18 @@ def migrate(migrator, database, fake=False, **kwargs):
             NL = 'Nederlands'
             FR = 'Francais'
 
-        id = AutoField()
-        first_name = CharField(null=False)
-        last_name = CharField(null=False, default='')
+        # id = AutoField()
+        id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
+        username = CharField(null=False, unique=True)
+        first_name = CharField(null=True)
+        last_name = CharField(null=True)
         role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
-        pin_code = CharField(null=False, unique=True)
+        pin_code = CharField(null=True, unique=True)
         language = CharField(null=False, default='English')  # options: See Userlanguages
         password = CharField()
         apartment_id = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
         is_active = BooleanField(default=True)
         accepted_terms = IntegerField(default=0)
-
-        # Keep these here to use as reference functions to populate the first_name and last_name fields
-        # consistent with the implementation used in models.py at the moment of creating the migration
-        @property
-        def username(self):
-            # type: () -> str
-            separator = ''
-            if self.first_name != '' and self.last_name != '':
-                separator = ' '
-            return "{}{}{}".format(self.first_name, separator, self.last_name)
-
-        @username.setter
-        def username(self, username):
-            # type: (str) -> None
-            splits = username.split(' ')
-            if len(splits) > 1:
-                self.first_name = splits[0]
-                self.last_name = ' '.join(splits[1:])
-            else:
-                self.first_name = username
-                self.last_name = ''
 
     # copy over the data from the old table to the new one
     for user in UserOld.select():
@@ -103,7 +84,7 @@ def migrate(migrator, database, fake=False, **kwargs):
         user_orm = User()
         user_orm.username = user.username
         user_orm.role = User.UserRoles.ADMIN
-        user_orm.pin_code = user.username
+        user_orm.pin_code = None
         user_orm.id = user.id
         user_orm.is_active = True
         user_orm.apartment_id = None

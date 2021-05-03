@@ -132,6 +132,7 @@ class PubSub(object):
             logger.warning('Received gateway event %s on topic "%s" without subscribers', gateway_event.type, topic)
         for callback in callbacks:
             try:
+                logger.debug('Executing callback {} with {}'.format(callback.__name__, gateway_event))
                 callback(gateway_event)
             except Exception:
                 logger.exception('Failed to call handle %s for topic %s', callback, topic)

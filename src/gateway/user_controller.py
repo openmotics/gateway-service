@@ -54,18 +54,11 @@ class UserController(object):
         # type: () -> None
         # Create the user for the cloud
         logger.info('Adding the cloud user')
-        first_name = self._config['username'].lower()
-        password = self._config['password']
-        hashed_password = UserDTO._hash_password(password)
-
-        if User.select().where((User.first_name == first_name) & (User.password == hashed_password)).first():
-            # If the cloud user is already in the DB, do not add it anymore
-            logger.debug('Cloud user already added, not adding it anymore')
-            return
+        username = self._config['username'].lower()
 
         cloud_user_dto = UserDTO(
-            username=self._config['username'].lower(),
-            pin_code=self._config['username'].lower(),
+            username=username,
+            pin_code=None,
             role=User.UserRoles.ADMIN,
             accepted_terms=AuthenticationController.TERMS_VERSION
         )
@@ -174,14 +167,14 @@ class UserController(object):
         except:
             pass
 
-        first_name = user_dto.first_name
-        last_name = user_dto.last_name
+        # set username to lowercase to compare on username
+        username = user_dto.username.lower()
 
         # check if the removed user is not the last admin user of the system
         if UserController.get_number_of_users() <= 1:
             raise Exception(UserEnums.DeleteErrors.LAST_ACCOUNT)
-        query = User.delete().where((User.first_name == first_name) & (User.last_name == last_name))
-        query.execute()
+
+        User.delete().where(User.username == username).execute()
 
     def login(self, user_dto, accept_terms=False, timeout=None):
         # type: (UserDTO, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
@@ -223,4 +216,3 @@ class UserController(object):
             not isinstance(user.accepted_terms, six.integer_types) or \
                 0 < user.accepted_terms < AuthenticationController.TERMS_VERSION:
             raise RuntimeError('A user must have a valid "accepted_terms" fields')
-
