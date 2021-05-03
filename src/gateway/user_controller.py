@@ -53,13 +53,6 @@ class UserController(object):
         # Create the user for the cloud
         logger.info('Adding the cloud user')
         username = self._config['username'].lower()
-        password = self._config['password']
-        hashed_password = UserDTO._hash_password(password)
-
-        if User.select().where((User.username == username) & (User.password == hashed_password)).first():
-            # If the cloud user is already in the DB, do not add it anymore
-            logger.debug('Cloud user already added, not adding it anymore')
-            return
 
         cloud_user_dto = UserDTO(
             username=username,
@@ -79,10 +72,6 @@ class UserController(object):
         # type: (UserDTO) -> None
         """ Saves one instance of a user with the defined fields in param fields """
         _ = self
-        current_users = self.load_users()
-        for user in current_users:
-            if user.username == user_dto.username:
-                raise RuntimeError('Cannot save user with duplicate usernames')
         user_orm = UserMapper.dto_to_orm(user_dto)
         UserController._validate(user_orm)
         user_orm.save()
