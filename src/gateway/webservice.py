@@ -56,13 +56,14 @@ from gateway.exceptions import UnsupportedException, ItemDoesNotExistException
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
-from gateway.models import Database, Feature, Config
+from gateway.models import Database, Feature, Config, User
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Hardware, Platform, System
 from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
+from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Dict, Optional, Any, List, Literal
@@ -361,6 +362,7 @@ class WebInterface(object):
 
     def in_authorized_mode(self):
         # type: () -> bool
+        return True
         if self._frontpanel_controller:
             return self._frontpanel_controller.authorized_mode
         else:
@@ -460,8 +462,7 @@ class WebInterface(object):
         :returns: Authentication token
         :rtype: str
         """
-        user_dto = UserDTO()
-        user_dto.username = username
+        user_dto = UserDTO(username=username)
         user_dto.set_password(password)
         success, token_or_error = self._user_controller.login(user_dto, accept_terms, timeout)
         if success is True and isinstance(token_or_error, AuthenticationToken):  # token_or_error is an actual token
@@ -497,6 +498,7 @@ class WebInterface(object):
         if not self.in_authorized_mode():
             raise cherrypy.HTTPError(401, "unauthorized")
         user_dto = UserDTO(username=username,
+                           role=User.UserRoles.ADMIN,
                            accepted_terms=0)
         user_dto.set_password(password)
         self._user_controller.save_user(user_dto)
@@ -687,6 +689,16 @@ class WebInterface(object):
         """
         return {'status': self._gateway_api.get_input_status()}
 
+    @openmotics_api(auth=True, check=types(id=int, is_on=bool))
+    def set_input(self, id, is_on):  # type: (int, bool) -> Dict
+        """
+        Set the status of a virtual input.
+        :param id: The id of the input to set
+        :param is_on: Whether the input is on (pressed)
+        """
+        self._gateway_api.set_input_status(id, is_on)
+        return {}
+
     @openmotics_api(auth=True)
     def get_output_status(self):
         """
@@ -712,19 +724,21 @@ class WebInterface(object):
     @openmotics_api(auth=True)
     def set_all_lights_off(self):
         """ Turn all lights off. """
-        self._output_controller.set_all_lights_off()
+        self._output_controller.set_all_lights(action='OFF')
         return {}
 
     @openmotics_api(auth=True, check=types(floor=int))
     def set_all_lights_floor_off(self, floor):
         """ Turn all lights on a given floor off. """
-        self._output_controller.set_all_lights_floor_off(floor)
+        floor = Toolbox.nonify(floor, 255)
+        self._output_controller.set_all_lights(action='OFF', floor_id=floor)
         return {}
 
     @openmotics_api(auth=True, check=types(floor=int))
     def set_all_lights_floor_on(self, floor):
         """ Turn all lights on a given floor on. """
-        self._output_controller.set_all_lights_floor_on(floor)
+        floor = Toolbox.nonify(floor, 255)
+        self._output_controller.set_all_lights(action='ON', floor_id=floor)
         return {}
 
     @openmotics_api(auth=True)

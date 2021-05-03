@@ -21,7 +21,7 @@ import mock
 
 from bus.om_bus_client import MessageClient
 from gateway.dto import OutputStateDTO, ScheduleDTO, VentilationDTO, \
-    VentilationSourceDTO, VentilationStatusDTO
+    VentilationSourceDTO, VentilationStatusDTO, ModuleDTO, UserDTO
 from gateway.gateway_api import GatewayApi
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
@@ -47,10 +47,13 @@ class WebInterfaceTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
+        self.maxDiff = None
+        self.user_controller = mock.Mock(UserController)
         self.output_controller = mock.Mock(OutputController)
         self.scheduling_controller = mock.Mock(SchedulingController)
         self.ventilation_controller = mock.Mock(VentilationController)
         self.gateway_api = mock.Mock(GatewayApi)
+        self.module_controller = mock.Mock(ModuleController)
         SetUpTestInjections(frontpanel_controller=mock.Mock(FrontpanelController),
                             gateway_api=self.gateway_api,
                             group_action_controller=mock.Mock(GroupActionController),
@@ -64,10 +67,64 @@ class WebInterfaceTest(unittest.TestCase):
                             sensor_controller=mock.Mock(SensorController),
                             shutter_controller=mock.Mock(ShutterController),
                             thermostat_controller=mock.Mock(ThermostatController),
-                            user_controller=mock.Mock(UserController),
+                            user_controller=self.user_controller,
                             ventilation_controller=self.ventilation_controller,
-                            module_controller=mock.Mock(ModuleController))
+                            module_controller=self.module_controller)
         self.web = WebInterface()
+
+    def test_get_usernames(self):
+        loaded_users = [
+            UserDTO(
+                id=1,
+                username='test user_1',
+                role='ADMIN',
+                pin_code='1234',
+                apartment=None,
+                accepted_terms=1
+            ),
+            UserDTO(
+                id=2,
+                username='test user_2',
+                role='USER',
+                pin_code='',
+                apartment=None,
+                accepted_terms=1
+            )
+        ]
+        with mock.patch.object(self.user_controller, 'load_users',
+                               return_value=loaded_users):
+            response = self.web.get_usernames()
+            self.assertEqual(
+                {'usernames': ['test user_1', 'test user_2'], 'success': True},
+                json.loads(response)
+            )
+
+    def test_create_user(self):
+        to_save_user = UserDTO(
+            username='test',
+            role='ADMIN',
+            pin_code=None
+        )
+        to_save_user.set_password('test')
+        with mock.patch.object(self.user_controller, 'save_user') as save_user_func:
+            response = self.web.create_user(username='test', password='test')
+            save_user_func.assert_called_once_with(to_save_user)
+            self.assertEqual(
+                {'success': True},
+                json.loads(response)
+            )
+
+    def test_remove_user(self):
+        to_remove_user = UserDTO(
+            username='test',
+        )
+        with mock.patch.object(self.user_controller, 'remove_user') as remove_user_func:
+            response = self.web.remove_user(username='test')
+            remove_user_func.assert_called_once_with(to_remove_user)
+            self.assertEqual(
+                {'success': True},
+                json.loads(response)
+            )
 
     def test_output_status(self):
         with mock.patch.object(self.output_controller, 'get_output_statuses',
@@ -151,3 +208,55 @@ class WebInterfaceTest(unittest.TestCase):
                 'timer': None
             }, json.loads(response)['status'])
             set_status.assert_called()
+
+    def test_set_all_lights_off(self):
+        with mock.patch.object(self.output_controller, 'set_all_lights',
+                               return_value={}) as set_status:
+            self.web.set_all_lights_off()
+            set_status.assert_called_with(action='OFF')
+
+            floor_expectations = [(255, None), (2, 2), (0, 0)]
+            for expectation in floor_expectations:
+                self.web.set_all_lights_floor_off(floor=expectation[0])
+                set_status.assert_called_with(action='OFF', floor_id=expectation[1])
+
+    def test_set_all_lights_on(self):
+        expectations = [(255, None), (2, 2), (0, 0)]
+        with mock.patch.object(self.output_controller, 'set_all_lights',
+                               return_value={}) as set_status:
+            for expectation in expectations:
+                self.web.set_all_lights_floor_on(floor=expectation[0])
+                set_status.assert_called_with(action='ON', floor_id=expectation[1])
+
+    def test_get_modules_information(self):
+        master_modules = [ModuleDTO(source=ModuleDTO.Source.MASTER,
+                                    module_type=ModuleDTO.ModuleType.OUTPUT,
+                                    address='079.000.000.001',
+                                    hardware_type=ModuleDTO.HardwareType.INTERNAL,
+                                    firmware_version='3.1.0',
+                                    hardware_version='4',
+                                    order=0,
+                                    online=True)]
+        energy_modules = [ModuleDTO(source=ModuleDTO.Source.GATEWAY,
+                                    module_type=ModuleDTO.ModuleType.ENERGY,
+                                    address='2',
+                                    hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                                    firmware_version='1.2.3',
+                                    order=0)]
+        with mock.patch.object(self.module_controller, 'load_master_modules', return_value=master_modules) as load_master_modules, \
+                mock.patch.object(self.module_controller, 'load_energy_modules', return_value=energy_modules) as load_energy_modules:
+            api_response = json.loads(self.web.get_modules_information())
+            load_master_modules.assert_called()
+            load_energy_modules.assert_called()
+            self.assertDictEqual(api_response, {"modules": {"energy": {'2': {'address': '2',
+                                                                             'firmware': '1.2.3',
+                                                                             'id': 0,
+                                                                             'type': 'E'}},
+                                                            "master": {"079.000.000.001": {"category": "OUTPUT",
+                                                                                           "is_can": False,
+                                                                                           "hardware_type": "internal",
+                                                                                           "module_nr": 0,
+                                                                                           "is_virtual": False,
+                                                                                           "address": "079.000.000.001",
+                                                                                           "type": "O"}}},
+                                                "success": True})

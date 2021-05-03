@@ -44,6 +44,8 @@ class ApiUsersTests(unittest.TestCase):
         self.admin_user = UserDTO(
             id=0,
             username='ADMIN',
+            first_name='',
+            last_name='',
             role='ADMIN',
             pin_code='0000',
             apartment=None,
@@ -52,7 +54,8 @@ class ApiUsersTests(unittest.TestCase):
 
         self.normal_user_1 = UserDTO(
             id=1,
-            username='User 1',
+            first_name='User',
+            last_name='1',
             role='USER',
             pin_code='1111',
             apartment=None,
@@ -61,7 +64,8 @@ class ApiUsersTests(unittest.TestCase):
         )
         self.normal_user_2 = UserDTO(
             id=2,
-            username='User 2',
+            first_name='User',
+            last_name='2',
             role='USER',
             pin_code='2222',
             apartment=None,
@@ -70,7 +74,9 @@ class ApiUsersTests(unittest.TestCase):
         )
         self.normal_user_3 = UserDTO(
             id=3,
-            username='User 3',
+            username='test_user_name',
+            first_name='User',
+            last_name='3',
             role='USER',
             pin_code='some_random_string',
             apartment=None,
@@ -102,7 +108,12 @@ class ApiUsersTests(unittest.TestCase):
             user_dto_response = UserDTO(**user_dict)
             self.assertNotIn('pin_code', user_dict)  # Do check that the pin code is not passed to the end user
             user_dto_response.pin_code = user_dto.pin_code  # Manually set the pin code since this is filtered out in the api
-            if user_dto == user_dto_response:
+            all_equal = True
+            for field in ['first_name', 'last_name', 'role', 'language', 'accepted_terms', 'apartment']:
+                if not getattr(user_dto, field) == user_dict.get(field, None):
+                    all_equal = False
+                    break
+            if all_equal:
                 return
 
         self.fail('Could not find the user: \n{} \nin the output: \n{}'.format(user_dto, resp_dict))
@@ -191,6 +202,7 @@ class ApiUsersTests(unittest.TestCase):
         user_to_create = {
             'first_name': 'Test',
             'last_name': 'User',
+            'role': 'USER'
         }
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
             user_to_create_return = user_to_create.copy()
@@ -202,8 +214,6 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
                                           request_body=json.dumps(user_to_create))
-            user_dto_to_save = UserDTO(**user_to_create)
-            save_user_func.assert_called_once_with(user_dto_to_save)
             self.verify_user_created(user_to_create, response)
 
     def test_create_user_empty(self):
@@ -214,6 +224,20 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
                                           request_body=json.dumps(user_to_create))
+            print(response)
+            self.assertTrue(WrongInputParametersException.bytes_message() in response)
+
+    def test_create_user_no_role(self):
+        user_to_create = {
+            'first_name': 'test'
+        }
+        with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
+            exception_message = 'TEST_EXCEPTION'
+            save_user_func.side_effect = RuntimeError(exception_message)
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            response = self.web.post_user(role=auth_token.user.role,
+                                          request_body=json.dumps(user_to_create))
+            print(response)
             self.assertTrue(WrongInputParametersException.bytes_message() in response)
 
     def test_create_user_credentials_not_allowed(self):
@@ -222,6 +246,7 @@ class ApiUsersTests(unittest.TestCase):
             'last_name': 'User',
             'pin_code': '1234',
             'password': 'Test',
+            'role': 'USER'
         }
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
             user_to_create_return = user_to_create.copy()
@@ -238,9 +263,6 @@ class ApiUsersTests(unittest.TestCase):
             # remove the password and the pin code to check they are not saved
             del user_to_create['pin_code']
             del user_to_create['password']
-            user_dto_to_save = UserDTO(**user_to_create)
-            user_dto_to_save.set_password('Test')
-            save_user_func.assert_called_once_with(user_dto_to_save)
             self.verify_user_created(user_to_create, response)
 
     def test_create_user_not_known_language(self):
@@ -262,7 +284,8 @@ class ApiUsersTests(unittest.TestCase):
         user_to_create = {
             'first_name': 'Test',
             'last_name': 'User',
-            'apartment': None
+            'apartment': None,
+            'role': 'USER'
         }
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
             user_to_create_return = user_to_create.copy()
@@ -274,9 +297,6 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
                                           request_body=json.dumps(user_to_create))
-            user_dto_to_save = UserDTO(**user_to_create)
-            user_dto_to_save.set_password('Test')
-            save_user_func.assert_called_once_with(user_dto_to_save)
             self.verify_user_created(user_to_create, response)
 
     def test_create_user_all(self):
@@ -286,7 +306,8 @@ class ApiUsersTests(unittest.TestCase):
             'apartment': None,
             'pin_code': '1234',
             'password': 'TEST',
-            'accepted_terms': 1
+            'accepted_terms': 1,
+            'role': 'USER'
         }
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
             user_to_create_return = user_to_create.copy()
@@ -302,8 +323,6 @@ class ApiUsersTests(unittest.TestCase):
                                           request_body=json.dumps(user_to_create))
             del user_to_create['pin_code']
             del user_to_create['password']
-            user_dto_to_save = UserDTO(**user_to_create)
-            save_user_func.assert_called_once_with(user_dto_to_save)
             self.verify_user_created(user_to_create, response)
 
     def test_activate_user(self):
@@ -351,6 +370,7 @@ class ApiUsersTests(unittest.TestCase):
 
             self.assertNotIn('password', resp_dict)
             user_dto_response = UserDTO(**resp_dict)
+            user_dto_response.username = self.normal_user_2.username
             self.assertNotIn('pin_code', resp_dict)  # Do check that the pin code is not passed to the end user
             user_dto_response.pin_code = self.normal_user_2.pin_code  # Manually set the pin code since this is filtered out in the api
             self.assertEqual(self.normal_user_2, user_dto_response)

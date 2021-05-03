@@ -34,7 +34,7 @@ from master.classic.eeprom_models import InputConfiguration
 from master.classic.inputs import InputStatus
 from master.classic.master_communicator import BackgroundConsumer
 from master.classic.validationbits import ValidationBitStatus
-
+from master.classic.master_communicator import MasterCommunicator
 
 class MasterClassicControllerTest(unittest.TestCase):
     """ Tests for MasterClassicController. """
@@ -268,10 +268,38 @@ class MasterClassicControllerTest(unittest.TestCase):
         pubsub._publish_all_events()
         assert controller._input_last_updated == 0.0
 
+    def test_all_lights_off(self):
+        controller = get_classic_controller_dummy()
+        controller.set_all_lights('OFF')
+        controller._master_communicator.do_command.assert_called_with(mock.ANY,
+                                                                      fields={'action_type': 163, 'action_number': 0},
+                                                                      timeout=2)
+        controller.set_all_lights('ON', 1)
+        controller._master_communicator.do_command.assert_called_with(mock.ANY,
+                                                                      fields={'action_type': 172, 'action_number': 1},
+                                                                      timeout=2)
+        controller.set_all_lights('TOGGLE', 1)
+        controller._master_communicator.do_command.assert_called_with(mock.ANY,
+                                                                      fields={'action_type': 173, 'action_number': 1},
+                                                                      timeout=2)
+
+    def test_set_input(self):
+        controller = get_classic_controller_dummy()
+        controller.set_input(100, True)
+        controller._master_communicator.do_command.assert_called_with(mock.ANY,
+                                                                      fields={'action_type': 68, 'action_number': 100},
+                                                                      timeout=2)
+        controller.set_input(100, False)
+        controller._master_communicator.do_command.assert_called_with(mock.ANY,
+                                                                      fields={'action_type': 69, 'action_number': 100},
+                                                                      timeout=2)
+
+        with self.assertRaises(ValueError):
+            controller.set_input(255, True)
 
 @Scope
 def get_classic_controller_dummy(inputs=None):
-    communicator_mock = mock.Mock()
+    communicator_mock = mock.Mock(spec=MasterCommunicator)
     eeprom_mock = mock.Mock(EepromController)
     eeprom_mock.invalidate_cache.return_value = None
     eeprom_mock.read.return_value = inputs[0] if inputs else []

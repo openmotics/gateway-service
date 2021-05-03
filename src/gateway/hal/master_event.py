@@ -40,6 +40,12 @@ class MasterEvent(object):
       {'id': int,                     # Input ID
        'status': bool,                # Pressed or not
        'location': {'room_id': int}}  # Room ID
+    * EXECUTE_GATEWAY_API
+      {'type': str,                   # APITypes
+       'data': {...}}
+      * SET_LIGHTS
+        {'action': 'ON/OFF/TOGGLE',
+         'floor_id': Optional[int]}
     """
 
     class Types(object):
@@ -51,6 +57,10 @@ class MasterEvent(object):
         OUTPUT_CHANGE = 'OUTPUT_CHANGE'
         OUTPUT_STATUS = 'OUTPUT_STATUS'
         SHUTTER_CHANGE = 'SHUTTER_CHANGE'
+        EXECUTE_GATEWAY_API = 'EXECUTE_GATEWAY_API'
+
+    class APITypes(object):
+        SET_LIGHTS = 'SET_LIGHTS'
 
     def __init__(self, event_type, data):
         # type: (str, Dict[str,Any]) -> None

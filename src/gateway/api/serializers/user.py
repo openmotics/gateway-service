@@ -41,6 +41,7 @@ class UserSerializer(object):
                 'language': dto_object.language,
                 # 'pin_code': dto_object.pin_code,  # Hide the pin code for the api
                 'apartment': None,
+                'is_active': dto_object.is_active,
                 'accepted_terms': dto_object.accepted_terms}  # type: Dict[str, Any]
         if fields is not None and 'apartment' in fields:
             apartment_data = ApartmentSerializer.serialize(dto_object.apartment)
@@ -51,8 +52,10 @@ class UserSerializer(object):
     def deserialize(api_data):
         # type: (Dict[str,Any]) -> UserDTO
         user_id = api_data['id'] if 'id' in api_data else None
-        user_dto = UserDTO(user_id)
-        for field in ['first_name', 'last_name', 'role', 'pin_code', 'language', 'accepted_terms']:
+        first_name = api_data['first_name'] if 'first_name' in api_data and api_data['first_name'] is not None else ''
+        last_name = api_data['last_name'] if 'last_name' in api_data and api_data['last_name'] is not None else ''
+        user_dto = UserDTO(user_id, first_name=first_name, last_name=last_name)
+        for field in ['role', 'pin_code', 'language', 'accepted_terms']:
             if field in api_data:
                 setattr(user_dto, field, api_data[field])
         apartment_dto = None

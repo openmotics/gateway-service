@@ -128,12 +128,16 @@ class MasterCoreController(MasterController):
             # Interesting for debug purposes, but not for everything
             logger.info('Got master event: {0}'.format(core_event))
         if core_event.type == MasterCoreEvent.Types.OUTPUT:
-            # Update internal state cache
             output_id = core_event.data['output']
-            state_dto = OutputStateDTO(id=output_id,
-                                       status=core_event.data['status'],
-                                       dimmer=core_event.data['dimmer_value'],
-                                       ctimer=core_event.data['timer'])
+            if core_event.data['type'] == MasterCoreEvent.OutputEventTypes.STATUS:
+                # Update internal state cache
+                state_dto = OutputStateDTO(id=output_id,
+                                           status=core_event.data['status'],
+                                           dimmer=core_event.data['dimmer_value'],
+                                           ctimer=core_event.data['timer'])
+            else:  # elif core_event.data['type'] == MasterCoreEvent.OutputEventTypes.LOCKING:
+                state_dto = OutputStateDTO(id=output_id,
+                                           locked=core_event.data['locked'])
             self._handle_output_state(output_id, state_dto)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             master_event = self._input_state.handle_event(core_event)
@@ -143,20 +147,24 @@ class MasterCoreController(MasterController):
             if sensor_id not in self._sensor_states:
                 return
             self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
-        elif core_event.type == MasterCoreEvent.Types.EXECUTED_BA:
-            # Relies on BA logging being enabled on the master - to be replaced in the future
-            basic_action = core_event.data['basic_action']  # type: BasicAction
-            if basic_action.action_type == 0 and basic_action.action == 250:
-                output_id = basic_action.device_nr
-                state_dto = OutputStateDTO(id=output_id,
-                                           locked=basic_action.extra_parameter == 1)
-                self._handle_output_state(output_id, state_dto)
-        # TODO: Handle `OUTPUT_LOCK` event instead of `EXECUTED_BA` event
-        # elif core_event.type == MasterCoreEvent.Types.OUTPUT_LOCK:
-        #     output_id = core_event.data['output']
-        #     state_dto = OutputStateDTO(id=output_id,
-        #                                locked=core_event.data['locked'])
-        #     self._handle_output_state(output_id, state_dto)
+        elif core_event.type == MasterCoreEvent.Types.EXECUTE_GATEWAY_API:
+            self._handle_execute_event(action=core_event.data['action'],
+                                       device_nr=core_event.data['device_nr'],
+                                       extra_parameter=core_event.data['extra_parameter'])
+
+    def _handle_execute_event(self, action, device_nr, extra_parameter):  # type: (int, int, int) -> None
+        if action == 0:
+            if extra_parameter not in [0, 1, 2]:
+                return
+            floor_id = None  # type: Optional[int]
+            if device_nr != 65535:
+                floor_id = device_nr
+            event_action = {0: 'OFF', 1: 'ON', 2: 'TOGGLE'}[extra_parameter]
+            self._pubsub.publish_master_event(topic=PubSub.MasterTopics.OUTPUT,
+                                              master_event=MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
+                                                                       data={'type': MasterEvent.APITypes.SET_LIGHTS,
+                                                                             'data': {'action': event_action,
+                                                                                      'floor_id': floor_id}}))
 
     def _handle_output_state(self, output_id, state_dto):
         # type: (int, OutputStateDTO) -> None
@@ -427,6 +435,9 @@ class MasterCoreController(MasterController):
                 for master_event in self._input_state.refresh(data['information']):
                     self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
         return refresh
+    
+    def set_input(self, input_id, state):
+        raise NotImplementedError()
 
     # Outputs
 
@@ -586,13 +597,22 @@ class MasterCoreController(MasterController):
         self._shutters_last_updated = time.time()
 
     def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
-        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+        device_nr = shutter_group_id + 256
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=1,
+                                                              device_nr=device_nr))
 
     def shutter_group_down(self, shutter_group_id):  # type: (int) -> None
-        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+        device_nr = shutter_group_id + 256
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=2,
+                                                              device_nr=device_nr))
 
     def shutter_group_stop(self, shutter_group_id):  # type: (int) -> None
-        raise NotImplementedError()  # TODO: Implement once supported by Core(+)
+        device_nr = shutter_group_id + 256
+        self._master_communicator.do_basic_action(BasicAction(action_type=10,
+                                                              action=0,
+                                                              device_nr=device_nr))
 
     def load_shutter_group(self, shutter_group_id):  # type: (int) -> ShutterGroupDTO
         return ShutterGroupDTO(id=shutter_group_id)
@@ -604,7 +624,7 @@ class MasterCoreController(MasterController):
         return shutter_groups
 
     def save_shutter_groups(self, shutter_groups):  # type: (List[ShutterGroupDTO]) -> None
-        pass  # TODO: Implement when/if ShutterGroups get actual properties
+        raise UnsupportedException()
 
     # Thermostats
 
@@ -1144,19 +1164,41 @@ class MasterCoreController(MasterController):
     def set_status_leds(self, status):
         raise NotImplementedError()
 
-    def set_all_lights_off(self):
-        # type: () -> None
-        self._master_communicator.do_basic_action(BasicAction(action_type=0,
-                                                              action=255,
-                                                              device_nr=1))
+    # All lights actions
 
-    def set_all_lights_floor_off(self, floor):
-        # type: (int) -> None
-        raise NotImplementedError()
+    def set_all_lights(self, action, floor_id=None, output_ids=None):
+        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int], Optional[List[int]]) -> None
+        _ = floor_id  # Ignored, the Core Master does not know about floors
 
-    def set_all_lights_floor_on(self, floor):
-        # type: (int) -> None
-        raise NotImplementedError()
+        if output_ids is None and action == 'OFF':
+            # All lights off
+            self._master_communicator.do_basic_action(BasicAction(action_type=0,
+                                                                  action=255,
+                                                                  device_nr=1))
+            return
+
+        ba_action = {'ON': 1, 'OFF': 0, 'TOGGLE': 16}[action]
+
+        if output_ids is None:
+            # None means "all lights"
+            output_ids = list(self._enumerate_io_modules('output'))
+        filtered_output_ids = []
+        for output_id in output_ids:
+            output = OutputConfiguration(output_id)
+            if not output.is_shutter and output.output_type >= 128:
+                filtered_output_ids.append(output.id)
+
+        # Execute action in batch; either a single BA (for 1 device) or a BA series (for 2 to 40 devices)
+        for i in range(0, len(output_ids), 40):
+            chunk_output_ids = output_ids[i:i + 40]
+            if len(chunk_output_ids) == 1:
+                self._master_communicator.do_basic_action(BasicAction(action_type=0,
+                                                                      action=ba_action,
+                                                                      device_nr=chunk_output_ids[0]))
+            else:
+                self._master_communicator.do_command(command=CoreAPI.execute_basic_action_series(len(chunk_output_ids)),
+                                                     fields={'type': 0, 'action': ba_action, 'extra_parameter': 0,
+                                                             'device_nrs': chunk_output_ids})
 
     def get_configuration_dirty_flag(self):
         return False  # TODO: Implement

@@ -29,12 +29,14 @@ class UserMapper(object):
     def orm_to_dto(orm_object):
         # type: (User) -> UserDTO
         user_dto = UserDTO(id=orm_object.id,
+                           username=orm_object.username,
                            first_name=orm_object.first_name,
                            last_name=orm_object.last_name,
                            role=orm_object.role,
                            pin_code=orm_object.pin_code,
                            language=orm_object.language,
                            apartment=None,
+                           is_active=orm_object.is_active,
                            accepted_terms=orm_object.accepted_terms)
         try:
             apartment_orm = orm_object.apartment_id
@@ -50,28 +52,29 @@ class UserMapper(object):
     @staticmethod
     def dto_to_orm(dto_object):
         # type: (UserDTO) -> User
-        user = User.get_or_none(first_name=dto_object.first_name,
-                                last_name=dto_object.last_name)
-        if user is None:
-            mandatory_fields = {'role', 'pin_code', 'first_name', 'last_name', 'password'}
+        user_orm = User.get_or_none(username=dto_object.username)
+
+        if user_orm is None:
+            mandatory_fields = {'username'}
             if not mandatory_fields.issubset(set(dto_object.loaded_fields)):
                 raise ValueError('Cannot create user without mandatory fields `{0}`\nGot fields: {1}\nDifference: {2}'
                                  .format('`, `'.join(mandatory_fields),
                                          dto_object.loaded_fields,
                                          mandatory_fields - set(dto_object.loaded_fields)))
+            user_orm = User(username=dto_object.username.lower())
 
-        user_orm = User(password=dto_object.hashed_password)
+        # Set the default role to a normal user
         if dto_object.role is None:
-            dto_object.role = User.UserRoles.ADMIN  # set default role to admin when one is created
-        if dto_object.pin_code is None:
-            dto_object.pin_code = dto_object.first_name  # set the default pin code to the first name if no pin is provided
+            dto_object.role = User.UserRoles.USER  # set default role to USER when one is created
+
         for field in dto_object.loaded_fields:
             if getattr(dto_object, field, None) is None:
                 continue
-            if field == 'apartment_id' and dto_object.apartment is not None:
+            elif field == 'hashed_password':
+                user_orm.password = dto_object.hashed_password
+            elif field == 'apartment_id' and dto_object.apartment is not None:
                 apartment_orm = ApartmentMapper.dto_to_orm(dto_object.apartment)
                 user_orm.apartment_id = apartment_orm
-                continue
-            if field not in ['password']:
+            elif field not in ['username', 'hashed_password']:
                 setattr(user_orm, field, getattr(dto_object, field))
         return user_orm

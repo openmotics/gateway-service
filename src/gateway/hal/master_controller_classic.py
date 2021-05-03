@@ -65,7 +65,7 @@ if False:  # MYPY
 
     HEALTH = Literal['success', 'unstable', 'failure']
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 def communication_enabled(f):
@@ -448,7 +448,19 @@ class MasterClassicController(MasterController):
         # type: (Dict[str,Any]) -> None
         """ Triggers when the master informs us of an Input state change """
         # Update status tracker
+        logger.debug('Got input event data from master {}'.format(data))
         self._input_status.set_input(data)
+
+    @communication_enabled
+    def set_input(self, input_id, state):
+        # type: (int, bool) -> None
+        # https://wiki.openmotics.com/index.php/Virtual_Inputs
+        if input_id is None or input_id < 0 or input_id > 240:
+            raise ValueError('Input ID {0} not in range 0 <= id <= 240'.format(input_id))
+        if state:
+            self.do_basic_action(master_api.BA_INPUT_PRESS, input_id)
+        else:
+            self.do_basic_action(master_api.BA_INPUT_RELEASE, input_id)
 
     # Outputs
 
@@ -540,9 +552,11 @@ class MasterClassicController(MasterController):
     def _input_changed(self, input_id, status):
         # type: (int, str) -> None
         """ Executed by the Input Status tracker when an input changed state """
+        logger.debug('Input {} changed'.format(input_id))
         input_configuration = self._input_config.get(input_id)
         if input_configuration is None:
-            # An event was received from an input for which the configuration was not yet loaded. As
+            logger.warning('No input configuration found for {}'.format(input_id))
+            # An event was received from an inp
             # configuraion should not be loaded inside an event handler, the event is discarded.
             # TODO: Detach input even processing from event handler so it can load the configuration if needed
             return
@@ -550,6 +564,7 @@ class MasterClassicController(MasterController):
                       'status': status,
                       'location': {'room_id': Toolbox.denonify(input_configuration.room, 255)}}
         master_event = MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data)
+        logger.debug('Publishing input {} event'.format(master_event))
         self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
 
     def _is_output_locked(self, output_id):
@@ -1584,25 +1599,22 @@ class MasterClassicController(MasterController):
             batch.append(GlobalFeedbackMapper.dto_to_orm(global_feedback))
         self._eeprom_controller.write_batch(batch)
 
-    # All lights off functions
+    # All lights functions
 
     @communication_enabled
-    def set_all_lights_off(self):
-        # type: () -> None
-        """ Turn all lights off. """
-        self.do_basic_action(master_api.BA_ALL_LIGHTS_OFF, 0)
-
-    @communication_enabled
-    def set_all_lights_floor_off(self, floor):
-        # type: (int) -> None
-        """ Turn all lights on a given floor off. """
-        self.do_basic_action(master_api.BA_LIGHTS_OFF_FLOOR, floor)
-
-    @communication_enabled
-    def set_all_lights_floor_on(self, floor):
-        # type: (int) -> None
-        """ Turn all lights on a given floor on. """
-        self.do_basic_action(master_api.BA_LIGHTS_ON_FLOOR, floor)
+    def set_all_lights(self, action, floor_id=None, output_ids=None):
+        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int], Optional[List[int]]) -> None
+        _ = output_ids  # Ignored, as the Classic Master knows about the floor
+        floor_id = Toolbox.denonify(floor_id, 255)
+        if action == 'OFF':
+            if floor_id == 255:
+                self.do_basic_action(master_api.BA_ALL_LIGHTS_OFF, 0)
+            else:
+                self.do_basic_action(master_api.BA_LIGHTS_OFF_FLOOR, floor_id)
+        elif action == 'ON':
+            self.do_basic_action(master_api.BA_LIGHTS_ON_FLOOR, floor_id)
+        elif action == 'TOGGLE':
+            self.do_basic_action(master_api.BA_LIGHTS_TOGGLE_FLOOR, floor_id)
 
     # Sensors
 

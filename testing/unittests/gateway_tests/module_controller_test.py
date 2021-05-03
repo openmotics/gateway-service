@@ -110,6 +110,13 @@ class ModuleControllerTest(unittest.TestCase):
                                   firmware_version='3.1.0',
                                   hardware_version='4',
                                   order=0)
+        master_module_internal = ModuleDTO(source=ModuleDTO.Source.MASTER,
+                                           module_type=ModuleDTO.ModuleType.OUTPUT,
+                                           address='079.000.000.001',
+                                           hardware_type=ModuleDTO.HardwareType.INTERNAL,
+                                           firmware_version='3.1.0',
+                                           hardware_version='4',
+                                           order=0)
         energy_module = ModuleDTO(source=ModuleDTO.Source.GATEWAY,
                                   module_type=ModuleDTO.ModuleType.ENERGY,
                                   address='2',
@@ -123,7 +130,15 @@ class ModuleControllerTest(unittest.TestCase):
                           'is_virtual': False,
                           'firmware': '3.1.0',
                           'hardware': '4',
+                          'hardware_type': 'physical',
                           'address': '079.000.000.001'}, ModuleSerializer.serialize(master_module, fields=None))
+        self.assertEqual({'type': 'O',
+                          'module_nr': 0,
+                          'category': 'OUTPUT',
+                          'is_can': False,
+                          'is_virtual': False,
+                          'hardware_type': 'internal',
+                          'address': '079.000.000.001'}, ModuleSerializer.serialize(master_module_internal, fields=None))
         self.assertEqual({'type': 'E',
                           'firmware': '1.2.3',
                           'address': '2',
