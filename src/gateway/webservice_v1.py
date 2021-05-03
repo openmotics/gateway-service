@@ -17,6 +17,8 @@
 
 from __future__ import absolute_import
 import base64
+import uuid
+
 import cherrypy
 import logging
 import ujson as json
@@ -80,6 +82,8 @@ def _openmotics_api_v1(f):
             status = 500
             data = ex
             logger.error('General Error occurred during api call: {}'.format(data))
+            import traceback
+            print(traceback.print_exc())
 
         timings['process'] = ('Processing', time.time() - start)
         serialization_start = time.time()
@@ -269,19 +273,28 @@ class Users(RestAPIEndpoint):
             raise WrongInputParametersException('The request body is empty')
         try:
             user_json = json.loads(request_body)
-            tmp_password = None
-            if 'password' in user_json:
-                tmp_password = user_json['password']
-                del user_json['password']
-            user_dto = UserSerializer.deserialize(user_json)
-            if tmp_password is not None:
-                user_dto.set_password(tmp_password)
-
-            if 'pin_code' in user_dto.loaded_fields:
-                user_dto.pin_code = None
-                user_dto.loaded_fields.remove('pin_code')
         except Exception:
             raise ParseException('Could not parse the user json input')
+        tmp_password = None
+        if 'role' not in user_json:
+            raise WrongInputParametersException('The role is required to pass when creating a user')
+        if 'password' in user_json:
+            tmp_password = user_json['password']
+            del user_json['password']
+        user_dto = UserSerializer.deserialize(user_json)
+        if tmp_password is not None:
+            user_dto.set_password(tmp_password)
+
+        if 'pin_code' in user_dto.loaded_fields:
+            user_dto.pin_code = None
+            user_dto.loaded_fields.remove('pin_code')
+
+        user_dto.username = uuid.uuid4().hex
+        # add a custom user code
+        user_dto.pin_code = str(self._user_controller.generate_new_pin_code())
+        # Generate a random password as a dummy to fill in the gap
+        random_password = uuid.uuid4().hex
+        user_dto.set_password(random_password)
 
         # Authenticated as a technician or admin, creating the user
         if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
@@ -344,9 +357,12 @@ class Users(RestAPIEndpoint):
             if not self._user_controller.authentication_controller.check_api_secret(api_secret):
                 raise UnAuthorizedException('The api secret is not valid')
 
+        user_dto_orig = self._user_controller.load_user(user_id)
         user_dto = UserSerializer.deserialize(user_json)
-        user_dto.id = user_id
-        self._user_controller.update_user(user_dto)
+        for field in ['first_name', 'last_name', 'pin_code', 'language', 'apartment']:
+            if field in user_dto.loaded_fields:
+                setattr(user_dto_orig, field, getattr(user_dto, field))
+        self._user_controller.save_user(user_dto_orig)
         user_loaded = self._user_controller.load_user(user_id)
         return json.dumps(UserSerializer.serialize(user_loaded))
 

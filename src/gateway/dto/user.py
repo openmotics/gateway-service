@@ -29,7 +29,8 @@ if False:  # MYPY
 class UserDTO(BaseDTO):
     @capture_fields
     def __init__(self, id=None, username=None, first_name='', last_name='', role=None,
-                 pin_code=None, apartment=None, language='English', accepted_terms=0):
+                 pin_code=None, apartment=None, language='English', accepted_terms=0,
+                 is_active=None):
         self.id = id  # type: Optional[int]
         self.username = username  # type: str
         # if there is no username, but one can be created from the first and last name, create it as well
@@ -43,6 +44,7 @@ class UserDTO(BaseDTO):
         self.apartment = apartment  # type: ApartmentDTO
         self.hashed_password = ''  # type: str
         self.language = language  # type: str
+        self.is_active = is_active  # type: bool
         self.accepted_terms = accepted_terms  # type: int
         # if no first and last name is given, allow to set to set the name to username
         if first_name == '' and last_name == '':
@@ -90,5 +92,6 @@ class UserDTO(BaseDTO):
                 self.role == other.role and
                 self.pin_code == other.pin_code and
                 self.apartment == other.apartment and
+                self.is_active == other.is_active and
                 self.accepted_terms == other.accepted_terms)
 

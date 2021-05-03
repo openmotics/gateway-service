@@ -40,5 +40,5 @@ venv2.7/
 *.egg-info
 
 # Local scripts (makes it possible to add local bash scripts for easier development)
-**-ignore.sh
-**-ignore.py
+**ignore.sh
+**ignore.py

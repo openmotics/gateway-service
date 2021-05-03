@@ -71,8 +71,7 @@ class AuthenticationController(object):
             timeout = self._token_timeout
 
         user_orm = User.select().where(
-            (User.first_name == user_dto.first_name.lower()) &  # use explicit and for peewee
-            (User.last_name == user_dto.last_name.lower()) &
+            (User.username == user_dto.username.lower()) &
             (User.password == user_dto.hashed_password)
         ).first()
 
@@ -176,8 +175,7 @@ class TokenStore(object):
     def _get_full_user_dto(self, user_dto):
         _ = self
         user_orm = User.select().where(
-            (User.first_name == user_dto.first_name.lower()) &
-            (User.last_name == user_dto.last_name.lower())
+            (User.username == user_dto.username.lower())
         ).first()
         full_user_dto = UserMapper.orm_to_dto(user_orm)
         return full_user_dto

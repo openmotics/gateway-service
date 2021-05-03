@@ -47,7 +47,7 @@ class UserController(object):
         """ Constructor a new UserController. """
         self._config = config
         self.authentication_controller = authentication_controller
-        self.user_cache = []  # type: List[UserDTO]
+        # self.user_cache = []  # type: List[UserDTO]
         self.load_users()
 
     def start(self):
@@ -74,20 +74,16 @@ class UserController(object):
         # type: (UserDTO) -> UserDTO
         """ Saves one instance of a user with the defined fields in param fields """
         _ = self
-
-        for cached_user in self.user_cache:
-            if cached_user.username == user_dto.username:
-                raise RuntimeError('Cannot save the requested user: User already exists')
-        # set some default values
-        if 'role' not in user_dto.loaded_fields:
-            user_dto.role = User.UserRoles.USER
-        if 'pin_code' not in user_dto.loaded_fields:
-            user_dto.pin_code = str(self.generate_new_pin_code()).zfill(4)
-        elif self.check_if_pin_exists(user_dto.pin_code):
-            raise RuntimeError('The requested pin code already exists, Cannot save a user with the same pin code')
-        # to keep it backwards compatible, save the password as the pin code
-        if 'password' not in user_dto.loaded_fields:
-            user_dto.set_password(user_dto.pin_code)
+        # # set some default values
+        # if 'role' not in user_dto.loaded_fields:
+        #     user_dto.role = User.UserRoles.USER
+        # if 'pin_code' not in user_dto.loaded_fields:
+        #     user_dto.pin_code = str(self.generate_new_pin_code()).zfill(4)
+        # elif self.check_if_pin_exists(user_dto.pin_code):
+        #     raise RuntimeError('The requested pin code already exists, Cannot save a user with the same pin code')
+        # # to keep it backwards compatible, save the password as the pin code
+        # if 'password' not in user_dto.loaded_fields:
+        #     user_dto.set_password(user_dto.pin_code)
 
         if 'language' in user_dto.loaded_fields:
             if user_dto.language not in User.UserLanguages.ALL:
@@ -97,7 +93,6 @@ class UserController(object):
         UserController._validate(user_orm)
         user_orm.save()
         user_dto_saved = UserMapper.orm_to_dto(user_orm)
-        self.user_cache.append(user_dto_saved)
         return user_dto_saved
 
 
@@ -127,7 +122,7 @@ class UserController(object):
             user_dto = UserMapper.orm_to_dto(user_orm)
             user_dto.clear_password()
             users.append(user_dto)
-        self.user_cache = users
+        # self.user_cache = users
         return users
 
     def activate_user(self, user_id):
@@ -139,17 +134,17 @@ class UserController(object):
         except Exception as e:
             raise RuntimeError('Could not save the is_active flag to the database: {}'.format(e))
 
-    def update_user(self, user_dto):
-        # type: (UserDTO) -> None
-        _ = self
-        try:
-            user_orm = User.select().where(User.id == user_dto.id).first()
-            for field in user_dto.loaded_fields:
-                if hasattr(user_orm, field):
-                    setattr(user_orm, field, getattr(user_dto, field))
-            user_orm.save()
-        except Exception as e:
-            raise RuntimeError('Could not update the user: {}'.format(e))
+    # def update_user(self, user_dto):
+    #     # type: (UserDTO) -> None
+    #     _ = self
+    #     try:
+    #         user_orm = User.select().where(User.id == user_dto.id).first()
+    #         for field in user_dto.loaded_fields:
+    #             if hasattr(user_orm, field):
+    #                 setattr(user_orm, field, getattr(user_dto, field))
+    #         user_orm.save()
+    #     except Exception as e:
+    #         raise RuntimeError('Could not update the user: {}'.format(e))
 
 
     @staticmethod
@@ -193,7 +188,8 @@ class UserController(object):
 
     def generate_new_pin_code(self):
         # loads the users in the self.users_cache
-        current_pin_codes = [x.pin_code for x in self.user_cache if x.pin_code.isdigit()]
+        _ = self
+        current_pin_codes = User.select(User.pin_code).execute()
         while True:
             new_pin = random.randint(0, 9999)
             if new_pin not in current_pin_codes:
@@ -201,7 +197,8 @@ class UserController(object):
         return new_pin
 
     def check_if_pin_exists(self, pin):
-        current_pin_codes = [x.pin_code for x in self.user_cache]
+        _ = self
+        current_pin_codes = User.select(User.pin_code).execute()
         return pin in current_pin_codes
 
     @staticmethod
@@ -210,8 +207,9 @@ class UserController(object):
         """  Checks if the user object is a valid object to store  """
         if user.username is None or not isinstance(user.username, six.string_types) or user.username.strip() == '':
             raise RuntimeError('A user must have a username, value of type {} is provided'.format(type(user.username)))
-        if user.password is None or not isinstance(user.password, six.string_types):
-            raise RuntimeError('A user must have a password, value of type {} is provided'.format(type(user.password)))
+        if (not (user.password is not None and isinstance(user.password, six.string_types)) and
+                not (user.pin_code is not None and isinstance(user.pin_code, six.string_types))):
+            raise RuntimeError('A user must have a password or pin_code, value of types {} {} is provided'.format(type(user.password), type(user.pin_code)))
         if user.accepted_terms is None or \
             not isinstance(user.accepted_terms, six.integer_types) or \
                 0 < user.accepted_terms < AuthenticationController.TERMS_VERSION:

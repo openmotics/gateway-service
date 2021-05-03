@@ -36,6 +36,7 @@ class UserMapper(object):
                            pin_code=orm_object.pin_code,
                            language=orm_object.language,
                            apartment=None,
+                           is_active=orm_object.is_active,
                            accepted_terms=orm_object.accepted_terms)
         try:
             apartment_orm = orm_object.apartment_id
@@ -54,13 +55,13 @@ class UserMapper(object):
         user_orm = User.get_or_none(username=dto_object.username)
 
         if user_orm is None:
-            mandatory_fields = {'username', 'hashed_password'}
+            mandatory_fields = {'username'}
             if not mandatory_fields.issubset(set(dto_object.loaded_fields)):
                 raise ValueError('Cannot create user without mandatory fields `{0}`\nGot fields: {1}\nDifference: {2}'
                                  .format('`, `'.join(mandatory_fields),
                                          dto_object.loaded_fields,
                                          mandatory_fields - set(dto_object.loaded_fields)))
-            user_orm = User(username=dto_object.username.lower(), password=dto_object.hashed_password)
+            user_orm = User(username=dto_object.username.lower())
 
         # Set the default role to a normal user
         if dto_object.role is None:
