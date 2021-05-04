@@ -31,6 +31,7 @@ from gateway.mappers.sensor import SensorMapper
 from gateway.models import Plugin, Room, Sensor
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
+from master.core.events import Event as MasterCoreEvent
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Set, Tuple
@@ -71,8 +72,8 @@ class SensorController(BaseController):
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
         super(SensorController, self)._handle_master_event(master_event)
-        if master_event.type == MasterEvent.Types.SENSOR_VALUE:
-            key = (master_event.data['type'], master_event.data['id'])
+        if master_event.type in (MasterEvent.Types.SENSOR_VALUE, MasterCoreEvent.Types.SENSOR):
+            key = (master_event.data['type'], master_event.data['sensor'])
             sensor_dto = self._master_cache.get(key)
             if sensor_dto is not None:
                 self._master_cache[key] = sensor_dto

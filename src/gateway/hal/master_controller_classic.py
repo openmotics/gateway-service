@@ -1656,19 +1656,19 @@ class MasterClassicController(MasterController):
                 if value is None:
                     continue
                 master_event = MasterEvent(event_type=MasterEvent.Types.SENSOR_VALUE,
-                                           data={'id': i, 'type': 'temperature', 'value': value})
+                                           data={'sensor': i, 'type': MasterEvent.SensorType.TEMPERATURE, 'value': value})
                 self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
             for i, value in enumerate(self.get_sensors_humidity()):
                 if value is None:
                     continue
                 master_event = MasterEvent(event_type=MasterEvent.Types.SENSOR_VALUE,
-                                           data={'id': i, 'type': 'humidity', 'value': value})
+                                           data={'sensor': i, 'type': MasterEvent.SensorType.HUMIDITY, 'value': value})
                 self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
             for i, value in enumerate(self.get_sensors_brightness()):
                 if value is None:
                     continue
                 master_event = MasterEvent(event_type=MasterEvent.Types.SENSOR_VALUE,
-                                           data={'id': i, 'type': 'brighness', 'value': value})
+                                           data={'sensor': i, 'type': MasterEvent.SensorType.BRIGHTNESS, 'value': value})
                 self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
         except NotImplementedError as e:
             logger.error('Cannot refresh sensors: {}'.format(e))

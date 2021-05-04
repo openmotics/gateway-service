@@ -41,7 +41,7 @@ class MasterEvent(object):
        'status': bool,                # Pressed or not
        'location': {'room_id': int}}  # Room ID
     * SENSOR_VALUE
-      {'id': int,                     # Sensor ID
+      {'sensor': int,                 # Sensor ID
        'type': str,                   # temperature, humidity, brightness
        'value': float}                # Current sensor value
     * EXECUTE_GATEWAY_API
@@ -66,6 +66,11 @@ class MasterEvent(object):
 
     class APITypes(object):
         SET_LIGHTS = 'SET_LIGHTS'
+
+    class SensorType(object):
+        TEMPERATURE = 'TEMPERATURE'
+        HUMIDITY = 'HUMIDITY'
+        BRIGHTNESS = 'BRIGHTNESS'
 
     def __init__(self, event_type, data):
         # type: (str, Dict[str,Any]) -> None
