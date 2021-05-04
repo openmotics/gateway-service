@@ -206,7 +206,7 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
             header = request.headers.get('Authorization')
             if header is not None and 'Bearer ' in header:
                 token = header.replace('Bearer ', '')
-        # check if hte token is passed as a web-socket Bearer token
+        # check if the token is passed as a web-socket Bearer token
         if token is None:
             header = request.headers.get('Sec-WebSocket-Protocol')
             if header is not None and 'authorization.bearer.' in header:
