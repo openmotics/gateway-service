@@ -94,7 +94,7 @@ class UserController(object):
             self.save_user(user_dto)
 
     def load_user(self, user_id, clear_password=True):
-        # type: (int) -> Optional[UserDTO]
+        # type: (int, bool) -> Optional[UserDTO]
         """  Returns a UserDTO of the requested user """
         _ = self
         user_orm = User.select().where(User.id == user_id).first()
