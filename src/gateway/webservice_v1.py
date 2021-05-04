@@ -165,7 +165,7 @@ def openmotics_api_v1(_func=None, check=None, auth=False, pass_token=False, pass
 
 
 # ----------------------------
-# eSafe API
+# REST API
 # ----------------------------
 
 class RestAPIEndpoint(object):
@@ -422,7 +422,7 @@ class WebServiceV1(object):
     def add_api_tree(self):
         mounts = []
         if self.endpoints is None:
-            raise AttributeError('No esafe endpoints defined at this stage, could not add them to the api tree')
+            raise AttributeError('No endpoints defined at this stage, could not add them to the api tree')
         for endpoint in self.endpoints:
             if endpoint.API_ENDPOINT is None:
                 logger.error('Could not add endpoint {}: No "ENDPOINT" variable defined in the endpoint object.'.format(endpoint))
