@@ -78,7 +78,7 @@ class SensorStatusDTO(BaseDTO):
     def __init__(self, id, value=None, last_value=None):
         # type: (int, Optional[float], Optional[float]) -> None
         self.id = id
-        self.value = value
+        self.value = float(value) if value else None
         self.last_value = last_value
 
     def __eq__(self, other):

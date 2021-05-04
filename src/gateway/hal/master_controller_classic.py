@@ -96,6 +96,7 @@ class MasterClassicController(MasterController):
 
         self._input_status = InputStatus(on_input_change=self._input_changed)
         self._validation_bits = ValidationBitStatus(on_validation_bit_change=self._validation_bit_changed)
+        self._master_version_last_updated = 0.0
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
         self._synchronization_thread = DaemonThread(name='mastersync',
@@ -142,8 +143,10 @@ class MasterClassicController(MasterController):
                 return
 
             now = time.time()
-            self._get_master_version()
-            self._register_version_depending_background_consumers()
+            if self._master_version is None or self._master_version_last_updated < now - 300:
+                self._get_master_version()
+                self._master_version_last_updated = now
+                self._register_version_depending_background_consumers()
             # Validate communicator checks
             if self._time_last_updated < now - 300:
                 self._check_master_time()

@@ -49,7 +49,7 @@ class SensorController(BaseController):
     @Inject
     def __init__(self, master_controller=INJECTED, pubsub=INJECTED):
         # type: (MasterController, PubSub) -> None
-        super(SensorController, self).__init__(master_controller, sync_interval=60)
+        super(SensorController, self).__init__(master_controller, sync_interval=600)
         self._pubsub = pubsub
         self._master_cache = {}  # type: Dict[Tuple[str,int],SensorDTO]
         self._status = {}  # type: Dict[int,SensorStatusDTO]
@@ -61,13 +61,16 @@ class SensorController(BaseController):
         gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'sensor'})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
 
-    def _publish_state(self, status_dto):
+    def _handle_status(self, status_dto):
         # type: (SensorStatusDTO) -> None
         event_data = {'id': status_dto.id,
                       'value': status_dto.value}
         gateway_event = GatewayEvent(GatewayEvent.Types.SENSOR_CHANGE, event_data)
-        logger.debug('Sensor value changed %s', gateway_event)
-        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
+        if not (status_dto == self._status.get(status_dto.id)):
+            logger.debug('Sensor value changed %s', gateway_event)
+            self._status[status_dto.id] = status_dto
+            self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
+        self._status[status_dto.id].last_value = time.time()
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
@@ -76,8 +79,7 @@ class SensorController(BaseController):
             key = (master_event.data['type'], master_event.data['sensor'])
             sensor_dto = self._master_cache.get(key)
             if sensor_dto is not None:
-                self._master_cache[key] = sensor_dto
-                self._publish_state(SensorStatusDTO(sensor_dto.id,
+                self._handle_status(SensorStatusDTO(sensor_dto.id,
                                                     value=master_event.data['value']))
             else:
                 logger.warning('Received value for unknown sensor %s', master_event)
@@ -133,10 +135,7 @@ class SensorController(BaseController):
             self._master_cache[(physical_quantity, i)] = sensor_dto
 
             status_dto = SensorStatusDTO(sensor.id, value=float(value))
-            if not (status_dto == self._status.get(status_dto.id)):
-                self._status[sensor.id] = status_dto
-                self._publish_state(status_dto)
-            self._status[sensor.id].last_value = now
+            self._handle_status(status_dto)
         return ids
 
     def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
@@ -232,9 +231,10 @@ class SensorController(BaseController):
     def get_sensors_status(self):  # type: () -> List[SensorStatusDTO]
         """ Get the current status of all sensors.
         """
+        now = time.time()
         status = []
         for status_dto in list(self._status.values()):
-            if status_dto.last_value is None or status_dto.last_value < time.time() - self.STATUS_EXIPRE:
+            if status_dto.last_value is None or status_dto.last_value < now - self.STATUS_EXIPRE:
                 self._status.pop(status_dto.id)
                 continue
             status.append(status_dto)
@@ -243,10 +243,11 @@ class SensorController(BaseController):
     def get_sensor_status(self, sensor_id):  # type: (int) -> Optional[SensorStatusDTO]
         """ Get the current status of a sensor.
         """
+        now = time.time()
         status_dto = None
         if sensor_id in self._status:
             status_dto = self._status[sensor_id]
-            if status_dto.last_value is None or status_dto.last_value < time.time() - self.STATUS_EXIPRE:
+            if status_dto.last_value is None or status_dto.last_value < now - self.STATUS_EXIPRE:
                 self._status.pop(sensor_id)
                 status_dto = None
         return status_dto
@@ -254,12 +255,9 @@ class SensorController(BaseController):
     def set_sensor_status(self, status_dto):  # type: (SensorStatusDTO) -> SensorStatusDTO
         """ Update the current status of a (non master) sensor.
         """
-        if status_dto.id < 256:
+        if status_dto.id < 200:
             raise ValueError('Sensor %s status is readonly' % status_dto.id)
-        if not (status_dto == self._status.get(status_dto.id)):
-            self._status[status_dto.id] = status_dto
-            self._publish_state(status_dto)
-        self._status[status_dto.id].last_value = time.time()
+        self._handle_status(status_dto)
         return status_dto
 
     def _translate_legacy_statuses(self, physical_quantity):  # type: (str) -> List[Optional[float]]
@@ -270,9 +268,16 @@ class SensorController(BaseController):
             sensor_count = max(s.id for s in sensors) + 1
         except ValueError:
             sensor_count = 0
+        now = time.time()
         values = [None] * sensor_count  # type: List[Optional[float]]
         for sensor in sensors:
-            values[sensor.id] = self._status[sensor.id].value
+            status_dto = self._status.get(sensor.id)
+            if status_dto:
+                if status_dto.last_value is None or status_dto.last_value < now - self.STATUS_EXIPRE:
+                    self._status.pop(sensor.id)
+                    status_dto = None
+            if status_dto:
+                values[sensor.id] = status_dto.value
         return values
 
     def get_temperature_status(self):  # type: () -> List[Optional[float]]
