@@ -22,5 +22,9 @@ class UnsupportedException(GatewayException):
     pass
 
 
+class FeatureUnavailableException(GatewayException):
+    pass
+
+
 class ServiceUnavailableException(GatewayException):
     pass

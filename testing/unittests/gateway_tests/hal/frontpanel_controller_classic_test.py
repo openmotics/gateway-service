@@ -90,7 +90,8 @@ class FrontpanelControllerClassicTest(unittest.TestCase):
         from gateway.hal.frontpanel_controller_classic import FrontpanelClassicController
         SetUpTestInjections(leds_i2c_address=0x0,
                             master_controller=Mock(),
-                            power_communicator=Mock())
+                            power_communicator=Mock(),
+                            uart_controller=Mock())
         return FrontpanelClassicController()
 
 

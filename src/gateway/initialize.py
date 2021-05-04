@@ -42,6 +42,7 @@ from gateway.thermostat.gateway.thermostat_controller_gateway import \
     ThermostatControllerGateway
 from gateway.thermostat.master.thermostat_controller_master import \
     ThermostatControllerMaster
+from gateway.uart_controller import UARTController
 from ioc import INJECTED, Inject, Injectable
 from master.classic.maintenance import MaintenanceClassicCommunicator
 from master.classic.master_communicator import MasterCommunicator
@@ -250,6 +251,13 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(power_communicator=None)  # TODO: remove from gateway_api
         Injectable.value(power_controller=None)
         Injectable.value(p1_controller=None)
+
+    # UART Controller
+    try:
+        uart_serial_port = config.get('OpenMotics', 'uart_serial')
+        Injectable.value(uart_controller=UARTController(uart_port=uart_serial_port))
+    except NoOptionError:
+        Injectable.value(uart_controller=None)
 
     # Pulse Controller
     Injectable.value(pulse_db=constants.get_pulse_counter_database_file())
