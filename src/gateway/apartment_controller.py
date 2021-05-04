@@ -35,40 +35,47 @@ class ApartmentController(object):
     def __init__(self):
         pass
 
-    def load_apartment(self, apartment_id):
+    @staticmethod
+    def load_apartment(apartment_id):
         # type: (int) -> Optional[ApartmentDTO]
-        _ = self
         apartment_orm = Apartment.select().where(Apartment.id == apartment_id).first()
         if apartment_orm is None:
             return None
         apartment_dto = ApartmentMapper.orm_to_dto(apartment_orm)
         return apartment_dto
 
-    def load_apartments(self):
+    @staticmethod
+    def load_apartments():
         # type: () -> List[ApartmentDTO]
-        _ = self
         apartments = []
         for apartment_orm in Apartment.select():
             apartment_dto = ApartmentMapper.orm_to_dto(apartment_orm)
             apartments.append(apartment_dto)
         return apartments
 
-    def get_apartment_count(self):
+    @staticmethod
+    def get_apartment_count():
         # type: () -> int
-        _ = self
         return Apartment.select().count()
 
-    def save_apartment(self, apartment_dto):
+    @staticmethod
+    def apartment_id_exists(apartment_id):
+        # type: (int) -> bool
+        apartments = ApartmentController.load_apartments()
+        ids = [x.id for x in apartments]
+        return apartment_id in ids
+
+    @staticmethod
+    def save_apartment(apartment_dto):
         # type: (ApartmentDTO) -> Optional[ApartmentDTO]
-        _ = self
         # TODO: Check if the rebus id's actually exists
         apartment_orm = ApartmentMapper.dto_to_orm(apartment_dto)
         apartment_orm.save()
-        return self.load_apartment(apartment_orm.id)
+        return ApartmentController.load_apartment(apartment_orm.id)
 
-    def update_apartment(self, apartment_dto):
+    @staticmethod
+    def update_apartment(apartment_dto):
         # type: (ApartmentDTO) -> Optional[ApartmentDTO]
-        _ = self
         # TODO: Check if the rebus id's actually exists
         if 'id' not in apartment_dto.loaded_fields or apartment_dto.id is None:
             raise RuntimeError('cannot update an apartment without the id being set')
@@ -82,11 +89,11 @@ class ApartmentController(object):
             apartment_orm.save()
         except Exception as e:
             raise RuntimeError('Could not update the user: {}'.format(e))
-        return self.load_apartment(apartment_dto.id)
+        return ApartmentController.load_apartment(apartment_dto.id)
 
-    def delete_apartment(self, apartment_dto):
+    @staticmethod
+    def delete_apartment(apartment_dto):
         # type: (ApartmentDTO) -> None
-        _ = self
         if "id" in apartment_dto.loaded_fields and apartment_dto.id is not None:
             Apartment.delete_by_id(apartment_dto.id)
         elif "name" in apartment_dto.loaded_fields:

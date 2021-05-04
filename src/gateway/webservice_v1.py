@@ -283,7 +283,10 @@ class Users(RestAPIEndpoint):
         if 'password' in user_json:
             tmp_password = user_json['password']
             del user_json['password']
-        user_dto = UserSerializer.deserialize(user_json)
+        try:
+            user_dto = UserSerializer.deserialize(user_json)
+        except RuntimeError as ex:
+            raise WrongInputParametersException('Could not deserialize user json format: {}'.format(ex))
         if tmp_password is not None:
             user_dto.set_password(tmp_password)
 

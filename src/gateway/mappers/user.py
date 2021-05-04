@@ -72,7 +72,7 @@ class UserMapper(object):
                 continue
             elif field == 'hashed_password':
                 user_orm.password = dto_object.hashed_password
-            elif field == 'apartment_id' and dto_object.apartment is not None:
+            elif field == 'apartment' and dto_object.apartment is not None:
                 apartment_orm = ApartmentMapper.dto_to_orm(dto_object.apartment)
                 user_orm.apartment_id = apartment_orm
             elif field not in ['username', 'hashed_password']:
