@@ -46,9 +46,6 @@ class UserDTO(BaseDTO):
         self.language = language  # type: str
         self.is_active = is_active  # type: bool
         self.accepted_terms = accepted_terms  # type: int
-        # if no first and last name is given, allow to set to set the name to username
-        if first_name == '' and last_name == '':
-            self.username = username
 
     @staticmethod
     def _hash_password(password):

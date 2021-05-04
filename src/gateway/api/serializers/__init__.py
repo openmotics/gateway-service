@@ -28,5 +28,6 @@ from gateway.api.serializers.shutter import ShutterSerializer
 from gateway.api.serializers.shutter_group import ShutterGroupSerializer
 from gateway.api.serializers.thermostat import ThermostatSerializer, ThermostatGroupSerializer, \
     ThermostatGroupStatusSerializer, ThermostatAircoStatusSerializer, PumpGroupSerializer
+from gateway.api.serializers.user import UserSerializer
 from gateway.api.serializers.ventilation import VentilationSerializer, \
     VentilationStatusSerializer

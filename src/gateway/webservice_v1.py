@@ -219,7 +219,7 @@ class Users(RestAPIEndpoint):
         self.route_dispatcher.connect('post_user', '',
                                       controller=self, action='post_user',
                                       conditions={'method': ['POST']})
-        self.route_dispatcher.connect('post_activate_user', '/activate/:user_id',
+        self.route_dispatcher.connect('post_activate_user', '/:user_id/activate',
                                       controller=self, action='post_activate_user',
                                       conditions={'method': ['POST']})
         # --- PUT ---

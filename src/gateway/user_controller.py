@@ -163,7 +163,7 @@ class UserController(object):
         return result is not None
 
     def generate_new_pin_code(self):
-        # loads the users in the self.users_cache
+        # type: () -> int
         _ = self
         current_pin_codes = User.select(User.pin_code).execute()
         while True:
