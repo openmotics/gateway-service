@@ -61,6 +61,7 @@ if False:  # MYPY
     from gateway.user_controller import UserController
     from gateway.hal.master_controller import MasterController
     from gateway.hal.frontpanel_controller import FrontpanelController
+    from gateway.uart_controller import UARTController
     from plugins.base import PluginController
     from power.power_communicator import PowerCommunicator
     from master.classic.passthrough import PassthroughService
@@ -122,34 +123,34 @@ class OpenmoticsService(object):
 
     @staticmethod
     @Inject
-    def start(
-                master_controller=INJECTED,  # type: MasterController
-                maintenance_controller=INJECTED,  # type: MaintenanceController
-                power_communicator=INJECTED,  # type: PowerCommunicator
-                power_serial=INJECTED,  # type: RS485
-                metrics_controller=INJECTED,  # type: MetricsController
-                passthrough_service=INJECTED,  # type: PassthroughService
-                scheduling_controller=INJECTED,  # type: SchedulingController
-                metrics_collector=INJECTED,  # type: MetricsCollector
-                web_service=INJECTED,  # type: WebService
-                web_interface=INJECTED,  # type: WebInterface
-                watchdog=INJECTED,  # type: Watchdog
-                plugin_controller=INJECTED,  # type: PluginController
-                event_sender=INJECTED,  # type: EventSender
-                thermostat_controller=INJECTED,  # type: ThermostatController
-                output_controller=INJECTED,  # type: OutputController
-                input_controller=INJECTED,  # type: InputController
-                pulse_counter_controller=INJECTED,  # type: PulseCounterController
-                sensor_controller=INJECTED,  # type: SensorController
-                shutter_controller=INJECTED,  # type: ShutterController
-                group_action_controller=INJECTED,  # type: GroupActionController
-                frontpanel_controller=INJECTED,  # type: FrontpanelController
-                module_controller=INJECTED,  # type: ModuleController
-                user_controller=INJECTED,  # type: UserController
-                ventilation_controller=INJECTED,  # type: VentilationController
-                pubsub=INJECTED,  # type: PubSub
-                web_service_v1=INJECTED  # type: WebServiceV1
-    ):
+    def start(master_controller=INJECTED,  # type: MasterController
+              maintenance_controller=INJECTED,  # type: MaintenanceController
+              power_communicator=INJECTED,  # type: PowerCommunicator
+              power_serial=INJECTED,  # type: RS485
+              metrics_controller=INJECTED,  # type: MetricsController
+              passthrough_service=INJECTED,  # type: PassthroughService
+              scheduling_controller=INJECTED,  # type: SchedulingController
+              metrics_collector=INJECTED,  # type: MetricsCollector
+              web_service=INJECTED,  # type: WebService
+              web_interface=INJECTED,  # type: WebInterface
+              watchdog=INJECTED,  # type: Watchdog
+              plugin_controller=INJECTED,  # type: PluginController
+              event_sender=INJECTED,  # type: EventSender
+              thermostat_controller=INJECTED,  # type: ThermostatController
+              output_controller=INJECTED,  # type: OutputController
+              input_controller=INJECTED,  # type: InputController
+              pulse_counter_controller=INJECTED,  # type: PulseCounterController
+              sensor_controller=INJECTED,  # type: SensorController
+              shutter_controller=INJECTED,  # type: ShutterController
+              group_action_controller=INJECTED,  # type: GroupActionController
+              frontpanel_controller=INJECTED,  # type: FrontpanelController
+              module_controller=INJECTED,  # type: ModuleController
+              user_controller=INJECTED,  # type: UserController
+              ventilation_controller=INJECTED,  # type: VentilationController
+              pubsub=INJECTED,  # type: PubSub
+              web_service_v1=INJECTED,  # type: WebServiceV1
+              uart_controller=INJECTED  # type: UARTController
+              ):
         """ Main function. """
         logger.info('Starting OM core service...')
 
@@ -198,6 +199,8 @@ class OpenmoticsService(object):
         sensor_controller.start()
         shutter_controller.start()
         group_action_controller.start()
+        if uart_controller:
+            uart_controller.start()
         pubsub.start()
 
         web_interface.set_service_state(True)
@@ -208,6 +211,8 @@ class OpenmoticsService(object):
             _ = signum, frame
             logger.info('Stopping OM core service...')
             watchdog.stop()
+            if uart_controller:
+                uart_controller.stop()
             output_controller.stop()
             input_controller.stop()
             pulse_counter_controller.stop()

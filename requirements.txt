@@ -27,3 +27,4 @@ python-dateutil == 2.8.1
 ujson == 1.35
 fakesleep == 0.1
 Routes==2.5.1
+minimalmodbus == 1.0.2
