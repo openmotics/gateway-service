@@ -17,8 +17,9 @@
 Schedule (de)serializer
 """
 from __future__ import absolute_import
+from toolbox import Toolbox
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto import ScheduleDTO
+from gateway.dto import ScheduleDTO, LegacyScheduleDTO, LegacyStartupActionDTO
 
 if False:  # MYPY
     from typing import Dict, Optional, List, Tuple
@@ -45,3 +46,48 @@ class ScheduleSerializer(object):
     @staticmethod
     def deserialize(api_data):  # type: (Dict) -> ScheduleDTO
         raise NotImplementedError()
+
+
+class LegacyScheduleSerializer(object):
+    BYTE_MAX = 255
+
+    @staticmethod
+    def serialize(schedule_dto, fields):  # type: (LegacyScheduleDTO, Optional[List[str]]) -> Dict
+        data = {'id': schedule_dto.id,
+                'hour': Toolbox.denonify(schedule_dto.hour, LegacyScheduleSerializer.BYTE_MAX),
+                'minute': Toolbox.denonify(schedule_dto.minute, LegacyScheduleSerializer.BYTE_MAX),
+                'day': Toolbox.denonify(schedule_dto.day, LegacyScheduleSerializer.BYTE_MAX),
+                'action': '' if schedule_dto.action is None else str(schedule_dto.action)}
+        return SerializerToolbox.filter_fields(data, fields)
+
+    @staticmethod
+    def deserialize(api_data):  # type: (Dict) -> LegacyScheduleDTO
+        schedule_dto = LegacyScheduleDTO(api_data['id'])
+        SerializerToolbox.deserialize(
+            dto=schedule_dto,  # Referenced
+            api_data=api_data,
+            mapping={'hour': ('hour', LegacyScheduleSerializer.BYTE_MAX),
+                     'minute': ('minute', LegacyScheduleSerializer.BYTE_MAX),
+                     'day': ('day', LegacyScheduleSerializer.BYTE_MAX),
+                     'action': ('action', lambda s: None if s == '' else int(s))}
+        )
+        return schedule_dto
+
+
+class LegacyStartupActionSerializer(object):
+    BYTE_MAX = 255
+
+    @staticmethod
+    def serialize(startup_action_dto, fields):  # type: (LegacyStartupActionDTO, Optional[List[str]]) -> Dict
+        data = {'actions': ','.join([str(action) for action in startup_action_dto.actions])}
+        return SerializerToolbox.filter_fields(data, fields)
+
+    @staticmethod
+    def deserialize(api_data):  # type: (Dict) -> LegacyStartupActionDTO
+        startup_action_dto = LegacyStartupActionDTO()
+        SerializerToolbox.deserialize(
+            dto=startup_action_dto,  # Referenced
+            api_data=api_data,
+            mapping={'actions': ('actions', lambda s: [] if s == '' else [int(a) for a in s.split(',')])}
+        )
+        return startup_action_dto

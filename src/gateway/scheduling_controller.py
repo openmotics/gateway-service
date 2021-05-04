@@ -38,9 +38,11 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import List, Dict, Tuple, Optional
+    from typing import List, Dict, Tuple, Optional, Any
     from gateway.group_action_controller import GroupActionController
-    from gateway.gateway_api import GatewayApi
+    from gateway.system_controller import SystemController
+    from gateway.hal.master_controller import MasterController
+    from gateway.dto import LegacyScheduleDTO, LegacyStartupActionDTO
 
 logger = logging.getLogger('gateway.scheduling.controller')
 
@@ -71,17 +73,17 @@ class SchedulingController(object):
     TIMEZONE = None
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, group_action_controller=INJECTED):
-        # type: (GatewayApi, GroupActionController) -> None
-        self._gateway_api = gateway_api
+    def __init__(self, group_action_controller=INJECTED, system_controller=INJECTED, master_controller=INJECTED):
+        # type: (GroupActionController, SystemController, MasterController) -> None
         self._group_action_controller = group_action_controller
+        self._master_controller = master_controller
         self._web_interface = None
         self._stop = False
         self._processor = None  # type: Optional[DaemonThread]
         self._schedules = {}  # type: Dict[int, Tuple[ScheduleDTO, Schedule]]
         self._event = threading.Event()
 
-        SchedulingController.TIMEZONE = gateway_api.get_timezone()
+        SchedulingController.TIMEZONE = system_controller.get_timezone()
         self.reload_schedules()
 
     def set_webinterface(self, web_interface):
@@ -200,7 +202,7 @@ class SchedulingController(object):
                 if schedule_dto.action == 'GROUP_ACTION':
                     self._group_action_controller.do_group_action(schedule_dto.arguments)
                 elif schedule_dto.action == 'BASIC_ACTION':
-                    self._gateway_api.do_basic_action(**schedule_dto.arguments)
+                    self._group_action_controller.do_basic_action(**schedule_dto.arguments)
                 elif schedule_dto.action == 'LOCAL_API':
                     func = getattr(self._web_interface, schedule_dto.arguments['name'])
                     func(**schedule_dto.arguments['parameters'])
@@ -269,3 +271,25 @@ class SchedulingController(object):
             check = getattr(func, 'check')
             if check is not None:
                 params_parser(arguments['parameters'], check)
+
+    # Legacy master driven schedules & startup action
+
+    def load_scheduled_action(self, scheduled_action_id):
+        # type: (int) -> LegacyScheduleDTO
+        return self._master_controller.load_scheduled_action(scheduled_action_id)
+
+    def load_scheduled_actions(self):
+        # type: () -> List[LegacyScheduleDTO]
+        return self._master_controller.load_scheduled_actions()
+
+    def save_scheduled_actions(self, scheduled_actions):
+        # type: (List[LegacyScheduleDTO]) -> None
+        self._master_controller.save_scheduled_actions(scheduled_actions)
+
+    def load_startup_action(self):
+        # type: () -> LegacyStartupActionDTO
+        return self._master_controller.load_startup_action()
+
+    def save_startup_action(self, startup_action):
+        # type: (LegacyStartupActionDTO) -> None
+        self._master_controller.save_startup_action(startup_action)

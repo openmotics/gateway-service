@@ -31,7 +31,7 @@ from gateway.module_controller import ModuleController
 from gateway.output_controller import OutputController
 from gateway.pulse_counter_controller import PulseCounterController
 from gateway.room_controller import RoomController
-from gateway.scheduling import SchedulingController
+from gateway.scheduling_controller import SchedulingController
 from gateway.sensor_controller import SensorController
 from gateway.shutter_controller import ShutterController
 from gateway.thermostat.thermostat_controller import ThermostatController

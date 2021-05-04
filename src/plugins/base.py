@@ -391,7 +391,7 @@ class PluginController(object):
             if runner is not None and runner.is_running():
                 yield runner
 
-    def process_observer_event(self, event):
+    def process_gateway_event(self, event):
         if event.type == GatewayEvent.Types.INPUT_CHANGE:
             # Should be called when the input status changes, notifies all plugins.
             input_id = event.data['id']

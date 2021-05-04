@@ -21,7 +21,6 @@ import mock
 from bus.om_bus_client import MessageClient
 from gateway.gateway_api import GatewayApi
 from gateway.hal.master_controller import MasterController
-from gateway.observer import Observer
 from gateway.output_controller import OutputController
 from ioc import SetTestMode, SetUpTestInjections
 from power.power_api import ENERGY_MODULE, P1_CONCENTRATOR, POWER_MODULE, \
@@ -43,7 +42,6 @@ class GatewayApiTest(unittest.TestCase):
         self.p1_controller = mock.Mock(P1Controller)
         SetUpTestInjections(master_controller=mock.Mock(MasterController),
                             message_client=mock.Mock(MessageClient),
-                            observer=mock.Mock(Observer),
                             output_controller=self.output_controller,
                             p1_controller=self.p1_controller,
                             power_communicator=mock.Mock(PowerCommunicator),

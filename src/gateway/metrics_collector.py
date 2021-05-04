@@ -230,7 +230,7 @@ class MetricsCollector(object):
             sleep = max(0.1, interval - elapsed)
             time.sleep(sleep)
 
-    def process_observer_event(self, event):
+    def process_gateway_event(self, event):
         # type: (GatewayEvent) -> None
         if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             output_id = event.data['id']

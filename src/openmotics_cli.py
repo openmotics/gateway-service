@@ -53,7 +53,6 @@ def cmd_shell(args):
           metrics_cache_controller=INJECTED,
           metrics_controller=INJECTED,
           module_controller=INJECTED,
-          observer=INJECTED,
           output_controller=INJECTED,
           plugin_controller=INJECTED,
           power_controller=INJECTED,

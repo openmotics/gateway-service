@@ -28,7 +28,8 @@ from peewee import DoesNotExist
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
     PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, \
-    GlobalFeedbackDTO, OutputStateDTO
+    GlobalFeedbackDTO, OutputStateDTO, LegacyStartupActionDTO, \
+    LegacyScheduleDTO
 from gateway.enums import ShutterEnums, IndicateType
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
@@ -435,7 +436,7 @@ class MasterCoreController(MasterController):
                 for master_event in self._input_state.refresh(data['information']):
                     self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
         return refresh
-    
+
     def set_input(self, input_id, state):
         raise NotImplementedError()
 
@@ -1205,13 +1206,13 @@ class MasterCoreController(MasterController):
 
     # Legacy
 
-    def load_scheduled_action_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
+    def load_scheduled_actions(self):
+        # type: (Any) -> List[LegacyScheduleDTO]
         return []
 
-    def load_startup_action_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        return {'actions': ''}
+    def load_startup_action(self):
+        # type: (Any) -> LegacyStartupActionDTO
+        return LegacyStartupActionDTO(actions=[])
 
     def load_dimmer_configuration(self, fields=None):
         # type: (Any) -> Dict[str,Any]

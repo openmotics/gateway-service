@@ -183,12 +183,12 @@ def setup_target_platform(target_platform, message_client_name):
     # abstract implementations depending on e.g. the platform (classic vs core) or certain settings (classic
     # thermostats vs gateway thermostats)
     from plugins import base
-    from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
+    from gateway import (metrics_controller, webservice, scheduling_controller, gateway_api, metrics_collector,
                          maintenance_controller, user_controller, pulse_counter_controller,
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
                          shutter_controller, group_action_controller, module_controller, ventilation_controller)
     from cloud import events
-    _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
+    _ = (metrics_controller, webservice, scheduling_controller, gateway_api, metrics_collector,
          maintenance_controller, base, events, user_controller,
          pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
          sensor_controller, shutter_controller, group_action_controller, module_controller, ventilation_controller)

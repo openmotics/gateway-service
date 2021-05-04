@@ -27,7 +27,7 @@ from gateway.models import Module
 from gateway.mappers.module import ModuleMapper
 
 if False:  # MYPY
-    from typing import Dict, List, Optional
+    from typing import Dict, List, Optional, Any
     from gateway.hal.master_controller import MasterController
     from power.power_controller import PowerController
 
@@ -89,6 +89,9 @@ class ModuleController(BaseController):
 
         return True
 
+    def get_modules(self):
+        return self._master_controller.get_modules()
+
     def load_master_modules(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
         return [ModuleMapper.orm_to_dto(module)
                 for module in Module.select().where(Module.source == ModuleDTO.Source.MASTER)
@@ -142,3 +145,38 @@ class ModuleController(BaseController):
             self._master_controller.add_virtual_sensor_module()
         else:
             raise RuntimeError('Adding a virtual module of type `{0}` is not supported'.format(module_type))
+
+    def update_master_firmware(self, hex_filename):
+        self._master_controller.update_master(hex_filename)
+
+    def update_slave_firmware(self, module_type, hex_filename):
+        self._master_controller.update_slave_modules(module_type, hex_filename)
+
+    def module_discover_start(self, timeout=900):  # type: (int) -> None
+        self._master_controller.module_discover_start(timeout)
+
+    def module_discover_stop(self):  # type: () -> None
+        self._master_controller.module_discover_stop()
+
+    def module_discover_status(self):  # type: () -> bool
+        return self._master_controller.module_discover_status()
+
+    def get_module_log(self):  # type: () -> List[Dict[str, Any]]
+        return self._master_controller.get_module_log()
+
+    def get_master_status(self):
+        return self._master_controller.get_status()
+
+    def get_master_online(self):  # type: () -> bool
+        return self._master_controller.get_master_online()
+
+    def get_master_version(self):
+        return self._master_controller.get_firmware_version()
+
+    def reset_master(self, power_on=True):
+        # type: (bool) -> None
+        self._master_controller.cold_reset(power_on=power_on)
+
+    def raw_master_action(self, action, size, data=None):
+        # type: (str, int, Optional[bytearray]) -> Dict[str, Any]
+        return self._master_controller.raw_action(action, size, data=data)
