@@ -362,14 +362,14 @@ class Users(RestAPIEndpoint):
             if not self._user_controller.authentication_controller.check_api_secret(api_secret):
                 raise UnAuthorizedException('The api secret is not valid')
 
-        user_dto_orig = self._user_controller.load_user(user_id)
+        user_dto_orig = self._user_controller.load_user(user_id, clear_password=False)
         user_dto = UserSerializer.deserialize(user_json)
         for field in ['first_name', 'last_name', 'pin_code', 'language', 'apartment']:
             if field in user_dto.loaded_fields:
                 setattr(user_dto_orig, field, getattr(user_dto, field))
-        self._user_controller.save_user(user_dto_orig)
-        user_loaded = self._user_controller.load_user(user_id)
-        return json.dumps(UserSerializer.serialize(user_loaded))
+        saved_user = self._user_controller.save_user(user_dto_orig)
+        saved_user.clear_password()
+        return json.dumps(UserSerializer.serialize(saved_user))
 
     @openmotics_api_v1(auth=False, pass_role=False, pass_token=True)
     def delete_user(self, user_id, token=None):

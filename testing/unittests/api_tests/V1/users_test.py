@@ -393,7 +393,8 @@ class ApiUsersTests(unittest.TestCase):
         }
         # Change the user so that it will be correctly loaded
         self.normal_user_2.first_name = user_to_update['first_name']
-        with mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2) as load_user_func:
+        with mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2) as load_user_func, \
+                mock.patch.object(self.users_controller, 'save_user', return_value=self.normal_user_2) as save_user_func:
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.put_update_user('2',
                                                 token=auth_token,

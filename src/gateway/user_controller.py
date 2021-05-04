@@ -93,7 +93,7 @@ class UserController(object):
         for user_dto in users:
             self.save_user(user_dto)
 
-    def load_user(self, user_id):
+    def load_user(self, user_id, clear_password=True):
         # type: (int) -> Optional[UserDTO]
         """  Returns a UserDTO of the requested user """
         _ = self
@@ -101,7 +101,8 @@ class UserController(object):
         if user_orm is None:
             return None
         user_dto = UserMapper.orm_to_dto(user_orm)
-        user_dto.clear_password()
+        if clear_password:
+            user_dto.clear_password()
         return user_dto
 
     def load_users(self):
