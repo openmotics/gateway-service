@@ -1165,7 +1165,7 @@ class MasterClassicController(MasterController):
         return ''.join(chr(c) for c in output)
 
     def factory_reset(self, can=False):
-        # type: () -> None
+        # type: (bool) -> None
         # Wipe CC EEPROM
         # https://wiki.openmotics.com/index.php/API_Reference_Guide#FX_-.3E_Erase_external_Eeprom_slave_modules_and_perform_factory_reset
         # Erasing CAN EEPROM first because the master needs to have the module information

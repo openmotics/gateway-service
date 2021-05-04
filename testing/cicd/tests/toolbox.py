@@ -322,7 +322,7 @@ class Toolbox(object):
         # type: (bool) -> Dict[str,Any]
         assert self.dut._auth
         logger.debug('factory reset')
-        params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm, Can=True}
+        params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm, 'can':True}
         return self.dut.get('/factory_reset', params=params, success=confirm)
 
     def list_modules(self):

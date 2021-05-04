@@ -397,8 +397,8 @@ class GatewayApi(object):
             # Restart the Cherrypy server after 1 second. Lets the current request terminate.
             threading.Timer(1, lambda: os._exit(0)).start()
 
-    def factory_reset(self, Can=False):
-        # type: () -> Dict[str,Any]
+    def factory_reset(self, can=True):
+        # type: (bool) -> Dict[str,Any]
         try:
             subprocess.check_output(['python2', 'openmotics_cli.py', 'operator', 'factory-reset'])
         except subprocess.CalledProcessError as exc:
@@ -410,7 +410,7 @@ class GatewayApi(object):
             System.restart_service('openmotics')
 
         threading.Timer(2, _restart).start()
-        if Can:
+        if can:
             return {'factory_reset_full': 'pending'}
         return {'factory_reset': 'pending'}
 
