@@ -1164,12 +1164,13 @@ class MasterClassicController(MasterController):
                 time.sleep(2)  # Doing heavy reads on eeprom can exhaust the master. Give it a bit room to breathe.
         return ''.join(chr(c) for c in output)
 
-    def factory_reset(self):
+    def factory_reset(self, can=False):
         # type: () -> None
         # Wipe CC EEPROM
         # https://wiki.openmotics.com/index.php/API_Reference_Guide#FX_-.3E_Erase_external_Eeprom_slave_modules_and_perform_factory_reset
         # Erasing CAN EEPROM first because the master needs to have the module information
-        self.can_control_factory_reset()
+        if can:
+            self.can_control_factory_reset()
         # Wipe master EEPROM
         data = chr(255) * (256 * 256)
         self.restore(data)

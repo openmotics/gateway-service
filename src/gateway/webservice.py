@@ -597,11 +597,6 @@ class WebInterface(object):
         return {'old_module': ModuleSerializer.serialize(old_module, fields=None),
                 'new_module': ModuleSerializer.serialize(new_module, fields=None)}
 
-    # For testing purposes - to avoid having to run the entire factory-reset test
-    @openmotics_api(check=types(confirm=bool), auth=True, plugin_exposed=False)
-    def can_control_factory_reset(self):
-        self._gateway_api.can_control_factory_reset()
-        return {}
 
     @openmotics_api(auth=True)
     def get_features(self):
@@ -2382,7 +2377,7 @@ class WebInterface(object):
         return {'definitions': definitions}
 
     @openmotics_api(check=types(confirm=bool), auth=True, plugin_exposed=False)
-    def factory_reset(self, username, password, confirm=False):
+    def factory_reset(self, username, password, confirm=False, Can=False):
         user_dto = UserDTO(username=username)
         user_dto.set_password(password)
         success, _ = self._user_controller.login(user_dto)
@@ -2390,7 +2385,7 @@ class WebInterface(object):
             raise cherrypy.HTTPError(401, 'invalid_credentials')
         if not confirm:
             raise cherrypy.HTTPError(401, 'not_confirmed')
-        return self._gateway_api.factory_reset()
+        return self._gateway_api.factory_reset(Can=Can)
 
     @openmotics_api(auth=False)
     def health_check(self):

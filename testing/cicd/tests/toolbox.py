@@ -322,7 +322,7 @@ class Toolbox(object):
         # type: (bool) -> Dict[str,Any]
         assert self.dut._auth
         logger.debug('factory reset')
-        params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm}
+        params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm, Can=True}
         return self.dut.get('/factory_reset', params=params, success=confirm)
 
     def list_modules(self):
@@ -420,10 +420,11 @@ class Toolbox(object):
         if ucans:
             ucan_inputs = []
             for module in INPUT_MODULE_LAYOUT:
-                if module.mtype == 'C':
+                if module.is_can:
                     ucan_inputs += module.inputs
             for ucan_input in ucan_inputs:
                 self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
+                time.sleep(0.5)
             time.sleep(0.5)  # Give a brief moment for the CC to settle
 
         new_modules = []

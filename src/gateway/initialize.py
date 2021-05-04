@@ -76,6 +76,10 @@ def initialize(message_client_name):
             logger.info('Running factory reset...')
             factory_reset()
             logger.info('Running factory reset, done')
+        elif content == 'factory_reset_full':
+            logger.info('Running full factory reset [also wiping CC EEPROM]...')
+            factory_reset(Can=True)
+            logger.info('Running full factory reset, done')
         else:
             logger.warning('unknown initialization {}'.format(content))
 
@@ -104,7 +108,7 @@ def apply_migrations():
 
 
 @Inject
-def factory_reset(master_controller=INJECTED):
+def factory_reset(master_controller=INJECTED, Can=False):
     # type: (MasterController) -> None
     import glob
     import shutil
@@ -115,7 +119,7 @@ def factory_reset(master_controller=INJECTED):
 
     logger.info('Wiping master eeprom...')
     master_controller.start()
-    master_controller.factory_reset()
+    master_controller.factory_reset(Can=Can)
     master_controller.stop()
 
     logger.info('Removing databases...')

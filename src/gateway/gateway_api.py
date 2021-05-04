@@ -236,10 +236,6 @@ class GatewayApi(object):
             values += [None] * (32 - len(values))
         return values
 
-    # For testing purposes - to avoid having to run the entire factory-reset test
-    def can_control_factory_reset(self):
-        self.__master_controller.can_control_factory_reset()
-
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         # TODO: work with sensor controller
         # TODO: add other sensors too (e.g. from database <-- plugins)
@@ -401,7 +397,7 @@ class GatewayApi(object):
             # Restart the Cherrypy server after 1 second. Lets the current request terminate.
             threading.Timer(1, lambda: os._exit(0)).start()
 
-    def factory_reset(self):
+    def factory_reset(self, Can=False):
         # type: () -> Dict[str,Any]
         try:
             subprocess.check_output(['python2', 'openmotics_cli.py', 'operator', 'factory-reset'])
@@ -414,6 +410,8 @@ class GatewayApi(object):
             System.restart_service('openmotics')
 
         threading.Timer(2, _restart).start()
+        if Can:
+            return {'factory_reset_full': 'pending'}
         return {'factory_reset': 'pending'}
 
     def get_master_backup(self):
