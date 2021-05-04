@@ -74,17 +74,6 @@ class UserController(object):
         # type: (UserDTO) -> UserDTO
         """ Saves one instance of a user with the defined fields in param fields """
         _ = self
-        # # set some default values
-        # if 'role' not in user_dto.loaded_fields:
-        #     user_dto.role = User.UserRoles.USER
-        # if 'pin_code' not in user_dto.loaded_fields:
-        #     user_dto.pin_code = str(self.generate_new_pin_code()).zfill(4)
-        # elif self.check_if_pin_exists(user_dto.pin_code):
-        #     raise RuntimeError('The requested pin code already exists, Cannot save a user with the same pin code')
-        # # to keep it backwards compatible, save the password as the pin code
-        # if 'password' not in user_dto.loaded_fields:
-        #     user_dto.set_password(user_dto.pin_code)
-
         if 'language' in user_dto.loaded_fields:
             if user_dto.language not in User.UserLanguages.ALL:
                 raise RuntimeError('Could not save the user with an unknown language: {}'.format(user_dto.language))
@@ -136,19 +125,6 @@ class UserController(object):
         except Exception as e:
             raise RuntimeError('Could not save the is_active flag to the database: {}'.format(e))
 
-    # def update_user(self, user_dto):
-    #     # type: (UserDTO) -> None
-    #     _ = self
-    #     try:
-    #         user_orm = User.select().where(User.id == user_dto.id).first()
-    #         for field in user_dto.loaded_fields:
-    #             if hasattr(user_orm, field):
-    #                 setattr(user_orm, field, getattr(user_dto, field))
-    #         user_orm.save()
-    #     except Exception as e:
-    #         raise RuntimeError('Could not update the user: {}'.format(e))
-
-
     @staticmethod
     def get_number_of_users():
         # type: () -> int
@@ -189,7 +165,7 @@ class UserController(object):
         return result is not None
 
     def generate_new_pin_code(self):
-        # loads the users in the self.users_cache
+        # type: () -> int
         _ = self
         current_pin_codes = User.select(User.pin_code).execute()
         while True:

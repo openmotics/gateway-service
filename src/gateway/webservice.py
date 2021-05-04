@@ -52,13 +52,14 @@ from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO, \
     GlobalRTD10DTO
 from gateway.enums import ShutterEnums, UserEnums
-from gateway.exceptions import UnsupportedException, ItemDoesNotExistException
+from gateway.exceptions import UnsupportedException, FeatureUnavailableException, ItemDoesNotExistException
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
 from gateway.models import Database, Feature, Config, User
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
+from gateway.uart_controller import UARTController
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Hardware, Platform, System
 from power.power_communicator import InAddressModeException
@@ -206,7 +207,7 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
             header = request.headers.get('Authorization')
             if header is not None and 'Bearer ' in header:
                 token = header.replace('Bearer ', '')
-        # check if hte token is passed as a web-socket Bearer token
+        # check if the token is passed as a web-socket Bearer token
         if token is None:
             header = request.headers.get('Sec-WebSocket-Protocol')
             if header is not None and 'authorization.bearer.' in header:
@@ -284,6 +285,10 @@ def _openmotics_api(f, *args, **kwargs):
         logger.error('Some features for API call %s are unsupported on this device', f.__name__)
         status = 200  # OK
         data = {'success': False, 'msg': 'Unsupported'}
+    except FeatureUnavailableException:
+        logger.warning('Some features for API call %s are currently unavailable on this device', f.__name__)
+        status = 200  # OK
+        data = {'success': False, 'msg': 'Feature unavailable'}
     except Exception as ex:
         logger.exception('Unexpected error during API call %s', f.__name__)
         status = 200  # OK
@@ -331,7 +336,8 @@ class WebInterface(object):
                  thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED,
                  room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
-                 frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED):
+                 frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED,
+                 uart_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -348,6 +354,7 @@ class WebInterface(object):
         self._frontpanel_controller = frontpanel_controller  # type: Optional[FrontpanelController]
         self._module_controller = module_controller  # type: ModuleController
         self._ventilation_controller = ventilation_controller  # type: VentilationController
+        self._uart_controller = uart_controller  # type: UARTController
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
@@ -1877,6 +1884,38 @@ class WebInterface(object):
         return {'eeprom': self._gateway_api.get_configuration_dirty_flag(),
                 'power': power_dirty,
                 'orm': orm_dirty}
+
+    # UART
+
+    @openmotics_api(auth=True, check=types(mode=UARTController.MODES))
+    def uart_request_mode(self, mode):
+        if self._uart_controller is None or self._uart_controller.mode not in [UARTController.Mode.NONE, mode]:
+            # If UART is not availabel or a different UART mode is active (except `NONE`), raise an error
+            raise FeatureUnavailableException()
+        self._uart_controller.set_mode(mode)
+        return {}
+
+    @openmotics_api(auth=True, check=types(slaveaddress=int, registeraddress=int, number_of_decimals=int, functioncode=int, signed=bool))
+    def read_modbus_register(self, slaveaddress, registeraddress, number_of_decimals=0, functioncode=3, signed=False):
+        if self._uart_controller is None or self._uart_controller.mode != UARTController.Mode.MODBUS:
+            raise FeatureUnavailableException()
+        return {'data': self._uart_controller.read_register(slaveaddress=slaveaddress,
+                                                            registeraddress=registeraddress,
+                                                            number_of_decimals=number_of_decimals,
+                                                            functioncode=functioncode,
+                                                            signed=signed)}
+
+    @openmotics_api(auth=True, check=types(slaveaddress=int, registeraddress=int, value=float, number_of_decimals=int, functioncode=int, signed=bool))
+    def write_modbus_register(self, slaveaddress, registeraddress, value, number_of_decimals=0, functioncode=16, signed=False):
+        if self._uart_controller is None or self._uart_controller.mode != UARTController.Mode.MODBUS:
+            raise FeatureUnavailableException()
+        self._uart_controller.write_register(slaveaddress=slaveaddress,
+                                             registeraddress=registeraddress,
+                                             value=value,
+                                             number_of_decimals=number_of_decimals,
+                                             functioncode=functioncode,
+                                             signed=signed)
+        return {}
 
     # Energy modules
 

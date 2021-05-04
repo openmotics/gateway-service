@@ -65,7 +65,8 @@ class FrontpanelCoreController(FrontpanelController):
                                                             15: FrontpanelController.Leds.RELAYS_9_16},
                                                         1: {6: FrontpanelController.Leds.RELAYS_1_8,
                                                             7: FrontpanelController.Leds.OUTPUTS_DIG_1_4}}}
-    LED_TO_BA = {FrontpanelController.Leds.P1: 6,
+    LED_TO_BA = {FrontpanelController.Leds.EXPANSION: 0,
+                 FrontpanelController.Leds.P1: 6,
                  FrontpanelController.Leds.LAN_GREEN: 7,
                  FrontpanelController.Leds.LAN_RED: 8,
                  FrontpanelController.Leds.CLOUD: 9}
@@ -211,7 +212,9 @@ class FrontpanelCoreController(FrontpanelController):
 
     def _report_serial_activity(self, serial_port, activity):
         # type: (str, Optional[bool]) -> None
-        if serial_port != FrontpanelController.SerialPorts.P1:
+        led = {FrontpanelController.SerialPorts.P1: FrontpanelController.Leds.P1,
+               FrontpanelController.SerialPorts.EXPANSION: FrontpanelController.Leds.EXPANSION}.get(serial_port)
+        if led is None:
             return
         mode = FrontpanelController.LedStates.SOLID
         on = True
@@ -219,8 +222,7 @@ class FrontpanelCoreController(FrontpanelController):
             on = False
         elif activity:
             mode = FrontpanelController.LedStates.BLINKING_50
-        self._set_led(led=FrontpanelController.Leds.P1,
-                      on=on, mode=mode)
+        self._set_led(led=led, on=on, mode=mode)
 
     def _report_cloud_reachable(self, reachable):
         # type: (bool) -> None

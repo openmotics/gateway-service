@@ -22,6 +22,7 @@ from ioc import INJECTED, Inject
 from bus.om_bus_client import OMBusEvents
 from platform_utils import Hardware
 from gateway.daemon_thread import DaemonThread
+from gateway.uart_controller import UARTController
 
 if False:  # MYPY
     from typing import Optional
@@ -84,12 +85,14 @@ class FrontpanelController(object):
         MASTER_API = 'MASTER_API'
         ENERGY = 'ENERGY'
         P1 = 'P1'
+        EXPANSION = 'EXPANSION'
 
     @Inject
-    def __init__(self, master_controller=INJECTED, power_communicator=INJECTED):
-        # type: (MasterController, PowerCommunicator) -> None
+    def __init__(self, master_controller=INJECTED, power_communicator=INJECTED, uart_controller=INJECTED):
+        # type: (MasterController, PowerCommunicator, UARTController) -> None
         self._master_controller = master_controller
         self._power_communicator = power_communicator
+        self._uart_controller = uart_controller
         self._network_carrier = None
         self._network_activity = None
         self._network_activity_scan_counter = 0
@@ -211,8 +214,15 @@ class FrontpanelController(object):
             self._report_serial_activity(FrontpanelController.SerialPorts.ENERGY, activity)
             self._power_stats = new_power_stats
 
-            activity = None  # type: Optional[bool]  # TODO: Load P1/RS232 activity
-            self._report_serial_activity(FrontpanelController.SerialPorts.P1, activity)
+            p1_activity = None  # type: Optional[bool]
+            exp_activity = None  # type: Optional[bool]
+            if self._uart_controller is not None:
+                if self._uart_controller.mode in [UARTController.Mode.MODBUS]:
+                    exp_activity = self._uart_controller.activity
+                elif self._uart_controller.mode in [UARTController.Mode.P1]:
+                    p1_activity = self._uart_controller.activity
+            self._report_serial_activity(FrontpanelController.SerialPorts.P1, p1_activity)
+            self._report_serial_activity(FrontpanelController.SerialPorts.EXPANSION, exp_activity)
         except Exception as exception:
             logger.error('Error while checking serial activity: {0}'.format(exception))
 

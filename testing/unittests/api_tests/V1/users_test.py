@@ -273,6 +273,7 @@ class ApiUsersTests(unittest.TestCase):
             'first_name': 'Test',
             'last_name': 'User',
             'language': 'TEST',
+            'role': 'USER'
         }
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
             # mock the behaviour of the usercontroller sending back an exception that the language is not known

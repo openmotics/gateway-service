@@ -52,11 +52,8 @@ class UserSerializer(object):
     @staticmethod
     def deserialize(api_data):
         # type: (Dict[str,Any]) -> UserDTO
-        user_id = api_data['id'] if 'id' in api_data else None
-        first_name = api_data['first_name'] if 'first_name' in api_data and api_data['first_name'] is not None else ''
-        last_name = api_data['last_name'] if 'last_name' in api_data and api_data['last_name'] is not None else ''
-        user_dto = UserDTO(user_id, first_name=first_name, last_name=last_name)
-        for field in ['role', 'pin_code', 'language', 'accepted_terms']:
+        user_dto = UserDTO()
+        for field in ['id', 'first_name', 'last_name', 'role', 'pin_code', 'language', 'accepted_terms', 'is_active']:
             if field in api_data:
                 setattr(user_dto, field, api_data[field])
         apartment_dto = None

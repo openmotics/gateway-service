@@ -37,6 +37,10 @@ class UnsupportedException(GatewayException):
     DESC = 'action is not supported'
 
 
+class FeatureUnavailableException(GatewayException):
+    pass
+
+
 class ServiceUnavailableException(GatewayException):
     DESC = 'Service is unavailable'
 
