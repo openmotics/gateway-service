@@ -27,6 +27,7 @@ import unittest
 from peewee import SqliteDatabase
 from pytest import mark
 
+from gateway.authentication_controller import AuthenticationController, TokenStore
 from gateway.dto import UserDTO
 from gateway.enums import UserEnums
 from gateway.mappers.user import UserMapper
@@ -59,6 +60,8 @@ class UserControllerTest(unittest.TestCase):
         self.test_db.create_tables(MODELS)
         SetUpTestInjections(config={'username': 'om', 'password': 'pass'},
                             token_timeout=UserControllerTest.TOKEN_TIMEOUT)
+        SetUpTestInjections(token_store = TokenStore())
+        SetUpTestInjections(authentication_controller=AuthenticationController())
         self.controller = UserController()
         self.controller.start()
 
@@ -79,6 +82,17 @@ class UserControllerTest(unittest.TestCase):
                            pin_code='1234')
         user_dto.set_password("test")
         self.controller.save_user(user_dto)
+
+        num_users = self.controller.get_number_of_users()
+        self.assertEqual(2, num_users)
+
+        # setup test credentials
+        user_dto = UserDTO(username='TEST',
+                           role=User.UserRoles.USER,
+                           pin_code='1234',
+                           language='TEST')
+        user_dto.set_password("test")
+        self.assertRaises(RuntimeError, self.controller.save_user, user_dto)
 
         num_users = self.controller.get_number_of_users()
         self.assertEqual(2, num_users)
