@@ -27,13 +27,15 @@ from ioc import INJECTED, Inject
 logger = logging.getLogger('openmotics')
 
 
-def cmd_factory_reset(args):
+def cmd_factory_reset(args, can):
     lock_file = constants.get_init_lockfile()
     if os.path.isfile(lock_file) and not args.force:
         print('already_in_progress')
         exit(1)
     with open(lock_file, 'w') as fd:
-        fd.write('factory_reset')
+        if can:
+            fd.write('factory_reset_full')
+        else: fd.write('factory_reset')
 
 
 def cmd_shell(args):
