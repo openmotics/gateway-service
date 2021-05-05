@@ -58,15 +58,15 @@ class UserSerializer(object):
                 setattr(user_dto, field, api_data[field])
         apartment_dto = None
         if 'apartment' in api_data:
-            if api_data['apartment'] is not None and isinstance(api_data['apartment'], list):
-                apartment_element = api_data['apartment'][0]
+            if api_data['apartment'] is not None:
+                apartment_element = api_data['apartment']
                 if isinstance(apartment_element, int):
                     if ApartmentController.apartment_id_exists(apartment_element):
                         apartment_dto = ApartmentController.load_apartment(apartment_element)
                     else:
                         raise RuntimeError('apartment_id provided in user json does not exists')
                 else:
-                    raise RuntimeError('user json deserialize: apartment does require an array with one id inside')
+                    raise RuntimeError('user json deserialize: apartment does require an integer as the id of the apartment')
             user_dto.apartment = apartment_dto
         if 'password' in api_data:
             user_dto.set_password(api_data['password'])
