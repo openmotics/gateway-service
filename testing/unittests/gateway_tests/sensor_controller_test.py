@@ -127,6 +127,43 @@ class SensorControllerTest(unittest.TestCase):
         assert Sensor.select().where(Sensor.physical_quantity.is_null()).count() == 1
         assert Sensor.select().count() == 4
 
+    def test_sync_migrate_existing(self):
+        events = []
+
+        def handle_event(gateway_event):
+            events.append(gateway_event)
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
+
+        room = Room.create(number=2, name='Livingroom')
+        Sensor.create(source='master', external_id='1', name='', room=room)
+
+        master_sensors = [MasterSensorDTO(id=0, name='foo'),
+                          MasterSensorDTO(id=1, name='bar')]
+        with mock.patch.object(self.master_controller, 'load_sensors', return_value=master_sensors), \
+             mock.patch.object(self.master_controller, 'get_sensors_brightness', return_value=[None, None]), \
+             mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None, 49.0]), \
+             mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[None, 21.0]):
+            self.controller.run_sync_orm()
+            self.pubsub._publish_all_events()
+        assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
+        assert len(events) == 1
+
+        assert Sensor.select().where(Sensor.physical_quantity == 'humidity').count() == 1
+        sensor = Sensor.get(Sensor.physical_quantity == 'humidity')
+        assert sensor.external_id == '1'
+        assert sensor.source == 'master'
+        assert sensor.name == 'bar'
+        assert sensor.room == room
+        assert Sensor.select().where(Sensor.physical_quantity == 'temperature').count() == 1
+        sensor = Sensor.get(Sensor.physical_quantity == 'temperature')
+        assert sensor.external_id == '1'
+        assert sensor.source == 'master'
+        assert sensor.name == 'bar'
+        assert sensor.room == room
+        assert Sensor.select().where(Sensor.physical_quantity == 'brightness').count() == 0
+        assert Sensor.select().count() == 2
+
+
     def test_sync_max_id(self):
         Sensor.create(id=239, source='master', external_id='2', name='')  # id out of range
 
@@ -181,8 +218,9 @@ class SensorControllerTest(unittest.TestCase):
             events.append(gateway_event)
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
 
+        room = Room.create(number=2, name='Livingroom')
         Sensor.create(id=42, source='master', external_id='0', name='')
-        sensor_dto = SensorDTO(id=42, physical_quantity='temperature', unit='celcius', name='foo')
+        sensor_dto = SensorDTO(id=42, physical_quantity='temperature', unit='celcius', name='foo', room=2)
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
             self.controller.save_sensors([sensor_dto])
             self.pubsub._publish_all_events()
@@ -194,6 +232,7 @@ class SensorControllerTest(unittest.TestCase):
         sensor = Sensor.select().where(Sensor.id == 42).get()
         assert sensor.physical_quantity == 'temperature'
         assert sensor.name == 'foo'
+        assert sensor.room == room
         master_sensor_dtos = save.call_args_list[0][0][0]
         assert [0] == [x.id for x in master_sensor_dtos]
         assert ['foo'] == [x.name for x in master_sensor_dtos]
