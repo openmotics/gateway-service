@@ -400,7 +400,7 @@ class GatewayApi(object):
     def factory_reset(self, can=True):
         # type: (bool) -> Dict[str,Any]
         try:
-            subprocess.check_output(['python2', 'openmotics_cli.py', 'operator', 'factory-reset', 'can'])
+            subprocess.check_output(['python2', 'openmotics_cli.py', 'operator', 'factory-reset', '--can'])
         except subprocess.CalledProcessError as exc:
             return {'success': False, 'factory_reset': exc.output.strip()}
 
