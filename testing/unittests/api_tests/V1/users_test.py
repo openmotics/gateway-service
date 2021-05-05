@@ -307,7 +307,9 @@ class ApiUsersTests(unittest.TestCase):
         user_to_create = {
             'first_name': 'Test',
             'last_name': 'User',
-            'apartment': 2,
+            'apartment': [
+                2
+            ],
             'role': 'USER'
         }
         apartment_dto = ApartmentDTO(id=2, name='TEST_APARTMENT', doorbell_rebus_id=37, mailbox_rebus_id=38)
@@ -412,7 +414,9 @@ class ApiUsersTests(unittest.TestCase):
         user_to_update = {
             'first_name': 'Test',
             'last_name': 'User',
-            'apartment': 2,
+            'apartment': [
+                2
+            ],
             'role': 'USER'
         }
         apartment_dto = ApartmentDTO(id=2, name='TEST_APARTMENT', doorbell_rebus_id=37, mailbox_rebus_id=38)

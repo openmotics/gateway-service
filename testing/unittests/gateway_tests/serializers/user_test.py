@@ -167,7 +167,7 @@ class UserSerializerTest(unittest.TestCase):
             'last_name': 'last',
             'role': 'USER',
             'id': 37,
-            'apartment': 2,
+            'apartment': [2],
             'pin_code': '1234',
             'is_active': False,
         }
