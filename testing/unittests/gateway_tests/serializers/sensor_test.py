@@ -69,3 +69,16 @@ class SensorSerializerTest(unittest.TestCase):
                                             'name': 'bar'})
         self.assertEqual(SensorDTO(id=5, name='bar'), dto)
         self.assertEqual(['id', 'name'], sorted(dto.loaded_fields))
+
+        # Invalid physical_quantity
+        with self.assertRaises(ValueError):
+            _ = SensorSerializer.deserialize({'id': 5,
+                                              'physical_quantity': 'something',
+                                              'unit': 'celcius',
+                                              'name': 'bar'})
+        # Invalid unit
+        with self.assertRaises(ValueError):
+            _ = SensorSerializer.deserialize({'id': 5,
+                                              'physical_quantity': 'temperature',
+                                              'unit': 'unicorns',
+                                              'name': 'bar'})

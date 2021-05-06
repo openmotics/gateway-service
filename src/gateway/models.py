@@ -249,10 +249,25 @@ class Sensor(BaseModel):
         MASTER = 'master'
         PLUGIN = 'plugin'
 
-    class PhysicalQuanitites(object):
-        BRIGHTNESS = 'brightness'
-        HUMIDITY = 'humidity'
+    class PhysicalQuantities:
         TEMPERATURE = 'temperature'
+        HUMIDITY = 'humidity'
+        BRIGHTNESS = 'brightness'
+        SOUND = 'sound'
+        DUST = 'dust'
+        COMFORT_INDEX = 'comfort_index'
+        AQI = 'aqi'
+        CO2 = 'co2'
+        VOC = 'voc'
+
+    class Units:
+        NONE = 'none'
+        CELCIUS = 'celcius'
+        PERCENT = 'percent'
+        DECIBEL = 'decibel'
+        LUX = 'lux'
+        MICRO_GRAM_PER_CUBIC_METER = 'micro_gram_per_cubic_meter'
+        PARTS_PER_MILLION = 'parts_per_million'
 
     class Meta:
         indexes = (

@@ -20,14 +20,37 @@ from __future__ import absolute_import
 
 from gateway.api.serializers.base import SerializerToolbox
 from gateway.dto import SensorDTO, SensorSourceDTO, SensorStatusDTO
+from gateway.models import Sensor
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Dict, Optional, List, Tuple
+    from typing import Any, Dict, List, Optional, Tuple
 
 
 class SensorSerializer(object):
     BYTE_MAX = 255
+
+    PHYSICAL_QUANTITIES = [
+        Sensor.PhysicalQuantities.TEMPERATURE,
+        Sensor.PhysicalQuantities.HUMIDITY,
+        Sensor.PhysicalQuantities.BRIGHTNESS,
+        Sensor.PhysicalQuantities.SOUND,
+        Sensor.PhysicalQuantities.DUST,
+        Sensor.PhysicalQuantities.COMFORT_INDEX,
+        Sensor.PhysicalQuantities.AQI,
+        Sensor.PhysicalQuantities.CO2,
+        Sensor.PhysicalQuantities.VOC,
+    ]
+
+    UNITS = [
+        Sensor.Units.NONE,
+        Sensor.Units.CELCIUS,
+        Sensor.Units.PERCENT,
+        Sensor.Units.DECIBEL,
+        Sensor.Units.LUX,
+        Sensor.Units.MICRO_GRAM_PER_CUBIC_METER,
+        Sensor.Units.PARTS_PER_MILLION,
+    ]
 
     @staticmethod
     def serialize(sensor_dto, fields):  # type: (SensorDTO, Optional[List[str]]) -> Dict
@@ -67,7 +90,19 @@ class SensorSerializer(object):
                      'room': ('room', SensorSerializer.BYTE_MAX),
                      'virtual': ('virtual', None)}
         )
+        field = 'physical_quantity'
+        if field in sensor_dto.loaded_fields:
+            SensorSerializer._validate_values(sensor_dto, field, SensorSerializer.PHYSICAL_QUANTITIES)
+        field = 'unit'
+        if field in sensor_dto.loaded_fields:
+            SensorSerializer._validate_values(sensor_dto, field, SensorSerializer.UNITS)
         return sensor_dto
+
+    @staticmethod
+    def _validate_values(dto, field, allowed_values):  # type: (SensorDTO, str, List[Any]) -> None
+        value = getattr(dto, field)
+        if value not in allowed_values:
+            raise ValueError('Invalid Sensor {} {}'.format(field, value))
 
 
 class SensorStatusSerializer(object):

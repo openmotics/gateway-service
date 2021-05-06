@@ -96,9 +96,9 @@ class SensorController(BaseController):
             brighness = self._master_controller.get_sensors_brightness()
             humidity = self._master_controller.get_sensors_humidity()
             temperature = self._master_controller.get_sensors_temperature()
-            ids |= self._sync_orm_master(Sensor.PhysicalQuanitites.TEMPERATURE, 'celcius', temperature, master_orm_mapping)
-            ids |= self._sync_orm_master(Sensor.PhysicalQuanitites.HUMIDITY, 'percent', humidity, master_orm_mapping)
-            ids |= self._sync_orm_master(Sensor.PhysicalQuanitites.BRIGHTNESS, 'percent', brighness, master_orm_mapping)
+            ids |= self._sync_orm_master(Sensor.PhysicalQuantities.TEMPERATURE, 'celcius', temperature, master_orm_mapping)
+            ids |= self._sync_orm_master(Sensor.PhysicalQuantities.HUMIDITY, 'percent', humidity, master_orm_mapping)
+            ids |= self._sync_orm_master(Sensor.PhysicalQuantities.BRIGHTNESS, 'percent', brighness, master_orm_mapping)
             count = Sensor.delete() \
                 .where(Sensor.source == Sensor.Sources.MASTER) \
                 .where(Sensor.external_id.not_in(ids)) \
@@ -155,7 +155,7 @@ class SensorController(BaseController):
         if sensor.source == Sensor.Sources.MASTER:
             master_sensor_dto = self._master_controller.load_sensor(sensor_id=int(sensor.external_id))
             sensor_dto.virtual = master_sensor_dto.virtual
-            if sensor.physical_quantity == Sensor.PhysicalQuanitites.TEMPERATURE:
+            if sensor.physical_quantity == Sensor.PhysicalQuantities.TEMPERATURE:
                 sensor_dto.offset = master_sensor_dto.offset
         return sensor_dto
 
@@ -177,7 +177,7 @@ class SensorController(BaseController):
             if sensor.source == Sensor.Sources.MASTER:
                 master_sensor_dto = self._master_controller.load_sensor(sensor_id=int(sensor.external_id))
                 sensor_dto.virtual = master_sensor_dto.virtual
-                if sensor.physical_quantity == Sensor.PhysicalQuanitites.TEMPERATURE:
+                if sensor.physical_quantity == Sensor.PhysicalQuantities.TEMPERATURE:
                     sensor_dto.offset = master_sensor_dto.offset
             sensor_dtos.append(sensor_dto)
         return sensor_dtos
@@ -285,15 +285,15 @@ class SensorController(BaseController):
 
         :returns: list with 32 temperatures, 1 for each sensor. None/null if not connected
         """
-        return self._translate_legacy_statuses(Sensor.PhysicalQuanitites.TEMPERATURE)
+        return self._translate_legacy_statuses(Sensor.PhysicalQuantities.TEMPERATURE)
 
     def get_humidity_status(self):  # type: () -> List[Optional[float]]
         """ Get the current humidity of all sensors. """
-        return self._translate_legacy_statuses(Sensor.PhysicalQuanitites.HUMIDITY)
+        return self._translate_legacy_statuses(Sensor.PhysicalQuantities.HUMIDITY)
 
     def get_brightness_status(self):  # type: () -> List[Optional[float]]
         """ Get the current brightness of all sensors. """
-        return self._translate_legacy_statuses(Sensor.PhysicalQuanitites.BRIGHTNESS)
+        return self._translate_legacy_statuses(Sensor.PhysicalQuantities.BRIGHTNESS)
 
 
 def get_sensor_orm_id(source):  # type: (str) -> Optional[int]

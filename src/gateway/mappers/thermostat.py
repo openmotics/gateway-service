@@ -129,7 +129,7 @@ class ThermostatMapper(object):
 
         def _load_sensor(pk):
             sensor = Sensor.get_or_none(id=pk)
-            if sensor and sensor.physical_quantity != Sensor.PhysicalQuanitites.TEMPERATURE:
+            if sensor and sensor.physical_quantity != Sensor.PhysicalQuantities.TEMPERATURE:
                 raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor.id, sensor.physical_quantity))
             return sensor
 

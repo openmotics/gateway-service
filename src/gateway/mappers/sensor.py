@@ -112,7 +112,7 @@ class SensorMapper(object):
                 master_dto.name = sensor_dto.name
             if 'virtual' in sensor_dto.loaded_fields:
                 master_dto.virtual = sensor_dto.virtual
-            if 'offset' in sensor_dto.loaded_fields and sensor_dto.physical_quantity == Sensor.PhysicalQuanitites.TEMPERATURE:
+            if 'offset' in sensor_dto.loaded_fields and sensor_dto.physical_quantity == Sensor.PhysicalQuantities.TEMPERATURE:
                 master_dto.offset = sensor_dto.offset
             return master_dto
         else:

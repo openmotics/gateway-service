@@ -179,7 +179,7 @@ class ThermostatControllerMaster(ThermostatController):
         else:
             sensor = Sensor.select() \
                 .where(Sensor.source == Sensor.Sources.MASTER) \
-                .where(Sensor.physical_quantity == Sensor.PhysicalQuanitites.TEMPERATURE) \
+                .where(Sensor.physical_quantity == Sensor.PhysicalQuantities.TEMPERATURE) \
                 .where(Sensor.external_id == str(sensor_id)) \
                 .get()
             return sensor.id
@@ -191,7 +191,7 @@ class ThermostatControllerMaster(ThermostatController):
             sensor = Sensor.get(Sensor.id == sensor_id)
             if sensor.source != Sensor.Sources.MASTER:
                 raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor_id, sensor.source))
-            if sensor.physical_quantity != Sensor.PhysicalQuanitites.TEMPERATURE:
+            if sensor.physical_quantity != Sensor.PhysicalQuantities.TEMPERATURE:
                 raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor_id, sensor.physical_quantity))
             return int(sensor.external_id)
 
