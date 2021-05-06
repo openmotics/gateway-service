@@ -184,3 +184,25 @@ class ModuleController(BaseController):
     def set_master_status_leds(self, status):
         # type: (bool) -> None
         self._master_controller.set_status_leds(status)
+
+    def master_error_list(self):
+        """
+        Get the error list per module (input and output modules). The modules are identified by
+        O1, O2, I1, I2, ...
+
+        :returns: dict with 'errors' key, it contains list of tuples (module, nr_errors).
+        """
+        return self._master_controller.error_list()
+
+    def master_communication_statistics(self):
+        return self._master_controller.get_communication_statistics()
+
+    def master_command_histograms(self):
+        return self._master_controller.get_command_histograms()
+
+    def master_last_success(self):
+        """ Get the number of seconds since the last successful communication with the master.  """
+        return self._master_controller.last_success()
+
+    def master_clear_error_list(self):
+        return self._master_controller.clear_error_list()

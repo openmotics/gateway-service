@@ -107,6 +107,10 @@ class InputController(BaseController):
         """
         return self._master_controller.get_recent_inputs()
 
+    def get_input_module_type(self, input_module_id):
+        """ Gets the module type for a given Input Module ID """
+        return self._master_controller.get_input_module_type(input_module_id)
+
     @staticmethod
     def load_inputs_event_enabled():
         return {input_['number']: input_['event_enabled']

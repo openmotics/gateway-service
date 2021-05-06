@@ -1121,12 +1121,12 @@ class WebInterface(object):
         :rtype: dict
         """
         try:
-            errors = self._gateway_api.master_error_list()
+            errors = self._module_controller.master_error_list()
         except Exception:
             # In case of communications problems with the master.
             errors = []
 
-        master_last = self._gateway_api.master_last_success()
+        master_last = self._module_controller.master_last_success()
         power_last = self._gateway_api.power_last_success()
 
         return {'errors': errors,
@@ -1138,13 +1138,13 @@ class WebInterface(object):
         """
         Clear the number of errors.
         """
-        return self._gateway_api.master_clear_error_list()
+        return self._module_controller.master_clear_error_list()
 
     @openmotics_api(auth=True)
     def master_diagnostics(self):
-        return {'master_last_success': self._gateway_api.master_last_success(),
-                'command_histograms': self._gateway_api.master_command_histograms(),
-                'communication_statistics': self._gateway_api.master_communication_statistics()}
+        return {'master_last_success': self._module_controller.master_last_success(),
+                'command_histograms': self._module_controller.master_command_histograms(),
+                'communication_statistics': self._module_controller.master_communication_statistics()}
 
     # Output configurations
 

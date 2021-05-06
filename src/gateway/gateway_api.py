@@ -116,28 +116,6 @@ class GatewayApi(object):
 
     # Error and diagnostic functions
 
-    def master_error_list(self):
-        """ Get the error list per module (input and output modules). The modules are identified by
-        O1, O2, I1, I2, ...
-
-        :returns: dict with 'errors' key, it contains list of tuples (module, nr_errors).
-        """
-        return self.__master_controller.error_list()
-
-    def master_communication_statistics(self):
-        return self.__master_controller.get_communication_statistics()
-
-    def master_command_histograms(self):
-        return self.__master_controller.get_command_histograms()
-
-    def master_last_success(self):
-        """ Get the number of seconds since the last successful communication with the master.
-        """
-        return self.__master_controller.last_success()
-
-    def master_clear_error_list(self):
-        return self.__master_controller.clear_error_list()
-
     def power_last_success(self):
         """ Get the number of seconds since the last successful communication with the power
         modules.
@@ -145,12 +123,6 @@ class GatewayApi(object):
         if self.__power_communicator is None:
             return 0
         return self.__power_communicator.get_seconds_since_last_success()
-
-    # Inputs
-
-    def get_input_module_type(self, input_module_id):
-        """ Gets the module type for a given Input Module ID """
-        return self.__master_controller.get_input_module_type(input_module_id)
 
     def get_dimmer_configuration(self, fields=None):
         # type: (Any) -> Dict[str,Any]
