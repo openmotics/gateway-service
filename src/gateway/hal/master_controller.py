@@ -421,7 +421,8 @@ class MasterController(object):
     def restore(self, data):
         raise NotImplementedError()
 
-    def factory_reset(self):
+    def factory_reset(self, can):
+        # type: (bool) -> None
         raise NotImplementedError()
 
     def sync_time(self):

@@ -85,7 +85,7 @@ def master_cold_reset(master_controller=INJECTED):
 def master_factory_reset(master_controller=INJECTED):
     # type: (MasterController) -> None
     logger.info('Wiping the master...')
-    master_controller.factory_reset()
+    master_controller.factory_reset(can=True)
     logger.info('Done wiping the master')
 
 
