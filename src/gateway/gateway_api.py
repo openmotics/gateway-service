@@ -124,14 +124,6 @@ class GatewayApi(object):
             return 0
         return self.__power_communicator.get_seconds_since_last_success()
 
-    # End of auto generated functions
-
-    def get_configuration_dirty_flag(self):
-        # type: () -> bool
-        return self.__master_controller.get_configuration_dirty_flag()
-
-    # Power functions
-
     def get_power_modules(self):
         # type: () -> List[Dict[str,Any]]
         """ Get information on the power modules.

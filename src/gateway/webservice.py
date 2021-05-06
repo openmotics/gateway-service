@@ -1844,7 +1844,7 @@ class WebInterface(object):
         self._power_dirty = False
         orm_dirty = Database.get_dirty_flag()
         # eeprom key used here for compatibility
-        return {'eeprom': self._gateway_api.get_configuration_dirty_flag(),
+        return {'eeprom': self._module_controller.get_configuration_dirty_flag(),
                 'power': power_dirty,
                 'orm': orm_dirty}
 

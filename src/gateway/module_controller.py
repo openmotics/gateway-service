@@ -206,3 +206,7 @@ class ModuleController(BaseController):
 
     def master_clear_error_list(self):
         return self._master_controller.clear_error_list()
+
+    def get_configuration_dirty_flag(self):
+        # type: () -> bool
+        return self._master_controller.get_configuration_dirty_flag()
