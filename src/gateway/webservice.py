@@ -49,10 +49,11 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     ThermostatAircoStatusSerializer, PumpGroupSerializer, \
     GlobalRTD10Serializer, RTD10Serializer, GlobalFeedbackSerializer, \
     LegacyStartupActionSerializer, LegacyScheduleSerializer
-from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, \
+from gateway.authentication_controller import AuthenticationToken
+from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO, \
     GlobalRTD10DTO
 from gateway.enums import ShutterEnums, UserEnums
-from gateway.exceptions import UnsupportedException, FeatureUnavailableException
+from gateway.exceptions import UnsupportedException, FeatureUnavailableException, ItemDoesNotExistException
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
@@ -69,6 +70,7 @@ from toolbox import Toolbox
 if False:  # MYPY
     from typing import Dict, Optional, Any, List, Literal
     from bus.om_bus_client import MessageClient
+    from gateway.authentication_controller import AuthenticationController, AuthenticationToken
     from gateway.gateway_api import GatewayApi
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.frontpanel_controller import FrontpanelController
@@ -193,18 +195,21 @@ def cors_handler():
     cherrypy.response.headers['Access-Control-Allow-Methods'] = 'GET'
 
 
-def authentication_handler(pass_token=False):
+def authentication_handler(pass_token=False, pass_role=False, version=0):
     request = cherrypy.request
     if request.method == 'OPTIONS':
         return
     try:
         token = None
+        # check if token is passed with the params
         if 'token' in request.params:
             token = request.params.pop('token')
+        # check if the token is passed as a Bearer token in the headers
         if token is None:
             header = request.headers.get('Authorization')
             if header is not None and 'Bearer ' in header:
                 token = header.replace('Bearer ', '')
+        # check if the token is passed as a web-socket Bearer token
         if token is None:
             header = request.headers.get('Sec-WebSocket-Protocol')
             if header is not None and 'authorization.bearer.' in header:
@@ -215,12 +220,25 @@ def authentication_handler(pass_token=False):
                 except Exception:
                     pass
         _self = request.handler.callable.__self__
+        # Fetch the checkToken function that is placed under the main webservice or under the plugin webinterface.
+        check_token = _self._user_controller.authentication_controller.check_token \
+            if hasattr(_self, '_user_controller') \
+            else _self.webinterface.check_token
+        checked_token = check_token(token)  # type: Optional[AuthenticationToken]
+        # check if the call is done from localhost, and then verify the token
         if request.remote.ip != '127.0.0.1':
-            check_token = _self._user_controller.check_token if hasattr(_self, '_user_controller') else _self.webinterface.check_token
-            if not check_token(token):
+            if checked_token is None:
                 raise RuntimeError()
         if pass_token is True:
-            request.params['token'] = token
+            if version == 0:
+                request.params['token'] = token
+            else:
+                request.params['token'] = checked_token
+        if pass_role is True:
+            if version == 0:
+                request.params['role'] = 'ADMIN'
+            else:
+                request.params['role'] = checked_token.user.role
     except Exception:
         cherrypy.response.headers['Content-Type'] = 'application/json'
         cherrypy.response.status = 401  # Unauthorized
@@ -290,12 +308,13 @@ def _openmotics_api(f, *args, **kwargs):
     return contents.encode()
 
 
-def openmotics_api(auth=False, check=None, pass_token=False, plugin_exposed=True, deprecated=None):
+def openmotics_api(auth=False, check=None, pass_token=False, pass_role=False,
+                   plugin_exposed=True, deprecated=None, version=0):
     def wrapper(func):
         func.deprecated = deprecated
         func = _openmotics_api(func)
         if auth is True:
-            func = cherrypy.tools.authenticated(pass_token=pass_token)(func)
+            func = cherrypy.tools.authenticated(pass_token=pass_token, pass_role=pass_role, version=version)(func)
         func = cherrypy.tools.params(**(check or {}))(func)
         func.exposed = True
         func.plugin_exposed = plugin_exposed
@@ -455,10 +474,10 @@ class WebInterface(object):
         """
         user_dto = UserDTO(username=username)
         user_dto.set_password(password)
-        success, data = self._user_controller.login(user_dto, accept_terms, timeout)
-        if success is True:
-            return {'token': data}
-        if data == UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED:
+        success, token_or_error = self._user_controller.login(user_dto, accept_terms, timeout)
+        if success is True and isinstance(token_or_error, AuthenticationToken):  # token_or_error is an actual token
+            return {'token': token_or_error.token}
+        if token_or_error == UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED:  # Check which error token_or_error contains
             return {'next_step': 'accept_terms'}
         raise cherrypy.HTTPError(401, "invalid_credentials")
 
@@ -470,7 +489,10 @@ class WebInterface(object):
         :returns: 'status': 'OK'
         :rtype: str
         """
-        self._user_controller.logout(token)
+        try:
+            self._user_controller.logout(token)
+        except ItemDoesNotExistException:
+            return {'status': 'Could not log out successfully'}
         return {'status': 'OK'}
 
     @openmotics_api(plugin_exposed=False)

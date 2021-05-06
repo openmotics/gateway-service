@@ -323,10 +323,11 @@ class System(object):
         operating_system = System.get_operating_system().get('ID')
         # check if running in python 2 mode, otherwise packages should be included in the build (PyInstaller)
         if sys.version_info.major == 2:
+            import site
             if os.path.exists('/opt/openmotics/python-deps/lib/python2.7/site-packages'):
-                sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
+                site.addsitedir('/opt/openmotics/python-deps/lib/python2.7/site-packages')
             if os.path.exists('/opt/openmotics/python-deps/lib/python2.7/dist-packages'):
-                sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/dist-packages')
+                site.addsitedir('/opt/openmotics/python-deps/lib/python2.7/dist-packages')
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:
