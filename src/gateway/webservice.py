@@ -628,6 +628,7 @@ class WebInterface(object):
         return {'old_module': ModuleSerializer.serialize(old_module, fields=None),
                 'new_module': ModuleSerializer.serialize(new_module, fields=None)}
 
+
     @openmotics_api(auth=True)
     def get_features(self):
         """
@@ -2449,7 +2450,7 @@ class WebInterface(object):
         return {'definitions': definitions}
 
     @openmotics_api(check=types(confirm=bool), auth=True, plugin_exposed=False)
-    def factory_reset(self, username, password, confirm=False):
+    def factory_reset(self, username, password, confirm=False, can=True):
         user_dto = UserDTO(username=username)
         user_dto.set_password(password)
         success, _ = self._user_controller.login(user_dto)
@@ -2457,7 +2458,7 @@ class WebInterface(object):
             raise cherrypy.HTTPError(401, 'invalid_credentials')
         if not confirm:
             raise cherrypy.HTTPError(401, 'not_confirmed')
-        return self._gateway_api.factory_reset()
+        return self._gateway_api.factory_reset(can=can)
 
     @openmotics_api(auth=False)
     def health_check(self):
