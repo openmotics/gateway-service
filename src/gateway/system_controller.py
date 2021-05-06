@@ -33,6 +33,7 @@ from gateway.base_controller import BaseController
 
 if False:  # MYPY
     from typing import Dict, Any
+    from gateway.watchdog import Watchdog
 
 logger = logging.getLogger("openmotics")
 
@@ -253,3 +254,9 @@ class SystemController(BaseController):
     def master_restore(self, data):
         return self._master_controller.restore(data)
 
+    @Inject
+    def set_self_recovery(self, active, watchdog=INJECTED):  # type: (bool, Watchdog) -> None
+        if active:
+            watchdog.start()
+        else:
+            watchdog.stop()

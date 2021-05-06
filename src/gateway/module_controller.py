@@ -180,3 +180,7 @@ class ModuleController(BaseController):
     def raw_master_action(self, action, size, data=None):
         # type: (str, int, Optional[bytearray]) -> Dict[str, Any]
         return self._master_controller.raw_action(action, size, data=data)
+
+    def set_master_status_leds(self, status):
+        # type: (bool) -> None
+        self._master_controller.set_status_leds(status)

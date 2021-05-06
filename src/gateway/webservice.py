@@ -1048,14 +1048,10 @@ class WebInterface(object):
         return {}
 
     @openmotics_api(auth=True, check=types(status=bool))
-    def set_master_status_leds(self, status):
-        """
-        Set the status of the leds on the master.
-
-        :param status: whether the leds should be on (true) or off (false).
-        :type status: bool
-        """
-        return self._gateway_api.set_master_status_leds(status)
+    def set_master_status_leds(self, status):  # type: (bool) -> Dict[str, Any]
+        """ Set the status of the leds on the master. """
+        self._module_controller.set_master_status_leds(status)
+        return {}
 
     @cherrypy.expose
     @cherrypy.tools.authenticated()
@@ -2405,7 +2401,7 @@ class WebInterface(object):
 
     @openmotics_api(auth=True, check=types(active=bool), plugin_exposed=False)
     def set_self_recovery(self, active):
-        self._gateway_api.set_self_recovery(active=active)
+        self._system_controller.set_self_recovery(active=active)
         return {}
 
     @openmotics_api(auth=True)

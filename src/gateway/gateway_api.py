@@ -34,7 +34,6 @@ if False:  # MYPY:
     from power.power_store import PowerStore
     from power.power_controller import PowerController, P1Controller
     from bus.om_bus_client import MessageClient
-    from gateway.watchdog import Watchdog
 
     T = TypeVar('T', bound=Union[int, float])
 
@@ -147,11 +146,6 @@ class GatewayApi(object):
             return 0
         return self.__power_communicator.get_seconds_since_last_success()
 
-    # Status led functions
-
-    def set_master_status_leds(self, status):
-        self.__master_controller.set_status_leds(status)
-
     # Inputs
 
     def get_input_module_type(self, input_module_id):
@@ -184,13 +178,6 @@ class GatewayApi(object):
     def get_configuration_dirty_flag(self):
         # type: () -> bool
         return self.__master_controller.get_configuration_dirty_flag()
-
-    @Inject
-    def set_self_recovery(self, active, watchdog=INJECTED):  # type: (bool, Watchdog) -> None
-        if active:
-            watchdog.start()
-        else:
-            watchdog.stop()
 
     # Power functions
 
