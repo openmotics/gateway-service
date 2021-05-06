@@ -29,7 +29,7 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
     PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, \
     GlobalFeedbackDTO, OutputStateDTO, LegacyStartupActionDTO, \
-    LegacyScheduleDTO
+    LegacyScheduleDTO, DimmerConfigurationDTO
 from gateway.enums import ShutterEnums, IndicateType
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
@@ -1214,12 +1214,9 @@ class MasterCoreController(MasterController):
         # type: (Any) -> LegacyStartupActionDTO
         return LegacyStartupActionDTO(actions=[])
 
-    def load_dimmer_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        return {'min_dim_level': 0,  # TODO: Implement
-                'dim_step': 0,
-                'dim_wait_cycle': 0,
-                'dim_memory': 0}
+    def load_dimmer_configuration(self):
+        # type: () -> DimmerConfigurationDTO
+        return DimmerConfigurationDTO()  # All default values
 
 
 class MasterInputState(object):

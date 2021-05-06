@@ -20,7 +20,8 @@ from __future__ import absolute_import
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatAircoStatusDTO, \
     ThermostatDTO, ThermostatGroupDTO, ModuleDTO, GlobalFeedbackDTO, \
-    OutputStateDTO, LegacyStartupActionDTO, LegacyScheduleDTO
+    OutputStateDTO, LegacyStartupActionDTO, LegacyScheduleDTO, \
+    DimmerConfigurationDTO
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -496,12 +497,12 @@ class MasterController(object):
 
     # Dimmer functions
 
-    def load_dimmer_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
+    def load_dimmer_configuration(self):
+        # type: () -> DimmerConfigurationDTO
         raise NotImplementedError()
 
-    def save_dimmer_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
+    def save_dimmer_configuration(self, dimmer_configuration_dto):
+        # type: (DimmerConfigurationDTO) -> None
         raise NotImplementedError()
 
     # Can Led functions

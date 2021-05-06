@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from gateway.hal.mappers_classic.global_feedback import GlobalFeedbackMapper
-from gateway.hal.mappers_classic.output import OutputMapper
+from gateway.hal.mappers_classic.output import OutputMapper, DimmerConfigurationMapper
 from gateway.hal.mappers_classic.shutter import ShutterMapper
 from gateway.hal.mappers_classic.shutter_group import ShutterGroupMapper
 from gateway.hal.mappers_classic.thermostat import ThermostatMapper, ThermostatGroupMapper, PumpGroupMapper

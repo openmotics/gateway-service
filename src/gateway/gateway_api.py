@@ -124,27 +124,6 @@ class GatewayApi(object):
             return 0
         return self.__power_communicator.get_seconds_since_last_success()
 
-    def get_dimmer_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        """
-        Get the dimmer_configuration.
-
-        :param fields: The field of the dimmer_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: dimmer_configuration dict: contains 'dim_memory' (Byte), 'dim_step' (Byte), 'dim_wait_cycle' (Byte), 'min_dim_level' (Byte)
-        """
-        return self.__master_controller.load_dimmer_configuration(fields=fields)
-
-    def set_dimmer_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set the dimmer_configuration.
-
-        :param config: The dimmer_configuration to set
-        :type config: dimmer_configuration dict: contains 'dim_memory' (Byte), 'dim_step' (Byte), 'dim_wait_cycle' (Byte), 'min_dim_level' (Byte)
-        """
-        self.__master_controller.save_dimmer_configuration(config)
-
     # End of auto generated functions
 
     def get_configuration_dirty_flag(self):

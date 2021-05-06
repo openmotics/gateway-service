@@ -24,7 +24,8 @@ from peewee import JOIN
 
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import OutputDTO, OutputStateDTO, GlobalFeedbackDTO
+from gateway.dto import OutputDTO, OutputStateDTO, GlobalFeedbackDTO, \
+    DimmerConfigurationDTO
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
@@ -163,6 +164,14 @@ class OutputController(BaseController):
                 output.save()
             outputs_to_save.append(output_dto)
         self._master_controller.save_outputs(outputs_to_save)
+
+    def load_dimmer_configuration(self):
+        # type: () -> DimmerConfigurationDTO
+        return self._master_controller.load_dimmer_configuration()
+
+    def save_dimmer_configuration(self, dimmer_configuration_dto):
+        # type: (DimmerConfigurationDTO) -> None
+        self._master_controller.save_dimmer_configuration(dimmer_configuration_dto)
 
     def set_all_lights(self, action, floor_id=None):  # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int]) -> None
         # TODO: Also include other sources (e.g. plugins) once implemented

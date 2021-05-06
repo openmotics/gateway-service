@@ -48,7 +48,8 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     ThermostatGroupStatusSerializer, ThermostatGroupSerializer, \
     ThermostatAircoStatusSerializer, PumpGroupSerializer, \
     GlobalRTD10Serializer, RTD10Serializer, GlobalFeedbackSerializer, \
-    LegacyStartupActionSerializer, LegacyScheduleSerializer
+    LegacyStartupActionSerializer, LegacyScheduleSerializer, \
+    DimmerConfigurationSerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO, \
     GlobalRTD10DTO
@@ -1724,23 +1725,16 @@ class WebInterface(object):
     def get_dimmer_configuration(self, fields=None):
         """
         Get the dimmer_configuration.
-
         :param fields: The field of the dimmer_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': dimmer_configuration dict: contains 'dim_memory' (Byte), 'dim_step' (Byte), 'dim_wait_cycle' (Byte), 'min_dim_level' (Byte)
-        :rtype: dict
         """
-        return {'config': self._gateway_api.get_dimmer_configuration(fields)}
+        return {'config': DimmerConfigurationSerializer.serialize(dimmer_configuration_dto=self._output_controller.load_dimmer_configuration(),
+                                                                  fields=fields)}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_dimmer_configuration(self, config):
-        """
-        Set the dimmer_configuration.
-
-        :param config: The dimmer_configuration to set: dimmer_configuration dict: contains 'dim_memory' (Byte), 'dim_step' (Byte), 'dim_wait_cycle' (Byte), 'min_dim_level' (Byte)
-        :type config: dict
-        """
-        self._gateway_api.set_dimmer_configuration(config)
+        """ Set the dimmer_configuration. """
+        data = DimmerConfigurationSerializer.deserialize(config)
+        self._output_controller.save_dimmer_configuration(data)
         return {}
 
     @openmotics_api(auth=True, check=types(fields='json'))

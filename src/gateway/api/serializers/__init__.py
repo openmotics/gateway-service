@@ -18,7 +18,7 @@ from gateway.api.serializers.group_action import GroupActionSerializer
 from gateway.api.serializers.input import InputSerializer
 from gateway.api.serializers.module import ModuleSerializer
 from gateway.api.serializers.output import OutputSerializer, \
-    OutputStateSerializer
+    OutputStateSerializer, DimmerConfigurationSerializer
 from gateway.api.serializers.pulse_counter import PulseCounterSerializer
 from gateway.api.serializers.rtd10 import GlobalRTD10Serializer, RTD10Serializer
 from gateway.api.serializers.room import RoomSerializer
