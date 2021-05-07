@@ -31,13 +31,15 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO, \
     ThermostatGroupDTO, ThermostatAircoStatusDTO, PumpGroupDTO, \
-    GlobalRTD10DTO, RTD10DTO, GlobalFeedbackDTO, OutputStateDTO
+    GlobalRTD10DTO, RTD10DTO, GlobalFeedbackDTO, OutputStateDTO, \
+    LegacyScheduleDTO, LegacyStartupActionDTO, DimmerConfigurationDTO
 from gateway.enums import ShutterEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
     OutputMapper, PulseCounterMapper, SensorMapper, ShutterGroupMapper, \
     ShutterMapper, ThermostatMapper, ThermostatGroupMapper, PumpGroupMapper, \
-    GlobalRTD10Mapper, RTD10Mapper, GlobalFeedbackMapper
+    GlobalRTD10Mapper, RTD10Mapper, GlobalFeedbackMapper, \
+    LegacyScheduleMapper, LegacyStartupActionMapper, DimmerConfigurationMapper
 from gateway.hal.master_controller import CommunicationFailure, \
     MasterController
 from gateway.hal.master_event import MasterEvent
@@ -1562,46 +1564,44 @@ class MasterClassicController(MasterController):
     # Schedules
 
     @communication_enabled
-    def load_scheduled_action_configuration(self, scheduled_action_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        return self._eeprom_controller.read(ScheduledActionConfiguration, scheduled_action_id, fields).serialize()
+    def load_scheduled_action(self, scheduled_action_id):  # type: (int) -> LegacyScheduleDTO
+        classic_object = self._eeprom_controller.read(ScheduledActionConfiguration, scheduled_action_id)
+        return LegacyScheduleMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def load_scheduled_action_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        return [o.serialize() for o in self._eeprom_controller.read_all(ScheduledActionConfiguration, fields)]
+    def load_scheduled_actions(self):  # type: () -> List[LegacyScheduleDTO]
+        return [LegacyScheduleMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(ScheduledActionConfiguration)]
 
     @communication_enabled
-    def save_scheduled_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(ScheduledActionConfiguration.deserialize(config))
+    def save_scheduled_actions(self, scheduled_actions):  # type: (List[LegacyScheduleDTO]) -> None
+        batch = []
+        for schedule in scheduled_actions:
+            batch.append(LegacyScheduleMapper.dto_to_orm(schedule))
+        self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
-    def save_scheduled_action_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        self._eeprom_controller.write_batch([ScheduledActionConfiguration.deserialize(o) for o in config])
+    def load_startup_action(self):  # type: () -> LegacyStartupActionDTO
+        classic_object = self._eeprom_controller.read(StartupActionConfiguration)
+        return LegacyStartupActionMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def load_startup_action_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        return self._eeprom_controller.read(StartupActionConfiguration, fields).serialize()
-
-    @communication_enabled
-    def save_startup_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(StartupActionConfiguration.deserialize(config))
+    def save_startup_action(self, startup_action):
+        # type: (LegacyStartupActionDTO) -> None
+        self._eeprom_controller.write(LegacyStartupActionMapper.dto_to_orm(startup_action))
 
     # Dimmer functions
 
     @communication_enabled
-    def load_dimmer_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        return self._eeprom_controller.read(DimmerConfiguration, fields).serialize()
+    def load_dimmer_configuration(self):
+        # type: () -> DimmerConfigurationDTO
+        classic_object = self._eeprom_controller.read(DimmerConfiguration)
+        return DimmerConfigurationMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def save_dimmer_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(DimmerConfiguration.deserialize(config))
+    def save_dimmer_configuration(self, dimmer_configuration_dto):
+        # type: (DimmerConfigurationDTO) -> None
+        self._eeprom_controller.write(DimmerConfigurationMapper.dto_to_orm(dimmer_configuration_dto))
 
     # Can Led functions
 

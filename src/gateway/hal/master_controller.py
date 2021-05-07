@@ -20,7 +20,8 @@ from __future__ import absolute_import
 from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatAircoStatusDTO, \
     ThermostatDTO, ThermostatGroupDTO, ModuleDTO, GlobalFeedbackDTO, \
-    OutputStateDTO
+    OutputStateDTO, LegacyStartupActionDTO, LegacyScheduleDTO, \
+    DimmerConfigurationDTO
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -480,38 +481,29 @@ class MasterController(object):
 
     # Schedule
 
-    def load_scheduled_action_configuration(self, scheduled_action_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
+    def load_scheduled_action(self, scheduled_action_id):  # type: (int) -> LegacyScheduleDTO
         raise NotImplementedError()
 
-    def load_scheduled_action_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
+    def load_scheduled_actions(self):  # type: () -> List[LegacyScheduleDTO]
         raise NotImplementedError()
 
-    def save_scheduled_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
+    def save_scheduled_actions(self, scheduled_actions):  # type: (List[LegacyScheduleDTO]) -> None
         raise NotImplementedError()
 
-    def save_scheduled_action_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
+    def load_startup_action(self):  # type: () -> LegacyStartupActionDTO
         raise NotImplementedError()
 
-    def load_startup_action_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        raise NotImplementedError()
-
-    def save_startup_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
+    def save_startup_action(self, startup_action):  # type: (LegacyStartupActionDTO) -> None
         raise NotImplementedError()
 
     # Dimmer functions
 
-    def load_dimmer_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
+    def load_dimmer_configuration(self):
+        # type: () -> DimmerConfigurationDTO
         raise NotImplementedError()
 
-    def save_dimmer_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
+    def save_dimmer_configuration(self, dimmer_configuration_dto):
+        # type: (DimmerConfigurationDTO) -> None
         raise NotImplementedError()
 
     # Can Led functions

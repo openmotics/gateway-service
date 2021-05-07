@@ -228,8 +228,8 @@ class MasterCommunicator(object):
         """
         self.__consumers.append(consumer)
 
-    def do_raw_action(self, action, size, output_size=None, data=None, timeout=2):
-        # type: (str, int, Optional[int], Optional[bytearray], Union[T_co, int]) -> Union[T_co, Dict[str, Any]]
+    def do_raw_action(self, action, size, data=None, timeout=2):
+        # type: (str, int, Optional[bytearray], Union[T_co, int]) -> Union[T_co, Dict[str, Any]]
         input_field = Field.padding(13) if data is None else Field.bytes('data', len(data))
         command = MasterCommandSpec(action,
                                     [input_field],

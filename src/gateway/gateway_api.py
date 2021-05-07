@@ -19,36 +19,21 @@ and call the master_api to complete the actions.
 
 from __future__ import absolute_import
 
-import glob
 import logging
 import math
-import os
-import shutil
-import sqlite3
-import subprocess
-import tempfile
-import threading
-import warnings
 
-from six.moves.configparser import ConfigParser
-
-import constants
-from bus.om_bus_events import OMBusEvents
 from gateway.hal.master_controller import MasterController
 from ioc import INJECTED, Inject, Injectable, Singleton
-from platform_utils import System
 from power import power_api
 from power.power_api import RealtimePower
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY:
-    from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union
+    from typing import Any, Dict, List, Optional, TypeVar, Union
     from power.power_communicator import PowerCommunicator
     from power.power_store import PowerStore
     from power.power_controller import PowerController, P1Controller
     from bus.om_bus_client import MessageClient
-    from gateway.observer import Observer
-    from gateway.watchdog import Watchdog
 
     T = TypeVar('T', bound=Union[int, float])
 
@@ -76,131 +61,14 @@ class GatewayApi(object):
     @Inject
     def __init__(self,
                  master_controller=INJECTED, power_store=INJECTED, power_communicator=INJECTED,
-                 power_controller=INJECTED, p1_controller=INJECTED, message_client=INJECTED,
-                 observer=INJECTED):
-        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer) -> None
+                 power_controller=INJECTED, p1_controller=INJECTED, message_client=INJECTED):
+        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient) -> None
         self.__master_controller = master_controller  # type: MasterController
         self.__power_store = power_store
         self.__power_communicator = power_communicator
         self.__p1_controller = p1_controller
         self.__power_controller = power_controller
         self.__message_client = message_client
-        self.__observer = observer
-
-    def set_plugin_controller(self, plugin_controller):
-        """ Set the plugin controller. """
-        self.__master_controller.set_plugin_controller(plugin_controller)
-
-    def sync_master_time(self):
-        # type: () -> None
-        """ Set the time on the master. """
-        self.__master_controller.sync_time()
-
-    def set_timezone(self, timezone):
-        _ = self  # Not static for consistency
-        timezone_file_path = '/usr/share/zoneinfo/' + timezone
-        if not os.path.isfile(timezone_file_path):
-            raise RuntimeError('Could not find timezone \'' + timezone + '\'')
-        if os.path.exists(constants.get_timezone_file()):
-            os.remove(constants.get_timezone_file())
-        os.symlink(timezone_file_path, constants.get_timezone_file())
-
-    def get_timezone(self):
-        try:
-            path = os.path.realpath(constants.get_timezone_file())
-            if not path.startswith('/usr/share/zoneinfo/'):
-                # Reset timezone to default setting
-                self.set_timezone('UTC')
-                return 'UTC'
-            if path.startswith('/usr/share/zoneinfo/posix'):
-                # As seen on the buildroot os, the timezone info is all located in the posix folder within zoneinfo.
-                return path[26:]
-            return path[20:]
-        except Exception:
-            return 'UTC'
-
-    def get_status(self):
-        # TODO: implement gateway status too (e.g. plugin status)
-        return self.__master_controller.get_status()
-
-    def get_master_online(self):
-        # type: () -> bool
-        return self.__master_controller.get_master_online()
-
-    def get_master_version(self):
-        return self.__master_controller.get_firmware_version()
-
-    def get_main_version(self):
-        """ Gets reported main version """
-        _ = self
-        config = ConfigParser()
-        config.read(constants.get_config_file())
-        return str(config.get('OpenMotics', 'version'))
-
-    def reset_master(self, power_on=True):
-        # type: (bool) -> Dict[str,Any]
-        self.__master_controller.cold_reset(power_on=power_on)
-        return {}
-
-    def raw_master_action(self, action, size, data=None):
-        # type: (str, int, Optional[bytearray]) -> Dict[str,Any]
-        return self.__master_controller.raw_action(action, size, data=data)
-
-    def update_master_firmware(self, hex_filename):
-        self.__master_controller.update_master(hex_filename)
-
-    def update_slave_firmware(self, module_type, hex_filename):
-        self.__master_controller.update_slave_modules(module_type, hex_filename)
-
-    # Master module functions
-
-    def module_discover_start(self, timeout=900):  # type: (int) -> None
-        """ Start the module discover mode on the master. """
-        self.__master_controller.module_discover_start(timeout)
-
-    def module_discover_stop(self):  # type: () -> None
-        """ Stop the module discover mode on the master. """
-        self.__master_controller.module_discover_stop()
-
-    def module_discover_status(self):  # type: () -> bool
-        """ Gets the status of the module discover mode on the master. """
-        return self.__master_controller.module_discover_status()
-
-    def get_module_log(self):  # type: () -> List[Dict[str, Any]]
-        """
-        Get the log statements from the module discovery mode. This returns the current log
-        messages and clear the log messages.
-        """
-        return self.__master_controller.get_module_log()
-
-    def get_modules(self):
-        # TODO: do we want to include non-master managed "modules" ? e.g. plugin outputs
-        return self.__master_controller.get_modules()
-
-    def flash_leds(self, led_type, led_id):
-        return self.__master_controller.flash_leds(led_type, led_id)
-
-    # Input functions
-
-    def get_input_status(self):
-        """
-        Get a list containing the status of the Inputs.
-        :returns: A list is a dicts containing the following keys: id, status.
-        """
-        # TODO: work with input controller
-        inputs = self.__observer.get_inputs()
-        return [{'id': input_port['id'], 'status': input_port['status']} for input_port in inputs]
-
-    def set_input_status(self, input_id, status):
-        # TODO: work with input controller
-        self.__master_controller.set_input(input_id, status)
-
-    def get_last_inputs(self):
-        """ Get the X last pressed inputs during the last Y seconds.
-        :returns: a list of tuples (input, output).
-        """
-        # TODO: work with input controller
-        return self.__observer.get_recent()
 
     # Sensors
 
@@ -246,210 +114,7 @@ class GatewayApi(object):
         """ Set the temperature, humidity and brightness value of a virtual sensor. """
         self.__master_controller.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
 
-    # Basic and group actions
-
-    def do_basic_action(self, action_type, action_number):
-        return self.__master_controller.do_basic_action(action_type, action_number)
-
-    # Backup and restore functions
-
-    def get_full_backup(self):
-        """
-        Get a backup (tar) of the master eeprom, the sqlite databases and the plugins
-
-        :returns: Tar containing multiple files: master.eep, config.db, scheduled.db, power.db,
-        eeprom_extensions.db, metrics.db and plugins as a string of bytes.
-        """
-        _ = self  # Not static for consistency
-
-        def backup_sqlite_db(input_db_path, backup_db_path):
-            """ Backup an sqlite db provided the path to the db to backup and the backup db. """
-            # Connect to database
-            connection = sqlite3.connect(input_db_path)
-            cursor = connection.cursor()
-
-            # Lock database before making a backup
-            cursor.execute('begin immediate')
-
-            # Make new backup file
-            shutil.copyfile(input_db_path, backup_db_path)
-
-            # Unlock database
-            connection.rollback()
-
-        tmp_dir = tempfile.mkdtemp()
-        tmp_sqlite_dir = '{0}/sqlite'.format(tmp_dir)
-        os.mkdir(tmp_sqlite_dir)
-
-        try:
-            with open('{0}/master.eep'.format(tmp_sqlite_dir), 'w') as eeprom_file:
-                eeprom_file.write(self.get_master_backup())
-
-            for filename, source in {'config.db': constants.get_config_database_file(),
-                                     'power.db': constants.get_power_database_file(),
-                                     'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
-                                     'metrics.db': constants.get_metrics_database_file(),
-                                     'gateway.db': constants.get_gateway_database_file()}.items():
-                if os.path.exists(source):
-                    target = '{0}/{1}'.format(tmp_sqlite_dir, filename)
-                    backup_sqlite_db(source, target)
-
-            # Backup plugins
-            tmp_plugin_dir = '{0}/{1}'.format(tmp_dir, 'plugins')
-            tmp_plugin_content_dir = '{0}/{1}'.format(tmp_plugin_dir, 'content')
-            tmp_plugin_config_dir = '{0}/{1}'.format(tmp_plugin_dir, 'config')
-            os.mkdir(tmp_plugin_dir)
-            os.mkdir(tmp_plugin_content_dir)
-            os.mkdir(tmp_plugin_config_dir)
-
-            plugin_dir = constants.get_plugin_dir()
-            plugins = [name for name in os.listdir(plugin_dir) if os.path.isdir(os.path.join(plugin_dir, name))]
-            for plugin in plugins:
-                shutil.copytree(plugin_dir + plugin, '{0}/{1}/'.format(tmp_plugin_content_dir, plugin))
-
-            config_files = constants.get_plugin_configfiles()
-            for config_file in glob.glob(config_files):
-                shutil.copy(config_file, '{0}/'.format(tmp_plugin_config_dir))
-
-            # Backup hex files
-            tmp_hex_dir = '{0}/{1}'.format(tmp_dir, 'hex')
-            os.mkdir(tmp_hex_dir)
-            hex_files = constants.get_hex_files()
-            for hex_file in glob.glob(hex_files):
-                shutil.copy(hex_file, '{0}/'.format(tmp_hex_dir))
-
-            # Backup general config stuff
-            tmp_config_dir = '{0}/{1}'.format(tmp_dir, 'config')
-            os.mkdir(tmp_config_dir)
-            config_dir = constants.get_config_dir()
-            for file_name in ['openmotics.conf', 'https.key', 'https.crt']:
-                shutil.copy(os.path.join(config_dir, file_name), '{0}/'.format(tmp_config_dir))
-
-            retcode = subprocess.call('cd {0}; tar cf backup.tar *'.format(tmp_dir), shell=True)
-            if retcode != 0:
-                raise Exception('The backup tar could not be created.')
-
-            with open('{0}/backup.tar'.format(tmp_dir), 'r') as backup_file:
-                return backup_file.read()
-
-        finally:
-            shutil.rmtree(tmp_dir)
-
-    def restore_full_backup(self, data):
-        """
-        Restore a full backup containing the master eeprom and the sqlite databases.
-
-        :param data: The backup to restore.
-        :type data: Tar containing multiple files: master.eep, config.db, scheduled.db, power.db,
-        eeprom_extensions.db, metrics.db and plugins as a string of bytes.
-        :returns: dict with 'output' key.
-        """
-        import glob
-        import shutil
-        import tempfile
-        import subprocess
-
-        tmp_dir = tempfile.mkdtemp()
-        tmp_sqlite_dir = '{0}/sqlite'.format(tmp_dir)
-        try:
-            with open('{0}/backup.tar'.format(tmp_dir), 'wb') as backup_file:
-                backup_file.write(data)
-
-            retcode = subprocess.call('cd {0}; tar xf backup.tar'.format(tmp_dir), shell=True)
-            if retcode != 0:
-                raise Exception('The backup tar could not be extracted.')
-
-            # Check if the sqlite db's are in a folder or not for backwards compatibility
-            src_dir = tmp_sqlite_dir if os.path.isdir(tmp_sqlite_dir) else tmp_dir
-
-            with open('{0}/master.eep'.format(src_dir), 'r') as eeprom_file:
-                eeprom_content = eeprom_file.read()
-                self.master_restore(eeprom_content)
-
-            for filename, target in {'config.db': constants.get_config_database_file(),
-                                     'users.db': constants.get_config_database_file(),
-                                     'power.db': constants.get_power_database_file(),
-                                     'eeprom_extensions.db': constants.get_eeprom_extension_database_file(),
-                                     'metrics.db': constants.get_metrics_database_file(),
-                                     'gateway.db': constants.get_gateway_database_file()}.items():
-                source = '{0}/{1}'.format(src_dir, filename)
-                if os.path.exists(source):
-                    shutil.copyfile(source, target)
-
-            # Restore the plugins if there are any
-            backup_plugin_dir = '{0}/plugins'.format(tmp_dir)
-            backup_plugin_content_dir = '{0}/content'.format(backup_plugin_dir)
-            backup_plugin_config_files = '{0}/config/pi_*'.format(backup_plugin_dir)
-
-            if os.path.isdir(backup_plugin_dir):
-                plugin_dir = constants.get_plugin_dir()
-                plugins = [name for name in os.listdir(backup_plugin_content_dir) if os.path.isdir(os.path.join(backup_plugin_content_dir, name))]
-                for plugin in plugins:
-                    dest_dir = '{0}{1}'.format(plugin_dir, plugin)
-                    if os.path.isdir(dest_dir):
-                        shutil.rmtree(dest_dir)
-                    shutil.copytree('{0}/{1}/'.format(backup_plugin_content_dir, plugin), '{0}{1}'.format(plugin_dir, plugin))
-
-                config_files = constants.get_plugin_config_dir()
-                for config_file in glob.glob(backup_plugin_config_files):
-                    shutil.copy(config_file, '{0}/'.format(config_files))
-
-            return {'output': 'Restore complete'}
-
-        finally:
-            shutil.rmtree(tmp_dir)
-            # Restart the Cherrypy server after 1 second. Lets the current request terminate.
-            threading.Timer(1, lambda: os._exit(0)).start()
-
-    def factory_reset(self, can=True):
-        # type: (bool) -> Dict[str,Any]
-        try:
-            argv = ['python2', 'openmotics_cli.py', 'operator', 'factory-reset']
-            if can:
-                argv.append('--can')
-            subprocess.check_output(argv)
-        except subprocess.CalledProcessError as exc:
-            return {'success': False, 'factory_reset': exc.output.strip()}
-
-        def _restart():
-            # type: () -> None
-            logger.info('Restarting for factory reset...')
-            System.restart_service('openmotics')
-
-        threading.Timer(2, _restart).start()
-        if can:
-            return {'factory_reset_full': 'pending'}
-        return {'factory_reset': 'pending'}
-
-    def get_master_backup(self):
-        return self.__master_controller.get_backup()
-
-    def master_restore(self, data):
-        return self.__master_controller.restore(data)
-
     # Error and diagnostic functions
-
-    def master_error_list(self):
-        """ Get the error list per module (input and output modules). The modules are identified by
-        O1, O2, I1, I2, ...
-
-        :returns: dict with 'errors' key, it contains list of tuples (module, nr_errors).
-        """
-        return self.__master_controller.error_list()
-
-    def master_communication_statistics(self):
-        return self.__master_controller.get_communication_statistics()
-
-    def master_command_histograms(self):
-        return self.__master_controller.get_command_histograms()
-
-    def master_last_success(self):
-        """ Get the number of seconds since the last successful communication with the master.
-        """
-        return self.__master_controller.last_success()
-
-    def master_clear_error_list(self):
-        return self.__master_controller.clear_error_list()
 
     def power_last_success(self):
         """ Get the number of seconds since the last successful communication with the power
@@ -458,120 +123,6 @@ class GatewayApi(object):
         if self.__power_communicator is None:
             return 0
         return self.__power_communicator.get_seconds_since_last_success()
-
-    # Status led functions
-
-    def set_master_status_leds(self, status):
-        self.__master_controller.set_status_leds(status)
-
-    # Inputs
-
-    def get_input_module_type(self, input_module_id):
-        """ Gets the module type for a given Input Module ID """
-        return self.__master_controller.get_input_module_type(input_module_id)
-
-    # Schedules
-
-    def get_scheduled_action_configuration(self, scheduled_action_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        """
-        Get a specific scheduled_action_configuration defined by its id.
-
-        :param scheduled_action_id: The id of the scheduled_action_configuration
-        :type scheduled_action_id: Id
-        :param fields: The field of the scheduled_action_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: scheduled_action_configuration dict: contains 'id' (Id), 'action' (Actions[1]), 'day' (Byte), 'hour' (Byte), 'minute' (Byte)
-        """
-        return self.__master_controller.load_scheduled_action_configuration(scheduled_action_id, fields=fields)
-
-    def get_scheduled_action_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        """
-        Get all scheduled_action_configurations.
-
-        :param fields: The field of the scheduled_action_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: list of scheduled_action_configuration dict: contains 'id' (Id), 'action' (Actions[1]), 'day' (Byte), 'hour' (Byte), 'minute' (Byte)
-        """
-        return self.__master_controller.load_scheduled_action_configurations(fields=fields)
-
-    def set_scheduled_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set one scheduled_action_configuration.
-
-        :param config: The scheduled_action_configuration to set
-        :type config: scheduled_action_configuration dict: contains 'id' (Id), 'action' (Actions[1]), 'day' (Byte), 'hour' (Byte), 'minute' (Byte)
-        """
-        self.__master_controller.save_scheduled_action_configuration(config)
-
-    def set_scheduled_action_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        """
-        Set multiple scheduled_action_configurations.
-
-        :param config: The list of scheduled_action_configurations to set
-        :type config: list of scheduled_action_configuration dict: contains 'id' (Id), 'action' (Actions[1]), 'day' (Byte), 'hour' (Byte), 'minute' (Byte)
-        """
-        self.__master_controller.save_scheduled_action_configurations(config)
-
-    def get_startup_action_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        """
-        Get the startup_action_configuration.
-
-        :param fields: The field of the startup_action_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: startup_action_configuration dict: contains 'actions' (Actions[100])
-        """
-        return self.__master_controller.load_startup_action_configuration(fields=fields)
-
-    def set_startup_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set the startup_action_configuration.
-
-        :param config: The startup_action_configuration to set
-        :type config: startup_action_configuration dict: contains 'actions' (Actions[100])
-        """
-        self.__master_controller.save_startup_action_configuration(config)
-
-    def get_dimmer_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        """
-        Get the dimmer_configuration.
-
-        :param fields: The field of the dimmer_configuration to get. (None gets all fields)
-        :type fields: List of strings
-        :returns: dimmer_configuration dict: contains 'dim_memory' (Byte), 'dim_step' (Byte), 'dim_wait_cycle' (Byte), 'min_dim_level' (Byte)
-        """
-        return self.__master_controller.load_dimmer_configuration(fields=fields)
-
-    def set_dimmer_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        """
-        Set the dimmer_configuration.
-
-        :param config: The dimmer_configuration to set
-        :type config: dimmer_configuration dict: contains 'dim_memory' (Byte), 'dim_step' (Byte), 'dim_wait_cycle' (Byte), 'min_dim_level' (Byte)
-        """
-        self.__master_controller.save_dimmer_configuration(config)
-
-    # End of auto generated functions
-
-    def get_configuration_dirty_flag(self):
-        # type: () -> bool
-        return self.__master_controller.get_configuration_dirty_flag()
-
-    @Inject
-    def set_self_recovery(self, active, watchdog=INJECTED):  # type: (bool, Watchdog) -> None
-        if active:
-            watchdog.start()
-        else:
-            watchdog.stop()
-
-    # Power functions
 
     def get_power_modules(self):
         # type: () -> List[Dict[str,Any]]

@@ -22,7 +22,7 @@ from gateway.migrations.base_migrator import BaseMigrator
 from gateway.models import Schedule
 
 if False:  # MYPY
-    from gateway.scheduling import SchedulingController
+    from gateway.scheduling_controller import SchedulingController
 
 logger = logging.getLogger('openmotics')
 

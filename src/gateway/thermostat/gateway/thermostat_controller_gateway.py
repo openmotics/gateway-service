@@ -42,6 +42,7 @@ if False:  # MYPY
     from typing import Dict, List, Literal, Tuple, Optional
     from gateway.gateway_api import GatewayApi
     from gateway.output_controller import OutputController
+    from gateway.system_controller import SystemController
 
 logger = logging.getLogger('openmotics')
 
@@ -57,8 +58,8 @@ class ThermostatControllerGateway(ThermostatController):
     SYNC_CONFIG_INTERVAL = 900
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, output_controller=INJECTED, pubsub=INJECTED):
-        # type: (GatewayApi, OutputController, PubSub) -> None
+    def __init__(self, gateway_api=INJECTED, output_controller=INJECTED, pubsub=INJECTED, system_controller=INJECTED):
+        # type: (GatewayApi, OutputController, PubSub, SystemController) -> None
         super(ThermostatControllerGateway, self).__init__(output_controller)
         self._gateway_api = gateway_api
         self._pubsub = pubsub
@@ -69,7 +70,7 @@ class ThermostatControllerGateway(ThermostatController):
         self.thermostat_pids = {}  # type: Dict[int, ThermostatPid]
         self._pump_valve_controller = PumpValveController()
 
-        timezone = gateway_api.get_timezone()
+        timezone = system_controller.get_timezone()
 
         # we could also use an in-memory store, but this allows us to detect 'missed' transitions
         # e.g. in case when gateway was rebooting during a scheduled transition
