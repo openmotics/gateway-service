@@ -27,7 +27,7 @@ from gateway.models import Module
 from gateway.mappers.module import ModuleMapper
 
 if False:  # MYPY
-    from typing import Dict, List, Optional
+    from typing import Dict, List, Optional, Any
     from gateway.hal.master_controller import MasterController
     from power.power_controller import PowerController
 
@@ -89,6 +89,9 @@ class ModuleController(BaseController):
 
         return True
 
+    def get_modules(self):
+        return self._master_controller.get_modules()
+
     def load_master_modules(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
         return [ModuleMapper.orm_to_dto(module)
                 for module in Module.select().where(Module.source == ModuleDTO.Source.MASTER)
@@ -142,3 +145,80 @@ class ModuleController(BaseController):
             self._master_controller.add_virtual_sensor_module()
         else:
             raise RuntimeError('Adding a virtual module of type `{0}` is not supported'.format(module_type))
+
+    def update_master_firmware(self, hex_filename):
+        self._master_controller.update_master(hex_filename)
+
+    def update_slave_firmware(self, module_type, hex_filename):
+        self._master_controller.update_slave_modules(module_type, hex_filename)
+
+    def module_discover_start(self, timeout=900):  # type: (int) -> None
+        self._master_controller.module_discover_start(timeout)
+
+    def module_discover_stop(self):  # type: () -> None
+        self._master_controller.module_discover_stop()
+
+    def module_discover_status(self):  # type: () -> bool
+        return self._master_controller.module_discover_status()
+
+    def get_module_log(self):  # type: () -> List[Dict[str, Any]]
+        return self._master_controller.get_module_log()
+
+    def get_master_status(self):
+        return self._master_controller.get_status()
+
+    def get_master_online(self):  # type: () -> bool
+        return self._master_controller.get_master_online()
+
+    def get_master_version(self):
+        return self._master_controller.get_firmware_version()
+
+    def reset_master(self, power_on=True):
+        # type: (bool) -> None
+        self._master_controller.cold_reset(power_on=power_on)
+
+    def raw_master_action(self, action, size, data=None):
+        # type: (str, int, Optional[bytearray]) -> Dict[str, Any]
+        return self._master_controller.raw_action(action, size, data=data)
+
+    def set_master_status_leds(self, status):
+        # type: (bool) -> None
+        self._master_controller.set_status_leds(status)
+
+    def get_master_backup(self):
+        return self._master_controller.get_backup()
+
+    def master_restore(self, data):
+        return self._master_controller.restore(data)
+
+    def sync_master_time(self):  # type: () -> None
+        self._master_controller.sync_time()
+
+    def flash_leds(self, led_type, led_id):
+        return self._master_controller.flash_leds(led_type, led_id)
+
+    def master_error_list(self):
+        """
+        Get the error list per module (input and output modules). The modules are identified by
+        O1, O2, I1, I2, ...
+
+        :returns: dict with 'errors' key, it contains list of tuples (module, nr_errors).
+        """
+        return self._master_controller.error_list()
+
+    def master_communication_statistics(self):
+        return self._master_controller.get_communication_statistics()
+
+    def master_command_histograms(self):
+        return self._master_controller.get_command_histograms()
+
+    def master_last_success(self):
+        """ Get the number of seconds since the last successful communication with the master.  """
+        return self._master_controller.last_success()
+
+    def master_clear_error_list(self):
+        return self._master_controller.clear_error_list()
+
+    def get_configuration_dirty_flag(self):
+        # type: () -> bool
+        return self._master_controller.get_configuration_dirty_flag()

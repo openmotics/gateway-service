@@ -20,11 +20,14 @@ import logging
 from peewee import JOIN
 from ioc import Injectable, Inject, INJECTED, Singleton
 from gateway.dto import InputDTO
+from gateway.events import GatewayEvent
 from gateway.models import Input, Room
+from gateway.hal.master_event import MasterEvent
 from gateway.base_controller import BaseController, SyncStructure
+from gateway.pubsub import PubSub
 
 if False:  # MYPY
-    from typing import List, Tuple
+    from typing import List, Dict, Any, Tuple
 
 logger = logging.getLogger("openmotics")
 
@@ -38,6 +41,14 @@ class InputController(BaseController):
     @Inject
     def __init__(self, master_controller=INJECTED):
         super(InputController, self).__init__(master_controller)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.INPUT, self._handle_master_event)
+
+    def _handle_master_event(self, master_event):
+        # type: (MasterEvent) -> None
+        if master_event.type == MasterEvent.Types.INPUT_CHANGE:
+            gateway_event = GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE,
+                                         data=master_event.data)
+            self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     def load_input(self, input_id):  # type: (int) -> InputDTO
         input_ = Input.select(Input, Room) \
@@ -77,6 +88,28 @@ class InputController(BaseController):
                 input_.save()
             inputs_to_save.append(input_dto)
         self._master_controller.save_inputs(inputs_to_save)
+
+    def get_input_status(self):  # type: () -> List[Dict[str, Any]]
+        """
+        Get a list containing the status of the Inputs.
+        :returns: A list is a dicts containing the following keys: id, status.
+        """
+        # TODO: Convert to some StatusDTO similar to the OutputStatus
+        return [{'id': input_port['id'], 'status': input_port['status']}
+                for input_port in self._master_controller.get_inputs_with_status()]
+
+    def set_input_status(self, input_id, status):
+        self._master_controller.set_input(input_id, status)
+
+    def get_last_inputs(self):  # type: () -> List[int]
+        """
+        Get the X last pressed inputs during the last Y seconds.
+        """
+        return self._master_controller.get_recent_inputs()
+
+    def get_input_module_type(self, input_module_id):
+        """ Gets the module type for a given Input Module ID """
+        return self._master_controller.get_input_module_type(input_module_id)
 
     @staticmethod
     def load_inputs_event_enabled():

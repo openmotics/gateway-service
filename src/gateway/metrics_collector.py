@@ -38,6 +38,7 @@ if False:  # MYPY
     from gateway.input_controller import InputController
     from gateway.output_controller import OutputController
     from gateway.sensor_controller import SensorController
+    from gateway.module_controller import ModuleController
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.pulse_counter_controller import PulseCounterController
     from gateway.gateway_api import GatewayApi
@@ -71,7 +72,8 @@ class MetricsCollector(object):
 
     @Inject
     def __init__(self, gateway_api=INJECTED, pulse_counter_controller=INJECTED, thermostat_controller=INJECTED,
-                 output_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED):
+                 output_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
+                 module_controller=INJECTED):
         self._start = time.time()
         self._last_service_uptime = 0
         self._stopped = True
@@ -103,6 +105,7 @@ class MetricsCollector(object):
         self._output_controller = output_controller  # type: OutputController
         self._input_controller = input_controller  # type: InputController
         self._sensor_controller = sensor_controller  # type: SensorController
+        self._module_controller = module_controller  # type: ModuleController
         self._metrics_queue = deque()  # type: deque
 
     def start(self):
@@ -230,7 +233,7 @@ class MetricsCollector(object):
             sleep = max(0.1, interval - elapsed)
             time.sleep(sleep)
 
-    def process_observer_event(self, event):
+    def process_gateway_event(self, event):
         # type: (GatewayEvent) -> None
         if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             output_id = event.data['id']
@@ -590,7 +593,7 @@ class MetricsCollector(object):
             start = time.time()
             try:
                 now = time.time()
-                errors = self._gateway_api.master_error_list()
+                errors = self._module_controller.master_error_list()
                 for error in errors:
                     om_module = error[0]
                     count = error[1]

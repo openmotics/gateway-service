@@ -27,6 +27,7 @@ from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatC
 from gateway.dto import PumpGroupDTO, ThermostatGroupDTO, OutputStateDTO, \
     ThermostatGroupStatusDTO, ThermostatStatusDTO
 from gateway.output_controller import OutputController
+from gateway.system_controller import SystemController
 from gateway.gateway_api import GatewayApi
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
@@ -53,12 +54,14 @@ class ThermostatControllerTest(unittest.TestCase):
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
         self._gateway_api = mock.Mock(GatewayApi)
-        self._gateway_api.get_timezone.return_value = 'Europe/Brussels'
         self._gateway_api.get_sensor_temperature_status.return_value = 10.0
+        system_controller = mock.Mock(SystemController)
+        system_controller.get_timezone.return_value = 'Europe/Brussels'
         output_controller = mock.Mock(OutputController)
         output_controller.get_output_status.return_value = OutputStateDTO(id=0, status=False)
         SetUpTestInjections(gateway_api=self._gateway_api,
                             output_controller=output_controller,
+                            system_controller=system_controller,
                             pubsub=mock.Mock())
         self._thermostat_controller = ThermostatControllerGateway()
         SetUpTestInjections(thermostat_controller=self._thermostat_controller)

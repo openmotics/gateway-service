@@ -85,3 +85,22 @@ class OutputStateDTO(BaseDTO):
                 self.ctimer == other.ctimer and
                 self.dimmer == other.dimmer and
                 self.locked == other.locked)
+
+
+class DimmerConfigurationDTO(BaseDTO):
+    @capture_fields
+    def __init__(self, min_dim_level=None, dim_step=None, dim_wait_cycle=None, dim_memory=None):
+        # type: (Optional[int], Optional[int], Optional[int], Optional[int]) -> None
+        self.min_dim_level = min_dim_level
+        self.dim_step = dim_step
+        self.dim_wait_cycle = dim_wait_cycle
+        self.dim_memory = dim_memory
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        if not isinstance(other, DimmerConfigurationDTO):
+            return False
+        return (self.min_dim_level == other.min_dim_level and
+                self.dim_step == other.dim_step and
+                self.dim_wait_cycle == other.dim_wait_cycle and
+                self.dim_memory == other.dim_memory)

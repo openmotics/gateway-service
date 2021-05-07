@@ -47,7 +47,9 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer, \
     ThermostatGroupStatusSerializer, ThermostatGroupSerializer, \
     ThermostatAircoStatusSerializer, PumpGroupSerializer, \
-    GlobalRTD10Serializer, RTD10Serializer, GlobalFeedbackSerializer
+    GlobalRTD10Serializer, RTD10Serializer, GlobalFeedbackSerializer, \
+    LegacyStartupActionSerializer, LegacyScheduleSerializer, \
+    DimmerConfigurationSerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO, \
     GlobalRTD10DTO
@@ -81,9 +83,10 @@ if False:  # MYPY
     from gateway.output_controller import OutputController
     from gateway.pulse_counter_controller import PulseCounterController
     from gateway.room_controller import RoomController
-    from gateway.scheduling import SchedulingController
+    from gateway.scheduling_controller import SchedulingController
     from gateway.sensor_controller import SensorController
     from gateway.shutter_controller import ShutterController
+    from gateway.system_controller import SystemController
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.user_controller import UserController
     from gateway.ventilation_controller import VentilationController
@@ -337,7 +340,7 @@ class WebInterface(object):
                  room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
                  frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED,
-                 uart_controller=INJECTED):
+                 uart_controller=INJECTED, system_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -355,6 +358,7 @@ class WebInterface(object):
         self._module_controller = module_controller  # type: ModuleController
         self._ventilation_controller = ventilation_controller  # type: VentilationController
         self._uart_controller = uart_controller  # type: UARTController
+        self._system_controller = system_controller  # type: SystemController
 
         self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
@@ -551,43 +555,39 @@ class WebInterface(object):
         return {'port': port}
 
     @openmotics_api(auth=True, check=types(power_on=bool))
-    def reset_master(self, power_on=True):
-        """
-        Perform a cold reset on the master.
-
-        :returns: 'status': 'OK'.
-        :rtype: dict
-        """
-        return self._gateway_api.reset_master(power_on=power_on)
+    def reset_master(self, power_on=True):  # type: (bool) -> Dict[str, Any]
+        """ Perform a cold reset on the master. """
+        self._module_controller.reset_master(power_on=power_on)
+        return {}
 
     @openmotics_api(auth=True, plugin_exposed=False, check=types(action=str, size=int, data='json'))
-    def raw_master_action(self, action, size=None, data=None):
+    def raw_master_action(self, action, size, data=None):
         # type: (str, int, Optional[List[int]]) -> Dict[str,Any]
         """
         Send a raw action to the master.
 
-            POST /raw_master_action action=ST size=13
-            {"literal":"","data":[16,16,15,2,0,0,0,0,76,3,143,95,4],"success":true}
+        > POST /raw_master_action action=ST size=13
+        > {"literal":"","data":[16,16,15,2,0,0,0,0,76,3,143,95,4],"success":true}
         """
         input_data = data if data is None else bytearray(data)
-        return self._gateway_api.raw_master_action(action, size, input_data)
+        return self._module_controller.raw_master_action(action, size, input_data)
 
     @openmotics_api(auth=True)
     def module_discover_start(self):  # type: () -> Dict[str, str]
         """ Start the module discover mode on the master. """
-        self._gateway_api.module_discover_start()
+        self._module_controller.module_discover_start()
         return {'status': 'OK'}
 
     @openmotics_api(auth=True)
     def module_discover_stop(self):  # type: () -> Dict[str, str]
         """ Stop the module discover mode on the master. """
-        self._gateway_api.module_discover_stop()
+        self._module_controller.module_discover_stop()
         return {'status': 'OK'}
 
     @openmotics_api(auth=True)
     def module_discover_status(self):  # type: () -> Dict[str, bool]
         """ Gets the status of the module discover mode on the master. """
-        return {'running': self._gateway_api.module_discover_status()}
+        return {'running': self._module_controller.module_discover_status()}
 
     @openmotics_api(auth=True)
     def get_module_log(self):  # type: () -> Dict[str, List[Dict[str, Any]]]
@@ -595,7 +595,7 @@ class WebInterface(object):
         Get the log messages from the module discovery mode. This returns the current log
         messages and clear the log messages.
         """
-        return {'log': self._gateway_api.get_module_log()}
+        return {'log': self._module_controller.get_module_log()}
 
     @openmotics_api(auth=True)
     def get_modules(self):
@@ -608,7 +608,7 @@ class WebInterface(object):
         * 'shutters' (List of modules types: S).
         :rtype: dict
         """
-        return self._gateway_api.get_modules()
+        return self._module_controller.get_modules()
 
     @openmotics_api(auth=True, check=types(address=str, fields='json'))
     def get_modules_information(self, address=None, fields=None):  # type: (Optional[str], Optional[List[str]]) -> Dict[str, Any]
@@ -628,6 +628,7 @@ class WebInterface(object):
         return {'old_module': ModuleSerializer.serialize(old_module, fields=None),
                 'new_module': ModuleSerializer.serialize(new_module, fields=None)}
 
+
     @openmotics_api(auth=True)
     def get_features(self):
         """
@@ -644,7 +645,7 @@ class WebInterface(object):
             'ventilation',
         ]
 
-        master_version = self._gateway_api.get_master_version()
+        master_version = self._module_controller.get_master_version()
         if master_version >= (3, 143, 77):
             features.append('default_timer_disabled')
         if master_version >= (3, 143, 79):
@@ -673,7 +674,7 @@ class WebInterface(object):
         :param type: The module type: output/dimmer (0), input (1), sensor/temperatur (2).
         :param id: The id of the output/input/sensor.
         """
-        status = self._gateway_api.flash_leds(type, id)
+        status = self._module_controller.flash_leds(type, id)
         return {'status': status}
 
     @openmotics_api(auth=True)
@@ -685,7 +686,7 @@ class WebInterface(object):
             'mode': Integer, 'version': a.b.c and 'hw_version': hardware version (Integer).
         :rtype: dict
         """
-        return self._gateway_api.get_status()
+        return self._module_controller.get_master_status()
 
     @openmotics_api(auth=True)
     def get_input_status(self):
@@ -694,7 +695,7 @@ class WebInterface(object):
 
         :returns: 'status': list of dictionaries with the following keys: id, status.
         """
-        return {'status': self._gateway_api.get_input_status()}
+        return {'status': self._input_controller.get_input_status()}
 
     @openmotics_api(auth=True, check=types(id=int, is_on=bool))
     def set_input(self, id, is_on):  # type: (int, bool) -> Dict
@@ -703,7 +704,7 @@ class WebInterface(object):
         :param id: The id of the input to set
         :param is_on: Whether the input is on (pressed)
         """
-        self._gateway_api.set_input_status(id, is_on)
+        self._input_controller.set_input_status(id, is_on)
         return {}
 
     @openmotics_api(auth=True)
@@ -757,7 +758,7 @@ class WebInterface(object):
         :rtype: dict
         """
         # for backwards compatibility reasons a list of input, output tuples is returned
-        inputs = [(changed_input, None) for changed_input in self._gateway_api.get_last_inputs()]
+        inputs = [(changed_input, None) for changed_input in self._input_controller.get_last_inputs()]
         return {'inputs': inputs}
 
     # Shutters
@@ -1036,7 +1037,7 @@ class WebInterface(object):
         :param action_number: The number provided to the basic action, its meaning depends on the action_type.
         :type action_number: int
         """
-        self._gateway_api.do_basic_action(action_type, action_number)
+        self._group_action_controller.do_basic_action(action_type, action_number)
         return {}
 
     @openmotics_api(auth=True, check=types(group_action_id=int))
@@ -1049,14 +1050,10 @@ class WebInterface(object):
         return {}
 
     @openmotics_api(auth=True, check=types(status=bool))
-    def set_master_status_leds(self, status):
-        """
-        Set the status of the leds on the master.
-
-        :param status: whether the leds should be on (true) or off (false).
-        :type status: bool
-        """
-        return self._gateway_api.set_master_status_leds(status)
+    def set_master_status_leds(self, status):  # type: (bool) -> Dict[str, Any]
+        """ Set the status of the leds on the master. """
+        self._module_controller.set_master_status_leds(status)
+        return {}
 
     @cherrypy.expose
     @cherrypy.tools.authenticated()
@@ -1069,7 +1066,7 @@ class WebInterface(object):
         :rtype: dict
         """
         cherrypy.response.headers['Content-Type'] = 'application/octet-stream'
-        return self._gateway_api.get_full_backup()
+        return self._system_controller.get_full_backup()
 
     @openmotics_api(auth=True, plugin_exposed=False)
     def restore_full_backup(self, backup_data):
@@ -1085,7 +1082,7 @@ class WebInterface(object):
         data = backup_data.file.read()
         if not data:
             raise RuntimeError('backup_data is empty')
-        return self._gateway_api.restore_full_backup(data)
+        return self._system_controller.restore_full_backup(data)
 
     @cherrypy.expose
     @cherrypy.tools.authenticated()
@@ -1098,7 +1095,7 @@ class WebInterface(object):
         :rtype: bytearray
         """
         cherrypy.response.headers['Content-Type'] = 'application/octet-stream'
-        return self._gateway_api.get_master_backup()
+        return self._module_controller.get_master_backup()
 
     @openmotics_api(auth=True)
     def master_restore(self, data):
@@ -1111,7 +1108,7 @@ class WebInterface(object):
         :rtype: dict
         """
         data = data.file.read()
-        return self._gateway_api.master_restore(data)
+        return self._module_controller.master_restore(data)
 
     @openmotics_api(auth=True)
     def get_errors(self):
@@ -1126,12 +1123,12 @@ class WebInterface(object):
         :rtype: dict
         """
         try:
-            errors = self._gateway_api.master_error_list()
+            errors = self._module_controller.master_error_list()
         except Exception:
             # In case of communications problems with the master.
             errors = []
 
-        master_last = self._gateway_api.master_last_success()
+        master_last = self._module_controller.master_last_success()
         power_last = self._gateway_api.power_last_success()
 
         return {'errors': errors,
@@ -1143,13 +1140,13 @@ class WebInterface(object):
         """
         Clear the number of errors.
         """
-        return self._gateway_api.master_clear_error_list()
+        return self._module_controller.master_clear_error_list()
 
     @openmotics_api(auth=True)
     def master_diagnostics(self):
-        return {'master_last_success': self._gateway_api.master_last_success(),
-                'command_histograms': self._gateway_api.master_command_histograms(),
-                'communication_statistics': self._gateway_api.master_communication_statistics()}
+        return {'master_last_success': self._module_controller.master_last_success(),
+                'command_histograms': self._module_controller.master_command_histograms(),
+                'communication_statistics': self._module_controller.master_communication_statistics()}
 
     # Output configurations
 
@@ -1618,54 +1615,36 @@ class WebInterface(object):
         self._group_action_controller.save_group_actions(data)
         return {}
 
-    # Schedules
+    # Schedules  # TODO: Legacy, cleanp
 
     @openmotics_api(auth=True, check=types(id=int, fields='json'))
     def get_scheduled_action_configuration(self, id, fields=None):
-        """
-        Get a specific scheduled_action_configuration defined by its id.
-
-        :param id: The id of the scheduled_action_configuration
-        :type id: int
-        :param fields: The field of the scheduled_action_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': scheduled_action_configuration dict: contains 'id' (Id), 'action' (Actions[1]), 'day' (Byte), 'hour' (Byte), 'minute' (Byte)
-        :rtype: dict
-        """
-        return {'config': self._gateway_api.get_scheduled_action_configuration(id, fields)}
+        # type: (int, Optional[List[str]]) -> Dict[str, Any]
+        """ Get a specific scheduled_action_configuration defined by its id. """
+        return {'config': LegacyScheduleSerializer.serialize(schedule_dto=self._scheduling_controller.load_scheduled_action(id),
+                                                             fields=fields)}
 
     @openmotics_api(auth=True, check=types(fields='json'))
     def get_scheduled_action_configurations(self, fields=None):
-        """
-        Get all scheduled_action_configurations.
-
-        :param fields: The field of the scheduled_action_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': list of scheduled_action_configuration dict: contains 'id' (Id), 'action' (Actions[1]), 'day' (Byte), 'hour' (Byte), 'minute' (Byte)
-        :rtype: dict
-        """
-        return {'config': self._gateway_api.get_scheduled_action_configurations(fields)}
+        # type: (Optional[List[str]]) -> Dict[str, List[Any]]
+        """ Get all scheduled_action_configurations. """
+        return {'config': [LegacyScheduleSerializer.serialize(schedule_dto=schedule, fields=fields)
+                           for schedule in self._scheduling_controller.load_scheduled_actions()]}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_scheduled_action_configuration(self, config):
-        """
-        Set one scheduled_action_configuration.
-
-        :param config: The scheduled_action_configuration to set: scheduled_action_configuration dict: contains 'id' (Id), 'action' (Actions[1]), 'day' (Byte), 'hour' (Byte), 'minute' (Byte)
-        :type config: dict
-        """
-        self._gateway_api.set_scheduled_action_configuration(config)
+        # type: (Dict[str, Any]) -> Dict[str, Any]
+        """ Set one scheduled_action_configuration. """
+        data = LegacyScheduleSerializer.deserialize(config)
+        self._scheduling_controller.save_scheduled_actions([data])
         return {}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_scheduled_action_configurations(self, config):
-        """
-        Set multiple scheduled_action_configurations.
-
-        :param config: The list of scheduled_action_configurations to set: list of scheduled_action_configuration dict: contains 'id' (Id), 'action' (Actions[1]), 'day' (Byte), 'hour' (Byte), 'minute' (Byte)
-        :type config: list
-        """
-        self._gateway_api.set_scheduled_action_configurations(config)
+        # type: (List[Dict[str, Any]]) -> Dict[str, Any]
+        """ Set multiple scheduled_action_configurations. """
+        data = [LegacyScheduleSerializer.deserialize(entry) for entry in config]
+        self._scheduling_controller.save_scheduled_actions(data)
         return {}
 
     # PulseCounters
@@ -1726,52 +1705,37 @@ class WebInterface(object):
         """
         return {'value': self._pulse_counter_controller.set_value(pulse_counter_id, value)}
 
-    # Startup actions
+    # Startup actions  # TODO: Legacy, cleanp
 
     @openmotics_api(auth=True, check=types(fields='json'))
     def get_startup_action_configuration(self, fields=None):
-        """
-        Get the startup_action_configuration.
-
-        :param fields: The field of the startup_action_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': startup_action_configuration dict: contains 'actions' (Actions[100])
-        :rtype: dict
-        """
-        return {'config': self._gateway_api.get_startup_action_configuration(fields)}
+        # type: (Optional[List[str]]) -> Dict[str, Any]
+        """ Get the startup_action_configuration. """
+        return {'config': LegacyStartupActionSerializer.serialize(startup_action_dto=self._scheduling_controller.load_startup_action(),
+                                                                  fields=fields)}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_startup_action_configuration(self, config):
-        """
-        Set the startup_action_configuration.
-
-        :param config: The startup_action_configuration to set: startup_action_configuration dict: contains 'actions' (Actions[100])
-        :type config: dict
-        """
-        self._gateway_api.set_startup_action_configuration(config)
+        # type: (Dict[str, Any]) -> Dict[str, Any]
+        """ Set the startup_action_configuration. """
+        data = LegacyStartupActionSerializer.deserialize(config)
+        self._scheduling_controller.save_startup_action(data)
         return {}
 
     @openmotics_api(auth=True, check=types(fields='json'))
     def get_dimmer_configuration(self, fields=None):
         """
         Get the dimmer_configuration.
-
         :param fields: The field of the dimmer_configuration to get. (None gets all fields)
-        :type fields: list
-        :returns: 'config': dimmer_configuration dict: contains 'dim_memory' (Byte), 'dim_step' (Byte), 'dim_wait_cycle' (Byte), 'min_dim_level' (Byte)
-        :rtype: dict
         """
-        return {'config': self._gateway_api.get_dimmer_configuration(fields)}
+        return {'config': DimmerConfigurationSerializer.serialize(dimmer_configuration_dto=self._output_controller.load_dimmer_configuration(),
+                                                                  fields=fields)}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_dimmer_configuration(self, config):
-        """
-        Set the dimmer_configuration.
-
-        :param config: The dimmer_configuration to set: dimmer_configuration dict: contains 'dim_memory' (Byte), 'dim_step' (Byte), 'dim_wait_cycle' (Byte), 'min_dim_level' (Byte)
-        :type config: dict
-        """
-        self._gateway_api.set_dimmer_configuration(config)
+        """ Set the dimmer_configuration. """
+        data = DimmerConfigurationSerializer.deserialize(config)
+        self._output_controller.save_dimmer_configuration(data)
         return {}
 
     @openmotics_api(auth=True, check=types(fields='json'))
@@ -1881,7 +1845,7 @@ class WebInterface(object):
         self._power_dirty = False
         orm_dirty = Database.get_dirty_flag()
         # eeprom key used here for compatibility
-        return {'eeprom': self._gateway_api.get_configuration_dirty_flag(),
+        return {'eeprom': self._module_controller.get_configuration_dirty_flag(),
                 'power': power_dirty,
                 'orm': orm_dirty}
 
@@ -2080,10 +2044,10 @@ class WebInterface(object):
         :returns: 'version': String (a.b.c).
         :rtype: dict
         """
-        master_version = self._gateway_api.get_master_version()
+        master_version = self._module_controller.get_master_version()
         if master_version is not None:
             master_version = ".".join([str(n) for n in master_version] if len(master_version) else None)
-        return {'version': self._gateway_api.get_main_version(),
+        return {'version': self._system_controller.get_main_version(),
                 'gateway': gateway.__version__,
                 'master': master_version}
 
@@ -2134,7 +2098,7 @@ class WebInterface(object):
         """
         with open(constants.get_update_output_file(), "r") as output_file:
             output = output_file.read()
-        version = self._gateway_api.get_main_version()
+        version = self._system_controller.get_main_version()
 
         return {'output': output,
                 'version': version}
@@ -2143,27 +2107,27 @@ class WebInterface(object):
     def update_firmware(self, master=None, output=None, input=None, can=None, dimmer=None, temperature=None):
         if master:
             temp_file = self._download_firmware('master_classic', master)
-            self._gateway_api.update_master_firmware(temp_file)
+            self._module_controller.update_master_firmware(temp_file)
             shutil.move(temp_file, '/opt/openmotics/firmware.hex')
         if output:
             temp_file = self._download_firmware('output', output)
-            self._gateway_api.update_slave_firmware('O', temp_file)
+            self._module_controller.update_slave_firmware('O', temp_file)
             shutil.move(temp_file, '/opt/openmotics/o_firmware.hex')
         if input:
             temp_file = self._download_firmware('input', input)
-            self._gateway_api.update_slave_firmware('I', temp_file)
+            self._module_controller.update_slave_firmware('I', temp_file)
             shutil.move(temp_file, '/opt/openmotics/i_firmware.hex')
         if can:
             temp_file = self._download_firmware('can', can)
-            self._gateway_api.update_slave_firmware('C', temp_file)
+            self._module_controller.update_slave_firmware('C', temp_file)
             shutil.move(temp_file, '/opt/openmotics/c_firmware.hex')
         if dimmer:
             temp_file = self._download_firmware('dimmer', dimmer)
-            self._gateway_api.update_slave_firmware('D', temp_file)
+            self._module_controller.update_slave_firmware('D', temp_file)
             shutil.move(temp_file, '/opt/openmotics/d_firmware.hex')
         if temperature:
             temp_file = self._download_firmware('temperature', temperature)
-            self._gateway_api.update_slave_firmware('T', temp_file)
+            self._module_controller.update_slave_firmware('T', temp_file)
             shutil.move(temp_file, '/opt/openmotics/t_firmware.hex')
         return {}
 
@@ -2211,7 +2175,7 @@ class WebInterface(object):
         temp_file = '/tmp/{}.hex'.format(md5)
         with open(temp_file, 'wb') as firmware_file:
             firmware_file.write(firmware_data)
-        self._gateway_api.update_master_firmware(temp_file)
+        self._module_controller.update_master_firmware(temp_file)
         shutil.move(temp_file, '/opt/openmotics/firmware.hex')
         return {}
 
@@ -2233,7 +2197,7 @@ class WebInterface(object):
         temp_file = '/tmp/{}.hex'.format(md5)
         with open(temp_file, 'wb') as firmware_file:
             firmware_file.write(firmware_data)
-        self._gateway_api.update_slave_firmware(type, temp_file)
+        self._module_controller.update_slave_firmware(type, temp_file)
         shutil.move(temp_file, '/opt/openmotics/{}_firmware.hex'.format(type))
         return {}
 
@@ -2245,8 +2209,8 @@ class WebInterface(object):
         :param timezone: in format 'Continent/City'.
         :type timezone: str
         """
-        self._gateway_api.set_timezone(timezone)
-        self._gateway_api.sync_master_time()
+        self._system_controller.set_timezone(timezone)
+        self._module_controller.sync_master_time()
         return {}
 
     @openmotics_api(auth=True)
@@ -2257,7 +2221,7 @@ class WebInterface(object):
         :returns: 'timezone': the timezone in 'Continent/City' format (String).
         :rtype: dict
         """
-        return {'timezone': self._gateway_api.get_timezone()}
+        return {'timezone': self._system_controller.get_timezone()}
 
     @openmotics_api(auth=True, check=types(headers='json', auth='json', timeout=int), plugin_exposed=False)
     def do_url_action(self, url, method='GET', headers=None, data=None, auth=None, timeout=10):
@@ -2432,7 +2396,7 @@ class WebInterface(object):
 
     @openmotics_api(auth=True, check=types(active=bool), plugin_exposed=False)
     def set_self_recovery(self, active):
-        self._gateway_api.set_self_recovery(active=active)
+        self._system_controller.set_self_recovery(active=active)
         return {}
 
     @openmotics_api(auth=True)
@@ -2449,7 +2413,7 @@ class WebInterface(object):
         return {'definitions': definitions}
 
     @openmotics_api(check=types(confirm=bool), auth=True, plugin_exposed=False)
-    def factory_reset(self, username, password, confirm=False):
+    def factory_reset(self, username, password, confirm=False, can=True):
         user_dto = UserDTO(username=username)
         user_dto.set_password(password)
         success, _ = self._user_controller.login(user_dto)
@@ -2457,13 +2421,13 @@ class WebInterface(object):
             raise cherrypy.HTTPError(401, 'invalid_credentials')
         if not confirm:
             raise cherrypy.HTTPError(401, 'not_confirmed')
-        return self._gateway_api.factory_reset()
+        return self._system_controller.factory_reset(can=can)
 
     @openmotics_api(auth=False)
     def health_check(self):
         """ Requests the state of the various services and checks the returned value for the global state """
         health = {'openmotics': {'state': self._service_state},
-                  'master': {'state': self._gateway_api.get_master_online()}}
+                  'master': {'state': self._module_controller.get_master_online()}}
         try:
             state = {}
             if self._message_client is not None:

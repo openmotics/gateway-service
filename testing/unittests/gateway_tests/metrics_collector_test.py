@@ -45,7 +45,8 @@ class MetricsCollectorTest(unittest.TestCase):
                             thermostat_controller=mock.Mock(),
                             output_controller=mock.Mock(),
                             input_controller=mock.Mock(),
-                            sensor_controller=mock.Mock())
+                            sensor_controller=mock.Mock(),
+                            module_controller=mock.Mock())
         self.controller = MetricsCollector()
 
     def test_realtime_power_metrics(self):

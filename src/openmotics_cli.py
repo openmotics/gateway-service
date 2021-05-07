@@ -33,7 +33,9 @@ def cmd_factory_reset(args):
         print('already_in_progress')
         exit(1)
     with open(lock_file, 'w') as fd:
-        fd.write('factory_reset')
+        if args.can:
+            fd.write('factory_reset_full')
+        else: fd.write('factory_reset')
 
 
 def cmd_shell(args):
@@ -53,7 +55,6 @@ def cmd_shell(args):
           metrics_cache_controller=INJECTED,
           metrics_controller=INJECTED,
           module_controller=INJECTED,
-          observer=INJECTED,
           output_controller=INJECTED,
           plugin_controller=INJECTED,
           power_controller=INJECTED,
@@ -120,6 +121,7 @@ operator_subparsers = operator_parser.add_subparsers()
 factory_reset_parser = operator_subparsers.add_parser('factory-reset')
 factory_reset_parser.set_defaults(func=cmd_factory_reset)
 factory_reset_parser.add_argument('--force', action='store_true')
+factory_reset_parser.add_argument('--can', action='store_true')
 shell_parser = operator_subparsers.add_parser('shell')
 shell_parser.set_defaults(func=cmd_shell)
 top_parser = operator_subparsers.add_parser('top')

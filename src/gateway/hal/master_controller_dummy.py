@@ -21,7 +21,8 @@ import logging
 
 from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
     PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, \
-    ThermostatAircoStatusDTO, PumpGroupDTO, GlobalFeedbackDTO, OutputStateDTO
+    ThermostatAircoStatusDTO, PumpGroupDTO, GlobalFeedbackDTO, OutputStateDTO, \
+    LegacyScheduleDTO, LegacyStartupActionDTO, DimmerConfigurationDTO
 from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import MasterController
 
@@ -243,21 +244,16 @@ class MasterDummyController(MasterController):
         # type: () -> ThermostatAircoStatusDTO
         return ThermostatAircoStatusDTO({})
 
-    def load_dimmer_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        return {
-                "min_dim_level": 255,
-                "dim_wait_cycle": 255,
-                "dim_step": 255,
-                "dim_memory": 255
-        }
-
+    def load_dimmer_configuration(self):
+        # type: () -> DimmerConfigurationDTO
+        return DimmerConfigurationDTO()  # All default values
 
     # Schedules
-    def load_scheduled_action_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
+
+    def load_scheduled_actions(self):
+        # type: (Any) -> List[LegacyScheduleDTO]
         return []
 
-    def load_startup_action_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        return {}
+    def load_startup_action(self):
+        # type: (Any) -> LegacyStartupActionDTO
+        return LegacyStartupActionDTO(actions=[])

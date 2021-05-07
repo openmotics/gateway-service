@@ -19,11 +19,12 @@ from gateway.api.serializers.group_action import GroupActionSerializer
 from gateway.api.serializers.input import InputSerializer
 from gateway.api.serializers.module import ModuleSerializer
 from gateway.api.serializers.output import OutputSerializer, \
-    OutputStateSerializer
+    OutputStateSerializer, DimmerConfigurationSerializer
 from gateway.api.serializers.pulse_counter import PulseCounterSerializer
 from gateway.api.serializers.rtd10 import GlobalRTD10Serializer, RTD10Serializer
 from gateway.api.serializers.room import RoomSerializer
-from gateway.api.serializers.schedule import ScheduleSerializer
+from gateway.api.serializers.schedule import ScheduleSerializer, LegacyScheduleSerializer, \
+    LegacyStartupActionSerializer
 from gateway.api.serializers.sensor import SensorSerializer
 from gateway.api.serializers.shutter import ShutterSerializer
 from gateway.api.serializers.shutter_group import ShutterGroupSerializer

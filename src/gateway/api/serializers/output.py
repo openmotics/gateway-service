@@ -19,7 +19,8 @@ Output (de)serializer
 from __future__ import absolute_import
 
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto import FeedbackLedDTO, OutputDTO, OutputStateDTO
+from gateway.dto import FeedbackLedDTO, OutputDTO, OutputStateDTO, \
+    DimmerConfigurationDTO
 from toolbox import Toolbox
 
 if False:  # MYPY
@@ -98,3 +99,27 @@ class OutputStateSerializer(object):
                      'locked': ('locked', lambda x: x or False)}
         )
         return output_state_dto
+
+
+class DimmerConfigurationSerializer(object):
+    BYTE_MAX = 255
+
+    @staticmethod
+    def serialize(dimmer_configuration_dto, fields):  # type: (DimmerConfigurationDTO, Optional[List[str]]) -> Dict
+        data = {}
+        for field in ['min_dim_level', 'dim_step', 'dim_wait_cycle', 'dim_memory']:
+            data[field] = Toolbox.denonify(getattr(dimmer_configuration_dto, field), DimmerConfigurationSerializer.BYTE_MAX)
+        return SerializerToolbox.filter_fields(data, fields)
+
+    @staticmethod
+    def deserialize(api_data):  # type: (Dict) -> DimmerConfigurationDTO
+        dimmer_configuration_dto = DimmerConfigurationDTO()
+        SerializerToolbox.deserialize(
+            dto=dimmer_configuration_dto,  # Referenced
+            api_data=api_data,
+            mapping={'min_dim_level': ('min_dim_level', DimmerConfigurationSerializer.BYTE_MAX),
+                     'dim_step': ('dim_step', DimmerConfigurationSerializer.BYTE_MAX),
+                     'dim_wait_cycle': ('dim_wait_cycle', DimmerConfigurationSerializer.BYTE_MAX),
+                     'dim_memory': ('dim_memory', DimmerConfigurationSerializer.BYTE_MAX)}
+        )
+        return dimmer_configuration_dto
