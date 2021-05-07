@@ -329,11 +329,6 @@ class System(object):
                 site.addsitedir(path)
                 sys.path.remove(path)
                 sys.path.insert(0, path)
-            path = '/opt/openmotics/python-deps/lib/python2.7/dist-packages'
-            if os.path.exists(path):
-                site.addsitedir(path)
-                sys.path.remove(path)
-                sys.path.insert(0, path)
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:
