@@ -94,7 +94,7 @@ class InputController(BaseController):
         Get a list containing the status of the Inputs.
         :returns: A list is a dicts containing the following keys: id, status.
         """
-        # TODO: Return a List[DTO]
+        # TODO: Convert to some StatusDTO similar to the OutputStatus
         return [{'id': input_port['id'], 'status': input_port['status']}
                 for input_port in self._master_controller.get_inputs_with_status()]
 

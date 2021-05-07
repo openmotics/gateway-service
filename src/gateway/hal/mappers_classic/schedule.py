@@ -36,7 +36,7 @@ class LegacyScheduleMapper(object):
                                  hour=Toolbox.nonify(data['hour'], LegacyScheduleMapper.BYTE_MAX),
                                  minute=Toolbox.nonify(data['minute'], LegacyScheduleMapper.BYTE_MAX),
                                  day=Toolbox.nonify(data['day'], LegacyScheduleMapper.BYTE_MAX),
-                                 action=None if data['action'] == '' else int(data['action']))
+                                 action=[] if data['action'] == '' else [int(i) for i in data['action'].split(',')])
 
     @staticmethod
     def dto_to_orm(schedule_dto):  # type: (LegacyScheduleDTO) -> EepromModel
@@ -47,7 +47,7 @@ class LegacyScheduleMapper(object):
             if dto_field in schedule_dto.loaded_fields:
                 data[data_field] = Toolbox.denonify(getattr(schedule_dto, dto_field), LegacyScheduleMapper.BYTE_MAX)
         if 'action' in schedule_dto.loaded_fields:
-            data['action'] = '' if schedule_dto.action is None else str(schedule_dto.action)
+            data['action'] = ','.join([str(action) for action in schedule_dto.action])
         return ScheduledActionConfiguration.deserialize(data)
 
 

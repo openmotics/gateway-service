@@ -185,6 +185,18 @@ class ModuleController(BaseController):
         # type: (bool) -> None
         self._master_controller.set_status_leds(status)
 
+    def get_master_backup(self):
+        return self._master_controller.get_backup()
+
+    def master_restore(self, data):
+        return self._master_controller.restore(data)
+
+    def sync_master_time(self):  # type: () -> None
+        self._master_controller.sync_time()
+
+    def flash_leds(self, led_type, led_id):
+        return self._master_controller.flash_leds(led_type, led_id)
+
     def master_error_list(self):
         """
         Get the error list per module (input and output modules). The modules are identified by

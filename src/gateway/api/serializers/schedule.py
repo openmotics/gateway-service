@@ -57,7 +57,7 @@ class LegacyScheduleSerializer(object):
                 'hour': Toolbox.denonify(schedule_dto.hour, LegacyScheduleSerializer.BYTE_MAX),
                 'minute': Toolbox.denonify(schedule_dto.minute, LegacyScheduleSerializer.BYTE_MAX),
                 'day': Toolbox.denonify(schedule_dto.day, LegacyScheduleSerializer.BYTE_MAX),
-                'action': '' if schedule_dto.action is None else str(schedule_dto.action)}
+                'action': ','.join([str(action) for action in schedule_dto.action])}
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
@@ -69,7 +69,7 @@ class LegacyScheduleSerializer(object):
             mapping={'hour': ('hour', LegacyScheduleSerializer.BYTE_MAX),
                      'minute': ('minute', LegacyScheduleSerializer.BYTE_MAX),
                      'day': ('day', LegacyScheduleSerializer.BYTE_MAX),
-                     'action': ('action', lambda s: None if s == '' else int(s))}
+                     'action': ('action', lambda s: [] if s == '' else [int(a) for a in s.split(',')])}
         )
         return schedule_dto
 

@@ -34,6 +34,7 @@ from gateway.base_controller import BaseController
 if False:  # MYPY
     from typing import Dict, Any
     from gateway.watchdog import Watchdog
+    from gateway.module_controller import ModuleController
 
 logger = logging.getLogger("openmotics")
 
@@ -43,8 +44,9 @@ logger = logging.getLogger("openmotics")
 class SystemController(BaseController):
 
     @Inject
-    def __init__(self, master_controller=INJECTED):
+    def __init__(self, master_controller=INJECTED, module_controller=INJECTED):
         super(SystemController, self).__init__(master_controller)
+        self._module_controller = module_controller  # type: ModuleController
 
     # Time related
 
@@ -70,12 +72,6 @@ class SystemController(BaseController):
             return path[20:]
         except Exception:
             return 'UTC'
-
-    def sync_master_time(self):  # type: () -> None
-        self._master_controller.sync_time()
-
-    def flash_leds(self, led_type, led_id):
-        return self._master_controller.flash_leds(led_type, led_id)
 
     def get_main_version(self):
         _ = self
@@ -115,7 +111,7 @@ class SystemController(BaseController):
 
         try:
             with open('{0}/master.eep'.format(tmp_sqlite_dir), 'w') as eeprom_file:
-                eeprom_file.write(self._master_controller.get_backup())
+                eeprom_file.write(self._module_controller.get_master_backup())
 
             for filename, source in {'config.db': constants.get_config_database_file(),
                                      'power.db': constants.get_power_database_file(),
@@ -196,7 +192,7 @@ class SystemController(BaseController):
 
             with open('{0}/master.eep'.format(src_dir), 'r') as eeprom_file:
                 eeprom_content = eeprom_file.read()
-                self._master_controller.restore(eeprom_content)
+                self._module_controller.master_restore(data=eeprom_content)
 
             for filename, target in {'config.db': constants.get_config_database_file(),
                                      'users.db': constants.get_config_database_file(),
@@ -252,12 +248,6 @@ class SystemController(BaseController):
         if can:
             return {'factory_reset_full': 'pending'}
         return {'factory_reset': 'pending'}
-
-    def get_master_backup(self):
-        return self._master_controller.get_backup()
-
-    def master_restore(self, data):
-        return self._master_controller.restore(data)
 
     @Inject
     def set_self_recovery(self, active, watchdog=INJECTED):  # type: (bool, Watchdog) -> None

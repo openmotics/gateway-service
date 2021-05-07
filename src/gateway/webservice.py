@@ -674,7 +674,7 @@ class WebInterface(object):
         :param type: The module type: output/dimmer (0), input (1), sensor/temperatur (2).
         :param id: The id of the output/input/sensor.
         """
-        status = self._system_controller.flash_leds(type, id)
+        status = self._module_controller.flash_leds(type, id)
         return {'status': status}
 
     @openmotics_api(auth=True)
@@ -1095,7 +1095,7 @@ class WebInterface(object):
         :rtype: bytearray
         """
         cherrypy.response.headers['Content-Type'] = 'application/octet-stream'
-        return self._system_controller.get_master_backup()
+        return self._module_controller.get_master_backup()
 
     @openmotics_api(auth=True)
     def master_restore(self, data):
@@ -1108,7 +1108,7 @@ class WebInterface(object):
         :rtype: dict
         """
         data = data.file.read()
-        return self._system_controller.master_restore(data)
+        return self._module_controller.master_restore(data)
 
     @openmotics_api(auth=True)
     def get_errors(self):
@@ -2210,7 +2210,7 @@ class WebInterface(object):
         :type timezone: str
         """
         self._system_controller.set_timezone(timezone)
-        self._system_controller.sync_master_time()
+        self._module_controller.sync_master_time()
         return {}
 
     @openmotics_api(auth=True)

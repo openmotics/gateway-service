@@ -21,7 +21,8 @@ import mock
 
 from bus.om_bus_client import MessageClient
 from gateway.dto import OutputStateDTO, ScheduleDTO, VentilationDTO, \
-    VentilationSourceDTO, VentilationStatusDTO, ModuleDTO, UserDTO
+    VentilationSourceDTO, VentilationStatusDTO, ModuleDTO, UserDTO, \
+    LegacyScheduleDTO, DimmerConfigurationDTO, LegacyStartupActionDTO
 from gateway.gateway_api import GatewayApi
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
@@ -37,6 +38,7 @@ from gateway.shutter_controller import ShutterController
 from gateway.thermostat.thermostat_controller import ThermostatController
 from gateway.user_controller import UserController
 from gateway.ventilation_controller import VentilationController
+from gateway.scheduling_controller import SchedulingController
 from gateway.webservice import WebInterface
 from ioc import SetTestMode, SetUpTestInjections
 
@@ -66,6 +68,7 @@ class WebInterfaceTest(unittest.TestCase):
                             scheduling_controller=self.scheduling_controller,
                             sensor_controller=mock.Mock(SensorController),
                             shutter_controller=mock.Mock(ShutterController),
+                            system_controller=mock.Mock(),
                             thermostat_controller=mock.Mock(ThermostatController),
                             user_controller=self.user_controller,
                             ventilation_controller=self.ventilation_controller,
@@ -261,3 +264,42 @@ class WebInterfaceTest(unittest.TestCase):
                                                                                            "address": "079.000.000.001",
                                                                                            "type": "O"}}},
                                                 "success": True})
+
+    def test_scheduled_action_configurations(self):
+        dtos = [LegacyScheduleDTO(id=0, hour=1, day=2, minute=3, action=[4, 5])]
+        with mock.patch.object(self.scheduling_controller, 'load_scheduled_actions', return_value=dtos) as load_scheduled_actions:
+            api_response = json.loads(self.web.get_scheduled_action_configurations())
+            load_scheduled_actions.assert_called()
+            self.assertEqual({'success': True,
+                              'config': [{'id': 0, 'hour': 1, 'day': 2, 'minute': 3, 'action': '4,5'}]}, api_response)
+        config = [{'id': 5, 'hour': 4, 'day': 3, 'minute': 2, 'action': '1,0'}]
+        with mock.patch.object(self.scheduling_controller, 'save_scheduled_actions') as save_scheduled_actions:
+            api_response = json.loads(self.web.set_scheduled_action_configurations(config=config))
+            self.assertEqual({'success': True}, api_response)
+            save_scheduled_actions.assert_called_with([LegacyScheduleDTO(id=5, hour=4, day=3, minute=2, action=[1, 0])])
+
+    def test_startup_action_configuration(self):
+        dto = LegacyStartupActionDTO(actions=[0, 1, 2, 3])
+        with mock.patch.object(self.scheduling_controller, 'load_startup_action', return_value=dto) as load_startup_action:
+            api_response = json.loads(self.web.get_startup_action_configuration())
+            load_startup_action.assert_called()
+            self.assertEqual({'success': True,
+                              'config': {'actions': '0,1,2,3'}}, api_response)
+        config = {'actions': '3,2,1,0'}
+        with mock.patch.object(self.scheduling_controller, 'save_startup_action') as save_startup_action:
+            api_response = json.loads(self.web.set_startup_action_configuration(config=config))
+            self.assertEqual({'success': True}, api_response)
+            save_startup_action.assert_called_with(LegacyStartupActionDTO(actions=[3, 2, 1, 0]))
+
+    def test_dimmer_configuration(self):
+        dto = DimmerConfigurationDTO(min_dim_level=0, dim_memory=1, dim_step=2)
+        with mock.patch.object(self.output_controller, 'load_dimmer_configuration', return_value=dto) as load_dimmer_configuration:
+            api_response = json.loads(self.web.get_dimmer_configuration())
+            load_dimmer_configuration.assert_called()
+            self.assertEqual({'success': True,
+                              'config': {'min_dim_level': 0, 'dim_memory': 1, 'dim_step': 2, 'dim_wait_cycle': 255}}, api_response)
+        config = {'min_dim_level': 255, 'dim_memory': 2, 'dim_step': 1, 'dim_wait_cycle': 0}
+        with mock.patch.object(self.output_controller, 'save_dimmer_configuration') as save_dimmer_configuration:
+            api_response = json.loads(self.web.set_dimmer_configuration(config=config))
+            self.assertEqual({'success': True}, api_response)
+            save_dimmer_configuration.assert_called_with(DimmerConfigurationDTO(dim_memory=2, dim_step=1, dim_wait_cycle=0))
