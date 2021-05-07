@@ -155,6 +155,7 @@ class OpenmoticsService(object):
         master_controller.start()
 
         # Sync ORM with sources of thruth
+        # TODO: Check if these can be removed
         output_controller.run_sync_orm()
         input_controller.run_sync_orm()
         pulse_counter_controller.run_sync_orm()

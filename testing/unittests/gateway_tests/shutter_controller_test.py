@@ -547,6 +547,20 @@ class ShutterControllerTest(unittest.TestCase):
         self.assertEqual([GatewayEvent('SHUTTER_CHANGE', {'id': 0, 'status': {'state': 'GOING_UP', 'position': 89, 'last_change': 100.0}, 'location': {'room_id': None}})], events)
         controller.stop()
 
+    def test_exception_during_sync(self):
+        _ = self
+
+        def _raise():
+            raise RuntimeError()
+
+        master_controller = Mock()
+        SetUpTestInjections(master_controller=master_controller,
+                            maintenance_controller=Mock())
+        controller = ShutterController()
+        controller._sync_orm()
+        controller.load_shutters = _raise
+        controller._sync_orm()  # Should not raise an exception
+
 
 if __name__ == '__main__':
     unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))
