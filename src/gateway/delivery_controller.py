@@ -99,23 +99,6 @@ class DeliveryController(object):
         delivery_orm = query.first()
         return delivery_orm is None
 
-    # @staticmethod
-    # def update_delivery(delivery_dto):
-    #     # type: (DeliveryDTO) -> Optional[DeliveryDTO]
-    #     if 'id' not in delivery_dto.loaded_fields or delivery_dto.id is None:
-    #         raise RuntimeError('cannot update an delivery without the id being set')
-    #     try:
-    #         delivery_orm = Delivery.select().where(Delivery.id == delivery_dto.id).first()
-    #         for field in delivery_dto.loaded_fields:
-    #             if field == 'id':
-    #                 continue
-    #             if hasattr(delivery_orm, field):
-    #                 setattr(delivery_orm, field, getattr(delivery_dto, field))
-    #         delivery_orm.save()
-    #     except Exception as e:
-    #         raise RuntimeError('Could not update the user: {}'.format(e))
-    #     return DeliveryController.load_delivery(delivery_dto.id)
-
     @staticmethod
     def datetime_to_string_format(timestamp):
         # type: (datetime.datetime) -> str
@@ -140,16 +123,6 @@ class DeliveryController(object):
 
         delivery_dto.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
         return DeliveryController.save_delivery(delivery_dto)
-
-    # @staticmethod
-    # def delete_delivery(delivery_dto):
-    #     # type: (DeliveryDTO) -> None
-    #     if "id" in delivery_dto.loaded_fields and delivery_dto.id is not None:
-    #         Delivery.delete_by_id(delivery_dto.id)
-    #     else:
-    #         raise RuntimeError('Could not find an delivery with the id {} to delete'.format(delivery_dto.id))
-    #     return
-
 
     @staticmethod
     def _validate_delivery_type(delivery_dto):
