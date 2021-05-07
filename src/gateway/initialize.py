@@ -77,6 +77,10 @@ def initialize(message_client_name):
             logger.info('Running factory reset...')
             factory_reset()
             logger.info('Running factory reset, done')
+        elif content == 'factory_reset_full':
+            logger.info('Running full factory reset [also wiping CC EEPROM]...')
+            factory_reset(can=True)
+            logger.info('Running full factory reset, done')
         else:
             logger.warning('unknown initialization {}'.format(content))
 
@@ -105,8 +109,8 @@ def apply_migrations():
 
 
 @Inject
-def factory_reset(master_controller=INJECTED):
-    # type: (MasterController) -> None
+def factory_reset(master_controller=INJECTED, can=True):
+    # type: (MasterController, bool) -> None
     import glob
     import shutil
 
@@ -116,7 +120,7 @@ def factory_reset(master_controller=INJECTED):
 
     logger.info('Wiping master eeprom...')
     master_controller.start()
-    master_controller.factory_reset()
+    master_controller.factory_reset(can=can)
     master_controller.stop()
 
     logger.info('Removing databases...')
@@ -183,17 +187,17 @@ def setup_target_platform(target_platform, message_client_name):
     # abstract implementations depending on e.g. the platform (classic vs core) or certain settings (classic
     # thermostats vs gateway thermostats)
     from plugins import base
-    from gateway import (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
+    from gateway import (metrics_controller, webservice, scheduling_controller, gateway_api, metrics_collector,
                          maintenance_controller, user_controller, pulse_counter_controller,
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
-                         shutter_controller, group_action_controller, module_controller, ventilation_controller,
-                         webservice_v1, apartment_controller, delivery_controller)
+                         shutter_controller, system_controller, group_action_controller, module_controller,
+                         ventilation_controller, webservice_v1, apartment_controller, delivery_controller)
     from cloud import events
-    _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
+    _ = (metrics_controller, webservice, scheduling_controller, gateway_api, metrics_collector,
          maintenance_controller, base, events, user_controller,
          pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
-         sensor_controller, shutter_controller, group_action_controller, module_controller,
-         webservice_v1, ventilation_controller, apartment_controller, delivery_controller)
+         sensor_controller, shutter_controller, system_controller, group_action_controller, module_controller,
+         ventilation_controller, webservice_v1, apartment_controller, delivery_controller)
 
     # IPC
     message_client = None

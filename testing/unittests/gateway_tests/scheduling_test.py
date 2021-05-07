@@ -29,7 +29,7 @@ from peewee import SqliteDatabase
 import fakesleep
 from gateway.dto import ScheduleDTO
 from gateway.models import Schedule
-from gateway.scheduling import SchedulingController
+from gateway.scheduling_controller import SchedulingController
 from gateway.ventilation_controller import VentilationController
 from gateway.webservice import WebInterface
 from ioc import SetTestMode, SetUpTestInjections
@@ -179,14 +179,14 @@ class SchedulingControllerTest(BaseSchedulingTest):
             SchedulingControllerTest.RETURN_DATA['do_basic_action'] = (action_type, action_number)
             return {}
 
-        gateway_api = Mock()
-        gateway_api.get_timezone = lambda: 'UTC'
-        gateway_api.do_basic_action = _do_basic_action
+        system_controller = Mock()
+        system_controller.get_timezone = lambda: 'UTC'
 
         group_action_controller = Mock()
         group_action_controller.do_group_action = _do_group_action
+        group_action_controller.do_basic_action = _do_basic_action
 
-        SetUpTestInjections(gateway_api=gateway_api,
+        SetUpTestInjections(system_controller=system_controller,
                             user_controller=None,
                             maintenance_controller=None,
                             message_client=None,
@@ -202,7 +202,9 @@ class SchedulingControllerTest(BaseSchedulingTest):
                             frontpanel_controller=Mock(),
                             group_action_controller=group_action_controller,
                             module_controller=Mock(),
-                            uart_controller=Mock())
+                            uart_controller=Mock(),
+                            master_controller=Mock(),
+                            gateway_api=Mock())
         controller = SchedulingController()
         SetUpTestInjections(scheduling_controller=controller)
         controller.set_webinterface(WebInterface())

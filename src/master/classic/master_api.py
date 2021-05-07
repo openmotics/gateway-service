@@ -542,6 +542,14 @@ def get_module_version():
                               Field.crc(), Field.lit('\r\n')])
 
 
+def erase_can_eeprom():
+    """ This instruction will erase the internal and external (if installed) Eeprom of the slave module
+    and bring it back to factory reset."""
+    return MasterCommandSpec('FX',
+                             [Field.bytes('addr', 4), Field.byte('instr'), Field.crc(), Field.padding(5)],
+                             [Field.bytes('addr', 4), Field.byte('error_code'), Field.crc(), Field.padding(5), Field.lit('\r\n')])
+
+
 # Below are the asynchronous messages, sent by the master to the gateway
 
 def output_list():
