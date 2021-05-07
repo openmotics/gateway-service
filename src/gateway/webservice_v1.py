@@ -23,17 +23,18 @@ import cherrypy
 import logging
 import ujson as json
 import time
+import datetime
 
 from ioc import INJECTED, Inject, Injectable, Singleton
-from gateway.api.serializers.apartment import ApartmentSerializer
-from gateway.api.serializers.user import UserSerializer
-from gateway.dto import ApartmentDTO
+from gateway.api.serializers import ApartmentSerializer, UserSerializer, DeliverySerializer
+from gateway.dto import ApartmentDTO, DeliveryDTO
 from gateway.exceptions import *
-from gateway.models import User
+from gateway.models import User, Delivery
 from gateway.webservice import params_handler
 
 if False:  # MyPy
     from gateway.apartment_controller import ApartmentController
+    from gateway.delivery_controller import DeliveryController
     from gateway.authentication_controller import AuthenticationToken
     from gateway.user_controller import UserController
     from gateway.webservice import WebService
@@ -553,6 +554,108 @@ class Apartments(RestAPIEndpoint):
         return 'OK'
 
 
+class Deliveries(RestAPIEndpoint):
+    API_ENDPOINT = '/api/v1/deliveries'
+
+    @Inject
+    def __init__(self, delivery_controller=INJECTED):
+        # type: (DeliveryController) -> None
+        super(Deliveries, self).__init__()
+        self.delivery_controller = delivery_controller
+        # Set a custom route dispatcher in the class so that you have full
+        # control over how the routes are defined.
+        self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
+        # --- GET ---
+        self.route_dispatcher.connect('get_deliveries', '',
+                                      controller=self, action='get_deliveries',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_delivery', '/:delivery_id',
+                                      controller=self, action='get_delivery',
+                                      conditions={'method': ['GET']})
+        # --- POST ---
+        self.route_dispatcher.connect('post_delivery', '',
+                                      controller=self, action='post_delivery',
+                                      conditions={'method': ['POST']})
+        # --- PUT ---
+        self.route_dispatcher.connect('put_delivery_pickup', '/:delivery_id/pickup',
+                                      controller=self, action='put_delivery_pickup',
+                                      conditions={'method': ['PUT']})
+
+    @openmotics_api_v1(auth=True, pass_token=True)
+    def get_deliveries(self, token):
+        # type: (AuthenticationToken) -> str
+        role = token.user.role
+        user_id = token.user.id
+
+        # get all the deliveries
+        deliveries = self.delivery_controller.load_deliveries()  # type: List[DeliveryDTO]
+
+        # filter the deliveries for only the user id when they are not technician or admin
+        if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            deliveries = [delivery for delivery in deliveries if user_id in [delivery.user_id_delivery, delivery.user_id_pickup]]
+
+        deliveries_serial = [DeliverySerializer.serialize(delivery) for delivery in deliveries]
+        return json.dumps(deliveries_serial)
+
+    @openmotics_api_v1(auth=True, pass_token=True)
+    def get_delivery(self, delivery_id, token):
+        # type: (int, AuthenticationToken) -> str
+        delivery = self.delivery_controller.load_delivery(delivery_id)
+        if delivery is None:
+            raise ItemDoesNotExistException('Could not find the delivery with id: {}'.format(delivery_id))
+        user_id = token.user.id
+        user_role = token.user.role
+        if user_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            if user_id not in [delivery.user_id_delivery, delivery.user_id_pickup]:
+                raise UnAuthorizedException('You are not allowed to request this delivery')
+        deliveries_serial = DeliverySerializer.serialize(delivery)
+        return json.dumps(deliveries_serial)
+
+    @openmotics_api_v1(auth=False, pass_token=True)
+    def post_delivery(self, token=None, request_body=None):
+        # type: (Optional[AuthenticationToken], str) -> str
+        if request_body is None:
+            raise WrongInputParametersException('Expected a body when creating a new delivery')
+        try:
+            delivery_dict = json.loads(request_body)
+        except Exception as ex:
+            raise ParseException('Cannot parse the body as a valid json format: {}'.format(ex))
+        try:
+            delivery_dto = DeliverySerializer.deserialize(delivery_dict)
+        except Exception as ex:
+            raise ParseException('Could not create a valid delivery from the passed json data: {}'.format(ex))
+        if delivery_dto.type == Delivery.DeliveryType.RETURN:
+            if token is None or token.user.role == User.UserRoles.COURIER:
+                raise UnAuthorizedException('To create a return delivery, you need to be logged in as USER, ADMIN or TECHNICIAN')
+
+        saved_delivery = self.delivery_controller.save_delivery(delivery_dto)
+        if saved_delivery is None:
+            raise RuntimeError('Unexpected error: Delivery is None when pickup_delivery is called')
+        saved_delivery_serial = DeliverySerializer.serialize(saved_delivery)
+        return json.dumps(saved_delivery_serial)
+
+    @openmotics_api_v1(auth=True, pass_token=True)
+    def put_delivery_pickup(self, delivery_id, token=None):
+        # type: (int, AuthenticationToken) -> str
+        if token is None:
+            raise UnAuthorizedException('You need to be logged in to pick up a delivery')
+
+        delivery_dto = self.delivery_controller.load_delivery(delivery_id)
+        if delivery_dto is None:
+            raise ItemDoesNotExistException('Cannot pickup a delivery that does not exists: id: {}'.format(delivery_id))
+
+        if token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            auth_user_id = token.user.id
+            if auth_user_id not in [delivery_dto.user_id_delivery, delivery_dto.user_id_pickup]:
+                raise UnAuthorizedException('Cannot pick up a package that is not yours when you are not admin or technician')
+
+        delivery_dto_returned = self.delivery_controller.pickup_delivery(delivery_id)
+        if delivery_dto_returned is None:
+            raise RuntimeError('Unexpected error: Delivery is None when pickup_delivery is called')
+        delivery_serial = DeliverySerializer.serialize(delivery_dto_returned)
+        return json.dumps(delivery_serial)
+
+
 @Injectable.named('web_service_v1')
 @Singleton
 class WebServiceV1(object):
@@ -561,7 +664,8 @@ class WebServiceV1(object):
         self.web_service = web_service
         self.endpoints = [
             Users(),
-            Apartments()
+            Apartments(),
+            Deliveries()
         ]
 
     def start(self):

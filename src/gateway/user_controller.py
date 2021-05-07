@@ -47,7 +47,6 @@ class UserController(object):
         """ Constructor a new UserController. """
         self._config = config
         self.authentication_controller = authentication_controller
-        # self.user_cache = []  # type: List[UserDTO]
         self.load_users()
 
     def start(self):
@@ -69,6 +68,11 @@ class UserController(object):
     def stop(self):
         # type: () -> None
         pass
+
+    def user_id_exists(self, user_id):
+        # type: (int) -> bool
+        user_orm = User.get_by_id(user_id)
+        return user_orm is not None
 
     def save_user(self, user_dto):
         # type: (UserDTO) -> UserDTO

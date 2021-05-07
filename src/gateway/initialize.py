@@ -187,13 +187,13 @@ def setup_target_platform(target_platform, message_client_name):
                          maintenance_controller, user_controller, pulse_counter_controller,
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
                          shutter_controller, group_action_controller, module_controller, ventilation_controller,
-                         webservice_v1, apartment_controller)
+                         webservice_v1, apartment_controller, delivery_controller)
     from cloud import events
     _ = (metrics_controller, webservice, scheduling, observer, gateway_api, metrics_collector,
          maintenance_controller, base, events, user_controller,
          pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
          sensor_controller, shutter_controller, group_action_controller, module_controller,
-         webservice_v1, ventilation_controller, apartment_controller)
+         webservice_v1, ventilation_controller, apartment_controller, delivery_controller)
 
     # IPC
     message_client = None

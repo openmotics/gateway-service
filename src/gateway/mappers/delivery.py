@@ -52,29 +52,47 @@ class DeliveryMapper(object):
     @staticmethod
     def dto_to_orm(dto_object):
         # type: (DeliveryDTO) -> Delivery
-        delivery = Delivery.get_or_none(type=dto_object.type,
-                                        user_id_delivery=dto_object.user_id_delivery,
-                                        timestamp_delivery=dto_object.timestamp_delivery,
-                                        parcelbox_rebus_id=dto_object.parcelbox_rebus_id)
-        if delivery is None:
-            mandatory_fields = {'type', 'timestamp_delivery', 'user_id_delivery', 'parcelbox_rebus_id'}
+        delivery_orm = None
+        if dto_object.id is not None:
+            delivery_orm = Delivery.get_by_id(dto_object.id)
+        # delivery_orm = Delivery.get_or_none(type=dto_object.type,
+        #                                     user_id_delivery=dto_object.user_id_delivery,
+        #                                     timestamp_delivery=dto_object.timestamp_delivery,
+        #                                     parcelbox_rebus_id=dto_object.parcelbox_rebus_id)
+        if delivery_orm is None:
+            mandatory_fields = {'type', 'timestamp_delivery', 'user_pickup', 'parcelbox_rebus_id'}
             if not mandatory_fields.issubset(set(dto_object.loaded_fields)):
                 raise ValueError('Cannot create delivery without mandatory fields `{0}`\nGot fields: {1}\nDifference: {2}'
                                  .format('`, `'.join(mandatory_fields),
                                          dto_object.loaded_fields,
                                          mandatory_fields - set(dto_object.loaded_fields)))
+            delivery_orm = Delivery()
 
-        delivery_orm = Delivery()
         for field in dto_object.loaded_fields:
-            if getattr(dto_object, field, None) is None:
+            # if getattr(dto_object, field, None) is None:
+            #     continue
+            if field == 'timestamp_pickup':
+                # only change the timestamp when there is none in the DB
+                if delivery_orm.timestamp_pickup is None:
+                    delivery_orm.timestamp_pickup = dto_object.timestamp_pickup
                 continue
-            if field == 'user_id_delivery' and dto_object.user_delivery is not None:
-                user_orm = UserMapper.dto_to_orm(dto_object.user_delivery)
+            elif field == 'timestamp_delivery':
+                # only change the timestamp when there is none in the DB
+                if delivery_orm.timestamp_delivery is None:
+                    delivery_orm.timestamp_delivery = dto_object.timestamp_delivery
+                continue
+            elif field == 'user_delivery':
+                user_orm = None
+                if dto_object.user_delivery is not None:
+                    user_orm = UserMapper.dto_to_orm(dto_object.user_delivery)
                 delivery_orm.user_id_delivery = user_orm
                 continue
-            if field == 'user_id_pickup' and dto_object.user_pickup is not None:
-                user_orm = UserMapper.dto_to_orm(dto_object.user_pickup)
+            elif field == 'user_pickup':
+                user_orm = None
+                if dto_object.user_pickup is not None:
+                    user_orm = UserMapper.dto_to_orm(dto_object.user_pickup)
                 delivery_orm.user_id_pickup = user_orm
                 continue
-            setattr(delivery_orm, field, getattr(dto_object, field))
+            else:
+                setattr(delivery_orm, field, getattr(dto_object, field))
         return delivery_orm
