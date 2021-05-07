@@ -324,10 +324,16 @@ class System(object):
         # check if running in python 2 mode, otherwise packages should be included in the build (PyInstaller)
         if sys.version_info.major == 2:
             import site
-            if os.path.exists('/opt/openmotics/python-deps/lib/python2.7/site-packages'):
-                site.addsitedir('/opt/openmotics/python-deps/lib/python2.7/site-packages')
-            if os.path.exists('/opt/openmotics/python-deps/lib/python2.7/dist-packages'):
-                site.addsitedir('/opt/openmotics/python-deps/lib/python2.7/dist-packages')
+            path = '/opt/openmotics/python-deps/lib/python2.7/site-packages'
+            if os.path.exists(path):
+                site.addsitedir(path)
+                sys.path.remove(path)
+                sys.path.insert(0, path)
+            path = '/opt/openmotics/python-deps/lib/python2.7/dist-packages'
+            if os.path.exists(path):
+                site.addsitedir(path)
+                sys.path.remove(path)
+                sys.path.insert(0, path)
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:
