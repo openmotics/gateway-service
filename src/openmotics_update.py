@@ -453,6 +453,7 @@ def update(version, expected_md5):
         raise SystemExit(EXIT_CODES['failed_preprepare_update'])
 
     errors = []
+    sysex_errors = []
     services_running = True
     try:
         date = datetime.now().strftime('%Y%m%d%H%M%S')
@@ -536,6 +537,7 @@ def update(version, expected_md5):
         logger.error('FAILED')
         logger.error('exit ({}) : {}'.format(sex.code, sex))
         logger.error(traceback.format_exc())
+        sysex_errors.append(sex)
 
     except Exception as exc:
         logger.exception('Unexpected exception updating')
@@ -548,6 +550,13 @@ def update(version, expected_md5):
 
         logger.info(' -> Running cleanup')
         cmd('rm -v -rf {}/*'.format(update_dir), shell=True)
+
+        if sysex_errors:
+            logger.error('SystemExit Exceptions:')
+            for error in sysex_errors:
+                logger.error('- {0}'.format(error))
+            raise sysex_errors[0]
+
 
         if errors:
             logger.error('Exceptions:')
