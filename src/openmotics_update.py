@@ -532,6 +532,11 @@ def update(version, expected_md5):
         logger.info(' -> Waiting for health check')
         check_gateway_health()
 
+    except SystemExit as sex:
+        logger.error('FAILED')
+        logger.error('exit ({}) : {}'.format(sex.code, sex))
+        logger.error(traceback.format_exc())
+
     except Exception as exc:
         logger.exception('Unexpected exception updating')
         errors.append(exc)
