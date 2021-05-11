@@ -595,17 +595,10 @@ class Deliveries(RestAPIEndpoint):
         deliveries_serial = DeliverySerializer.serialize(delivery)
         return json.dumps(deliveries_serial)
 
-    @openmotics_api_v1(auth=False, pass_token=True)
+    @openmotics_api_v1(auth=False, pass_token=True, expect_body_type='JSON')
     def post_delivery(self, token=None, request_body=None):
-        # type: (Optional[AuthenticationToken], str) -> str
-        if request_body is None:
-            raise WrongInputParametersException('Expected a body when creating a new delivery')
         try:
-            delivery_dict = json.loads(request_body)
-        except Exception as ex:
-            raise ParseException('Cannot parse the body as a valid json format: {}'.format(ex))
-        try:
-            delivery_dto = DeliverySerializer.deserialize(delivery_dict)
+            delivery_dto = DeliverySerializer.deserialize(request_body)
         except Exception as ex:
             raise ParseException('Could not create a valid delivery from the passed json data: {}'.format(ex))
         if delivery_dto.type == Delivery.DeliveryType.RETURN:
@@ -619,11 +612,8 @@ class Deliveries(RestAPIEndpoint):
         return json.dumps(saved_delivery_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True)
-    def put_delivery_pickup(self, delivery_id, token=None):
+    def put_delivery_pickup(self, delivery_id, token):
         # type: (int, AuthenticationToken) -> str
-        if token is None:
-            raise UnAuthorizedException('You need to be logged in to pick up a delivery')
-
         delivery_dto = self.delivery_controller.load_delivery(delivery_id)
         if delivery_dto is None:
             raise ItemDoesNotExistException('Cannot pickup a delivery that does not exists: id: {}'.format(delivery_id))

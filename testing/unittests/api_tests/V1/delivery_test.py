@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
 
+import cherrypy
 import copy
 import json
 import time
@@ -31,6 +32,8 @@ from gateway.user_controller import UserController
 from gateway.webservice_v1 import Deliveries
 
 from ioc import SetTestMode, SetUpTestInjections
+
+from .base import BaseCherryPyUnitTester
 
 
 class ApiDeliverysTests(unittest.TestCase):
@@ -264,7 +267,7 @@ class ApiDeliverysTests(unittest.TestCase):
             save_delivery_func.return_value = delivery_dto_to_save
             auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_delivery(token=auth_token,
-                                              request_body=json.dumps(delivery_to_create))
+                                              request_body=delivery_to_create)
             save_delivery_func.assert_called_once_with(delivery_dto_to_save)
             self.verify_delivery_created(delivery_to_create, response)
 
@@ -281,7 +284,7 @@ class ApiDeliverysTests(unittest.TestCase):
             save_delivery_func.return_value = delivery_dto_to_save
             auth_token = AuthenticationToken(user=self.test_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_delivery(token=auth_token,
-                                              request_body=json.dumps(delivery_to_create))
+                                              request_body=delivery_to_create)
             save_delivery_func.assert_called_once_with(delivery_dto_to_save)
             self.verify_delivery_created(delivery_to_create, response)
 
@@ -299,7 +302,7 @@ class ApiDeliverysTests(unittest.TestCase):
             # save an user with other credentials. this is allowed
             auth_token = AuthenticationToken(user=self.test_user_2, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_delivery(token=auth_token,
-                                              request_body=json.dumps(delivery_to_create))
+                                              request_body=delivery_to_create)
             save_delivery_func.assert_called_once_with(delivery_dto_to_save)
             self.verify_delivery_created(delivery_to_create, response)
 
@@ -316,7 +319,7 @@ class ApiDeliverysTests(unittest.TestCase):
             save_delivery_func.return_value = delivery_dto_to_save
             auth_token = None
             response = self.web.post_delivery(token=auth_token,
-                                              request_body=json.dumps(delivery_to_create))
+                                              request_body=delivery_to_create)
             save_delivery_func.assert_called_once_with(delivery_dto_to_save)
             self.verify_delivery_created(delivery_to_create, response)
 
@@ -424,15 +427,15 @@ class ApiDeliverysTests(unittest.TestCase):
             response = self.web.put_delivery_pickup(delivery_id=self.test_delivery_1.id, token=auth_token)
             self.assert_delivery_picked_up(response)
 
-    def test_pickup_delivery_no_auth(self):
-        with mock.patch.object(self.delivery_controller, 'pickup_delivery') as save_delivery_func, \
-                mock.patch.object(self.delivery_controller, 'load_delivery', return_value=self.test_delivery_1):
-            delivery_dto_to_save = self.test_delivery_1
-            delivery_dto_to_save.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
-            save_delivery_func.return_value = delivery_dto_to_save
-            auth_token = None
-            response = self.web.put_delivery_pickup(delivery_id=self.test_delivery_1.id, token=auth_token)
-            self.assertIn(UnAuthorizedException.bytes_message(), response)
+    # def test_pickup_delivery_no_auth(self):
+    #     with mock.patch.object(self.delivery_controller, 'pickup_delivery') as save_delivery_func, \
+    #             mock.patch.object(self.delivery_controller, 'load_delivery', return_value=self.test_delivery_1):
+    #         delivery_dto_to_save = self.test_delivery_1
+    #         delivery_dto_to_save.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
+    #         save_delivery_func.return_value = delivery_dto_to_save
+    #         auth_token = None
+    #         response = self.web.put_delivery_pickup(delivery_id=self.test_delivery_1.id, token=auth_token)
+    #         self.assertIn(UnAuthorizedException.bytes_message(), response)
 
     def test_pickup_delivery_user_auth(self):
         with mock.patch.object(self.delivery_controller, 'pickup_delivery') as save_delivery_func, \
@@ -463,3 +466,52 @@ class ApiDeliverysTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.test_user_2, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.put_delivery_pickup(delivery_id=37, token=auth_token)
             self.assertIn(ItemDoesNotExistException.bytes_message(), response)
+
+
+class DeliveryApiCherryPyTest(BaseCherryPyUnitTester):
+    def setUp(self):
+        super(DeliveryApiCherryPyTest, self).setUp()
+        self.delivery_controller = mock.Mock(DeliveryController)
+        SetUpTestInjections(delivery_controller=self.delivery_controller)
+        self.web = Deliveries()
+        cherrypy.tree.mount(root=self.web,
+                            script_name=self.web.API_ENDPOINT,
+                            config={'/':  {'request.dispatch': self.web.route_dispatcher}})
+
+        self.test_admin = UserDTO(
+            id=30,
+            username='admin_1',
+            role='ADMIN'
+        )
+
+        self.test_user_1 = UserDTO(
+            id=30,
+            username='user_1',
+            role='USER'
+        )
+        self.test_user_1.set_password('test')
+
+        self.test_delivery_1 = DeliveryDTO(
+            id=1,
+            type='DELIVERY',
+            parcelbox_rebus_id=1,
+            user_pickup=self.test_user_1
+        )
+
+    def test_post_no_body(self):
+        with mock.patch.object(self.delivery_controller, 'pickup_delivery') as save_delivery_func, \
+                mock.patch.object(self.delivery_controller, 'load_delivery', return_value=self.test_delivery_1):
+            delivery_dto_to_save = self.test_delivery_1
+            delivery_dto_to_save.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
+            save_delivery_func.return_value = delivery_dto_to_save
+            status, headers, response = self.POST('/api/v1/deliveries', login_user=None, body=None)
+            self.assertIn(WrongInputParametersException.bytes_message(), response)
+
+    def test_put_no_auth(self):
+        with mock.patch.object(self.delivery_controller, 'pickup_delivery') as save_delivery_func, \
+                mock.patch.object(self.delivery_controller, 'load_delivery', return_value=self.test_delivery_1):
+            delivery_dto_to_save = self.test_delivery_1
+            delivery_dto_to_save.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
+            save_delivery_func.return_value = delivery_dto_to_save
+            status, headers, response = self.PUT('/api/v1/deliveries/1/pickup', login_user=None, body=None)
+            self.assertIn(UnAuthorizedException.bytes_message(), response)
