@@ -562,7 +562,7 @@ class User(BaseModel):
     pin_code = CharField(null=True, unique=True)
     language = CharField(null=False, default='English')  # options: See Userlanguages
     password = CharField()
-    apartment_id = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
+    apartment = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
     is_active = BooleanField(default=True)
     accepted_terms = IntegerField(default=0)
 

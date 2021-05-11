@@ -311,25 +311,19 @@ class Users(RestAPIEndpoint):
             raise UnAuthorizedException('X-API-Secret is incorrect')
         return str(self._user_controller.generate_new_pin_code())
 
-    @openmotics_api_v1(auth=False, pass_role=True)
-    def post_user(self, role=None, request_body=None):
+    @openmotics_api_v1(auth=False, pass_role=True, expect_body_type='JSON')
+    def post_user(self, role, request_body):
         # Authentication:
         # only ADMIN & TECHNICIAN can create new USER, ADMIN, TECHNICIAN user types,
         # anyone can create a new COURIER
-        if request_body is None:
-            raise WrongInputParametersException('The request body is empty')
-        try:
-            user_json = json.loads(request_body)
-        except Exception:
-            raise ParseException('Could not parse the user json input')
         tmp_password = None
-        if 'role' not in user_json:
+        if 'role' not in request_body:
             raise WrongInputParametersException('The role is required to pass when creating a user')
-        if 'password' in user_json:
-            tmp_password = user_json['password']
-            del user_json['password']
+        if 'password' in request_body:
+            tmp_password = request_body['password']
+            del request_body['password']
         try:
-            user_dto = UserSerializer.deserialize(user_json)
+            user_dto = UserSerializer.deserialize(request_body)
         except RuntimeError as ex:
             raise WrongInputParametersException('Could not deserialize user json format: {}'.format(ex))
         if tmp_password is not None:
@@ -358,18 +352,10 @@ class Users(RestAPIEndpoint):
             raise WrongInputParametersException('The user could not be saved: {}'.format(e))
         return json.dumps(UserSerializer.serialize(user_dto_saved))
 
-    @openmotics_api_v1(auth=False, pass_role=False)
-    def post_activate_user(self, user_id, request_body=None):
+    @openmotics_api_v1(auth=False, pass_role=False, expect_body_type='JSON')
+    def post_activate_user(self, user_id, request_body):
         # request to activate a certain user
-        if request_body is None:
-            raise WrongInputParametersException('Body expected when calling the activate function')
-
-        try:
-            body_json = json.loads(request_body)
-        except Exception:
-            raise ParseException('Could not parse the user json input')
-
-        request_code = body_json.get('code') or body_json.get('rfid_tag')
+        request_code = request_body.get('code') or request_body.get('rfid_tag')
         if request_code is None:
             raise WrongInputParametersException('when activating, a pin code or rfid tag is expected.')
 
@@ -384,17 +370,9 @@ class Users(RestAPIEndpoint):
         self._user_controller.activate_user(user_id)
         return 'OK'
 
-    @openmotics_api_v1(auth=False, pass_role=False, pass_token=True)
+    @openmotics_api_v1(auth=True, pass_role=False, pass_token=True, expect_body_type='JSON')
     def put_update_user(self, user_id, token=None, request_body=None, **kwargs):
-        if token is None:
-            raise UnAuthorizedException('Cannot change a user without being logged in')
-        if request_body is None:
-            raise WrongInputParametersException('The request body is empty')
-        try:
-            user_json = json.loads(request_body)
-        except Exception:
-            raise ParseException('Could not parse the user json input')
-
+        user_json = request_body
         if token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
             if token.user.id != user_id:
                 raise UnAuthorizedException('As a non admin or technician user, you cannot change another user')
@@ -407,7 +385,8 @@ class Users(RestAPIEndpoint):
             if not self._user_controller.authentication_controller.check_api_secret(api_secret):
                 raise UnAuthorizedException('The api secret is not valid')
 
-        user_dto_orig = self._user_controller.load_user(user_id, clear_password=False)
+        # user_dto_orig = self._user_controller.load_user(user_id, clear_password=False)
+        user_dto_orig = self._user_controller.load_user(user_id)
         user_dto = UserSerializer.deserialize(user_json)
         for field in ['first_name', 'last_name', 'pin_code', 'language', 'apartment']:
             if field in user_dto.loaded_fields:
