@@ -19,7 +19,6 @@ import json
 
 import mock
 
-import debug_ignore
 from gateway.dto import ApartmentDTO, UserDTO
 from gateway.exceptions import *
 from gateway.apartment_controller import ApartmentController
@@ -32,7 +31,6 @@ from ioc import SetTestMode, SetUpTestInjections
 
 class ApiApartmentsTests(BaseCherryPyUnitTester):
 
-    @debug_ignore.debugmethod
     def setUp(self):
         super(ApiApartmentsTests, self).setUp()
 
