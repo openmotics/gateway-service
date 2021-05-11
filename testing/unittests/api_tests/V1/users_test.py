@@ -216,7 +216,7 @@ class ApiUsersTests(unittest.TestCase):
 
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
-                                          request_body=json.dumps(user_to_create))
+                                          request_body=user_to_create)
             self.verify_user_created(user_to_create, response)
 
     def test_create_user_empty(self):
@@ -262,7 +262,7 @@ class ApiUsersTests(unittest.TestCase):
 
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
-                                          request_body=json.dumps(user_to_create))
+                                          request_body=user_to_create.copy())
             # remove the password and the pin code to check they are not saved
             del user_to_create['pin_code']
             del user_to_create['password']
@@ -281,7 +281,7 @@ class ApiUsersTests(unittest.TestCase):
             save_user_func.side_effect = RuntimeError(exception_message)
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
-                                          request_body=json.dumps(user_to_create))
+                                          request_body=user_to_create)
             self.assertTrue(WrongInputParametersException.bytes_message() in response)
 
     def test_create_user_null_apartment(self):
@@ -300,7 +300,7 @@ class ApiUsersTests(unittest.TestCase):
 
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
-                                          request_body=json.dumps(user_to_create))
+                                          request_body=user_to_create)
             self.verify_user_created(user_to_create, response)
 
     def test_create_user_known_apartment(self):
@@ -325,7 +325,7 @@ class ApiUsersTests(unittest.TestCase):
 
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
-                                          request_body=json.dumps(user_to_create))
+                                          request_body=user_to_create.copy())
 
             # manually fill in the apartment field since it will be converted back to full output
             user_to_create['apartment'] = ApartmentSerializer.serialize(apartment_dto)
@@ -355,7 +355,7 @@ class ApiUsersTests(unittest.TestCase):
 
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
-                                          request_body=json.dumps(user_to_create))
+                                          request_body=user_to_create.copy())
             del user_to_create['pin_code']
             del user_to_create['password']
             self.verify_user_created(user_to_create, response)
@@ -365,7 +365,7 @@ class ApiUsersTests(unittest.TestCase):
         with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
                 mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
             response = self.web.post_activate_user('2',
-                                                   request_body=json.dumps(user_code))
+                                                   request_body=user_code)
             self.assertEqual(b'OK', response)
 
     def test_activate_user_wrong_code(self):
@@ -373,15 +373,8 @@ class ApiUsersTests(unittest.TestCase):
         with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
                 mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
             response = self.web.post_activate_user('2',
-                                                   request_body=json.dumps(user_code))
+                                                   request_body=user_code)
             self.assertTrue(UnAuthorizedException.bytes_message() in response)
-
-    def test_activate_user_no_body(self):
-        with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
-                mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
-            response = self.web.post_activate_user('2',
-                                                   request_body=None)
-            self.assertTrue(WrongInputParametersException.bytes_message() in response)
 
     # ----------------------------------------------------------------
     # --- PUT
@@ -399,7 +392,7 @@ class ApiUsersTests(unittest.TestCase):
             response = self.web.put_update_user('2',
                                                 token=auth_token,
                                                 role=auth_token.user.role,
-                                                request_body=json.dumps(user_to_update))
+                                                request_body=user_to_update)
 
             resp_dict = json.loads(response)
 
@@ -435,7 +428,7 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.put_update_user(user_id=5,
                                                 token=auth_token,
-                                                request_body=json.dumps(user_to_update))
+                                                request_body=user_to_update)
 
             # manually fill in the apartment field since it will be converted back to full output
             user_to_update['apartment'] = ApartmentSerializer.serialize(apartment_dto)
@@ -456,7 +449,7 @@ class ApiUsersTests(unittest.TestCase):
             response = self.web.put_update_user('2',
                                                 token=auth_token,
                                                 role=auth_token.user.role,
-                                                request_body=json.dumps(user_to_update))
+                                                request_body=user_to_update)
 
             self.assertTrue(UnAuthorizedException.bytes_message() in response)
 

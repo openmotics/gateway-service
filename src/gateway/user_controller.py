@@ -85,8 +85,8 @@ class UserController(object):
         user_orm = UserMapper.dto_to_orm(user_dto)
         UserController._validate(user_orm)
         user_orm.save()
-        if user_orm.apartment_id is not None:
-            user_orm.apartment_id.save()
+        if user_orm.apartment is not None:
+            user_orm.apartment.save()
         user_dto_saved = UserMapper.orm_to_dto(user_orm)
         return user_dto_saved
 
@@ -97,16 +97,15 @@ class UserController(object):
         for user_dto in users:
             self.save_user(user_dto)
 
-    def load_user(self, user_id, clear_password=True):
-        # type: (int, bool) -> Optional[UserDTO]
+    def load_user(self, user_id):
+        # type: (int) -> Optional[UserDTO]
         """  Returns a UserDTO of the requested user """
         _ = self
         user_orm = User.select().where(User.id == user_id).first()
         if user_orm is None:
             return None
         user_dto = UserMapper.orm_to_dto(user_orm)
-        if clear_password:
-            user_dto.clear_password()
+        user_dto.clear_password()
         return user_dto
 
     def load_users(self):

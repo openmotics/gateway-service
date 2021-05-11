@@ -20,7 +20,7 @@ import mock
 from gateway.authentication_controller import AuthenticationToken, TokenStore, AuthenticationController
 from gateway.user_controller import UserController
 
-from ioc import SetTestMode, SetUpTestInjections
+from ioc import SetTestMode, SetUpTestInjections, TearDownTestInjections
 
 if False:  # MyPy
     from typing import Optional, Dict
@@ -29,9 +29,17 @@ if False:  # MyPy
 
 class BaseCherryPyUnitTester(helper.CPWebCase):
 
+    @classmethod
+    def setUpClass(cls):
+        super(BaseCherryPyUnitTester, cls).setUpClass()
+        SetTestMode()
+
+    def tearDown(self):
+        super(BaseCherryPyUnitTester, self).tearDown()
+        TearDownTestInjections()
+
     def setUp(self):
         super(BaseCherryPyUnitTester, self).setUp()
-        SetTestMode()
         SetUpTestInjections(token_timeout=3)
         self.auth_controller = mock.Mock(AuthenticationController)
         SetUpTestInjections(authentication_controller=self.auth_controller)
@@ -74,6 +82,7 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
         # type: (str, Optional[UserDTO], Optional[Dict]) -> str
         return self.general_request(url, method='DELETE', login_user=login_user, headers=headers, body=None)
 
+    # explicitly do nothing in the setup_server function, but keep it here since it triggers it to setup the cherrypy tree
     @classmethod
     def setup_server(cls):
         pass

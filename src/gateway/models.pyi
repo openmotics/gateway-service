@@ -414,7 +414,7 @@ class User(BaseModel):
     role: MixedCharField
     pin_code: MixedCharField
     language: MixedCharField
-    apartment_id: ApartmentForeignKeyField
+    apartment: ApartmentForeignKeyField
     is_active: ApartmentForeignKeyField
     accepted_terms: MixedIntegerField
 class UserForeignKeyField(User, ForeignKeyField): ...
