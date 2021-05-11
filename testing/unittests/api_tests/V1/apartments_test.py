@@ -14,33 +14,27 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
 
+import cherrypy
 import json
-import time
-import unittest
 
 import mock
 
-from gateway.api.serializers import ApartmentSerializer
-from gateway.authentication_controller import AuthenticationToken
+import debug_ignore
 from gateway.dto import ApartmentDTO, UserDTO
 from gateway.exceptions import *
 from gateway.apartment_controller import ApartmentController
-from gateway.user_controller import UserController
 from gateway.webservice_v1 import Apartments
+
+from .base_test import BaseCherryPyUnitTester
 
 from ioc import SetTestMode, SetUpTestInjections
 
 
-class ApiApartmentsTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        SetTestMode()
+class ApiApartmentsTests(BaseCherryPyUnitTester):
 
+    @debug_ignore.debugmethod
     def setUp(self):
-        self.users_controller = mock.Mock(UserController)
-        self.apartment_controller = mock.Mock(ApartmentController)
-        SetUpTestInjections(user_controller=self.users_controller, apartment_controller=self.apartment_controller)
-        self.web = Apartments()
+        super(ApiApartmentsTests, self).setUp()
 
         # some test apartments
         self.test_apartment_1 = ApartmentDTO(
@@ -86,6 +80,13 @@ class ApiApartmentsTests(unittest.TestCase):
             accepted_terms=1
         )
 
+        self.apartment_controller = mock.Mock(ApartmentController)
+        SetUpTestInjections(apartment_controller=self.apartment_controller)
+        self.web = Apartments()
+        cherrypy.tree.mount(root=self.web,
+                            script_name=self.web.API_ENDPOINT,
+                            config={'/':  {'request.dispatch': self.web.route_dispatcher}})
+
     # ----------------------------------------------------------------
     # --- HELPERS
     # ----------------------------------------------------------------
@@ -121,15 +122,16 @@ class ApiApartmentsTests(unittest.TestCase):
 
     def test_get_apartment_list(self):
         with mock.patch.object(self.apartment_controller, 'load_apartments', return_value=self.all_apartments):
-            response = self.web.get_apartments()
+            status, headers, body = self.GET('/api/v1/apartments', login_user=None)
+            self.assertStatus('200 OK')
             for apartment in self.all_apartments:
-                self.verify_apartment_in_output(apartment, response)
+                self.verify_apartment_in_output(apartment, body)
 
     def test_get_apartment(self):
         with mock.patch.object(self.apartment_controller, 'load_apartment', return_value=self.test_apartment_1):
-            response = self.web.get_apartment('1')
-            self.verify_apartment_in_output(self.test_apartment_1, response)
-            self.verify_apartment_not_in_output(self.test_apartment_2, response)
+            status, headers, body = self.GET('/api/v1/apartments/1', login_user=None)
+            self.verify_apartment_in_output(self.test_apartment_1, body)
+            self.verify_apartment_not_in_output(self.test_apartment_2, body)
 
     # ----------------------------------------------------------------
     # --- POST
@@ -152,49 +154,40 @@ class ApiApartmentsTests(unittest.TestCase):
         with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
             apartment_dto_to_save = ApartmentDTO(**apartment_to_create)
             save_apartment_func.return_value = apartment_dto_to_save
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
-            response = self.web.post_apartment(role=auth_token.user.role,
-                                               request_body=json.dumps(apartment_to_create))
+            body = json.dumps(apartment_to_create)
+            status, headers, body = self.POST('/api/v1/apartments', login_user=self.admin_user, body=body)
             save_apartment_func.assert_called_once_with(apartment_dto_to_save)
-            self.verify_apartment_created(apartment_to_create, response)
+            self.verify_apartment_created(apartment_to_create, body)
 
     def test_create_apartment_empty(self):
         apartment_to_create = {}
         with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
             exception_message = 'TEST_EXCEPTION'
-            save_apartment_func.side_effect = RuntimeError(exception_message)
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
-            response = self.web.post_apartment(role=auth_token.user.role,
-                                               request_body=json.dumps(apartment_to_create))
-            self.assertTrue(bytes(exception_message.encode('utf-8')) in response)
+            save_apartment_func.side_effect = ValueError(exception_message)
+            status, headers, body = self.POST('/api/v1/apartments', login_user=self.admin_user, body=json.dumps(apartment_to_create))
+            self.assertTrue(bytes(exception_message.encode('utf-8')) in body)
 
     def test_create_apartment_empty_list(self):
         apartment_to_create = []
         with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
             exception_message = 'TEST_EXCEPTION'
-            save_apartment_func.side_effect = RuntimeError(exception_message)
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
-            response = self.web.post_apartments(role=auth_token.user.role,
-                                                request_body=json.dumps(apartment_to_create))
-            self.assertEqual(b'[]', response)
+            save_apartment_func.side_effect = ValueError(exception_message)
+            status, headers, body = self.POST('/api/v1/apartments/list', login_user=self.admin_user, body=json.dumps(apartment_to_create))
+            self.assertEqual(b'[]', body)
 
     def test_create_apartment_no_body(self):
         with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
             exception_message = 'TEST_EXCEPTION'
             save_apartment_func.side_effect = RuntimeError(exception_message)
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
-            response = self.web.post_apartment(role=auth_token.user.role,
-                                               request_body=None)
-            self.assertTrue(WrongInputParametersException.bytes_message() in response)
+            status, headers, body = self.POST('/api/v1/apartments', login_user=self.admin_user, body=None)
+            self.assertTrue(WrongInputParametersException.bytes_message() in body)
 
     def test_create_apartment_no_body_list(self):
         with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
             exception_message = 'TEST_EXCEPTION'
             save_apartment_func.side_effect = RuntimeError(exception_message)
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
-            response = self.web.post_apartments(role=auth_token.user.role,
-                                               request_body=None)
-            self.assertTrue(WrongInputParametersException.bytes_message() in response)
+            status, headers, body = self.POST('/api/v1/apartments/list', login_user=self.admin_user, body=None)
+            self.assertTrue(WrongInputParametersException.bytes_message() in body)
 
     def test_create_apartment_not_allowed(self):
         apartment_to_create = {
@@ -205,10 +198,8 @@ class ApiApartmentsTests(unittest.TestCase):
         with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
             apartment_dto_to_save = ApartmentDTO(**apartment_to_create)
             save_apartment_func.return_value = apartment_dto_to_save
-            auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
-            response = self.web.post_apartment(role=auth_token.user.role,
-                                               request_body=json.dumps(apartment_to_create))
-            self.assertTrue(UnAuthorizedException.bytes_message() in response)
+            status, headers, body = self.POST('/api/v1/apartments', login_user=self.normal_user_1, body=json.dumps(apartment_to_create))
+            self.assertTrue(UnAuthorizedException.bytes_message() in body)
 
     def test_create_apartment_id_filled_in(self):
         apartment_to_create = {
@@ -220,11 +211,8 @@ class ApiApartmentsTests(unittest.TestCase):
         with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
             apartment_dto_to_save = ApartmentDTO(**apartment_to_create)
             save_apartment_func.return_value = apartment_dto_to_save
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
-            response = self.web.post_apartment(role=auth_token.user.role,
-                                               request_body=json.dumps(apartment_to_create))
-            print(response)
-            self.assertTrue(WrongInputParametersException.bytes_message() in response)
+            status, headers, body = self.POST('/api/v1/apartments', login_user=self.admin_user, body=json.dumps(apartment_to_create))
+            self.assertTrue(WrongInputParametersException.bytes_message() in body)
 
     def test_create_apartment_id_filled_in_list(self):
         apartment_to_create = [{
@@ -236,11 +224,8 @@ class ApiApartmentsTests(unittest.TestCase):
         with mock.patch.object(self.apartment_controller, 'save_apartment') as save_apartment_func:
             apartment_dto_to_save = ApartmentDTO(**apartment_to_create[0])
             save_apartment_func.return_value = apartment_dto_to_save
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
-            response = self.web.post_apartments(role=auth_token.user.role,
-                                               request_body=json.dumps(apartment_to_create))
-            print(response)
-            self.assertTrue(WrongInputParametersException.bytes_message() in response)
+            status, headers, body = self.POST('/api/v1/apartments/list', login_user=self.admin_user, body=json.dumps(apartment_to_create))
+            self.assertTrue(WrongInputParametersException.bytes_message() in body)
 
     # ----------------------------------------------------------------
     # --- PUT
@@ -255,11 +240,8 @@ class ApiApartmentsTests(unittest.TestCase):
         # Change the apartment so that it will be correctly loaded
         self.test_apartment_1.name = apartment_to_update['name']
         with mock.patch.object(self.apartment_controller, 'update_apartment', return_value=self.test_apartment_1) as update_apartment_func:
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
-            response = self.web.put_apartment('1',
-                                              role=auth_token.user.role,
-                                              request_body=json.dumps(apartment_to_update))
-            resp_dict = json.loads(response)
+            status, headers, body = self.PUT('/api/v1/apartments/1', login_user=self.admin_user, body=json.dumps(apartment_to_update))
+            resp_dict = json.loads(body)
             apartment_dto_response = ApartmentDTO(**resp_dict)
             self.assertEqual(self.test_apartment_1, apartment_dto_response)
 
@@ -272,19 +254,13 @@ class ApiApartmentsTests(unittest.TestCase):
         # Change the apartment so that it will be correctly loaded
         self.test_apartment_1.name = apartment_to_update['name']
         with mock.patch.object(self.apartment_controller, 'update_apartment', return_value=self.test_apartment_1) as update_apartment_func:
-            auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
-            response = self.web.put_apartment('1',
-                                              role=auth_token.user.role,
-                                              request_body=json.dumps(apartment_to_update))
-            self.assertTrue(UnAuthorizedException.bytes_message() in response)
+            status, headers, body = self.PUT('/api/v1/apartments/1', login_user=self.normal_user_1, body=json.dumps(apartment_to_update))
+            self.assertTrue(UnAuthorizedException.bytes_message() in body)
 
     def test_update_apartment_empty_body(self):
         with mock.patch.object(self.apartment_controller, 'update_apartment', return_value=self.test_apartment_1) as update_apartment_func:
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
-            response = self.web.put_apartment('1',
-                                              role=auth_token.user.role,
-                                              request_body=None)
-            self.assertTrue(WrongInputParametersException.bytes_message() in response)
+            status, headers, body = self.PUT('/api/v1/apartments/1', login_user=self.admin_user, body=None)
+            self.assertTrue(WrongInputParametersException.bytes_message() in body)
 
     # ----------------------------------------------------------------
     # --- DELETE
@@ -292,13 +268,11 @@ class ApiApartmentsTests(unittest.TestCase):
 
     def test_delete_apartment(self):
         with mock.patch.object(self.apartment_controller, 'delete_apartment') as delete_apartment_func:
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
-            response = self.web.delete_apartment('2', role=auth_token.user.role)
-            self.assertEqual(b'OK', response)
+            status, headers, body = self.DELETE('/api/v1/apartments/2', login_user=self.admin_user)
+            self.assertEqual(b'OK', body)
 
     def test_delete_apartment_unauthorized(self):
         with mock.patch.object(self.apartment_controller, 'delete_apartment') as delete_apartment_func:
-            auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
-            response = self.web.delete_apartment('2', role=auth_token.user.role)
-            self.assertTrue(UnAuthorizedException.bytes_message() in response)
+            status, headers, body = self.DELETE('/api/v1/apartments/2', login_user=self.normal_user_1)
+            self.assertTrue(UnAuthorizedException.bytes_message() in body)
 

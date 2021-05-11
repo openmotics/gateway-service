@@ -64,9 +64,9 @@ class UserSerializer(object):
                     if ApartmentController.apartment_id_exists(apartment_element):
                         apartment_dto = ApartmentController.load_apartment(apartment_element)
                     else:
-                        raise RuntimeError('apartment_id provided in user json does not exists')
+                        raise ValueError('apartment_id provided in user json does not exists')
                 else:
-                    raise RuntimeError('user json deserialize: apartment does require an array with one id inside')
+                    raise ValueError('user json deserialize: apartment does require an array with one id inside')
             user_dto.apartment = apartment_dto
         if 'password' in api_data:
             user_dto.set_password(api_data['password'])

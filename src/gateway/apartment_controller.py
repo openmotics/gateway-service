@@ -62,7 +62,7 @@ class ApartmentController(object):
     def apartment_id_exists(apartment_id):
         # type: (int) -> bool
         apartments = ApartmentController.load_apartments()
-        ids = [x.id for x in apartments]
+        ids = (x.id for x in apartments)
         return apartment_id in ids
 
     @staticmethod
