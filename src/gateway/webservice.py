@@ -54,7 +54,7 @@ from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO, \
     GlobalRTD10DTO
 from gateway.enums import ShutterEnums, UserEnums
-from gateway.exceptions import UnsupportedException, FeatureUnavailableException, ItemDoesNotExistException
+from gateway.exceptions import UnsupportedException, FeatureUnavailableException, ItemDoesNotExistException, WrongInputParametersException, ParseException
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
@@ -162,7 +162,7 @@ def params_parser(params, param_types):
                 params[key] = param_types[key](value)
 
 
-def params_handler(**kwargs):
+def params_handler(expect_body_type=None, **kwargs):
     """ Converts/parses/loads specified request params. """
     request = cherrypy.request
     response = cherrypy.response
@@ -170,7 +170,18 @@ def params_handler(**kwargs):
         if request.method in request.methods_with_bodies:
             body = request.body.read()
             if body:
-                request.params['request_body'] = body
+                parsed_body = body
+                if expect_body_type == 'JSON':
+                    try:
+                        parsed_body = json.loads(body)
+                    except Exception:
+                        raise ParseException('Could not parse the json body type')
+                elif expect_body_type == 'RAW':
+                    pass
+                request.params['request_body'] = parsed_body
+            else:
+                if expect_body_type is not None:
+                    raise WrongInputParametersException('No body has been passed to the request')
     except Exception:
         response.headers['Content-Type'] = 'application/json'
         response.status = 406  # No Acceptable

@@ -40,9 +40,6 @@ class ApartmentMapper(object):
     def dto_to_orm(dto_object):
         # type: (ApartmentDTO) -> Apartment
         apartment_orm = Apartment.get_or_none(id=dto_object.id)
-        # apartment_orm = Apartment.get_or_none(name=dto_object.name,
-        #                                       mailbox_rebus_id=dto_object.mailbox_rebus_id,
-        #                                       doorbell_rebus_id=dto_object.doorbell_rebus_id)
         if apartment_orm is None:
             mandatory_fields = {'name', 'mailbox_rebus_id', 'doorbell_rebus_id'}
             if not mandatory_fields.issubset(set(dto_object.loaded_fields)):
