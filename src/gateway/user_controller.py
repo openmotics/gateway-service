@@ -81,6 +81,8 @@ class UserController(object):
         user_orm = UserMapper.dto_to_orm(user_dto)
         UserController._validate(user_orm)
         user_orm.save()
+        if user_orm.apartment is not None:
+            user_orm.apartment.save()
         user_dto_saved = UserMapper.orm_to_dto(user_orm)
         return user_dto_saved
 

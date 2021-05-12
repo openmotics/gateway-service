@@ -39,7 +39,7 @@ class UserMapper(object):
                            is_active=orm_object.is_active,
                            accepted_terms=orm_object.accepted_terms)
         try:
-            apartment_orm = orm_object.apartment_id
+            apartment_orm = orm_object.apartment
             if apartment_orm is not None:
                 apartment_dto = ApartmentMapper.orm_to_dto(apartment_orm)
                 user_dto.apartment = apartment_dto
@@ -72,9 +72,9 @@ class UserMapper(object):
                 continue
             elif field == 'hashed_password':
                 user_orm.password = dto_object.hashed_password
-            elif field == 'apartment_id' and dto_object.apartment is not None:
+            elif field == 'apartment' and dto_object.apartment is not None:
                 apartment_orm = ApartmentMapper.dto_to_orm(dto_object.apartment)
-                user_orm.apartment_id = apartment_orm
+                user_orm.apartment = apartment_orm
             elif field not in ['username', 'hashed_password']:
                 setattr(user_orm, field, getattr(dto_object, field))
         return user_orm

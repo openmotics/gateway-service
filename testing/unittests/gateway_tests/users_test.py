@@ -76,6 +76,9 @@ class UserControllerTest(unittest.TestCase):
         num_users = self.controller.get_number_of_users()
         self.assertEqual(1, num_users)
 
+        num_users = User.select().count()
+        self.assertEqual(1, num_users)
+
         # setup test credentials
         user_dto = UserDTO(username='fred',
                            role=User.UserRoles.ADMIN,

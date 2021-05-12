@@ -20,9 +20,10 @@ from __future__ import absolute_import
 
 import logging
 
-from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto.user import UserDTO
+from gateway.apartment_controller import ApartmentController
 from gateway.api.serializers.apartment import ApartmentSerializer
+from gateway.api.serializers.base import SerializerToolbox
+from gateway.dto import UserDTO, ApartmentDTO
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple, Union
@@ -43,7 +44,7 @@ class UserSerializer(object):
                 'apartment': None,
                 'is_active': dto_object.is_active,
                 'accepted_terms': dto_object.accepted_terms}  # type: Dict[str, Any]
-        if fields is not None and 'apartment' in fields:
+        if 'apartment' in dto_object.loaded_fields and isinstance(dto_object.apartment, ApartmentDTO):
             apartment_data = ApartmentSerializer.serialize(dto_object.apartment)
             data['apartment'] = apartment_data
         return SerializerToolbox.filter_fields(data, fields)
@@ -57,8 +58,15 @@ class UserSerializer(object):
                 setattr(user_dto, field, api_data[field])
         apartment_dto = None
         if 'apartment' in api_data:
-            if api_data['apartment'] is not None:
-                apartment_dto = ApartmentSerializer.deserialize(api_data['apartment'])
+            if api_data['apartment'] is not None and isinstance(api_data['apartment'], list):
+                apartment_element = api_data['apartment'][0]
+                if isinstance(apartment_element, int):
+                    if ApartmentController.apartment_id_exists(apartment_element):
+                        apartment_dto = ApartmentController.load_apartment(apartment_element)
+                    else:
+                        raise ValueError('apartment_id provided in user json does not exists')
+                else:
+                    raise ValueError('user json deserialize: apartment does require an array with one id inside')
             user_dto.apartment = apartment_dto
         if 'password' in api_data:
             user_dto.set_password(api_data['password'])

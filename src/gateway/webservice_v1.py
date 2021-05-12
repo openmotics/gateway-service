@@ -27,11 +27,13 @@ import time
 from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.api.serializers.user import UserSerializer
+from gateway.dto import ApartmentDTO
 from gateway.exceptions import *
 from gateway.models import User
-from gateway.webservice import params_handler
+from gateway.webservice import params_handler, params_parser
 
 if False:  # MyPy
+    from gateway.apartment_controller import ApartmentController
     from gateway.authentication_controller import AuthenticationToken
     from gateway.user_controller import UserController
     from gateway.webservice import WebService
@@ -97,7 +99,7 @@ def _openmotics_api_v1(f):
     return wrapper
 
 
-def authentication_handler_v1(pass_token=False, pass_role=False, throw_error=True):
+def authentication_handler_v1(pass_token=False, pass_role=False, throw_error=True, allowed_user_roles=None):
     request = cherrypy.request
     if request.method == 'OPTIONS':
         return
@@ -125,8 +127,11 @@ def authentication_handler_v1(pass_token=False, pass_role=False, throw_error=Tru
         # Fetch the checkToken function that is placed under the main webservice or under the plugin webinterface.
         check_token = _self._user_controller.authentication_controller.check_token
         checked_token = check_token(token)  # type: Optional[AuthenticationToken]
-        if checked_token is None and throw_error:
-            raise UnAuthorizedException('Unauthorized API call')
+        if throw_error:
+            if checked_token is None:
+                raise UnAuthorizedException('Unauthorized API call')
+            if allowed_user_roles is not None and checked_token.user.role not in allowed_user_roles:
+                raise UnAuthorizedException('User role is not allowed for this API call: Allowed: {}, Got: {}'.format(allowed_user_roles, checked_token.user.role))
         if pass_token is True:
             request.params['token'] = checked_token
         if pass_role is True:
@@ -142,21 +147,63 @@ def authentication_handler_v1(pass_token=False, pass_role=False, throw_error=Tru
         # do not handle the request, just return the unauthorized message
         request.handler = None
 
+def params_handler_v1(expect_body_type=None, **kwargs):
+    """ Converts/parses/loads specified request params. """
+    request = cherrypy.request
+    response = cherrypy.response
+    try:
+        if request.method in request.methods_with_bodies:
+            body = request.body.read()
+            if body:
+                parsed_body = body
+                if expect_body_type == 'JSON':
+                    try:
+                        parsed_body = json.loads(body)
+                    except Exception:
+                        raise ParseException('Could not parse the json body type')
+                elif expect_body_type == 'RAW':
+                    pass
+                request.params['request_body'] = parsed_body
+            else:
+                if expect_body_type is not None:
+                    raise WrongInputParametersException('No body has been passed to the request')
+    except (ParseException, WrongInputParametersException) as ex:
+        response.status = 400
+        contents = ex.message
+        response.body = contents.encode()
+        request.handler = None
+        return
+    except Exception:
+        response.status = 406  # No Acceptable
+        contents = 'Generic Error: invalid_body'
+        response.body = contents.encode()
+        request.handler = None
+        return
+    try:
+        params_parser(request.params, kwargs)
+    except ValueError:
+        response.status = 400  # No Acceptable
+        contents = WrongInputParametersException.DESC
+        response.body = contents.encode()
+        request.handler = None
+
 
 # Assign the v1 authentication handler
 cherrypy.tools.authenticated_v1 = cherrypy.Tool('before_handler', authentication_handler_v1)
-cherrypy.tools.params_v1 = cherrypy.Tool('before_handler', params_handler)
+cherrypy.tools.params_v1 = cherrypy.Tool('before_handler', params_handler_v1)
 
 
-def openmotics_api_v1(_func=None, check=None, auth=False, pass_token=False, pass_role=False):
+def openmotics_api_v1(_func=None, check=None, auth=False, pass_token=False, pass_role=False, allowed_user_roles=None, expect_body_type=None):
     def decorator_openmotics_api_v1(func):
         func = _openmotics_api_v1(func)  # First layer decorator
         if auth is True:
             # Second layer decorator
-            func = cherrypy.tools.authenticated_v1(pass_token=pass_token, pass_role=pass_role)(func)
+            func = cherrypy.tools.authenticated_v1(pass_token=pass_token, pass_role=pass_role, allowed_user_roles=allowed_user_roles)(func)
         elif pass_token or pass_role:
-            func = cherrypy.tools.authenticated_v1(pass_token=pass_token, pass_role=pass_role, throw_error=False)(func)
-        func = cherrypy.tools.params(**(check or {}))(func)
+            func = cherrypy.tools.authenticated_v1(pass_token=pass_token, pass_role=pass_role, allowed_user_roles=allowed_user_roles, throw_error=False)(func)
+        if check is not None:
+            check['expect_body_type'] = expect_body_type
+        func = cherrypy.tools.params_v1(**(check or {'expect_body_type': expect_body_type}))(func)
         return func
     if _func is None:
         return decorator_openmotics_api_v1
@@ -264,24 +311,21 @@ class Users(RestAPIEndpoint):
             raise UnAuthorizedException('X-API-Secret is incorrect')
         return str(self._user_controller.generate_new_pin_code())
 
-    @openmotics_api_v1(auth=False, pass_role=True)
-    def post_user(self, role=None, request_body=None):
+    @openmotics_api_v1(auth=False, pass_role=True, expect_body_type='JSON')
+    def post_user(self, role, request_body):
         # Authentication:
         # only ADMIN & TECHNICIAN can create new USER, ADMIN, TECHNICIAN user types,
         # anyone can create a new COURIER
-        if request_body is None:
-            raise WrongInputParametersException('The request body is empty')
-        try:
-            user_json = json.loads(request_body)
-        except Exception:
-            raise ParseException('Could not parse the user json input')
         tmp_password = None
-        if 'role' not in user_json:
+        if 'role' not in request_body:
             raise WrongInputParametersException('The role is required to pass when creating a user')
-        if 'password' in user_json:
-            tmp_password = user_json['password']
-            del user_json['password']
-        user_dto = UserSerializer.deserialize(user_json)
+        if 'password' in request_body:
+            tmp_password = request_body['password']
+            del request_body['password']
+        try:
+            user_dto = UserSerializer.deserialize(request_body)
+        except RuntimeError as ex:
+            raise WrongInputParametersException('Could not deserialize user json format: {}'.format(ex))
         if tmp_password is not None:
             user_dto.set_password(tmp_password)
 
@@ -308,18 +352,10 @@ class Users(RestAPIEndpoint):
             raise WrongInputParametersException('The user could not be saved: {}'.format(e))
         return json.dumps(UserSerializer.serialize(user_dto_saved))
 
-    @openmotics_api_v1(auth=False, pass_role=False)
-    def post_activate_user(self, user_id, request_body=None):
+    @openmotics_api_v1(auth=False, pass_role=False, expect_body_type='JSON')
+    def post_activate_user(self, user_id, request_body):
         # request to activate a certain user
-        if request_body is None:
-            raise WrongInputParametersException('Body expected when calling the activate function')
-
-        try:
-            body_json = json.loads(request_body)
-        except Exception:
-            raise ParseException('Could not parse the user json input')
-
-        request_code = body_json.get('code') or body_json.get('rfid_tag')
+        request_code = request_body.get('code') or request_body.get('rfid_tag')
         if request_code is None:
             raise WrongInputParametersException('when activating, a pin code or rfid tag is expected.')
 
@@ -334,17 +370,9 @@ class Users(RestAPIEndpoint):
         self._user_controller.activate_user(user_id)
         return 'OK'
 
-    @openmotics_api_v1(auth=False, pass_role=False, pass_token=True)
+    @openmotics_api_v1(auth=True, pass_role=False, pass_token=True, expect_body_type='JSON')
     def put_update_user(self, user_id, token=None, request_body=None, **kwargs):
-        if token is None:
-            raise UnAuthorizedException('Cannot change a user without being logged in')
-        if request_body is None:
-            raise WrongInputParametersException('The request body is empty')
-        try:
-            user_json = json.loads(request_body)
-        except Exception:
-            raise ParseException('Could not parse the user json input')
-
+        user_json = request_body
         if token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
             if token.user.id != user_id:
                 raise UnAuthorizedException('As a non admin or technician user, you cannot change another user')
@@ -357,14 +385,15 @@ class Users(RestAPIEndpoint):
             if not self._user_controller.authentication_controller.check_api_secret(api_secret):
                 raise UnAuthorizedException('The api secret is not valid')
 
+        # user_dto_orig = self._user_controller.load_user(user_id, clear_password=False)
         user_dto_orig = self._user_controller.load_user(user_id)
         user_dto = UserSerializer.deserialize(user_json)
         for field in ['first_name', 'last_name', 'pin_code', 'language', 'apartment']:
             if field in user_dto.loaded_fields:
                 setattr(user_dto_orig, field, getattr(user_dto, field))
-        self._user_controller.save_user(user_dto_orig)
-        user_loaded = self._user_controller.load_user(user_id)
-        return json.dumps(UserSerializer.serialize(user_loaded))
+        saved_user = self._user_controller.save_user(user_dto_orig)
+        saved_user.clear_password()
+        return json.dumps(UserSerializer.serialize(saved_user))
 
     @openmotics_api_v1(auth=False, pass_role=False, pass_token=True)
     def delete_user(self, user_id, token=None):
@@ -383,19 +412,129 @@ class Users(RestAPIEndpoint):
         return 'OK'
 
 
-class Apartment(RestAPIEndpoint):
+class Apartments(RestAPIEndpoint):
     API_ENDPOINT = '/api/v1/apartments'
 
-    def GET(self):
-        return json.dumps({'apartment': 'testApartment'})
+    @Inject
+    def __init__(self, apartment_controller=INJECTED):
+        # type: (ApartmentController) -> None
+        super(Apartments, self).__init__()
+        self.apartment_controller = apartment_controller
+        # Set a custom route dispatcher in the class so that you have full
+        # control over how the routes are defined.
+        self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
+        # --- GET ---
+        self.route_dispatcher.connect('get_apartment', '',
+                                      controller=self, action='get_apartments',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_apartment', '/:apartment_id',
+                                      controller=self, action='get_apartment',
+                                      conditions={'method': ['GET']})
+        # --- POST ---
+        self.route_dispatcher.connect('post_apartment', '',
+                                      controller=self, action='post_apartment',
+                                      conditions={'method': ['POST']})
+        self.route_dispatcher.connect('post_apartment_list', '/list',
+                                      controller=self, action='post_apartments',
+                                      conditions={'method': ['POST']})
+        # --- PUT ---
+        self.route_dispatcher.connect('put_apartments', '',
+                                      controller=self, action='put_apartments',
+                                      conditions={'method': ['PUT']})
+        self.route_dispatcher.connect('put_apartment', '/:apartment_id',
+                                      controller=self, action='put_apartment',
+                                      conditions={'method': ['PUT']})
+        # --- DELETE ---
+        self.route_dispatcher.connect('delete_apartment', '/:apartment_id',
+                                      controller=self, action='delete_apartment',
+                                      conditions={'method': ['DELETE']})
 
-    def POST(self, list=None):
-        request_body = cherrypy.request.body.read(int(cherrypy.request.headers['Content-Length']))
-        if request_body is None:
-            return json.dumps({'apartment': 'Pass a apartment body with your post request', 'testparam': list})
-        else:
-            request_body = json.loads(request_body)
-            return json.dumps({'body': request_body, 'testparam': list})
+    @openmotics_api_v1(auth=False, pass_role=False, pass_token=False)
+    def get_apartments(self):
+        apartments = self.apartment_controller.load_apartments()
+        apartments_serial = []
+        for apartment in apartments:
+            apartments_serial.append(ApartmentSerializer.serialize(apartment))
+        return json.dumps(apartments_serial)
+
+    @openmotics_api_v1(auth=False, pass_role=False, pass_token=False)
+    def get_apartment(self, apartment_id):
+        apartment_dto = self.apartment_controller.load_apartment(apartment_id)
+        if apartment_dto is None:
+            raise ItemDoesNotExistException('Apartment with id {} does not exists'.format(apartment_id))
+        apartment_serial = ApartmentSerializer.serialize(apartment_dto)
+        return json.dumps(apartment_serial)
+
+    @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
+                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN],
+                       expect_body_type='JSON')
+    def post_apartments(self, request_body):
+        to_create_apartments = []
+        for apartment in request_body:
+            apartment_dto = ApartmentSerializer.deserialize(apartment)
+            if 'id' in apartment_dto.loaded_fields:
+                raise WrongInputParametersException('The apartments cannot have an ID set when creating a new apartment')
+            if apartment_dto is None:
+                raise WrongInputParametersException('Could not parse the json body: Could not parse apartment: {}'.format(apartment))
+            to_create_apartments.append(apartment_dto)
+
+        apartments_serial = []
+        for apartment in to_create_apartments:
+            apartment_dto = self.apartment_controller.save_apartment(apartment)
+            apartments_serial.append(ApartmentSerializer.serialize(apartment_dto))
+        return json.dumps(apartments_serial)
+
+    @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
+                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN],
+                       expect_body_type='JSON')
+    def post_apartment(self, request_body=None):
+        apartment_deserialized = ApartmentSerializer.deserialize(request_body)
+        apartment_dto = self.apartment_controller.save_apartment(apartment_deserialized)
+        if 'id' in apartment_dto.loaded_fields:
+            raise WrongInputParametersException('The apartments cannot have an ID set when creating a new apartment')
+        if apartment_dto is None:
+            raise ItemDoesNotExistException('Could not create the apartment: Could not load after creation')
+        apartment_serial = ApartmentSerializer.serialize(apartment_dto)
+        return json.dumps(apartment_serial)
+
+    @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
+                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN],
+                       expect_body_type='JSON')
+    def put_apartment(self, apartment_id, request_body):
+        try:
+            apartment_dto = ApartmentSerializer.deserialize(request_body)
+            apartment_dto.id = apartment_id
+        except Exception:
+            raise WrongInputParametersException('Could not parse the json body into an apartment object')
+        apartment_dto = self.apartment_controller.update_apartment(apartment_dto)
+        return json.dumps(ApartmentSerializer.serialize(apartment_dto))
+
+    @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
+                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN],
+                       expect_body_type='JSON')
+    def put_apartments(self, request_body):
+        apartments_to_update = []
+        for apartment in request_body:
+            apartment_dto = ApartmentSerializer.deserialize(apartment)
+            if 'id' not in apartment_dto.loaded_fields or apartment_dto.id is None:
+                raise WrongInputParametersException('The ID is needed to know which apartment to update.')
+            apartments_to_update.append(apartment_dto)
+
+        updated_apartments = []
+        for apartment in apartments_to_update:
+            apartment_dto = self.apartment_controller.update_apartment(apartment)
+            updated_apartments.append(apartment_dto)
+        return json.dumps([ApartmentSerializer.serialize(apartment_dto) for apartment_dto in updated_apartments])
+
+    @openmotics_api_v1(auth=True, pass_role=True, pass_token=False)
+    def delete_apartment(self, apartment_id, role=None):
+        if role is None:
+            raise UnAuthorizedException('Authentication is needed when updating an apartment')
+        if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            raise UnAuthorizedException('You need to be logged in as an admin or technician to update an apartment')
+        apartment_dto = ApartmentDTO(id=apartment_id)
+        self.apartment_controller.delete_apartment(apartment_dto)
+        return 'OK'
 
 
 @Injectable.named('web_service_v1')
@@ -406,7 +545,7 @@ class WebServiceV1(object):
         self.web_service = web_service
         self.endpoints = [
             Users(),
-            Apartment()
+            Apartments()
         ]
 
     def start(self):
