@@ -422,6 +422,7 @@ class Toolbox(object):
             for module in INPUT_MODULE_LAYOUT:
                 if module.is_can:
                     ucan_inputs += module.inputs
+            logger.debug('Toggle uCAN inputs %s', ucan_inputs)
             for ucan_input in ucan_inputs:
                 self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
                 time.sleep(0.5)
@@ -438,7 +439,7 @@ class Toolbox(object):
             if input_modules:
                 self.tester.toggle_output(self.DEBIAN_DISCOVER_INPUT, delay=0.5)
                 new_modules += self.watch_module_discovery_log(module_amounts={'I': 1}, addresses=addresses)
-            if can_controls:
+            if can_controls or ucans:
                 self.tester.toggle_output(self.DEBIAN_DISCOVER_CAN_CONTROL, delay=0.5)
                 module_amounts = {'C': 1}
                 if ucans:

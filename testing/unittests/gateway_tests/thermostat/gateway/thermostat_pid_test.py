@@ -14,16 +14,20 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
 
-import unittest
-import fakesleep
-import mock
 import logging
+import unittest
+
+import mock
 from peewee import SqliteDatabase
 
-from gateway.models import Output, Valve, Thermostat, ThermostatGroup, Sensor, Preset, ValveToThermostat, DaySchedule
-from gateway.gateway_api import GatewayApi
-from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
-from gateway.thermostat.gateway.thermostat_pid import ThermostatPid, PID
+import fakesleep
+from gateway.dto import SensorStatusDTO
+from gateway.models import DaySchedule, Output, Preset, Sensor, Thermostat, \
+    ThermostatGroup, Valve, ValveToThermostat
+from gateway.sensor_controller import SensorController
+from gateway.thermostat.gateway.pump_valve_controller import \
+    PumpValveController
+from gateway.thermostat.gateway.thermostat_pid import PID, ThermostatPid
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 
@@ -46,15 +50,16 @@ class PumpValveControllerTest(unittest.TestCase):
         self.test_db.bind(MODELS)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
-        self._gateway_api = mock.Mock(GatewayApi)
-        self._gateway_api.get_sensor_temperature_status.return_value = 0.0
+        sensor_controller = mock.Mock(SensorController)
+        sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(id=x, value=10.0)
         self._pump_valve_controller = mock.Mock(PumpValveController)
-        SetUpTestInjections(gateway_api=self._gateway_api)
+        SetUpTestInjections(sensor_controller=sensor_controller)
+        sensor = Sensor.create(source='master', external_id='1', physical_quantity='temperature', name='')
         self._thermostat_group = ThermostatGroup.create(number=0,
                                                         name='thermostat group',
                                                         on=True,
                                                         threshold_temperature=10.0,
-                                                        sensor=Sensor.create(number=1),
+                                                        sensor=sensor,
                                                         mode='heating')
 
     def tearDown(self):
@@ -62,9 +67,10 @@ class PumpValveControllerTest(unittest.TestCase):
         self.test_db.close()
 
     def _get_thermostat_pid(self):
+        sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
         thermostat = Thermostat.create(number=1,
                                        name='thermostat 1',
-                                       sensor=Sensor.create(number=10),
+                                       sensor=sensor,
                                        pid_heating_p=200,
                                        pid_heating_i=100,
                                        pid_heating_d=50,

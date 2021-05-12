@@ -33,9 +33,10 @@ logger = logging.getLogger("openmotics")
 class ThermostatMapper(object):
     @staticmethod
     def orm_to_dto(orm_object, mode):  # type: (Thermostat, Literal['cooling', 'heating']) -> ThermostatDTO
+        sensor_id = None if orm_object.sensor is None else orm_object.sensor.id
         dto = ThermostatDTO(id=orm_object.number,
                             name=orm_object.name,
-                            sensor=orm_object.sensor.number if orm_object.sensor is not None else None,
+                            sensor=sensor_id,
                             pid_p=getattr(orm_object, 'pid_{0}_p'.format(mode)),
                             pid_i=getattr(orm_object, 'pid_{0}_i'.format(mode)),
                             pid_d=getattr(orm_object, 'pid_{0}_d'.format(mode)),
@@ -126,6 +127,12 @@ class ThermostatMapper(object):
 
         objects = {}  # type: Dict[str, Dict[int, Any]]
 
+        def _load_sensor(pk):
+            sensor = Sensor.get_or_none(id=pk)
+            if sensor and sensor.physical_quantity != Sensor.PhysicalQuantities.TEMPERATURE:
+                raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor.id, sensor.physical_quantity))
+            return sensor
+
         def _load_object(orm_type, number):
             if number is None:
                 return None
@@ -144,7 +151,7 @@ class ThermostatMapper(object):
             thermostat = Thermostat(number=thermostat_dto.id)
             thermostat.thermostat_group = thermostat_group
         for orm_field, (dto_field, mapping) in {'name': ('name', None),
-                                                'sensor': ('sensor', lambda n: _load_object(Sensor, n)),
+                                                'sensor': ('sensor', _load_sensor),
                                                 'room': ('room', lambda n: _load_object(Room, n)),
                                                 'pid_{0}_p'.format(mode): ('pid_p', float),
                                                 'pid_{0}_i'.format(mode): ('pid_i', float),

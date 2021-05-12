@@ -19,10 +19,11 @@ from __future__ import absolute_import
 
 import logging
 
-from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
-    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, \
-    ThermostatAircoStatusDTO, PumpGroupDTO, GlobalFeedbackDTO, OutputStateDTO, \
-    LegacyScheduleDTO, LegacyStartupActionDTO, DimmerConfigurationDTO
+from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
+    GroupActionDTO, InputDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
+    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStateDTO, PulseCounterDTO, \
+    PumpGroupDTO, ShutterDTO, ShutterGroupDTO, \
+    ThermostatAircoStatusDTO, ThermostatDTO
 from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import MasterController
 
@@ -186,7 +187,7 @@ class MasterDummyController(MasterController):
         return []
 
     def load_sensors(self):
-        # type: () -> List[SensorDTO]
+        # type: () -> List[MasterSensorDTO]
         return []
 
     def get_sensors_temperature(self):

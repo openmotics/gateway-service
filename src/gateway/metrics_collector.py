@@ -518,30 +518,7 @@ class MetricsCollector(object):
         while not self._stopped:
             start = time.time()
             try:
-                now = time.time()
-                temperatures = self._gateway_api.get_sensors_temperature_status()
-                humidities = self._gateway_api.get_sensors_humidity_status()
-                brightnesses = self._gateway_api.get_sensors_brightness_status()
-                for sensor_id, sensor_dto in self._environment_sensors.items():
-                    name = sensor_dto.name
-                    # TODO: Add a flag to the ORM to store this "in use" metadata
-                    if name == '' or name == 'NOT_IN_USE':
-                        continue
-                    tags = {'id': sensor_id,
-                            'name': name}
-                    values = {}
-                    if temperatures[sensor_id] is not None:
-                        values['temp'] = temperatures[sensor_id]
-                    if humidities[sensor_id] is not None:
-                        values['hum'] = humidities[sensor_id]
-                    if brightnesses[sensor_id] is not None:
-                        values['bright'] = brightnesses[sensor_id]
-                    if len(values) == 0:
-                        continue
-                    self._enqueue_metrics(metric_type=metric_type,
-                                          values=values,
-                                          tags=tags,
-                                          timestamp=now)
+                self._process_sensors(metric_type)
             except CommunicationFailure as ex:
                 logger.info('Error getting sensor status: {}'.format(ex))
             except Exception as ex:
@@ -549,6 +526,28 @@ class MetricsCollector(object):
             if self._stopped:
                 return
             self._pause(start, metric_type)
+
+    def _process_sensors(self, metric_type):
+        # type: (str) -> None
+        now = time.time()
+        status_map = {s.id: s for s in self._sensor_controller.get_sensors_status()}
+        for sensor_id, sensor_dto in self._environment_sensors.items():
+            # TODO: Add a flag to the ORM to store this "in use" metadata
+            if sensor_dto.name in ('', 'NOT_IN_USE'):
+                continue
+            tags = {'id': sensor_id,
+                    'name': sensor_dto.name,
+                    'unit': sensor_dto.unit}
+            values = {}
+            status = status_map.get(sensor_dto.id)
+            if status:
+                values[sensor_dto.physical_quantity] = status.value
+            if len(values) == 0:
+                continue
+            self._enqueue_metrics(metric_type=metric_type,
+                                  values=values,
+                                  tags=tags,
+                                  timestamp=now)
 
     def _run_thermostats(self, metric_type):
         while not self._stopped:
@@ -656,12 +655,12 @@ class MetricsCollector(object):
         # type: (str) -> None
         while not self._stopped:
             start = time.time()
-            self._run_power_metrics(metric_type)
+            self._process_power_metrics(metric_type)
             if self._stopped:
                 return
             self._pause(start, metric_type)
 
-    def _run_power_metrics(self, metric_type):
+    def _process_power_metrics(self, metric_type):
         # type: (str) -> None
         def _add_if_not_none(dictionary, field, value):
             if value is not None:
