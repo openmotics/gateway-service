@@ -235,7 +235,7 @@ def check_gateway_health(timeout=60):
         time.sleep(10)
     message = 'health check failed {}'.format(pending)
     logger.error(message)
-    raise SystemExit(EXIT_CODES['failed_health_check'])
+    raise Exception(message)
 
 
 def is_up_to_date(name, new_version):
@@ -531,13 +531,10 @@ def update(version, expected_md5):
         services_running = True
 
         logger.info(' -> Waiting for health check')
-        check_gateway_health()
-
-    except SystemExit as sex:
-        logger.error('FAILED')
-        logger.error('exit ({}) : {}'.format(sex.code, sex))
-        logger.error(traceback.format_exc())
-        sysex_errors.append(sex)
+        try:
+            check_gateway_health()
+        except Exception:
+            raise SystemExit(EXIT_CODES['failed_health_check'])
 
     except Exception as exc:
         logger.exception('Unexpected exception updating')
@@ -550,13 +547,6 @@ def update(version, expected_md5):
 
         logger.info(' -> Running cleanup')
         cmd('rm -v -rf {}/*'.format(update_dir), shell=True)
-
-        if sysex_errors:
-            logger.error('SystemExit Exceptions:')
-            for error in sysex_errors:
-                logger.error('- {0}'.format(error))
-            raise sysex_errors[0]
-
 
         if errors:
             logger.error('Exceptions:')
