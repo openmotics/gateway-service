@@ -453,7 +453,6 @@ def update(version, expected_md5):
         raise SystemExit(EXIT_CODES['failed_preprepare_update'])
 
     errors = []
-    sysex_errors = []
     services_running = True
     try:
         date = datetime.now().strftime('%Y%m%d%H%M%S')
