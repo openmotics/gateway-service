@@ -630,6 +630,30 @@ class Deliveries(RestAPIEndpoint):
         return json.dumps(delivery_serial)
 
 
+class System(RestAPIEndpoint):
+    API_ENDPOINT = '/api/v1/system'
+
+    @Inject
+    def __init__(self):
+        # type: () -> None
+        super(System, self).__init__()
+        self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
+        # --- GET ---
+        self.route_dispatcher.connect('get_config', '',
+                                      controller=self, action='get_config',
+                                      conditions={'method': ['GET']})
+        # --- POST ---
+        self.route_dispatcher.connect('post_delivery', '',
+                                      controller=self, action='post_config',
+                                      conditions={'method': ['POST']})
+
+    @openmotics_api_v1(auth=True)
+    def get_config(self):
+        # type: () -> str
+        pass
+
+
+
 @Injectable.named('web_service_v1')
 @Singleton
 class WebServiceV1(object):
