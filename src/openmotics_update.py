@@ -34,6 +34,9 @@ from six.moves.configparser import ConfigParser, NoOptionError
 from six.moves.urllib.parse import urlparse, urlunparse
 import constants
 
+class HealthCheckFailed(Exception):
+    pass
+
 if False:  #MyPy
     from typing import List, Any, Union, Tuple
 
@@ -235,7 +238,7 @@ def check_gateway_health(timeout=60):
         time.sleep(10)
     message = 'health check failed {}'.format(pending)
     logger.error(message)
-    raise Exception(message)
+    raise HealthCheckFailed(message)
 
 
 def is_up_to_date(name, new_version):
@@ -530,10 +533,8 @@ def update(version, expected_md5):
         services_running = True
 
         logger.info(' -> Waiting for health check')
-        try:
-            check_gateway_health()
-        except Exception:
-            raise SystemExit(EXIT_CODES['failed_health_check'])
+
+        check_gateway_health()
 
     except Exception as exc:
         logger.exception('Unexpected exception updating')
@@ -591,6 +592,11 @@ def main():
         except SystemExit as sex:
             logger.error('FAILED')
             logger.error('exit ({}) : {}'.format(sex.code, sex))
+            logger.error(traceback.format_exc())
+        except HealthCheckFailed as ex:
+            logger.error('FAILED')
+            logger.error('HealthCheck Failed: {}'.format(ex))
+            logger.error('exit {}'.format(EXIT_CODES['failed_health_check']))
             logger.error(traceback.format_exc())
         except Exception as ex:
             logger.error('FAILED')
