@@ -27,15 +27,14 @@ from gateway.base_controller import BaseController, SyncStructure
 from gateway.pubsub import PubSub
 
 if False:  # MYPY
-    from typing import List, Dict, Any, Tuple
+    from typing import Any, Dict, List
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('openmotics')
 
 
 @Injectable.named('input_controller')
 @Singleton
 class InputController(BaseController):
-
     SYNC_STRUCTURES = [SyncStructure(Input, 'input', skip=lambda i: i.module_type not in ['i', 'I'])]
 
     @Inject

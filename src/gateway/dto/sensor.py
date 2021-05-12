@@ -17,15 +17,20 @@
 Sensor DTO
 """
 from gateway.dto.base import BaseDTO, capture_fields
+from gateway.models import Sensor
 
 if False:  # MYPY
-    from typing import Optional
+    from typing import Any, Optional
 
 
 class SensorDTO(BaseDTO):
     @capture_fields
-    def __init__(self, id, name='', room=None, offset=None, virtual=False):
+    def __init__(self, id, external_id=None, source=None, physical_quantity=None, unit=None, name='', room=None, offset=None, virtual=False):
         self.id = id  # type: int
+        self.external_id = external_id  # type: str
+        self.source = source  # type: SensorSourceDTO
+        self.physical_quantity = physical_quantity  # type: Optional[str]
+        self.unit = unit  # type: Optional[str]
         self.name = name  # type: str
         self.offset = offset  # type: Optional[float]
         self.room = room  # type: Optional[int]
@@ -35,7 +40,67 @@ class SensorDTO(BaseDTO):
         if not isinstance(other, SensorDTO):
             return False
         return (self.id == other.id and
+                self.external_id == other.external_id and
+                self.source == other.source and
+                self.physical_quantity == other.physical_quantity and
+                self.unit == other.unit and
                 self.name == other.name and
                 self.offset == other.offset and
                 self.room == other.room and
+                self.virtual == other.virtual)
+
+
+class SensorSourceDTO(BaseDTO):
+    @capture_fields
+    def __init__(self, type, name=None):
+        # type: (str, str) -> None
+        self.type = type
+        self.name = name
+
+    @property
+    def is_master(self):
+        return self.type == Sensor.Sources.MASTER
+
+    @property
+    def is_plugin(self):
+        return self.type == Sensor.Sources.PLUGIN
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        if not isinstance(other, SensorSourceDTO):
+            return False
+        return (self.type == other.type and
+                self.name == other.name)
+
+
+class SensorStatusDTO(BaseDTO):
+    @capture_fields
+    def __init__(self, id, value=None, last_value=None):
+        # type: (int, Optional[float], Optional[float]) -> None
+        self.id = id
+        self.value = float(value) if value else None
+        self.last_value = last_value
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        if not isinstance(other, SensorStatusDTO):
+            return False
+        return (self.id == other.id and
+                self.value == other.value)
+
+
+class MasterSensorDTO(BaseDTO):
+    @capture_fields
+    def __init__(self, id, name='', offset=None, virtual=False):
+        self.id = id  # type: int
+        self.name = name[:16]  # type: str
+        self.offset = offset  # type: Optional[float]
+        self.virtual = virtual  # type: bool
+
+    def __eq__(self, other):
+        if not isinstance(other, MasterSensorDTO):
+            return False
+        return (self.id == other.id and
+                self.name == other.name and
+                self.offset == other.offset and
                 self.virtual == other.virtual)

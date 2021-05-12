@@ -37,6 +37,11 @@ class GatewayEvent(object):
                   'value': int},      # Optional, dimmer value
        'location': {'room_id': int}}  # Room ID
 
+    * SENSOR_CHANGE
+      {'id': int,       # Sensor ID
+       'plugin': str,   # Target Plugin
+       'value': float}  # Value
+
     * VENTILATION_CHANGE
       {'id': str,      # Device ID
        'plugin': str,  # Target Plugin
@@ -49,6 +54,7 @@ class GatewayEvent(object):
         CONFIG_CHANGE = 'CONFIG_CHANGE'
         INPUT_CHANGE = 'INPUT_CHANGE'
         OUTPUT_CHANGE = 'OUTPUT_CHANGE'
+        SENSOR_CHANGE = 'SENSOR_CHANGE'
         SHUTTER_CHANGE = 'SHUTTER_CHANGE'
         THERMOSTAT_CHANGE = 'THERMOSTAT_CHANGE'
         THERMOSTAT_GROUP_CHANGE = 'THERMOSTAT_GROUP_CHANGE'

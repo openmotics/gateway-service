@@ -28,7 +28,7 @@ if False:  # MYPY
     from gateway.events import GatewayEvent
     from gateway.hal.master_event import MasterEvent
     GATEWAY_TOPIC = Literal['config', 'state']
-    MASTER_TOPIC = Literal['eeprom', 'maintenance', 'module', 'power', 'output', 'input', 'shutter']
+    MASTER_TOPIC = Literal['eeprom', 'maintenance', 'module', 'power', 'output', 'input', 'shutter', 'sensor']
 
 logger = logging.getLogger('gateway.pubsub')
 
@@ -45,6 +45,7 @@ class PubSub(object):
         OUTPUT = 'output'  # type: MASTER_TOPIC
         INPUT = 'input'  # type: MASTER_TOPIC
         SHUTTER = 'shutter'  # type: MASTER_TOPIC
+        SENSOR = 'sensor'  # type: MASTER_TOPIC
 
     class GatewayTopics(object):
         CONFIG = 'config'  # type: GATEWAY_TOPIC

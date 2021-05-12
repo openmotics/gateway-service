@@ -132,12 +132,6 @@ class ShutterGroup(BaseModel):
     room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='shutter_groups')
 
 
-class Sensor(BaseModel):
-    id = AutoField()
-    number = IntegerField(unique=True)
-    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='sensors')
-
-
 class PulseCounter(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
@@ -239,6 +233,46 @@ class Plugin(BaseModel):
     id = AutoField()
     name = CharField(unique=True)
     version = CharField()
+
+
+class Sensor(BaseModel):
+    id = AutoField()
+    source = CharField()  # Options: 'master' or 'plugin'
+    plugin = ForeignKeyField(Plugin, null=True, on_delete='CASCADE')
+    external_id = CharField()
+    physical_quantity = CharField(null=True)
+    unit = CharField(null=True)
+    name = CharField()
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='sensors')
+
+    class Sources(object):
+        MASTER = 'master'
+        PLUGIN = 'plugin'
+
+    class PhysicalQuantities:
+        TEMPERATURE = 'temperature'
+        HUMIDITY = 'humidity'
+        BRIGHTNESS = 'brightness'
+        SOUND = 'sound'
+        DUST = 'dust'
+        COMFORT_INDEX = 'comfort_index'
+        AQI = 'aqi'
+        CO2 = 'co2'
+        VOC = 'voc'
+
+    class Units:
+        NONE = 'none'
+        CELCIUS = 'celcius'
+        PERCENT = 'percent'
+        DECIBEL = 'decibel'
+        LUX = 'lux'
+        MICRO_GRAM_PER_CUBIC_METER = 'micro_gram_per_cubic_meter'
+        PARTS_PER_MILLION = 'parts_per_million'
+
+    class Meta:
+        indexes = (
+            (('source', 'plugin_id', 'external_id', 'physical_quantity'), True),
+        )
 
 
 class Ventilation(BaseModel):

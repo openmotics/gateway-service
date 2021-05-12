@@ -146,7 +146,7 @@ class ShutterGroup(BaseModel):
 class Sensor(BaseModel):
     id: MixedPrimaryKeyField
     number: MixedIntegerField
-    room: Optional[RoomForeignKeyField]
+    room: Any
 
 
 class SensorForeignKeyField(Sensor, ForeignKeyField): ...

@@ -28,18 +28,20 @@ from threading import Lock, Timer
 import six
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
-    SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatDTO, ModuleDTO, \
-    ThermostatGroupDTO, ThermostatAircoStatusDTO, PumpGroupDTO, \
-    GlobalRTD10DTO, RTD10DTO, GlobalFeedbackDTO, OutputStateDTO, \
-    LegacyScheduleDTO, LegacyStartupActionDTO, DimmerConfigurationDTO
+from gateway.dto import RTD10DTO, DimmerConfigurationDTO, GlobalFeedbackDTO, \
+    GlobalRTD10DTO, GroupActionDTO, InputDTO, LegacyScheduleDTO, \
+    LegacyStartupActionDTO, MasterSensorDTO, ModuleDTO, OutputDTO, \
+    OutputStateDTO, PulseCounterDTO, PumpGroupDTO, ShutterDTO, \
+    ShutterGroupDTO, ThermostatAircoStatusDTO, ThermostatDTO, \
+    ThermostatGroupDTO
 from gateway.enums import ShutterEnums
 from gateway.exceptions import UnsupportedException
-from gateway.hal.mappers_classic import GroupActionMapper, InputMapper, \
-    OutputMapper, PulseCounterMapper, SensorMapper, ShutterGroupMapper, \
-    ShutterMapper, ThermostatMapper, ThermostatGroupMapper, PumpGroupMapper, \
-    GlobalRTD10Mapper, RTD10Mapper, GlobalFeedbackMapper, \
-    LegacyScheduleMapper, LegacyStartupActionMapper, DimmerConfigurationMapper
+from gateway.hal.mappers_classic import DimmerConfigurationMapper, \
+    GlobalFeedbackMapper, GlobalRTD10Mapper, GroupActionMapper, InputMapper, \
+    LegacyScheduleMapper, LegacyStartupActionMapper, OutputMapper, \
+    PulseCounterMapper, PumpGroupMapper, RTD10Mapper, SensorMapper, \
+    ShutterGroupMapper, ShutterMapper, ThermostatGroupMapper, \
+    ThermostatMapper
 from gateway.hal.master_controller import CommunicationFailure, \
     MasterController
 from gateway.hal.master_event import MasterEvent
@@ -47,11 +49,12 @@ from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from master.classic import eeprom_models, master_api
 from master.classic.eeprom_controller import EepromAddress, EepromController
-from master.classic.eeprom_models import CoolingPumpGroupConfiguration, \
-    DimmerConfiguration, GlobalRTD10Configuration, \
-    GlobalThermostatConfiguration, PumpGroupConfiguration, RTD10CoolingConfiguration, \
+from master.classic.eeprom_models import CoolingConfiguration, \
+    CoolingPumpGroupConfiguration, DimmerConfiguration, \
+    GlobalRTD10Configuration, GlobalThermostatConfiguration, \
+    PumpGroupConfiguration, RTD10CoolingConfiguration, \
     RTD10HeatingConfiguration, ScheduledActionConfiguration, \
-    StartupActionConfiguration, ThermostatConfiguration, CoolingConfiguration
+    StartupActionConfiguration, ThermostatConfiguration
 from master.classic.inputs import InputStatus
 from master.classic.master_communicator import BackgroundConsumer, \
     MasterCommunicator, MasterUnavailable
@@ -93,11 +96,12 @@ class MasterClassicController(MasterController):
 
         self._input_status = InputStatus(on_input_change=self._input_changed)
         self._validation_bits = ValidationBitStatus(on_validation_bit_change=self._validation_bit_changed)
+        self._master_version_last_updated = 0.0
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
         self._synchronization_thread = DaemonThread(name='mastersync',
                                                     target=self._synchronize,
-                                                    interval=30, delay=10)
+                                                    interval=5, delay=10)
         self._master_version = None  # type: Optional[Tuple[int, int, int]]
         self._communication_enabled = True
         self._input_interval = 300
@@ -107,6 +111,8 @@ class MasterClassicController(MasterController):
         self._shutters_interval = 600
         self._shutters_last_updated = 0.0
         self._shutter_config = {}  # type: Dict[int, ShutterDTO]
+        self._sensor_last_updated = 0.0
+        self._sensors_interval = 10
         self._validation_bits_interval = 1800
         self._validation_bits_last_updated = 0.0
 
@@ -137,8 +143,10 @@ class MasterClassicController(MasterController):
                 return
 
             now = time.time()
-            self._get_master_version()
-            self._register_version_depending_background_consumers()
+            if self._master_version is None or self._master_version_last_updated < now - 300:
+                self._get_master_version()
+                self._master_version_last_updated = now
+                self._register_version_depending_background_consumers()
             # Validate communicator checks
             if self._time_last_updated < now - 300:
                 self._check_master_time()
@@ -153,6 +161,8 @@ class MasterClassicController(MasterController):
                 self._refresh_inputs()
             if self._shutters_last_updated + self._shutters_interval < now:
                 self._refresh_shutter_states()
+            if self._sensor_last_updated + self._sensors_interval < now:
+                self._refresh_sensor_values()
         except CommunicationTimedOutException:
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
             raise DaemonThreadWait
@@ -1641,6 +1651,32 @@ class MasterClassicController(MasterController):
 
     # Sensors
 
+    @communication_enabled
+    def _refresh_sensor_values(self):  # type: () -> None
+        try:
+            # poll for latest sensor values
+            for i, value in enumerate(self.get_sensors_temperature()):
+                if value is None:
+                    continue
+                master_event = MasterEvent(event_type=MasterEvent.Types.SENSOR_VALUE,
+                                           data={'sensor': i, 'type': MasterEvent.SensorType.TEMPERATURE, 'value': value})
+                self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+            for i, value in enumerate(self.get_sensors_humidity()):
+                if value is None:
+                    continue
+                master_event = MasterEvent(event_type=MasterEvent.Types.SENSOR_VALUE,
+                                           data={'sensor': i, 'type': MasterEvent.SensorType.HUMIDITY, 'value': value})
+                self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+            for i, value in enumerate(self.get_sensors_brightness()):
+                if value is None:
+                    continue
+                master_event = MasterEvent(event_type=MasterEvent.Types.SENSOR_VALUE,
+                                           data={'sensor': i, 'type': MasterEvent.SensorType.BRIGHTNESS, 'value': value})
+                self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+        except NotImplementedError as e:
+            logger.error('Cannot refresh sensors: {}'.format(e))
+        self._sensor_last_updated = time.time()
+
     def get_sensor_temperature(self, sensor_id):
         if sensor_id is None or sensor_id < 0 or sensor_id > 31:
             raise ValueError('Sensor ID {0} not in range 0 <= id <= 31'.format(sensor_id))
@@ -1695,17 +1731,17 @@ class MasterClassicController(MasterController):
         )
 
     @communication_enabled
-    def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
+    def load_sensor(self, sensor_id):  # type: (int) -> MasterSensorDTO
         classic_object = self._eeprom_controller.read(eeprom_models.SensorConfiguration, sensor_id)
         return SensorMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def load_sensors(self):  # type: () -> List[SensorDTO]
+    def load_sensors(self):  # type: () -> List[MasterSensorDTO]
         return [SensorMapper.orm_to_dto(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.SensorConfiguration)]
 
     @communication_enabled
-    def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> None
+    def save_sensors(self, sensors):  # type: (List[MasterSensorDTO]) -> None
         batch = []
         for sensor in sensors:
             batch.append(SensorMapper.dto_to_orm(sensor))
