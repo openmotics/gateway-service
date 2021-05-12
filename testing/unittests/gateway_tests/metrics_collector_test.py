@@ -18,7 +18,9 @@ import unittest
 
 import mock
 
+from gateway.dto import SensorDTO, SensorStatusDTO
 from gateway.metrics_collector import MetricsCollector
+from gateway.sensor_controller import SensorController
 from ioc import Scope, SetTestMode, SetUpTestInjections
 from power.power_api import RealtimePower
 
@@ -40,19 +42,32 @@ class MetricsCollectorTest(unittest.TestCase):
         self.gateway_api.get_realtime_power.return_value = {}
         self.gateway_api.get_realtime_p1.return_value = {}
         self.gateway_api.get_total_energy.return_value = {}
+        self.sensor_controller = mock.Mock(SensorController)
         SetUpTestInjections(gateway_api=self.gateway_api,
                             pulse_counter_controller=mock.Mock(),
                             thermostat_controller=mock.Mock(),
                             output_controller=mock.Mock(),
                             input_controller=mock.Mock(),
-                            sensor_controller=mock.Mock(),
+                            sensor_controller=self.sensor_controller,
                             module_controller=mock.Mock())
         self.controller = MetricsCollector()
+
+    def test_sensor_metrics(self):
+        sensor_dto = SensorDTO(id=42, source='master', external_id='0', physical_quantity='temperature', unit='celcius', name='foo')
+        self.controller._environment_sensors = {42: sensor_dto}
+        self.sensor_controller.get_sensors_status.return_value = [SensorStatusDTO(id=42, value=21.0)]
+        with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
+            self.controller._process_sensors('sensor')
+            expected_call = mock.call(timestamp=mock.ANY,
+                                      metric_type='sensor',
+                                      tags={'id': 42, 'unit': 'celcius', 'name': 'foo'},
+                                      values={'temperature': 21.0})
+            assert enqueue.call_args_list == [expected_call]
 
     def test_realtime_power_metrics(self):
         self.gateway_api.get_realtime_power.return_value = {'10': [RealtimePower(10.0, 2.1, 5.0, 3.6)]}
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._run_power_metrics('energy')
+            self.controller._process_power_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy',
                                       tags={'type': 'openmotics', 'id': '11.0', 'name': 'foo'},
@@ -76,7 +91,7 @@ class MetricsCollectorTest(unittest.TestCase):
              'timestamp': 190527083152.0},
         ]
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._run_power_metrics('energy')
+            self.controller._process_power_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy_p1',
                                       tags={'type': 'openmotics', 'id': '11.0',
@@ -111,7 +126,7 @@ class MetricsCollectorTest(unittest.TestCase):
              'timestamp': 190527083152.0},
         ]
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._run_power_metrics('energy')
+            self.controller._process_power_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy_p1',
                                       tags={'type': 'openmotics', 'id': '11.0',
@@ -139,7 +154,7 @@ class MetricsCollectorTest(unittest.TestCase):
              'timestamp': 190527083152.0},
         ]
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._run_power_metrics('energy')
+            self.controller._process_power_metrics('energy')
             assert enqueue.call_args_list == []
 
     def test_realtime_p1_gas_metrics(self):
@@ -153,7 +168,7 @@ class MetricsCollectorTest(unittest.TestCase):
              'timestamp': 190527083152.0},
         ]
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._run_power_metrics('energy')
+            self.controller._process_power_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy_p1',
                                       tags={'type': 'openmotics', 'id': '11.0',
@@ -172,13 +187,13 @@ class MetricsCollectorTest(unittest.TestCase):
              'timestamp': 190527083152.0},
         ]
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._run_power_metrics('energy')
+            self.controller._process_power_metrics('energy')
             assert enqueue.call_args_list == []
 
     def test_total_power_metrics(self):
         self.gateway_api.get_total_energy.return_value = {'10': [[10.0, 2.1]]}
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._run_power_metrics('energy')
+            self.controller._process_power_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy',
                                       tags={'type': 'openmotics', 'id': '11.0', 'name': 'foo'},

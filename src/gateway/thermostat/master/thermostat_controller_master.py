@@ -17,12 +17,13 @@ import logging
 import time
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO, ThermostatStatusDTO, \
-    ThermostatGroupDTO, ThermostatAircoStatusDTO, PumpGroupDTO, \
-    GlobalRTD10DTO, RTD10DTO
+from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, \
+    ThermostatAircoStatusDTO, ThermostatDTO, ThermostatGroupDTO, \
+    ThermostatGroupStatusDTO, ThermostatStatusDTO
 from gateway.events import GatewayEvent
-from gateway.hal.master_event import MasterEvent
 from gateway.hal.master_controller import CommunicationFailure
+from gateway.hal.master_event import MasterEvent
+from gateway.models import Sensor
 from gateway.pubsub import PubSub
 from gateway.thermostat.master.thermostat_status_master import \
     ThermostatStatusMaster
@@ -139,24 +140,60 @@ class ThermostatControllerMaster(ThermostatController):
     ################################
 
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
-        return self._master_controller.load_heating_thermostat(thermostat_id)
+        thermostat_dto = self._master_controller.load_heating_thermostat(thermostat_id)
+        thermostat_dto.sensor = self._sensor_to_orm(thermostat_dto.sensor)
+        return thermostat_dto
 
     def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
-        return self._master_controller.load_heating_thermostats()
+        thermostats = self._master_controller.load_heating_thermostats()
+        for thermostat_dto in thermostats:
+            thermostat_dto.sensor = self._sensor_to_orm(thermostat_dto.sensor)
+        return thermostats
 
     def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
+        for thermostat_dto in thermostats:
+            thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
         self._master_controller.save_heating_thermostats(thermostats)
         self.invalidate_cache(THERMOSTATS)
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
-        return self._master_controller.load_cooling_thermostat(thermostat_id)
+        thermostat_dto = self._master_controller.load_cooling_thermostat(thermostat_id)
+        thermostat_dto.sensor = self._sensor_to_orm(thermostat_dto.sensor)
+        return thermostat_dto
 
     def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
-        return self._master_controller.load_cooling_thermostats()
+        thermostats = self._master_controller.load_cooling_thermostats()
+        for thermostat_dto in thermostats:
+            thermostat_dto.sensor = self._sensor_to_orm(thermostat_dto.sensor)
+        return thermostats
 
     def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
+        for thermostat_dto in thermostats:
+            thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
         self._master_controller.save_cooling_thermostats(thermostats)
         self.invalidate_cache(THERMOSTATS)
+
+    def _sensor_to_orm(self, sensor_id):  # type: (Optional[int]) -> Optional[int]
+        if sensor_id in (None, 240, 255):
+            return sensor_id
+        else:
+            sensor = Sensor.select() \
+                .where(Sensor.source == Sensor.Sources.MASTER) \
+                .where(Sensor.physical_quantity == Sensor.PhysicalQuantities.TEMPERATURE) \
+                .where(Sensor.external_id == str(sensor_id)) \
+                .get()
+            return sensor.id
+
+    def _sensor_to_master(self, sensor_id):  # type: (Optional[int]) -> Optional[int]
+        if sensor_id in (None, 240, 255):
+            return sensor_id
+        else:
+            sensor = Sensor.get(Sensor.id == sensor_id)
+            if sensor.source != Sensor.Sources.MASTER:
+                raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor_id, sensor.source))
+            if sensor.physical_quantity != Sensor.PhysicalQuantities.TEMPERATURE:
+                raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor_id, sensor.physical_quantity))
+            return int(sensor.external_id)
 
     def load_cooling_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         return self._master_controller.load_cooling_pump_group(pump_group_id)
