@@ -72,42 +72,6 @@ class GatewayApi(object):
 
     # Sensors
 
-    def get_sensors_temperature_status(self):
-        """ Get the current temperature of all sensors.
-
-        :returns: list with 32 temperatures, 1 for each sensor. None/null if not connected
-        """
-        # TODO: work with sensor controller
-        # TODO: add other sensors too (e.g. from database <-- plugins)
-        values = self.__master_controller.get_sensors_temperature()[:32]
-        if len(values) < 32:
-            values += [None] * (32 - len(values))
-        return values
-
-    def get_sensor_temperature_status(self, sensor_id):
-        """ Get the current temperature of all sensors. """
-        # TODO: work with sensor controller
-        # TODO: add other sensors too (e.g. from database <-- plugins)
-        return self.__master_controller.get_sensor_temperature(sensor_id)
-
-    def get_sensors_humidity_status(self):
-        """ Get the current humidity of all sensors. """
-        # TODO: work with sensor controller
-        # TODO: add other sensors too (e.g. from database <-- plugins)
-        values = self.__master_controller.get_sensors_humidity()[:32]
-        if len(values) < 32:
-            values += [None] * (32 - len(values))
-        return values
-
-    def get_sensors_brightness_status(self):
-        """ Get the current brightness of all sensors. """
-        # TODO: work with sensor controller
-        # TODO: add other sensors too (e.g. from database <-- plugins)
-        values = self.__master_controller.get_sensors_brightness()[:32]
-        if len(values) < 32:
-            values += [None] * (32 - len(values))
-        return values
-
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         # TODO: work with sensor controller
         # TODO: add other sensors too (e.g. from database <-- plugins)
