@@ -55,10 +55,6 @@ class DeliveryMapper(object):
         delivery_orm = None
         if dto_object.id is not None:
             delivery_orm = Delivery.get_by_id(dto_object.id)
-        # delivery_orm = Delivery.get_or_none(type=dto_object.type,
-        #                                     user_id_delivery=dto_object.user_id_delivery,
-        #                                     timestamp_delivery=dto_object.timestamp_delivery,
-        #                                     parcelbox_rebus_id=dto_object.parcelbox_rebus_id)
         if delivery_orm is None:
             mandatory_fields = {'type', 'timestamp_delivery', 'user_pickup', 'parcelbox_rebus_id'}
             if not mandatory_fields.issubset(set(dto_object.loaded_fields)):
@@ -69,8 +65,6 @@ class DeliveryMapper(object):
             delivery_orm = Delivery()
 
         for field in dto_object.loaded_fields:
-            # if getattr(dto_object, field, None) is None:
-            #     continue
             if field == 'timestamp_pickup':
                 # only change the timestamp when there is none in the DB
                 if delivery_orm.timestamp_pickup is None:
