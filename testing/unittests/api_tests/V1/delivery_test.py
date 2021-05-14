@@ -36,7 +36,7 @@ from ioc import SetTestMode, SetUpTestInjections
 from .base import BaseCherryPyUnitTester
 
 
-class ApiDeliverysTests(unittest.TestCase):
+class ApiDeliveriesTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()

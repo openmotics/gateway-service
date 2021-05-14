@@ -33,6 +33,9 @@ from gateway.dto.sensor import MasterSensorDTO, SensorDTO, SensorSourceDTO, \
     SensorStatusDTO
 from gateway.dto.shutter import ShutterDTO
 from gateway.dto.shutter_group import ShutterGroupDTO
+from gateway.dto.system_config import SystemDoorbellConfigDTO, SystemRFIDConfigDTO, \
+    SystemRFIDSectorBlockConfigDTO, SystemTouchscreenConfigDTO, SystemGlobalConfigDTO, \
+    SystemActivateUserConfigDTO
 from gateway.dto.thermostat import PumpGroupDTO, ThermostatAircoStatusDTO, \
     ThermostatDTO, ThermostatGroupDTO, ThermostatGroupStatusDTO, \
     ThermostatStatusDTO

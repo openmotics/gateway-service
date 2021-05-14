@@ -58,3 +58,19 @@ def capture_fields(func):
         func(self, *args, **kwargs)
 
     return new_init
+
+
+def generic_equal_func(cls):
+    orig_init = cls.__init__
+    field_names = Toolbox.get_parameter_names(orig_init)
+    field_names.pop(0)  # Remove `self`
+
+    def new_eq(self, other):
+        if not isinstance(other, type(self)):
+            return False
+        for field in field_names:
+            if getattr(self, field) != getattr(other, field):
+                return False
+        return True
+    cls.__eq__ = new_eq
+    return cls

@@ -31,6 +31,10 @@ from gateway.api.serializers.sensor import SensorSerializer, \
     SensorStatusSerializer
 from gateway.api.serializers.shutter import ShutterSerializer
 from gateway.api.serializers.shutter_group import ShutterGroupSerializer
+from gateway.api.serializers.system_config import SystemDoorbellConfigSerializer, \
+    SystemRFIDConfigSerializer, SystemRFIDSectorBlockConfigSerializer, \
+    SystemTouchscreenConfigSerializer, SystemGlobalConfigSerializer, \
+    SystemActivateUserConfigSerializer
 from gateway.api.serializers.thermostat import PumpGroupSerializer, \
     ThermostatAircoStatusSerializer, ThermostatGroupSerializer, \
     ThermostatGroupStatusSerializer, ThermostatSerializer
