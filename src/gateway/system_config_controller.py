@@ -93,7 +93,7 @@ class SystemConfigController(object):
 
     @classmethod
     def _get_config_values(cls, config_names, translation=None):
-        # type: (List[str], Optional[Dict[str, str]]) -> Dict[str]
+        # type: (List[str], Optional[Dict[str, str]]) -> Dict[str, Any]
         if translation is None:
             translation = {}
 

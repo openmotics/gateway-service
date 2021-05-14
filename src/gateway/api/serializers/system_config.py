@@ -20,9 +20,12 @@ from gateway.dto.system_config import SystemDoorbellConfigDTO, SystemRFIDConfigD
     SystemRFIDSectorBlockConfigDTO, SystemTouchscreenConfigDTO, SystemGlobalConfigDTO, \
     SystemActivateUserConfigDTO
 
+if False:  #MyPy
+    from typing import Dict
+
 
 class SystemConfigSerializer(object):
-    TRANSLATION = {}  # KEYS = dto-naming, VALUES = api/serial-naming
+    TRANSLATION = {}  # type: Dict[str, str]  # KEYS = dto-naming, VALUES = api/serial-naming
     DTO = None
 
     @classmethod

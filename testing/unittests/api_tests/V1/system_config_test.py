@@ -171,7 +171,7 @@ class SystemConfigApiCherryPyTest(BaseCherryPyUnitTester):
             self.assertStatus('200 OK')
             self.assertBody(json.dumps({'enabled': True}))
 
-    def test_put_no_body(self):
+    def test_put_body(self):
         with mock.patch.object(self.system_config_controller, 'save_doorbell_config') as save_config_func:
             body = {
                 'enabled': False
@@ -180,3 +180,10 @@ class SystemConfigApiCherryPyTest(BaseCherryPyUnitTester):
             save_config_func.assert_called_once_with(SystemDoorbellConfigDTO(enabled=False))
             self.assertStatus('200 OK')
             self.assertBody('')
+
+    def test_put_no_body(self):
+        with mock.patch.object(self.system_config_controller, 'save_doorbell_config') as save_config_func:
+            status, headers, response = self.PUT('/api/v1/system/configuration/doorbell', login_user=None, body=None)
+            save_config_func.assert_not_called()
+            self.assertStatus('400 Bad Request')
+            self.assertBody('Wrong input parameter: No body has been passed to the request')
