@@ -80,7 +80,7 @@ class SensorControllerTest(unittest.TestCase):
         assert len(events) == 1
         events.pop()
 
-        master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, {'sensor': 1, 'type': 'temperature', 'value': 22.5})
+        master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, {'sensor': 1, 'type': 'TEMPERATURE', 'value': 22.5})
         self.pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
         self.pubsub._publish_all_events()
 
