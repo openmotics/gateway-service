@@ -65,7 +65,7 @@ class DeliveryController(object):
     def delivery_id_exists(delivery_id):
         # type: (int) -> bool
         deliveries = DeliveryController.load_deliveries()
-        ids = [x.id for x in deliveries]
+        ids = (x.id for x in deliveries)
         return delivery_id in ids
 
     @staticmethod
