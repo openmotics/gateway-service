@@ -384,7 +384,6 @@ class WebInterface(object):
 
     def in_authorized_mode(self):
         # type: () -> bool
-        return True
         if self._frontpanel_controller:
             return self._frontpanel_controller.authorized_mode
         else:
