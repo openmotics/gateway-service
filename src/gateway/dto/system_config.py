@@ -22,6 +22,7 @@ from toolbox import Toolbox
 if False:  # MYPY
     from typing import Any, Optional
 
+
 @generic_equal_func
 class SystemDoorbellConfigDTO(BaseDTO):
     @capture_fields
@@ -73,36 +74,3 @@ class SystemActivateUserConfigDTO(BaseDTO):
         self.change_last_name = change_last_name
         self.change_language = change_language
         self.change_pin_code = change_pin_code
-
-def main():
-    print('Running main')
-    # auc = SystemActivateUserConfigDTO()
-    # print(auc)
-    #
-    # auc.change_first_name = True
-    # print(auc)
-    #
-    # auc = SystemActivateUserConfigDTO(change_last_name=True)
-    # print(auc)
-    # auc.change_language = True
-    # print(auc)
-
-    # sdbc = SystemDoorbellConfigDTO(enabled=True)
-    # print(sdbc)
-    #
-    # sdbc_2 = SystemDoorbellConfigDTO(enabled=False)
-    # print(sdbc_2)
-    #
-    # sdbc_3 = SystemDoorbellConfigDTO(enabled=False)
-    # print(sdbc_3)
-    #
-    # sdbc_4 = object()
-    # print(sdbc_4)
-    #
-    # print(sdbc == sdbc_2)
-    # print(sdbc_2 == sdbc_3)
-    # print(sdbc_3 == sdbc_4)
-
-
-if __name__ == '__main__':
-    main()

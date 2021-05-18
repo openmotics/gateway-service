@@ -57,24 +57,6 @@ class SystemConfigController(object):
         'ESAFE_activate_change_user_code_enabled': False
     }
 
-    # # This translates the DTO name to the actual name that is used in the database
-    # # KEY = Database-name; VALUE = DTO-name
-    # TRANSLATIONS = {
-    #     'doorbell_enabled': 'enabled',
-    #     'rfid_enabled': 'enabled',
-    #     'rfid_security_enabled': 'security_enabled',
-    #     'max_rfid': 'max_tags',
-    #     'activate_change_first_name_enabled': 'change_first_name',
-    #     'activate_change_last_name_enabled': 'change_last_name',
-    #     'activate_change_language_enabled': 'change_language',
-    #     'activate_change_user_code_enabled': 'change_pin_code',
-    # }
-    # TRANSLATIONS_REVERSED = {TRANSLATIONS[x]: x for x in TRANSLATIONS}
-
-    def __init__(self):
-        # SystemConfigController.TRANSLATIONS_REVERSED = {SystemConfigController.TRANSLATIONS[x]: x for x in SystemConfigController.TRANSLATIONS}
-        pass
-
     @classmethod
     def _get_config_value(cls, config_name):
         # type: (str) -> Any
