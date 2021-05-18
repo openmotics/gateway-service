@@ -192,13 +192,14 @@ def setup_target_platform(target_platform, message_client_name):
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
                          shutter_controller, system_controller, group_action_controller, module_controller,
                          ventilation_controller, webservice_v1, apartment_controller, delivery_controller,
-                         system_config_controller)
+                         system_config_controller, rfid_controller)
     from cloud import events
     _ = (metrics_controller, webservice, scheduling_controller, gateway_api, metrics_collector,
          maintenance_controller, base, events, user_controller,
          pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
          sensor_controller, shutter_controller, system_controller, group_action_controller, module_controller,
-         ventilation_controller, webservice_v1, apartment_controller, delivery_controller, system_config_controller)
+         ventilation_controller, webservice_v1, apartment_controller, delivery_controller, system_config_controller,
+         rfid_controller)
 
     # IPC
     message_client = None
