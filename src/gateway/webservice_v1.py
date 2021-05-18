@@ -610,7 +610,7 @@ class Deliveries(RestAPIEndpoint):
 
         saved_delivery = self.delivery_controller.save_delivery(delivery_dto)
         if saved_delivery is None:
-            raise RuntimeError('Unexpected error: Delivery is None when pickup_delivery is called')
+            raise RuntimeError('Unexpected error: Delivery is None when save_delivery is called')
         saved_delivery_serial = DeliverySerializer.serialize(saved_delivery)
         return json.dumps(saved_delivery_serial)
 
