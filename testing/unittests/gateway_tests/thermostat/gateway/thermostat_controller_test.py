@@ -14,20 +14,22 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
 
-import unittest
-import fakesleep
-import mock
 import logging
+import unittest
+
+import mock
 from peewee import SqliteDatabase
 
-from gateway.models import Pump, Output, Valve, PumpToValve, Thermostat, \
-    ThermostatGroup, ValveToThermostat, Sensor, Preset, OutputToThermostatGroup, \
-    DaySchedule
-from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatControllerGateway
-from gateway.dto import PumpGroupDTO, ThermostatGroupDTO, OutputStateDTO, \
+import fakesleep
+from gateway.dto import OutputStatusDTO, PumpGroupDTO, ThermostatGroupDTO, \
     ThermostatGroupStatusDTO, ThermostatStatusDTO
-from gateway.output_controller import OutputController
 from gateway.gateway_api import GatewayApi
+from gateway.models import DaySchedule, Output, OutputToThermostatGroup, \
+    Preset, Pump, PumpToValve, Sensor, Thermostat, ThermostatGroup, Valve, \
+    ValveToThermostat
+from gateway.output_controller import OutputController
+from gateway.thermostat.gateway.thermostat_controller_gateway import \
+    ThermostatControllerGateway
 from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 
@@ -56,7 +58,7 @@ class ThermostatControllerTest(unittest.TestCase):
         self._gateway_api.get_timezone.return_value = 'Europe/Brussels'
         self._gateway_api.get_sensor_temperature_status.return_value = 10.0
         output_controller = mock.Mock(OutputController)
-        output_controller.get_output_status.return_value = OutputStateDTO(id=0, status=False)
+        output_controller.get_output_status.return_value = OutputStatusDTO(id=0, status=False)
         SetUpTestInjections(gateway_api=self._gateway_api,
                             output_controller=output_controller,
                             pubsub=mock.Mock())

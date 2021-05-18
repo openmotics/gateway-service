@@ -15,7 +15,7 @@
 
 from gateway.api.serializers.global_feedback import GlobalFeedbackSerializer
 from gateway.api.serializers.group_action import GroupActionSerializer
-from gateway.api.serializers.input import InputSerializer
+from gateway.api.serializers.input import InputSerializer, InputStateSerializer
 from gateway.api.serializers.module import ModuleSerializer
 from gateway.api.serializers.output import OutputSerializer, \
     OutputStateSerializer

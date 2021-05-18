@@ -17,19 +17,19 @@ from gateway.dto.feedback_led import FeedbackLedDTO
 from gateway.dto.floor import FloorDTO
 from gateway.dto.global_feedback import GlobalFeedbackDTO
 from gateway.dto.group_action import GroupActionDTO
-from gateway.dto.input import InputDTO
+from gateway.dto.input import InputDTO, InputStatusDTO
 from gateway.dto.module import ModuleDTO
-from gateway.dto.output import OutputDTO, OutputStateDTO
+from gateway.dto.output import OutputDTO, OutputStatusDTO
 from gateway.dto.pulse_counter import PulseCounterDTO
 from gateway.dto.room import RoomDTO
-from gateway.dto.rtd10 import GlobalRTD10DTO, RTD10DTO
+from gateway.dto.rtd10 import RTD10DTO, GlobalRTD10DTO
 from gateway.dto.schedule import ScheduleDTO
 from gateway.dto.sensor import SensorDTO
 from gateway.dto.shutter import ShutterDTO
 from gateway.dto.shutter_group import ShutterGroupDTO
-from gateway.dto.thermostat import ThermostatDTO, ThermostatGroupDTO, \
-    ThermostatStatusDTO, ThermostatGroupStatusDTO, ThermostatAircoStatusDTO, \
-    PumpGroupDTO
+from gateway.dto.thermostat import PumpGroupDTO, ThermostatAircoStatusDTO, \
+    ThermostatDTO, ThermostatGroupDTO, ThermostatGroupStatusDTO, \
+    ThermostatStatusDTO
 from gateway.dto.thermostat_schedule import ThermostatScheduleDTO
 from gateway.dto.user import UserDTO
 from gateway.dto.ventilation import VentilationDTO, VentilationSourceDTO, \

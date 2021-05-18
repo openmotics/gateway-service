@@ -26,10 +26,10 @@ from threading import Timer
 from peewee import DoesNotExist
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import GroupActionDTO, InputDTO, ModuleDTO, OutputDTO, \
-    PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, \
-    GlobalFeedbackDTO, OutputStateDTO
-from gateway.enums import ShutterEnums, IndicateType
+from gateway.dto import GlobalFeedbackDTO, \
+    GroupActionDTO, InputDTO, InputStatusDTO, ModuleDTO, OutputDTO, \
+    OutputStatusDTO, PulseCounterDTO, SensorDTO, ShutterDTO, ShutterGroupDTO
+from gateway.enums import IndicateType, ShutterEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
@@ -51,9 +51,10 @@ from master.core.memory_models import CanControlModuleConfiguration, \
     GlobalConfiguration, InputConfiguration, InputModuleConfiguration, \
     OutputConfiguration, OutputModuleConfiguration, SensorConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
-from master.core.memory_types import MemoryAddress, MemoryActivator
+from master.core.memory_types import MemoryActivator, MemoryAddress
 from master.core.slave_communicator import SlaveCommunicator
-from master.core.system_value import Humidity, Temperature, Timer as SVTTimer
+from master.core.system_value import Humidity, Temperature
+from master.core.system_value import Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 
 if False:  # MYPY
@@ -77,7 +78,7 @@ class MasterCoreController(MasterController):
         self._master_online = False
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._input_state = MasterInputState()
-        self._output_states = {}  # type: Dict[int,OutputStateDTO]
+        self._output_states = {}  # type: Dict[int,OutputStatusDTO]
         self._sensor_interval = 300
         self._sensor_last_updated = 0.0
         self._sensor_states = {}  # type: Dict[int,Dict[str,None]]
@@ -131,13 +132,13 @@ class MasterCoreController(MasterController):
             output_id = core_event.data['output']
             if core_event.data['type'] == MasterCoreEvent.OutputEventTypes.STATUS:
                 # Update internal state cache
-                state_dto = OutputStateDTO(id=output_id,
-                                           status=core_event.data['status'],
-                                           dimmer=core_event.data['dimmer_value'],
-                                           ctimer=core_event.data['timer'])
+                state_dto = OutputStatusDTO(id=output_id,
+                                            status=core_event.data['status'],
+                                            dimmer=core_event.data['dimmer_value'],
+                                            ctimer=core_event.data['timer'])
             else:  # elif core_event.data['type'] == MasterCoreEvent.OutputEventTypes.LOCKING:
-                state_dto = OutputStateDTO(id=output_id,
-                                           locked=core_event.data['locked'])
+                state_dto = OutputStatusDTO(id=output_id,
+                                            locked=core_event.data['locked'])
             self._handle_output_state(output_id, state_dto)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
             master_event = self._input_state.handle_event(core_event)
@@ -167,7 +168,7 @@ class MasterCoreController(MasterController):
                                                                                       'floor_id': floor_id}}))
 
     def _handle_output_state(self, output_id, state_dto):
-        # type: (int, OutputStateDTO) -> None
+        # type: (int, OutputStatusDTO) -> None
         master_event = MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': state_dto})
         self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)
         shutter_id = self._output_shutter_map.get(output_id)
@@ -401,13 +402,10 @@ class MasterCoreController(MasterController):
         input_module = InputConfiguration(input_module_id)
         return input_module.module.device_type
 
-    def get_inputs_with_status(self):
-        # type: () -> List[Dict[str,Any]]
-        return self._input_state.get_inputs()
-
-    def get_recent_inputs(self):
-        # type: () -> List[int]
-        return self._input_state.get_recent()
+    def load_input_status(self):
+        # type: () -> List[InputStatusDTO]
+        return [InputStatusDTO(id=input_port['id'], status=input_port['status'])
+                for input_port in self._input_state.get_inputs()]
 
     def load_input(self, input_id):  # type: (int) -> InputDTO
         input_ = InputConfiguration(input_id)
@@ -492,17 +490,17 @@ class MasterCoreController(MasterController):
         MemoryActivator.activate()
 
     def load_output_status(self):
-        # type: () -> List[OutputStateDTO]
+        # type: () -> List[OutputStatusDTO]
         output_status = []
         for i in self._enumerate_io_modules('output'):
             data = self._master_communicator.do_command(CoreAPI.output_detail(), {'device_nr': i})
             timer = SVTTimer.event_timer_type_to_seconds(data['timer_type'], data['timer'])
             output = OutputConfiguration(i)
-            output_status.append(OutputStateDTO(id=i,
-                                                status=bool(data['status']),
-                                                ctimer=timer,
-                                                dimmer=int(data['dimmer']),
-                                                locked=output.locking.locked))
+            output_status.append(OutputStatusDTO(id=i,
+                                                 status=bool(data['status']),
+                                                 ctimer=timer,
+                                                 dimmer=int(data['dimmer']),
+                                                 locked=output.locking.locked))
         return output_status
 
     # Shutters
@@ -578,7 +576,7 @@ class MasterCoreController(MasterController):
         MemoryActivator.activate()
 
     def _refresh_shutter_states(self):
-        status_data = {x.id: x for x in self.load_output_status()}  # type: Dict[int, OutputStateDTO]
+        status_data = {x.id: x for x in self.load_output_status()}  # type: Dict[int, OutputStatusDTO]
         for shutter_id in range(len(status_data) // 2):
             shutter = ShutterConfiguration(shutter_id)
             output_0 = status_data.get(shutter.outputs.output_0)
@@ -1232,8 +1230,8 @@ class MasterInputState(object):
     def get_recent(self):
         # type: () -> List[int]
         sorted_inputs = sorted(list(self._values.values()), key=lambda x: x.changed_at)
-        recent_events = [x.input_id for x in sorted_inputs
-                         if x.changed_at > time.time() - 10]
+        recent_events = [y.input_id for y in sorted_inputs
+                         if y.changed_at > time.time() - 10]
         return recent_events[-5:]
 
     def handle_event(self, core_event):
@@ -1296,10 +1294,9 @@ class MasterInputValue(object):
 
     def master_event(self):
         # type: () -> MasterEvent
-        return MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE,
-                           data={'id': self.input_id,
-                                 'status': bool(self.status),
-                                 'location': {'room_id': 255}})  # TODO: missing room
+        state_dto = InputStatusDTO(id=self.input_id,
+                                   status=bool(self.status))
+        return MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data={'state': state_dto})
 
     def __repr__(self):
         # type: () -> str

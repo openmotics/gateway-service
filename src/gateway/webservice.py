@@ -40,22 +40,23 @@ from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
 import gateway
-from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
-    ModuleSerializer, OutputSerializer, OutputStateSerializer, \
-    PulseCounterSerializer, RoomSerializer, ScheduleSerializer, \
-    SensorSerializer, ShutterGroupSerializer, ShutterSerializer, \
-    ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer, \
-    ThermostatGroupStatusSerializer, ThermostatGroupSerializer, \
-    ThermostatAircoStatusSerializer, PumpGroupSerializer, \
-    GlobalRTD10Serializer, RTD10Serializer, GlobalFeedbackSerializer
-from gateway.dto import RoomDTO, ScheduleDTO, UserDTO, ModuleDTO, ThermostatDTO, \
-    GlobalRTD10DTO
+from gateway.api.serializers import GlobalFeedbackSerializer, \
+    GlobalRTD10Serializer, GroupActionSerializer, InputSerializer, \
+    InputStateSerializer, ModuleSerializer, OutputSerializer, \
+    OutputStateSerializer, PulseCounterSerializer, PumpGroupSerializer, \
+    RoomSerializer, RTD10Serializer, ScheduleSerializer, SensorSerializer, \
+    ShutterGroupSerializer, ShutterSerializer, \
+    ThermostatAircoStatusSerializer, ThermostatGroupSerializer, \
+    ThermostatGroupStatusSerializer, ThermostatSerializer, \
+    VentilationSerializer, VentilationStatusSerializer
+from gateway.dto import GlobalRTD10DTO, InputStatusDTO, ModuleDTO, RoomDTO, \
+    ScheduleDTO, ThermostatDTO, UserDTO
 from gateway.enums import ShutterEnums, UserEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_communicator import InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
-from gateway.models import Database, Feature, Config
+from gateway.models import Config, Database, Feature
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -658,15 +659,29 @@ class WebInterface(object):
 
     @openmotics_api(auth=True)
     def get_input_status(self):
+        # type: () -> Dict[str, List[Dict[str, Any]]]
         """
         Get the status of the inputs.
 
         :returns: 'status': list of dictionaries with the following keys: id, status.
         """
-        return {'status': self._gateway_api.get_input_status()}
+        return {'status': [InputStateSerializer.serialize(input, None)
+                           for input in self._input_controller.get_input_statuses()]}
+
+    @openmotics_api(auth=True, check=types(id=int, is_on=bool))
+    def set_input(self, id, is_on):
+        # type: (int, bool) -> Dict
+        """
+        Set the status of a virtual input.
+        :param id: The id of the input to set
+        :param is_on: Whether the input is on (pressed)
+        """
+        self._input_controller.set_input_status(InputStatusDTO(id, status=is_on))
+        return {}
 
     @openmotics_api(auth=True)
     def get_output_status(self):
+        # type: () -> Dict[str, List[Dict[str, Any]]]
         """
         Get the status of the outputs.
 
@@ -675,8 +690,20 @@ class WebInterface(object):
         return {'status': [OutputStateSerializer.serialize(output, None)
                            for output in self._output_controller.get_output_statuses()]}
 
+    @openmotics_api(auth=True)
+    def get_last_outputs(self):
+        # type: () -> Dict[str, List[int]]
+        """
+        Get list of outputs which changed during the last 10 seconds.
+
+        :returns: 'outputs': list of output ids.
+        :rtype: dict
+        """
+        return {'outputs': self._output_controller.get_last_outputs()}
+
     @openmotics_api(auth=True, check=types(id=int, is_on=bool, dimmer=int, timer=int))
-    def set_output(self, id, is_on, dimmer=None, timer=None):  # type: (int, bool, Optional[int], Optional[int]) -> Dict
+    def set_output(self, id, is_on, dimmer=None, timer=None):
+        # type: (int, bool, Optional[int], Optional[int]) -> Dict
         """
         Set the status, dimmer and timer of an output.
         :param id: The id of the output to set
