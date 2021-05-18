@@ -47,7 +47,6 @@ if False:  # MYPY
     from gateway.maintenance_controller import MaintenanceController
     from gateway.metrics_collector import MetricsCollector
     from gateway.metrics_controller import MetricsController
-    from gateway.observer import Observer
     from gateway.pulse_counter_controller import PulseCounterController
     from gateway.scheduling import SchedulingController
     from gateway.sensor_controller import SensorController
@@ -77,7 +76,6 @@ class OpenmoticsService(object):
                 message_client=INJECTED,  # type: MessageClient
                 web_interface=INJECTED,  # type: WebInterface
                 scheduling_controller=INJECTED,  # type: SchedulingController
-                observer=INJECTED,  # type: Observer
                 pubsub=INJECTED,  # type: PubSub
                 gateway_api=INJECTED,  # type: GatewayApi
                 metrics_collector=INJECTED,  # type: MetricsCollector

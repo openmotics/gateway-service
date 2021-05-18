@@ -47,7 +47,6 @@ if False:  # MYPY:
     from power.power_store import PowerStore
     from power.power_controller import PowerController, P1Controller
     from bus.om_bus_client import MessageClient
-    from gateway.observer import Observer
     from gateway.watchdog import Watchdog
 
     T = TypeVar('T', bound=Union[int, float])
@@ -76,16 +75,14 @@ class GatewayApi(object):
     @Inject
     def __init__(self,
                  master_controller=INJECTED, power_store=INJECTED, power_communicator=INJECTED,
-                 power_controller=INJECTED, p1_controller=INJECTED, message_client=INJECTED,
-                 observer=INJECTED):
-        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient, Observer) -> None
+                 power_controller=INJECTED, p1_controller=INJECTED, message_client=INJECTED):
+        # type: (MasterController, PowerStore, PowerCommunicator, PowerController, P1Controller, MessageClient) -> None
         self.__master_controller = master_controller  # type: MasterController
         self.__power_store = power_store
         self.__power_communicator = power_communicator
         self.__p1_controller = p1_controller
         self.__power_controller = power_controller
         self.__message_client = message_client
-        self.__observer = observer
 
     def set_plugin_controller(self, plugin_controller):
         """ Set the plugin controller. """
@@ -179,24 +176,6 @@ class GatewayApi(object):
 
     def flash_leds(self, led_type, led_id):
         return self.__master_controller.flash_leds(led_type, led_id)
-
-    # Input functions
-
-    def get_input_status(self):
-        """
-        Get a list containing the status of the Inputs.
-        :returns: A list is a dicts containing the following keys: id, status.
-        """
-        # TODO: work with input controller
-        inputs = self.__observer.get_inputs()
-        return [{'id': input_port['id'], 'status': input_port['status']} for input_port in inputs]
-
-    def get_last_inputs(self):
-        """ Get the X last pressed inputs during the last Y seconds.
-        :returns: a list of tuples (input, output).
-        """
-        # TODO: work with input controller
-        return self.__observer.get_recent()
 
     # Sensors
 
