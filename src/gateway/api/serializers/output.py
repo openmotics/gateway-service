@@ -19,7 +19,7 @@ Output (de)serializer
 from __future__ import absolute_import
 
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto import FeedbackLedDTO, OutputDTO, OutputStateDTO, \
+from gateway.dto import FeedbackLedDTO, OutputDTO, OutputStatusDTO, \
     DimmerConfigurationDTO
 from toolbox import Toolbox
 
@@ -78,7 +78,7 @@ class OutputSerializer(object):
 class OutputStateSerializer(object):
     @staticmethod
     def serialize(output_state_dto, fields):
-        # type: (OutputStateDTO, Optional[List[str]]) -> Dict
+        # type: (OutputStatusDTO, Optional[List[str]]) -> Dict
         data = {'id': output_state_dto.id,
                 'status': 1 if output_state_dto.status else 0,
                 'ctimer': output_state_dto.ctimer,
@@ -88,8 +88,8 @@ class OutputStateSerializer(object):
 
     @staticmethod
     def deserialize(api_data):
-        # type: (Dict) -> OutputStateDTO
-        output_state_dto = OutputStateDTO(api_data['id'])
+        # type: (Dict) -> OutputStatusDTO
+        output_state_dto = OutputStatusDTO(api_data['id'])
         SerializerToolbox.deserialize(
             dto=output_state_dto,  # Referenced
             api_data=api_data,

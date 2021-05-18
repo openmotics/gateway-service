@@ -19,10 +19,10 @@ from gateway.dto.feedback_led import FeedbackLedDTO
 from gateway.dto.floor import FloorDTO
 from gateway.dto.global_feedback import GlobalFeedbackDTO
 from gateway.dto.group_action import GroupActionDTO
-from gateway.dto.input import InputDTO
+from gateway.dto.input import InputDTO, InputStatusDTO
 from gateway.dto.module import ModuleDTO
 from gateway.dto.output import DimmerConfigurationDTO, OutputDTO, \
-    OutputStateDTO
+    OutputStatusDTO
 from gateway.dto.pulse_counter import PulseCounterDTO
 from gateway.dto.rfid import RfidDTO
 from gateway.dto.room import RoomDTO

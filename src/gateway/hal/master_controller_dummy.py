@@ -18,10 +18,9 @@ Module for communicating with the Master
 from __future__ import absolute_import
 
 import logging
-
 from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
-    GroupActionDTO, InputDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
-    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStateDTO, PulseCounterDTO, \
+    GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
+    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
     PumpGroupDTO, ShutterDTO, ShutterGroupDTO, \
     ThermostatAircoStatusDTO, ThermostatDTO
 from gateway.exceptions import UnsupportedException
@@ -119,19 +118,15 @@ class MasterDummyController(MasterController):
         # type: () -> List[GlobalFeedbackDTO]
         return []
 
-    def get_inputs_with_status(self):
-        # type: () -> List[Dict[str,Any]]
-        return []
-
-    def get_recent_inputs(self):
-        # type: () -> List[int]
+    def load_input_status(self):
+        # type: () -> List[InputStatusDTO]
         return []
 
     def load_outputs(self):  # type: () -> List[OutputDTO]
         return []
 
     def load_output_status(self):
-        # type: () -> List[OutputStateDTO]
+        # type: () -> List[OutputStatusDTO]
         return []
 
     def load_shutters(self):

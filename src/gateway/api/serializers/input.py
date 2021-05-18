@@ -17,6 +17,8 @@
 Input (de)serializer
 """
 from __future__ import absolute_import
+
+from gateway.dto.input import InputStatusDTO
 from toolbox import Toolbox
 from gateway.api.serializers.base import SerializerToolbox
 from gateway.dto import InputDTO
@@ -57,3 +59,23 @@ class InputSerializer(object):
                      'room': ('room', InputSerializer.BYTE_MAX)}
         )
         return input_dto
+
+
+class InputStateSerializer(object):
+    @staticmethod
+    def serialize(input_state_dto, fields):
+        # type: (InputStatusDTO, Optional[List[str]]) -> Dict
+        data = {'id': input_state_dto.id,
+                'status': 1 if input_state_dto.status else 0}
+        return SerializerToolbox.filter_fields(data, fields)
+
+    @staticmethod
+    def deserialize(api_data):
+        # type: (Dict) -> InputStatusDTO
+        input_state_dto = InputStatusDTO(api_data['id'])
+        SerializerToolbox.deserialize(
+            dto=input_state_dto,  # Referenced
+            api_data=api_data,
+            mapping={'status': ('status', bool)}
+        )
+        return input_state_dto

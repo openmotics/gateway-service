@@ -16,15 +16,17 @@
 """
 Input DTO
 """
+import time
+
 from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
-    from typing import Optional, List
+    from typing import Optional, List, Any
 
 
 class InputDTO(BaseDTO):
     @capture_fields
-    def __init__(self, id, name='', module_type='I', action=None, basic_actions=None, invert=False, can=False, room=None, event_enabled=False):
+    def __init__(self, id, name='', module_type='I', action=None, basic_actions=None, invert=False, can=False, room=None, event_enabled=False, state=None):
         # The argument `basic_actions` is None since you should not set a reference type as default value
         self.id = id  # type: int
         self.name = name  # type: str
@@ -35,6 +37,9 @@ class InputDTO(BaseDTO):
         self.invert = invert  # type: bool
         self.can = can  # type: bool
         self.event_enabled = event_enabled  # type: bool
+        self.state = state  # type: Optional[InputStatusDTO]
+        if self.state:
+            self.state.id = self.id
 
     def __eq__(self, other):
         if not isinstance(other, InputDTO):
@@ -48,3 +53,19 @@ class InputDTO(BaseDTO):
                 self.invert == other.invert and
                 self.can == other.can and
                 self.event_enabled == other.event_enabled)
+
+
+class InputStatusDTO(BaseDTO):
+    @capture_fields
+    def __init__(self, id, status=False, updated_at=None):
+        # type: (int, bool, Optional[float]) -> None
+        self.id = id  # type: int
+        self.status = bool(status)  # type: bool
+        self.updated_at = updated_at or time.time()  # type: float
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        if not isinstance(other, InputStatusDTO):
+            return False
+        return (self.id == other.id and
+                self.status == other.status)

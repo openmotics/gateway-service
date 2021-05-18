@@ -16,6 +16,8 @@
 """
 Output DTO
 """
+import time
+
 from gateway.dto.base import BaseDTO, capture_fields
 from gateway.dto.feedback_led import FeedbackLedDTO
 
@@ -66,19 +68,20 @@ class OutputDTO(BaseDTO):
                 self.can_led_4 == other.can_led_4)
 
 
-class OutputStateDTO(BaseDTO):
+class OutputStatusDTO(BaseDTO):
     @capture_fields
-    def __init__(self, id, status=False, ctimer=0, dimmer=0, locked=False):
-        # type: (int, bool, int, int, bool) -> None
+    def __init__(self, id, status=False, ctimer=0, dimmer=0, locked=False, updated_at=None):
+        # type: (int, bool, int, int, bool, Optional[float]) -> None
         self.id = id  # type: int
         self.status = status
         self.ctimer = ctimer
         self.dimmer = dimmer
         self.locked = locked
+        self.updated_at = updated_at or time.time()  # type: float
 
     def __eq__(self, other):
         # type: (Any) -> bool
-        if not isinstance(other, OutputStateDTO):
+        if not isinstance(other, OutputStatusDTO):
             return False
         return (self.id == other.id and
                 self.status == other.status and
