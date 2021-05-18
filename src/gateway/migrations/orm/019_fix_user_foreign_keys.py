@@ -53,7 +53,6 @@ def migrate(migrator, database, fake=False, **kwargs):
             NL = 'Nederlands'
             FR = 'Francais'
 
-        # id = AutoField()
         id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
         username = CharField(null=False, unique=True)
         first_name = CharField(null=True)

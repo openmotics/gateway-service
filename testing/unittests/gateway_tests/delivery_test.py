@@ -28,7 +28,6 @@ from gateway.delivery_controller import DeliveryController
 from ioc import SetTestMode
 
 MODELS = [Delivery, User]
-# MODELS = [Delivery]
 
 class DeliveryControllerTest(unittest.TestCase):
     """ Tests for DeliveryController. """

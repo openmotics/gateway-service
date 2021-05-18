@@ -427,16 +427,6 @@ class ApiDeliverysTests(unittest.TestCase):
             response = self.web.put_delivery_pickup(delivery_id=self.test_delivery_1.id, token=auth_token)
             self.assert_delivery_picked_up(response)
 
-    # def test_pickup_delivery_no_auth(self):
-    #     with mock.patch.object(self.delivery_controller, 'pickup_delivery') as save_delivery_func, \
-    #             mock.patch.object(self.delivery_controller, 'load_delivery', return_value=self.test_delivery_1):
-    #         delivery_dto_to_save = self.test_delivery_1
-    #         delivery_dto_to_save.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
-    #         save_delivery_func.return_value = delivery_dto_to_save
-    #         auth_token = None
-    #         response = self.web.put_delivery_pickup(delivery_id=self.test_delivery_1.id, token=auth_token)
-    #         self.assertIn(UnAuthorizedException.bytes_message(), response)
-
     def test_pickup_delivery_user_auth(self):
         with mock.patch.object(self.delivery_controller, 'pickup_delivery') as save_delivery_func, \
                 mock.patch.object(self.delivery_controller, 'load_delivery', return_value=self.test_delivery_1):
