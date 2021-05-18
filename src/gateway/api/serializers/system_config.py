@@ -16,12 +16,13 @@
 System config serializer
 """
 
+from gateway.dto.base import BaseDTO
 from gateway.dto.system_config import SystemDoorbellConfigDTO, SystemRFIDConfigDTO, \
     SystemRFIDSectorBlockConfigDTO, SystemTouchscreenConfigDTO, SystemGlobalConfigDTO, \
     SystemActivateUserConfigDTO
 
 if False:  #MyPy
-    from typing import Dict
+    from typing import Dict, Any
 
 
 class SystemConfigSerializer(object):
@@ -30,6 +31,7 @@ class SystemConfigSerializer(object):
 
     @classmethod
     def serialize(cls, dto_object):
+        # type: (BaseDTO) -> Dict[str, Any]
         serial_data = {}
         for dto_naming, serial_naming in cls.TRANSLATION.items():
             serial_data[serial_naming] = getattr(dto_object, dto_naming)
@@ -37,6 +39,7 @@ class SystemConfigSerializer(object):
 
     @classmethod
     def deserialize(cls, serial_data):
+        # type: (Dict[str, Any]) -> BaseDTO
         if cls.DTO is None:
             raise RuntimeError('The dto type is not specified to return to')
         translation_reverse = {v: k for k, v in cls.TRANSLATION.items()}
@@ -100,21 +103,3 @@ class SystemActivateUserConfigSerializer(SystemConfigSerializer):
         'change_language': 'change_language_enabled',
         'change_pin_code': 'change_user_code_enabled'
     }
-
-# def main():
-#     print('Running main')
-#     serial = {
-#         'enabled': True
-#     }
-#     dc = SystemDoorbellConfigSerializer.deserialize(serial)
-#     print(dc)
-#
-#     dc = SystemDoorbellConfigDTO(enabled=False)
-#     print(SystemDoorbellConfigSerializer.serialize(dc))
-#
-#
-#
-#
-# if __name__ == '__main__':
-#     main()
-#
