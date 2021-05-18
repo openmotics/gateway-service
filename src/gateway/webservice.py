@@ -2444,7 +2444,7 @@ class WebInterface(object):
                         definitions[_source][_metric_type] = definition
         return {'definitions': definitions}
 
-    @openmotics_api(check=types(confirm=bool), auth=True, plugin_exposed=False)
+    @openmotics_api(check=types(confirm=bool, can=bool), auth=True, plugin_exposed=False)
     def factory_reset(self, username, password, confirm=False, can=True):
         user_dto = UserDTO(username=username)
         user_dto.set_password(password)
