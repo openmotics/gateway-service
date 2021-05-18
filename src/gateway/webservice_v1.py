@@ -839,7 +839,7 @@ class Rfid(RestAPIEndpoint):
         # first fetch the rfid tag to check if it exists and if the deletion is authorized
         rfid = self.rfid_controller.load_rfid(rfid_id)
         if rfid is None:
-            raise ItemDoesNotExistException("Cannot delete RFID: tag with id '{}' does not exist")
+            raise ItemDoesNotExistException("Cannot delete RFID: tag with id '{}' does not exist".format(rfid_id))
 
         if token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
             if rfid.user.id != token.user.id:
