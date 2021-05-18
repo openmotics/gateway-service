@@ -2161,6 +2161,7 @@ class WebInterface(object):
             temp_file = self._download_firmware('temperature', temperature)
             self._module_controller.update_slave_firmware('T', temp_file)
             shutil.move(temp_file, '/opt/openmotics/t_firmware.hex')
+        self._module_controller.request_sync_orm()
         return {}
 
     @Inject
