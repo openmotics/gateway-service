@@ -46,6 +46,10 @@ class SensorController(BaseController):
     SYNC_STRUCTURES = [SyncStructure(Sensor, 'sensor')]
     STATUS_EXIPRE = 60.0
 
+    MASTER_TYPES = {MasterEvent.SensorType.TEMPERATURE: Sensor.PhysicalQuantities.TEMPERATURE,
+                    MasterEvent.SensorType.HUMIDITY: Sensor.PhysicalQuantities.HUMIDITY,
+                    MasterEvent.SensorType.BRIGHTNESS: Sensor.PhysicalQuantities.BRIGHTNESS}
+
     @Inject
     def __init__(self, master_controller=INJECTED, pubsub=INJECTED):
         # type: (MasterController, PubSub) -> None
@@ -76,13 +80,14 @@ class SensorController(BaseController):
         # type: (MasterEvent) -> None
         super(SensorController, self)._handle_master_event(master_event)
         if master_event.type in (MasterEvent.Types.SENSOR_VALUE, MasterCoreEvent.Types.SENSOR):
-            key = (master_event.data['type'], master_event.data['sensor'])
+            sensor_type = SensorController.MASTER_TYPES[master_event.data['type']]
+            key = (sensor_type, master_event.data['sensor'])
             sensor_dto = self._master_cache.get(key)
             if sensor_dto is not None:
                 self._handle_status(SensorStatusDTO(sensor_dto.id,
                                                     value=master_event.data['value']))
             else:
-                logger.warning('Received value for unknown sensor %s', master_event)
+                logger.warning('Received value for unknown %s sensor %s', key, master_event)
                 self.request_sync_orm()
 
     def _sync_orm_structure(self, structure):  # type: (SyncStructure) -> None
