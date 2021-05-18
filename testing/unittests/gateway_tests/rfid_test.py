@@ -152,10 +152,10 @@ class RFIDControllerTest(unittest.TestCase):
         res_2 = self.controller.save_rfid(self.test_rfid_2)
         self.assertEqual(2, RFID.select().count())
 
-        self.controller.delete_tag(res_1.id)
+        self.controller.delete_rfid(res_1.id)
         self.assertEqual(1, RFID.select().count())
 
-        self.controller.delete_tag(res_2.id)
+        self.controller.delete_rfid(res_2.id)
         self.assertEqual(0, RFID.select().count())
 
         res_3 = self.controller.save_rfid(self.test_rfid_1)
