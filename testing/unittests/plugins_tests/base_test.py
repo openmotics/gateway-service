@@ -34,7 +34,7 @@ from peewee import SqliteDatabase
 from pytest import mark
 
 import plugin_runtime
-from gateway.dto import OutputStateDTO
+from gateway.dto import OutputStatusDTO
 from gateway.enums import ShutterEnums
 from gateway.events import GatewayEvent
 from gateway.models import Plugin
@@ -222,7 +222,7 @@ class P1(OMPluginBase):
             controller._update_dependencies = _call
             controller.start()
             self.assertIsNotNone(controller._dependencies_timer)
-            self.assertEquals(0, called['called'])
+            self.assertEqual(0, called['called'])
             _wait_for_called(1)
             controller.stop_plugin('P1')
             _wait_for_called(2)
@@ -295,7 +295,7 @@ class P1(OMPluginBase):
 """)
 
             output_controller = Mock(OutputController)
-            output_controller.get_output_statuses = lambda: [OutputStateDTO(id=1, status=True, dimmer=5)]
+            output_controller.get_output_statuses = lambda: [OutputStatusDTO(id=1, status=True, dimmer=5)]
             controller = PluginControllerTest._get_controller(output_controller=output_controller)
             controller.start()
 
