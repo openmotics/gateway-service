@@ -34,6 +34,9 @@ if False:  # MyPy
 @Singleton
 class SystemConfigController(object):
 
+    def __init__(self):
+        pass
+
     ESAFE_CONFIG_PREFIX = 'ESAFE_'
     DEFAULT_CONFIG = {
         # 'db_version': '006',
