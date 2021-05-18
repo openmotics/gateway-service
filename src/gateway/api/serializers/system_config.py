@@ -31,7 +31,6 @@ class SystemConfigSerializer(object):
 
     @classmethod
     def serialize(cls, dto_object):
-        # type: (BaseDTO) -> Dict[str, Any]
         serial_data = {}
         for dto_naming, serial_naming in cls.TRANSLATION.items():
             serial_data[serial_naming] = getattr(dto_object, dto_naming)
@@ -39,7 +38,6 @@ class SystemConfigSerializer(object):
 
     @classmethod
     def deserialize(cls, serial_data):
-        # type: (Dict[str, Any]) -> BaseDTO
         if cls.DTO is None:
             raise RuntimeError('The dto type is not specified to return to')
         translation_reverse = {v: k for k, v in cls.TRANSLATION.items()}

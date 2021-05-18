@@ -171,12 +171,25 @@ class SystemConfigApiCherryPyTest(BaseCherryPyUnitTester):
             self.assertStatus('200 OK')
             self.assertBody(json.dumps({'enabled': True}))
 
-    def test_put_body(self):
+    def test_put_unauthorized(self):
         with mock.patch.object(self.system_config_controller, 'save_doorbell_config') as save_config_func:
             body = {
                 'enabled': False
             }
             status, headers, response = self.PUT('/api/v1/system/configuration/doorbell', login_user=None, body=json.dumps(body))
+            save_config_func.assert_not_called()
+            self.assertStatus('401 Unauthorized')
+
+            status, headers, response = self.PUT('/api/v1/system/configuration/doorbell', login_user=self.test_user_1, body=json.dumps(body))
+            save_config_func.assert_not_called()
+            self.assertStatus('401 Unauthorized')
+
+    def test_put_body(self):
+        with mock.patch.object(self.system_config_controller, 'save_doorbell_config') as save_config_func:
+            body = {
+                'enabled': False
+            }
+            status, headers, response = self.PUT('/api/v1/system/configuration/doorbell', login_user=self.test_admin, body=json.dumps(body))
             save_config_func.assert_called_once_with(SystemDoorbellConfigDTO(enabled=False))
             self.assertStatus('200 OK')
             self.assertBody('')

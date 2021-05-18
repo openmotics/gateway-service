@@ -688,7 +688,7 @@ class SystemConfiguration(RestAPIEndpoint):
         config_serial = SystemDoorbellConfigSerializer.serialize(config_dto)
         return json.dumps(config_serial)
 
-    @openmotics_api_v1(auth=False, expect_body_type='JSON')
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
     def put_doorbell_config(self, request_body):
         # type: (Dict) -> None
         config_dto = SystemDoorbellConfigSerializer.deserialize(request_body)
@@ -702,7 +702,7 @@ class SystemConfiguration(RestAPIEndpoint):
         config_serial = SystemRFIDConfigSerializer.serialize(config_dto)
         return json.dumps(config_serial)
 
-    @openmotics_api_v1(auth=False, expect_body_type='JSON')
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
     def put_rfid_config(self, request_body):
         # type: (Dict) -> None
         config_dto = SystemRFIDConfigSerializer.deserialize(request_body)
@@ -716,7 +716,7 @@ class SystemConfiguration(RestAPIEndpoint):
         config_serial = SystemRFIDSectorBlockConfigSerializer.serialize(config_dto)
         return json.dumps(config_serial)
 
-    @openmotics_api_v1(auth=False, expect_body_type='JSON')
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
     def put_rfid_sector_block_config(self, request_body):
         # type: (Dict) -> None
         config_dto = SystemRFIDSectorBlockConfigSerializer.deserialize(request_body)
@@ -730,7 +730,7 @@ class SystemConfiguration(RestAPIEndpoint):
         config_serial = SystemTouchscreenConfigSerializer.serialize(config_dto)
         return json.dumps(config_serial)
 
-    @openmotics_api_v1(auth=False)
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN])
     def put_touchscreen_config(self):
         # type: () -> None
         self.system_config_controller.save_touchscreen_config()
@@ -743,7 +743,7 @@ class SystemConfiguration(RestAPIEndpoint):
         config_serial = SystemGlobalConfigSerializer.serialize(config_dto)
         return json.dumps(config_serial)
 
-    @openmotics_api_v1(auth=False, expect_body_type='JSON')
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
     def put_global_config(self, request_body):
         # type: (Dict) -> None
         config_dto = SystemGlobalConfigSerializer.deserialize(request_body)
@@ -757,7 +757,7 @@ class SystemConfiguration(RestAPIEndpoint):
         config_serial = SystemActivateUserConfigSerializer.serialize(config_dto)
         return json.dumps(config_serial)
 
-    @openmotics_api_v1(auth=False, expect_body_type='JSON')
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
     def put_activate_user_config(self, request_body):
         # type: (Dict) -> None
         config_dto = SystemActivateUserConfigSerializer.deserialize(request_body)
