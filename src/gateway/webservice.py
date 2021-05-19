@@ -2472,6 +2472,10 @@ class WebInterface(object):
             raise cherrypy.HTTPError(401, 'not_confirmed')
         return self._system_controller.factory_reset(can=can)
 
+    @openmotics_api(auth=True, plugin_exposed=False)
+    def restart_services(self):
+        return self._system_controller.restart_services()
+
     @openmotics_api(auth=False)
     def health_check(self):
         """ Requests the state of the various services and checks the returned value for the global state """

@@ -32,7 +32,7 @@ from platform_utils import System
 from gateway.base_controller import BaseController
 
 if False:  # MYPY
-    from typing import Dict, Any
+    from typing import Dict, Any, List, Optional
     from gateway.watchdog import Watchdog
     from gateway.module_controller import ModuleController
 
@@ -239,15 +239,24 @@ class SystemController(BaseController):
         except subprocess.CalledProcessError as exc:
             return {'success': False, 'factory_reset': exc.output.strip()}
 
-        def _restart():
-            # type: () -> None
-            logger.info('Restarting for factory reset...')
-            System.restart_service('openmotics')
-
-        Timer(2, _restart).start()
+        self.restart_services(['openmotics'])
         if can:
             return {'factory_reset_full': 'pending'}
         return {'factory_reset': 'pending'}
+
+    def restart_services(self, service_names=None):
+        # type: (Optional[List[str]]) -> Dict[str,Any]
+        def _restart(_service_names):
+            # type: (List[str]) -> None
+            logger.info('Restarting services...')
+            for service_name in _service_names:
+                System.restart_service(service_name)
+
+        if service_names is None:
+            service_names = System.SERVICES
+
+        Timer(2, _restart, args=service_names).start()
+        return {'restart_services': 'pending'}
 
     @Inject
     def set_self_recovery(self, active, watchdog=INJECTED):  # type: (bool, Watchdog) -> None
