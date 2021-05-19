@@ -16,6 +16,8 @@
 """
 Delivery DTO
 """
+from dateutil.parser import parse
+
 from gateway.dto.base import BaseDTO, capture_fields
 
 if False:  # MYPY
@@ -24,13 +26,15 @@ if False:  # MYPY
 
 
 class DeliveryDTO(BaseDTO):
+
     @capture_fields
-    def __init__(self, id, type, timestamp_delivery, user_delivery, timestamp_pickup=None, courier_firm='',
-                 signature_delivery='', signature_pickup='', parcelbox_rebus_id=None, user_pickup=None):
+    def __init__(self, id=None, type=None, timestamp_delivery=None, user_delivery=None, timestamp_pickup=None,
+                 courier_firm=None, signature_delivery=None, signature_pickup=None, parcelbox_rebus_id=None,
+                 user_pickup=None):
         self.id = id  # type: int
         self.type = type  # type: str
-        self.timestamp_delivery = timestamp_delivery  # type: int
-        self.timestamp_pickup = timestamp_pickup  # type: Optional[int]
+        self.timestamp_delivery = timestamp_delivery  # type: str
+        self.timestamp_pickup = timestamp_pickup  # type: str
         self.courier_firm = courier_firm  # type: str
         self.signature_delivery = signature_delivery  # type: str
         self.signature_pickup = signature_pickup  # type: str
@@ -38,18 +42,23 @@ class DeliveryDTO(BaseDTO):
         self.user_delivery = user_delivery  # type: UserDTO
         self.user_pickup = user_pickup  # type: Optional[UserDTO]
 
-        self._loaded_fields.remove('user_delivery')
-        self._loaded_fields.add('user_id_delivery')
-        if user_pickup is not None:
-            self._loaded_fields.add('user_id_pickup')
-            self._loaded_fields.remove('user_pickup')
+    @property
+    def timestamp_delivery_datetime(self):
+        if self.timestamp_delivery is not None:
+            return parse(self.timestamp_delivery)
+        return None
+
+    @property
+    def timestamp_pickup_datetime(self):
+        if self.timestamp_pickup is not None:
+            return parse(self.timestamp_pickup)
+        return None
 
     @property
     def user_id_delivery(self):
         if self.user_delivery is not None:
             return self.user_delivery.id
         return None
-
 
     @property
     def user_id_pickup(self):

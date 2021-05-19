@@ -602,27 +602,31 @@ class User(BaseModel):
 
 
 class RFID(BaseModel):
-    id = AutoField()
+    id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
     tag_string = CharField(null=False, unique=True)
     uid_manufacturer = CharField(null=False, unique=True)
-    uid_extension = CharField()
+    uid_extension = CharField(null=True)
     enter_count = IntegerField(null=False)
     blacklisted = BooleanField(null=False, default=False)
     label = CharField()
-    timestamp_created = CharField()
-    timestamp_last_used = CharField()
+    timestamp_created = CharField(null=False)
+    timestamp_last_used = CharField(null=True)
     user_id = ForeignKeyField(User, null=False, backref='rfids', on_delete='CASCADE')
 
 
 class Delivery(BaseModel):
-    id = AutoField()
-    type = CharField(null=False)
+    class DeliveryType(object):
+        DELIVERY = 'DELIVERY'
+        RETURN = 'RETURN'
+
+    id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
+    type = CharField(null=False)  # options: DeliveryType
     timestamp_delivery = CharField(null=False)
-    timestamp_pickup = CharField()
-    courier_firm = CharField()
-    signature_delivery = CharField(null=False)
-    signature_pickup = CharField()
+    timestamp_pickup = CharField(null=True)
+    courier_firm = CharField(null=True)
+    signature_delivery = CharField(null=True)
+    signature_pickup = CharField(null=True)
     parcelbox_rebus_id = IntegerField(null=False)
-    user_id_delivery = ForeignKeyField(User, backref='deliveries', on_delete='NO ACTION', null=False)
-    user_id_pickup = ForeignKeyField(User, backref='pickups', on_delete='NO ACTION')
+    user_delivery = ForeignKeyField(User, backref='deliveries', on_delete='NO ACTION', null=True)
+    user_pickup = ForeignKeyField(User, backref='pickups', on_delete='NO ACTION', null=False)
 

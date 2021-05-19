@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from gateway.api.serializers.apartment import ApartmentSerializer
+from gateway.api.serializers.delivery import DeliverySerializer
 from gateway.api.serializers.global_feedback import GlobalFeedbackSerializer
 from gateway.api.serializers.group_action import GroupActionSerializer
 from gateway.api.serializers.input import InputSerializer, InputStateSerializer

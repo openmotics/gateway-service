@@ -86,6 +86,9 @@ class UserControllerTest(unittest.TestCase):
         user_dto.set_password("test")
         self.controller.save_user(user_dto)
 
+        user_orm = User.select().where(User.username == 'fred').first()
+        self.assertIsNotNone(user_orm)
+
         num_users = self.controller.get_number_of_users()
         self.assertEqual(2, num_users)
 
