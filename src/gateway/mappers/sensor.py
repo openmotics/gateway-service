@@ -38,10 +38,14 @@ class SensorMapper(object):
         if source_dto.is_plugin:
             source_dto.id = sensor.plugin.id
             source_dto.name = sensor.plugin.name
+        room = sensor.room.number if sensor.room else None
         return SensorDTO(sensor.id,
                          source=source_dto,
                          external_id=sensor.external_id,
-                         name=sensor.name)
+                         physical_quantity=sensor.physical_quantity,
+                         unit=sensor.unit,
+                         name=sensor.name,
+                         room=room)
 
     @staticmethod
     def dto_to_orm(sensor_dto):  # type: (SensorDTO) -> Sensor
