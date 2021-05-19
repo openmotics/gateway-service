@@ -239,7 +239,7 @@ class SystemController(BaseController):
         except subprocess.CalledProcessError as exc:
             return {'success': False, 'factory_reset': exc.output.strip()}
 
-        self.restart_services(['openmotics'])
+        self.restart_services(service_names=['openmotics'])
         if can:
             return {'factory_reset_full': 'pending'}
         return {'factory_reset': 'pending'}
