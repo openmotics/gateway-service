@@ -20,7 +20,7 @@ import unittest
 import mock
 
 from bus.om_bus_client import MessageClient
-from gateway.dto import OutputStateDTO, ScheduleDTO, VentilationDTO, \
+from gateway.dto import OutputStatusDTO, ScheduleDTO, VentilationDTO, \
     VentilationSourceDTO, VentilationStatusDTO, ModuleDTO
 from gateway.gateway_api import GatewayApi
 from gateway.group_action_controller import GroupActionController
@@ -73,7 +73,7 @@ class WebInterfaceTest(unittest.TestCase):
 
     def test_output_status(self):
         with mock.patch.object(self.output_controller, 'get_output_statuses',
-                               return_value=[OutputStateDTO(id=0, status=True)]):
+                               return_value=[OutputStatusDTO(id=0, status=True)]):
             response = self.web.get_output_status()
             self.assertEqual([{'id': 0, 'status': 1, 'ctimer': 0, 'dimmer': 0, 'locked': False}], json.loads(response)['status'])
 

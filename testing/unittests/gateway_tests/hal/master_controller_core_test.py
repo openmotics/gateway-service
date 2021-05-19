@@ -8,7 +8,8 @@ from six.moves import map
 from six.moves.queue import Queue
 
 import gateway.hal.master_controller_core
-from gateway.dto import InputDTO, OutputStateDTO, OutputDTO
+from gateway.dto import InputDTO, OutputStatusDTO, OutputDTO
+from gateway.dto.input import InputStatusDTO
 from gateway.hal.master_controller_core import MasterCoreController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
@@ -57,10 +58,10 @@ class MasterCoreControllerTest(unittest.TestCase):
         self.controller._handle_event({'type': 0, 'device_nr': 4, 'action': 2, 'data': bytearray([1, 0, 0, 0])})
         self.controller._handle_event({'type': 0, 'device_nr': 6, 'action': 2, 'data': bytearray([0, 0, 0, 0])})
         self.pubsub._publish_all_events()
-        self.assertEqual([MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=0, status=False, dimmer=255, ctimer=0)}),
-                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=2, status=True, dimmer=100, ctimer=65534)}),
-                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=4, locked=True)}),
-                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStateDTO(id=6, locked=False)})],
+        self.assertEqual([MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStatusDTO(id=0, status=False, dimmer=255, ctimer=0)}),
+                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStatusDTO(id=2, status=True, dimmer=100, ctimer=65534)}),
+                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStatusDTO(id=4, locked=True)}),
+                          MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStatusDTO(id=6, locked=False)})],
                          events)
 
     def test_master_shutter_event(self):
@@ -71,9 +72,9 @@ class MasterCoreControllerTest(unittest.TestCase):
 
         self.pubsub.subscribe_master_events(PubSub.MasterTopics.SHUTTER, _on_event)
 
-        self.controller._output_states = {0: OutputStateDTO(id=0, status=False),
-                                          10: OutputStateDTO(id=10, status=False),
-                                          11: OutputStateDTO(id=11, status=False)}
+        self.controller._output_states = {0: OutputStatusDTO(id=0, status=False),
+                                          10: OutputStatusDTO(id=10, status=False),
+                                          11: OutputStatusDTO(id=11, status=False)}
         self.controller._output_shutter_map = {10: 1, 11: 1}
         self.controller._shutter_status = {1: (False, False)}
         self.pubsub._publish_all_events()
@@ -114,10 +115,10 @@ class MasterCoreControllerTest(unittest.TestCase):
 
         self.pubsub.subscribe_master_events(PubSub.MasterTopics.SHUTTER, _on_event)
 
-        output_status = [OutputStateDTO(id=0, status=False, dimmer=0),
-                         OutputStateDTO(id=1, status=False, dimmer=0),
-                         OutputStateDTO(id=10, status=False, dimmer=0),
-                         OutputStateDTO(id=11, status=False, dimmer=0)]
+        output_status = [OutputStatusDTO(id=0, status=False, dimmer=0),
+                         OutputStatusDTO(id=1, status=False, dimmer=0),
+                         OutputStatusDTO(id=10, status=False, dimmer=0),
+                         OutputStatusDTO(id=11, status=False, dimmer=0)]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
@@ -126,10 +127,10 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
-        output_status = [OutputStateDTO(id=0, status=False, dimmer=0),
-                         OutputStateDTO(id=1, status=True, dimmer=0),
-                         OutputStateDTO(id=10, status=True, dimmer=0),
-                         OutputStateDTO(id=11, status=False, dimmer=0)]
+        output_status = [OutputStatusDTO(id=0, status=False, dimmer=0),
+                         OutputStatusDTO(id=1, status=True, dimmer=0),
+                         OutputStatusDTO(id=10, status=True, dimmer=0),
+                         OutputStatusDTO(id=11, status=False, dimmer=0)]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
@@ -138,10 +139,10 @@ class MasterCoreControllerTest(unittest.TestCase):
             self.pubsub._publish_all_events()
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_up', 'location': {'room_id': 255}})] == events
 
-        output_status = [OutputStateDTO(id=0, status=False, dimmer=0),
-                         OutputStateDTO(id=1, status=True, dimmer=0),
-                         OutputStateDTO(id=10, status=False, dimmer=0),
-                         OutputStateDTO(id=11, status=True, dimmer=0)]
+        output_status = [OutputStatusDTO(id=0, status=False, dimmer=0),
+                         OutputStatusDTO(id=1, status=True, dimmer=0),
+                         OutputStatusDTO(id=10, status=False, dimmer=0),
+                         OutputStatusDTO(id=11, status=True, dimmer=0)]
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy), \
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
@@ -182,13 +183,7 @@ class MasterCoreControllerTest(unittest.TestCase):
     def test_inputs_with_status(self):
         from gateway.hal.master_controller_core import MasterInputState
         with mock.patch.object(MasterInputState, 'get_inputs', return_value=[]) as get:
-            self.controller.get_inputs_with_status()
-            get.assert_called_with()
-
-    def test_recent_inputs(self):
-        from gateway.hal.master_controller_core import MasterInputState
-        with mock.patch.object(MasterInputState, 'get_recent', return_value=[]) as get:
-            self.controller.get_recent_inputs()
+            self.controller.load_input_status()
             get.assert_called_with()
 
     def test_event_consumer(self):
@@ -218,10 +213,9 @@ class MasterCoreControllerTest(unittest.TestCase):
         with mock.patch.object(Queue, 'get', return_value=event_data):
             consumer_list[0].deliver()
         self.pubsub._publish_all_events()
+
         expected_event = MasterEvent.deserialize({'type': 'INPUT_CHANGE',
-                                                  'data': {'id': 2,
-                                                           'status': True,
-                                                           'location': {'room_id': 255}}})
+                                                  'data': {'state': InputStatusDTO(id=2, status=True)}})
         subscriber.callback.assert_called_with(expected_event)
 
     def test_get_modules(self):
@@ -297,9 +291,7 @@ class MasterInputState(unittest.TestCase):
         with mock.patch.object(time, 'time', return_value=30):
             event = state.handle_event(core_event)
             expected_data = {'type': 'INPUT_CHANGE',
-                             'data': {'id': 2,
-                                      'status': True,
-                                      'location': {'room_id': 255}}}
+                             'data': {'state': InputStatusDTO(id=2, status=True)}}
             self.assertEqual(expected_data, event.serialize())
             self.assertIn({'id': 2, 'status': 1}, state.get_inputs())
 
@@ -316,10 +308,9 @@ class MasterInputState(unittest.TestCase):
             self.assertTrue(state.should_refresh())
             events = state.refresh([0b00000110])
             self.assertEqual(1, len(events))
+
             expected_event = MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE,
-                                         data={'id': 2,
-                                               'status': True,
-                                               'location': {'room_id': 255}})
+                                         data={'state': InputStatusDTO(id=2, status=True)})
             self.assertIn(expected_event, events)
             self.assertFalse(state.should_refresh())
 

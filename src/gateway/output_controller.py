@@ -19,12 +19,13 @@ from __future__ import absolute_import
 
 import copy
 import logging
+import time
 from threading import Lock
 from peewee import JOIN
 
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import OutputDTO, OutputStateDTO, GlobalFeedbackDTO
+from gateway.dto import OutputDTO, OutputStatusDTO, GlobalFeedbackDTO
 from gateway.events import GatewayEvent
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
@@ -74,9 +75,6 @@ class OutputController(BaseController):
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
         super(OutputController, self)._handle_master_event(master_event)
-        if master_event.type == MasterEvent.Types.MODULE_DISCOVERY:
-            if self._sync_state_thread:
-                self._sync_state_thread.request_single_run()
         if master_event.type == MasterEvent.Types.OUTPUT_STATUS:
             self._handle_output_status(master_event.data['state'])
         if master_event.type == MasterEvent.Types.EXECUTE_GATEWAY_API:
@@ -86,7 +84,7 @@ class OutputController(BaseController):
                 self.set_all_lights(action=action, floor_id=floor_id)
 
     def _handle_output_status(self, state_dto):
-        # type: (OutputStateDTO) -> None
+        # type: (OutputStatusDTO) -> None
         changed, output_dto = self._cache.handle_change(state_dto)
         if changed and output_dto is not None:
             self._publish_output_change(output_dto)
@@ -118,7 +116,7 @@ class OutputController(BaseController):
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
 
     def get_output_status(self, output_id):
-        # type: (int) -> OutputStateDTO
+        # type: (int) -> OutputStatusDTO
         # TODO also support plugins
         output_state_dto = self._cache.get_state().get(output_id)
         if output_state_dto is None:
@@ -126,7 +124,7 @@ class OutputController(BaseController):
         return output_state_dto
 
     def get_output_statuses(self):
-        # type: () -> List[OutputStateDTO]
+        # type: () -> List[OutputStatusDTO]
         # TODO also support plugins
         return list(self._cache.get_state().values())
 
@@ -187,6 +185,12 @@ class OutputController(BaseController):
         # type: (int, bool, Optional[int], Optional[int]) -> None
         self._master_controller.set_output(output_id=output_id, state=is_on, dimmer=dimmer, timer=timer)
 
+    def get_last_outputs(self):  # type: () -> List[int]
+        """
+        Get the X last changed outputs during the last Y seconds.
+        """
+        return self._cache.get_recent_outputs()
+
     # Global (led) feedback
 
     def load_global_feedback(self, global_feedback_id):  # type: (int) -> GlobalFeedbackDTO
@@ -206,7 +210,7 @@ class OutputStateCache(object):
         self._loaded = False
 
     def get_state(self):
-        # type: () -> Dict[int,OutputStateDTO]
+        # type: () -> Dict[int,OutputStatusDTO]
         return {x.id: x.state for x in self._cache.values()}
 
     def update_outputs(self, output_dtos):
@@ -218,13 +222,18 @@ class OutputStateCache(object):
                 if output_dto.id in self._cache:
                     output_dto.state = self._cache[output_dto.id].state
                 else:
-                    output_dto.state = OutputStateDTO(output_dto.id)
+                    output_dto.state = OutputStatusDTO(output_dto.id)
                 new_state[output_dto.id] = output_dto
             self._cache = new_state
             self._loaded = True
 
+    def get_recent_outputs(self, threshold=10):
+        # type: (int) -> List[int]
+        sorted_outputs = sorted(list(self._cache.values()), key=lambda x: x.state.updated_at if x.state else 0.0)
+        return [y.id for y in sorted_outputs if y.state and y.state.updated_at > time.time() - threshold]
+
     def handle_change(self, state_dto):
-        # type: (OutputStateDTO) -> Tuple[bool, Optional[OutputDTO]]
+        # type: (OutputStatusDTO) -> Tuple[bool, Optional[OutputDTO]]
         """
         Cache output state and detect changes.
         The classic master will send multiple status events when an output changes,
@@ -238,19 +247,25 @@ class OutputStateCache(object):
                 logger.warning('Received change for unknown output {0}: {1}'.format(output_id, state_dto))
                 return False, None
             changed = False
-            state = self._cache[output_id].state
-            if 'status' in state_dto.loaded_fields:
-                status = state_dto.status
-                changed |= state.status != status
-                state.status = status
-            if 'ctimer' in state_dto.loaded_fields:
-                state.ctimer = state_dto.ctimer
-            if 'dimmer' in state_dto.loaded_fields:
-                dimmer = state_dto.dimmer
-                changed |= state.dimmer != dimmer
-                state.dimmer = dimmer
-            if 'locked' in state_dto.loaded_fields:
-                locked = state_dto.locked
-                changed |= state.locked != locked
-                state.locked = locked
+            current_state = self._cache[output_id].state
+            if current_state is None:
+                self._cache[output_id].state = state_dto
+                changed = True
+            else:
+                if 'status' in state_dto.loaded_fields:
+                    status = state_dto.status
+                    changed |= current_state.status != status
+                    current_state.status = status
+                if 'ctimer' in state_dto.loaded_fields:
+                    current_state.ctimer = state_dto.ctimer
+                if 'dimmer' in state_dto.loaded_fields:
+                    dimmer = state_dto.dimmer
+                    changed |= current_state.dimmer != dimmer
+                    current_state.dimmer = dimmer
+                if 'locked' in state_dto.loaded_fields:
+                    locked = state_dto.locked
+                    changed |= current_state.locked != locked
+                    current_state.locked = locked
+                if changed:
+                    current_state.updated_at = state_dto.updated_at
             return changed, self._cache[output_id]

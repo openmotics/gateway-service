@@ -17,10 +17,10 @@ Module for communicating with the Master
 """
 from __future__ import absolute_import
 
-from gateway.dto import GroupActionDTO, InputDTO, OutputDTO, PulseCounterDTO, \
+from gateway.dto import GlobalFeedbackDTO, GroupActionDTO, InputDTO, \
+    InputStatusDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatAircoStatusDTO, \
-    ThermostatDTO, ThermostatGroupDTO, ModuleDTO, GlobalFeedbackDTO, \
-    OutputStateDTO
+    ThermostatDTO, ThermostatGroupDTO
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -78,6 +78,9 @@ class MasterController(object):
 
     # Input
 
+    def set_input(self, input_id, state):
+        raise NotImplementedError()
+
     def get_input_module_type(self, input_module_id):
         raise NotImplementedError()
 
@@ -90,12 +93,8 @@ class MasterController(object):
     def save_inputs(self, inputs):  # type: (List[InputDTO]) -> None
         raise NotImplementedError()
 
-    def get_inputs_with_status(self):
-        # type: () -> List[Dict[str,Any]]
-        raise NotImplementedError()
-
-    def get_recent_inputs(self):
-        # type: () -> List[int]
+    def load_input_status(self):
+        # type: () -> List[InputStatusDTO]
         raise NotImplementedError()
 
     # Outputs
@@ -116,7 +115,7 @@ class MasterController(object):
         raise NotImplementedError()
 
     def load_output_status(self):
-        # type: () -> List[OutputStateDTO]
+        # type: () -> List[OutputStatusDTO]
         raise NotImplementedError()
 
     # Shutters
