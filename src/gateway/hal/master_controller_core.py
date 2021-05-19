@@ -144,6 +144,7 @@ class MasterCoreController(MasterController):
             master_event = self._input_state.handle_event(core_event)
             self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
         elif core_event.type == MasterCoreEvent.Types.SENSOR:
+            master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, data=core_event.data)
             self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
             sensor_id = core_event.data['sensor']
             if sensor_id not in self._sensor_states:
