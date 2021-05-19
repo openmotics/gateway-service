@@ -24,17 +24,19 @@ import mock
 import gateway.hal.master_controller_classic
 import master.classic.master_api
 import master.classic.master_communicator
-from gateway.dto import InputDTO, OutputDTO, OutputStateDTO
+from gateway.dto import InputDTO, OutputDTO, OutputStatusDTO
+from gateway.dto.input import InputStatusDTO
 from gateway.hal.master_controller_classic import MasterClassicController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Scope, SetTestMode, SetUpTestInjections
+from master.classic import master_api
 from master.classic.eeprom_controller import EepromController
 from master.classic.eeprom_models import InputConfiguration
-from master.classic.inputs import InputStatus
 from master.classic.master_communicator import BackgroundConsumer
 from master.classic.validationbits import ValidationBitStatus
 from master.classic.master_communicator import MasterCommunicator
+
 
 class MasterClassicControllerTest(unittest.TestCase):
     """ Tests for MasterClassicController. """
@@ -124,22 +126,32 @@ class MasterClassicControllerTest(unittest.TestCase):
             except:
                 pass  # Just ensure it has at least consumed once
             expected_event = MasterEvent.deserialize({'type': 'INPUT_CHANGE',
-                                                      'data': {'id': 1,
-                                                               'status': True,
-                                                               'location': {'room_id': 255}}})
+                                                      'data': {'state': InputStatusDTO(id=1, status=True)}})
             subscriber.callback.assert_called_with(expected_event)
 
-    def test_get_inputs_with_status(self):
+    def test_load_input_status(self):
         controller = get_classic_controller_dummy()
-        with mock.patch.object(InputStatus, 'get_inputs', return_value=[]) as get:
-            controller.get_inputs_with_status()
-            self.assertIn(mock.call(), get.call_args_list)
 
-    def test_get_recent_inputs(self):
-        controller = get_classic_controller_dummy()
-        with mock.patch.object(InputStatus, 'get_recent', return_value=[]) as get:
-            controller.get_recent_inputs()
-            self.assertIn(mock.call(), get.call_args_list)
+        def _do_command(cmd, fields=None, **kwargs):
+            if cmd == master_api.number_of_io_modules():
+                return {'in': 1}
+            elif cmd == master_api.read_input_module(controller._master_version):
+                return {'input_status': 0b10110111}
+
+        controller._master_communicator.do_command.side_effect = _do_command
+
+        with mock.patch.object(MasterClassicController, 'get_input_module_type') as get_input_module_type:
+            get_input_module_type.side_effect = lambda x: 'I'
+            input_statuses = controller.load_input_status()
+            self.assertListEqual([InputStatusDTO(0, status=True),
+                                  InputStatusDTO(1, status=True),
+                                  InputStatusDTO(2, status=True),
+                                  InputStatusDTO(3, status=False),
+                                  InputStatusDTO(4, status=True),
+                                  InputStatusDTO(5, status=True),
+                                  InputStatusDTO(6, status=False),
+                                  InputStatusDTO(7, status=True)],
+                                 input_statuses)
 
     def test_master_output_event(self):
         events = []
@@ -158,9 +170,9 @@ class MasterClassicControllerTest(unittest.TestCase):
         events = []
         classic._on_master_output_event({'outputs': [(0, 0), (2, 5)]})
         pubsub._publish_all_events()
-        self.assertEqual(events, [MasterEvent('OUTPUT_STATUS', {'state': OutputStateDTO(id=0, status=True, dimmer=0)}),
-                                  MasterEvent('OUTPUT_STATUS', {'state': OutputStateDTO(id=1, status=False)}),
-                                  MasterEvent('OUTPUT_STATUS', {'state': OutputStateDTO(id=2, status=True, dimmer=5)})])
+        self.assertEqual(events, [MasterEvent('OUTPUT_STATUS', {'state': OutputStatusDTO(id=0, status=True, dimmer=0)}),
+                                  MasterEvent('OUTPUT_STATUS', {'state': OutputStatusDTO(id=1, status=False)}),
+                                  MasterEvent('OUTPUT_STATUS', {'state': OutputStatusDTO(id=2, status=True, dimmer=5)})])
 
     def test_validation_bits_passthrough(self):
         # Important note: bits are ordened per byte, so the sequence is like:
@@ -210,9 +222,9 @@ class MasterClassicControllerTest(unittest.TestCase):
         classic._on_master_validation_bit_change(6, True)
         classic._on_master_validation_bit_change(5, False)
         pubsub._publish_all_events()
-        self.assertEqual(events, [{'state': OutputStateDTO(id=0, locked=False)},
-                                  {'state': OutputStateDTO(id=0, locked=True)},
-                                  {'state': OutputStateDTO(id=0, locked=False)}])
+        self.assertEqual(events, [{'state': OutputStatusDTO(id=0, locked=False)},
+                                  {'state': OutputStatusDTO(id=0, locked=True)},
+                                  {'state': OutputStatusDTO(id=0, locked=False)}])
 
     def test_module_discover(self):
         subscriber = mock.Mock()
@@ -261,12 +273,12 @@ class MasterClassicControllerTest(unittest.TestCase):
 
     def test_master_eeprom_event(self):
         controller = get_classic_controller_dummy()
-        controller._input_last_updated = 1603178386.0
+        controller._shutters_last_updated = 1603178386.0
         pubsub = get_pubsub()
         master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
         pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
         pubsub._publish_all_events()
-        assert controller._input_last_updated == 0.0
+        assert controller._shutters_last_updated == 0.0
 
     def test_all_lights_off(self):
         controller = get_classic_controller_dummy()

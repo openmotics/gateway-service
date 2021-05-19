@@ -34,7 +34,7 @@ from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Any, List, Dict, Optional, Tuple
-    from gateway.dto import OutputStateDTO
+    from gateway.dto import OutputStatusDTO
     from gateway.hal.master_controller_classic import MasterClassicController
     from gateway.output_controller import OutputController
 
@@ -375,7 +375,7 @@ class ThermostatControllerMaster(ThermostatController):
         except CommunicationFailure:
             return
 
-        status = {state.id: state for state in self._output_controller.get_output_statuses()}  # type: Dict[int,OutputStateDTO]
+        status = {state.id: state for state in self._output_controller.get_output_statuses()}  # type: Dict[int,OutputStatusDTO]
 
         mode = thermostat_info['mode']
         thermostats_on = bool(mode & 1 << 7)

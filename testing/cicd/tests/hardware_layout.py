@@ -12,9 +12,36 @@ class TestPlatform(object):
 TEST_PLATFORM = os.environ['TEST_PLATFORM']
 
 
+class ClassicTesterOutputs(object):
+    class Power(object):
+        dut = 0  # PWR_DUT_CL
+        bus2 = 1  # PWR_DUT_CL_BUS2
+        bus1 = 2  # PWR_DUT_CL_BUS1
+        cc = 3  # PWR_DUT_CL_CAN
+        dali = 4  # PWR_DUT_CL_DALI
+        temp = 5  # PWR_DUT_CL_TMEP
+
+    class Buttons(object):
+        dut = [8]  # BTN_DUT_CL
+
+    class Button(object):
+        energy = 9  # BTN_DUT_CL_EY
+        input = 10  # BTN_DUT_CL_IN
+        output = 11  # BTN_DUT_CL_OUT
+        shutter = 12  # BTN_DUT_CL_SHT
+        dimmer = 13  # BTN_DUT_CL_DIM
+        temp = 14  # BTN_DUT_CL_TMP
+        can = 15  # BTN_DUT_CL_CC
+
+
+# TODO: handle Core+ here
+TESTER = ClassicTesterOutputs
+
+
 class Output(object):
-    def __init__(self, output_id, module=None):
+    def __init__(self, output_id, tester_input_id, module=None):
         self.output_id = output_id
+        self.tester_input_id = tester_input_id
         self.module = module
 
     def __str__(self):
@@ -95,84 +122,62 @@ _OUTPUT_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [
         # TODO: Add support for open-collector outputs, that are connected
         #       with a dim control on the tester
-        Module(name='output module 0', mtype='o',
-               hardware_type=Module.HardwareType.INTERNAL,
-               outputs=[Output(output_id=0),
-                        Output(output_id=1),
-                        Output(output_id=2),
-                        Output(output_id=3),
-                        Output(output_id=4),
-                        Output(output_id=5),
-                        Output(output_id=6),
-                        Output(output_id=7)]),
-        Module(name='output module 1', mtype='o',
-               hardware_type=Module.HardwareType.INTERNAL,
-               outputs=[Output(output_id=8),
-                        Output(output_id=9),
-                        Output(output_id=10),
-                        Output(output_id=11),
-                        Output(output_id=12),
-                        Output(output_id=13),
-                        Output(output_id=14),
-                        Output(output_id=15)])
     ],
     TestPlatform.DEBIAN: [
         Module(name='output module', mtype='O',
                hardware_type=Module.HardwareType.PHYSICAL,
-               outputs=[Output(output_id=0),
-                        Output(output_id=1),
-                        Output(output_id=2),
-                        Output(output_id=3),
-                        Output(output_id=4),
-                        Output(output_id=5),
-                        Output(output_id=6),
-                        Output(output_id=7)]),
+               outputs=[Output(output_id=0, tester_input_id=8),
+                        Output(output_id=1, tester_input_id=9),
+                        Output(output_id=2, tester_input_id=10),
+                        Output(output_id=3, tester_input_id=11),
+                        Output(output_id=4, tester_input_id=12),
+                        Output(output_id=5, tester_input_id=13),
+                        Output(output_id=6, tester_input_id=14),
+                        Output(output_id=7, tester_input_id=15)
+                        ]),
+        Module(name='shutter module', mtype='R',
+               hardware_type=Module.HardwareType.PHYSICAL,
+               outputs=[]),
         Module(name='dimmer module', mtype='D',
                hardware_type=Module.HardwareType.PHYSICAL,
                outputs=[]),
         Module(name='virtual output', mtype='o',
                hardware_type=Module.HardwareType.VIRTUAL,
-               outputs=[Output(output_id=16),
-                        Output(output_id=17),
-                        Output(output_id=18),
-                        Output(output_id=19),
-                        Output(output_id=20),
-                        Output(output_id=21),
-                        Output(output_id=22),
-                        Output(output_id=23)])
+               outputs=[Output(output_id=24, tester_input_id=None),
+                        Output(output_id=25, tester_input_id=None),
+                        Output(output_id=26, tester_input_id=None),
+                        Output(output_id=27, tester_input_id=None),
+                        Output(output_id=28, tester_input_id=None),
+                        Output(output_id=29, tester_input_id=None),
+                        Output(output_id=30, tester_input_id=None),
+                        Output(output_id=31, tester_input_id=None)])
     ]
 }
 OUTPUT_MODULE_LAYOUT = _OUTPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
 
 _INPUT_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [
-        Module(name='input module', mtype='i',
-               hardware_type=Module.HardwareType.INTERNAL,
-               inputs=[Input(input_id=0, tester_output_id=24, is_dimmer=True),
-                       Input(input_id=1, tester_output_id=25, is_dimmer=True),
-                       Input(input_id=2, tester_output_id=26, is_dimmer=True),
-                       Input(input_id=3, tester_output_id=27, is_dimmer=True)])  # Only 4 inputs are wired up
+        # TODO
     ],
     TestPlatform.DEBIAN: [
         Module(name='input module', mtype='I',
                hardware_type=Module.HardwareType.PHYSICAL,
-               inputs=[Input(input_id=0, tester_output_id=0),
-                       Input(input_id=1, tester_output_id=1),
-                       Input(input_id=2, tester_output_id=2),
-                       Input(input_id=3, tester_output_id=3),
-                       Input(input_id=4, tester_output_id=4),
-                       Input(input_id=5, tester_output_id=5),
-                       Input(input_id=6, tester_output_id=6),
-                       Input(input_id=7, tester_output_id=7)]),
-        # TODO: also test random order discovery?
+               inputs=[Input(input_id=0, tester_output_id=24),
+                       Input(input_id=1, tester_output_id=25),
+                       Input(input_id=2, tester_output_id=26),
+                       Input(input_id=3, tester_output_id=27),
+                       Input(input_id=4, tester_output_id=28),
+                       Input(input_id=5, tester_output_id=29),
+                       Input(input_id=6, tester_output_id=30),
+                       Input(input_id=7, tester_output_id=31)]),
         Module(name='CAN control', mtype='I', is_can=True,
                hardware_type=Module.HardwareType.EMULATED,
-               inputs=[Input(input_id=16, tester_output_id=32),
-                       Input(input_id=17, tester_output_id=33),
-                       Input(input_id=18, tester_output_id=34),
-                       Input(input_id=19, tester_output_id=35),
-                       Input(input_id=20, tester_output_id=36),
-                       Input(input_id=21, tester_output_id=37)])
+               inputs=[Input(input_id=24, tester_output_id=16),
+                       Input(input_id=25, tester_output_id=17),
+                       Input(input_id=26, tester_output_id=18),
+                       Input(input_id=27, tester_output_id=19),
+                       Input(input_id=28, tester_output_id=20),
+                       Input(input_id=29, tester_output_id=21)]),
     ]
 }
 INPUT_MODULE_LAYOUT = _INPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
@@ -180,12 +185,12 @@ INPUT_MODULE_LAYOUT = _INPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
 _TEMPERATURE_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [],
     TestPlatform.DEBIAN: [
+        Module(name='temperature module', mtype='T',
+               hardware_type=Module.HardwareType.PHYSICAL,
+               temps=[]),
         Module(name='CAN control', mtype='T', is_can=True,
                hardware_type=Module.HardwareType.EMULATED,
                temps=[]),
-        Module(name='temperature module', mtype='T',
-               hardware_type=Module.HardwareType.PHYSICAL,
-               temps=[])
     ],
 }
 TEMPERATURE_MODULE_LAYOUT = _TEMPERATURE_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]

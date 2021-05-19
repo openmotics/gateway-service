@@ -29,9 +29,9 @@ import six
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import RTD10DTO, DimmerConfigurationDTO, GlobalFeedbackDTO, \
-    GlobalRTD10DTO, GroupActionDTO, InputDTO, LegacyScheduleDTO, \
+    GlobalRTD10DTO, GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, \
     LegacyStartupActionDTO, MasterSensorDTO, ModuleDTO, OutputDTO, \
-    OutputStateDTO, PulseCounterDTO, PumpGroupDTO, ShutterDTO, \
+    OutputStatusDTO, PulseCounterDTO, PumpGroupDTO, ShutterDTO, \
     ShutterGroupDTO, ThermostatAircoStatusDTO, ThermostatDTO, \
     ThermostatGroupDTO
 from gateway.enums import ShutterEnums
@@ -55,7 +55,6 @@ from master.classic.eeprom_models import CoolingConfiguration, \
     PumpGroupConfiguration, RTD10CoolingConfiguration, \
     RTD10HeatingConfiguration, ScheduledActionConfiguration, \
     StartupActionConfiguration, ThermostatConfiguration
-from master.classic.inputs import InputStatus
 from master.classic.master_communicator import BackgroundConsumer, \
     MasterCommunicator, MasterUnavailable
 from master.classic.master_heartbeat import MasterHeartbeat
@@ -94,7 +93,6 @@ class MasterClassicController(MasterController):
         self._heartbeat = MasterHeartbeat()
         self._plugin_controller = None  # type: Optional[Any]
 
-        self._input_status = InputStatus(on_input_change=self._input_changed)
         self._validation_bits = ValidationBitStatus(on_validation_bit_change=self._validation_bit_changed)
         self._master_version_last_updated = 0.0
         self._settings_last_updated = 0.0
@@ -104,9 +102,6 @@ class MasterClassicController(MasterController):
                                                     interval=5, delay=10)
         self._master_version = None  # type: Optional[Tuple[int, int, int]]
         self._communication_enabled = True
-        self._input_interval = 300
-        self._input_last_updated = 0.0
-        self._input_config = {}  # type: Dict[int, InputDTO]
         self._output_config = {}  # type: Dict[int, OutputDTO]
         self._shutters_interval = 600
         self._shutters_last_updated = 0.0
@@ -157,8 +152,6 @@ class MasterClassicController(MasterController):
             # Refresh if required
             if self._validation_bits_last_updated + self._validation_bits_interval < now:
                 self._refresh_validation_bits()
-            if self._input_last_updated + self._input_interval < now:
-                self._refresh_inputs()
             if self._shutters_last_updated + self._shutters_interval < now:
                 self._refresh_shutter_states()
             if self._sensor_last_updated + self._sensors_interval < now:
@@ -340,15 +333,14 @@ class MasterClassicController(MasterController):
             extra_kwargs = {}
             if dimmer is not None:
                 extra_kwargs['dimmer'] = dimmer
-            state_dto = OutputStateDTO(id=output_id,
-                                       status=status,
-                                       **extra_kwargs)
+            state_dto = OutputStatusDTO(id=output_id,
+                                        status=status,
+                                        **extra_kwargs)
             master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS, data={'state': state_dto})
             self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)
 
     def _invalidate_caches(self):
         # type: () -> None
-        self._input_last_updated = 0.0
         self._shutters_last_updated = 0.0
         self._synchronization_thread.request_single_run()
 
@@ -401,13 +393,25 @@ class MasterClassicController(MasterController):
         o = self._eeprom_controller.read(eeprom_models.InputConfiguration, input_module_id * 8, ['module_type'])
         return o.module_type
 
-    def get_inputs_with_status(self):
-        # type: () -> List[Dict[str,Any]]
-        return self._input_status.get_inputs()
-
-    def get_recent_inputs(self):
-        # type: () -> List[int]
-        return self._input_status.get_recent()
+    @communication_enabled
+    def load_input_status(self):
+        # type: () -> List[InputStatusDTO]
+        number_of_input_modules = self._master_communicator.do_command(master_api.number_of_io_modules())['in']
+        inputs = []
+        for i in range(number_of_input_modules):
+            # we could be dealing with e.g. a temperature module, skip those
+            module_type = self.get_input_module_type(i)
+            if module_type not in ['i', 'I']:
+                continue
+            result = self._master_communicator.do_command(master_api.read_input_module(self._master_version),
+                                                          {'input_module_nr': i})
+            module_status = result['input_status']
+            # module_status byte contains bits for each individual input, use mask and bitshift to get status
+            for n in range(8):
+                input_nr = i * 8 + n
+                input_status = module_status & (1 << n) != 0
+                inputs.append(InputStatusDTO(input_nr, status=input_status))
+        return inputs
 
     @communication_enabled
     def load_input(self, input_id):  # type: (int) -> InputDTO
@@ -429,39 +433,15 @@ class MasterClassicController(MasterController):
             batch.append(InputMapper.dto_to_orm(input_))
         self._eeprom_controller.write_batch(batch)
 
-    @communication_enabled
-    def _refresh_inputs(self):  # type: () -> None
-        # 1. refresh input configuration
-        self._input_config = {input_configuration.id: input_configuration
-                              for input_configuration in self.load_inputs()}
-        # 2. poll for latest input status
-        try:
-            number_of_input_modules = self._master_communicator.do_command(master_api.number_of_io_modules())['in']
-            inputs = []
-            for i in range(number_of_input_modules):
-                # we could be dealing with e.g. a temperature module, skip those
-                module_type = self.get_input_module_type(i)
-                if module_type not in ['i', 'I']:
-                    continue
-                result = self._master_communicator.do_command(master_api.read_input_module(self._master_version), {'input_module_nr': i})
-                module_status = result['input_status']
-                # module_status byte contains bits for each individual input, use mask and bitshift to get status
-                for n in range(8):
-                    input_nr = i * 8 + n
-                    input_status = module_status & (1 << n) != 0
-                    data = {'input': input_nr, 'status': input_status}
-                    inputs.append(data)
-            self._input_status.full_update(inputs)
-        except NotImplementedError as e:
-            logger.error('Cannot refresh inputs: {}'.format(e))
-        self._input_last_updated = time.time()
-
     def _on_master_input_change(self, data):
         # type: (Dict[str,Any]) -> None
         """ Triggers when the master informs us of an Input state change """
-        # Update status tracker
         logger.debug('Got input event data from master {}'.format(data))
-        self._input_status.set_input(data)
+        # previous versions of the master only sent rising edges, so default to True if not present in data
+        new_status = bool(data.get('status', True))
+        state_dto = InputStatusDTO(id=data['input'], status=new_status)
+        master_event = MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data={'state': state_dto})
+        self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
 
     @communication_enabled
     def set_input(self, input_id, state):
@@ -549,35 +529,17 @@ class MasterClassicController(MasterController):
 
     @communication_enabled
     def load_output_status(self):
-        # type: () -> List[OutputStateDTO]
+        # type: () -> List[OutputStatusDTO]
         number_of_outputs = self._master_communicator.do_command(master_api.number_of_io_modules())['out'] * 8
         output_status = []
         for i in range(number_of_outputs):
             data = self._master_communicator.do_command(master_api.read_output(), {'id': i})
-            output_status.append(OutputStateDTO(id=i,
-                                                status=bool(data['status']),
-                                                ctimer=int(data['ctimer']),
-                                                dimmer=int(data['dimmer']),
-                                                locked=self._is_output_locked(data['id'])))
+            output_status.append(OutputStatusDTO(id=i,
+                                                 status=bool(data['status']),
+                                                 ctimer=int(data['ctimer']),
+                                                 dimmer=int(data['dimmer']),
+                                                 locked=self._is_output_locked(data['id'])))
         return output_status
-
-    def _input_changed(self, input_id, status):
-        # type: (int, str) -> None
-        """ Executed by the Input Status tracker when an input changed state """
-        logger.debug('Input {} changed'.format(input_id))
-        input_configuration = self._input_config.get(input_id)
-        if input_configuration is None:
-            logger.warning('No input configuration found for {}'.format(input_id))
-            # An event was received from an inp
-            # configuraion should not be loaded inside an event handler, the event is discarded.
-            # TODO: Detach input even processing from event handler so it can load the configuration if needed
-            return
-        event_data = {'id': input_id,
-                      'status': status,
-                      'location': {'room_id': Toolbox.denonify(input_configuration.room, 255)}}
-        master_event = MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data=event_data)
-        logger.debug('Publishing input {} event'.format(master_event))
-        self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
 
     def _is_output_locked(self, output_id):
         # TODO remove self._output_config cache, this belongs in the output controller.
@@ -1817,6 +1779,6 @@ class MasterClassicController(MasterController):
         for output_id, output_dto in six.iteritems(self._output_config):
             if output_dto.lock_bit_id == bit_nr:
                 master_event = MasterEvent(event_type=MasterEvent.Types.OUTPUT_STATUS,
-                                           data={'state': OutputStateDTO(id=output_id,
-                                                                         locked=value)})
+                                           data={'state': OutputStatusDTO(id=output_id,
+                                                                          locked=value)})
                 self._pubsub.publish_master_event(PubSub.MasterTopics.OUTPUT, master_event)

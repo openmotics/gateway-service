@@ -237,7 +237,7 @@ class VPNServiceTest(TestCase):
                 events.pop(0)
                 executor._vpn_controller.vpn_connected = is_open
                 executor._open_vpn(should_open)
-                self.assertEquals(is_running and is_open, executor.vpn_open)
+                self.assertEqual(is_running and is_open, executor.vpn_open)
                 cv.assert_called()
                 self.assertEqual(2, cv.call_count)
                 if should_open and not is_running:
@@ -248,7 +248,7 @@ class VPNServiceTest(TestCase):
                     so.assert_called_once()
                 else:
                     so.assert_not_called()
-                self.assertEquals([(OMBusEvents.VPN_OPEN, is_running and is_open)], events)
+                self.assertEqual([(OMBusEvents.VPN_OPEN, is_running and is_open)], events)
 
     def test_executor_process_configuration_data(self):
         events = []

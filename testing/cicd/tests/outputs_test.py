@@ -33,7 +33,7 @@ DEFAULT_LIGHT_CONFIG = {'type': 255, 'timer': 2**16 - 1}
 
 @pytest.mark.smoke
 @hypothesis.given(outputs(), booleans())
-def test_events(toolbox, output, to_status):
+def test_output_events(toolbox, output, to_status):
     from_status = not to_status
     logger.debug('output status {}, expect event {} -> {}'.format(output, from_status, to_status))
     toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)

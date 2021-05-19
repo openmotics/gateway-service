@@ -40,19 +40,19 @@ from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
 import gateway
-from gateway.api.serializers import DimmerConfigurationSerializer, \
-    GlobalFeedbackSerializer, GlobalRTD10Serializer, GroupActionSerializer, \
-    InputSerializer, LegacyScheduleSerializer, LegacyStartupActionSerializer, \
-    ModuleSerializer, OutputSerializer, OutputStateSerializer, \
-    PulseCounterSerializer, PumpGroupSerializer, RoomSerializer, \
-    RTD10Serializer, ScheduleSerializer, SensorSerializer, \
-    SensorStatusSerializer, ShutterGroupSerializer, ShutterSerializer, \
-    ThermostatAircoStatusSerializer, ThermostatGroupSerializer, \
-    ThermostatGroupStatusSerializer, ThermostatSerializer, \
-    VentilationSerializer, VentilationStatusSerializer
+from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
+    ModuleSerializer, OutputSerializer, OutputStateSerializer, InputStateSerializer, \
+    PulseCounterSerializer, RoomSerializer, ScheduleSerializer, \
+    SensorSerializer, ShutterGroupSerializer, ShutterSerializer, \
+    ThermostatSerializer, VentilationSerializer, VentilationStatusSerializer, \
+    ThermostatGroupStatusSerializer, ThermostatGroupSerializer, \
+    ThermostatAircoStatusSerializer, PumpGroupSerializer, \
+    GlobalRTD10Serializer, RTD10Serializer, GlobalFeedbackSerializer, \
+    LegacyStartupActionSerializer, LegacyScheduleSerializer, \
+    DimmerConfigurationSerializer, SensorStatusSerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import GlobalRTD10DTO, ModuleDTO, RoomDTO, ScheduleDTO, \
-    UserDTO
+    UserDTO, InputStatusDTO
 from gateway.enums import ShutterEnums, UserEnums
 from gateway.exceptions import UnsupportedException, FeatureUnavailableException, \
     ItemDoesNotExistException, WrongInputParametersException, ParseException
@@ -384,7 +384,6 @@ class WebInterface(object):
 
     def in_authorized_mode(self):
         # type: () -> bool
-        return True
         if self._frontpanel_controller:
             return self._frontpanel_controller.authorized_mode
         else:
@@ -702,25 +701,29 @@ class WebInterface(object):
 
     @openmotics_api(auth=True)
     def get_input_status(self):
+        # type: () -> Dict[str, List[Dict[str, Any]]]
         """
         Get the status of the inputs.
 
         :returns: 'status': list of dictionaries with the following keys: id, status.
         """
-        return {'status': self._input_controller.get_input_status()}
+        return {'status': [InputStateSerializer.serialize(input, None)
+                           for input in self._input_controller.get_input_statuses()]}
 
     @openmotics_api(auth=True, check=types(id=int, is_on=bool))
-    def set_input(self, id, is_on):  # type: (int, bool) -> Dict
+    def set_input(self, id, is_on):
+        # type: (int, bool) -> Dict
         """
         Set the status of a virtual input.
         :param id: The id of the input to set
         :param is_on: Whether the input is on (pressed)
         """
-        self._input_controller.set_input_status(id, is_on)
+        self._input_controller.set_input_status(InputStatusDTO(id, status=is_on))
         return {}
 
     @openmotics_api(auth=True)
     def get_output_status(self):
+        # type: () -> Dict[str, List[Dict[str, Any]]]
         """
         Get the status of the outputs.
 
@@ -729,8 +732,20 @@ class WebInterface(object):
         return {'status': [OutputStateSerializer.serialize(output, None)
                            for output in self._output_controller.get_output_statuses()]}
 
+    @openmotics_api(auth=True)
+    def get_last_outputs(self):
+        # type: () -> Dict[str, List[int]]
+        """
+        Get list of outputs which changed during the last 10 seconds.
+
+        :returns: 'outputs': list of output ids.
+        :rtype: dict
+        """
+        return {'outputs': self._output_controller.get_last_outputs()}
+
     @openmotics_api(auth=True, check=types(id=int, is_on=bool, dimmer=int, timer=int))
-    def set_output(self, id, is_on, dimmer=None, timer=None):  # type: (int, bool, Optional[int], Optional[int]) -> Dict
+    def set_output(self, id, is_on, dimmer=None, timer=None):
+        # type: (int, bool, Optional[int], Optional[int]) -> Dict
         """
         Set the status, dimmer and timer of an output.
         :param id: The id of the output to set
@@ -2162,6 +2177,7 @@ class WebInterface(object):
             temp_file = self._download_firmware('temperature', temperature)
             self._module_controller.update_slave_firmware('T', temp_file)
             shutil.move(temp_file, '/opt/openmotics/t_firmware.hex')
+        self._module_controller.request_sync_orm()
         return {}
 
     @Inject
@@ -2445,7 +2461,7 @@ class WebInterface(object):
                         definitions[_source][_metric_type] = definition
         return {'definitions': definitions}
 
-    @openmotics_api(check=types(confirm=bool), auth=True, plugin_exposed=False)
+    @openmotics_api(check=types(confirm=bool, can=bool), auth=True, plugin_exposed=False)
     def factory_reset(self, username, password, confirm=False, can=True):
         user_dto = UserDTO(username=username)
         user_dto.set_password(password)
