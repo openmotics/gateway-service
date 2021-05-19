@@ -255,7 +255,7 @@ class SystemController(BaseController):
         if service_names is None:
             service_names = System.SERVICES
 
-        Timer(2, _restart, args=service_names).start()
+        Timer(2, _restart, args=[service_names]).start()
         return {'restart_services': 'pending'}
 
     @Inject
