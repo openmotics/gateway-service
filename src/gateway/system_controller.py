@@ -32,7 +32,7 @@ from platform_utils import System
 from gateway.base_controller import BaseController
 
 if False:  # MYPY
-    from typing import Dict, Any, List, Optional
+    from typing import Dict, Any, List, Optional, Iterable
     from gateway.watchdog import Watchdog
     from gateway.module_controller import ModuleController
 
@@ -245,9 +245,9 @@ class SystemController(BaseController):
         return {'factory_reset': 'pending'}
 
     def restart_services(self, service_names=None):
-        # type: (Optional[List[str]]) -> Dict[str,Any]
+        # type: (Optional[Iterable[str]]) -> Dict[str,Any]
         def _restart(_service_names):
-            # type: (List[str]) -> None
+            # type: (Iterable[str]) -> None
             logger.info('Restarting services...')
             for service_name in _service_names:
                 System.restart_service(service_name)
