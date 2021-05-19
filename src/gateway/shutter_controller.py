@@ -32,6 +32,7 @@ from gateway.models import Room, Shutter, ShutterGroup
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 from toolbox import Toolbox
+from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
     from typing import List, Dict, Optional, Tuple, Any
@@ -119,7 +120,12 @@ class ShutterController(BaseController):
 
     def _sync_orm(self):
         super(ShutterController, self)._sync_orm()
-        self.update_config(self.load_shutters())
+        try:
+            self.update_config(self.load_shutters())
+        except CommunicationTimedOutException as ex:
+            logger.error('ORM sync (Shutter config): Failed: {0}'.format(ex))
+        except Exception:
+            logger.exception('ORM sync (Shutter config): Failed')
 
     def update_config(self, config):  # type: (List[ShutterDTO]) -> None
         with self._config_lock:
