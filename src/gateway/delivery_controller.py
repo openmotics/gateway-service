@@ -41,17 +41,24 @@ class DeliveryController(object):
     @staticmethod
     def load_delivery(delivery_id):
         # type: (int) -> Optional[DeliveryDTO]
-        delivery_orm = Delivery.select().where(Delivery.id == delivery_id).first()
+        delivery_orm = Delivery.select().where(Delivery.id == delivery_id).where(Delivery.timestamp_pickup.is_null()).first()
         if delivery_orm is None:
             return None
         delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
         return delivery_dto
 
     @staticmethod
-    def load_deliveries():
-        # type: () -> List[DeliveryDTO]
+    def load_deliveries(user_id=None):
+        # type: (Optional[int]) -> List[DeliveryDTO]
         deliveries = []
-        for delivery_orm in Delivery.select():
+        if user_id is None:
+            query = Delivery.select().where(Delivery.timestamp_pickup.is_null())
+        else:
+            query = Delivery.select().where((Delivery.timestamp_pickup.is_null()) &
+                                            ((Delivery.user_delivery_id == user_id) |
+                                             (Delivery.user_pickup_id == user_id)))
+
+        for delivery_orm in query:
             delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
             deliveries.append(delivery_dto)
         return deliveries
@@ -82,10 +89,6 @@ class DeliveryController(object):
         DeliveryController._validate_delivery_type(delivery_dto)
 
         delivery_orm = DeliveryMapper.dto_to_orm(delivery_dto)
-        if delivery_orm.user_id_delivery is not None:
-            delivery_orm.user_id_delivery.save()
-        if delivery_orm.user_id_pickup is not None:
-            delivery_orm.user_id_pickup.save()
         delivery_orm.save()
         return DeliveryMapper.orm_to_dto(delivery_orm)
 
@@ -105,12 +108,11 @@ class DeliveryController(object):
         # replace the microseconds to not show them in the string
         return timestamp.replace(microsecond=0).isoformat('T')
 
-    @staticmethod
-    def current_timestamp_to_string_format():
+    @classmethod
+    def current_timestamp_to_string_format(cls):
         # type: () -> str
         timestamp = datetime.datetime.now(tzlocal())
-        # replace the microseconds to not show them in the string
-        return timestamp.replace(microsecond=0).isoformat('T')
+        return cls.datetime_to_string_format(timestamp)
 
     @staticmethod
     def pickup_delivery(delivery_id):

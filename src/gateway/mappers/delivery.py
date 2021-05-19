@@ -32,11 +32,11 @@ class DeliveryMapper(object):
     def orm_to_dto(orm_object):
         # type: (Delivery) -> DeliveryDTO
         user_dto_delivery = None
-        if orm_object.user_id_delivery is not None:
-            user_dto_delivery = UserMapper.orm_to_dto(orm_object.user_id_delivery)
+        if orm_object.user_delivery is not None:
+            user_dto_delivery = UserMapper.orm_to_dto(orm_object.user_delivery)
         user_dto_pickup = None
-        if orm_object.user_id_pickup is not None:
-            user_dto_pickup = UserMapper.orm_to_dto(orm_object.user_id_pickup)
+        if orm_object.user_pickup is not None:
+            user_dto_pickup = UserMapper.orm_to_dto(orm_object.user_pickup)
         delivery_dto = DeliveryDTO(id=orm_object.id,
                                    type=orm_object.type,
                                    timestamp_delivery=orm_object.timestamp_delivery,
@@ -55,6 +55,7 @@ class DeliveryMapper(object):
         delivery_orm = None
         if dto_object.id is not None:
             delivery_orm = Delivery.get_by_id(dto_object.id)
+        # if there was no delivery specified before
         if delivery_orm is None:
             mandatory_fields = {'type', 'timestamp_delivery', 'user_pickup', 'parcelbox_rebus_id'}
             if not mandatory_fields.issubset(set(dto_object.loaded_fields)):
@@ -62,6 +63,10 @@ class DeliveryMapper(object):
                                  .format('`, `'.join(mandatory_fields),
                                          dto_object.loaded_fields,
                                          mandatory_fields - set(dto_object.loaded_fields)))
+            if dto_object.type == 'DELIVERY' and 'courier_firm' not in dto_object.loaded_fields:
+                raise ValueError('Field "courier_firm" has not been specified to create a new delivery')
+            if dto_object.type == 'RETURN' and 'user_delivery' not in dto_object.loaded_fields:
+                raise ValueError('Field "user_id_delivery" has been specified to create a new delivery')
             delivery_orm = Delivery()
 
         for field in dto_object.loaded_fields:
@@ -79,13 +84,13 @@ class DeliveryMapper(object):
                 user_orm = None
                 if dto_object.user_delivery is not None:
                     user_orm = UserMapper.dto_to_orm(dto_object.user_delivery)
-                delivery_orm.user_id_delivery = user_orm
+                delivery_orm.user_delivery = user_orm
                 continue
             elif field == 'user_pickup':
                 user_orm = None
                 if dto_object.user_pickup is not None:
                     user_orm = UserMapper.dto_to_orm(dto_object.user_pickup)
-                delivery_orm.user_id_pickup = user_orm
+                delivery_orm.user_pickup = user_orm
                 continue
             else:
                 setattr(delivery_orm, field, getattr(dto_object, field))
