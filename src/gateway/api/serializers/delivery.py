@@ -59,17 +59,15 @@ class DeliverySerializer(object):
 
         if 'user_id_delivery' in api_data and api_data['user_id_delivery'] is not None:
             user_id = api_data['user_id_delivery']
-            if user_controller.user_id_exists(user_id):
-                user_delivery_dto = user_controller.load_user(user_id)
-            else:
+            user_delivery_dto = user_controller.load_user(user_id)
+            if user_delivery_dto is None:
                 raise RuntimeError('user_id_delivery provided in the delivery json does not exists')
             delivery_dto.user_delivery = user_delivery_dto
 
         if 'user_id_pickup' in api_data and api_data['user_id_pickup'] is not None:
             user_id = api_data['user_id_pickup']
-            if user_controller.user_id_exists(user_id):
-                user_pickup_dto = user_controller.load_user(user_id)
-            else:
+            user_pickup_dto = user_controller.load_user(user_id)
+            if user_pickup_dto is None:
                 raise RuntimeError('user_id_pickup provided in the delivery json does not exists')
             delivery_dto.user_pickup = user_pickup_dto
 
