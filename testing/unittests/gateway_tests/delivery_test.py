@@ -66,21 +66,31 @@ class DeliveryControllerTest(unittest.TestCase):
         )
         self.test_user_3.set_password('test')
 
+        self.all_users = [self.test_user_1, self.test_user_2, self.test_user_3]
+        for user in self.all_users:
+            user_orm = UserMapper.dto_to_orm(user)
+            user_orm.save()
+
+
+
         self.test_delivery_1 = DeliveryDTO(
             type='DELIVERY',
             parcelbox_rebus_id=1,
+            courier_firm='TEST',
             user_pickup=self.test_user_1
         )
 
         self.test_delivery_2 = DeliveryDTO(
             type='DELIVERY',
             parcelbox_rebus_id=2,
+            courier_firm='TEST',
             user_pickup=self.test_user_2
         )
 
         self.test_return_1 = DeliveryDTO(
             type='RETURN',
             parcelbox_rebus_id=10,
+            courier_firm='TEST',
             user_pickup=self.test_user_2,
             user_delivery=self.test_user_3
         )
@@ -109,14 +119,14 @@ class DeliveryControllerTest(unittest.TestCase):
         for field in delivery_dto.loaded_fields:
             if field == 'user_delivery':
                 if delivery_dto.user_delivery is not None:
-                    self.assertEqual(delivery_dto.user_delivery.username, delivery_orm.user_id_delivery.username)
+                    self.assertEqual(delivery_dto.user_delivery.username, delivery_orm.user_delivery.username)
                 else:
-                    self.assertIsNone(delivery_orm.user_id_delivery)
+                    self.assertIsNone(delivery_orm.user_delivery)
             elif field == 'user_pickup':
                 if delivery_dto.user_pickup is not None:
-                    self.assertEqual(delivery_dto.user_pickup.username, delivery_orm.user_id_pickup.username)
+                    self.assertEqual(delivery_dto.user_pickup.username, delivery_orm.user_pickup.username)
                 else:
-                    self.assertIsNone(delivery_orm.user_id_pickup)
+                    self.assertIsNone(delivery_orm.user_pickup)
             else:
                 self.assertEqual(getattr(delivery_dto, field),
                                  getattr(delivery_orm, field))
@@ -129,7 +139,7 @@ class DeliveryControllerTest(unittest.TestCase):
         delivery_orm = Delivery.select().first()
         self.assertEqual(self.test_delivery_1.type, delivery_orm.type)
         self.assertEqual(self.test_delivery_1.parcelbox_rebus_id, delivery_orm.parcelbox_rebus_id)
-        self.assertEqual(self.test_delivery_1.user_pickup.username, delivery_orm.user_id_pickup.username)
+        self.assertEqual(self.test_delivery_1.user_pickup.username, delivery_orm.user_pickup.username)
         self.test_delivery_1.id = result.id
         self.assert_deliveries_equal(self.test_delivery_1, result)
         self.assert_delivery_in_db(result.id, self.test_delivery_1)
@@ -138,15 +148,12 @@ class DeliveryControllerTest(unittest.TestCase):
         """ Test the create delivery functionality """
         result_1 = self.controller.save_delivery(self.test_delivery_1)
         self.assertEqual(1, Delivery.select().count())
-        self.assertEqual(1, User.select().count())
 
         result_2 = self.controller.save_delivery(self.test_delivery_2)
         self.assertEqual(2, Delivery.select().count())
-        self.assertEqual(2, User.select().count())
 
         result_3 = self.controller.save_delivery(self.test_return_1)
         self.assertEqual(3, Delivery.select().count())
-        self.assertEqual(3, User.select().count())
 
         self.assert_deliveries_equal(self.test_delivery_1, result_1)
         self.assert_deliveries_equal(self.test_delivery_2, result_2)
@@ -245,12 +252,26 @@ class DeliveryControllerTest(unittest.TestCase):
         delivery_orm = Delivery(
             type='DELIVERY',
             timestamp_delivery='2021-05-07T10:10:04+02:00',
+            timestamp_pickup='2021-05-08T10:10:04+02:00',
             courier_firm='TNT',
             parcelbox_rebus_id=37,
-            user_id_pickup=user_id
+            user_pickup=user_id
+        )
+        delivery_orm.save()
+
+        delivery_orm = Delivery(
+            type='DELIVERY',
+            timestamp_delivery='2021-05-07T10:10:04+02:00',
+            courier_firm='TNT',
+            parcelbox_rebus_id=37,
+            user_pickup=user_id
         )
         delivery_orm.save()
         delivery_id = delivery_orm.id
+
+        # check that there are 2 deliveries in the database
+        count = Delivery.select().count()
+        self.assertEqual(2, count)
 
         # verify that the user is saved
         user_queried = User.get_by_id(user_id)
@@ -260,4 +281,10 @@ class DeliveryControllerTest(unittest.TestCase):
         result = self.controller.load_delivery(delivery_id)
         self.assertEqual(delivery_dto, result)
 
+        result = self.controller.load_deliveries()
+        # only one delivery should be returned since the first one is already picked up
+        self.assertEqual(1, len(result))
 
+        result = self.controller.load_deliveries(user_id=user_id)
+        # only one delivery should be returned since the first one is already picked up
+        self.assertEqual(1, len(result))

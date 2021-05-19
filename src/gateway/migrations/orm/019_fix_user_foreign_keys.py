@@ -92,8 +92,8 @@ def migrate(migrator, database, fake=False, **kwargs):
         signature_delivery = CharField(null=True)
         signature_pickup = CharField(null=True)
         parcelbox_rebus_id = IntegerField(null=False)
-        user_id_delivery = ForeignKeyField(User, backref='deliveries', on_delete='NO ACTION', null=True)
-        user_id_pickup = ForeignKeyField(User, backref='pickups', on_delete='NO ACTION', null=False)
+        user_delivery = ForeignKeyField(User, backref='deliveries', on_delete='NO ACTION', null=True)
+        user_pickup = ForeignKeyField(User, backref='pickups', on_delete='NO ACTION', null=False)
 
     migrator.drop_table(Delivery)
     migrator.drop_table(RFID)

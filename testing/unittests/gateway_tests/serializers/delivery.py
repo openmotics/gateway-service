@@ -113,16 +113,15 @@ class DeliverySerializerTest(unittest.TestCase):
             'type': 'DELIVERY',
             'courier_firm': 'TEST',
         }
-        dto = DeliverySerializer.deserialize(serial)
-        # set first name afterwards to not set the username
-        expected = DeliveryDTO(type=serial['type'], courier_firm=serial['courier_firm'])
-        self.assertEqual(expected, dto)
+        with self.assertRaises(ValueError):
+            dto = DeliverySerializer.deserialize(serial)
 
         # with one user
         serial = {
             'type': 'DELIVERY',
             'courier_firm': 'TEST',
-            'user_id_delivery': 5
+            'parcelbox_rebus_id': 37,
+            'user_id_pickup': 5
         }
         user_dto_to_return = UserDTO(id=5, username='testuser')
         with mock.patch.object(self.user_controller, 'load_user', return_value=user_dto_to_return) as load_user_func, \
@@ -131,13 +130,14 @@ class DeliverySerializerTest(unittest.TestCase):
             user_exists_func.assert_called_once_with(5)
             load_user_func.assert_called_once_with(5)
             # set first name afterwards to not set the username
-            expected = DeliveryDTO(type=serial['type'], courier_firm=serial['courier_firm'], user_delivery=user_dto_to_return)
+            expected = DeliveryDTO(type=serial['type'], courier_firm=serial['courier_firm'], user_pickup=user_dto_to_return, parcelbox_rebus_id=37)
             self.assertEqual(expected, dto)
 
         # with users
         serial = {
             'type': 'DELIVERY',
             'courier_firm': 'TEST',
+            'parcelbox_rebus_id': 37,
             'user_id_delivery': 5,
             'user_id_pickup': 6
         }
@@ -152,7 +152,8 @@ class DeliverySerializerTest(unittest.TestCase):
             load_user_func.assert_has_calls([mock.call(5), mock.call(6)], any_order=False)
             # set first name afterwards to not set the username
             expected = DeliveryDTO(type=serial['type'], courier_firm=serial['courier_firm'],
-                                   user_delivery=user_dto_to_return, user_pickup=user_pickup_dto_to_return)
+                                   user_delivery=user_dto_to_return, user_pickup=user_pickup_dto_to_return,
+                                   parcelbox_rebus_id=37)
             self.assertEqual(expected, dto)
             
         # with timestamps
@@ -163,6 +164,7 @@ class DeliverySerializerTest(unittest.TestCase):
             'user_id_pickup': 6,
             'timestamp_delivery': '2020-10-07T15:28:19+02:00',
             'timestamp_pickup': '2020-10-07T15:28:42+02:00',
+            'parcelbox_rebus_id': 37,
         }
         user_dto_to_return = UserDTO(id=5, username='testuser')
         user_pickup_dto_to_return = UserDTO(id=6, username='testuser')
@@ -176,5 +178,6 @@ class DeliverySerializerTest(unittest.TestCase):
             # set first name afterwards to not set the username
             expected = DeliveryDTO(type=serial['type'], courier_firm=serial['courier_firm'],
                                    user_delivery=user_dto_to_return, user_pickup=user_pickup_dto_to_return,
-                                   timestamp_delivery='2020-10-07T15:28:19+02:00', timestamp_pickup='2020-10-07T15:28:42+02:00')
+                                   timestamp_delivery='2020-10-07T15:28:19+02:00', timestamp_pickup='2020-10-07T15:28:42+02:00',
+                                   parcelbox_rebus_id=37)
             self.assertEqual(expected, dto)

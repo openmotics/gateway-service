@@ -52,43 +52,27 @@ class DeliverySerializer(object):
     def deserialize(api_data, user_controller=INJECTED):
         # type: (Dict[str,Any], UserController) -> DeliveryDTO
 
-        delivery_dto = DeliveryDTO()
-        for field in ['id', 'type', 'timestamp_delivery', 'timestamp_pickup', 'courier_firm',
-                      'signature_delivery', 'signature_pickup', 'parcelbox_rebus_id']:
-            if field in api_data:
-                setattr(delivery_dto, field, api_data[field])
+        to_load_fields = ['id', 'type', 'timestamp_delivery', 'timestamp_pickup', 'courier_firm',
+                          'signature_delivery', 'signature_pickup', 'parcelbox_rebus_id']
+        delivery_dto_fields = {k: v for k, v in api_data.items() if k in to_load_fields}
+        delivery_dto = DeliveryDTO(**delivery_dto_fields)
 
         if 'user_id_delivery' in api_data and api_data['user_id_delivery'] is not None:
             user_id = api_data['user_id_delivery']
-            if user_controller.user_id_exists(user_id):
-                user_delivery_dto = user_controller.load_user(user_id)
-            else:
+            user_delivery_dto = user_controller.load_user(user_id)
+            if user_delivery_dto is None:
                 raise RuntimeError('user_id_delivery provided in the delivery json does not exists')
             delivery_dto.user_delivery = user_delivery_dto
 
         if 'user_id_pickup' in api_data and api_data['user_id_pickup'] is not None:
             user_id = api_data['user_id_pickup']
-            if user_controller.user_id_exists(user_id):
-                user_pickup_dto = user_controller.load_user(user_id)
-            else:
+            user_pickup_dto = user_controller.load_user(user_id)
+            if user_pickup_dto is None:
                 raise RuntimeError('user_id_pickup provided in the delivery json does not exists')
             delivery_dto.user_pickup = user_pickup_dto
 
         if delivery_dto.type not in ['DELIVERY', 'RETURN']:
             raise ValueError('Field "type" has to be "DELIVERY" or "RETURN"')
-
-        required_fields = ['type', 'parcelbox_rebus_id', 'user_pickup']
-        for field in required_fields:
-            if field not in delivery_dto.loaded_fields:
-                raise ValueError('Field "{}" has not been specified to create a new delivery'.format(field))
-
-        if delivery_dto.type == 'DELIVERY':
-            if 'courier_firm' not in delivery_dto.loaded_fields:
-                raise ValueError('Field "{}" has been specified to create a new delivery'.format('courier_firm'))
-        else:
-            if 'user_delivery' not in delivery_dto.loaded_fields:
-                raise ValueError('Field "{}" has been specified to create a new delivery'.format('user_id_delivery'))
-
 
         return delivery_dto
 
