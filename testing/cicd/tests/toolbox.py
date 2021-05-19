@@ -279,10 +279,6 @@ class Toolbox(object):
         for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
             assert modules.get(mtype, 0) == expected_amount, 'Expected {0} modules {1}'.format(expected_amount, mtype)
 
-        # TODO ensure discovery synchonization finished.
-        for module in INPUT_MODULE_LAYOUT:
-            self.ensure_input_exists(module.inputs[-1], timeout=300)
-
         try:
             for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
                 assert modules.get(mtype, 0) >= expected_amount
