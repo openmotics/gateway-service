@@ -152,6 +152,8 @@ class System(object):
     Abstracts the system related functions
     """
 
+    SERVICES = ('vpn_service', 'openmotics')
+
     SYSTEMD_UNIT_MAP = {'openmotics': 'openmotics-api.service',
                         'vpn_service': 'openmotics-vpn.service'}
     # runit action map to make sure the executable will be stopped,
