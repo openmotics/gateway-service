@@ -32,12 +32,3 @@ class GlobalFeedbackDTO(BaseDTO):
         self.can_led_2 = can_led_2 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
         self.can_led_3 = can_led_3 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
         self.can_led_4 = can_led_4 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
-
-    def __eq__(self, other):
-        if not isinstance(other, GlobalFeedbackDTO):
-            return False
-        return (self.id == other.id and
-                self.can_led_1 == other.can_led_1 and
-                self.can_led_2 == other.can_led_2 and
-                self.can_led_3 == other.can_led_3 and
-                self.can_led_4 == other.can_led_4)

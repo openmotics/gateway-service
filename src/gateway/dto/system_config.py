@@ -29,11 +29,6 @@ class SystemDoorbellConfigDTO(BaseDTO):
         # type: (bool) -> None
         self.enabled = enabled
 
-    def __eq__(self, other):
-        if not isinstance(other, SystemDoorbellConfigDTO):
-            return False
-        return self.enabled == other.enabled
-
 
 class SystemRFIDConfigDTO(BaseDTO):
     @capture_fields
@@ -43,13 +38,6 @@ class SystemRFIDConfigDTO(BaseDTO):
         self.security_enabled = security_enabled
         self.max_tags = max_tags
 
-    def __eq__(self, other):
-        if not isinstance(other, SystemRFIDConfigDTO):
-            return False
-        return (self.enabled == other.enabled and
-                self.security_enabled == other.security_enabled and
-                self.max_tags == other.max_tags)
-
 
 class SystemRFIDSectorBlockConfigDTO(BaseDTO):
     @capture_fields
@@ -57,22 +45,12 @@ class SystemRFIDSectorBlockConfigDTO(BaseDTO):
         # type: (int) -> None
         self.rfid_sector_block = rfid_sector_block
 
-    def __eq__(self, other):
-        if not isinstance(other, SystemRFIDSectorBlockConfigDTO):
-            return False
-        return self.rfid_sector_block == other.rfid_sector_block
-
 
 class SystemTouchscreenConfigDTO(BaseDTO):
     @capture_fields
     def __init__(self, calibrated=None):
         # type: (bool) -> None
         self.calibrated = calibrated
-
-    def __eq__(self, other):
-        if not isinstance(other, SystemTouchscreenConfigDTO):
-            return False
-        return self.calibrated == other.calibrated
 
 
 class SystemGlobalConfigDTO(BaseDTO):
@@ -87,17 +65,6 @@ class SystemGlobalConfigDTO(BaseDTO):
         self.house_number = house_number
         self.language = language
 
-    def __eq__(self, other):
-        if not isinstance(other, SystemGlobalConfigDTO):
-            return False
-        return (self.device_name == other.device_name and
-                self.country == other.country and
-                self.postal_code == other.postal_code and
-                self.city == other.city and
-                self.street == other.street and
-                self.house_number == other.house_number and
-                self.language == other.language)
-
 
 class SystemActivateUserConfigDTO(BaseDTO):
     @capture_fields
@@ -107,11 +74,3 @@ class SystemActivateUserConfigDTO(BaseDTO):
         self.change_last_name = change_last_name
         self.change_language = change_language
         self.change_pin_code = change_pin_code
-
-    def __eq__(self, other):
-        if not isinstance(other, SystemActivateUserConfigDTO):
-            return False
-        return (self.change_first_name == other.change_first_name and
-                self.change_last_name == other.change_last_name and
-                self.change_language == other.change_language and
-                self.change_pin_code == other.change_pin_code)

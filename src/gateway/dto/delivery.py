@@ -65,19 +65,3 @@ class DeliveryDTO(BaseDTO):
         if self.user_pickup is not None:
             return self.user_pickup.id
         return None
-
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        if not isinstance(other, DeliveryDTO):
-            return False
-        return (self.id == other.id and
-                self.type == other.type and
-                self.timestamp_delivery == other.timestamp_delivery and
-                self.timestamp_pickup == other.timestamp_pickup and
-                self.courier_firm == other.courier_firm and
-                self.signature_delivery == other.signature_delivery and
-                self.signature_pickup == other.signature_pickup and
-                self.parcelbox_rebus_id == other.parcelbox_rebus_id and
-                self.user_delivery == other.user_delivery and
-                self.user_pickup == other.user_pickup)
-
