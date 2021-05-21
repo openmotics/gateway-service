@@ -42,12 +42,6 @@ class GlobalRTD10DTO(BaseDTO):
                                         for i in GlobalRTD10DTO.TEMPERATURES
                                         if i in cooling_values})
 
-    def __eq__(self, other):
-        if not isinstance(other, GlobalRTD10DTO):
-            return False
-        return (self.heating_values == other.heating_values and
-                self.cooling_values == other.cooling_values)
-
 
 class RTD10DTO(BaseDTO):
     @capture_fields
@@ -66,17 +60,3 @@ class RTD10DTO(BaseDTO):
         self.poke_angle_output = poke_angle_output
         self.poke_angle_value = poke_angle_value
         self.room = room
-
-    def __eq__(self, other):
-        if not isinstance(other, RTD10DTO):
-            return False
-        return (self.id == other.id and
-                self.temp_setpoint_output == other.temp_setpoint_output and
-                self.ventilation_speed_output == other.ventilation_speed_output and
-                self.ventilation_speed_value == other.ventilation_speed_value and
-                self.mode_output == other.mode_output and
-                self.mode_value == other.mode_value and
-                self.on_off_output == other.on_off_output and
-                self.poke_angle_output == other.poke_angle_output and
-                self.poke_angle_value == other.poke_angle_value and
-                self.room == other.room)

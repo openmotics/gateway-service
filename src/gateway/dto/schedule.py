@@ -77,22 +77,8 @@ class LegacyScheduleDTO(BaseDTO):
         self.day = day
         self.action = [] if action is None else action  # type: List[int]
 
-    def __eq__(self, other):
-        if not isinstance(other, LegacyScheduleDTO):
-            return False
-        return (self.id == other.id and
-                self.hour == other.hour and
-                self.minute == other.minute and
-                self.day == other.day and
-                self.action == other.action)
-
 
 class LegacyStartupActionDTO(BaseDTO):
     @capture_fields
     def __init__(self, actions=None):  # type: (Optional[List[int]]) -> None
         self.actions = [] if actions is None else actions  # type: List[int]
-
-    def __eq__(self, other):
-        if not isinstance(other, LegacyStartupActionDTO):
-            return False
-        return self.actions == other.actions

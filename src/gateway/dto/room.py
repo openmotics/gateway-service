@@ -30,13 +30,6 @@ class RoomDTO(BaseDTO):
         self.name = name  # type: Optional[str]
         self.floor = floor  # type: Optional[FloorDTO]
 
-    def __eq__(self, other):
-        if not isinstance(other, RoomDTO):
-            return False
-        return (self.id == other.id and
-                self.name == other.name and
-                self.floor == other.floor)
-
     @property
     def in_use(self):
         return ((self.name is not None and self.name != '') or

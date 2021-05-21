@@ -35,14 +35,3 @@ class ThermostatScheduleDTO(BaseDTO):
         self.end_day_1 = end_day_1  # type: str
         self.start_day_2 = start_day_2  # type: str
         self.end_day_2 = end_day_2  # type: str
-
-    def __eq__(self, other):
-        if not isinstance(other, ThermostatScheduleDTO):
-            return False
-        return (self.temp_night == other.temp_night and
-                self.temp_day_1 == other.temp_day_1 and
-                self.temp_day_2 == other.temp_day_2 and
-                self.start_day_1 == other.start_day_1 and
-                self.end_day_1 == other.end_day_1 and
-                self.start_day_2 == other.start_day_2 and
-                self.end_day_2 == other.end_day_2)

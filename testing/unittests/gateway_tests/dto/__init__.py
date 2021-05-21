@@ -1,4 +1,4 @@
-# Copyright (C) 2020 OpenMotics BV
+# Copyright (C) 2021 OpenMotics BV
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -12,21 +12,3 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-"""
-PulseCounter DTO
-"""
-from gateway.dto.base import BaseDTO, capture_fields
-
-if False:  # MYPY
-    from typing import Optional
-
-
-class PulseCounterDTO(BaseDTO):
-    @capture_fields
-    def __init__(self, id, name='', room=None, input_id=None, persistent=False):
-        self.id = id  # type: int
-        self.name = name  # type: str
-        self.input_id = input_id  # type: Optional[int]
-        self.room = room  # type: Optional[int]
-        self.persistent = persistent  # type: bool

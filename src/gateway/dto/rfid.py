@@ -38,18 +38,3 @@ class RfidDTO(BaseDTO):
         self.timestamp_created = timestamp_created  # type: str
         self.timestamp_last_used = timestamp_last_used  # type: str
         self.user = user_dto  # type: UserDTO
-
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        if not isinstance(other, RfidDTO):
-            return False
-        return (self.id == other.id and
-                self.tag_string == other.tag_string and
-                self.uid_extension == other.uid_extension and
-                self.uid_manufacturer == other.uid_manufacturer and
-                self.enter_count == other.enter_count and
-                self.blacklisted == other.blacklisted and
-                self.label == other.label and
-                self.timestamp_created == other.timestamp_created and
-                self.timestamp_last_used == other.timestamp_last_used and
-                self.user == other.user)

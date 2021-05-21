@@ -191,9 +191,3 @@ class FeedbackLedDTO(BaseDTO):
     def __init__(self, id, function):  # type: (Optional[int], str) -> None
         self.id = id  # type: Optional[int]
         self.function = function  # type: str
-
-    def __eq__(self, other):
-        if not isinstance(other, FeedbackLedDTO):
-            return False
-        return (self.id == other.id and
-                self.function == other.function)
