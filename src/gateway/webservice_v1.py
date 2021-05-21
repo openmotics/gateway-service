@@ -671,7 +671,7 @@ class SystemConfiguration(RestAPIEndpoint):
         self.route_dispatcher.connect('put_rfid_sector_block_delivery', '/configuration/rfid_sector_block',
                                       controller=self, action='put_rfid_sector_block_config',
                                       conditions={'method': ['PUT']})
-        self.route_dispatcher.connect('put_touchscreen_delivery', '/configuration/touchscreen',
+        self.route_dispatcher.connect('put_touchscreen_delivery', '/touchscreen/calibrate',
                                       controller=self, action='put_touchscreen_config',
                                       conditions={'method': ['PUT']})
         self.route_dispatcher.connect('put_global_delivery', '/configuration/global',
@@ -733,7 +733,10 @@ class SystemConfiguration(RestAPIEndpoint):
     @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN])
     def put_touchscreen_config(self):
         # type: () -> None
-        self.system_config_controller.save_touchscreen_config()
+        try:
+            self.system_config_controller.save_touchscreen_config()
+        except Exception as ex:
+            raise RuntimeError('Could not calibrate the touchscreen: {}'.format(ex))
         return
 
     @openmotics_api_v1(auth=False)

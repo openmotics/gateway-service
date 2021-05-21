@@ -255,3 +255,20 @@ class SystemController(BaseController):
             watchdog.start()
         else:
             watchdog.stop()
+
+
+    def is_esafe_touchscreen_calibrated(self):
+        _ = self
+        return os.path.exists(constants.get_esafe_touchscreen_calibration_file())
+
+    def calibrate_esafe_touchscreen(self):
+        _ = self
+        try:
+            argv = ['TSLIB_CONSOLEDEVICE=none', 'ts_calibrate']
+            subprocess.check_output(argv)
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError('Could not calibrate touchscreen: {}'.format(exc))
+
+
+
+

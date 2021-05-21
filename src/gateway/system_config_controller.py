@@ -23,11 +23,12 @@ from gateway.dto import SystemDoorbellConfigDTO, SystemRFIDConfigDTO, \
     SystemRFIDSectorBlockConfigDTO, SystemTouchscreenConfigDTO, SystemGlobalConfigDTO, \
     SystemActivateUserConfigDTO
 
-from ioc import Injectable, Singleton
+from ioc import Injectable, Singleton, INJECTED, Inject
 
 if False:  # MyPy
     from typing import Dict, Any, List, Optional
     from gateway.dto.base import BaseDTO
+    from gateway.system_controller import SystemController
 
 
 @Injectable.named('system_config_controller')
@@ -136,15 +137,16 @@ class SystemConfigController(object):
         cls._save_config_values(config_dto)
 
     @classmethod
-    def get_touchscreen_config(cls):
-        # type: () -> SystemTouchscreenConfigDTO
-        return SystemTouchscreenConfigDTO(calibrated=os.path.exists(constants.get_esafe_touchscreen_calibration_file()))
+    @Inject
+    def get_touchscreen_config(cls, system_controller=INJECTED):
+        # type: (SystemController) -> SystemTouchscreenConfigDTO
+        return SystemTouchscreenConfigDTO(calibrated=system_controller.is_esafe_touchscreen_calibrated())
 
     @classmethod
-    def save_touchscreen_config(cls):
-        # type: () -> None
-        # TODO: run the calibrate touchscreen script
-        raise NotImplementedError()
+    @Inject
+    def save_touchscreen_config(cls, system_controller=INJECTED):
+        # type: (SystemController) -> None
+        system_controller.calibrate_esafe_touchscreen()
 
     @classmethod
     def get_global_config(cls):
