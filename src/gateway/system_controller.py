@@ -268,7 +268,3 @@ class SystemController(BaseController):
             subprocess.check_output(argv)
         except subprocess.CalledProcessError as exc:
             raise RuntimeError('Could not calibrate touchscreen: {}'.format(exc))
-
-
-
-
