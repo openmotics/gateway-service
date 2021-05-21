@@ -26,7 +26,9 @@ import time
 import datetime
 
 from ioc import INJECTED, Inject, Injectable, Singleton
-from gateway.api.serializers import ApartmentSerializer, UserSerializer, DeliverySerializer
+from gateway.api.serializers import ApartmentSerializer, UserSerializer, DeliverySerializer, \
+    SystemDoorbellConfigSerializer, SystemRFIDConfigSerializer, SystemRFIDSectorBlockConfigSerializer, \
+    SystemTouchscreenConfigSerializer, SystemGlobalConfigSerializer, SystemActivateUserConfigSerializer
 from gateway.dto import ApartmentDTO, DeliveryDTO
 from gateway.exceptions import *
 from gateway.models import User, Delivery
@@ -37,8 +39,9 @@ if False:  # MyPy
     from gateway.delivery_controller import DeliveryController
     from gateway.authentication_controller import AuthenticationToken
     from gateway.user_controller import UserController
+    from gateway.system_config_controller import SystemConfigController
     from gateway.webservice import WebService
-    from typing import Optional, List
+    from typing import Optional, List, Dict
 
 logger = logging.getLogger("openmotics")
 
@@ -90,13 +93,13 @@ def _openmotics_api_v1(f):
 
         timings['process'] = ('Processing', time.time() - start)
         serialization_start = time.time()
-        contents = str(data)
+        contents = str(data).encode() if data is not None else None
         timings['serialization'] = 'Serialization', time.time() - serialization_start
         cherrypy.response.headers['Content-Type'] = 'application/json'
         cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
                                                                for key, value in timings.items()])
         cherrypy.response.status = status
-        return contents.encode()
+        return contents
     return wrapper
 
 
@@ -630,6 +633,141 @@ class Deliveries(RestAPIEndpoint):
         return json.dumps(delivery_serial)
 
 
+class SystemConfiguration(RestAPIEndpoint):
+    API_ENDPOINT = '/api/v1/system'
+
+    @Inject
+    def __init__(self, system_config_controller=INJECTED):
+        # type: (SystemConfigController) -> None
+        super(SystemConfiguration, self).__init__()
+        self.system_config_controller = system_config_controller
+        self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
+        # --- GET ---
+        self.route_dispatcher.connect('get_doorbell_config', '/configuration/doorbell',
+                                      controller=self, action='get_doorbell_config',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_rfid_config', '/configuration/rfid',
+                                      controller=self, action='get_rfid_config',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_rfid_sector_block_config', '/configuration/rfid_sector_block',
+                                      controller=self, action='get_rfid_sector_block_config',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_touchscreen_config', '/configuration/touchscreen',
+                                      controller=self, action='get_touchscreen_config',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_global_config', '/configuration/global',
+                                      controller=self, action='get_global_config',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_activate_user_config', '/configuration/activate_user',
+                                      controller=self, action='get_activate_user_config',
+                                      conditions={'method': ['GET']})
+        # --- PUT ---
+        self.route_dispatcher.connect('put_doorbell_delivery', '/configuration/doorbell',
+                                      controller=self, action='put_doorbell_config',
+                                      conditions={'method': ['PUT']})
+        self.route_dispatcher.connect('put_rfid_delivery', '/configuration/rfid',
+                                      controller=self, action='put_rfid_config',
+                                      conditions={'method': ['PUT']})
+        self.route_dispatcher.connect('put_rfid_sector_block_delivery', '/configuration/rfid_sector_block',
+                                      controller=self, action='put_rfid_sector_block_config',
+                                      conditions={'method': ['PUT']})
+        self.route_dispatcher.connect('put_touchscreen_delivery', '/touchscreen/calibrate',
+                                      controller=self, action='put_touchscreen_config',
+                                      conditions={'method': ['PUT']})
+        self.route_dispatcher.connect('put_global_delivery', '/configuration/global',
+                                      controller=self, action='put_global_config',
+                                      conditions={'method': ['PUT']})
+        self.route_dispatcher.connect('put_activate_user_delivery', '/configuration/activate_user',
+                                      controller=self, action='put_activate_user_config',
+                                      conditions={'method': ['PUT']})
+
+    @openmotics_api_v1(auth=False)
+    def get_doorbell_config(self):
+        # type: () -> str
+        config_dto = self.system_config_controller.get_doorbell_config()
+        config_serial = SystemDoorbellConfigSerializer.serialize(config_dto)
+        return json.dumps(config_serial)
+
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
+    def put_doorbell_config(self, request_body):
+        # type: (Dict) -> None
+        config_dto = SystemDoorbellConfigSerializer.deserialize(request_body)
+        self.system_config_controller.save_doorbell_config(config_dto)
+        return
+
+    @openmotics_api_v1(auth=False)
+    def get_rfid_config(self):
+        # type: () -> str
+        config_dto = self.system_config_controller.get_rfid_config()
+        config_serial = SystemRFIDConfigSerializer.serialize(config_dto)
+        return json.dumps(config_serial)
+
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
+    def put_rfid_config(self, request_body):
+        # type: (Dict) -> None
+        config_dto = SystemRFIDConfigSerializer.deserialize(request_body)
+        self.system_config_controller.save_rfid_config(config_dto)
+        return
+
+    @openmotics_api_v1(auth=False)
+    def get_rfid_sector_block_config(self):
+        # type: () -> str
+        config_dto = self.system_config_controller.get_rfid_sector_block_config()
+        config_serial = SystemRFIDSectorBlockConfigSerializer.serialize(config_dto)
+        return json.dumps(config_serial)
+
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
+    def put_rfid_sector_block_config(self, request_body):
+        # type: (Dict) -> None
+        config_dto = SystemRFIDSectorBlockConfigSerializer.deserialize(request_body)
+        self.system_config_controller.save_rfid_sector_block_config(config_dto)
+        return
+
+    @openmotics_api_v1(auth=False)
+    def get_touchscreen_config(self):
+        # type: () -> str
+        config_dto = self.system_config_controller.get_touchscreen_config()
+        config_serial = SystemTouchscreenConfigSerializer.serialize(config_dto)
+        return json.dumps(config_serial)
+
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN])
+    def put_touchscreen_config(self):
+        # type: () -> None
+        try:
+            self.system_config_controller.save_touchscreen_config()
+        except Exception as ex:
+            raise RuntimeError('Could not calibrate the touchscreen: {}'.format(ex))
+        return
+
+    @openmotics_api_v1(auth=False)
+    def get_global_config(self):
+        # type: () -> str
+        config_dto = self.system_config_controller.get_global_config()
+        config_serial = SystemGlobalConfigSerializer.serialize(config_dto)
+        return json.dumps(config_serial)
+
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
+    def put_global_config(self, request_body):
+        # type: (Dict) -> None
+        config_dto = SystemGlobalConfigSerializer.deserialize(request_body)
+        self.system_config_controller.save_global_config(config_dto)
+        return
+
+    @openmotics_api_v1(auth=False)
+    def get_activate_user_config(self):
+        # type: () -> str
+        config_dto = self.system_config_controller.get_activate_user_config()
+        config_serial = SystemActivateUserConfigSerializer.serialize(config_dto)
+        return json.dumps(config_serial)
+
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
+    def put_activate_user_config(self, request_body):
+        # type: (Dict) -> None
+        config_dto = SystemActivateUserConfigSerializer.deserialize(request_body)
+        self.system_config_controller.save_activate_user_config(config_dto)
+        return
+
+
 @Injectable.named('web_service_v1')
 @Singleton
 class WebServiceV1(object):
@@ -639,7 +777,8 @@ class WebServiceV1(object):
         self.endpoints = [
             Users(),
             Apartments(),
-            Deliveries()
+            Deliveries(),
+            SystemConfiguration()
         ]
 
     def start(self):
