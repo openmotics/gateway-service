@@ -92,7 +92,7 @@ if False:  # MYPY
     from gateway.ventilation_controller import VentilationController
     from plugins.base import PluginController
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class FloatWrapper(float):

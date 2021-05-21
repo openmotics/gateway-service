@@ -26,7 +26,7 @@ import power.power_api as power_api
 if False:  # MYPY
     from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class TimeKeeper(object):

@@ -28,7 +28,7 @@ if False:  # MYPY
 
     HEALTH = Literal['success', 'unstable', 'failure']
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class MasterHeartbeat(object):

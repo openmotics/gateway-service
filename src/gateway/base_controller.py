@@ -34,7 +34,7 @@ if False:  # MYPY
     from typing import Any, Callable, List, Optional, Type, TypeVar
     from gateway.maintenance_controller import MaintenanceController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class SyncStructure(object):

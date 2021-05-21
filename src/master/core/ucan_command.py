@@ -26,7 +26,7 @@ if False:  # MYPY
     from typing import Optional, List, Dict, Any, Iterator, Union, Callable
 
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class SID(object):

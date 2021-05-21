@@ -18,7 +18,7 @@ from tests.hardware_layout import TEST_PLATFORM, TestPlatform
 
 
 logging.getLogger('urllib3').propagate = False
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 settings.register_profile('default', deadline=None, max_examples=10, stateful_step_count=5, print_blob=True)

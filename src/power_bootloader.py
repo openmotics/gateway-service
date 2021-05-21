@@ -30,7 +30,7 @@ from serial_utils import CommunicationTimedOutException
 from power import power_api
 from gateway.initialize import setup_minimal_power_platform
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('openmotics')
 
 
 class HexReader(object):

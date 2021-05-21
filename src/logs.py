@@ -15,17 +15,18 @@
 
 import logging
 from logging import handlers
+import re
 
 
 class Logs(object):
 
-    LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    LOG_FORMAT = "%(asctime)s - %(levelname)s - (%(threadName)s) - %(name)s - %(message)s"
 
     @staticmethod
-    def setup_logger(log_level=logging.INFO, enable_update_logging=False):
+    def setup_logger(log_level_override=None, enable_update_logging=False):
         """
         Setup the OpenMotics logger.
-        :param log_level: Sets the main log level for OpenMotics logging to the default StreamHandler/SysLogHandler
+        :param log_level_override: Sets the main log level for OpenMotics logging to the default StreamHandler/SysLogHandler
         :param enable_update_logging: Enables logging to the `update_log` file. This will always log in DEBUG
         """
 
@@ -38,9 +39,9 @@ class Logs(object):
             root_logger.removeHandler(root_logger.handlers[0])
 
         # Setup basic stream handler
-        logging.basicConfig(format=Logs.LOG_FORMAT,
-                            level=logging.INFO)
-        openmotics_log_level = log_level
+        logging.basicConfig(format=Logs.LOG_FORMAT, level=logging.INFO)
+
+        openmotics_log_level = Logs.get_configured_loglevel(fallback=logging.INFO, override=log_level_override)
 
         # Alter some system loggers
         requests_logger = logging.getLogger('requests.packages.urllib3.connectionpool')
@@ -51,20 +52,35 @@ class Logs(object):
             update_handler = handlers.RotatingFileHandler(constants.get_update_log_location(), maxBytes=3 * 1024 ** 2, backupCount=2)
             update_handler.setLevel(logging.DEBUG)
             update_handler.setFormatter(logging.Formatter(Logs.LOG_FORMAT))
-            openmotics_log_level = min(log_level, logging.DEBUG)
+            openmotics_log_level = min(openmotics_log_level, logging.DEBUG)
 
         syslog_handler = None
         if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
             syslog_handler = handlers.SysLogHandler(address='/dev/log')
-            syslog_handler.setLevel(log_level)
+            syslog_handler.setLevel(openmotics_log_level)
             syslog_handler.setFormatter(logging.Formatter(Logs.LOG_FORMAT))
 
-        for logger_namespace in ['openmotics', 'gateway']:
-            _logger = logging.getLogger(logger_namespace)
-            _logger.setLevel(openmotics_log_level)
-            _logger.propagate = True
+        for logger_namespace in logging.root.manager.loggerDict:
+            if re.match("^openmotics.*|^gateway.*|^master.*|^plugins.*|^power.*", logger_namespace):
+                _logger = logging.getLogger(logger_namespace)
+                _logger.setLevel(openmotics_log_level)
+                _logger.propagate = True
 
-            for extra_handler in [update_handler, syslog_handler]:
-                # Add extra handlers, where available
-                if extra_handler is not None:
-                    _logger.addHandler(extra_handler)
+                for extra_handler in [update_handler, syslog_handler]:
+                    # Add extra handlers, where available
+                    if extra_handler is not None:
+                        _logger.addHandler(extra_handler)
+
+    @staticmethod
+    def get_configured_loglevel(fallback=logging.INFO, override=None):
+        import constants
+        from six.moves.configparser import ConfigParser, NoOptionError
+        if override is not None:
+            return override
+        try:
+            config = ConfigParser()
+            config.read(constants.get_config_file())
+            log_level = config.get('OpenMotics', 'log_level')
+            return logging._checkLevel(log_level) if log_level else fallback
+        except NoOptionError:
+            return fallback

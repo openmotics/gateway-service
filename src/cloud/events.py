@@ -27,7 +27,7 @@ from gateway.input_controller import InputController
 from gateway.models import Config
 from ioc import INJECTED, Inject, Injectable, Singleton
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 if False:  # MYPY
     from typing import Dict

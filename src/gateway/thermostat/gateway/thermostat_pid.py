@@ -26,7 +26,7 @@ if False:  # MYPY
     from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
     from gateway.sensor_controller import SensorController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @Inject

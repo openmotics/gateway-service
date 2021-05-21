@@ -19,7 +19,7 @@ import inspect
 import logging
 
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 def input_status(method=None, version=1):

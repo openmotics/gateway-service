@@ -24,7 +24,7 @@ from pytest import fixture, mark
 
 from tests.hardware_layout import INPUT_MODULE_LAYOUT, OUTPUT_MODULE_LAYOUT, Output, Module
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 VIRTUAL_MODULES = 10

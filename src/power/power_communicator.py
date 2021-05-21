@@ -42,7 +42,7 @@ if False:  # MYPY:
 
     HEALTH = Literal['success', 'unstable', 'failure']
 
-logger = logging.getLogger('gateway.power')
+logger = logging.getLogger(__name__)
 
 
 class PowerCommunicator(object):

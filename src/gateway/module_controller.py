@@ -31,7 +31,7 @@ if False:  # MYPY
     from gateway.hal.master_controller import MasterController
     from power.power_controller import PowerController
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('module_controller')

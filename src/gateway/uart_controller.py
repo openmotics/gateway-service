@@ -28,7 +28,7 @@ from platform_utils import Hardware
 if False:  # MYPY
     from typing import Dict, Union
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 def require_mode(mode):

@@ -36,7 +36,7 @@ if False:  # MYPY
     from gateway.watchdog import Watchdog
     from gateway.module_controller import ModuleController
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('system_controller')

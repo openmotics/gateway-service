@@ -38,7 +38,7 @@ if False:  # MYPY
     from gateway.hal.master_controller_classic import MasterClassicController
     from gateway.output_controller import OutputController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 THERMOSTATS = 'THERMOSTATS'
 

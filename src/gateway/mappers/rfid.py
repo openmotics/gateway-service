@@ -24,7 +24,7 @@ from gateway.dto.rfid import RfidDTO
 from gateway.mappers.user import UserMapper
 from gateway.models import RFID
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class RfidMapper(object):

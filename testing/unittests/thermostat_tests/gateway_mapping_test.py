@@ -42,7 +42,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        Logs.setup_logger(log_level=logging.DEBUG)
+        Logs.setup_logger(log_level_override=logging.DEBUG)
         cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):

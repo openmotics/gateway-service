@@ -30,7 +30,7 @@ from serial_utils import CommunicationTimedOutException
 if False:  # MYPY
     from typing import Optional
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class UCANUpdater(object):

@@ -38,7 +38,7 @@ if False:  # MYPY
     from gateway.metrics_caching import MetricsCacheController
     from gateway.config_controller import ConfigurationController
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class MetricsDistributeFailed(Exception):

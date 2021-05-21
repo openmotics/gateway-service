@@ -27,7 +27,7 @@ if False:  # MYPY
     from typing import Any
     from tests.toolbox import Toolbox
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture

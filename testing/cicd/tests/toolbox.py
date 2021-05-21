@@ -29,7 +29,7 @@ from tests.hardware_layout import INPUT_MODULE_LAYOUT, OUTPUT_MODULE_LAYOUT, \
     TEMPERATURE_MODULE_LAYOUT, TEST_PLATFORM, TESTER, Input, Module, Output, \
     TestPlatform
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 if False:  # MYPY
     from typing import Any, Dict, List, Optional, Tuple

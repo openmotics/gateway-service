@@ -29,7 +29,7 @@ from platform_utils import Hardware
 if False:  # MYPY
     from typing import Dict, Optional
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class FrontpanelClassicController(FrontpanelController):

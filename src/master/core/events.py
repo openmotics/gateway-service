@@ -25,7 +25,7 @@ from master.core.basic_action import BasicAction
 if False:  # MYPY
     from typing import List, Optional
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class Event(object):

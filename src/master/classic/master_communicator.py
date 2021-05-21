@@ -34,7 +34,7 @@ from master.classic import master_api
 from master.classic.master_command import Field, MasterCommandSpec, printable
 from serial_utils import CommunicationTimedOutException
 
-logger = logging.getLogger('gateway.master.classic')
+logger = logging.getLogger(__name__)
 
 if False:  # MYPY
     from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, Tuple

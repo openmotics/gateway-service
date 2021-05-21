@@ -40,7 +40,7 @@ if False:  # MyPy
     from gateway.webservice import WebService
     from typing import Optional, List
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 # ------------------------
 #  api decorator

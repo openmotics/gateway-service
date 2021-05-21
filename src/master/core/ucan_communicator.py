@@ -30,7 +30,7 @@ from serial_utils import CommunicationTimedOutException, printable
 if False:  # MYPY
     from typing import Optional, Dict, Any, Union, Callable, List
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('ucan_communicator')

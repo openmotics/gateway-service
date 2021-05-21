@@ -61,7 +61,7 @@ if False:  # MYPY
     from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union
     HEALTH = Literal['success', 'unstable', 'failure']
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class MasterCoreController(MasterController):

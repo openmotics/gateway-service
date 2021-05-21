@@ -41,7 +41,7 @@ if False:  # MYPY
     from serial import Serial
     T_co = TypeVar('T_co', bound=None, covariant=True)
 
-logger = logging.getLogger('gateway.master.core')
+logger = logging.getLogger(__name__)
 
 
 class CoreCommunicator(object):

@@ -24,7 +24,7 @@ if False:  # MYPY
     from typing import Any, Dict, Callable, List, Optional, AnyStr
     from gateway.webservice import WebInterface
 
-logger_ = logging.getLogger('openmotics')
+logger_ = logging.getLogger(__name__)
 
 class Service(object):
     def __init__(self, runner, webinterface):

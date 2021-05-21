@@ -24,7 +24,7 @@ if False:  # MYPY
     from typing import Optional, List, Dict, Any, Union, Callable
 
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class Instruction(object):

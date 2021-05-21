@@ -37,7 +37,7 @@ if False:  # MYPY:
 
     T = TypeVar('T', bound=Union[int, float])
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 def convert_nan(number, default):  # type: (T, Optional[T]) -> Optional[T]

@@ -30,7 +30,7 @@ if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
     from plugins.base import PluginController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class MasterCommunicator(object):

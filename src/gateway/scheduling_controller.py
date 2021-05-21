@@ -44,7 +44,7 @@ if False:  # MYPY
     from gateway.hal.master_controller import MasterController
     from gateway.dto import LegacyScheduleDTO, LegacyStartupActionDTO
 
-logger = logging.getLogger('gateway.scheduling.controller')
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('scheduling_controller')

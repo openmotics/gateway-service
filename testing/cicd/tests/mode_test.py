@@ -21,7 +21,7 @@ import time
 import psutil
 import pytest
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 def check_ip_range():

@@ -32,7 +32,7 @@ if False:  # MYPY
     from typing import Dict, List, Any
     T = TypeVar('T')
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class Database(object):

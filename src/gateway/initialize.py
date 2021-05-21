@@ -15,6 +15,8 @@
 
 from __future__ import absolute_import
 
+import re
+
 from platform_utils import Platform, System
 System.import_libs()
 
@@ -59,7 +61,7 @@ if False:  # MYPY
     from typing import Any, Optional
     from gateway.hal.master_controller import MasterController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 def initialize(message_client_name):
@@ -161,7 +163,9 @@ def setup_target_platform(target_platform, message_client_name):
     try:
         debug_logger = config.get('OpenMotics', 'debug_logger')
         if debug_logger:
-            logging.getLogger(debug_logger).setLevel(logging.DEBUG)
+            for logger_namespace in logging.root.manager.loggerDict:
+                if re.match("^{}.*".format(debug_logger), logger_namespace):
+                    logging.getLogger(logger_namespace).setLevel(logging.DEBUG)
     except NoOptionError:
         pass
 

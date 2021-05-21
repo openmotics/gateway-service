@@ -127,7 +127,6 @@ def run_tarball_extract(file, output_dir=None):
         cmd(['tar', '-vxf', gunzipped_file, '-C', output_dir])
 
 
-
 def extract_legacy_update(update_file, expected_md5):
     md5_hasher = hashlib.md5()
     with open(update_file, 'rb') as fd:

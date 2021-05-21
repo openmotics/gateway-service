@@ -35,7 +35,7 @@ if False:  # MYPY
     from master.classic.master_communicator import MasterCommunicator
     M = TypeVar('M', bound='EepromModel')
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('eeprom_controller')
