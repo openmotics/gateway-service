@@ -163,7 +163,7 @@ def setup_target_platform(target_platform, message_client_name):
     try:
         debug_logger = config.get('OpenMotics', 'debug_logger')
         if debug_logger:
-            for logger_namespace in logging.root.manager.loggerDict:
+            for logger_namespace in logging.root.manager.loggerDict:  # type: ignore
                 if re.match("^{}.*".format(debug_logger), logger_namespace):
                     logging.getLogger(logger_namespace).setLevel(logging.DEBUG)
     except NoOptionError:

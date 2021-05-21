@@ -60,7 +60,7 @@ class Logs(object):
             syslog_handler.setLevel(openmotics_log_level)
             syslog_handler.setFormatter(logging.Formatter(Logs.LOG_FORMAT))
 
-        for logger_namespace in logging.root.manager.loggerDict:
+        for logger_namespace in logging.root.manager.loggerDict:  # type: ignore
             if re.match("^openmotics.*|^gateway.*|^master.*|^plugins.*|^power.*", logger_namespace):
                 _logger = logging.getLogger(logger_namespace)
                 _logger.setLevel(openmotics_log_level)
@@ -81,6 +81,6 @@ class Logs(object):
             config = ConfigParser()
             config.read(constants.get_config_file())
             log_level = config.get('OpenMotics', 'log_level')
-            return logging._checkLevel(log_level) if log_level else fallback
+            return logging._checkLevel(log_level) if log_level else fallback  # type: ignore
         except NoOptionError:
             return fallback
