@@ -109,7 +109,7 @@ def apply_migrations():
 
 
 @Inject
-def factory_reset(master_controller=INJECTED, can=True):
+def factory_reset(master_controller=INJECTED, can=False):
     # type: (MasterController, bool) -> None
     import glob
     import shutil
