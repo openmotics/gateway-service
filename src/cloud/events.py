@@ -82,7 +82,7 @@ class EventSender(object):
             if not self._batch_send_events():
                 raise DaemonThreadWait
         except APIException as ex:
-            logger.error('Error sending events to the cloud: {}'.format(str(ex)))
+            logger.exception('Error sending events to the cloud')
 
     def _batch_send_events(self):
         events = []

@@ -20,7 +20,7 @@ import re
 
 class Logs(object):
 
-    LOG_FORMAT = "%(asctime)s - %(levelname)s - (%(threadName)s) - %(name)s - %(message)s"
+    LOG_FORMAT = "%(asctime)s - %(levelname)-8s - (%(threadName)s) - %(name)s - %(message)s"
 
     @staticmethod
     def setup_logger(log_level_override=None, enable_update_logging=False):
