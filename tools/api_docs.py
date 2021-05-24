@@ -33,7 +33,6 @@ if __name__ == "__main__":
     for api_name in sorted(api_endpoints):
         endpoint = "/{}".format(api_name)
         api_params = api_endpoints[api_name]
-        print(api_params)
         item = {"name": endpoint,
                 "description": endpoint,
                 "item": [{"name": endpoint,
@@ -68,5 +67,4 @@ if __name__ == "__main__":
         docs['item'].append(item)
     api_docs = open('gw-postman-collection.json', 'w')
     api_docs.write(json.dumps(docs))
-    print(docs)
 
