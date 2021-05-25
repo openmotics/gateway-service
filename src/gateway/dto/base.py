@@ -44,9 +44,14 @@ class BaseDTO(object):
 
     def __eq__(self, other):
         # type: (Any) -> bool
+        # This only works with the generic DTO which uses the 'capture_fields' decorator
+        field_names = getattr(self.__class__.__init__, 'field_names', None)
+        if field_names is None:
+            return False
+
         if not isinstance(other, self.__class__):
             return False
-        for field in self.loaded_fields:
+        for field in field_names:
             if getattr(self, field) != getattr(other, field):
                 return False
         return True
@@ -59,6 +64,9 @@ class BaseDTO(object):
 def capture_fields(func):
     field_names = Toolbox.get_parameter_names(func)
     field_names.pop(0)  # Remove `self`
+
+    # Assign the fieldnames to the function itself, this will make it possible to retrieve them later
+    func.field_names = field_names
 
     @wraps(func)
     def new_init(self, *args, **kwargs):

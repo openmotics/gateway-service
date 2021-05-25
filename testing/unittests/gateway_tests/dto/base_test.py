@@ -24,17 +24,31 @@ from gateway.dto.base import BaseDTO, capture_fields
 # Helper classes
 class TestFirstDTO(BaseDTO):
     @capture_fields
-    def __init__(self, value):
+    def __init__(self, value=None, value_2=None):
         self.value = value
+        self.value_2 = value_2
 
 
 class TestSecondDTO(BaseDTO):
     @capture_fields
-    def __init__(self, value):
+    def __init__(self, value=None, value_2=None):
         self.value = value
+        self.value_2 = value_2
 
 
 class BaseDTOTest(unittest.TestCase):
+
+    def assert_dto_equal(self, first, second):
+        equal = (first == second)
+        self.assertTrue(equal)
+        equal = (second == first)
+        self.assertTrue(equal)
+
+    def assert_dto_not_equal(self, first, second):
+        equal = (first == second)
+        self.assertFalse(equal)
+        equal = (second == first)
+        self.assertFalse(equal)
 
     def test_dto_equal(self):
         td_1_1 = TestFirstDTO(37)
@@ -46,16 +60,23 @@ class BaseDTOTest(unittest.TestCase):
         td_2_3 = TestSecondDTO(37)
 
         # Test if instance of same class is equal
-        self.assertEqual(td_1_1, td_1_3)
-        self.assertNotEqual(td_1_1, td_1_2)
+        self.assert_dto_equal(td_1_1, td_1_3)
+        self.assert_dto_not_equal(td_1_1, td_1_2)
 
-        self.assertEqual(td_2_1, td_2_3)
-        self.assertNotEqual(td_2_1, td_2_2)
+        self.assert_dto_equal(td_2_1, td_2_3)
+        self.assert_dto_not_equal(td_2_1, td_2_2)
 
         # Test if instance of different class are not equal
-        self.assertNotEqual(td_1_1, td_2_1)
-        self.assertNotEqual(td_1_2, td_2_1)
+        self.assert_dto_not_equal(td_1_1, td_2_1)
+        self.assert_dto_not_equal(td_1_2, td_2_1)
 
         td_1_4 = TestFirstDTO(None)
-        self.assertNotEqual(td_1_1, td_1_4)
+        self.assert_dto_not_equal(td_1_1, td_1_4)
 
+        # value not in loaded fields, but should not be equal
+        td_1_5 = TestFirstDTO()
+        self.assert_dto_not_equal(td_1_5, td_1_1)
+
+        td_1_6 = TestFirstDTO(1)     # This will be (1, None)
+        td_1_7 = TestFirstDTO(1, 3)  # This will be (1, 3)
+        self.assert_dto_not_equal(td_1_6, td_1_7)
