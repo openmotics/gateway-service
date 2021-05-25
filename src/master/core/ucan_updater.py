@@ -178,11 +178,11 @@ class UCANUpdater(object):
                                          command=UCANAPI.set_bootloader_timeout(SID.BOOTLOADER_COMMAND),
                                          identity=ucan_address,
                                          fields={'timeout': UCANUpdater.BOOTLOADER_TIMEOUT_RUNTIME})
-            logger.info('Set safety bit allowing the application to immediately start on reset')
+            logger.info('Set safety counter allowing the application to immediately start on reset')
             ucan_communicator.do_command(cc_address=cc_address,
-                                         command=UCANAPI.set_bootloader_safety_flag(),
+                                         command=UCANAPI.set_bootloader_safety_counter(),
                                          identity=ucan_address,
-                                         fields={'safety_flag': 1})
+                                         fields={'safety_counter': 5})
 
             # Switch to application mode
             logger.info('Reset to application mode')
