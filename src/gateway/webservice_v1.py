@@ -64,7 +64,7 @@ def _openmotics_api_v1(f):
             status = 401
             data = ex.message
         except ForbiddenException as ex:
-            status = 400
+            status = 403
             data = ex.message
         except ItemDoesNotExistException as ex:
             status = 404
