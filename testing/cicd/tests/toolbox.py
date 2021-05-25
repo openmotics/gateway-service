@@ -294,6 +294,14 @@ class Toolbox(object):
         for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
             assert modules.get(mtype, 0) >= expected_amount
 
+        # TODO ensure discovery synchonization finished.
+        for module in OUTPUT_MODULE_LAYOUT:
+            if module.outputs:
+                self.ensure_output_exists(module.outputs[-1], timeout=300)
+        for module in INPUT_MODULE_LAYOUT:
+            if module.inputs:
+                self.ensure_input_exists(module.inputs[-1], timeout=300)
+
     def print_logs(self):
         # type: () -> None
         try:
@@ -653,6 +661,20 @@ class Toolbox(object):
         logger.error('get status {} status={} != expected {}, timeout after {:.2f}s'.format(output, bool(current_status), status, time.time() - since))
         self.tester.log_events()
         raise AssertionError('get status {} status={} != expected {}, timeout after {:.2f}s'.format(output, bool(current_status), status, time.time() - since))
+
+    def ensure_output_exists(self, output, timeout=30):
+        # type: (Output, float) -> None
+        since = time.time()
+        while since > time.time() - timeout:
+            data = self.dut.get('/get_output_status')
+            try:
+                next(x for x in data['status'] if x['id'] == output.output_id)
+                logger.debug('output {} with status discovered, after {:.2f}s'.format(output, time.time() - since))
+                return
+            except StopIteration:
+                pass
+            time.sleep(2)
+        raise AssertionError('output {} status missing, timeout after {:.2f}s'.format(output, time.time() - since))
 
     def ensure_input_exists(self, _input, timeout=30):
         # type: (Input, float) -> None

@@ -71,6 +71,10 @@ class InputController(BaseController):
             self._sync_state_thread.stop()
             self._sync_state_thread = None
 
+    def request_sync_state(self):
+        if self._sync_state_thread:
+            self._sync_state_thread.request_single_run()
+
     def _sync_state(self):
         try:
             for state_dto in self._master_controller.load_input_status():
@@ -184,7 +188,6 @@ class InputStateCache(object):
     def __init__(self):
         self._cache = {}  # type: Dict[int,InputDTO]
         self._lock = Lock()
-        self._loaded = False
 
     def get_input_status(self):
         # type: () -> Dict[int,Optional[InputStatusDTO]]
@@ -207,7 +210,6 @@ class InputStateCache(object):
                     input_dto.state = InputStatusDTO(input_dto.id)
                 new_state[input_dto.id] = input_dto
             self._cache = new_state
-            self._loaded = True
 
     def get_recent_inputs(self, threshold=10):
         # type: (int) -> List[int]
@@ -223,11 +225,10 @@ class InputStateCache(object):
         this deduplicates actual changes based on the cached state.
         """
         with self._lock:
-            if not self._loaded:
-                return False, None
             input_id = state_dto.id
             if input_id not in self._cache:
                 logger.warning('Received change for unknown input {0}: {1}'.format(input_id, state_dto))
+                self._cache[input_id] = InputDTO(input_id, state=state_dto)
                 return False, None
             changed = False
             if 'status' in state_dto.loaded_fields and self._cache[input_id].state != state_dto:
