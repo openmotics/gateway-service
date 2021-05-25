@@ -20,7 +20,7 @@ from functools import wraps
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Set
+    from typing import Set, Any
 
 
 class BaseDTO(object):
@@ -41,6 +41,15 @@ class BaseDTO(object):
         if self._init_done and key in self.__dict__:
             self._loaded_fields.add(key)
         object.__setattr__(self, key, value)
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        if not isinstance(other, self.__class__):
+            return False
+        for field in self.loaded_fields:
+            if getattr(self, field) != getattr(other, field):
+                return False
+        return True
 
     @property
     def loaded_fields(self):

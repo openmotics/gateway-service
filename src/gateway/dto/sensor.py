@@ -36,19 +36,6 @@ class SensorDTO(BaseDTO):
         self.room = room  # type: Optional[int]
         self.virtual = virtual  # type: bool
 
-    def __eq__(self, other):
-        if not isinstance(other, SensorDTO):
-            return False
-        return (self.id == other.id and
-                self.external_id == other.external_id and
-                self.source == other.source and
-                self.physical_quantity == other.physical_quantity and
-                self.unit == other.unit and
-                self.name == other.name and
-                self.offset == other.offset and
-                self.room == other.room and
-                self.virtual == other.virtual)
-
 
 class SensorSourceDTO(BaseDTO):
     @capture_fields
@@ -64,13 +51,6 @@ class SensorSourceDTO(BaseDTO):
     @property
     def is_plugin(self):
         return self.type == Sensor.Sources.PLUGIN
-
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        if not isinstance(other, SensorSourceDTO):
-            return False
-        return (self.type == other.type and
-                self.name == other.name)
 
 
 class SensorStatusDTO(BaseDTO):
@@ -96,11 +76,3 @@ class MasterSensorDTO(BaseDTO):
         self.name = name[:16]  # type: str
         self.offset = offset  # type: Optional[float]
         self.virtual = virtual  # type: bool
-
-    def __eq__(self, other):
-        if not isinstance(other, MasterSensorDTO):
-            return False
-        return (self.id == other.id and
-                self.name == other.name and
-                self.offset == other.offset and
-                self.virtual == other.virtual)

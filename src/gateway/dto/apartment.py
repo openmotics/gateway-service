@@ -30,12 +30,3 @@ class ApartmentDTO(BaseDTO):
         self.name = name
         self.mailbox_rebus_id = mailbox_rebus_id
         self.doorbell_rebus_id = doorbell_rebus_id
-
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        if not isinstance(other, ApartmentDTO):
-            return False
-        return (self.id == other.id and
-                self.name == other.name and
-                self.mailbox_rebus_id == other.mailbox_rebus_id and
-                self.doorbell_rebus_id == other.doorbell_rebus_id)

@@ -36,19 +36,6 @@ class VentilationDTO(BaseDTO):
         self.device_type = device_type  # type: str
         self.device_serial = device_serial  # type: str
 
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        if not isinstance(other, VentilationDTO):
-            return False
-        return (self.id == other.id and
-                self.source == other.source and
-                self.external_id == other.external_id and
-                self.name == other.name and
-                self.device_vendor == other.device_vendor and
-                self.device_type == other.device_type and
-                self.device_serial == other.device_serial and
-                self.amount_of_levels == other.amount_of_levels)
-
 
 class VentilationSourceDTO(BaseDTO):
     class Type(object):
@@ -63,14 +50,6 @@ class VentilationSourceDTO(BaseDTO):
     @property
     def is_plugin(self):
         return self.type == VentilationSourceDTO.Type.PLUGIN
-
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        if not isinstance(other, VentilationSourceDTO):
-            return False
-        return (self.id == other.id and
-                self.name == other.name and
-                self.type == other.type)
 
 
 class VentilationStatusDTO(BaseDTO):

@@ -31,11 +31,3 @@ class GroupActionDTO(BaseDTO):
         self.name = name
         self.actions = [] if actions is None else actions  # type: List[int]
         self.internal = internal
-
-    def __eq__(self, other):
-        if not isinstance(other, GroupActionDTO):
-            return False
-        return (self.id == other.id and
-                self.name == other.name and
-                self.actions == other.actions and
-                self.internal == other.internal)

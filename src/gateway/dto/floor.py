@@ -27,9 +27,3 @@ class FloorDTO(BaseDTO):
     def __init__(self, id, name=None):
         self.id = id  # type: int
         self.name = name  # type: Optional[str]
-
-    def __eq__(self, other):
-        if not isinstance(other, FloorDTO):
-            return False
-        return (self.id == other.id and
-                self.name == other.name)

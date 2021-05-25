@@ -181,8 +181,12 @@ class ThermostatControllerMaster(ThermostatController):
                 .where(Sensor.source == Sensor.Sources.MASTER) \
                 .where(Sensor.physical_quantity == Sensor.PhysicalQuantities.TEMPERATURE) \
                 .where(Sensor.external_id == str(sensor_id)) \
-                .get()
-            return sensor.id
+                .first()
+            if sensor is None:
+                logger.warning('Invalid <Sensor external_id={}> configured on thermostat'.format(sensor_id))
+                return None
+            else:
+                return sensor.id
 
     def _sensor_to_master(self, sensor_id):  # type: (Optional[int]) -> Optional[int]
         if sensor_id in (None, 240, 255):

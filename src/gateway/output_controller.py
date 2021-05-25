@@ -73,6 +73,10 @@ class OutputController(BaseController):
             self._sync_state_thread.stop()
             self._sync_state_thread = None
 
+    def request_sync_state(self):
+        if self._sync_state_thread:
+            self._sync_state_thread.request_single_run()
+
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
         super(OutputController, self)._handle_master_event(master_event)
@@ -216,7 +220,6 @@ class OutputStateCache(object):
     def __init__(self):
         self._cache = {}  # type: Dict[int,OutputDTO]
         self._lock = Lock()
-        self._loaded = False
 
     def get_state(self):
         # type: () -> Dict[int,OutputStatusDTO]
@@ -234,7 +237,6 @@ class OutputStateCache(object):
                     output_dto.state = OutputStatusDTO(output_dto.id)
                 new_state[output_dto.id] = output_dto
             self._cache = new_state
-            self._loaded = True
 
     def get_recent_outputs(self, threshold=10):
         # type: (int) -> List[int]
@@ -249,11 +251,10 @@ class OutputStateCache(object):
         this deduplicates actual changes based on the cached state.
         """
         with self._lock:
-            if not self._loaded:
-                return False, None
             output_id = state_dto.id
             if output_id not in self._cache:
                 logger.warning('Received change for unknown output {0}: {1}'.format(output_id, state_dto))
+                self._cache[output_id] = OutputDTO(output_id, state=state_dto)
                 return False, None
             changed = False
             current_state = self._cache[output_id].state
