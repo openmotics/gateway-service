@@ -64,13 +64,14 @@ from gateway.uart_controller import UARTController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
+from logs import Logs
 from platform_utils import Hardware, Platform, System
 from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Dict, Optional, Any, List, Literal
+    from typing import Dict, Optional, Any, List, Literal, Union
     from bus.om_bus_client import MessageClient
     from gateway.gateway_api import GatewayApi
     from gateway.group_action_controller import GroupActionController
@@ -1896,6 +1897,14 @@ class WebInterface(object):
         return {'eeprom': self._module_controller.get_configuration_dirty_flag(),
                 'power': power_dirty,
                 'orm': orm_dirty}
+
+    @openmotics_api(auth=True)
+    def set_loglevel(self, level='INFO'):  # type: (Union[str, int]) -> None
+        validated_level = logging._checkLevel(level)
+        validated_level_name = logging.getLevelName(validated_level)
+        logger.info('Switching loglevel to {}'.format(validated_level_name))
+        Logs.set_services_loglevel(validated_level)
+        return {'loglevel': validated_level_name}
 
     # UART
 

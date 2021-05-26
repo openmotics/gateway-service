@@ -60,16 +60,25 @@ class Logs(object):
             syslog_handler.setLevel(openmotics_log_level)
             syslog_handler.setFormatter(logging.Formatter(Logs.LOG_FORMAT))
 
+        Logs.set_services_loglevel(openmotics_log_level)
+
+        for _logger in Logs._get_service_loggers():
+            for extra_handler in [update_handler, syslog_handler]:
+                # Add extra handlers, where available
+                if extra_handler is not None:
+                    _logger.addHandler(extra_handler)
+
+    @staticmethod
+    def set_services_loglevel(level=logging.INFO):
+        for _logger in Logs._get_service_loggers():
+            _logger.setLevel(level)
+            _logger.propagate = True
+
+    @staticmethod
+    def _get_service_loggers():
         for logger_namespace in logging.root.manager.loggerDict:  # type: ignore
             if re.match("^openmotics.*|^gateway.*|^master.*|^plugins.*|^power.*", logger_namespace):
-                _logger = logging.getLogger(logger_namespace)
-                _logger.setLevel(openmotics_log_level)
-                _logger.propagate = True
-
-                for extra_handler in [update_handler, syslog_handler]:
-                    # Add extra handlers, where available
-                    if extra_handler is not None:
-                        _logger.addHandler(extra_handler)
+                yield logging.getLogger(logger_namespace)
 
     @staticmethod
     def get_configured_loglevel(fallback=logging.INFO, override=None):
