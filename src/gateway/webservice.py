@@ -1899,8 +1899,8 @@ class WebInterface(object):
                 'orm': orm_dirty}
 
     @openmotics_api(auth=True)
-    def set_loglevel(self, level='INFO'):  # type: (Union[str, int]) -> None
-        validated_level = logging._checkLevel(level)
+    def set_loglevel(self, level='INFO'):  # type: (Union[str, int]) -> Dict
+        validated_level = logging._checkLevel(level)  # type: ignore
         validated_level_name = logging.getLevelName(validated_level)
         logger.info('Switching loglevel to {}'.format(validated_level_name))
         Logs.set_services_loglevel(validated_level)
