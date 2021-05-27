@@ -39,7 +39,7 @@ class RfidController(object):
     @staticmethod
     def load_rfid(rfid_id):
         # type: (int) -> Optional[RfidDTO]
-        rfid_orm = RFID.select().where(RFID.id == rfid_id).first()
+        rfid_orm = RFID.get_or_none(RFID.id == rfid_id)
         if rfid_orm is None:
             return None
         rfid_dto = RfidMapper.orm_to_dto(rfid_orm)
@@ -60,12 +60,6 @@ class RfidController(object):
         return RFID.select().count()
 
     @staticmethod
-    def rfid_id_exists(rfid_id):
-        # type: (int) -> bool
-        result = RFID.get_by_id(rfid_id)
-        return result is not None
-
-    @staticmethod
     def save_rfid(rfid_dto):
         # type: (RfidDTO) -> Optional[RfidDTO]
         rfid_orm = RfidMapper.dto_to_orm(rfid_dto)
@@ -81,10 +75,7 @@ class RfidController(object):
 
     @staticmethod
     def delete_rfid(rfid_id):
-        if RfidController.rfid_id_exists(rfid_id):
-            RFID.delete().where(RFID.id == rfid_id).execute()
-        else:
-            raise ValueError("Cannot delete unknown RFID tag: RFID id '{}' does not exists")
+        RFID.delete().where(RFID.id == rfid_id).execute()
 
     @staticmethod
     def datetime_to_string_format(timestamp):
@@ -98,9 +89,3 @@ class RfidController(object):
         timestamp = datetime.datetime.now(tzlocal())
         # replace the microseconds to not show them in the string
         return timestamp.replace(microsecond=0).isoformat('T')
-
-    @staticmethod
-    def _validate_rfid_type(rfid_dto):
-        # type: (RfidDTO) -> None
-        if rfid_dto.user is None:
-            raise ValueError('RFID tag needs a user to be connected to')
