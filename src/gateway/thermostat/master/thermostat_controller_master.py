@@ -183,7 +183,7 @@ class ThermostatControllerMaster(ThermostatController):
                 .where(Sensor.external_id == str(sensor_id)) \
                 .first()
             if sensor is None:
-                logger.warning('Invalid <Sensor external_id={}> configured on thermostat', sensor_id)
+                logger.warning('Invalid <Sensor external_id={}> configured on thermostat'.format(sensor_id))
                 return None
             else:
                 return sensor.id
