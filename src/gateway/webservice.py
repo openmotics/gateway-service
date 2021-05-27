@@ -639,7 +639,6 @@ class WebInterface(object):
         return {'old_module': ModuleSerializer.serialize(old_module, fields=None),
                 'new_module': ModuleSerializer.serialize(new_module, fields=None)}
 
-
     @openmotics_api(auth=True)
     def get_features(self):
         """
@@ -1898,13 +1897,17 @@ class WebInterface(object):
                 'power': power_dirty,
                 'orm': orm_dirty}
 
-    @openmotics_api(auth=True)
-    def set_loglevel(self, level='INFO'):  # type: (Union[str, int]) -> Dict
-        validated_level = logging._checkLevel(level)  # type: ignore
-        validated_level_name = logging.getLevelName(validated_level)
-        logger.info('Switching loglevel to {}'.format(validated_level_name))
-        Logs.set_services_loglevel(validated_level)
-        return {'loglevel': validated_level_name}
+    @openmotics_api(auth=True, check=types(level=str, logger_name=str))
+    def set_loglevel(self, level='INFO', logger_name=None):  # type: (str, Optional[str]) -> Dict
+        level = level.upper()
+        if logger_name is None:
+            logger.info('Switching services loglevel to {}'.format(level))
+            Logs.set_services_loglevel(level=level)
+        else:
+            logger.info('Switching {} loglevel to {}'.format(logger_name, level))
+            _logger = logging.getLogger(logger_name)
+            _logger.setLevel(level=level)
+        return {'loglevel': level}
 
     # UART
 

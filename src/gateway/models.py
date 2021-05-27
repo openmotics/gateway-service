@@ -176,7 +176,6 @@ class Schedule(BaseModel):
     status = CharField()
 
 
-
 class Config(BaseModel):
     id = AutoField()
     setting = CharField(unique=True)
