@@ -28,7 +28,8 @@ import datetime
 from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.api.serializers import ApartmentSerializer, UserSerializer, DeliverySerializer, \
     SystemDoorbellConfigSerializer, SystemRFIDConfigSerializer, SystemRFIDSectorBlockConfigSerializer, \
-    SystemTouchscreenConfigSerializer, SystemGlobalConfigSerializer, SystemActivateUserConfigSerializer
+    SystemTouchscreenConfigSerializer, SystemGlobalConfigSerializer, SystemActivateUserConfigSerializer, \
+    RfidSerializer
 from gateway.dto import ApartmentDTO, DeliveryDTO
 from gateway.exceptions import *
 from gateway.models import User, Delivery
@@ -38,6 +39,7 @@ if False:  # MyPy
     from gateway.apartment_controller import ApartmentController
     from gateway.delivery_controller import DeliveryController
     from gateway.authentication_controller import AuthenticationToken
+    from gateway.rfid_controller import RfidController
     from gateway.user_controller import UserController
     from gateway.system_config_controller import SystemConfigController
     from gateway.webservice import WebService
@@ -165,6 +167,8 @@ def params_handler_v1(expect_body_type=None, **kwargs):
                         parsed_body = json.loads(body)
                     except Exception:
                         raise ParseException('Could not parse the json body type')
+                elif expect_body_type == 'NONE':
+                    raise ParseException('Received a body, but no body is required')
                 elif expect_body_type == 'RAW':
                     pass
                 request.params['request_body'] = parsed_body
@@ -768,6 +772,83 @@ class SystemConfiguration(RestAPIEndpoint):
         return
 
 
+class Rfid(RestAPIEndpoint):
+    API_ENDPOINT = '/api/v1/rfid'
+
+    @Inject
+    def __init__(self, rfid_controller=INJECTED):
+        # type: (RfidController) -> None
+        super(Rfid, self).__init__()
+        self.rfid_controller = rfid_controller
+        self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
+        # --- GET ---
+        self.route_dispatcher.connect('get_rfids', '',
+                                      controller=self, action='get_rfids',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_rfid', '/:rfid_id',
+                                      controller=self, action='get_rfid',
+                                      conditions={'method': ['GET']})
+        # --- PUT ---
+        self.route_dispatcher.connect('put_start_add', '/add_new/start',
+                                      controller=self, action='put_start_add',
+                                      conditions={'method': ['PUT']})
+        self.route_dispatcher.connect('put_cancel_add', '/add_new/cancel',
+                                      controller=self, action='put_cancel_add',
+                                      conditions={'method': ['PUT']})
+        # --- DELETE ---
+        self.route_dispatcher.connect('delete_rfid', '/:rfid_id',
+                                      controller=self, action='delete_rfid',
+                                      conditions={'method': ['DELETE']})
+
+    @openmotics_api_v1(auth=True, pass_token=True)
+    def get_rfids(self, token=None):
+        rfids = self.rfid_controller.load_rfids()
+
+        # filter the rfids if the role is not a super user
+        if token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            rfids = [rfid for rfid in rfids if rfid.user.id == token.user.id]
+
+        rfids_serial = [RfidSerializer.serialize(rfid) for rfid in rfids]
+        return json.dumps(rfids_serial)
+
+    @openmotics_api_v1(auth=True, pass_token=True)
+    def get_rfid(self, rfid_id, token=None):
+        rfid = self.rfid_controller.load_rfid(rfid_id)
+
+        if rfid is None:
+            raise ItemDoesNotExistException('RFID tag with id {} does not exists'.format(rfid_id))
+
+        # filter the rfids if the role is not a super user
+        if token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            if rfid.user.id != token.user.id:
+                raise UnAuthorizedException('As a non admin or technician, you cannot request an rfid that is not yours')
+
+        rfid_serial = RfidSerializer.serialize(rfid)
+        return json.dumps(rfid_serial)
+
+    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON')
+    def put_start_add(self, rfid_id, token, request_body):
+        raise NotImplementedException("start add new rfid not implemented")
+
+    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='NONE')
+    def put_cancel_add(self, rfid_id, token):
+        raise NotImplementedException("start add new rfid not implemented")
+
+    @openmotics_api_v1(auth=True, pass_token=True)
+    def delete_rfid(self, rfid_id, token=None):
+        # first fetch the rfid tag to check if it exists and if the deletion is authorized
+        rfid = self.rfid_controller.load_rfid(rfid_id)
+        if rfid is None:
+            raise ItemDoesNotExistException("Cannot delete RFID: tag with id '{}' does not exist".format(rfid_id))
+
+        if token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            if rfid.user.id != token.user.id:
+                raise UnAuthorizedException('As a non admin or technician, you cannot delete an rfid that is not yours')
+
+        self.rfid_controller.delete_rfid(rfid_id)
+        return 'OK'
+
+
 @Injectable.named('web_service_v1')
 @Singleton
 class WebServiceV1(object):
@@ -778,7 +859,8 @@ class WebServiceV1(object):
             Users(),
             Apartments(),
             Deliveries(),
-            SystemConfiguration()
+            SystemConfiguration(),
+            Rfid()
         ]
 
     def start(self):

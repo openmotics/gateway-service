@@ -611,7 +611,7 @@ class RFID(BaseModel):
     label = CharField()
     timestamp_created = CharField(null=False)
     timestamp_last_used = CharField(null=True)
-    user_id = ForeignKeyField(User, null=False, backref='rfids', on_delete='CASCADE')
+    user = ForeignKeyField(User, null=False, backref='rfids', on_delete='CASCADE')
 
 
 class Delivery(BaseModel):
