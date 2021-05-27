@@ -17,14 +17,12 @@
 Base DTO
 """
 from functools import wraps
-
 import six
 
 from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Set, Any, List
-
 
 
 class DTOMeta(type):

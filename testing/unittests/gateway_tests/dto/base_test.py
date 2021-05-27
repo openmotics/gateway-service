@@ -52,9 +52,6 @@ class BaseDTOTest(unittest.TestCase):
         td_1_1 = TestFirstDTO(37)
         td_1_2 = TestFirstDTO(12)
         td_1_3 = TestFirstDTO(37)
-        print(td_1_1)
-        print(td_1_2)
-        print(td_1_3)
 
         td_2_1 = TestSecondDTO(37)
         td_2_2 = TestSecondDTO(12)
