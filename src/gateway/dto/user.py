@@ -40,7 +40,7 @@ class UserDTO(BaseDTO):
         self.last_name = last_name  # type: str
         self.role = role  # type: str
         self.pin_code = pin_code  # type: str
-        self.apartment = apartment  # type: ApartmentDTO
+        self.apartment = apartment  # type: Optional[ApartmentDTO]
         self.hashed_password = ''  # type: str
         self.language = language  # type: str
         self.is_active = is_active  # type: bool

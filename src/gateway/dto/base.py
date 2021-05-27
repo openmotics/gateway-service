@@ -23,7 +23,8 @@ import six
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Set, Any
+    from typing import Set, Any, List
+
 
 
 class DTOMeta(type):
@@ -36,19 +37,21 @@ class DTOMeta(type):
             func(self, *args, **kwargs)
         return new_init
 
-    def __init__(cls, name, bases, dct):
-        cls_init = cls.__init__
-        cls._field_names = Toolbox.get_parameter_names(cls_init)
-        cls._field_names.pop(0)  # Remove `self`
-        cls.__init__ = cls.capture_fields(cls_init)
+    def __init__(mcs, name, bases, dct):
+        cls_init = mcs.__init__  # type: ignore
+        mcs._field_names = Toolbox.get_parameter_names(cls_init)
+        mcs._field_names.pop(0)  # Remove `self`
+        mcs.__init__ = mcs.capture_fields(cls_init)  # type: ignore
 
 
 class BaseDTO(six.with_metaclass(DTOMeta)):
     _loaded_fields = set()  # type: Set[str]
     _init_done = False
+    _field_names = []  # type: List[str]
 
     # Create a dummy constructor to not have a slot-method in python2... This will make the meta class possible
     def __init__(self):
+        # type: () -> None
         pass
 
     def __str__(self):

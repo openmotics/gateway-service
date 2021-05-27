@@ -259,7 +259,7 @@ class ThermostatControllerGateway(ThermostatController):
                 output_level = output.dimmer
             return output_level
 
-        def get_temperature_from_sensor(sensor):  # type: (Sensor) -> Optional[float]
+        def get_temperature_from_sensor(sensor):  # type: (Optional[Sensor]) -> Optional[float]
             if sensor:
                 status = self._sensor_controller.get_sensor_status(sensor.id)
                 if status:

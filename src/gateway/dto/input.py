@@ -55,7 +55,6 @@ class InputDTO(BaseDTO):
 
 
 class InputStatusDTO(BaseDTO):
-    @capture_fields
     def __init__(self, id, status=False, updated_at=None):
         # type: (int, bool, Optional[float]) -> None
         self.id = id  # type: int
