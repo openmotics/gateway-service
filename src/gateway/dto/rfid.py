@@ -16,7 +16,7 @@
 """
 RFID DTO
 """
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Any
@@ -24,7 +24,6 @@ if False:  # MYPY
 
 
 class RfidDTO(BaseDTO):
-    @capture_fields
     def __init__(self, id, tag_string, uid_manufacturer, timestamp_created, user_dto,
                  uid_extension='', enter_count=-1, blacklisted=False, label='',
                  timestamp_last_used=''):

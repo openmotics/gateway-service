@@ -16,14 +16,13 @@
 """
 PulseCounter DTO
 """
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Optional
 
 
 class PulseCounterDTO(BaseDTO):
-    @capture_fields
     def __init__(self, id, name='', room=None, input_id=None, persistent=False):
         self.id = id  # type: int
         self.name = name  # type: str

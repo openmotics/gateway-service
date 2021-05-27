@@ -16,7 +16,7 @@
 """
 Module DTO
 """
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Optional
@@ -46,7 +46,6 @@ class ModuleDTO(BaseDTO):
         POWER = 'power'
         P1_CONCENTRATOR = 'p1_concentrator'
 
-    @capture_fields
     def __init__(self, source, address, module_type, hardware_type, firmware_version=None, hardware_version=None, order=None, online=None):
         self.source = source  # type: str
         self.address = address  # type: str

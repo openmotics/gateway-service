@@ -16,7 +16,7 @@
 """
 Sensor DTO
 """
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 from gateway.models import Sensor
 
 if False:  # MYPY
@@ -24,7 +24,6 @@ if False:  # MYPY
 
 
 class SensorDTO(BaseDTO):
-    @capture_fields
     def __init__(self, id, external_id=None, source=None, physical_quantity=None, unit=None, name='', room=None, offset=None, virtual=False):
         self.id = id  # type: int
         self.external_id = external_id  # type: str
@@ -38,7 +37,6 @@ class SensorDTO(BaseDTO):
 
 
 class SensorSourceDTO(BaseDTO):
-    @capture_fields
     def __init__(self, type, name=None):
         # type: (str, str) -> None
         self.type = type
@@ -54,7 +52,6 @@ class SensorSourceDTO(BaseDTO):
 
 
 class SensorStatusDTO(BaseDTO):
-    @capture_fields
     def __init__(self, id, value=None, last_value=None):
         # type: (int, Optional[float], Optional[float]) -> None
         self.id = id
@@ -70,7 +67,6 @@ class SensorStatusDTO(BaseDTO):
 
 
 class MasterSensorDTO(BaseDTO):
-    @capture_fields
     def __init__(self, id, name='', offset=None, virtual=False):
         self.id = id  # type: int
         self.name = name[:16]  # type: str

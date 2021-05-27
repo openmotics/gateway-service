@@ -17,15 +17,39 @@
 Base DTO
 """
 from functools import wraps
+
+import six
+
 from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Set, Any
 
 
-class BaseDTO(object):
+class DTOMeta(type):
+
+    def capture_fields(cls, func):
+        @wraps(func)
+        def new_init(self, *args, **kwargs):
+            self._loaded_fields = set(cls._field_names[:len(args)] + list(kwargs.keys()))
+            self._init_done = True
+            func(self, *args, **kwargs)
+        return new_init
+
+    def __init__(cls, name, bases, dct):
+        cls_init = cls.__init__
+        cls._field_names = Toolbox.get_parameter_names(cls_init)
+        cls._field_names.pop(0)  # Remove `self`
+        cls.__init__ = cls.capture_fields(cls_init)
+
+
+class BaseDTO(six.with_metaclass(DTOMeta)):
     _loaded_fields = set()  # type: Set[str]
     _init_done = False
+
+    # Create a dummy constructor to not have a slot-method in python2... This will make the meta class possible
+    def __init__(self):
+        pass
 
     def __str__(self):
         return '<{} {}>'.format(self.__class__.__name__,
@@ -44,14 +68,9 @@ class BaseDTO(object):
 
     def __eq__(self, other):
         # type: (Any) -> bool
-        # This only works with the generic DTO which uses the 'capture_fields' decorator
-        field_names = getattr(self.__class__.__init__, 'field_names', None)
-        if field_names is None:
-            return False
-
         if not isinstance(other, self.__class__):
             return False
-        for field in field_names:
+        for field in self._field_names:
             if getattr(self, field) != getattr(other, field):
                 return False
         return True
@@ -59,19 +78,3 @@ class BaseDTO(object):
     @property
     def loaded_fields(self):
         return list(self._loaded_fields)
-
-
-def capture_fields(func):
-    field_names = Toolbox.get_parameter_names(func)
-    field_names.pop(0)  # Remove `self`
-
-    # Assign the fieldnames to the function itself, this will make it possible to retrieve them later
-    func.field_names = field_names
-
-    @wraps(func)
-    def new_init(self, *args, **kwargs):
-        self._loaded_fields = set(field_names[:len(args)] + list(kwargs.keys()))
-        self._init_done = True
-        func(self, *args, **kwargs)
-
-    return new_init
