@@ -14,7 +14,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
-from ConfigParser import NoSectionError
 from logging import handlers
 import re
 
@@ -97,7 +96,7 @@ class Logs(object):
     @staticmethod
     def get_configured_loglevel(fallback=logging.INFO, override=None):
         import constants
-        from six.moves.configparser import ConfigParser, NoOptionError
+        from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
         if override is not None:
             return override
         try:
