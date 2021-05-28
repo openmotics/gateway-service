@@ -27,7 +27,7 @@ from gateway.daemon_thread import BaseThread
 from gateway.hal.master_controller import CommunicationFailure
 
 if False:  # MYPY
-    from typing import Literal
+    from typing import Literal, Any
     from serial import Serial
 
 
@@ -47,7 +47,7 @@ class CommunicationStatus:
 
 class Printable(object):
 
-    def __init__(self, data):  # type: (str) -> None
+    def __init__(self, data):  # type: (Any) -> None
         self.data = data
 
     def __str__(self):

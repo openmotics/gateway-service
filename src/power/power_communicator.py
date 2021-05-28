@@ -183,7 +183,7 @@ class PowerCommunicator(object):
         self.__serial.write(data)
         self.__communication_stats_bytes['bytes_written'] += len(data)
         threshold = time.time() - self.__debug_buffer_duration
-        self.__debug_buffer['write'][time.time()] = Printable(data)
+        self.__debug_buffer['write'][time.time()] = str(Printable(data))
         for t in self.__debug_buffer['write'].keys():
             if t < threshold:
                 del self.__debug_buffer['write'][t]

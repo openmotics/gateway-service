@@ -18,7 +18,7 @@ from logging import handlers
 import re
 
 if False:  # MYPY
-    from typing import Union
+    from typing import Union, Optional
 
 logger = logging.getLogger('openmotics')
 
