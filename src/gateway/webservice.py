@@ -1900,13 +1900,7 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(level=str, logger_name=str))
     def set_loglevel(self, level='INFO', logger_name=None):  # type: (str, Optional[str]) -> Dict
         level = level.upper()
-        if logger_name is None:
-            logger.info('Switching services loglevel to {}'.format(level))
-            Logs.set_services_loglevel(level=level)
-        else:
-            logger.info('Switching {} loglevel to {}'.format(logger_name, level))
-            _logger = logging.getLogger(logger_name)
-            _logger.setLevel(level=level)
+        Logs.set_service_loglevel(level, namespace=logger_name)
         return {'loglevel': level}
 
     # UART

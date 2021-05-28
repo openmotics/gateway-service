@@ -17,6 +17,7 @@ from __future__ import absolute_import
 
 import re
 
+from logs import Logs
 from platform_utils import Platform, System
 System.import_libs()
 
@@ -163,9 +164,7 @@ def setup_target_platform(target_platform, message_client_name):
     try:
         debug_logger = config.get('OpenMotics', 'debug_logger')
         if debug_logger:
-            for logger_namespace in logging.root.manager.loggerDict:  # type: ignore
-                if re.match("^{}.*".format(debug_logger), logger_namespace):
-                    logging.getLogger(logger_namespace).setLevel(logging.DEBUG)
+            Logs.set_service_loglevel(logging.DEBUG, namespace=debug_logger)
     except NoOptionError:
         pass
 

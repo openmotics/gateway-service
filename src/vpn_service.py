@@ -138,8 +138,6 @@ class Cloud(object):
         if self._url is None:
             logger.debug('Cloud not configured, skipping call home')
         try:
-            for collector_key, data in six.iteritems(extra_data):
-                logger.debug('Uploading {} bytes of extra data from {}'.format(len(json.dumps(data).encode('utf-8')), collector_key))
             request = requests.post(self._url,
                                     data={'extra_data': json.dumps(extra_data, sort_keys=True)},
                                     timeout=10.0)

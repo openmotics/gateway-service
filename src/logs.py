@@ -17,6 +17,11 @@ import logging
 from logging import handlers
 import re
 
+if False:  # MYPY
+    from typing import Union
+
+logger = logging.getLogger('openmotics')
+
 
 class Logs(object):
 
@@ -60,7 +65,7 @@ class Logs(object):
             syslog_handler.setLevel(openmotics_log_level)
             syslog_handler.setFormatter(logging.Formatter(Logs.LOG_FORMAT))
 
-        Logs.set_services_loglevel(openmotics_log_level)
+        Logs.set_service_loglevel(openmotics_log_level)
 
         for _logger in Logs._get_service_loggers():
             for extra_handler in [update_handler, syslog_handler]:
@@ -69,10 +74,18 @@ class Logs(object):
                     _logger.addHandler(extra_handler)
 
     @staticmethod
-    def set_services_loglevel(level=logging.INFO):
-        for _logger in Logs._get_service_loggers():
-            _logger.setLevel(level)
-            _logger.propagate = True
+    def set_service_loglevel(level, namespace=None):  # type: (Union[int, str], Optional[str]) -> None
+        if namespace:
+            logger.info('Switching %s loglevel to %s', namespace, level)
+            for logger_namespace in logging.root.manager.loggerDict:  # type: ignore
+                if re.match("^{}.*".format(namespace), logger_namespace):
+                    _logger = logging.getLogger(logger_namespace)
+                    _logger.setLevel(level)
+        else:
+            logger.info('Switching services loglevel to %s', level)
+            for _logger in Logs._get_service_loggers():
+                _logger.setLevel(level)
+                _logger.propagate = True
 
     @staticmethod
     def _get_service_loggers():
