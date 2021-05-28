@@ -17,7 +17,7 @@ CoreCommandSpec defines payload handling; (de)serialization
 """
 from __future__ import absolute_import
 import logging
-from serial_utils import printable
+from serial_utils import Printable
 from master.core.fields import PaddingField
 from master.core.fields import Field
 
@@ -77,14 +77,14 @@ class CoreCommandSpec(object):
             if callable(field_length):
                 field_length = field_length(payload_length)
             if len(payload) < field_length:
-                logger.warning('Payload for instruction {0} did not contain all the expected data: {1}'.format(self.instruction, printable(payload)))
+                logger.warning('Payload for instruction %s did not contain all the expected data: %s', self.instruction, Printable(payload))
                 break
             data = payload[:field_length]
             if not isinstance(field, PaddingField):
                 result[field.name] = field.decode(data)
             payload = payload[field_length:]
         if payload != bytearray():
-            logger.warning('Payload for instruction {0} could not be consumed completely: {1}'.format(self.instruction, printable(payload)))
+            logger.warning('Payload for instruction %s could not be consumed completely: %s', self.instruction, Printable(payload))
         return result
 
     def __eq__(self, other):

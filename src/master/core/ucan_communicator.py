@@ -25,7 +25,7 @@ from master.core.core_communicator import CoreCommunicator, BackgroundConsumer
 from master.core.exceptions import BootloadingException
 from master.core.ucan_command import SID, UCANCommandSpec
 from master.core.ucan_api import UCANAPI
-from serial_utils import CommunicationTimedOutException, printable
+from serial_utils import CommunicationTimedOutException, Printable
 
 if False:  # MYPY
     from typing import Optional, Dict, Any, Union, Callable, List
@@ -107,7 +107,7 @@ class UCANCommunicator(object):
         master_timeout = False
         for payload in command.create_request_payloads(identity, fields):
             if self._verbose:
-                logger.info('Writing to uCAN transport:   CC {0} - SID {1} - Data: {2}'.format(cc_address, command.sid, printable(payload)))
+                logger.info('Writing to uCAN transport:   CC %s - SID %s - Data: %s', cc_address, command.sid, Printable(payload))
             try:
                 self._communicator.do_command(command=CoreAPI.ucan_tx_transport_message(),
                                               fields={'cc_address': cc_address,
@@ -140,8 +140,7 @@ class UCANCommunicator(object):
         payload = package['payload'][:payload_length]  # type: bytearray
         sid = package['sid']  # type: int
         cc_address = package['cc_address']  # type: str
-        if self._verbose:
-            logger.info('Reading from uCAN transport: CC {0} - SID {1} - Data: {2}'.format(cc_address, sid, printable(payload)))
+        logger.debug('Reading from uCAN transport: CC %s - SID %s - Data: %s', cc_address, sid, Printable(payload))
 
         consumers = self._consumers.get(cc_address, [])
         for consumer in consumers[:]:

@@ -20,7 +20,7 @@ Provides a function for each API call.
 from __future__ import absolute_import
 import math
 
-from serial_utils import printable
+from serial_utils import Printable
 
 if False:  # MYPY
     from typing import Optional, Tuple, Dict, Any, List
@@ -447,7 +447,7 @@ class LiteralFieldType(FieldType):
         # type: (bytearray) -> str
         """ Checks if byte_str is the literal """
         if byte_str != self.literal:
-            raise ValueError('Byte array does not match literal: expected %s, got %s' % (printable(self.literal), printable(byte_str)))
+            raise ValueError('Byte array does not match literal: expected %s, got %s' % (Printable(self.literal), Printable(byte_str)))
         else:
             return ''
 

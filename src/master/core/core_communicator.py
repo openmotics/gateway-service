@@ -33,7 +33,7 @@ from master.core.core_api import CoreAPI
 from master.core.core_command import CoreCommandSpec
 from master.core.fields import WordField
 from master.core.toolbox import Toolbox
-from serial_utils import CommunicationTimedOutException, printable
+from serial_utils import CommunicationTimedOutException, Printable
 
 if False:  # MYPY
     from master.core.basic_action import BasicAction
@@ -122,7 +122,7 @@ class CoreCommunicator(object):
     def get_debug_buffer(self):
         # type: () -> Dict[str,Dict[float,str]]
         def process(buffer):
-            return {k: printable(v) for k, v in six.iteritems(buffer)}
+            return {k: str(Printable(v)) for k, v in six.iteritems(buffer)}
 
         return {'read': process(self._debug_buffer['read']),
                 'write': process(self._debug_buffer['write'])}
@@ -170,8 +170,7 @@ class CoreCommunicator(object):
         :param data: the data to write
         """
         with self._serial_write_lock:
-            if self._verbose:
-                logger.debug('Writing to Core serial:   {0}'.format(printable(data)))
+            logger.debug('Writing to Core serial:   %s', Printable(data))
 
             threshold = time.time() - self._debug_buffer_duration
             self._debug_buffer['write'][time.time()] = data
@@ -356,8 +355,7 @@ class CoreCommunicator(object):
                 data = data[message_length:]
 
                 # A possible message is received, log where appropriate
-                if self._verbose:
-                    logger.debug('Reading from Core serial: {0}'.format(printable(message)))
+                logger.debug('Reading from Core serial: %s', Printable(message))
                 threshold = time.time() - self._debug_buffer_duration
                 self._debug_buffer['read'][time.time()] = message
                 for t in self._debug_buffer['read'].keys():
@@ -367,7 +365,7 @@ class CoreCommunicator(object):
                 # Validate message boundaries
                 correct_boundaries = message.startswith(CoreCommunicator.START_OF_REPLY) and message.endswith(CoreCommunicator.END_OF_REPLY)
                 if not correct_boundaries:
-                    logger.info('Unexpected boundaries: {0}'.format(printable(message)))
+                    logger.warning('Unexpected boundaries: %s', Printable(message))
                     # Reset, so we'll wait for the next RTR
                     message_length = None
                     data = message[3:] + data  # Strip the START_OF_REPLY, and restore full data
@@ -379,7 +377,7 @@ class CoreCommunicator(object):
                 checked_payload = message[3:-4]  # type: bytearray
                 expected_crc = CoreCommunicator._calculate_crc(checked_payload)
                 if crc != expected_crc:
-                    logger.info('Unexpected CRC ({0} vs expected {1}): {2}'.format(crc, expected_crc, printable(checked_payload)))
+                    logger.warning('Unexpected CRC (%s vs expected %s): %s', crc, expected_crc, Printable(checked_payload))
                     # Reset, so we'll wait for the next RTR
                     message_length = None
                     data = message[3:] + data  # Strip the START_OF_REPLY, and restore full data
@@ -388,8 +386,7 @@ class CoreCommunicator(object):
                 # A valid message is received, reliver it to the correct consumer
                 consumers = self._consumers.get(header_fields['hash'], [])
                 for consumer in consumers[:]:
-                    if self._verbose:
-                        logger.debug('Delivering payload to consumer {0}.{1}: {2}'.format(header_fields['command'], header_fields['cid'], printable(payload)))
+                    logger.debug('Delivering payload to consumer %s.%s: %s', header_fields['command'], header_fields['cid'], Printable(payload))
                     consumer.consume(payload)
                     if isinstance(consumer, Consumer):
                         self.unregister_consumer(consumer)

@@ -23,7 +23,7 @@ from ioc import Injectable, Inject, INJECTED, Singleton
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import CoreCommunicator, BackgroundConsumer
 from master.core.slave_command import SlaveCommandSpec
-from serial_utils import CommunicationTimedOutException, printable
+from serial_utils import CommunicationTimedOutException, Printable
 
 if False:  # MYPY
     from typing import Optional, Dict, Any
@@ -103,8 +103,7 @@ class SlaveCommunicator(object):
 
         master_timeout = False
         payload = command.create_request_payload(fields)
-        if self._verbose:
-            logger.info('Writing to slave transport:   Address: {0} - Data: {1}'.format(address, printable(payload)))
+        logger.info('Writing to slave transport:   Address: %s - Data: %s', address, Printable(payload))
         try:
             self._communicator.do_command(command=CoreAPI.slave_tx_transport_message(len(payload)),
                                           fields={'payload': payload},
@@ -127,8 +126,7 @@ class SlaveCommunicator(object):
 
     def _process_transport_message(self, package):
         payload = package['payload']
-        if self._verbose:
-            logger.info('Reading from slave transport: Data: {0}'.format(printable(payload)))
+        logger.debug('Reading from slave transport: Data: %s', Printable(payload))
 
         self._read_buffer += payload
         if SlaveCommandSpec.RESPONSE_PREFIX not in self._read_buffer:

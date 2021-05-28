@@ -20,7 +20,7 @@ import logging
 import math
 from master.core.fields import Field, PaddingField, UInt32Field, StringField
 from master.core.toolbox import Toolbox
-from serial_utils import printable
+from serial_utils import Printable
 
 if False:  # MYPY
     from typing import Optional, List, Dict, Any, Iterator, Union, Callable
@@ -131,7 +131,7 @@ class UCANCommandSpec(object):
         for response_hash in self.headers:
             # Headers are ordered
             if response_hash not in payload:
-                logger.warning('Payload did not contain all the expected data: {0}'.format(printable(payload)))
+                logger.warning('Payload did not contain all the expected data: %s', Printable(payload))
                 return None
             response_instruction = self._response_instruction_by_hash[response_hash]
             payload_entry = payload[response_hash]
@@ -140,7 +140,7 @@ class UCANCommandSpec(object):
             crc = payload_entry[response_instruction.checksum_byte]
             expected_crc = UCANCommandSpec.calculate_crc(payload_entry[:response_instruction.checksum_byte])
             if crc != expected_crc:
-                logger.info('Unexpected CRC ({0} vs expected {1}): {2}'.format(crc, expected_crc, printable(payload_entry)))
+                logger.warning('Unexpected CRC (%s vs expected %s): %s', crc, expected_crc, Printable(payload_entry))
                 return None
             usefull_payload = payload_entry[self.header_length:response_instruction.checksum_byte]
             payload_data += usefull_payload
@@ -159,7 +159,7 @@ class UCANCommandSpec(object):
             if callable(field_length):
                 field_length = field_length(payload_length)
             if len(payload_data) < field_length:
-                logger.warning('Payload did not contain all the expected data: {0}'.format(printable(payload_data)))
+                logger.warning('Payload did not contain all the expected data: %s', Printable(payload_data))
                 break
             data = payload_data[:field_length]
             if not isinstance(field, PaddingField):
@@ -246,7 +246,7 @@ class UCANPalletCommandSpec(UCANCommandSpec):
             raise RuntimeError('UCANPalletCommandSpec can only consume bytearray payloads')
         crc = UCANPalletCommandSpec.calculate_crc(payload)
         if crc != 0:
-            logger.info('Unexpected pallet CRC ({0} != 0): {1}'.format(crc, printable(payload)))
+            logger.warning('Unexpected pallet CRC (%s != 0): %s', crc, Printable(payload))
             return None
         return self._parse_payload(payload[7:-4])
 

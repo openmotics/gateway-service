@@ -31,7 +31,7 @@ from gateway.hal.master_controller import CommunicationFailure
 from gateway.maintenance_controller import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import master_api
-from master.classic.master_command import Field, MasterCommandSpec, printable
+from master.classic.master_command import Field, MasterCommandSpec, Printable
 from serial_utils import CommunicationTimedOutException
 
 logger = logging.getLogger(__name__)
@@ -178,7 +178,7 @@ class MasterCommunicator(object):
     def get_debug_buffer(self):
         # type: () -> Dict[str,Dict[float,str]]
         def process(buffer):
-            return {k: printable(v) for k, v in six.iteritems(buffer)}
+            return {k: str(Printable(v)) for k, v in six.iteritems(buffer)}
 
         return {'read': process(self.__debug_buffer['read']),
                 'write': process(self.__debug_buffer['write'])}
@@ -206,9 +206,7 @@ class MasterCommunicator(object):
             raise MasterUnavailable()
 
         with self.__serial_write_lock:
-            if self.__verbose:
-                logger.debug('Writing to Master serial:   {0}'.format(printable(data)))
-
+            logger.debug('Writing to Master serial:   %s', Printable(data))
             threshold = time.time() - self.__debug_buffer_duration
             self.__debug_buffer['write'][time.time()] = data
             for t in self.__debug_buffer['write'].keys():
@@ -494,8 +492,7 @@ class MasterCommunicator(object):
                     if t < threshold:
                         del self.__debug_buffer['read'][t]
 
-                if self.__verbose:
-                    logger.debug('Reading from Master serial: {0}'.format(printable(data)))
+                logger.debug('Reading from Master serial: %s', Printable(data))
 
                 if read_state.should_resume():
                     data = read_state.consume(data)

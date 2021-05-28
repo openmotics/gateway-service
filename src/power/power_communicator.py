@@ -32,7 +32,7 @@ from power import power_api
 from power.power_command import PowerCommand
 from power.time_keeper import TimeKeeper
 from serial_utils import CommunicationStatus, CommunicationTimedOutException, \
-    printable
+    Printable
 
 if False:  # MYPY:
     from typing import Any, Dict, List, Literal, Optional, Tuple, Union
@@ -170,8 +170,8 @@ class PowerCommunicator(object):
 
     def __debug(self, action, data):
         # type: (str, Optional[bytearray]) -> None
-        if self.__verbose and data is not None:
-            logger.debug("%.3f %s power: %s" % (time.time(), action, printable(data)))
+        if data is not None:
+            logger.debug("%.3f %s power: %s", time.time(), action, Printable(data))
 
     def __write_to_serial(self, data):
         # type: (bytearray) -> None
@@ -183,7 +183,7 @@ class PowerCommunicator(object):
         self.__serial.write(data)
         self.__communication_stats_bytes['bytes_written'] += len(data)
         threshold = time.time() - self.__debug_buffer_duration
-        self.__debug_buffer['write'][time.time()] = printable(data)
+        self.__debug_buffer['write'][time.time()] = Printable(data)
         for t in self.__debug_buffer['write'].keys():
             if t < threshold:
                 del self.__debug_buffer['write'][t]
@@ -451,7 +451,7 @@ class PowerCommunicator(object):
             self.__debug('reading from', command)
 
         threshold = time.time() - self.__debug_buffer_duration
-        self.__debug_buffer['read'][time.time()] = printable(command)
+        self.__debug_buffer['read'][time.time()] = str(Printable(command))
         for t in self.__debug_buffer['read'].keys():
             if t < threshold:
                 del self.__debug_buffer['read'][t]
