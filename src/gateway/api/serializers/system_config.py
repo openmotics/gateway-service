@@ -22,12 +22,12 @@ from gateway.dto.system_config import SystemDoorbellConfigDTO, SystemRFIDConfigD
     SystemActivateUserConfigDTO
 
 if False:  #MyPy
-    from typing import Dict, Any
+    from typing import Dict, Any, Type
 
 
 class SystemConfigSerializer(object):
     TRANSLATION = {}  # type: Dict[str, str]  # KEYS = dto-naming, VALUES = api/serial-naming
-    DTO = None
+    DTO = None  # type: Type[BaseDTO]
 
     @classmethod
     def serialize(cls, dto_object):
