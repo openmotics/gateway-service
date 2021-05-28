@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
+from ConfigParser import NoSectionError
 from logging import handlers
 import re
 
@@ -102,7 +103,9 @@ class Logs(object):
         try:
             config = ConfigParser()
             config.read(constants.get_config_file())
-            log_level = config.get('OpenMotics', 'log_level')
+            log_level = config.get('logging', 'log_level')
             return logging._checkLevel(log_level) if log_level else fallback  # type: ignore
         except NoOptionError:
+            return fallback
+        except NoSectionError:
             return fallback

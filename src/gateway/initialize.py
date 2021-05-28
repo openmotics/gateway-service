@@ -30,7 +30,7 @@ from threading import Lock
 
 from peewee_migrate import Router
 from serial import Serial
-from six.moves.configparser import ConfigParser, NoOptionError
+from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
 from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
@@ -162,10 +162,12 @@ def setup_target_platform(target_platform, message_client_name):
 
     # Debugging options
     try:
-        debug_logger = config.get('OpenMotics', 'debug_logger')
-        if debug_logger:
-            Logs.set_service_loglevel(logging.DEBUG, namespace=debug_logger)
+        for (namespace, log_level) in config.items('logging_overrides'):
+            logger.info('Setting %s log level to %s', namespace, log_level)
+            Logs.set_service_loglevel(log_level.upper(), namespace=namespace)
     except NoOptionError:
+        pass
+    except NoSectionError:
         pass
 
     # Webserver / Presentation layer
