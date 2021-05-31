@@ -27,7 +27,7 @@ import unittest
 
 from serial import Serial
 
-from serial_utils import printable
+from serial_utils import Printable
 
 if False:  # MYPY
     from typing import List, Optional, Tuple
@@ -63,7 +63,7 @@ class DummyPty(object):
     def write(self, data):
         # type: (bytes) -> int
         if data != self._sequence[0]:
-            assert printable(self._sequence[0]) == printable(data)
+            assert str(Printable(self._sequence[0])) == str(Printable(data))
         self._sequence.pop(0)
         if self._replies:
             self.fd.write(self._replies[0])
@@ -122,7 +122,7 @@ class SerialMock(object):
 
         if bytearray(data) != self.__sequence[0][1]:
             raise Exception("Got wrong data in SerialMock:\n  expected %s,\n       got %s" %
-                            (printable(self.__sequence[0][1]), printable(data)))
+                            (Printable(self.__sequence[0][1]), Printable(data)))
         self.__sequence.pop(0)
         self.bytes_written += len(data)
 

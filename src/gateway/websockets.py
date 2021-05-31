@@ -24,7 +24,7 @@ from ws4py.server.cherrypyserver import WebSocketPlugin, WebSocketTool
 from ws4py.websocket import WebSocket
 from gateway.events import GatewayEvent
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class OMPlugin(WebSocketPlugin):

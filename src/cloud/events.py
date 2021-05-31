@@ -27,7 +27,7 @@ from gateway.input_controller import InputController
 from gateway.models import Config
 from ioc import INJECTED, Inject, Injectable, Singleton
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 if False:  # MYPY
     from typing import Dict
@@ -82,7 +82,7 @@ class EventSender(object):
             if not self._batch_send_events():
                 raise DaemonThreadWait
         except APIException as ex:
-            logger.error('Error sending events to the cloud: {}'.format(str(ex)))
+            logger.error('Error sending events to the cloud %', ex)
 
     def _batch_send_events(self):
         events = []

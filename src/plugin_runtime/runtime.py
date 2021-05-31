@@ -24,7 +24,7 @@ from plugin_runtime.web import WebInterfaceDispatcher
 from six.moves.configparser import ConfigParser, NoSectionError, NoOptionError
 from toolbox import PluginIPCReader, PluginIPCWriter, Toolbox
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 if False:  # MYPY
     from typing import Any, Callable, Dict, List, Optional, Union

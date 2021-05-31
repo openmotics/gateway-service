@@ -32,7 +32,7 @@ if False:  # MYPY
     from typing import Dict, List, Any
     T = TypeVar('T')
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class Database(object):
@@ -174,7 +174,6 @@ class Schedule(BaseModel):
     action = CharField()
     arguments = CharField(null=True)
     status = CharField()
-
 
 
 class Config(BaseModel):

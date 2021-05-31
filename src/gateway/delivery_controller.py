@@ -29,7 +29,7 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 if False:  # MyPy
     from typing import List, Optional
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('delivery_controller')

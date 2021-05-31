@@ -35,7 +35,7 @@ if False:  # MYPY
     from power.power_communicator import PowerCommunicator
     from power.power_store import PowerStore
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class PowerController(object):

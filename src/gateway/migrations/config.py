@@ -19,7 +19,7 @@ import constants
 from gateway.migrations.base_migrator import BaseMigrator
 from gateway.models import Config
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class ConfigMigrator(BaseMigrator):

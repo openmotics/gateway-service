@@ -24,7 +24,7 @@ if False:  # MYPY
     from gateway.hal.master_controller_classic import MasterClassicController
     from master.classic.eeprom_extension import EepromExtension
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class InputMigrator(BaseMigrator):

@@ -23,7 +23,7 @@ import logging
 from gateway.dto.apartment import ApartmentDTO
 from gateway.models import Apartment, User
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class ApartmentMapper(object):

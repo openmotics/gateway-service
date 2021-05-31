@@ -24,7 +24,7 @@ if False:  # MYPY
     from typing import Optional, Any
     from gateway.output_controller import OutputController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @Inject

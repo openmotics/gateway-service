@@ -29,7 +29,7 @@ if False:  # MYPY
     from gateway.hal.master_controller import MasterController
     from power.power_communicator import PowerCommunicator
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class FrontpanelController(object):

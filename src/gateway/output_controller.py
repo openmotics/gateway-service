@@ -40,7 +40,7 @@ if False:  # MYPY
     from typing import Dict, List, Optional, Tuple, Literal
     from gateway.hal.master_controller import MasterController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('output_controller')

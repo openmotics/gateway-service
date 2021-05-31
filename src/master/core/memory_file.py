@@ -34,7 +34,7 @@ from master.core.memory_types import MemoryAddress
 if False:  # MYPY
     from typing import List, Dict, Callable, Any, Optional, Tuple, Set
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class MemoryTypes(object):

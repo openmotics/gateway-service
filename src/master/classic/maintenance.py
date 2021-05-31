@@ -31,7 +31,7 @@ if False:  # MYPY
     from typing import Callable, Optional
     from master.classic.master_communicator import MasterCommunicator
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class MaintenanceClassicCommunicator(MaintenanceCommunicator):

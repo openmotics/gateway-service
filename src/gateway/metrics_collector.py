@@ -44,7 +44,7 @@ if False:  # MYPY
     from gateway.gateway_api import GatewayApi
     from gateway.dto import InputDTO, SensorDTO, OutputDTO, PulseCounterDTO
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('metrics_collector')

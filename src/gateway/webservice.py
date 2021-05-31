@@ -64,13 +64,14 @@ from gateway.uart_controller import UARTController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
 from ioc import INJECTED, Inject, Injectable, Singleton
+from logs import Logs
 from platform_utils import Hardware, Platform, System
 from power.power_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
-    from typing import Dict, Optional, Any, List, Literal
+    from typing import Dict, Optional, Any, List, Literal, Union
     from bus.om_bus_client import MessageClient
     from gateway.gateway_api import GatewayApi
     from gateway.group_action_controller import GroupActionController
@@ -92,7 +93,7 @@ if False:  # MYPY
     from gateway.ventilation_controller import VentilationController
     from plugins.base import PluginController
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class FloatWrapper(float):
@@ -637,7 +638,6 @@ class WebInterface(object):
         old_module, new_module = self._module_controller.replace_module(old_address, new_address)
         return {'old_module': ModuleSerializer.serialize(old_module, fields=None),
                 'new_module': ModuleSerializer.serialize(new_module, fields=None)}
-
 
     @openmotics_api(auth=True)
     def get_features(self):
@@ -1896,6 +1896,12 @@ class WebInterface(object):
         return {'eeprom': self._module_controller.get_configuration_dirty_flag(),
                 'power': power_dirty,
                 'orm': orm_dirty}
+
+    @openmotics_api(auth=True, check=types(level=str, logger_name=str))
+    def set_loglevel(self, level='INFO', logger_name=None):  # type: (str, Optional[str]) -> Dict
+        level = level.upper()
+        Logs.set_service_loglevel(level, namespace=logger_name)
+        return {'loglevel': level}
 
     # UART
 

@@ -36,7 +36,7 @@ if False:  # MYPY
     from typing import Dict, List, Optional, Set, Tuple
     from gateway.master_controller import MasterController
 
-logger = logging.getLogger('gateway.sensor_controller')
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('sensor_controller')

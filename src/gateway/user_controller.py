@@ -34,7 +34,7 @@ from gateway.enums import UserEnums
 if False:  # MYPY
     from typing import Tuple, List, Optional, Dict, Union
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 @Injectable.named('user_controller')
 @Singleton

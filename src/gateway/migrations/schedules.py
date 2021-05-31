@@ -24,7 +24,7 @@ from gateway.models import Schedule
 if False:  # MYPY
     from gateway.scheduling_controller import SchedulingController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class ScheduleMigrator(BaseMigrator):

@@ -46,7 +46,7 @@ if False:  # MYPY
     from gateway.system_controller import SystemController
     from gateway.sensor_controller import SensorController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class ThermostatControllerGateway(ThermostatController):

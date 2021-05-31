@@ -36,7 +36,7 @@ class SlaveCommunicatorTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        Logs.setup_logger(log_level=logging.DEBUG)
+        Logs.setup_logger(log_level_override=logging.DEBUG)
 
     def setUp(self):
         fakesleep.monkey_patch()

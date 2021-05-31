@@ -18,13 +18,13 @@ SlaveCommandSpec defines payload handling; (de)serialization
 from __future__ import absolute_import
 import logging
 from master.core.fields import Field, PaddingField, AddressField
-from serial_utils import printable
+from serial_utils import Printable
 
 if False:  # MYPY
     from typing import Optional, List, Dict, Any, Union, Callable
 
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class Instruction(object):
@@ -85,7 +85,7 @@ class SlaveCommandSpec(object):
         crc = SlaveCommandSpec.decode_crc(payload[-(self._response_footer_length - 1):-len(SlaveCommandSpec.RESPONSE_SUFFIX)])
         expected_crc = SlaveCommandSpec.decode_crc(SlaveCommandSpec.calculate_crc(payload[self._response_prefix_length:-self._response_footer_length]))
         if crc != expected_crc:
-            logger.info('Unexpected CRC ({0} vs expected {1}): {2}'.format(crc, expected_crc, printable(payload)))
+            logger.warning('Unexpected CRC (%s vs expected %s): %s', crc, expected_crc, Printable(payload))
             return None
         payload_data = payload[self.header_length + self._instruction_length:-self._response_footer_length]
         return self._parse_payload(payload_data)
@@ -100,7 +100,7 @@ class SlaveCommandSpec(object):
             if callable(field_length):
                 field_length = field_length(payload_length)
             if len(payload_data) < field_length:
-                logger.warning('Payload did not contain all the expected data: {0}'.format(printable(payload_data)))
+                logger.warning('Payload did not contain all the expected data: %s', Printable(payload_data))
                 break
             data = payload_data[:field_length]  # type: bytearray
             if not isinstance(field, PaddingField):

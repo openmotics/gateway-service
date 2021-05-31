@@ -37,7 +37,7 @@ if False:  # MYPY
     from gateway.shutter_controller import ShutterController
     from gateway.webservice import WebInterface
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('plugin_controller')

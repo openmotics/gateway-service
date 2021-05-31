@@ -26,7 +26,7 @@ from gateway.models import Plugin, Room, Sensor
 if False:  # MYPY
     from typing import Optional
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class SensorMapper(object):

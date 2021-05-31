@@ -32,7 +32,7 @@ from master.core.slave_api import SlaveAPI
 from master.core.ucan_communicator import UCANCommunicator
 from master.core.ucan_updater import UCANUpdater
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 if False:  # MYPY
     from typing import Tuple, Optional, List, Dict, Any, Union

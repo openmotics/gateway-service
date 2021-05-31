@@ -26,7 +26,7 @@ from gateway.dto.apartment import ApartmentDTO
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 class ApartmentSerializer(object):
     @staticmethod
