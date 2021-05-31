@@ -57,7 +57,7 @@ class Timer(object):
         PER_1_M = 3
 
     @staticmethod
-    def event_timer_type_to_seconds(timer_type, timer_value):  # type: (int, int) -> Optional[int]
+    def event_timer_type_to_seconds(timer_type, timer_value):  # type: (int, int) -> int
         if timer_type == Timer.EventTimerType.PER_1_S:
             return timer_value
         if timer_type == Timer.EventTimerType.PER_100_MS:

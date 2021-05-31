@@ -19,7 +19,7 @@ User DTO
 
 import hashlib
 
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Optional, Any
@@ -27,7 +27,6 @@ if False:  # MYPY
 
 
 class UserDTO(BaseDTO):
-    @capture_fields
     def __init__(self, id=None, username=None, first_name='', last_name='', role=None,
                  pin_code=None, apartment=None, language='English', accepted_terms=0,
                  is_active=None):
@@ -41,7 +40,7 @@ class UserDTO(BaseDTO):
         self.last_name = last_name  # type: str
         self.role = role  # type: str
         self.pin_code = pin_code  # type: str
-        self.apartment = apartment  # type: ApartmentDTO
+        self.apartment = apartment  # type: Optional[ApartmentDTO]
         self.hashed_password = ''  # type: str
         self.language = language  # type: str
         self.is_active = is_active  # type: bool

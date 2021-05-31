@@ -16,7 +16,7 @@
 System config dto's
 """
 
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 from toolbox import Toolbox
 
 if False:  # MYPY
@@ -24,14 +24,12 @@ if False:  # MYPY
 
 
 class SystemDoorbellConfigDTO(BaseDTO):
-    @capture_fields
     def __init__(self, enabled=None):
         # type: (bool) -> None
         self.enabled = enabled
 
 
 class SystemRFIDConfigDTO(BaseDTO):
-    @capture_fields
     def __init__(self, enabled=None, security_enabled=None, max_tags=None):
         # type: (bool, bool, int) -> None
         self.enabled = enabled
@@ -40,21 +38,18 @@ class SystemRFIDConfigDTO(BaseDTO):
 
 
 class SystemRFIDSectorBlockConfigDTO(BaseDTO):
-    @capture_fields
     def __init__(self, rfid_sector_block=None):
         # type: (int) -> None
         self.rfid_sector_block = rfid_sector_block
 
 
 class SystemTouchscreenConfigDTO(BaseDTO):
-    @capture_fields
     def __init__(self, calibrated=None):
         # type: (bool) -> None
         self.calibrated = calibrated
 
 
 class SystemGlobalConfigDTO(BaseDTO):
-    @capture_fields
     def __init__(self, device_name=None, country=None, postal_code=None, city=None, street=None, house_number=None, language=None):
         # type: (str, str, str, str, str, str, str) -> None
         self.device_name = device_name
@@ -67,7 +62,6 @@ class SystemGlobalConfigDTO(BaseDTO):
 
 
 class SystemActivateUserConfigDTO(BaseDTO):
-    @capture_fields
     def __init__(self, change_first_name=None, change_last_name=None, change_language=None, change_pin_code=None):
         # type: (bool, bool, bool, bool) -> None
         self.change_first_name = change_first_name

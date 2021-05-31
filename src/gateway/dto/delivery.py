@@ -18,7 +18,7 @@ Delivery DTO
 """
 from dateutil.parser import parse
 
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Any, Optional
@@ -27,7 +27,6 @@ if False:  # MYPY
 
 class DeliveryDTO(BaseDTO):
 
-    @capture_fields
     def __init__(self, id=None, type=None, timestamp_delivery=None, user_delivery=None, timestamp_pickup=None,
                  courier_firm=None, signature_delivery=None, signature_pickup=None, parcelbox_rebus_id=None,
                  user_pickup=None):

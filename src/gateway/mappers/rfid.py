@@ -31,17 +31,17 @@ class RfidMapper(object):
     @staticmethod
     def orm_to_dto(orm_object):
         # type: (RFID) -> RfidDTO
-        rfid_dto = RfidDTO(orm_object.id,
-                           orm_object.tag_string,
-                           orm_object.uid_manufacturer,
-                           orm_object.uid_extension,
-                           orm_object.enter_count,
-                           orm_object.blacklisted,
-                           orm_object.label,
-                           orm_object.timestamp_created,
-                           orm_object.timestamp_last_used,
-                           None)
-        user_orm = orm_object.user_id
+        rfid_dto = RfidDTO(id=orm_object.id,
+                           tag_string=orm_object.tag_string,
+                           uid_manufacturer=orm_object.uid_manufacturer,
+                           uid_extension=orm_object.uid_extension,
+                           enter_count=orm_object.enter_count,
+                           blacklisted=orm_object.blacklisted,
+                           label=orm_object.label,
+                           timestamp_created=orm_object.timestamp_created,
+                           timestamp_last_used=orm_object.timestamp_last_used,
+                           user=None)
+        user_orm = orm_object.user
         if user_orm is not None:
             user_dto = UserMapper.orm_to_dto(user_orm)
             rfid_dto.user = user_dto
@@ -50,19 +50,17 @@ class RfidMapper(object):
     @staticmethod
     def dto_to_orm(dto_object):
         # type: (RfidDTO) -> RFID
-        rfid = RFID.get_or_none(tag_string=dto_object.tag_string)
-        if rfid is None:
-            mandatory_fields = {'tag_string', 'uid_manufacturer', 'enter_count', 'label', 'user_id'}
+        rfid_orm = RFID.get_or_none(tag_string=dto_object.tag_string)
+        if rfid_orm is None:
+            mandatory_fields = {'tag_string', 'uid_manufacturer', 'enter_count', 'label', 'user'}
             if not mandatory_fields.issubset(set(dto_object.loaded_fields)):
                 raise ValueError('Cannot create rfid without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
+            rfid_orm = RFID()
 
-        rfid_orm = RFID()
         for field in dto_object.loaded_fields:
-            if getattr(rfid_orm, field, None) is None or getattr(rfid_orm, field, None) is None:
-                continue
-            if field == 'user_id':
+            if field == 'user':
                 user_orm = UserMapper.dto_to_orm(dto_object.user)
-                rfid_orm.user_id = user_orm
-                continue
-            setattr(rfid_orm, field, getattr(dto_object, field))
+                rfid_orm.user = user_orm
+            else:
+                setattr(rfid_orm, field, getattr(dto_object, field))
         return rfid_orm

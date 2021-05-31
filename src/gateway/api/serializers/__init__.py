@@ -38,6 +38,7 @@ from gateway.api.serializers.system_config import SystemDoorbellConfigSerializer
 from gateway.api.serializers.thermostat import PumpGroupSerializer, \
     ThermostatAircoStatusSerializer, ThermostatGroupSerializer, \
     ThermostatGroupStatusSerializer, ThermostatSerializer
+from gateway.api.serializers.rfid import RfidSerializer
 from gateway.api.serializers.user import UserSerializer
 from gateway.api.serializers.ventilation import VentilationSerializer, \
     VentilationStatusSerializer

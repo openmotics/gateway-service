@@ -16,7 +16,7 @@
 """
 Room DTO
 """
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 from gateway.dto.floor import FloorDTO
 
 if False:  # MYPY
@@ -24,7 +24,6 @@ if False:  # MYPY
 
 
 class RoomDTO(BaseDTO):
-    @capture_fields
     def __init__(self, id, name=None, floor=None):
         self.id = id  # type: int
         self.name = name  # type: Optional[str]

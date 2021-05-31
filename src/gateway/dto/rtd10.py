@@ -18,7 +18,7 @@ RTD10 related DTO
 """
 
 from collections import defaultdict
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 
 if False:
     from typing import Dict, DefaultDict, Optional
@@ -28,7 +28,6 @@ class GlobalRTD10DTO(BaseDTO):
     TEMPERATURES = [16.0, 16.5, 17.0, 17.5, 18.0, 18.5, 19.0, 19.5, 20.0, 20.5,
                     21.0, 21.5, 22.0, 22.5, 23.0, 23.5, 24.0]
 
-    @capture_fields
     def __init__(self, heating_values=None, cooling_values=None):
         # type: (Optional[Dict[float, int]], Optional[Dict[float, int]]) -> None
         self.heating_values = defaultdict(default_factory=lambda: 0)  # type: DefaultDict[float, int]
@@ -44,7 +43,6 @@ class GlobalRTD10DTO(BaseDTO):
 
 
 class RTD10DTO(BaseDTO):
-    @capture_fields
     def __init__(self, id, temp_setpoint_output=None,
                  ventilation_speed_output=None, ventilation_speed_value=None,
                  mode_output=None, mode_value=None,
