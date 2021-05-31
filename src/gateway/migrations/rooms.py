@@ -13,21 +13,22 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
 import logging
+import os
+
 import constants
-from ioc import INJECTED, Inject
 from gateway.migrations.base_migrator import BaseMigrator
-from gateway.models import (
-    Feature, Output, Room, Floor, Input, Sensor,
-    ShutterGroup, Shutter, PulseCounter
-)
+from gateway.models import Feature, Floor, Input, Output, PulseCounter, Room, \
+    Sensor, Shutter, ShutterGroup
+from ioc import INJECTED, Inject
 from platform_utils import Platform
 
 if False:  # MYPY
-    from typing import Dict, Optional, List, Any
+    from typing import Any, Callable, Dict, List, Optional, Tuple, Type
     from gateway.hal.master_controller_classic import MasterClassicController
+    from master.classic.eeprom_controller import EepromModel
     from master.classic.eeprom_extension import EepromExtension
+    from master.models import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +68,14 @@ class RoomsMigrator(BaseMigrator):
                 logger.exception('Could not migrate single RoomConfiguration')
 
         # Main objects
-        for eeprom_model, orm_model, filter_ in [(OutputConfiguration, Output, lambda o: True),
-                                                 (InputConfiguration, Input, lambda i: i.module_type in ['i', 'I']),
-                                                 (SensorConfiguration, Sensor, lambda s: True),
-                                                 (ShutterConfiguration, Shutter, lambda s: True),
-                                                 (ShutterGroupConfiguration, ShutterGroup, lambda s: True)]:
+        items = [
+            (OutputConfiguration, Output, lambda o: True),
+            (InputConfiguration, Input, lambda i: i.module_type in ['i', 'I']),
+            (SensorConfiguration, Sensor, lambda s: True),
+            (ShutterConfiguration, Shutter, lambda s: True),
+            (ShutterGroupConfiguration, ShutterGroup, lambda s: True)
+        ]  # type: List[Tuple[Type[EepromModel], Type[BaseModel], Callable[[Any],bool]]]
+        for eeprom_model, orm_model, filter_ in items:
             logger.info('* {0}s'.format(eeprom_model.__name__))
             try:
                 for classic_orm in master_controller._eeprom_controller.read_all(eeprom_model):
@@ -86,7 +90,12 @@ class RoomsMigrator(BaseMigrator):
                             room_id = int(RoomsMigrator._read_eext_fields(eext_controller, eeprom_model.__name__, object_id, ['room']).get('room', 255))
                         except ValueError:
                             room_id = 255
-                        object_orm, _ = orm_model.get_or_create(number=object_id)  # type: ignore
+                        if orm_model in (Sensor,):
+                            object_orm, _ = orm_model.get_or_create(source='master',
+                                                                    external_id=str(object_id),
+                                                                    defaults={'name': ''})
+                        else:
+                            object_orm, _ = orm_model.get_or_create(number=object_id)
                         if room_id == 255:
                             object_orm.room = None
                         else:
