@@ -124,9 +124,7 @@ run_shell () {
     echo "Running docker shell"
     echo "-------------------------------------"
 	$DOCKER_RUN_CMD \
-    bash -c "
-        bash
-        "
+    bash
     echo "Done!"
 }
 
@@ -178,13 +176,15 @@ do
             shift
         ;;
         venv)
-            set -o xtrace
             create_venv
-            set +o xtrace
             shift
         ;;
         run)
             run_gw_in_docker
+            shift
+        ;;
+        clean)
+            clean
             shift
         ;;
         *)
