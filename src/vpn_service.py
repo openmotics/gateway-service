@@ -59,7 +59,10 @@ logger = logging.getLogger('openmotics')
 
 class VpnController(object):
     """ Contains methods to check the vpn status, start and stop the vpn. """
-    if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
+    config = ConfigParser()
+    config.read(constants.get_config_file())
+    vpn_supervisor = config.get('OpenMotics', 'vpn_supervisor') == 'True' if config.has_option('OpenMotics', 'vpn_supervisor') else True
+    if System.get_operating_system().get('ID') == System.OS.BUILDROOT or not vpn_supervisor:
         vpn_binary = 'openvpn'
         config_location = '/etc/openvpn/client/'
         start_cmd = 'cd {} ; {} --suppress-timestamps --nobind --config vpn.conf > /dev/null'.format(config_location, vpn_binary)
