@@ -24,11 +24,12 @@ import uuid
 
 import constants
 from ioc import Injectable, Inject, Singleton, INJECTED
-from gateway.dto import UserDTO
+from gateway.dto import UserDTO, RfidDTO
 from gateway.enums import UserEnums
 from gateway.exceptions import ItemDoesNotExistException
 from gateway.mappers.user import UserMapper
-from gateway.models import User
+from gateway.models import User, RFID
+from gateway.rfid_controller import RfidController
 
 
 if False:  # MYPY
@@ -41,8 +42,9 @@ class AuthenticationController(object):
     TERMS_VERSION = 1
 
     @Inject
-    def __init__(self, token_timeout=INJECTED, token_store=INJECTED):
-        # type: (int, TokenStore) -> None
+    def __init__(self, token_timeout=INJECTED, token_store=INJECTED, rfid_controller=INJECTED):
+        # type: (int, TokenStore, RfidController) -> None
+        self._rfid_controller = rfid_controller
         self._token_timeout = token_timeout
         self.token_store = token_store  # type: TokenStore
         self.api_secret = AuthenticationController._retrieve_api_secret()
@@ -87,6 +89,32 @@ class AuthenticationController(object):
             token = self.token_store.create_token(UserMapper.orm_to_dto(user_orm), timeout=timeout)
             return True, token
         return False, UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED
+
+    def login_with_user_code(self, pin_code, accept_terms=False, timeout=None):
+        # type: (str, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
+        """  Login a user given a pin_code """
+        user_orm = User.select().where(
+            (User.pin_code == pin_code)
+        ).first()
+
+        if user_orm is None:
+            return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
+
+        user_dto = UserMapper.orm_to_dto(user_orm)
+        return self.login(user_dto, accept_terms=accept_terms, timeout=timeout)
+
+    def login_with_rfid_tag(self, rfid_tag_string, accept_terms=False, timeout=None):
+        # type: (str, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
+        """  Login a user given a UserDTO """
+        # rfid_orm = RFID.select().where(RFID.tag_string == rfid_tag_string).first()  # type: RFID
+        # if rfid_orm is None:
+        #     return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
+        # user_orm = rfid_orm.user
+        # user_dto = UserMapper.orm_to_dto(user_orm)
+        rfid_dto = self._rfid_controller.check_rfid_tag_for_login(rfid_tag_string)
+        if rfid_dto is None:
+            return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
+        return self.login(rfid_dto.user, accept_terms=accept_terms, timeout=timeout)
 
     def logout(self, token):
         self.token_store.remove_token(token)
@@ -212,6 +240,13 @@ class AuthenticationToken(object):
             return id_int
         except Exception as ex:
             raise RuntimeError('Could not get user id from token: {}'.format(ex))
+
+    def to_dict(self):
+        return {
+            'user_id': self.user.id,
+            'user_role': self.user.role,
+            'token': self.token
+        }
 
     def __repr__(self):
         return '<Auth Token: {}, username: {}, Expire_timestamp: {}>'.format(self.token, self.user.username, self.expire_timestamp)
