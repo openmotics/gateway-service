@@ -27,7 +27,7 @@ from gateway.uart_controller import UARTController
 if False:  # MYPY
     from typing import Optional
     from gateway.hal.master_controller import MasterController
-    from power.power_communicator import PowerCommunicator
+    from gateway.energy_module_controller import EnergyModuleController
 
 logger = logging.getLogger("openmotics")
 
@@ -88,10 +88,10 @@ class FrontpanelController(object):
         EXPANSION = 'EXPANSION'
 
     @Inject
-    def __init__(self, master_controller=INJECTED, power_communicator=INJECTED, uart_controller=INJECTED):
-        # type: (MasterController, PowerCommunicator, UARTController) -> None
+    def __init__(self, master_controller=INJECTED, energy_module_controller=INJECTED, uart_controller=INJECTED):
+        # type: (MasterController, EnergyModuleController, UARTController) -> None
         self._master_controller = master_controller
-        self._power_communicator = power_communicator
+        self._energy_module_controller = energy_module_controller
         self._uart_controller = uart_controller
         self._network_carrier = None
         self._network_activity = None
@@ -205,11 +205,8 @@ class FrontpanelController(object):
             self._report_serial_activity(FrontpanelController.SerialPorts.MASTER_API, activity)
             self._master_stats = new_master_stats
 
-            if self._power_communicator is None:
-                new_power_stats = 0, 0
-            else:
-                stats = self._power_communicator.get_communication_statistics()
-                new_power_stats = (stats['bytes_read'], stats['bytes_written'])
+            stats = self._energy_module_controller.get_communication_statistics()
+            new_power_stats = (stats['bytes_read'], stats['bytes_written'])
             activity = self._power_stats[0] != new_power_stats[0] or self._power_stats[1] != new_power_stats[1]
             self._report_serial_activity(FrontpanelController.SerialPorts.ENERGY, activity)
             self._power_stats = new_power_stats

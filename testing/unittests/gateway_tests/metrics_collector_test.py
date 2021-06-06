@@ -15,14 +15,11 @@
 from __future__ import absolute_import
 
 import unittest
-
 import mock
-
-from gateway.dto import SensorDTO, SensorStatusDTO
+from gateway.dto import SensorDTO, SensorStatusDTO, RealtimeEnergyDTO, EnergyModuleDTO, TotalEnergyDTO
 from gateway.metrics_collector import MetricsCollector
 from gateway.sensor_controller import SensorController
 from ioc import Scope, SetTestMode, SetUpTestInjections
-from power.power_api import RealtimePower
 
 
 class MetricsCollectorTest(unittest.TestCase):
@@ -32,18 +29,26 @@ class MetricsCollectorTest(unittest.TestCase):
 
     @Scope
     def setUp(self):
-        self.gateway_api = mock.Mock()
-        self.gateway_api.get_power_modules.return_value = [
-            {'id': 10, 'address': 11, 'version': 1,
-             'input0': 'foo', 'input1': 'bar', 'input2': 'baz',
-             'input3': '', 'input4': '', 'input5': '', 'input6': '',
-             'input7': ''}
+        dto_kwargs = {}
+        for i in range(8):
+            dto_kwargs.update({'input{0}'.format(i): '',
+                               'sensor{0}'.format(i): 2,
+                               'times{0}'.format(i): '',
+                               'inverted{0}'.format(i): False})
+        dto_kwargs.update({'input0': 'foo',
+                           'input1': 'bar',
+                           'input2': 'baz'})
+        self.em_controller = mock.Mock()
+        self.em_controller.load_modules.return_value = [
+            EnergyModuleDTO(id=10, address=11, version=1, name='foo',
+                            **dto_kwargs)
         ]
-        self.gateway_api.get_realtime_power.return_value = {}
-        self.gateway_api.get_realtime_p1.return_value = {}
-        self.gateway_api.get_total_energy.return_value = {}
+        self.em_controller.get_realtime_energy.return_value = {}
+        self.em_controller.get_realtime_p1.return_value = {}
+        self.em_controller.get_total_energy.return_value = {}
         self.sensor_controller = mock.Mock(SensorController)
-        SetUpTestInjections(gateway_api=self.gateway_api,
+        SetUpTestInjections(gateway_api=mock.Mock(),  # TODO: Remove
+                            energy_module_controller=self.em_controller,
                             pulse_counter_controller=mock.Mock(),
                             thermostat_controller=mock.Mock(),
                             output_controller=mock.Mock(),
@@ -65,17 +70,20 @@ class MetricsCollectorTest(unittest.TestCase):
             assert enqueue.call_args_list == [expected_call]
 
     def test_realtime_power_metrics(self):
-        self.gateway_api.get_realtime_power.return_value = {'10': [RealtimePower(10.0, 2.1, 5.0, 3.6)]}
+        self.em_controller.get_realtime_energy.return_value = {'10': [RealtimeEnergyDTO(voltage=10.0,
+                                                                                        frequency=2.1,
+                                                                                        current=5.0,
+                                                                                        power=3.6)]}
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
             self.controller._process_power_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy',
                                       tags={'type': 'openmotics', 'id': '11.0', 'name': 'foo'},
                                       values={'current': 5.0, 'frequency': 2.1, 'power': 3.6, 'voltage': 10.0})
-            assert enqueue.call_args_list == [expected_call]
+            self.assertEqual([expected_call], enqueue.call_args_list)
 
     def test_realtime_p1_electricity_metrics(self):
-        self.gateway_api.get_realtime_p1.return_value = [
+        self.em_controller.get_realtime_p1.return_value = [
             {'electricity': {'current': {'phase1': 1.1, 'phase2': 1.2, 'phase3': 1.3},
                              'ean': '1111111111111111111111111111',
                              'tariff_indicator': 2.0,
@@ -110,7 +118,7 @@ class MetricsCollectorTest(unittest.TestCase):
             assert enqueue.call_args_list == [expected_call]
 
     def test_realtime_p1_electricity_partial_metrics(self):
-        self.gateway_api.get_realtime_p1.return_value = [
+        self.em_controller.get_realtime_p1.return_value = [
             {'electricity': {'current': {'phase1': 1.1, 'phase2': None, 'phase3': None},
                              'ean': '1111111111111111111111111111',
                              'tariff_indicator': None,
@@ -138,7 +146,7 @@ class MetricsCollectorTest(unittest.TestCase):
             assert enqueue.call_args_list == [expected_call]
 
     def test_realtime_p1_electricity_no_metrics(self):
-        self.gateway_api.get_realtime_p1.return_value = [
+        self.em_controller.get_realtime_p1.return_value = [
             {'electricity': {'current': {'phase1': None, 'phase2': None, 'phase3': None},
                              'ean': '1111111111111111111111111111',
                              'tariff_indicator': None,
@@ -158,7 +166,7 @@ class MetricsCollectorTest(unittest.TestCase):
             assert enqueue.call_args_list == []
 
     def test_realtime_p1_gas_metrics(self):
-        self.gateway_api.get_realtime_p1.return_value = [
+        self.em_controller.get_realtime_p1.return_value = [
             {'electricity': {'ean': ''},
              'gas': {'ean': '2222222222222222222222222222',
                      'consumption': 2.3},
@@ -177,7 +185,7 @@ class MetricsCollectorTest(unittest.TestCase):
             assert enqueue.call_args_list == [expected_call]
 
     def test_realtime_p1_gas_no_metrics(self):
-        self.gateway_api.get_realtime_p1.return_value = [
+        self.em_controller.get_realtime_p1.return_value = [
             {'electricity': {'ean': ''},
              'gas': {'ean': '2222222222222222222222222222',
                      'consumption': None},
@@ -191,11 +199,11 @@ class MetricsCollectorTest(unittest.TestCase):
             assert enqueue.call_args_list == []
 
     def test_total_power_metrics(self):
-        self.gateway_api.get_total_energy.return_value = {'10': [[10.0, 2.1]]}
+        self.em_controller.get_total_energy.return_value = {'10': [TotalEnergyDTO(day=10, night=2)]}
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
             self.controller._process_power_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy',
                                       tags={'type': 'openmotics', 'id': '11.0', 'name': 'foo'},
-                                      values={'counter_day': 10.0, 'counter_night': 2.1, 'counter': 12.1})
-            assert enqueue.call_args_list == [expected_call]
+                                      values={'counter_day': 10, 'counter_night': 2, 'counter': 12})
+            self.assertEqual([expected_call], enqueue.call_args_list)

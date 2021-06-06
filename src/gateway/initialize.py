@@ -50,8 +50,6 @@ from master.core.core_communicator import CoreCommunicator
 from master.core.maintenance import MaintenanceCoreCommunicator
 from master.core.memory_file import MemoryFile, MemoryTypes
 from power.power_communicator import PowerCommunicator
-from power.power_controller import P1Controller, PowerController
-from power.power_store import PowerStore
 from serial_utils import RS485
 
 
@@ -192,14 +190,14 @@ def setup_target_platform(target_platform, message_client_name):
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
                          shutter_controller, system_controller, group_action_controller, module_controller,
                          ventilation_controller, webservice_v1, apartment_controller, delivery_controller,
-                         system_config_controller, rfid_controller)
+                         system_config_controller, rfid_controller, energy_module_controller)
     from cloud import events
     _ = (metrics_controller, webservice, scheduling_controller, gateway_api, metrics_collector,
          maintenance_controller, base, events, user_controller,
          pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
          sensor_controller, shutter_controller, system_controller, group_action_controller, module_controller,
          ventilation_controller, webservice_v1, apartment_controller, delivery_controller, system_config_controller,
-         rfid_controller)
+         rfid_controller, energy_module_controller)
 
     # IPC
     message_client = None
@@ -246,19 +244,12 @@ def setup_target_platform(target_platform, message_client_name):
     except NoOptionError:
         power_serial_port = ''
     if power_serial_port:
-        Injectable.value(power_db=constants.get_power_database_file())
-        Injectable.value(power_store=PowerStore())
         # TODO: make non blocking?
         Injectable.value(power_serial=RS485(Serial(power_serial_port, 115200, timeout=None)))
         Injectable.value(power_communicator=PowerCommunicator())
-        Injectable.value(power_controller=PowerController())
-        Injectable.value(p1_controller=P1Controller())
     else:
         Injectable.value(power_serial=None)
-        Injectable.value(power_store=None)
-        Injectable.value(power_communicator=None)  # TODO: remove from gateway_api
-        Injectable.value(power_controller=None)
-        Injectable.value(p1_controller=None)
+        Injectable.value(power_communicator=None)
 
     # UART Controller
     try:
@@ -383,15 +374,11 @@ def setup_minimal_power_platform():
     config.read(constants.get_config_file())
     power_serial_port = config.get('OpenMotics', 'power_serial')
     if power_serial_port:
-        Injectable.value(power_db=constants.get_power_database_file())
-        Injectable.value(power_store=PowerStore())
         Injectable.value(power_serial=RS485(Serial(power_serial_port, 115200, timeout=None)))
         Injectable.value(power_communicator=PowerCommunicator())
-        Injectable.value(power_controller=PowerController())
-        Injectable.value(p1_controller=P1Controller())
     else:
-        Injectable.value(power_store=None)
         Injectable.value(power_communicator=None)
-        Injectable.value(power_controller=None)
-        Injectable.value(p1_controller=None)
         Injectable.value(power_serial=None)
+    Injectable.value(master_controller=None)
+    from gateway import energy_module_controller
+    _ = energy_module_controller

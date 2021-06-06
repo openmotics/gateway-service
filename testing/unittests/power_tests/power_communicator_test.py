@@ -23,15 +23,21 @@ import unittest
 
 import xmlrunner
 from pytest import mark
+import os
+import tempfile
 
 import power.power_api as power_api
+from peewee import SqliteDatabase
 from gateway.pubsub import PubSub
 from gateway.hal.master_event import MasterEvent
+from gateway.models import Module, EnergyModule, EnergyCT
+from gateway.dto import ModuleDTO
 from ioc import SetTestMode, SetUpTestInjections
 from power.power_communicator import InAddressModeException, PowerCommunicator
-from power.power_store import PowerStore
 from serial_test import SerialMock, sin, sout
 from serial_utils import RS485, CommunicationTimedOutException
+
+MODELS = [Module, EnergyModule, EnergyCT]
 
 
 class PowerCommunicatorTest(unittest.TestCase):
@@ -40,21 +46,29 @@ class PowerCommunicatorTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
+        cls.db_filename = tempfile.mktemp()
+        cls.test_db = SqliteDatabase(cls.db_filename)
+
+    @classmethod
+    def tearDownClass(cls):
+        if os.path.exists(cls.db_filename):
+            os.remove(cls.db_filename)
 
     def setUp(self):
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub)
         self.power_data = []  # type: list
-        SetUpTestInjections(power_db=':memory:')
         self.serial = RS485(SerialMock(self.power_data))
-        self.store = PowerStore()
-        SetUpTestInjections(power_serial=self.serial,
-                            power_store=self.store)
+        SetUpTestInjections(power_serial=self.serial)
         self.communicator = PowerCommunicator()
+        self.test_db.bind(MODELS, bind_refs=True, bind_backrefs=True)
+        self.test_db.connect()
+        self.test_db.create_tables(MODELS)
 
     def tearDown(self):
-        self.communicator.stop()
         self.serial.stop()
+        self.test_db.drop_tables(MODELS)
+        self.test_db.close()
 
     def test_do_command(self):
         """ Test for standard behavior PowerCommunicator.do_command. """
@@ -64,7 +78,6 @@ class PowerCommunicatorTest(unittest.TestCase):
             sin(action.create_input(1, 1)), sout(action.create_output(1, 1, 49.5))
         ])
         self.serial.start()
-        self.communicator.start()
 
         output = self.communicator.do_command(1, action)
         self.assertEqual((49.5, ), output)
@@ -83,7 +96,6 @@ class PowerCommunicatorTest(unittest.TestCase):
             sout(action.create_output(1, 2, 49.5))
         ])
         self.serial.start()
-        self.communicator.start()
 
         output = self.communicator.do_command(1, action)
         self.assertEqual((49.5, ), output)
@@ -99,7 +111,6 @@ class PowerCommunicatorTest(unittest.TestCase):
             sout(bytearray())
         ])
         self.serial.start()
-        self.communicator.start()
 
         with self.assertRaises(CommunicationTimedOutException):
             self.communicator.do_command(1, action)
@@ -114,7 +125,6 @@ class PowerCommunicatorTest(unittest.TestCase):
             sout(out[:5]), sout(out[5:])
         ])
         self.serial.start()
-        self.communicator.start()
 
         output = self.communicator.do_command(1, action)
         self.assertEqual((49.5, ), output)
@@ -129,7 +139,6 @@ class PowerCommunicatorTest(unittest.TestCase):
             sout(action_2.create_output(3, 2, 49.5))
         ])
         self.serial.start()
-        self.communicator.start()
 
         with self.assertRaises(Exception):
             self.communicator.do_command(1, action_1)
@@ -151,19 +160,19 @@ class PowerCommunicatorTest(unittest.TestCase):
             sin(sad.create_input(power_api.BROADCAST_ADDRESS, 1, power_api.ADDRESS_MODE)),
             sin(sad_p1c.create_input(power_api.BROADCAST_ADDRESS, 2, power_api.ADDRESS_MODE)),
             sout(power_api.want_an_address(power_api.POWER_MODULE).create_output(0, 0)),
-            sin(power_api.set_address(power_api.POWER_MODULE).create_input(0, 0, 1)),
+            sin(power_api.set_address(power_api.POWER_MODULE).create_input(0, 0, 2)),
             sout(power_api.want_an_address(power_api.ENERGY_MODULE).create_output(0, 0)),
-            sin(power_api.set_address(power_api.ENERGY_MODULE).create_input(0, 0, 2)),
+            sin(power_api.set_address(power_api.ENERGY_MODULE).create_input(0, 0, 3)),
             sout(power_api.want_an_address(power_api.P1_CONCENTRATOR).create_output(0, 0)),
-            sin(power_api.set_address(power_api.P1_CONCENTRATOR).create_input(0, 0, 3)),
+            sin(power_api.set_address(power_api.P1_CONCENTRATOR).create_input(0, 0, 4)),
             sout(bytearray()),  # Timeout read after 1 second
             sin(sad.create_input(power_api.BROADCAST_ADDRESS, 3, power_api.NORMAL_MODE)),
             sin(sad_p1c.create_input(power_api.BROADCAST_ADDRESS, 4, power_api.NORMAL_MODE))
         ])
         self.serial.start()
-        self.communicator.start()
 
-        self.assertEqual(self.store.get_free_address(), 1)
+        self.assertEqual(0, len(Module.select().where(Module.source == ModuleDTO.Source.GATEWAY,
+                                                      Module.hardware_type == ModuleDTO.HardwareType.PHYSICAL)))
 
         self.communicator.start_address_mode()
         self.assertTrue(self.communicator.in_address_mode())
@@ -176,9 +185,11 @@ class PowerCommunicatorTest(unittest.TestCase):
         assert MasterEvent(MasterEvent.Types.POWER_ADDRESS_EXIT, {}) in events
         assert len(events) == 1
 
-        self.assertEqual(self.store.get_free_address(), 4)
-        self.assertFalse(self.communicator.in_address_mode())
+        modules = Module.select().where(Module.source == ModuleDTO.Source.GATEWAY,
+                                        Module.hardware_type == ModuleDTO.HardwareType.PHYSICAL)
+        self.assertEqual(['2', '3', '4'], [module.address for module in modules])
 
+        self.assertFalse(self.communicator.in_address_mode())
 
     @mark.slow
     def test_do_command_in_address_mode(self):
@@ -197,7 +208,6 @@ class PowerCommunicatorTest(unittest.TestCase):
             sout(action.create_output(1, 5, 49.5))
         ])
         self.serial.start()
-        self.communicator.start()
 
         self.communicator.start_address_mode()
         with self.assertRaises(InAddressModeException):
@@ -224,34 +234,11 @@ class PowerCommunicatorTest(unittest.TestCase):
         ])
         self.communicator = PowerCommunicator(address_mode_timeout=1)
         self.serial.start()
-        self.communicator.start()
 
         self.communicator.start_address_mode()
         time.sleep(1.1)
 
         self.assertEqual((49.5, ), self.communicator.do_command(1, action))
-
-    @mark.slow
-    def test_timekeeper(self):
-        """ Test the TimeKeeper. """
-        self.store.register_power_module(1, power_api.POWER_MODULE)
-
-        time_action = power_api.set_day_night(power_api.POWER_MODULE)
-        times = [power_api.NIGHT for _ in range(8)]
-        action = power_api.get_voltage(power_api.POWER_MODULE)
-
-        self.power_data.extend([
-            sin(time_action.create_input(1, 1, *times)),
-            sout(time_action.create_output(1, 1)),
-            sin(action.create_input(1, 2)),
-            sout(action.create_output(1, 2, 243))
-        ])
-        self.communicator = PowerCommunicator(time_keeper_period=1)
-        self.serial.start()
-        self.communicator.start()
-
-        time.sleep(1.5)
-        self.assertEqual((243, ), self.communicator.do_command(1, action))
 
 
 if __name__ == "__main__":

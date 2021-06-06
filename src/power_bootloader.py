@@ -30,6 +30,12 @@ from serial_utils import CommunicationTimedOutException
 from power import power_api
 from gateway.initialize import setup_minimal_power_platform
 
+if False:  # MYPY
+    from typing import Tuple
+    from power.power_communicator import PowerCommunicator
+    from gateway.energy_module_controller import EnergyModuleController
+    from serial_utils import RS485
+
 logger = logging.getLogger("openmotics")
 
 
@@ -278,16 +284,17 @@ def main():
     setup_minimal_power_platform()
 
     @Inject
-    def _get_from_ioc(power_store=INJECTED, power_communicator=INJECTED, power_serial=INJECTED):
-        return power_store, power_communicator, power_serial
+    def _get_from_ioc(energy_module_controller=INJECTED, power_communicator=INJECTED, power_serial=INJECTED):
+        # type: (EnergyModuleController, PowerCommunicator, RS485) -> Tuple[EnergyModuleController, PowerCommunicator, RS485]
+        return energy_module_controller, power_communicator, power_serial
 
-    store, communicator, serial = _get_from_ioc()
+    controller, communicator, serial = _get_from_ioc()
 
     if serial is None:
         logger.info('Energy bus is disabled. Skipping...')
         return
-    if store is None:
-        logger.error('Database could not be loaded. Aborting...')
+    if controller is None:
+        logger.error('Controller could not be loaded. Aborting...')
         return
     if communicator is None:
         logger.error('Could not load communicator. Aborting...')
@@ -317,11 +324,11 @@ def main():
 
     def _bootload(_module, _module_address, filename):
         try:
-            if version == _module['version'] == power_api.POWER_MODULE:
+            if version == _module.version == power_api.POWER_MODULE:
                 bootload_power_module(_module_address, filename, communicator, args.firmware_version)
-            elif version == _module['version'] == power_api.ENERGY_MODULE:
+            elif version == _module.version == power_api.ENERGY_MODULE:
                 bootload_energy_module(_module_address, filename, communicator, args.firmware_version)
-            elif version == _module['version'] == power_api.P1_CONCENTRATOR:
+            elif version == _module.version == power_api.P1_CONCENTRATOR:
                 bootload_p1_concentrator(_module_address, filename, communicator, args.firmware_version)
         except CommunicationTimedOutException:
             logger.warning('E{0} - Module unavailable. Skipping...'.format(address))
@@ -329,15 +336,14 @@ def main():
             logger.exception('E{0} - Unexpected exception during bootload. Skipping...'.format(address))
 
     if args.address or args.all:
-        power_modules = store.get_power_modules()
+        power_modules = controller.load_modules()
         if args.all:
-            for module_id in power_modules:
-                module = power_modules[module_id]
-                address = module['address']
+            for module in power_modules:
+                address = module.address
                 _bootload(module, address, args.file)
         else:
             address = args.address
-            modules = [module for module in power_modules.values() if module['address'] == address]
+            modules = [module for module in power_modules if module.address == address]
             if len(modules) != 1:
                 logger.info('ERROR: Cannot find a module with address {0}'.format(address))
                 sys.exit(0)

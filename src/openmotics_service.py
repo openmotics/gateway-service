@@ -36,6 +36,7 @@ from ioc import INJECTED, Inject
 from logs import Logs
 
 if False:  # MYPY
+    from gateway.energy_module_controller import EnergyModuleController
     from gateway.output_controller import OutputController
     from gateway.group_action_controller import GroupActionController
     from gateway.input_controller import InputController
@@ -59,7 +60,6 @@ if False:  # MYPY
     from gateway.hal.frontpanel_controller import FrontpanelController
     from gateway.uart_controller import UARTController
     from plugins.base import PluginController
-    from power.power_communicator import PowerCommunicator
     from master.classic.passthrough import PassthroughService
     from cloud.events import EventSender
     from serial_utils import RS485
@@ -115,7 +115,6 @@ class OpenmoticsService(object):
     @Inject
     def start(master_controller=INJECTED,  # type: MasterController
               maintenance_controller=INJECTED,  # type: MaintenanceController
-              power_communicator=INJECTED,  # type: PowerCommunicator
               power_serial=INJECTED,  # type: RS485
               metrics_controller=INJECTED,  # type: MetricsController
               passthrough_service=INJECTED,  # type: PassthroughService
@@ -140,7 +139,8 @@ class OpenmoticsService(object):
               ventilation_controller=INJECTED,  # type: VentilationController
               pubsub=INJECTED,  # type: PubSub
               web_service_v1=INJECTED,  # type: WebServiceV1
-              uart_controller=INJECTED  # type: UARTController
+              uart_controller=INJECTED,  # type: UARTController
+              energy_module_controller=INJECTED  # type: EnergyModuleController
               ):
         """ Main function. """
         logger.info('Starting OM core service...')
@@ -167,9 +167,8 @@ class OpenmoticsService(object):
 
         # Start rest of the stack
         maintenance_controller.start()
-        if power_communicator:
+        if power_serial:
             power_serial.start()
-            power_communicator.start()
         metrics_controller.start()
         if passthrough_service:
             passthrough_service.start()
@@ -186,6 +185,7 @@ class OpenmoticsService(object):
         event_sender.start()
         watchdog.start()
         plugin_controller.start()
+        energy_module_controller.start()
         output_controller.start()
         input_controller.start()
         pulse_counter_controller.start()
@@ -207,6 +207,7 @@ class OpenmoticsService(object):
             watchdog.stop()
             if uart_controller:
                 uart_controller.stop()
+            energy_module_controller.stop()
             output_controller.stop()
             input_controller.stop()
             pulse_counter_controller.stop()
@@ -215,8 +216,6 @@ class OpenmoticsService(object):
             shutter_controller.stop()
             group_action_controller.stop()
             web_service.stop()
-            if power_communicator:
-                power_communicator.stop()
             master_controller.stop()
             maintenance_controller.stop()
             metrics_collector.stop()

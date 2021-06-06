@@ -15,6 +15,7 @@
 
 from gateway.mappers.apartment import ApartmentMapper
 from gateway.mappers.delivery import DeliveryMapper
+from gateway.mappers.energy import EnergyModuleMapper
 from gateway.mappers.floor import FloorMapper
 from gateway.mappers.thermostat import ThermostatMapper
 from gateway.mappers.pulse_counter import PulseCounterMapper

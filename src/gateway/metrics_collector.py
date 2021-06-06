@@ -35,6 +35,7 @@ from power import power_api
 
 if False:  # MYPY
     from typing import Dict, Any, List, Optional, Tuple
+    from gateway.energy_module_controller import EnergyModuleController
     from gateway.input_controller import InputController
     from gateway.output_controller import OutputController
     from gateway.sensor_controller import SensorController
@@ -73,7 +74,7 @@ class MetricsCollector(object):
     @Inject
     def __init__(self, gateway_api=INJECTED, pulse_counter_controller=INJECTED, thermostat_controller=INJECTED,
                  output_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
-                 module_controller=INJECTED):
+                 module_controller=INJECTED, energy_module_controller=INJECTED):
         self._start = time.time()
         self._last_service_uptime = 0
         self._stopped = True
@@ -106,6 +107,7 @@ class MetricsCollector(object):
         self._input_controller = input_controller  # type: InputController
         self._sensor_controller = sensor_controller  # type: SensorController
         self._module_controller = module_controller  # type: ModuleController
+        self._energy_module_controller = energy_module_controller  # type: EnergyModuleController
         self._metrics_queue = deque()  # type: deque
 
     def start(self):
@@ -670,17 +672,17 @@ class MetricsCollector(object):
         mapping = {}
         power_data = {}
         try:
-            for power_module in self._gateway_api.get_power_modules():
-                device_id = '{0}.{{0}}'.format(power_module['address'])
-                mapping[str(power_module['id'])] = device_id
-                for i in range(power_api.NUM_PORTS[power_module['version']]):
-                    power_data[device_id.format(i)] = {'name': power_module['input{0}'.format(i)]}
+            for power_module in self._energy_module_controller.load_modules():
+                device_id = '{0}.{{0}}'.format(power_module.address)
+                mapping[str(power_module.id)] = device_id
+                for i in range(power_api.NUM_PORTS[power_module.version]):
+                    power_data[device_id.format(i)] = {'name': getattr(power_module, 'input{0}'.format(i))}
         except CommunicationFailure as ex:
             logger.error('Error getting power modules: {}'.format(ex))
         except Exception as ex:
             logger.exception('Error getting power modules: {0}'.format(ex))
         try:
-            realtime_power_data = self._gateway_api.get_realtime_power()
+            realtime_power_data = self._energy_module_controller.get_realtime_energy()
             for module_id, device_id in mapping.items():
                 if module_id in realtime_power_data:
                     for index, realtime_power in enumerate(realtime_power_data[module_id]):
@@ -695,7 +697,7 @@ class MetricsCollector(object):
         except Exception as ex:
             logger.exception('Error getting realtime power: {0}'.format(ex))
         try:
-            for realtime_p1 in self._gateway_api.get_realtime_p1():
+            for realtime_p1 in self._energy_module_controller.get_realtime_p1():
                 electricity_p1 = realtime_p1.get('electricity', {})
                 if electricity_p1.get('ean'):
                     values = {'electricity_consumption_tariff1': convert_kwh(electricity_p1['consumption_tariff1']),
@@ -733,11 +735,11 @@ class MetricsCollector(object):
         except Exception as ex:
             logger.exception('Error getting realtime power: {0}'.format(ex))
         try:
-            total_energy = self._gateway_api.get_total_energy()
+            total_energy = self._energy_module_controller.get_total_energy()
             for module_id, device_id in mapping.items():
                 if module_id in total_energy:
                     for index, entry in enumerate(total_energy[module_id]):
-                        day, night = entry
+                        day, night = entry.day, entry.night
                         total = None
                         if day is not None and night is not None:
                             total = day + night

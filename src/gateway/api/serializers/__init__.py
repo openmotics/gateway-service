@@ -15,6 +15,7 @@
 
 from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.api.serializers.delivery import DeliverySerializer
+from gateway.api.serializers.energy import EnergyModuleSerializer
 from gateway.api.serializers.global_feedback import GlobalFeedbackSerializer
 from gateway.api.serializers.group_action import GroupActionSerializer
 from gateway.api.serializers.input import InputSerializer, InputStateSerializer

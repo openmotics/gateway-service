@@ -26,7 +26,6 @@ from gateway.models import Module
 from gateway.module_controller import ModuleController
 from gateway.pubsub import PubSub
 from ioc import SetTestMode, SetUpTestInjections
-from power.power_controller import PowerController
 
 MODELS = [Module]
 
@@ -44,11 +43,13 @@ class ModuleControllerTest(unittest.TestCase):
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub)
         self.master_controller = mock.Mock(MasterController)
-        self.power_controller = mock.Mock(PowerController)
         SetUpTestInjections(master_controller=self.master_controller,
-                            power_controller=self.power_controller,
                             maintenance_controller=mock.Mock())
         self.controller = ModuleController()
+        module = Module(address=2,
+                        source=ModuleDTO.Source.GATEWAY,
+                        hardware_type=ModuleDTO.HardwareType.PHYSICAL)
+        module.save()
 
     def tearDown(self):
         self.test_db.drop_tables(MODELS)
@@ -63,18 +64,9 @@ class ModuleControllerTest(unittest.TestCase):
                                     hardware_version='4',
                                     order=0,
                                     online=True)]
-        energy_modules = [ModuleDTO(source=ModuleDTO.Source.GATEWAY,
-                                    module_type=ModuleDTO.ModuleType.ENERGY,
-                                    address='2',
-                                    hardware_type=ModuleDTO.HardwareType.PHYSICAL,
-                                    firmware_version='1.2.3',
-                                    order=0,
-                                    online=True)]
         self.master_controller.get_modules_information.return_value = master_modules
-        self.power_controller.get_modules_information.return_value = energy_modules
         self.controller.run_sync_orm()
         self.assertEqual(master_modules, self.controller.load_master_modules())
-        self.assertEqual(energy_modules, self.controller.load_energy_modules())
         self.assertEqual([], self.controller.load_master_modules(address='000.000.000.000'))
 
     def test_module_offline(self):
@@ -86,7 +78,6 @@ class ModuleControllerTest(unittest.TestCase):
                         hardware_version='4',
                         order=0)
         self.master_controller.get_modules_information.return_value = [dto]
-        self.power_controller.get_modules_information.return_value = []
         self.controller.run_sync_orm()
         received_dto = self.controller.load_master_modules()[0]
         self.assertIsNone(received_dto.firmware_version)

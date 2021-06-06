@@ -29,7 +29,6 @@ from gateway.mappers.module import ModuleMapper
 if False:  # MYPY
     from typing import Dict, List, Optional, Any
     from gateway.hal.master_controller import MasterController
-    from power.power_controller import PowerController
 
 logger = logging.getLogger("openmotics")
 
@@ -39,10 +38,9 @@ logger = logging.getLogger("openmotics")
 class ModuleController(BaseController):
 
     @Inject
-    def __init__(self, master_controller=INJECTED, power_controller=INJECTED):
-        # type: (MasterController, Optional[PowerController]) -> None
+    def __init__(self, master_controller=INJECTED):
+        # type: (MasterController) -> None
         super(ModuleController, self).__init__(master_controller, sync_interval=None)
-        self._power_controller = power_controller
 
     def _sync_orm(self):
         # type: () -> bool
@@ -58,8 +56,6 @@ class ModuleController(BaseController):
             ids = []
             module_dtos = []
             module_dtos += self._master_controller.get_modules_information()
-            if self._power_controller:
-                module_dtos += self._power_controller.get_modules_information()
             for dto in module_dtos:
                 module = Module.get_or_none(source=dto.source,
                                             address=dto.address)

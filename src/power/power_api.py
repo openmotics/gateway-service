@@ -18,11 +18,8 @@ Contains the definition of the power modules Api.
 
 from __future__ import absolute_import
 
-from collections import namedtuple
-
 from power.power_command import PowerCommand, PowerModuleType
-
-RealtimePower = namedtuple('RealtimePower', ('voltage', 'frequency', 'current', 'power'))
+from gateway.exceptions import UnsupportedException
 
 if False:  # MYPY
     from typing import Optional
@@ -55,10 +52,9 @@ def get_general_status(version):
     """
     if version == POWER_MODULE:
         return PowerCommand('G', 'GST', '', 'H')
-    elif version == ENERGY_MODULE:
+    if version == ENERGY_MODULE:
         return PowerCommand('G', 'GST', '', 'B')
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_time_on(version):
@@ -69,8 +65,7 @@ def get_time_on(version):
     """
     if version == POWER_MODULE or version == ENERGY_MODULE:
         return PowerCommand('G', 'TON', '', 'L')
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_feed_status(version):
@@ -81,10 +76,9 @@ def get_feed_status(version):
     """
     if version == POWER_MODULE:
         return PowerCommand('G', 'FST', '', '8H')
-    elif version == ENERGY_MODULE:
+    if version == ENERGY_MODULE:
         return PowerCommand('G', 'FST', '', '12I')
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_feed_counter(version):
@@ -95,8 +89,7 @@ def get_feed_counter(version):
     """
     if version == POWER_MODULE or version == ENERGY_MODULE:
         return PowerCommand('G', 'FCO', '', 'H')
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_status_p1(version):
@@ -104,19 +97,17 @@ def get_status_p1(version):
     """ Gets the status from a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'SP\x00', '', 'B', module_type=PowerModuleType.C)
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
-def get_meter_p1(version, type=None):
+def get_meter_p1(version, meter_type=None):
     # type: (int, Optional[int]) -> PowerCommand
     """ Gets the meter id from a P1 concentrator """
     if version == P1_CONCENTRATOR:
-        if type not in (1, 2):
+        if meter_type not in (1, 2):
             raise ValueError('Unknown meter type')
-        return PowerCommand('G', 'M{0}\x00'.format(type), '', '224s', module_type=PowerModuleType.C)
-    else:
-        raise ValueError("Unknown power api version")
+        return PowerCommand('G', 'M{0}\x00'.format(meter_type), '', '224s', module_type=PowerModuleType.C)
+    raise UnsupportedException()
 
 
 def get_timestamp_p1(version):
@@ -124,8 +115,7 @@ def get_timestamp_p1(version):
     """ Gets the timestamp from a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'TS\x00', '', '104s', module_type=PowerModuleType.C)
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_gas_consumption_p1(version):
@@ -133,30 +123,27 @@ def get_gas_consumption_p1(version):
     """ Gets the gas consumption from a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'cG\x00', '', '112s', module_type=PowerModuleType.C)
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
-def get_consumption_tariff_p1(version, type=None):
+def get_consumption_tariff_p1(version, tariff_type=None):
     # type: (int, Optional[int]) -> PowerCommand
     """ Gets the electricity consumption tariff from a P1 concentrator """
     if version == P1_CONCENTRATOR:
-        if type not in (1, 2):
+        if tariff_type not in (1, 2):
             raise ValueError('Unknown tariff type')
-        return PowerCommand('G', 'c{0}\x00'.format(type), '', '112s', module_type=PowerModuleType.C)
-    else:
-        raise ValueError("Unknown power api version")
+        return PowerCommand('G', 'c{0}\x00'.format(tariff_type), '', '112s', module_type=PowerModuleType.C)
+    raise UnsupportedException()
 
 
-def get_injection_tariff_p1(version, type=None):
+def get_injection_tariff_p1(version, tariff_type=None):
     # type: (int, Optional[int]) -> PowerCommand
     """ Gets the injection tariff from a P1 concentrator """
     if version == P1_CONCENTRATOR:
-        if type not in (1, 2):
+        if tariff_type not in (1, 2):
             raise ValueError('Unknown tariff type')
-        return PowerCommand('G', 'i{0}\x00'.format(type), '', '112s', module_type=PowerModuleType.C)
-    else:
-        raise ValueError("Unknown power api version")
+        return PowerCommand('G', 'i{0}\x00'.format(tariff_type), '', '112s', module_type=PowerModuleType.C)
+    raise UnsupportedException()
 
 
 def get_tariff_indicator_p1(version):
@@ -164,8 +151,7 @@ def get_tariff_indicator_p1(version):
     """ Gets the tariff indicator from a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'ti\x00', '', '32s', module_type=PowerModuleType.C)
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_voltage(version, phase=None):
@@ -186,8 +172,7 @@ def get_voltage(version, phase=None):
         if phase is None:
             raise ValueError('A phase is required')
         return PowerCommand('G', 'V{0}\x00'.format(phase), '', '56s', module_type=PowerModuleType.C)
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_frequency(version):
@@ -198,10 +183,9 @@ def get_frequency(version):
     """
     if version == POWER_MODULE:
         return PowerCommand('G', 'FRE', '', 'f')
-    elif version == ENERGY_MODULE:
+    if version == ENERGY_MODULE:
         return PowerCommand('G', 'FRE', '', '12f')
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_current(version, phase=None):
@@ -222,8 +206,7 @@ def get_current(version, phase=None):
         if phase is None:
             raise ValueError('A phase is required')
         return PowerCommand('G', 'C{0}\x00'.format(phase), '', '40s', module_type=PowerModuleType.C)
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_power(version):
@@ -234,10 +217,9 @@ def get_power(version):
     """
     if version == POWER_MODULE:
         return PowerCommand('G', 'POW', '', '8f')
-    elif version == ENERGY_MODULE:
+    if version == ENERGY_MODULE:
         return PowerCommand('G', 'POW', '', '12f')
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_delivered_power(version):
@@ -245,8 +227,7 @@ def get_delivered_power(version):
     """ Gets the delivered power of a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'PD\x00', '', '72s', module_type=PowerModuleType.C)
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_received_power(version):
@@ -254,8 +235,7 @@ def get_received_power(version):
     """ Gets the reveived power of a P1 concentrator """
     if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'PR\x00', '', '72s', module_type=PowerModuleType.C)
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_normal_energy(version):
@@ -266,8 +246,7 @@ def get_normal_energy(version):
     """
     if version == ENERGY_MODULE:
         return PowerCommand('G', 'ENE', '', '12L')
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_day_energy(version):
@@ -278,12 +257,11 @@ def get_day_energy(version):
     """
     if version == POWER_MODULE:
         return PowerCommand('G', 'EDA', '', '8L')
-    elif version == ENERGY_MODULE:
+    if version == ENERGY_MODULE:
         return PowerCommand('G', 'EDA', '', '12L')
-    elif version == P1_CONCENTRATOR:
+    if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'c1\x00', '', '112s', module_type=PowerModuleType.C)
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_night_energy(version):
@@ -294,12 +272,11 @@ def get_night_energy(version):
     """
     if version == POWER_MODULE:
         return PowerCommand('G', 'ENI', '', '8L')
-    elif version == ENERGY_MODULE:
+    if version == ENERGY_MODULE:
         return PowerCommand('G', 'ENI', '', '12L')
-    elif version == P1_CONCENTRATOR:
+    if version == P1_CONCENTRATOR:
         return PowerCommand('G', 'c2\x00', '', '112s', module_type=PowerModuleType.C)
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def set_day_night(version):
@@ -309,10 +286,9 @@ def set_day_night(version):
     """
     if version == POWER_MODULE:
         return PowerCommand('S', 'SDN', '8b', '')
-    elif version == ENERGY_MODULE:
+    if version == ENERGY_MODULE:
         return PowerCommand('S', 'SDN', '12b', '')
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def get_sensor_types(version):
@@ -323,10 +299,9 @@ def get_sensor_types(version):
     """
     if version == POWER_MODULE:
         return PowerCommand('G', 'CSU', '', '8b')
-    elif version == ENERGY_MODULE:
-        raise ValueError("Getting sensor types is not applicable for the 12 port modules.")
-    else:
-        raise ValueError("Unknown power api version")
+    if version == ENERGY_MODULE:
+        raise UnsupportedException("Getting sensor types is not applicable for the 12 port modules.")
+    raise UnsupportedException()
 
 
 def set_sensor_types(version):
@@ -337,10 +312,9 @@ def set_sensor_types(version):
     """
     if version == POWER_MODULE:
         return PowerCommand('S', 'CSU', '8b', '')
-    elif version == ENERGY_MODULE:
-        raise ValueError("Setting sensor types is not applicable for the 12 port modules.")
-    else:
-        raise ValueError("Unknown power api version")
+    if version == ENERGY_MODULE:
+        raise UnsupportedException("Setting sensor types is not applicable for the 12 port modules.")
+    raise UnsupportedException()
 
 
 def set_current_clamp_factor(version):
@@ -350,11 +324,10 @@ def set_current_clamp_factor(version):
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
     """
     if version == POWER_MODULE:
-        raise ValueError("Setting clamp factor is not applicable for the 8 port modules.")
-    elif version == ENERGY_MODULE:
+        raise UnsupportedException("Setting clamp factor is not applicable for the 8 port modules.")
+    if version == ENERGY_MODULE:
         return PowerCommand('S', 'CCF', '12f', '')
-    else:
-        raise ValueError('Unknown power api version')
+    raise UnsupportedException()
 
 
 def set_current_inverse(version):
@@ -364,11 +337,10 @@ def set_current_inverse(version):
     :param version: power api version (POWER_API_8_PORTS or POWER_API_12_PORTS).
     """
     if version == POWER_MODULE:
-        raise ValueError("Setting current inverse is not applicable for the 8 port modules.")
-    elif version == ENERGY_MODULE:
+        raise UnsupportedException("Setting current inverse is not applicable for the 8 port modules.")
+    if version == ENERGY_MODULE:
         return PowerCommand('S', 'SCI', '=12B', '')
-    else:
-        raise ValueError('Unknown power api version')
+    raise UnsupportedException()
 
 
 # Below are the more advanced function (12p module only)
@@ -381,10 +353,9 @@ def get_voltage_sample_time(version):
     """
     if version == ENERGY_MODULE:
         return PowerCommand('G', 'VST', '2b', '50f')
-    elif version == POWER_MODULE:
-        raise ValueError("Getting a voltage sample (time) is not applicable for the 8 port modules.")
-    else:
-        raise ValueError("Unknown power api version")
+    if version == POWER_MODULE:
+        raise UnsupportedException("Getting a voltage sample (time) is not applicable for the 8 port modules.")
+    raise UnsupportedException()
 
 
 def get_current_sample_time(version):
@@ -395,10 +366,9 @@ def get_current_sample_time(version):
     """
     if version == ENERGY_MODULE:
         return PowerCommand('G', 'CST', '2b', '50f')
-    elif version == POWER_MODULE:
-        raise ValueError("Getting a current sample (time) is not applicable for the 8 port modules.")
-    else:
-        raise ValueError("Unknown power api version")
+    if version == POWER_MODULE:
+        raise UnsupportedException("Getting a current sample (time) is not applicable for the 8 port modules.")
+    raise UnsupportedException()
 
 
 def get_voltage_sample_frequency(version):
@@ -409,10 +379,9 @@ def get_voltage_sample_frequency(version):
     """
     if version == ENERGY_MODULE:
         return PowerCommand('G', 'VSF', '2b', '40f')
-    elif version == POWER_MODULE:
-        raise ValueError("Getting a voltage sample (frequency) is not applicable for the 8 port modules.")
-    else:
-        raise ValueError("Unknown power api version")
+    if version == POWER_MODULE:
+        raise UnsupportedException("Getting a voltage sample (frequency) is not applicable for the 8 port modules.")
+    raise UnsupportedException()
 
 
 def get_current_sample_frequency(version):
@@ -423,10 +392,9 @@ def get_current_sample_frequency(version):
     """
     if version == ENERGY_MODULE:
         return PowerCommand('G', 'CSF', '2b', '40f')
-    elif version == POWER_MODULE:
-        raise ValueError("Getting a current sample (frequency) is not applicable for the 8 port modules.")
-    else:
-        raise ValueError("Unknown power api version")
+    if version == POWER_MODULE:
+        raise UnsupportedException("Getting a current sample (frequency) is not applicable for the 8 port modules.")
+    raise UnsupportedException()
 
 
 def read_eeprom(version, length):
@@ -438,10 +406,9 @@ def read_eeprom(version, length):
     """
     if version == ENERGY_MODULE:
         return PowerCommand('G', 'EEP', '2H', '{0}B'.format(length))
-    elif version == POWER_MODULE:
-        raise ValueError("Reading eeprom is not possible for the 8 port modules.")
-    else:
-        raise ValueError("Unknown power api version")
+    if version == POWER_MODULE:
+        raise UnsupportedException("Reading eeprom is not possible for the 8 port modules.")
+    raise UnsupportedException()
 
 
 def write_eeprom(version, length):
@@ -453,10 +420,9 @@ def write_eeprom(version, length):
     """
     if version == ENERGY_MODULE:
         return PowerCommand('S', 'EEP', '1H{0}B'.format(length), '')
-    elif version == POWER_MODULE:
-        raise ValueError("Writing eeprom is not possible for the 8 port modules.")
-    else:
-        raise ValueError("Unknown power api version")
+    if version == POWER_MODULE:
+        raise UnsupportedException("Writing eeprom is not possible for the 8 port modules.")
+    raise UnsupportedException()
 
 
 # Below are the address mode functions.
@@ -474,12 +440,11 @@ def want_an_address(version):
     """ The Want An Address command, send by the power modules in address mode. """
     if version == POWER_MODULE:
         return PowerCommand('S', 'WAA', '', '')
-    elif version == ENERGY_MODULE:
+    if version == ENERGY_MODULE:
         return PowerCommand('S', 'WAD', '', '')
-    elif version == P1_CONCENTRATOR:
+    if version == P1_CONCENTRATOR:
         return PowerCommand('S', 'WAD', '', '', module_type=PowerModuleType.C)
-    else:
-        raise ValueError('Unknown power api version')
+    raise UnsupportedException()
 
 
 def set_address(version):
@@ -512,10 +477,9 @@ def reset_normal_energy(version):
     """
     if version == POWER_MODULE:
         return PowerCommand('S', 'ENE', '9B', '')
-    elif version == ENERGY_MODULE:
+    if version == ENERGY_MODULE:
         return PowerCommand('S', 'ENE', 'B12L', '')
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def reset_day_energy(version):
@@ -526,10 +490,9 @@ def reset_day_energy(version):
     """
     if version == POWER_MODULE:
         return PowerCommand('S', 'EDA', '9B', '')
-    elif version == ENERGY_MODULE:
+    if version == ENERGY_MODULE:
         return PowerCommand('S', 'EDA', 'B12L', '')
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def reset_night_energy(version):
@@ -540,10 +503,9 @@ def reset_night_energy(version):
     """
     if version == POWER_MODULE:
         return PowerCommand('S', 'ENI', '9B', '')
-    elif version == ENERGY_MODULE:
+    if version == ENERGY_MODULE:
         return PowerCommand('S', 'ENI', 'B12L', '')
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 # Below are the bootloader functions
@@ -570,10 +532,9 @@ def bootloader_write_code(version):
     """
     if version == POWER_MODULE:
         return PowerCommand('S', 'BWC', '195B', '')
-    elif version == ENERGY_MODULE:
+    if version == ENERGY_MODULE:
         return PowerCommand('S', 'BWC', '132B', '')
-    else:
-        raise ValueError("Unknown power api version")
+    raise UnsupportedException()
 
 
 def bootloader_erase_code():

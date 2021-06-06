@@ -57,7 +57,7 @@ def cmd_shell(args):
           module_controller=INJECTED,
           output_controller=INJECTED,
           plugin_controller=INJECTED,
-          power_controller=INJECTED,
+          energy_module_controller=INJECTED,
           pubsub=INJECTED,
           pulse_counter_controller=INJECTED,
           room_controller=INJECTED,

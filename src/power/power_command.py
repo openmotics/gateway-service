@@ -23,7 +23,7 @@ import struct
 import sys
 
 if False:  # MYPY
-    from typing import Any, Callable, Optional, Tuple, Union
+    from typing import Any, Optional, Tuple, Union
     DataType = Union[float, int, str]
 
 STR = bytearray(b'STR')
@@ -77,7 +77,7 @@ def crc8(to_send):
     return ret
 
 
-class PowerModuleType:
+class PowerModuleType(object):
     E = bytearray(b'E')
     C = bytearray(b'C')
 
@@ -88,7 +88,7 @@ class PowerCommand(object):
     look like this: 'STR' 'E' Address CID Mode(G/S) Type LEN Data CRC7/8 '\r\n'.
     """
 
-    def __init__(self, mode, type, input_format, output_format,
+    def __init__(self, mode, command, input_format, output_format,
                  module_type=PowerModuleType.E):
         # type: (str, str, str, Optional[str], bytearray) -> None
         """
@@ -96,12 +96,12 @@ class PowerCommand(object):
         command returned by the power module.
         :param module_type: 1 character, E (energy/power module) or C (P1 concentrator)
         :param mode: 1 character, S or G
-        :param type: 3 byte string, type of the command
+        :param command: 3 byte string, command itself
         :param input_format: the format of the data in the command
         :param output_format: the format of the data returned by the power module
         """
         self.mode = bytearray(ord(c) for c in mode)
-        self.type = bytearray(ord(c) for c in type)
+        self.command = bytearray(ord(c) for c in command)
         self.input_format = input_format
         self.output_format = output_format if output_format is not None else ""
         self.module_type = module_type
@@ -123,7 +123,7 @@ class PowerCommand(object):
         :param data: data to send to the power module
         """
         buffer = bytearray(struct.pack(self.input_format, *data))
-        header = self.module_type + bytearray([address, cid]) + self.mode + self.type
+        header = self.module_type + bytearray([address, cid]) + self.mode + self.command
         payload = bytearray([len(buffer)]) + buffer
         crc = PowerCommand.get_crc(header, payload)
         return STR + header + payload + bytearray([crc]) + CRNL
@@ -138,7 +138,7 @@ class PowerCommand(object):
         :param data: data to send to the power module
         """
         buffer = bytearray(struct.pack(self.output_format, *data))
-        header = self.module_type + bytearray([address, cid]) + self.mode + self.type
+        header = self.module_type + bytearray([address, cid]) + self.mode + self.command
         payload = bytearray([len(buffer)]) + buffer
         crc = PowerCommand.get_crc(header, payload)
         return RTR + header + payload + bytearray([crc]) + CRNL
@@ -148,20 +148,20 @@ class PowerCommand(object):
         """
         Check if the response header matches the command,
         when an address and cid are provided. """
-        return header[:-1] == self.module_type + bytearray([address, cid]) + self.mode + self.type
+        return header[:-1] == self.module_type + bytearray([address, cid]) + self.mode + self.command
 
     def is_nack(self, header, address, cid):
         # type: (bytearray, int, int) -> bool
         """
         Check if the response header is a nack to the command, when an address and cid are
         provided. """
-        return header[:-1] == self.module_type + bytearray([address, cid]) + self.type
+        return header[:-1] == self.module_type + bytearray([address, cid]) + self.command
 
     def check_header_partial(self, header):
         # type: (bytearray) -> bool
         """ Check if the header matches the command, does not check address and cid. """
         return header[:1] == self.module_type \
-            and header[3:-1] == self.mode + self.type
+            and header[3:-1] == self.mode + self.command
 
     def read_output(self, data):
         # type: (Any) -> Tuple[Any, ...]
@@ -177,11 +177,13 @@ class PowerCommand(object):
             return struct.unpack(self.output_format, data)
 
     def __eq__(self, other):
+        if not isinstance(other, PowerCommand):
+            return False
         return self.mode == other.mode \
-            and self.type == other.type \
+            and self.command == other.command \
             and self.input_format == other.input_format \
             and self.output_format == other.output_format \
             and self.module_type == other.module_type
 
     def __repr__(self):
-        return '<PowerCommand {} {} {} {} {}>'.format(self.mode, self.type, self.input_format, self.output_format, self.module_type)
+        return '<PowerCommand {} {} {} {} {}>'.format(self.mode, self.command, self.input_format, self.output_format, self.module_type)
