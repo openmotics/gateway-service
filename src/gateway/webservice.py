@@ -238,6 +238,8 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
             if hasattr(_self, '_user_controller') \
             else _self.webinterface.check_token
         checked_token = check_token(token)  # type: Optional[AuthenticationToken]
+        if checked_token.user.role != 'ADMIN':
+            raise RuntimeError('User is non ADMIN, need ADMIN to access V0 api')
         # check if the call is done from localhost, and then verify the token
         if request.remote.ip != '127.0.0.1':
             if checked_token is None:
