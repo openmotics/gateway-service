@@ -120,26 +120,31 @@ class ApiAuthenticationTests(unittest.TestCase):
         auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
         body = {'code': 'some-test-code'}
         with mock.patch.object(self.auth_controller, 'login_with_user_code', return_value=(True, auth_token)):
-            response = self.web.authenticate(request_body=body)
+            response = self.web.authenticate_pin_code(request_body=body)
             self.assertEqual(response, json.dumps(auth_token.to_dict()))
 
     def test_authenticate_wrong_credentials(self):
         data = UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
         body = {'code': 'some-test-code'}
         with mock.patch.object(self.auth_controller, 'login_with_user_code', return_value=(False, data)):
-            response = self.web.authenticate(request_body=body)
+            response = self.web.authenticate_pin_code(request_body=body)
             self.assertIn(UnAuthorizedException.bytes_message(), response)
 
     def test_authenticate_basic_rfid(self):
         auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
         body = {'rfid_tag': 'some-test-tag'}
         with mock.patch.object(self.auth_controller, 'login_with_rfid_tag', return_value=(True, auth_token)):
-            response = self.web.authenticate(request_body=body)
+            response = self.web.authenticate_rfid_tag(request_body=body)
             self.assertEqual(response, json.dumps(auth_token.to_dict()))
 
-    def test_authenticate_wrong_body(self):
+    def test_authenticate_pin_code_wrong_body(self):
         body = {'some_wrong_key': 'some_wrong_data'}
-        response = self.web.authenticate(request_body=body)
+        response = self.web.authenticate_pin_code(request_body=body)
+        self.assertIn(WrongInputParametersException.bytes_message(), response)
+
+    def test_authenticate_rfid_tag_wrong_body(self):
+        body = {'some_wrong_key': 'some_wrong_data'}
+        response = self.web.authenticate_rfid_tag(request_body=body)
         self.assertIn(WrongInputParametersException.bytes_message(), response)
 
     # ----------------------------------------------------------------
@@ -179,8 +184,7 @@ class AuthenticationApiCherryPyTest(BaseCherryPyUnitTester):
         auth_token = AuthenticationToken(user=self.test_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
         with mock.patch.object(self.auth_controller, 'login_with_user_code') as login_func:
             login_func.return_value = (True, auth_token)
-            status, headers, response = self.POST('/api/v1/authenticate', login_user=self.test_user_1, body=None)
-            print(status, headers, response)
+            status, headers, response = self.POST('/api/v1/authenticate/pin_code', login_user=self.test_user_1, body=None)
             self.assertIn(WrongInputParametersException.bytes_message(), response)
 
     def test_deauthenticate_no_token(self):
@@ -188,6 +192,5 @@ class AuthenticationApiCherryPyTest(BaseCherryPyUnitTester):
         with mock.patch.object(self.auth_controller, 'login_with_user_code') as login_func:
             login_func.return_value = auth_token
             status, headers, response = self.POST('/api/v1/deauthenticate', login_user=None, body=None)
-            print(status, headers, response)
             self.assertIn(UnAuthorizedException.bytes_message(), response)
 

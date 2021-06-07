@@ -105,7 +105,7 @@ class AuthenticationController(object):
 
     def login_with_rfid_tag(self, rfid_tag_string, accept_terms=False, timeout=None):
         # type: (str, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
-        """  Login a user given a UserDTO """
+        """  Login a user using an authorized RFID tag """
         rfid_dto = self._rfid_controller.check_rfid_tag_for_login(rfid_tag_string)
         if rfid_dto is None:
             return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
