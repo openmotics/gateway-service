@@ -106,11 +106,6 @@ class AuthenticationController(object):
     def login_with_rfid_tag(self, rfid_tag_string, accept_terms=False, timeout=None):
         # type: (str, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a UserDTO """
-        # rfid_orm = RFID.select().where(RFID.tag_string == rfid_tag_string).first()  # type: RFID
-        # if rfid_orm is None:
-        #     return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
-        # user_orm = rfid_orm.user
-        # user_dto = UserMapper.orm_to_dto(user_orm)
         rfid_dto = self._rfid_controller.check_rfid_tag_for_login(rfid_tag_string)
         if rfid_dto is None:
             return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS

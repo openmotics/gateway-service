@@ -851,14 +851,14 @@ class Rfid(RestAPIEndpoint):
 
 
 class Authentication(RestAPIEndpoint):
-    API_ENDPOINT = '/api/v1/'
+    API_ENDPOINT = '/api/v1'
 
     @Inject
     def __init__(self):
         # type: () -> None
         super(Authentication, self).__init__()
         self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
-        # --- POSt ---
+        # --- POST ---
         self.route_dispatcher.connect('authenticate', '/authenticate',
                                       controller=self, action='authenticate',
                                       conditions={'method': ['POST']})
@@ -887,7 +887,6 @@ class Authentication(RestAPIEndpoint):
         self._user_controller.logout(token)
 
 
-
 @Injectable.named('web_service_v1')
 @Singleton
 class WebServiceV1(object):
@@ -899,7 +898,8 @@ class WebServiceV1(object):
             Apartments(),
             Deliveries(),
             SystemConfiguration(),
-            Rfid()
+            Rfid(),
+            Authentication()
         ]
 
     def start(self):
