@@ -25,7 +25,7 @@ from gateway.models import GroupAction
 if False:  # MYPY
     from typing import List, Tuple
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('group_action_controller')

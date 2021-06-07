@@ -26,7 +26,7 @@ from master.core.memory_file import MemoryTypes, MemoryFile, MemoryAddress
 from logs import Logs
 from mocked_core_helper import MockedCore
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class MemoryModelsTest(unittest.TestCase):
@@ -80,7 +80,7 @@ class MemoryModelsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        Logs.setup_logger(log_level=logging.DEBUG)
+        Logs.setup_logger(log_level_override=logging.DEBUG)
 
     def setUp(self):
         self.mocked_core = MockedCore()

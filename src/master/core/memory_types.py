@@ -31,7 +31,7 @@ if False:  # MYPY
     from master.core.basic_action import BasicAction
     from master.core.memory_file import MemoryFile
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class MemoryModelDefinition(object):

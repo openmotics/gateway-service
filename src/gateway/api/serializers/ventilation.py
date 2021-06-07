@@ -28,7 +28,7 @@ from toolbox import Toolbox
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Tuple
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class VentilationSerializer(object):

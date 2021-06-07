@@ -26,9 +26,9 @@ import logging
 from gateway.daemon_thread import BaseThread
 from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
-from master.classic.master_command import printable
+from master.classic.master_command import Printable
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('passthrough_service')
@@ -65,8 +65,7 @@ class PassthroughService(object):
         while not self.__stopped:
             data = self.__master_communicator.get_passthrough_data()
             if data and len(data) > 0:
-                if self.__verbose:
-                    logger.info("Data for passthrough: %s", printable(data))
+                logger.debug("Data for passthrough: %s", Printable(data))
                 self.__passthrough_serial.write(data)
 
     def __writer(self):
@@ -78,8 +77,7 @@ class PassthroughService(object):
                 if num_bytes > 0:
                     data += self.__passthrough_serial.read(num_bytes)
                 try:
-                    if self.__verbose:
-                        logger.info("Data from passthrough: %s", printable(data))
+                    logger.debug("Data from passthrough: %s", Printable(data))
                     self.__master_communicator.send_passthrough_data(data)
                 except InMaintenanceModeException:
                     logger.info("Dropped passthrough communication in maintenance mode.")

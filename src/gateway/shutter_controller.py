@@ -38,7 +38,7 @@ if False:  # MYPY
     from typing import List, Dict, Optional, Tuple, Any
     from gateway.hal.master_controller import MasterController
 
-logger = logging.getLogger('gateway.shutter.controller')
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('shutter_controller')

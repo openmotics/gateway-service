@@ -17,6 +17,7 @@ The main module for the OpenMotics
 """
 from __future__ import absolute_import
 
+import constants
 from platform_utils import System
 System.import_libs()
 
@@ -64,7 +65,7 @@ if False:  # MYPY
     from cloud.events import EventSender
     from serial_utils import RS485
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('openmotics')
 
 
 class OpenmoticsService(object):

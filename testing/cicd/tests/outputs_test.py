@@ -25,7 +25,7 @@ from hypothesis.strategies import booleans, integers, just
 from tests.hardware import multiple_outputs, outputs, skip_on_platforms
 from tests.hardware_layout import TestPlatform
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 DEFAULT_OUTPUT_CONFIG = {'type': 0, 'timer': 2**16 - 1}
 DEFAULT_LIGHT_CONFIG = {'type': 255, 'timer': 2**16 - 1}

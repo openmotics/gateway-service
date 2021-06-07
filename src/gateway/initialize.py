@@ -15,6 +15,9 @@
 
 from __future__ import absolute_import
 
+import re
+
+from logs import Logs
 from platform_utils import Platform, System
 System.import_libs()
 
@@ -27,7 +30,7 @@ from threading import Lock
 
 from peewee_migrate import Router
 from serial import Serial
-from six.moves.configparser import ConfigParser, NoOptionError
+from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
 from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
@@ -57,7 +60,7 @@ if False:  # MYPY
     from typing import Any, Optional
     from gateway.hal.master_controller import MasterController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 def initialize(message_client_name):
@@ -157,10 +160,12 @@ def setup_target_platform(target_platform, message_client_name):
 
     # Debugging options
     try:
-        debug_logger = config.get('OpenMotics', 'debug_logger')
-        if debug_logger:
-            logging.getLogger(debug_logger).setLevel(logging.DEBUG)
+        for (namespace, log_level) in config.items('logging_overrides'):
+            logger.info('Setting %s log level to %s', namespace, log_level)
+            Logs.set_service_loglevel(log_level.upper(), namespace=namespace)
     except NoOptionError:
+        pass
+    except NoSectionError:
         pass
 
     # Webserver / Presentation layer

@@ -29,7 +29,7 @@ if False:  # MYPY
     from gateway.user_controller import UserController
     from typing import Any, Dict, Optional, List, Tuple
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 class DeliverySerializer(object):
     @staticmethod

@@ -36,7 +36,7 @@ if False:  # MYPY
     from gateway.energy_module_controller import EnergyModuleController
     from serial_utils import RS485
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('openmotics')
 
 
 class HexReader(object):

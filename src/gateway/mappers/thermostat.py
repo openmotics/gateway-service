@@ -27,7 +27,7 @@ from gateway.models import Thermostat, DaySchedule, ValveToThermostat, \
 if False:  # MYPY
     from typing import List, Optional, Dict, Any, Literal
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class ThermostatMapper(object):

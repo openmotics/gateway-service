@@ -34,7 +34,7 @@ if False:  # MYPY
     from typing import Any, Dict, Tuple, Optional
     from master.core.core_communicator import CoreCommunicator
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class FrontpanelCoreController(FrontpanelController):

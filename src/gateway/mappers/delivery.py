@@ -24,7 +24,7 @@ from gateway.dto.delivery import DeliveryDTO
 from gateway.mappers.user import UserMapper
 from gateway.models import Delivery
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class DeliveryMapper(object):

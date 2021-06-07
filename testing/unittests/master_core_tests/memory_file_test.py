@@ -36,7 +36,7 @@ class MemoryFileTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        Logs.setup_logger(log_level=logging.DEBUG)
+        Logs.setup_logger(log_level_override=logging.DEBUG)
 
     def test_data_consistency(self):
         mocked_core = MockedCore()

@@ -24,7 +24,7 @@ import psutil
 import pytest
 from hypothesis.strategies import just, one_of
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 firmwares = one_of([
     # just({'master': '3.143.103'}),

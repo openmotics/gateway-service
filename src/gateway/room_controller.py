@@ -27,7 +27,7 @@ from ioc import Injectable, Singleton
 if False:  # MYPY
     from typing import List, Tuple
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('room_controller')

@@ -40,7 +40,7 @@ if False:  # MYPY
     from typing import Dict, List, Optional, Tuple, Any
     from gateway.hal.master_controller import MasterController, CommunicationFailure
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('input_controller')

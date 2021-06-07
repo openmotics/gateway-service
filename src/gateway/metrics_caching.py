@@ -24,7 +24,7 @@ import ujson as json
 from random import randint
 from ioc import Injectable, Inject, INJECTED, Singleton
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('metrics_cache_controller')

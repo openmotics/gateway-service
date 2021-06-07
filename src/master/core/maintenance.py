@@ -26,7 +26,7 @@ from gateway.daemon_thread import BaseThread
 from gateway.maintenance_communicator import MaintenanceCommunicator
 from ioc import INJECTED, Inject
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class MaintenanceCoreCommunicator(MaintenanceCommunicator):

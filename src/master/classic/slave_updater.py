@@ -35,7 +35,7 @@ if False:  # MYPY
     from typing import Tuple, List, Dict, Any, Union, Optional
     from master.classic.master_api import MasterCommandSpec
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 def add_crc(command, command_input):

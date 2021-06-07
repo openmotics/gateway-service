@@ -30,7 +30,7 @@ if False:  # MYPY
     GATEWAY_TOPIC = Literal['config', 'state']
     MASTER_TOPIC = Literal['eeprom', 'maintenance', 'module', 'power', 'output', 'input', 'shutter', 'sensor']
 
-logger = logging.getLogger('gateway.pubsub')
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('pubsub')

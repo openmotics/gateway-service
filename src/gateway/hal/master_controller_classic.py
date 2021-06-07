@@ -1403,6 +1403,7 @@ class MasterClassicController(MasterController):
     @communication_enabled
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
+        logger.debug('triggering module discovery start')
         self._master_communicator.do_command(master_api.module_discover_start())
 
         if self._discover_mode_timer is not None:
@@ -1415,6 +1416,8 @@ class MasterClassicController(MasterController):
 
     @communication_enabled
     def module_discover_stop(self):  # type: () -> None
+        logger.debug('triggering module discovery stop')
+
         if self._discover_mode_timer is not None:
             self._discover_mode_timer.cancel()
             self._discover_mode_timer = None

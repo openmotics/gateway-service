@@ -29,7 +29,7 @@ if False:  # MYPY
     from typing import Optional
     from serial import Serial
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class CoreUpdater(object):

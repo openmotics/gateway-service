@@ -25,7 +25,7 @@ if False:  # MYPY
     from typing import List, Dict, Optional
     from master.core.basic_action import BasicAction
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class GroupAction(object):
