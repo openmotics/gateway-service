@@ -242,6 +242,8 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
         if request.remote.ip != '127.0.0.1':
             if checked_token is None:
                 raise RuntimeError()
+            if checked_token.user.role != 'ADMIN':
+                raise RuntimeError('User is non ADMIN, need ADMIN to access V0 api')
         if pass_token is True:
             if version == 0:
                 request.params['token'] = token
