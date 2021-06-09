@@ -193,8 +193,11 @@ class ApiUsersTests(unittest.TestCase):
     # ----------------------------------------------------------------
     # --- POST
     # ----------------------------------------------------------------
-    def verify_user_created(self, user_to_create, response):
+    def verify_user_created(self, user_to_create, response, check_for_pin=False):
         resp_dict = json.loads(response)
+        if check_for_pin:
+            self.assertIn('pin_code', resp_dict)
+            self.assertEqual(resp_dict['pin_code'], '1234')
         for field in user_to_create:
             self.assertIn(field, resp_dict)
             user_to_create_field = user_to_create[field]
@@ -207,7 +210,8 @@ class ApiUsersTests(unittest.TestCase):
             'last_name': 'User',
             'role': 'USER'
         }
-        with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
+        with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
+                mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value='1234'):
             user_to_create_return = user_to_create.copy()
             user_to_create_return['id'] = 5
             user_dto_to_return = UserDTO(**user_to_create_return)
@@ -217,7 +221,7 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
                                           request_body=user_to_create)
-            self.verify_user_created(user_to_create, response)
+            self.verify_user_created(user_to_create, response, check_for_pin=True)
 
     def test_create_user_empty(self):
         user_to_create = {}
@@ -227,7 +231,6 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
                                           request_body=json.dumps(user_to_create))
-            print(response)
             self.assertTrue(WrongInputParametersException.bytes_message() in response)
 
     def test_create_user_no_role(self):
@@ -240,18 +243,18 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
                                           request_body=json.dumps(user_to_create))
-            print(response)
             self.assertTrue(WrongInputParametersException.bytes_message() in response)
 
     def test_create_user_credentials_not_allowed(self):
         user_to_create = {
             'first_name': 'Test',
             'last_name': 'User',
-            'pin_code': '1234',
+            'pin_code': '6789',
             'password': 'Test',
             'role': 'USER'
         }
-        with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
+        with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
+                mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value='1234'):
             user_to_create_return = user_to_create.copy()
             del user_to_create_return['pin_code']
             del user_to_create_return['password']
@@ -291,7 +294,8 @@ class ApiUsersTests(unittest.TestCase):
             'apartment': None,
             'role': 'USER'
         }
-        with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
+        with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
+                mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value='1234'):
             user_to_create_return = user_to_create.copy()
             user_to_create_return['id'] = 5
             user_dto_to_return = UserDTO(**user_to_create_return)
@@ -301,7 +305,7 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.post_user(role=auth_token.user.role,
                                           request_body=user_to_create)
-            self.verify_user_created(user_to_create, response)
+            self.verify_user_created(user_to_create, response, check_for_pin=True)
 
     def test_create_user_known_apartment(self):
         user_to_create = {
@@ -315,6 +319,7 @@ class ApiUsersTests(unittest.TestCase):
         apartment_dto = ApartmentDTO(id=2, name='TEST_APARTMENT', doorbell_rebus_id=37, mailbox_rebus_id=38)
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
                 mock.patch.object(ApartmentController, 'load_apartment', return_value=apartment_dto), \
+                mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value='1234'), \
                 mock.patch.object(ApartmentController, 'apartment_id_exists', return_value=True):
             user_to_create_return = user_to_create.copy()
             user_to_create_return['id'] = 5
@@ -329,7 +334,7 @@ class ApiUsersTests(unittest.TestCase):
 
             # manually fill in the apartment field since it will be converted back to full output
             user_to_create['apartment'] = ApartmentSerializer.serialize(apartment_dto)
-            self.verify_user_created(user_to_create, response)
+            self.verify_user_created(user_to_create, response, check_for_pin=True)
             apartment_serial = ApartmentSerializer.serialize(apartment_dto)
             resp_dict = json.loads(response)
             self.assertEqual(apartment_serial, resp_dict['apartment'])
@@ -339,12 +344,13 @@ class ApiUsersTests(unittest.TestCase):
             'first_name': 'Test',
             'last_name': 'User',
             'apartment': None,
-            'pin_code': '1234',
+            'pin_code': '6789',
             'password': 'TEST',
             'accepted_terms': 1,
             'role': 'USER'
         }
-        with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
+        with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
+                mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value='1234'):
             user_to_create_return = user_to_create.copy()
             del user_to_create_return['pin_code']
             del user_to_create_return['password']
@@ -358,7 +364,7 @@ class ApiUsersTests(unittest.TestCase):
                                           request_body=user_to_create.copy())
             del user_to_create['pin_code']
             del user_to_create['password']
-            self.verify_user_created(user_to_create, response)
+            self.verify_user_created(user_to_create, response, check_for_pin=True)
 
     def test_activate_user(self):
         user_code = {'code': self.normal_user_2.pin_code}
@@ -416,6 +422,7 @@ class ApiUsersTests(unittest.TestCase):
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
                 mock.patch.object(self.users_controller, 'load_user') as load_user_func, \
                 mock.patch.object(ApartmentController, 'load_apartment', return_value=apartment_dto), \
+                mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value='1234'), \
                 mock.patch.object(ApartmentController, 'apartment_id_exists', return_value=True):
             user_to_update_return = user_to_update.copy()
             user_to_update_return['id'] = 5

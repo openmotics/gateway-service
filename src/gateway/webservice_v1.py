@@ -358,7 +358,10 @@ class Users(RestAPIEndpoint):
             user_dto_saved = self._user_controller.save_user(user_dto)
         except RuntimeError as e:
             raise WrongInputParametersException('The user could not be saved: {}'.format(e))
-        return json.dumps(UserSerializer.serialize(user_dto_saved))
+        user_dto_serial = UserSerializer.serialize(user_dto_saved)
+        # explicitly add the pin code when a new user is created, this way, the generated pin code is known to the user when created.
+        user_dto_serial['pin_code'] = user_dto.pin_code
+        return json.dumps(user_dto_serial)
 
     @openmotics_api_v1(auth=False, pass_role=False, expect_body_type='JSON')
     def post_activate_user(self, user_id, request_body):

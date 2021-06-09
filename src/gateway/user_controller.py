@@ -90,7 +90,6 @@ class UserController(object):
         user_dto_saved = UserMapper.orm_to_dto(user_orm)
         return user_dto_saved
 
-
     def save_users(self, users):
         # type: (List[UserDTO]) -> None
         """ Create or update a new user using a user DTO object """
