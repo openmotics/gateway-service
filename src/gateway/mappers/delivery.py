@@ -22,7 +22,7 @@ import logging
 
 from gateway.dto.delivery import DeliveryDTO
 from gateway.mappers.user import UserMapper
-from gateway.models import Delivery
+from gateway.models import Delivery, User
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +32,11 @@ class DeliveryMapper(object):
     def orm_to_dto(orm_object):
         # type: (Delivery) -> DeliveryDTO
         user_dto_delivery = None
-        if orm_object.user_delivery is not None:
+        if orm_object.user_delivery_id is not None:
             user_dto_delivery = UserMapper.orm_to_dto(orm_object.user_delivery)
         user_dto_pickup = None
-        if orm_object.user_pickup is not None:
+        # Special edge-case where the user_pickup_id can be set, but the Courier object is removed
+        if orm_object.user_pickup_id is not None and User.get_or_none(User.id == orm_object.user_pickup_id) is not None:
             user_dto_pickup = UserMapper.orm_to_dto(orm_object.user_pickup)
         delivery_dto = DeliveryDTO(id=orm_object.id,
                                    type=orm_object.type,

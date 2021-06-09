@@ -113,8 +113,8 @@ class ApiDeliveriesTests(unittest.TestCase):
             id=3,
             type='RETURN',
             parcelbox_rebus_id=10,
-            user_pickup=self.test_user_2,
-            user_delivery=self.test_courier_1
+            user_delivery=self.test_user_2,
+            user_pickup=self.test_courier_1
         )
 
         self.deliveries = [self.test_delivery_1, self.test_delivery_2]
@@ -456,6 +456,16 @@ class ApiDeliveriesTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.test_user_2, token='test-token', expire_timestamp=int(time.time() + 3600))
             response = self.web.put_delivery_pickup(delivery_id=37, token=auth_token)
             self.assertIn(ItemDoesNotExistException.bytes_message(), response)
+
+    def test_pickup_return(self):
+        with mock.patch.object(self.delivery_controller, 'pickup_delivery') as pickup_delivery_func, \
+                mock.patch.object(self.delivery_controller, 'load_delivery', return_value=self.test_return_1):
+            delivery_dto_to_save = self.test_return_1
+            delivery_dto_to_save.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
+            pickup_delivery_func.return_value = delivery_dto_to_save
+            auth_token = AuthenticationToken(user=self.test_user_2, token='test-token', expire_timestamp=int(time.time() + 3600))
+            response = self.web.put_delivery_pickup(delivery_id=self.test_return_1.id, token=auth_token)
+            self.assert_delivery_picked_up(response)
 
 
 class DeliveryApiCherryPyTest(BaseCherryPyUnitTester):
