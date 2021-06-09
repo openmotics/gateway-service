@@ -30,7 +30,8 @@ from gateway.api.serializers import ApartmentSerializer, UserSerializer, Deliver
     SystemDoorbellConfigSerializer, SystemRFIDConfigSerializer, SystemRFIDSectorBlockConfigSerializer, \
     SystemTouchscreenConfigSerializer, SystemGlobalConfigSerializer, SystemActivateUserConfigSerializer, \
     RfidSerializer
-from gateway.dto import ApartmentDTO, DeliveryDTO
+from gateway.authentication_controller import AuthenticationToken
+from gateway.dto import ApartmentDTO, DeliveryDTO, UserDTO
 from gateway.exceptions import *
 from gateway.models import User, Delivery
 from gateway.webservice import params_handler, params_parser
@@ -167,7 +168,7 @@ def params_handler_v1(expect_body_type=None, **kwargs):
                         parsed_body = json.loads(body)
                     except Exception:
                         raise ParseException('Could not parse the json body type')
-                elif expect_body_type == 'NONE':
+                elif expect_body_type is None:
                     raise ParseException('Received a body, but no body is required')
                 elif expect_body_type == 'RAW':
                     pass
@@ -344,6 +345,7 @@ class Users(RestAPIEndpoint):
         user_dto.username = uuid.uuid4().hex
         # add a custom user code
         user_dto.pin_code = str(self._user_controller.generate_new_pin_code())
+        user_dto.accepted_terms = True
         # Generate a random password as a dummy to fill in the gap
         random_password = uuid.uuid4().hex
         user_dto.set_password(random_password)
@@ -830,7 +832,7 @@ class Rfid(RestAPIEndpoint):
     def put_start_add(self, rfid_id, token, request_body):
         raise NotImplementedException("start add new rfid not implemented")
 
-    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='NONE')
+    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None)
     def put_cancel_add(self, rfid_id, token):
         raise NotImplementedException("start add new rfid not implemented")
 
@@ -849,6 +851,53 @@ class Rfid(RestAPIEndpoint):
         return 'OK'
 
 
+class Authentication(RestAPIEndpoint):
+    API_ENDPOINT = '/api/v1'
+
+    @Inject
+    def __init__(self):
+        # type: () -> None
+        super(Authentication, self).__init__()
+        self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
+        # --- POST ---
+        self.route_dispatcher.connect('authenticate_pin_code', '/authenticate/pin_code',
+                                      controller=self, action='authenticate_pin_code',
+                                      conditions={'method': ['POST']})
+        self.route_dispatcher.connect('authenticate_rfid_tag', '/authenticate/rfid_tag',
+                                      controller=self, action='authenticate_rfid_tag',
+                                      conditions={'method': ['POST']})
+        self.route_dispatcher.connect('deauthenticate', '/deauthenticate',
+                                      controller=self, action='deauthenticate',
+                                      conditions={'method': ['POST']})
+
+    @openmotics_api_v1(auth=False, expect_body_type='JSON')
+    def authenticate_pin_code(self, request_body):
+        if 'code' not in request_body:
+            raise WrongInputParametersException('Expected a code in the request body json')
+        success, data = self._user_controller.authentication_controller.login_with_user_code(pin_code=request_body['code'])
+        return self.handle_authentication_result(success, data)
+
+    @openmotics_api_v1(auth=False, expect_body_type='JSON')
+    def authenticate_rfid_tag(self, request_body):
+        if 'rfid_tag' not in request_body:
+            raise WrongInputParametersException('Expected an rfid_tag in the request body json')
+        success, data = self._user_controller.authentication_controller.login_with_rfid_tag(rfid_tag_string=request_body['rfid_tag'])
+        return self.handle_authentication_result(success, data)
+
+    def handle_authentication_result(self, success, data):
+        _ = self
+        if success:
+            if not isinstance(data, AuthenticationToken):
+                raise RuntimeError('Retrieved success as true, but no authentication token')
+            return json.dumps(data.to_dict())
+        else:
+            raise UnAuthorizedException('could not authenticate user: {}'.format(data))
+
+    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None)
+    def deauthenticate(self, token):
+        self._user_controller.logout(token)
+
+
 @Injectable.named('web_service_v1')
 @Singleton
 class WebServiceV1(object):
@@ -860,7 +909,8 @@ class WebServiceV1(object):
             Apartments(),
             Deliveries(),
             SystemConfiguration(),
-            Rfid()
+            Rfid(),
+            Authentication()
         ]
 
     def start(self):
