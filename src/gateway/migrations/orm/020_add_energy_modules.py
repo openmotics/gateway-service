@@ -66,6 +66,7 @@ def migrate(migrator, database, fake=False, **kwargs):
 
     migrator.create_model(EnergyModule)
     migrator.create_model(EnergyCT)
+    migrator.add_index(EnergyCT, 'number', 'energy_module_id', unique=True)
 
 
 def rollback(migrator, database, fake=False, **kwargs):

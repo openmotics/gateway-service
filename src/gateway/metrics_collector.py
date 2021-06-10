@@ -771,17 +771,17 @@ class MetricsCollector(object):
             start = time.time()
             try:
                 now = time.time()
-                result = self._gateway_api.get_power_modules()
-                for power_module in result:
-                    device_id = '{0}.{{0}}'.format(power_module['address'])
-                    if power_module['version'] != power_api.ENERGY_MODULE:
+                result = self._energy_module_controller.load_modules()
+                for energy_module in result:
+                    device_id = '{0}.{{0}}'.format(energy_module.formatted_address)
+                    if energy_module.version != power_api.ENERGY_MODULE:
                         continue
-                    result = self._gateway_api.get_energy_time(power_module['id'])
+                    result = self._energy_module_controller.get_energy_time(energy_module.id)
                     abort = False
                     for i in range(12):
                         if abort is True:
                             break
-                        name = power_module['input{0}'.format(i)]
+                        name = getattr(energy_module, 'input{0}'.format(i))
                         if name == '':
                             continue
                         timestamp = now
@@ -795,12 +795,12 @@ class MetricsCollector(object):
                                                         'type': 'time'},
                                                   timestamp=timestamp)
                             timestamp += 0.250  # Stretch actual data by 1000 for visualtisation purposes
-                    result = self._gateway_api.get_energy_frequency(power_module['id'])
+                    result = self._energy_module_controller.get_energy_frequency(energy_module.id)
                     abort = False
                     for i in range(12):
                         if abort is True:
                             break
-                        name = power_module['input{0}'.format(i)]
+                        name = getattr(energy_module, 'input{0}'.format(i))
                         if name == '':
                             continue
                         timestamp = now

@@ -103,10 +103,13 @@ class EnergyModuleController(BaseController):
                     daynight.append(NIGHT)
             if self._time_cache.get(energy_module.number) != daynight:
                 logger.info('Setting day/night for EnergyModule {0} to {1}'.format(energy_module.number, daynight))
-                self._energy_communicator.do_command(int(energy_module.module.address),
-                                                     power_api.set_day_night(energy_module.version),
-                                                     *daynight)
-                self._time_cache[energy_module.number] = daynight
+                try:
+                    self._energy_communicator.do_command(int(energy_module.module.address),
+                                                         power_api.set_day_night(energy_module.version),
+                                                         *daynight)
+                    self._time_cache[energy_module.number] = daynight
+                except CommunicationTimedOutException:
+                    logger.warning('Could not set day/night for EnergyModule {0}: Timed out'.format(energy_module.number))
 
     @staticmethod
     def _is_day_time(times, date):  # type: (Optional[str], datetime) -> bool
@@ -214,7 +217,11 @@ class EnergyModuleController(BaseController):
         for energy_module in energy_modules:
             helper = self._get_helper(version=energy_module.version)
             try:
-                online, firmware_version = helper.get_information(energy_module=energy_module)
+                try:
+                    online, firmware_version = helper.get_information(energy_module=energy_module)
+                except NotImplementedError:
+                    # TODO: Remove once the P1C part is implemented
+                    online, firmware_version = False, None
                 information.append(ModuleDTO(source=ModuleDTO.Source.GATEWAY,
                                              address=energy_module.module.address,
                                              module_type=module_type_map.get(energy_module.version),

@@ -37,6 +37,8 @@ class EnergyModuleSerializer(object):
         data = {}
         for field in EnergyModuleSerializer.DTO_FIELDS:
             data[field] = getattr(energy_module_dto, field)
+            if field == 'address':
+                data[field] = energy_module_dto.formatted_address
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod

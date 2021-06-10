@@ -54,9 +54,9 @@ class EnergyModulesMigrator(BaseMigrator):
                         module = Module.get_or_none(source=ModuleDTO.Source.GATEWAY,
                                                     address=address)
                         if module is None:
-                            module = Module(source=ModuleDTO.Source.GATEWAY,
-                                            address=address,
-                                            hardware_type=ModuleDTO.HardwareType.PHYSICAL)
+                            module = Module.create(source=ModuleDTO.Source.GATEWAY,
+                                                   address=address,
+                                                   hardware_type=ModuleDTO.HardwareType.PHYSICAL)
                         else:
                             module.hardware_type = ModuleDTO.HardwareType.PHYSICAL
                         module.save()
@@ -65,25 +65,26 @@ class EnergyModulesMigrator(BaseMigrator):
                         version = int(row_data['version'])
                         energy_module = EnergyModule.get_or_none(number=module_id)
                         if energy_module is None:
-                            energy_module = EnergyModule(number=module_id,
-                                                         version=version,
-                                                         name=row_data['name'])
+                            energy_module = EnergyModule.create(number=module_id,
+                                                                version=version,
+                                                                name=row_data['name'],
+                                                                module=module)
                         else:
                             energy_module.version = version
                             energy_module.name = row_data['name']
-                        energy_module.module = module
+                            energy_module.module = module
                         energy_module.save()
 
                         for i in range(EnergyModulesMigrator.NUM_CTS[version]):
                             ct = EnergyCT.get_or_none(energy_module=energy_module,
                                                       number=i)
                             if ct is None:
-                                ct = EnergyCT(energy_module=energy_module,
-                                              number=i,
-                                              name=row_data['input{0}'.format(i)],
-                                              sensor_type=int(row_data['sensor{0}'.format(i)]),
-                                              times=row_data['times{0}'.format(i)],
-                                              inverted=row_data['inverted{0}'.format(i)] == 1)
+                                ct = EnergyCT.create(energy_module=energy_module,
+                                                     number=i,
+                                                     name=row_data['input{0}'.format(i)],
+                                                     sensor_type=int(row_data['sensor{0}'.format(i)]),
+                                                     times=row_data['times{0}'.format(i)],
+                                                     inverted=row_data['inverted{0}'.format(i)] == 1)
                             else:
                                 ct.name = row_data['input{0}'.format(i)]
                                 ct.sensor_type = int(row_data['sensor{0}'.format(i)])
