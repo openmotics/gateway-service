@@ -109,15 +109,20 @@ class UCANUpdater(object):
                 logger.info('Bootloader active')
 
             logger.info('Loading bootloader version...')
-            response = ucan_communicator.do_command(cc_address=cc_address,
-                                                    command=UCANAPI.get_bootloader_version(),
-                                                    identity=ucan_address,
-                                                    fields={})
-            if response['major'] == ord('v'):
-                bootloader_version = '<= v1.3'  # Legacy version
-            else:
-                bootloader_version = 'v{0}.{1}'.format(response['major'], response['minor'])
-            logger.info('Bootloader version: {0}'.format(bootloader_version))
+            try:
+                response = ucan_communicator.do_command(cc_address=cc_address,
+                                                        command=UCANAPI.get_bootloader_version(),
+                                                        identity=ucan_address,
+                                                        fields={})
+                if response is None:
+                    raise RuntimeError()
+                if response['major'] == ord('v'):
+                    bootloader_version = '<= v1.3'  # Legacy version
+                else:
+                    bootloader_version = 'v{0}.{1}'.format(response['major'], response['minor'])
+                logger.info('Bootloader version: {0}'.format(bootloader_version))
+            except Exception:
+                logger.warning('Could not load bootloader version')
 
             logger.info('Erasing flash...')
             ucan_communicator.do_command(cc_address=cc_address,
