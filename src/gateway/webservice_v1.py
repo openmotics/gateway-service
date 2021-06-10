@@ -33,6 +33,7 @@ from gateway.api.serializers import ApartmentSerializer, UserSerializer, Deliver
 from gateway.dto import ApartmentDTO, DeliveryDTO
 from gateway.exceptions import *
 from gateway.models import User, Delivery
+from gateway.user_controller import UserController
 from gateway.webservice import params_handler, params_parser
 
 if False:  # MyPy
@@ -40,7 +41,6 @@ if False:  # MyPy
     from gateway.delivery_controller import DeliveryController
     from gateway.authentication_controller import AuthenticationToken
     from gateway.rfid_controller import RfidController
-    from gateway.user_controller import UserController
     from gateway.system_config_controller import SystemConfigController
     from gateway.webservice import WebService
     from typing import Optional, List, Dict
@@ -343,7 +343,7 @@ class Users(RestAPIEndpoint):
 
         user_dto.username = uuid.uuid4().hex
         # add a custom user code
-        user_dto.pin_code = str(self._user_controller.generate_new_pin_code())
+        user_dto.pin_code = str(self._user_controller.generate_new_pin_code()).rjust(UserController.PinCodeLength[user_dto.role], '0')
         # Generate a random password as a dummy to fill in the gap
         random_password = uuid.uuid4().hex
         user_dto.set_password(random_password)

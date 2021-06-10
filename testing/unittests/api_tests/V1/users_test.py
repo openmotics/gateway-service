@@ -223,6 +223,46 @@ class ApiUsersTests(unittest.TestCase):
                                           request_body=user_to_create)
             self.verify_user_created(user_to_create, response, check_for_pin=True)
 
+    def test_create_admin(self):
+        user_to_create = {
+            'first_name': 'Test',
+            'last_name': 'ADMIN',
+            'role': 'ADMIN'
+        }
+        with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
+                mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value=123):
+            user_to_create_return = user_to_create.copy()
+            user_to_create_return['id'] = 5
+            user_dto_to_return = UserDTO(**user_to_create_return)
+            user_dto_to_return.set_password('Test')
+            save_user_func.return_value = user_dto_to_return
+
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            response = self.web.post_user(role=auth_token.user.role,
+                                          request_body=user_to_create)
+            resp_json = json.loads(response)
+            self.assertEqual('000123', resp_json['pin_code'])  # Test that the admin code is longer
+            self.verify_user_created(user_to_create, response)
+
+    def test_create_admin_no_auth(self):
+        user_to_create = {
+            'first_name': 'Test',
+            'last_name': 'ADMIN',
+            'role': 'ADMIN'
+        }
+        with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
+                mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value=123):
+            user_to_create_return = user_to_create.copy()
+            user_to_create_return['id'] = 5
+            user_dto_to_return = UserDTO(**user_to_create_return)
+            user_dto_to_return.set_password('Test')
+            save_user_func.return_value = user_dto_to_return
+
+            auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
+            response = self.web.post_user(role=auth_token.user.role,
+                                          request_body=user_to_create)
+            self.assertIn(UnAuthorizedException.bytes_message(), response)
+
     def test_create_user_empty(self):
         user_to_create = {}
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
@@ -350,7 +390,7 @@ class ApiUsersTests(unittest.TestCase):
             'role': 'USER'
         }
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
-                mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value='1234'):
+                mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value=123):
             user_to_create_return = user_to_create.copy()
             del user_to_create_return['pin_code']
             del user_to_create_return['password']
@@ -364,7 +404,9 @@ class ApiUsersTests(unittest.TestCase):
                                           request_body=user_to_create.copy())
             del user_to_create['pin_code']
             del user_to_create['password']
-            self.verify_user_created(user_to_create, response, check_for_pin=True)
+            resp_json = json.loads(response)
+            self.assertEqual(resp_json['pin_code'], '0123')  # check the null padding
+            self.verify_user_created(user_to_create, response)
 
     def test_activate_user(self):
         user_code = {'code': self.normal_user_2.pin_code}

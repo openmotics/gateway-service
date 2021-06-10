@@ -40,6 +40,12 @@ logger = logging.getLogger(__name__)
 @Singleton
 class UserController(object):
     """ The UserController provides methods for the creation and authentication of users. """
+    PinCodeLength = {
+        'COURIER': 4,
+        'USER': 4,
+        'ADMIN': 6,
+        'TECHNICIAN': 6
+    }
 
     @Inject
     def __init__(self, config=INJECTED, authentication_controller=INJECTED):
