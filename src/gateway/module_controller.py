@@ -62,9 +62,12 @@ class ModuleController(BaseController):
                                             address=dto.address)
                 if module is None:
                     module = Module.create(source=dto.source,
-                                           address=dto.address)
-                module.module_type = dto.module_type
-                module.hardware_type = dto.hardware_type
+                                           address=dto.address,
+                                           module_type=dto.module_type,
+                                           hardware_type=dto.hardware_type)
+                else:
+                    module.module_type = dto.module_type
+                    module.hardware_type = dto.hardware_type
                 if dto.online:
                     module.firmware_version = dto.firmware_version
                     module.hardware_version = dto.hardware_version
@@ -92,7 +95,7 @@ class ModuleController(BaseController):
             ))
         except CommunicationTimedOutException as ex:
             logger.error('ORM sync (Modules): Failed: {0}'.format(ex))
-        except Exception:
+        except Exception as ex:
             logger.exception('ORM sync (Modules): Failed')
         finally:
             self._sync_running = False

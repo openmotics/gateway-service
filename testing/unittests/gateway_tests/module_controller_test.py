@@ -25,6 +25,7 @@ from gateway.hal.master_controller import MasterController
 from gateway.models import Module
 from gateway.module_controller import ModuleController
 from gateway.pubsub import PubSub
+from gateway.energy_module_controller import EnergyModuleController
 from ioc import SetTestMode, SetUpTestInjections
 
 MODELS = [Module]
@@ -43,12 +44,15 @@ class ModuleControllerTest(unittest.TestCase):
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub)
         self.master_controller = mock.Mock(MasterController)
+        self.energy_module_controller=mock.Mock(EnergyModuleController)
         SetUpTestInjections(master_controller=self.master_controller,
-                            maintenance_controller=mock.Mock())
+                            maintenance_controller=mock.Mock(),
+                            energy_module_controller=self.energy_module_controller)
         self.controller = ModuleController()
-        module = Module(address=2,
-                        source=ModuleDTO.Source.GATEWAY,
-                        hardware_type=ModuleDTO.HardwareType.PHYSICAL)
+        module = Module.create(address=2,
+                               source=ModuleDTO.Source.GATEWAY,
+                               hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                               module_type=ModuleDTO.ModuleType.ENERGY)
         module.save()
 
     def tearDown(self):
@@ -64,9 +68,18 @@ class ModuleControllerTest(unittest.TestCase):
                                     hardware_version='4',
                                     order=0,
                                     online=True)]
+        energy_modules = [ModuleDTO(source=ModuleDTO.Source.GATEWAY,
+                                    module_type=ModuleDTO.ModuleType.ENERGY,
+                                    address='2',
+                                    hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                                    firmware_version=None,
+                                    hardware_version=None,
+                                    order=None)]
         self.master_controller.get_modules_information.return_value = master_modules
+        self.energy_module_controller.get_modules_information.return_value = []  # Empty, should not remove EM
         self.controller.run_sync_orm()
         self.assertEqual(master_modules, self.controller.load_master_modules())
+        self.assertEqual(energy_modules, self.controller.load_energy_modules())
         self.assertEqual([], self.controller.load_master_modules(address='000.000.000.000'))
 
     def test_module_offline(self):
