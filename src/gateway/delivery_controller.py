@@ -21,7 +21,7 @@ import datetime
 from dateutil.tz import tzlocal
 import logging
 
-from gateway.models import Delivery, User
+from gateway.models import Delivery, User, Database
 from gateway.mappers import DeliveryMapper, UserMapper
 from gateway.dto import DeliveryDTO, UserDTO
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -135,8 +135,12 @@ class DeliveryController(object):
         delivery_dto.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
         if delivery_dto.type == Delivery.DeliveryType.RETURN:
             pickup_user_dto = delivery_dto.user_pickup
+            delivery_dto.user_pickup = delivery_dto.user_delivery
+            delivery_dto_saved = self.save_delivery(delivery_dto)
             self.user_controller.remove_user(pickup_user_dto)
-        return self.save_delivery(delivery_dto)
+        else:
+            delivery_dto_saved = self.save_delivery(delivery_dto)
+        return delivery_dto_saved
 
     @staticmethod
     def _validate_delivery_type(delivery_dto):
@@ -149,7 +153,7 @@ class DeliveryController(object):
             # Delivery needs a courier when it is not picked up, otherwise the user needs to be deleted.
             if delivery_dto.timestamp_pickup is None:
                 # not picked up
-                if delivery_dto.user_pickup is None or delivery_dto.user_pickup.role is not User.UserRoles.COURIER:
+                if delivery_dto.user_pickup is None or delivery_dto.user_pickup.role != User.UserRoles.COURIER:
                     raise ValueError('when the delivery is not picked up, the delivery needs a COURIER pickup user')
         else:
             if delivery_dto.user_delivery is not None:

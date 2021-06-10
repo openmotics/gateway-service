@@ -24,12 +24,12 @@ from peewee import SqliteDatabase
 from gateway.authentication_controller import AuthenticationController, TokenStore
 from gateway.dto import DeliveryDTO, UserDTO
 from gateway.mappers import UserMapper, DeliveryMapper
-from gateway.models import Delivery, User
+from gateway.models import Delivery, User, Apartment
 from gateway.delivery_controller import DeliveryController
 from gateway.user_controller import UserController
 from ioc import SetTestMode, SetUpTestInjections
 
-MODELS = [Delivery, User]
+MODELS = [Delivery, User, Apartment]
 
 
 class DeliveryControllerTest(unittest.TestCase):
@@ -39,7 +39,7 @@ class DeliveryControllerTest(unittest.TestCase):
     def setUpClass(cls):
         super(DeliveryControllerTest, cls).setUpClass()
         SetTestMode()
-        cls.test_db = SqliteDatabase(':memory:')
+        cls.test_db = SqliteDatabase(':memory:', pragmas={'foreign_keys': '1'})  # important to mimic the behavior of the real database connection
 
     @classmethod
     def tearDownClass(cls):
@@ -88,8 +88,6 @@ class DeliveryControllerTest(unittest.TestCase):
         for user in self.all_users:
             user_orm = UserMapper.dto_to_orm(user)
             user_orm.save()
-
-
 
         self.test_delivery_1 = DeliveryDTO(
             type='DELIVERY',
