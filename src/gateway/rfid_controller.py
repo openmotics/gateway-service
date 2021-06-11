@@ -60,6 +60,17 @@ class RfidController(object):
         return RFID.select().count()
 
     @staticmethod
+    def check_rfid_tag_for_login(rfid_tag_string):
+        # type: (str) -> Optional[RfidDTO]
+        rfid_orm = RFID.select().where(RFID.tag_string == rfid_tag_string).first()
+        if rfid_orm is None:
+            return None
+        rfid_orm.timestamp_last_used = RfidController.current_timestamp_to_string_format()
+        rfid_orm.save()
+        rfid_dto = RfidMapper.orm_to_dto(rfid_orm)
+        return rfid_dto
+
+    @staticmethod
     def save_rfid(rfid_dto):
         # type: (RfidDTO) -> Optional[RfidDTO]
         rfid_orm = RfidMapper.dto_to_orm(rfid_dto)
@@ -87,5 +98,4 @@ class RfidController(object):
     def current_timestamp_to_string_format():
         # type: () -> str
         timestamp = datetime.datetime.now(tzlocal())
-        # replace the microseconds to not show them in the string
-        return timestamp.replace(microsecond=0).isoformat('T')
+        return RfidController.datetime_to_string_format(timestamp)
