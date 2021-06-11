@@ -29,7 +29,7 @@ from playhouse.signals import Model, post_save
 import constants
 
 if False:  # MYPY
-    from typing import Dict, List, Any
+    from typing import Dict, List, Any, TypeVar
     T = TypeVar('T')
 
 logger = logging.getLogger(__name__)

@@ -455,7 +455,7 @@ class RFID(BaseModel):
     label: MixedCharField
     timestamp_created: MixedCharField
     timestamp_last_used: MixedCharField
-    user_id: UserForeignKeyField
+    user: UserForeignKeyField
 
 
 class Delivery(BaseModel):

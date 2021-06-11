@@ -21,7 +21,7 @@ from gateway.dto.floor import FloorDTO
 from gateway.models import Floor
 
 if False:  # MYPY
-    from typing import List
+    from typing import List, Optional
 
 
 class FloorMapper(object):
