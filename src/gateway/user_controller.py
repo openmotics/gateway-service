@@ -18,18 +18,20 @@ and authenticating users.
 """
 
 from __future__ import absolute_import
+
+from functools import reduce
 import logging
-import uuid
-import time
+import operator
 import random
 import six
-from ioc import Injectable, Inject, Singleton, INJECTED
+
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken
-from gateway.exceptions import ItemDoesNotExistException
-from gateway.models import User
-from gateway.mappers.user import UserMapper
 from gateway.dto.user import UserDTO
 from gateway.enums import UserEnums
+from gateway.mappers.user import UserMapper
+from gateway.models import User
+
+from ioc import Injectable, Inject, Singleton, INJECTED
 
 if False:  # MYPY
     from typing import Tuple, List, Optional, Dict, Union
@@ -113,12 +115,18 @@ class UserController(object):
         user_dto.clear_password()
         return user_dto
 
-    def load_users(self):
-        # type: () -> List[UserDTO]
+    def load_users(self, roles=None, include_inactive=False):
+        # type: (List[str], bool) -> List[UserDTO]
         """  Returns a list of UserDTOs with all the usernames """
         _ = self
         users = []
-        for user_orm in User.select():
+        query = User.select()
+        if roles is not None:
+            clauses = [(User.role == role) for role in roles]
+            query = query.where(reduce(operator.or_, clauses))
+        if not include_inactive:
+            query = query.where(User.is_active == 1)
+        for user_orm in query:
             user_dto = UserMapper.orm_to_dto(user_orm)
             user_dto.clear_password()
             users.append(user_dto)

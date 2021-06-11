@@ -92,7 +92,7 @@ class ApiSystemConfigTests(unittest.TestCase):
     def test_get_rfid(self):
         with mock.patch.object(self.rfid_controller, 'load_rfids', return_value=self.all_test_rfids):
             auth_token = AuthenticationToken(self.test_admin_1, token='test-token', expire_timestamp=int(time.time() + 3600))
-            resp = self.web.get_rfids(token=auth_token)
+            resp = self.web.get_rfids(auth_token=auth_token)
             rfids = json.loads(resp)
             all_test_rfids_serial = [RfidSerializer.serialize(x) for x in self.all_test_rfids]
             self.assertEqual(all_test_rfids_serial, rfids)
@@ -100,7 +100,7 @@ class ApiSystemConfigTests(unittest.TestCase):
     def test_get_rfid_normal_user(self):
         with mock.patch.object(self.rfid_controller, 'load_rfids', return_value=self.all_test_rfids):
             auth_token = AuthenticationToken(self.test_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
-            resp = self.web.get_rfids(token=auth_token)
+            resp = self.web.get_rfids(auth_token=auth_token)
             rfids = json.loads(resp)
             all_test_rfids_serial = [RfidSerializer.serialize(self.test_rfid_1)]
             self.assertEqual(all_test_rfids_serial, rfids)
@@ -108,7 +108,7 @@ class ApiSystemConfigTests(unittest.TestCase):
     def test_get_one_rfid_normal_user(self):
         with mock.patch.object(self.rfid_controller, 'load_rfid', return_value=self.test_rfid_1):
             auth_token = AuthenticationToken(self.test_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
-            resp = self.web.get_rfid(rfid_id=1, token=auth_token)
+            resp = self.web.get_rfid(rfid_id=1, auth_token=auth_token)
             rfids = json.loads(resp)
             all_test_rfids_serial = RfidSerializer.serialize(self.test_rfid_1)
             self.assertEqual(all_test_rfids_serial, rfids)
@@ -116,7 +116,7 @@ class ApiSystemConfigTests(unittest.TestCase):
     def test_get_one_rfid_wrong_user(self):
         with mock.patch.object(self.rfid_controller, 'load_rfid', return_value=self.test_rfid_2):
             auth_token = AuthenticationToken(self.test_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
-            resp = self.web.get_rfid(rfid_id=2, token=auth_token)
+            resp = self.web.get_rfid(rfid_id=2, auth_token=auth_token)
             print(resp)
             # should be unauthorized since you request another rfid that is not yours as a non admin
             self.assertIn(UnAuthorizedException.bytes_message(), resp)
@@ -124,7 +124,7 @@ class ApiSystemConfigTests(unittest.TestCase):
     def test_get_one_rfid_admin_user(self):
         with mock.patch.object(self.rfid_controller, 'load_rfid', return_value=self.test_rfid_1):
             auth_token = AuthenticationToken(self.test_admin_1, token='test-token', expire_timestamp=int(time.time() + 3600))
-            resp = self.web.get_rfid(rfid_id=1, token=auth_token)
+            resp = self.web.get_rfid(rfid_id=1, auth_token=auth_token)
             rfids = json.loads(resp)
             all_test_rfids_serial = RfidSerializer.serialize(self.test_rfid_1)
             # Should go as planned, admin can request all rfids
@@ -134,14 +134,14 @@ class ApiSystemConfigTests(unittest.TestCase):
         with mock.patch.object(self.rfid_controller, 'load_rfid', return_value=self.test_rfid_1), \
                 mock.patch.object(self.rfid_controller, 'delete_rfid') as delete_rfid_func:
             auth_token = AuthenticationToken(self.test_admin_1, token='test-token', expire_timestamp=int(time.time() + 3600))
-            resp = self.web.delete_rfid(rfid_id=1, token=auth_token)
+            resp = self.web.delete_rfid(rfid_id=1, auth_token=auth_token)
             self.assertEqual(b'OK', resp)
 
     def test_delete_rfid_wrong_auth(self):
         with mock.patch.object(self.rfid_controller, 'load_rfid', return_value=self.test_rfid_2), \
                 mock.patch.object(self.rfid_controller, 'delete_rfid') as delete_rfid_func:
             auth_token = AuthenticationToken(self.test_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
-            resp = self.web.delete_rfid(rfid_id=1, token=auth_token)
+            resp = self.web.delete_rfid(rfid_id=1, auth_token=auth_token)
             self.assertIn(UnAuthorizedException.bytes_message(), resp)
 
 
