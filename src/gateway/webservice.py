@@ -67,7 +67,7 @@ from gateway.websockets import EventsSocket, MaintenanceSocket, \
 from ioc import INJECTED, Inject, Injectable, Singleton
 from logs import Logs
 from platform_utils import Hardware, Platform, System
-from power.power_communicator import InAddressModeException
+from energy.energy_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
@@ -385,7 +385,7 @@ class WebInterface(object):
         self._metrics_controller = None  # type: Optional[MetricsController]
 
         self._ws_metrics_registered = False
-        self._power_dirty = False
+        self._energy_dirty = False
         self._service_state = False
 
     def in_authorized_mode(self):
@@ -1182,11 +1182,11 @@ class WebInterface(object):
             errors = []
 
         master_last = self._module_controller.master_last_success()
-        power_last = self._energy_module_controller.last_success()
+        energy_last = self._energy_module_controller.last_success()
 
         return {'errors': errors,
                 'master_last_success': master_last,
-                'power_last_success': power_last}
+                'power_last_success': energy_last}
 
     @openmotics_api(auth=True)
     def master_clear_error_list(self):
@@ -1894,12 +1894,12 @@ class WebInterface(object):
         """
         Gets the dirty flags, and immediately clears them
         """
-        power_dirty = self._power_dirty
-        self._power_dirty = False
+        energy_dirty = self._energy_dirty
+        self._energy_dirty = False
         orm_dirty = Database.get_dirty_flag()
         # eeprom key used here for compatibility
         return {'eeprom': self._module_controller.get_configuration_dirty_flag(),
-                'power': power_dirty,
+                'power': energy_dirty,
                 'orm': orm_dirty}
 
     @openmotics_api(auth=True, check=types(level=str, logger_name=str))
@@ -1990,7 +1990,7 @@ class WebInterface(object):
         """
         Stop the address mode on the power modules.
         """
-        self._power_dirty = True
+        self._energy_dirty = True
         self._energy_module_controller.stop_address_mode()
         return {}
 

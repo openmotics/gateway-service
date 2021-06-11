@@ -28,8 +28,8 @@ from gateway.pubsub import PubSub
 from gateway.dto import ModuleDTO, EnergyModuleDTO, RealtimeEnergyDTO, TotalEnergyDTO
 from gateway.energy_module_controller import EnergyModuleController
 from gateway.models import Module, EnergyModule, EnergyCT
-from power import power_api
-from power.power_communicator import PowerCommunicator
+from energy.energy_api import EnergyAPI, NIGHT
+from energy.energy_communicator import EnergyCommunicator
 from ioc import SetTestMode, SetUpTestInjections
 from serial_utils import RS485
 from serial_test import SerialMock, sin, sout
@@ -54,10 +54,10 @@ class EnergyModuleControllerTest(unittest.TestCase):
         SetUpTestInjections(pubsub=self.pubsub,
                             master_controller=None,
                             maintenance_controller=None)
-        self.power_data = []  # type: list
-        self.serial = RS485(SerialMock(self.power_data))
-        SetUpTestInjections(power_serial=self.serial)
-        SetUpTestInjections(power_communicator=PowerCommunicator())
+        self.energy_data = []  # type: list
+        self.serial = RS485(SerialMock(self.energy_data))
+        SetUpTestInjections(energy_serial=self.serial)
+        SetUpTestInjections(energy_communicator=EnergyCommunicator())
         self.test_db.bind(MODELS, bind_refs=True, bind_backrefs=True)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
@@ -132,11 +132,11 @@ class EnergyModuleControllerTest(unittest.TestCase):
     def test_time_sync_calls(self):
         self._setup_module(version=EnergyEnums.Version.POWER_MODULE)
 
-        time_action = power_api.set_day_night(power_api.POWER_MODULE)
-        times = [power_api.NIGHT for _ in range(8)]
-        action = power_api.get_voltage(power_api.POWER_MODULE)
+        time_action = EnergyAPI.set_day_night(EnergyEnums.Version.POWER_MODULE)
+        times = [NIGHT for _ in range(8)]
+        action = EnergyAPI.get_voltage(EnergyEnums.Version.POWER_MODULE)
 
-        self.power_data.extend([
+        self.energy_data.extend([
             sin(time_action.create_input(1, 1, *times)),
             sout(time_action.create_output(1, 1)),
             sin(action.create_input(1, 2)),
@@ -162,7 +162,7 @@ class EnergyModuleControllerTest(unittest.TestCase):
         assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'powermodule'}) in events
         assert len(events) == 1
 
-    def test_get_power_modules(self):
+    def test_get_energy_modules(self):
         self._setup_module(version=EnergyEnums.Version.POWER_MODULE, address=11, number=1)
         self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=21, number=2)
         result = self.controller.load_modules()
@@ -193,7 +193,7 @@ class EnergyModuleControllerTest(unittest.TestCase):
             self.assertEqual({'10': [RealtimeEnergyDTO(voltage=i + 0.3, frequency=i + 0.1, current=i + 0.0, power=i + 0.2)
                                      for i in range(1, 13)]}, result)
 
-    def test_get_realtime_power_p1(self):
+    def test_get_realtime_energy_p1(self):
         self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11, number=10)
         statuses = [True, True, False, True, False, False, False, False]
         with mock.patch.object(self.controller._p1c_helper, '_get_statuses', return_value=statuses), \
@@ -221,7 +221,7 @@ class EnergyModuleControllerTest(unittest.TestCase):
                                      RealtimeEnergyDTO(voltage=0.0, frequency=0.0, current=0.0, power=0.0)
                                      for i in range(1, 9)]}, result)
 
-    def test_get_realtime_power_p1_partial(self):
+    def test_get_realtime_energy_p1_partial(self):
         self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11, number=10)
         statuses = [True, True, False, True, False, False, False, False]
         with mock.patch.object(self.controller._p1c_helper, '_get_statuses', return_value=statuses), \

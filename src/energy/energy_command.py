@@ -13,8 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Contains PowerCommandClass that describes a command to the power modules. The PowerCommand
-class is used to create the power_api.
+Contains EnergyCommandClass that describes a command to the power modules. The EnergyCommand
+class is used to create the EnergyAPI.
 """
 
 from __future__ import absolute_import
@@ -77,22 +77,22 @@ def crc8(to_send):
     return ret
 
 
-class PowerModuleType(object):
+class EnergyModuleType(object):
     E = bytearray(b'E')
     C = bytearray(b'C')
 
 
-class PowerCommand(object):
+class EnergyCommand(object):
     """
-    A PowerCommand is an command that can be send to a Power Module over RS485. The commands
+    A EnergyCommand is an command that can be send to a Power Module over RS485. The commands
     look like this: 'STR' 'E' Address CID Mode(G/S) Type LEN Data CRC7/8 '\r\n'.
     """
 
     def __init__(self, mode, command, input_format, output_format,
-                 module_type=PowerModuleType.E):
+                 module_type=EnergyModuleType.E):
         # type: (str, str, str, Optional[str], bytearray) -> None
         """
-        Create PowerCommand using the fixed fields of the input command and the format of the
+        Create EnergyCommand using the fixed fields of the input command and the format of the
         command returned by the power module.
         :param module_type: 1 character, E (energy/power module) or C (P1 concentrator)
         :param mode: 1 character, S or G
@@ -109,7 +109,7 @@ class PowerCommand(object):
     @staticmethod
     def get_crc(header, payload):
         # type: (bytearray) -> int
-        if header[:1] == PowerModuleType.E:
+        if header[:1] == EnergyModuleType.E:
             return crc7(header + payload)
         else:
             return crc8(payload)
@@ -125,7 +125,7 @@ class PowerCommand(object):
         buffer = bytearray(struct.pack(self.input_format, *data))
         header = self.module_type + bytearray([address, cid]) + self.mode + self.command
         payload = bytearray([len(buffer)]) + buffer
-        crc = PowerCommand.get_crc(header, payload)
+        crc = EnergyCommand.get_crc(header, payload)
         return STR + header + payload + bytearray([crc]) + CRNL
 
     def create_output(self, address, cid, *data):
@@ -140,7 +140,7 @@ class PowerCommand(object):
         buffer = bytearray(struct.pack(self.output_format, *data))
         header = self.module_type + bytearray([address, cid]) + self.mode + self.command
         payload = bytearray([len(buffer)]) + buffer
-        crc = PowerCommand.get_crc(header, payload)
+        crc = EnergyCommand.get_crc(header, payload)
         return RTR + header + payload + bytearray([crc]) + CRNL
 
     def check_header(self, header, address, cid):
@@ -177,7 +177,7 @@ class PowerCommand(object):
             return struct.unpack(self.output_format, data)
 
     def __eq__(self, other):
-        if not isinstance(other, PowerCommand):
+        if not isinstance(other, EnergyCommand):
             return False
         return self.mode == other.mode \
             and self.command == other.command \
@@ -186,4 +186,4 @@ class PowerCommand(object):
             and self.module_type == other.module_type
 
     def __repr__(self):
-        return '<PowerCommand {} {} {} {} {}>'.format(self.mode, self.command, self.input_format, self.output_format, self.module_type)
+        return '<EnergyCommand {} {} {} {} {}>'.format(self.mode, self.command, self.input_format, self.output_format, self.module_type)

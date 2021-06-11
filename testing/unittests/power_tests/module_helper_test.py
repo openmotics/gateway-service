@@ -27,9 +27,9 @@ from gateway.pubsub import PubSub
 from gateway.models import Module, EnergyModule, EnergyCT
 from gateway.dto import ModuleDTO
 from ioc import SetTestMode, SetUpTestInjections
-from power.power_api import PowerCommand
-from power.module_helper_energy import EnergyModuleHelper
-from power.module_helper_p1c import P1ConcentratorHelper
+from energy.energy_command import EnergyCommand
+from energy.module_helper_energy import EnergyModuleHelper
+from energy.module_helper_p1c import P1ConcentratorHelper
 
 
 class EnergyModuleHelperTest(unittest.TestCase):
@@ -40,8 +40,8 @@ class EnergyModuleHelperTest(unittest.TestCase):
     def setUp(self):
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub)
-        self.power_communicator = mock.Mock()
-        SetUpTestInjections(power_communicator=self.power_communicator)
+        self.energy_communicator = mock.Mock()
+        SetUpTestInjections(energy_communicator=self.energy_communicator)
         self.helper = EnergyModuleHelper()
 
     def _setup_module(self, version, address):
@@ -61,61 +61,61 @@ class EnergyModuleHelperTest(unittest.TestCase):
     def test_get_currents(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.POWER_MODULE,
                                            address='11')
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             self.helper._get_currents(energy_module)
-            self.assertEqual([mock.call(11, PowerCommand('G', 'CUR', '', '8f', module_type=bytearray(b'E')))],
+            self.assertEqual([mock.call(11, EnergyCommand('G', 'CUR', '', '8f', module_type=bytearray(b'E')))],
                              cmd.call_args_list)
 
     def test_get_frequencies(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.POWER_MODULE,
                                            address='11')
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             self.helper._get_frequencies(energy_module)
-            self.assertEqual([mock.call(11, PowerCommand('G', 'FRE', '', 'f', module_type=bytearray(b'E')))],
+            self.assertEqual([mock.call(11, EnergyCommand('G', 'FRE', '', 'f', module_type=bytearray(b'E')))],
                              cmd.call_args_list)
         energy_module = self._setup_module(version=EnergyEnums.Version.ENERGY_MODULE,
                                            address='10')
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             self.helper._get_frequencies(energy_module)
-            self.assertEqual([mock.call(10, PowerCommand('G', 'FRE', '', '12f', module_type=bytearray(b'E')))],
+            self.assertEqual([mock.call(10, EnergyCommand('G', 'FRE', '', '12f', module_type=bytearray(b'E')))],
                              cmd.call_args_list)
 
     def test_get_powers(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.POWER_MODULE,
                                            address='11')
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             self.helper._get_powers(energy_module)
-            self.assertEqual([mock.call(11, PowerCommand('G', 'POW', '', '8f', module_type=bytearray(b'E')))],
+            self.assertEqual([mock.call(11, EnergyCommand('G', 'POW', '', '8f', module_type=bytearray(b'E')))],
                              cmd.call_args_list)
 
     def test_get_module_voltage(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.POWER_MODULE,
                                            address='11')
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             self.helper._get_voltages(energy_module)
-            self.assertEqual([mock.call(11, PowerCommand('G', 'VOL', '', 'f', module_type=bytearray(b'E')))],
+            self.assertEqual([mock.call(11, EnergyCommand('G', 'VOL', '', 'f', module_type=bytearray(b'E')))],
                              cmd.call_args_list)
         energy_module = self._setup_module(version=EnergyEnums.Version.ENERGY_MODULE,
                                            address='10')
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             self.helper._get_voltages(energy_module)
-            self.assertEqual([mock.call(10, PowerCommand('G', 'VOL', '', '12f', module_type=bytearray(b'E')))],
+            self.assertEqual([mock.call(10, EnergyCommand('G', 'VOL', '', '12f', module_type=bytearray(b'E')))],
                              cmd.call_args_list)
 
     def test_get_module_day_energy(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.POWER_MODULE,
                                            address='11')
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             self.helper.get_day_counters(energy_module)
-            self.assertEqual([mock.call(11, PowerCommand('G', 'EDA', '', '8L', module_type=bytearray(b'E')))],
+            self.assertEqual([mock.call(11, EnergyCommand('G', 'EDA', '', '8L', module_type=bytearray(b'E')))],
                              cmd.call_args_list)
 
     def test_get_module_night_energy(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.POWER_MODULE,
                                            address='11')
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             self.helper.get_night_counters(energy_module)
-            self.assertEqual([mock.call(11, PowerCommand('G', 'ENI', '', '8L', module_type=bytearray(b'E')))],
+            self.assertEqual([mock.call(11, EnergyCommand('G', 'ENI', '', '8L', module_type=bytearray(b'E')))],
                              cmd.call_args_list)
 
 
@@ -128,8 +128,8 @@ class P1ControllerTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
-        self.power_communicator = mock.Mock()
-        SetUpTestInjections(power_communicator=self.power_communicator)
+        self.energy_communicator = mock.Mock()
+        SetUpTestInjections(energy_communicator=self.energy_communicator)
         self.helper = P1ConcentratorHelper()
 
     def _setup_module(self, version, address):
@@ -243,7 +243,7 @@ class P1ControllerTest(unittest.TestCase):
     def test_get_module_status(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11)
         payload = 0b00001011
-        with mock.patch.object(self.power_communicator, 'do_command',
+        with mock.patch.object(self.energy_communicator, 'do_command',
                                return_value=[payload]) as cmd:
             status = self.helper._get_statuses(energy_module)
             self.assertEqual([
@@ -251,13 +251,13 @@ class P1ControllerTest(unittest.TestCase):
                 False, False, False, False
             ], status)
             self.assertEqual([
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C')))
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C')))
             ], cmd.call_args_list)
 
     def test_get_module_meter(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11)
         payload = '11111111111111111111111111112222222222222222222222222222                            4444444444444444444444444444'
-        with mock.patch.object(self.power_communicator, 'do_command',
+        with mock.patch.object(self.energy_communicator, 'do_command',
                                return_value=[payload]) as cmd:
             meters = self.helper._get_meter(energy_module, meter_type=1)
             self.assertEqual([
@@ -268,76 +268,76 @@ class P1ControllerTest(unittest.TestCase):
                 '', '', '', '',
             ], meters)
             self.assertEqual([
-                mock.call(11, PowerCommand('G', 'M1\x00', '', '224s', module_type=bytearray(b'C')))
+                mock.call(11, EnergyCommand('G', 'M1\x00', '', '224s', module_type=bytearray(b'C')))
             ], cmd.call_args_list)
 
     def test_get_module_timestamp(self):
         # TODO confirm this is correct
         energy_module = self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11)
         payload = '000000000001S000000000002              000000000012S000000000013S'
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             cmd.side_effect = [[0b00001011], [payload]]
             meters = self.helper._get_timestamp(energy_module)
             self.assertEqual([1.0, 2.0, None, 12.0, None, None, None, None], meters)
             self.assertEqual([
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'TS\x00', '', '104s', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'TS\x00', '', '104s', module_type=bytearray(b'C'))),
             ], cmd.call_args_list)
 
     def test_get_module_gas(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11)
         payload = '000000001*m300002.300*m3            00012.000*m300013.000*m3'
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             cmd.side_effect = [[0b00001011], [payload]]
             meters = self.helper._get_gas_consumption(energy_module)
             self.assertEqual([1.0, 2.3, None, 12.0, None, None, None, None], meters)
             self.assertEqual([
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'cG\x00', '', '112s', module_type=bytearray(b'C')))
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'cG\x00', '', '112s', module_type=bytearray(b'C')))
             ], cmd.call_args_list)
 
     def test_get_module_consumption_tariff(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11)
         payload = '0000000001*kWh000002.300*kWh              000012.000*kWh000013.000*kWh'
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             cmd.side_effect = [[0b00001011], [payload]]
             meters = self.helper._get_consumption_tariff(energy_module, tariff_type=1)
             self.assertEqual([1.0, 2.3, None, 12.0, None, None, None, None], meters)
             self.assertEqual([
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'c1\x00', '', '112s', module_type=bytearray(b'C')))
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'c1\x00', '', '112s', module_type=bytearray(b'C')))
             ], cmd.call_args_list)
 
     def test_get_module_injection_tariff(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11)
         payload = '0000000001*kWh000002.300*kWh              000012.000*kWh000013.000*kWh'
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             cmd.side_effect = [[0b00001011], [payload]]
             meters = self.helper._get_injection_tariff(energy_module, tariff_type=1)
             self.assertEqual([1.0, 2.3, None, 12.0, None, None, None, None], meters)
             self.assertEqual([
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'i1\x00', '', '112s', module_type=bytearray(b'C')))
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'i1\x00', '', '112s', module_type=bytearray(b'C')))
             ], cmd.call_args_list)
 
     def test_get_module_tariff_indicator(self):
         # TODO confirm this is correct
         energy_module = self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11)
         payload = '00010002    00120013'
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             cmd.side_effect = [[0b00001011], [payload]]
             meters = self.helper._get_tariff_indicator(energy_module)
             self.assertEqual([1.0, 2.0, None, 12.0, None, None, None, None], meters)
             self.assertEqual([
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'ti\x00', '', '32s', module_type=bytearray(b'C')))
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'ti\x00', '', '32s', module_type=bytearray(b'C')))
             ], cmd.call_args_list)
 
     def test_get_module_current(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11)
         payload1 = '001  002  !42  012  013  '
         payload2 = '002  003  !43  013  014  '
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             cmd.side_effect = [[0b00001011], [payload1],
                                [0b00001011], [payload1],
                                [0b00001011], [payload2]]
@@ -353,19 +353,19 @@ class P1ControllerTest(unittest.TestCase):
                 {'phase1': None, 'phase2': None, 'phase3': None}
             ], voltages)
             self.assertEqual([
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'C1\x00', '', '40s', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'C2\x00', '', '40s', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'C3\x00', '', '40s', module_type=bytearray(b'C')))
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'C1\x00', '', '40s', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'C2\x00', '', '40s', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'C3\x00', '', '40s', module_type=bytearray(b'C')))
             ], cmd.call_args_list)
 
     def test_get_module_voltage(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11)
         payload1 = '00001  002.3  !@#42  00012  00013  '
         payload2 = '00002  003.4  !@#43  00013  00014  '
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             cmd.side_effect = [[0b00001011], [payload1],
                                [0b00001011], [payload1],
                                [0b00001011], [payload2]]
@@ -381,58 +381,58 @@ class P1ControllerTest(unittest.TestCase):
                 {'phase1': None, 'phase2': None, 'phase3': None}
             ], voltages)
             self.assertEqual([
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'V1\x00', '', '56s', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'V2\x00', '', '56s', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'V3\x00', '', '56s', module_type=bytearray(b'C')))
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'V1\x00', '', '56s', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'V2\x00', '', '56s', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'V3\x00', '', '56s', module_type=bytearray(b'C')))
             ], cmd.call_args_list)
 
     def test_get_module_delivered_power(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11)
         payload = '000001   000002   !@#$42   000012   000013   '
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             cmd.side_effect = [[0b00001011], [payload]]
             delivered = self.helper._get_delivered_powers(energy_module)
             self.assertEqual([1.0, 2.0, None, 12.0, None, None, None, None], delivered)
             self.assertEqual([
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'PD\x00', '', '72s', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'PD\x00', '', '72s', module_type=bytearray(b'C'))),
             ], cmd.call_args_list)
 
     def test_get_module_received_power(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11)
         payload = '000001   000002   !@#$42   000012   000013   '
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             cmd.side_effect = [[0b00001011], [payload]]
             received = self.helper._get_received_powers(energy_module)
             self.assertEqual([1.0, 2.0, None, 12.0, None, None, None, None], received)
             self.assertEqual([
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'PR\x00', '', '72s', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'PR\x00', '', '72s', module_type=bytearray(b'C'))),
             ], cmd.call_args_list)
 
     def test_get_module_day_energy(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11)
         payload = '000000.001    000000.002    !@#$%^&*42    000000.012    000000.013    '
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             cmd.side_effect = [[0b00001011], [payload]]
             received = self.helper.get_day_counters(energy_module)
             self.assertEqual([1, 2, None, 12, None, None, None, None], received)
             self.assertEqual([
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'c1\x00', '', '112s', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'c1\x00', '', '112s', module_type=bytearray(b'C'))),
             ], cmd.call_args_list)
 
     def test_get_module_night_energy(self):
         energy_module = self._setup_module(version=EnergyEnums.Version.P1_CONCENTRATOR, address=11)
         payload = '000000.001    000000.002    !@#$%^&*42    000000.012    000000.013    '
-        with mock.patch.object(self.power_communicator, 'do_command') as cmd:
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             cmd.side_effect = [[0b00001011], [payload]]
             received = self.helper.get_night_counters(energy_module)
             self.assertEqual([1, 2, None, 12, None, None, None, None], received)
             self.assertEqual([
-                mock.call(11, PowerCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
-                mock.call(11, PowerCommand('G', 'c2\x00', '', '112s', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'SP\x00', '', 'B', module_type=bytearray(b'C'))),
+                mock.call(11, EnergyCommand('G', 'c2\x00', '', '112s', module_type=bytearray(b'C'))),
             ], cmd.call_args_list)

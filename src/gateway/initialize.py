@@ -52,7 +52,7 @@ from master.classic.master_communicator import MasterCommunicator
 from master.core.core_communicator import CoreCommunicator
 from master.core.maintenance import MaintenanceCoreCommunicator
 from master.core.memory_file import MemoryFile, MemoryTypes
-from power.power_communicator import PowerCommunicator
+from energy.energy_communicator import EnergyCommunicator
 from serial_utils import RS485
 
 
@@ -245,16 +245,16 @@ def setup_target_platform(target_platform, message_client_name):
 
     # Energy Controller
     try:
-        power_serial_port = config.get('OpenMotics', 'power_serial')
+        energy_serial_port = config.get('OpenMotics', 'power_serial')
     except NoOptionError:
-        power_serial_port = ''
-    if power_serial_port:
+        energy_serial_port = ''
+    if energy_serial_port:
         # TODO: make non blocking?
-        Injectable.value(power_serial=RS485(Serial(power_serial_port, 115200, timeout=None)))
-        Injectable.value(power_communicator=PowerCommunicator())
+        Injectable.value(energy_serial=RS485(Serial(energy_serial_port, 115200, timeout=None)))
+        Injectable.value(energy_communicator=EnergyCommunicator())
     else:
-        Injectable.value(power_serial=None)
-        Injectable.value(power_communicator=None)
+        Injectable.value(energy_serial=None)
+        Injectable.value(energy_communicator=None)
 
     # UART Controller
     try:
@@ -373,17 +373,17 @@ def setup_minimal_master_platform(port):
         logger.warning('Unhandled master implementation for %s', platform)
 
 
-def setup_minimal_power_platform():
+def setup_minimal_energy_platform():
     # type: () -> None
     config = ConfigParser()
     config.read(constants.get_config_file())
-    power_serial_port = config.get('OpenMotics', 'power_serial')
-    if power_serial_port:
-        Injectable.value(power_serial=RS485(Serial(power_serial_port, 115200, timeout=None)))
-        Injectable.value(power_communicator=PowerCommunicator())
+    energy_serial_port = config.get('OpenMotics', 'power_serial')
+    if energy_serial_port:
+        Injectable.value(energy_serial=RS485(Serial(energy_serial_port, 115200, timeout=None)))
+        Injectable.value(energy_communicator=EnergyCommunicator())
     else:
-        Injectable.value(power_communicator=None)
-        Injectable.value(power_serial=None)
+        Injectable.value(energy_communicator=None)
+        Injectable.value(energy_serial=None)
     Injectable.value(master_controller=None)
     from gateway import energy_module_controller
     _ = energy_module_controller

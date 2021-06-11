@@ -29,10 +29,9 @@ from gateway.dto import RealtimeEnergyDTO, ModuleDTO, TotalEnergyDTO, EnergyModu
 from gateway.enums import EnergyEnums
 from gateway.mappers import EnergyModuleMapper
 from gateway.models import EnergyModule, Module, EnergyCT
-from power.module_helper_energy import EnergyModuleHelper, PowerModuleHelper
-from power.module_helper_p1c import P1ConcentratorHelper
-from power.power_api import DAY, NIGHT
-from power import power_api
+from energy.module_helper_energy import EnergyModuleHelper, PowerModuleHelper
+from energy.module_helper_p1c import P1ConcentratorHelper
+from energy.energy_api import DAY, NIGHT, EnergyAPI
 from peewee import prefetch
 from serial_utils import CommunicationTimedOutException
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -40,8 +39,8 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 if False:  # MYPY
     from typing import Dict, List, Any, Optional
     from gateway.hal.master_controller import MasterController
-    from power.module_helper import ModuleHelper
-    from power.power_communicator import PowerCommunicator
+    from energy.module_helper import ModuleHelper
+    from energy.energy_communicator import EnergyCommunicator
 
 logger = logging.getLogger('openmotics')
 
@@ -51,12 +50,12 @@ logger = logging.getLogger('openmotics')
 class EnergyModuleController(BaseController):
 
     @Inject
-    def __init__(self, master_controller=INJECTED, power_communicator=INJECTED, pubsub=INJECTED):
-        # type: (MasterController, PowerCommunicator, PubSub) -> None
+    def __init__(self, master_controller=INJECTED, energy_communicator=INJECTED, pubsub=INJECTED):
+        # type: (MasterController, EnergyCommunicator, PubSub) -> None
         super(EnergyModuleController, self).__init__(master_controller)
         self._pubsub = pubsub
-        self._energy_communicator = power_communicator  # TODO: Rename
-        self._enabled = power_communicator is not None
+        self._energy_communicator = energy_communicator
+        self._enabled = energy_communicator is not None
         self._sync_time_thread = None  # type: Optional[DaemonThread]
 
         self._energy_module_helper = EnergyModuleHelper()
@@ -65,9 +64,9 @@ class EnergyModuleController(BaseController):
 
         self._time_cache = {}  # type: Dict[int, List[int]]
 
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.POWER, self._handle_power_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.POWER, self._handle_energy_event)
 
-    def _handle_power_event(self, master_event):
+    def _handle_energy_event(self, master_event):
         # type: (MasterEvent) -> None
         if master_event.type == MasterEvent.Types.POWER_ADDRESS_EXIT:
             gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'powermodule'})  # TODO: Should be called energymodule
@@ -105,7 +104,7 @@ class EnergyModuleController(BaseController):
                 logger.info('Setting day/night for EnergyModule {0} to {1}'.format(energy_module.number, daynight))
                 try:
                     self._energy_communicator.do_command(int(energy_module.module.address),
-                                                         power_api.set_day_night(energy_module.version),
+                                                         EnergyAPI.set_day_night(energy_module.version),
                                                          *daynight)
                     self._time_cache[energy_module.number] = daynight
                 except CommunicationTimedOutException:
@@ -326,4 +325,4 @@ class EnergyModuleController(BaseController):
     def do_raw_energy_command(self, address, mode, command, data):
         if not self._enabled:
             return []
-        return self._energy_communicator.do_command(address, power_api.raw_command(mode, command, len(data)), *data)
+        return self._energy_communicator.do_command(address, EnergyAPI.raw_command(mode, command, len(data)), *data)

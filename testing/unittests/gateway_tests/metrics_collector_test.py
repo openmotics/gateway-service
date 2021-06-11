@@ -69,13 +69,13 @@ class MetricsCollectorTest(unittest.TestCase):
                                       values={'temperature': 21.0})
             assert enqueue.call_args_list == [expected_call]
 
-    def test_realtime_power_metrics(self):
+    def test_realtime_energy_metrics(self):
         self.em_controller.get_realtime_energy.return_value = {'10': [RealtimeEnergyDTO(voltage=10.0,
                                                                                         frequency=2.1,
                                                                                         current=5.0,
                                                                                         power=3.6)]}
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._process_power_metrics('energy')
+            self.controller._process_energy_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy',
                                       tags={'type': 'openmotics', 'id': '11.0', 'name': 'foo'},
@@ -99,7 +99,7 @@ class MetricsCollectorTest(unittest.TestCase):
              'timestamp': 190527083152.0},
         ]
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._process_power_metrics('energy')
+            self.controller._process_energy_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy_p1',
                                       tags={'type': 'openmotics', 'id': '11.0',
@@ -134,7 +134,7 @@ class MetricsCollectorTest(unittest.TestCase):
              'timestamp': 190527083152.0},
         ]
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._process_power_metrics('energy')
+            self.controller._process_energy_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy_p1',
                                       tags={'type': 'openmotics', 'id': '11.0',
@@ -162,7 +162,7 @@ class MetricsCollectorTest(unittest.TestCase):
              'timestamp': 190527083152.0},
         ]
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._process_power_metrics('energy')
+            self.controller._process_energy_metrics('energy')
             assert enqueue.call_args_list == []
 
     def test_realtime_p1_gas_metrics(self):
@@ -176,7 +176,7 @@ class MetricsCollectorTest(unittest.TestCase):
              'timestamp': 190527083152.0},
         ]
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._process_power_metrics('energy')
+            self.controller._process_energy_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy_p1',
                                       tags={'type': 'openmotics', 'id': '11.0',
@@ -195,13 +195,13 @@ class MetricsCollectorTest(unittest.TestCase):
              'timestamp': 190527083152.0},
         ]
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._process_power_metrics('energy')
+            self.controller._process_energy_metrics('energy')
             assert enqueue.call_args_list == []
 
-    def test_total_power_metrics(self):
+    def test_total_energy_metrics(self):
         self.em_controller.get_total_energy.return_value = {'10': [TotalEnergyDTO(day=10, night=2)]}
         with mock.patch.object(self.controller, '_enqueue_metrics') as enqueue:
-            self.controller._process_power_metrics('energy')
+            self.controller._process_energy_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy',
                                       tags={'type': 'openmotics', 'id': '11.0', 'name': 'foo'},

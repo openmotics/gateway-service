@@ -25,7 +25,7 @@ from gateway.models import EnergyModule
 
 if False:  # MYPY
     from typing import Dict, Tuple, Optional, List, Any, TypeVar, Union
-    from power.power_communicator import PowerCommunicator
+    from energy.energy_communicator import EnergyCommunicator
     T = TypeVar('T', bound=Union[int, float])
 
 logger = logging.getLogger(__name__)
@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 class ModuleHelper(object):
     @Inject
-    def __init__(self, power_communicator=INJECTED):
-        self._energy_communicator = power_communicator  # type: PowerCommunicator  # TODO: Rename
+    def __init__(self, energy_communicator=INJECTED):
+        self._energy_communicator = energy_communicator  # type: EnergyCommunicator  # TODO: Rename
 
     def get_realtime(self, energy_module):  # type: (EnergyModule) -> Dict[int, RealtimeEnergyDTO]
         raise NotImplementedError()

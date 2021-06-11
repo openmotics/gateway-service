@@ -116,7 +116,7 @@ class OpenmoticsService(object):
     @Inject
     def start(master_controller=INJECTED,  # type: MasterController
               maintenance_controller=INJECTED,  # type: MaintenanceController
-              power_serial=INJECTED,  # type: RS485
+              energy_serial=INJECTED,  # type: RS485
               metrics_controller=INJECTED,  # type: MetricsController
               passthrough_service=INJECTED,  # type: PassthroughService
               scheduling_controller=INJECTED,  # type: SchedulingController
@@ -168,8 +168,8 @@ class OpenmoticsService(object):
 
         # Start rest of the stack
         maintenance_controller.start()
-        if power_serial:
-            power_serial.start()
+        if energy_serial:
+            energy_serial.start()
         metrics_controller.start()
         if passthrough_service:
             passthrough_service.start()

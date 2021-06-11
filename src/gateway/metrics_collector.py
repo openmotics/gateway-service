@@ -27,11 +27,11 @@ import six
 
 from gateway.daemon_thread import BaseThread
 from gateway.events import GatewayEvent
+from gateway.enums import EnergyEnums
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.models import Database
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Hardware
-from power import power_api
 
 if False:  # MYPY
     from typing import Dict, Any, List, Optional, Tuple
@@ -120,8 +120,8 @@ class MetricsCollector(object):
         MetricsCollector._start_thread(self._run_thermostats, 'thermostat')
         MetricsCollector._start_thread(self._run_errors, 'error')
         MetricsCollector._start_thread(self._run_pulsecounters, 'counter')
-        MetricsCollector._start_thread(self._run_power_openmotics, 'energy')
-        MetricsCollector._start_thread(self._run_power_openmotics_analytics, 'energy_analytics')
+        MetricsCollector._start_thread(self._run_energy_openmotics, 'energy')
+        MetricsCollector._start_thread(self._run_energy_openmotics_analytics, 'energy_analytics')
         thread = BaseThread(target=self._sleep_manager, name='metricsleep')
         thread.daemon = True
         thread.start()
@@ -653,16 +653,16 @@ class MetricsCollector(object):
                 return
             self._pause(start, metric_type)
 
-    def _run_power_openmotics(self, metric_type):
+    def _run_energy_openmotics(self, metric_type):
         # type: (str) -> None
         while not self._stopped:
             start = time.time()
-            self._process_power_metrics(metric_type)
+            self._process_energy_metrics(metric_type)
             if self._stopped:
                 return
             self._pause(start, metric_type)
 
-    def _process_power_metrics(self, metric_type):
+    def _process_energy_metrics(self, metric_type):
         # type: (str) -> None
         def _add_if_not_none(dictionary, field, value):
             if value is not None:
@@ -670,24 +670,24 @@ class MetricsCollector(object):
 
         now = time.time()
         mapping = {}
-        power_data = {}
+        energy_data = {}
         try:
-            for power_module in self._energy_module_controller.load_modules():
-                device_id = '{0}.{{0}}'.format(power_module.address)
-                mapping[str(power_module.id)] = device_id
-                for i in range(power_api.NUM_PORTS[power_module.version]):
-                    power_data[device_id.format(i)] = {'name': getattr(power_module, 'input{0}'.format(i))}
+            for energy_module in self._energy_module_controller.load_modules():
+                device_id = '{0}.{{0}}'.format(energy_module.address)
+                mapping[str(energy_module.id)] = device_id
+                for i in range(EnergyEnums.NUMBER_OF_PORTS[energy_module.version]):
+                    energy_data[device_id.format(i)] = {'name': getattr(energy_module, 'input{0}'.format(i))}
         except CommunicationFailure as ex:
             logger.error('Error getting power modules: {}'.format(ex))
         except Exception as ex:
             logger.exception('Error getting power modules: {0}'.format(ex))
         try:
-            realtime_power_data = self._energy_module_controller.get_realtime_energy()
+            realtime_energy_data = self._energy_module_controller.get_realtime_energy()
             for module_id, device_id in mapping.items():
-                if module_id in realtime_power_data:
-                    for index, realtime_power in enumerate(realtime_power_data[module_id]):
-                        if device_id.format(index) in power_data:
-                            usage = power_data[device_id.format(index)]
+                if module_id in realtime_energy_data:
+                    for index, realtime_power in enumerate(realtime_energy_data[module_id]):
+                        if device_id.format(index) in energy_data:
+                            usage = energy_data[device_id.format(index)]
                             _add_if_not_none(usage, 'voltage', realtime_power.voltage)
                             _add_if_not_none(usage, 'frequency', realtime_power.frequency)
                             _add_if_not_none(usage, 'current', realtime_power.current)
@@ -743,8 +743,8 @@ class MetricsCollector(object):
                         total = None
                         if day is not None and night is not None:
                             total = day + night
-                        if device_id.format(index) in power_data:
-                            usage = power_data[device_id.format(index)]
+                        if device_id.format(index) in energy_data:
+                            usage = energy_data[device_id.format(index)]
                             _add_if_not_none(usage, 'counter', total)
                             _add_if_not_none(usage, 'counter_day', day)
                             _add_if_not_none(usage, 'counter_night', night)
@@ -752,8 +752,8 @@ class MetricsCollector(object):
             logger.error('Error getting total energy: {}'.format(ex))
         except Exception as ex:
             logger.exception('Error getting total energy: {0}'.format(ex))
-        for device_id in power_data:
-            device = power_data[device_id]
+        for device_id in energy_data:
+            device = energy_data[device_id]
             try:
                 if device['name'] != '' and len(device) > 1:
                     name = device.pop('name')
@@ -766,7 +766,7 @@ class MetricsCollector(object):
             except Exception as ex:
                 logger.exception('Error processing OpenMotics power device {0}: {1}'.format(device_id, ex))
 
-    def _run_power_openmotics_analytics(self, metric_type):
+    def _run_energy_openmotics_analytics(self, metric_type):
         while not self._stopped:
             start = time.time()
             try:
@@ -774,7 +774,7 @@ class MetricsCollector(object):
                 result = self._energy_module_controller.load_modules()
                 for energy_module in result:
                     device_id = '{0}.{{0}}'.format(energy_module.formatted_address)
-                    if energy_module.version != power_api.ENERGY_MODULE:
+                    if energy_module.version != EnergyEnums.Version.ENERGY_MODULE:
                         continue
                     result = self._energy_module_controller.get_energy_time(energy_module.id)
                     abort = False

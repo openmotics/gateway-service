@@ -27,12 +27,13 @@ import time
 from ioc import INJECTED, Inject
 from logs import Logs
 from serial_utils import CommunicationTimedOutException
-from power import power_api
-from gateway.initialize import setup_minimal_power_platform
+from energy.energy_api import EnergyAPI
+from gateway.enums import EnergyEnums
+from gateway.initialize import setup_minimal_energy_platform
 
 if False:  # MYPY
     from typing import Tuple
-    from power.power_communicator import PowerCommunicator
+    from energy.energy_communicator import EnergyCommunicator
     from gateway.energy_module_controller import EnergyModuleController
     from serial_utils import RS485
 
@@ -111,16 +112,16 @@ class HexReader(object):
         return self.__crc
 
 
-def get_module_firmware_version(module_address, version, power_communicator):
+def get_module_firmware_version(module_address, version, energy_communicator):
     """
     Get the version of a power module.
 
     :param module_address: The address of a power module (integer).
     :param version: The version
-    :param power_communicator: Communication with the power modules.
+    :param energy_communicator: Communication with the power modules.
     """
-    raw_version = power_communicator.do_command(module_address, power_api.get_version(version))
-    if version == power_api.P1_CONCENTRATOR:
+    raw_version = energy_communicator.do_command(module_address, EnergyAPI.get_version(version))
+    if version == EnergyEnums.Version.P1_CONCENTRATOR:
         return '{0}.{1}.{2}'.format(raw_version[1], raw_version[2], raw_version[3]), str(raw_version[0])
     else:
         cleaned_version = raw_version[0].split('\x00', 1)[0]
@@ -130,16 +131,16 @@ def get_module_firmware_version(module_address, version, power_communicator):
         return '{0}.{1}.{2}'.format(parsed_version[1], parsed_version[2], parsed_version[3]), str(parsed_version[0])
 
 
-def bootload_power_module(module_address, hex_file, power_communicator, version):
+def bootload_power_module(module_address, hex_file, energy_communicator, version):
     """
     Bootload a 8 port power module.
 
     :param module_address: The address of a power module (integer).
     :param hex_file: The filename of the hex file to write.
-    :param power_communicator: Communication with the power modules.
+    :param energy_communicator: Communication with the power modules.
     :param version: Version of the provided hexfile
     """
-    firmware_version, hardware_version = get_module_firmware_version(module_address, power_api.POWER_MODULE, power_communicator)
+    firmware_version, hardware_version = get_module_firmware_version(module_address, EnergyEnums.Version.POWER_MODULE, energy_communicator)
     logger.info('P{0} - Version: {1} ({2})'.format(module_address, firmware_version, hardware_version))
     if firmware_version == version:
         logger.info('P{0} - Already up-to-date. Skipping')
@@ -148,39 +149,39 @@ def bootload_power_module(module_address, hex_file, power_communicator, version)
     reader = HexReader(hex_file)
 
     logger.info('P{0} - Going to bootloader'.format(module_address))
-    power_communicator.do_command(module_address, power_api.bootloader_goto(power_api.POWER_MODULE), 10)
+    energy_communicator.do_command(module_address, EnergyAPI.bootloader_goto(EnergyEnums.Version.POWER_MODULE), 10)
 
     logger.info('P{0} - Reading chip id'.format(module_address))
-    chip_id = power_communicator.do_command(module_address, power_api.bootloader_read_id())
+    chip_id = energy_communicator.do_command(module_address, EnergyAPI.bootloader_read_id())
     if chip_id[0] != 213:
         raise Exception('Unknown chip id: {0}'.format(chip_id[0]))
 
     logger.info('P{0} - Writing vector tabel'.format(module_address))
     for address in range(0, 1024, 128):      # 0x000 - 0x400
         data = reader.get_bytes_version_8(address)
-        power_communicator.do_command(module_address, power_api.bootloader_write_code(power_api.POWER_MODULE), *data)
+        energy_communicator.do_command(module_address, EnergyAPI.bootloader_write_code(EnergyEnums.Version.POWER_MODULE), *data)
 
     logger.info('P{0} -  Writing code'.format(module_address))
     for address in range(8192, 44032, 128):  # 0x2000 - 0xAC00
         data = reader.get_bytes_version_8(address)
-        power_communicator.do_command(module_address, power_api.bootloader_write_code(power_api.POWER_MODULE), *data)
+        energy_communicator.do_command(module_address, EnergyAPI.bootloader_write_code(EnergyEnums.Version.POWER_MODULE), *data)
 
     logger.info('P{0} - Jumping to application'.format(module_address))
-    power_communicator.do_command(module_address, power_api.bootloader_jump_application())
+    energy_communicator.do_command(module_address, EnergyAPI.bootloader_jump_application())
 
     logger.info('P{0} - Done'.format(module_address))
 
 
-def bootload_energy_module(module_address, hex_file, power_communicator, version):
+def bootload_energy_module(module_address, hex_file, energy_communicator, version):
     """
     Bootload a 12 port power module.
 
     :param module_address: The address of a power module (integer).
     :param hex_file: The filename of the hex file to write.
-    :param power_communicator: Communication with the power modules.
+    :param energy_communicator: Communication with the power modules.
     :param version: Version of the provided hexfile
     """
-    firmware_version, hardware_version = get_module_firmware_version(module_address, power_api.ENERGY_MODULE, power_communicator)
+    firmware_version, hardware_version = get_module_firmware_version(module_address, EnergyEnums.Version.ENERGY_MODULE, energy_communicator)
     logger.info('E{0} - Version: {1} ({2})'.format(module_address, firmware_version, hardware_version))
     if firmware_version == version:
         logger.info('E{0} - Already up-to-date. Skipping')
@@ -189,7 +190,7 @@ def bootload_energy_module(module_address, hex_file, power_communicator, version
 
     try:
         logger.info('E{0} - Reading calibration data'.format(module_address))
-        calibration_data = list(power_communicator.do_command(module_address, power_api.read_eeprom(12, 100), *[256, 100]))
+        calibration_data = list(energy_communicator.do_command(module_address, EnergyAPI.read_eeprom(12, 100), *[256, 100]))
         logger.info('E{0} - Calibration data: {1}'.format(module_address, ','.join([str(d) for d in calibration_data])))
     except Exception as ex:
         logger.info('E{0} - Could not read calibration data: {1}'.format(module_address, ex))
@@ -198,28 +199,28 @@ def bootload_energy_module(module_address, hex_file, power_communicator, version
     reader = HexReader(hex_file)
 
     logger.info('E{0} - Going to bootloader'.format(module_address))
-    power_communicator.do_command(module_address, power_api.bootloader_goto(power_api.ENERGY_MODULE), 10)
-    logger.info('E{0} - Bootloader version: {1}'.format(module_address, get_module_firmware_version(module_address, power_api.ENERGY_MODULE, power_communicator)))
+    energy_communicator.do_command(module_address, EnergyAPI.bootloader_goto(EnergyEnums.Version.ENERGY_MODULE), 10)
+    logger.info('E{0} - Bootloader version: {1}'.format(module_address, get_module_firmware_version(module_address, EnergyEnums.Version.ENERGY_MODULE, energy_communicator)))
 
     try:
         logger.info('E{0} - Erasing code...'.format(module_address))
         for page in range(6, 64):
-            power_communicator.do_command(module_address, power_api.bootloader_erase_code(), page)
+            energy_communicator.do_command(module_address, EnergyAPI.bootloader_erase_code(), page)
 
         logger.info('E{0} - Writing code...'.format(module_address))
         for address in range(0x1D006000, 0x1D03FFFB, 128):
             data = reader.get_bytes_version_12(address)
-            power_communicator.do_command(module_address, power_api.bootloader_write_code(power_api.ENERGY_MODULE), *data)
+            energy_communicator.do_command(module_address, EnergyAPI.bootloader_write_code(EnergyEnums.Version.ENERGY_MODULE), *data)
     finally:
         logger.info('E{0} - Jumping to application'.format(module_address))
-        power_communicator.do_command(module_address, power_api.bootloader_jump_application())
+        energy_communicator.do_command(module_address, EnergyAPI.bootloader_jump_application())
 
     tries = 0
     while True:
         try:
             tries += 1
             logger.info('E{0} - Waiting for application...'.format(module_address))
-            logger.info('E{0} - Version: {1}'.format(module_address, get_module_firmware_version(module_address, power_api.ENERGY_MODULE, power_communicator)))
+            logger.info('E{0} - Version: {1}'.format(module_address, get_module_firmware_version(module_address, EnergyEnums.Version.ENERGY_MODULE, energy_communicator)))
             break
         except Exception:
             if tries >= 3:
@@ -229,15 +230,15 @@ def bootload_energy_module(module_address, hex_file, power_communicator, version
     if calibration_data is not None:
         time.sleep(1)
         logger.info('E{0} - Restoring calibration data'.format(module_address))
-        power_communicator.do_command(module_address, power_api.write_eeprom(12, 100), *([256] + calibration_data))
+        energy_communicator.do_command(module_address, EnergyAPI.write_eeprom(12, 100), *([256] + calibration_data))
 
     logger.info('E{0} - Done'.format(module_address))
 
 
-def bootload_p1_concentrator(module_address, hex_file, power_communicator, version):
+def bootload_p1_concentrator(module_address, hex_file, energy_communicator, version):
     """ Bootload a P1 Concentrator module """
 
-    firmware_version, hardware_version = get_module_firmware_version(module_address, power_api.P1_CONCENTRATOR, power_communicator)
+    firmware_version, hardware_version = get_module_firmware_version(module_address, EnergyEnums.Version.P1_CONCENTRATOR, energy_communicator)
     logger.info('C{0} - Version: {1} ({2})'.format(module_address, firmware_version, hardware_version))
     if firmware_version == version:
         logger.info('C{0} - Already up-to-date. Skipping')
@@ -245,7 +246,7 @@ def bootload_p1_concentrator(module_address, hex_file, power_communicator, versi
     logger.info('C{0} - Start bootloading'.format(module_address))
 
     logger.info('C{0} - Going to bootloader'.format(module_address))
-    power_communicator.do_command(module_address, power_api.bootloader_goto(power_api.P1_CONCENTRATOR), 10)
+    energy_communicator.do_command(module_address, EnergyAPI.bootloader_goto(EnergyEnums.Version.P1_CONCENTRATOR), 10)
 
     # No clue yet. Most likely this will use the same approach as regular master slave modules
 
@@ -281,12 +282,12 @@ def main():
         parser.print_help()
         return
 
-    setup_minimal_power_platform()
+    setup_minimal_energy_platform()
 
     @Inject
-    def _get_from_ioc(energy_module_controller=INJECTED, power_communicator=INJECTED, power_serial=INJECTED):
-        # type: (EnergyModuleController, PowerCommunicator, RS485) -> Tuple[EnergyModuleController, PowerCommunicator, RS485]
-        return energy_module_controller, power_communicator, power_serial
+    def _get_from_ioc(energy_module_controller=INJECTED, energy_communicator=INJECTED, energy_serial=INJECTED):
+        # type: (EnergyModuleController, EnergyCommunicator, RS485) -> Tuple[EnergyModuleController, EnergyCommunicator, RS485]
+        return energy_module_controller, energy_communicator, energy_serial
 
     controller, communicator, serial = _get_from_ioc()
 
@@ -305,8 +306,8 @@ def main():
     if args.scan:
         logger.info('Scanning addresses 0-255...')
         for address in range(256):
-            for module_type, version in {'E/P': power_api.ENERGY_MODULE,
-                                         'C': power_api.P1_CONCENTRATOR}.items():
+            for module_type, version in {'E/P': EnergyEnums.Version.ENERGY_MODULE,
+                                         'C': EnergyEnums.Version.P1_CONCENTRATOR}.items():
                 try:
                     logger.info('{0}{1} - Version: {2}'.format(
                         module_type, address, get_module_firmware_version(address, version, communicator)
@@ -316,19 +317,19 @@ def main():
         logger.info('Scan completed')
         return
 
-    version = power_api.ENERGY_MODULE
+    version = EnergyEnums.Version.ENERGY_MODULE
     if args.old:
-        version = power_api.POWER_MODULE
+        version = EnergyEnums.Version.POWER_MODULE
     elif args.p1c:
-        version = power_api.P1_CONCENTRATOR
+        version = EnergyEnums.Version.P1_CONCENTRATOR
 
     def _bootload(_module, _module_address, filename):
         try:
-            if version == _module.version == power_api.POWER_MODULE:
+            if version == _module.version == EnergyEnums.Version.POWER_MODULE:
                 bootload_power_module(_module_address, filename, communicator, args.firmware_version)
-            elif version == _module.version == power_api.ENERGY_MODULE:
+            elif version == _module.version == EnergyEnums.Version.ENERGY_MODULE:
                 bootload_energy_module(_module_address, filename, communicator, args.firmware_version)
-            elif version == _module.version == power_api.P1_CONCENTRATOR:
+            elif version == _module.version == EnergyEnums.Version.P1_CONCENTRATOR:
                 bootload_p1_concentrator(_module_address, filename, communicator, args.firmware_version)
         except CommunicationTimedOutException:
             logger.warning('E{0} - Module unavailable. Skipping...'.format(address))
@@ -336,14 +337,14 @@ def main():
             logger.exception('E{0} - Unexpected exception during bootload. Skipping...'.format(address))
 
     if args.address or args.all:
-        power_modules = controller.load_modules()
+        energy_modules = controller.load_modules()
         if args.all:
-            for module in power_modules:
+            for module in energy_modules:
                 address = module.address
                 _bootload(module, address, args.file)
         else:
             address = args.address
-            modules = [module for module in power_modules if module.address == address]
+            modules = [module for module in energy_modules if module.address == address]
             if len(modules) != 1:
                 logger.info('ERROR: Cannot find a module with address {0}'.format(address))
                 sys.exit(0)

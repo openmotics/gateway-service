@@ -23,11 +23,11 @@ from gateway.dto import RealtimeEnergyDTO
 from gateway.enums import EnergyEnums
 from gateway.exceptions import UnsupportedException
 from gateway.models import EnergyModule
-from power.module_helper import ModuleHelper
-from power import power_api
+from energy.module_helper import ModuleHelper
+from energy.energy_api import EnergyAPI
 
 if False:  # MYPY
-    from power.power_command import PowerCommand
+    from energy.energy_command import EnergyCommand
     from typing import Dict, Optional, List, Tuple, Any, Callable, Union, TypeVar
     T = TypeVar('T', bound=Union[int, float])
 
@@ -58,7 +58,7 @@ class P1ConcentratorHelper(ModuleHelper):
         raise NotImplementedError()  # TODO
 
     def get_day_counters(self, energy_module):  # type: (EnergyModule) -> List[Optional[int]]
-        cmd = power_api.get_day_energy(energy_module.version)
+        cmd = EnergyAPI.get_day_energy(energy_module.version)
         return [None if value is None else int(value * 1000)
                 for value in self._parse_payload(cmd=cmd,
                                                  energy_module=energy_module,
@@ -67,7 +67,7 @@ class P1ConcentratorHelper(ModuleHelper):
                                                  cast=float)]
 
     def get_night_counters(self, energy_module):  # type: (EnergyModule) -> List[Optional[int]]
-        cmd = power_api.get_night_energy(energy_module.version)
+        cmd = EnergyAPI.get_night_energy(energy_module.version)
         return [None if value is None else int(value * 1000)
                 for value in self._parse_payload(cmd=cmd,
                                                  energy_module=energy_module,
@@ -124,7 +124,7 @@ class P1ConcentratorHelper(ModuleHelper):
         return values
 
     def _get_statuses(self, energy_module):  # type: (EnergyModule) -> List[bool]
-        cmd = power_api.get_status_p1(energy_module.version)
+        cmd = EnergyAPI.get_status_p1(energy_module.version)
         payload = self._energy_communicator.do_command(int(energy_module.module.address), cmd)[0]
         return [(payload & 1 << port_id) != 0
                 for port_id in range(P1ConcentratorHelper.NUMBER_OF_PORTS)]
@@ -136,7 +136,7 @@ class P1ConcentratorHelper(ModuleHelper):
     def _get_phase_voltages(self, energy_module):  # type: (EnergyModule) -> List[Dict[str, Optional[float]]]
         values = {}
         for phase in range(1, 4):
-            cmd = power_api.get_voltage(energy_module.version, phase=phase)
+            cmd = EnergyAPI.get_voltage(energy_module.version, phase=phase)
             values[phase] = self._parse_payload(cmd=cmd,
                                                 energy_module=energy_module,
                                                 field_length=5,
@@ -153,7 +153,7 @@ class P1ConcentratorHelper(ModuleHelper):
     def _get_phase_currents(self, energy_module):  # type: (EnergyModule) -> List[Dict[str, Optional[float]]]
         values = {}
         for phase in range(1, 4):
-            cmd = power_api.get_current(energy_module.version, phase=phase)
+            cmd = EnergyAPI.get_current(energy_module.version, phase=phase)
             values[phase] = self._parse_payload(cmd=cmd,
                                                 energy_module=energy_module,
                                                 field_length=3,
@@ -170,7 +170,7 @@ class P1ConcentratorHelper(ModuleHelper):
                 for port_id in range(P1ConcentratorHelper.NUMBER_OF_PORTS)]
 
     def _get_delivered_powers(self, energy_module):  # type: (EnergyModule) -> List[Optional[float]]
-        cmd = power_api.get_delivered_power(energy_module.version)
+        cmd = EnergyAPI.get_delivered_power(energy_module.version)
         return self._parse_payload(cmd=cmd,
                                    energy_module=energy_module,
                                    field_length=6,
@@ -178,7 +178,7 @@ class P1ConcentratorHelper(ModuleHelper):
                                    cast=float)
 
     def _get_received_powers(self, energy_module):  # type: (EnergyModule) -> List[Optional[float]]
-        cmd = power_api.get_received_power(energy_module.version)
+        cmd = EnergyAPI.get_received_power(energy_module.version)
         return self._parse_payload(cmd=cmd,
                                    energy_module=energy_module,
                                    field_length=6,
@@ -190,7 +190,7 @@ class P1ConcentratorHelper(ModuleHelper):
         return [0.0 for _ in range(P1ConcentratorHelper.NUMBER_OF_PORTS)]
 
     def _get_meter(self, energy_module, meter_type=1):  # type: (EnergyModule, int) -> List[str]
-        cmd = power_api.get_meter_p1(energy_module.version, meter_type=meter_type)
+        cmd = EnergyAPI.get_meter_p1(energy_module.version, meter_type=meter_type)
         return [value or ''
                 for value in self._parse_payload(cmd=cmd,
                                                  energy_module=energy_module,
@@ -199,7 +199,7 @@ class P1ConcentratorHelper(ModuleHelper):
                                                  filter_status=False)]
 
     def _get_timestamp(self, energy_module):  # type: (EnergyModule) -> List[Optional[float]]
-        cmd = power_api.get_timestamp_p1(energy_module.version)
+        cmd = EnergyAPI.get_timestamp_p1(energy_module.version)
         return self._parse_payload(cmd=cmd,
                                    energy_module=energy_module,
                                    field_length=12,
@@ -207,7 +207,7 @@ class P1ConcentratorHelper(ModuleHelper):
                                    cast=float)
 
     def _get_gas_consumption(self, energy_module):  # type: (EnergyModule) -> List[Optional[float]]
-        cmd = power_api.get_gas_consumption_p1(energy_module.version)
+        cmd = EnergyAPI.get_gas_consumption_p1(energy_module.version)
         return self._parse_payload(cmd=cmd,
                                    energy_module=energy_module,
                                    field_length=9,
@@ -215,7 +215,7 @@ class P1ConcentratorHelper(ModuleHelper):
                                    cast=float)
 
     def _get_consumption_tariff(self, energy_module, tariff_type=None):  # type: (EnergyModule, int) -> List[Optional[float]]
-        cmd = power_api.get_consumption_tariff_p1(energy_module.version, tariff_type=tariff_type)
+        cmd = EnergyAPI.get_consumption_tariff_p1(energy_module.version, tariff_type=tariff_type)
         return self._parse_payload(cmd=cmd,
                                    energy_module=energy_module,
                                    field_length=10,
@@ -223,7 +223,7 @@ class P1ConcentratorHelper(ModuleHelper):
                                    cast=float)
 
     def _get_injection_tariff(self, energy_module, tariff_type=None):  # type: (EnergyModule, int) -> List[Optional[float]]
-        cmd = power_api.get_injection_tariff_p1(energy_module.version, tariff_type=tariff_type)
+        cmd = EnergyAPI.get_injection_tariff_p1(energy_module.version, tariff_type=tariff_type)
         return self._parse_payload(cmd=cmd,
                                    energy_module=energy_module,
                                    field_length=10,
@@ -231,14 +231,14 @@ class P1ConcentratorHelper(ModuleHelper):
                                    cast=float)
 
     def _get_tariff_indicator(self, energy_module):  # type: (EnergyModule) -> List[Optional[float]]
-        cmd = power_api.get_tariff_indicator_p1(energy_module.version)
+        cmd = EnergyAPI.get_tariff_indicator_p1(energy_module.version)
         return self._parse_payload(cmd=cmd,
                                    energy_module=energy_module,
                                    field_length=4,
                                    padding_length=0,
                                    cast=float)
 
-    def _parse_payload(self, cmd, energy_module, field_length, padding_length, cast=None, filter_status=True):  # type: (PowerCommand, EnergyModule, int, int, Optional[Callable[[Any], Any]], bool) -> List[Optional[Any]]
+    def _parse_payload(self, cmd, energy_module, field_length, padding_length, cast=None, filter_status=True):  # type: (EnergyCommand, EnergyModule, int, int, Optional[Callable[[Any], Any]], bool) -> List[Optional[Any]]
         statuses = [] if filter_status is False else self._get_statuses(energy_module=energy_module)
         part_length = field_length + padding_length
         payload = self._energy_communicator.do_command(int(energy_module.module.address), cmd)[0]

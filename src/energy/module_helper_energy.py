@@ -25,8 +25,8 @@ from gateway.dto import RealtimeEnergyDTO
 from gateway.enums import EnergyEnums
 from gateway.exceptions import UnsupportedException
 from gateway.models import EnergyModule
-from power import power_api
-from power.module_helper import ModuleHelper
+from energy.energy_api import EnergyAPI
+from energy.module_helper import ModuleHelper
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
@@ -61,7 +61,7 @@ class EnergyModuleHelper(ModuleHelper):
 
     def get_information(self, energy_module):  # type: (EnergyModule) -> Tuple[bool, Optional[str]]
         # TODO: Add more information in some kind of EnergyModuleInformationDTO
-        cmd = power_api.get_version(energy_module.version)
+        cmd = EnergyAPI.get_version(energy_module.version)
         try:
             raw_version = self._energy_communicator.do_command(int(energy_module.module.address), cmd)
             cleaned_version = raw_version[0].split('\x00', 1)[0]
@@ -76,12 +76,12 @@ class EnergyModuleHelper(ModuleHelper):
         return False, None
 
     def get_day_counters(self, energy_module):  # type: (EnergyModule) -> List[Optional[int]]
-        cmd = power_api.get_day_energy(energy_module.version)
+        cmd = EnergyAPI.get_day_energy(energy_module.version)
         return [EnergyModuleHelper._convert_nan(value, default=None)
                 for value in self._energy_communicator.do_command(int(energy_module.module.address), cmd)]
 
     def get_night_counters(self, energy_module):  # type: (EnergyModule) -> List[Optional[int]]
-        cmd = power_api.get_night_energy(energy_module.version)
+        cmd = EnergyAPI.get_night_energy(energy_module.version)
         return [EnergyModuleHelper._convert_nan(value, default=None)
                 for value in self._energy_communicator.do_command(int(energy_module.module.address), cmd)]
 
@@ -107,13 +107,13 @@ class EnergyModuleHelper(ModuleHelper):
             sensor_settings.append(_convert_ccf(ct.sensor_type))
             inverted_settings.append(_convert_sci(ct.inverted))
 
-        self._energy_communicator.do_command(address, power_api.set_current_clamp_factor(energy_module.version),
+        self._energy_communicator.do_command(address, EnergyAPI.set_current_clamp_factor(energy_module.version),
                                              *sensor_settings)
-        self._energy_communicator.do_command(address, power_api.set_current_inverse(energy_module.version),
+        self._energy_communicator.do_command(address, EnergyAPI.set_current_inverse(energy_module.version),
                                              *inverted_settings)
 
     def set_module_voltage(self, energy_module, voltage):  # type: (EnergyModule, float) -> None
-        cmd = power_api.set_voltage()
+        cmd = EnergyAPI.set_voltage()
         self._energy_communicator.do_command(int(energy_module.module.address), cmd, voltage)
 
     def get_energy_time(self, energy_module, input_id=None):  # type: (EnergyModule, Optional[int]) -> Dict[str, Dict[str, Any]]
@@ -128,13 +128,13 @@ class EnergyModuleHelper(ModuleHelper):
         version = energy_module.version
         data = {}
         for input_id in input_ids:
-            voltage = list(self._energy_communicator.do_command(address, power_api.get_voltage_sample_time(version), input_id, 0))
-            current = list(self._energy_communicator.do_command(address, power_api.get_current_sample_time(version), input_id, 0))
-            for entry in self._energy_communicator.do_command(address, power_api.get_voltage_sample_time(version), input_id, 1):
+            voltage = list(self._energy_communicator.do_command(address, EnergyAPI.get_voltage_sample_time(version), input_id, 0))
+            current = list(self._energy_communicator.do_command(address, EnergyAPI.get_current_sample_time(version), input_id, 0))
+            for entry in self._energy_communicator.do_command(address, EnergyAPI.get_voltage_sample_time(version), input_id, 1):
                 if entry == float('inf'):
                     break
                 voltage.append(entry)
-            for entry in self._energy_communicator.do_command(address, power_api.get_current_sample_time(version), input_id, 1):
+            for entry in self._energy_communicator.do_command(address, EnergyAPI.get_current_sample_time(version), input_id, 1):
                 if entry == float('inf'):
                     break
                 current.append(entry)
@@ -154,8 +154,8 @@ class EnergyModuleHelper(ModuleHelper):
         version = energy_module.version
         data = {}
         for input_id in input_ids:
-            voltage = self._energy_communicator.do_command(address, power_api.get_voltage_sample_frequency(version), input_id, 20)
-            current = self._energy_communicator.do_command(address, power_api.get_current_sample_frequency(version), input_id, 20)
+            voltage = self._energy_communicator.do_command(address, EnergyAPI.get_voltage_sample_frequency(version), input_id, 20)
+            current = self._energy_communicator.do_command(address, EnergyAPI.get_current_sample_frequency(version), input_id, 20)
             # The received data has a length of 40; 20 harmonics entries, and 20 phase entries. For easier usage, the
             # API calls splits them into two parts so the customers doesn't have to do the splitting.
             data[str(input_id)] = {'voltage': [voltage[:20], voltage[20:]],
@@ -166,25 +166,25 @@ class EnergyModuleHelper(ModuleHelper):
         raise UnsupportedException()
 
     def _get_voltages(self, energy_module):  # type: (EnergyModule) -> List[float]
-        cmd = power_api.get_voltage(energy_module.version, phase=None)
+        cmd = EnergyAPI.get_voltage(energy_module.version, phase=None)
         return [0.0 if value is None else value  # Work around mypy limitation
                 for value in (EnergyModuleHelper._convert_nan(voltage, default=0.0)
                               for voltage in list(self._energy_communicator.do_command(int(energy_module.module.address), cmd)))]
 
     def _get_currents(self, energy_module):  # type: (EnergyModule) -> List[float]
-        cmd = power_api.get_current(energy_module.version, phase=None)
+        cmd = EnergyAPI.get_current(energy_module.version, phase=None)
         return [0.0 if value is None else value  # Work around mypy limitation
                 for value in (EnergyModuleHelper._convert_nan(current, default=0.0)
                               for current in list(self._energy_communicator.do_command(int(energy_module.module.address), cmd)))]
 
     def _get_frequencies(self, energy_module):  # type: (EnergyModule) -> List[float]
-        cmd = power_api.get_frequency(energy_module.version)
+        cmd = EnergyAPI.get_frequency(energy_module.version)
         return [0.0 if value is None else value  # Work around mypy limitation
                 for value in (EnergyModuleHelper._convert_nan(frequency, default=0.0)
                               for frequency in list(self._energy_communicator.do_command(int(energy_module.module.address), cmd)))]
 
     def _get_powers(self, energy_module):  # type: (EnergyModule) -> List[float]
-        cmd = power_api.get_power(energy_module.version)
+        cmd = EnergyAPI.get_power(energy_module.version)
         return [0.0 if value is None else value  # Work around mypy limitation
                 for value in (EnergyModuleHelper._convert_nan(power, default=0.0)
                               for power in list(self._energy_communicator.do_command(int(energy_module.module.address), cmd)))]
@@ -194,14 +194,14 @@ class PowerModuleHelper(EnergyModuleHelper):
     NUMBER_OF_PORTS = EnergyEnums.NUMBER_OF_PORTS[EnergyEnums.Version.POWER_MODULE]
 
     def _get_voltages(self, energy_module):  # type: (EnergyModule) -> List[float]
-        cmd = power_api.get_voltage(energy_module.version, phase=None)
+        cmd = EnergyAPI.get_voltage(energy_module.version, phase=None)
         raw_voltage = self._energy_communicator.do_command(int(energy_module.module.address), cmd)
         return [0.0 if value is None else value  # Work around mypy limitation
                 for value in (EnergyModuleHelper._convert_nan(raw_voltage[0], default=0.0)
                               for _ in range(PowerModuleHelper.NUMBER_OF_PORTS))]
 
     def _get_frequencies(self, energy_module):  # type: (EnergyModule) -> List[float]
-        cmd = power_api.get_frequency(energy_module.version)
+        cmd = EnergyAPI.get_frequency(energy_module.version)
         raw_frequency = self._energy_communicator.do_command(int(energy_module.module.address), cmd)
         return [0.0 if value is None else value  # Work around mypy limitation
                 for value in (EnergyModuleHelper._convert_nan(raw_frequency[0], default=0.0)
@@ -216,7 +216,7 @@ class PowerModuleHelper(EnergyModuleHelper):
             else:
                 sensor_settings.append(2)
 
-        self._energy_communicator.do_command(address, power_api.set_sensor_types(energy_module.version),
+        self._energy_communicator.do_command(address, EnergyAPI.set_sensor_types(energy_module.version),
                                              *sensor_settings)
 
     def get_energy_time(self, energy_module, input_id=None):  # type: (EnergyModule, Optional[int]) -> Dict[str, Dict[str, Any]]

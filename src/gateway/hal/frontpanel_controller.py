@@ -103,7 +103,7 @@ class FrontpanelController(object):
         self._indicate = False
         self._indicate_timeout = 0
         self._master_stats = 0, 0
-        self._power_stats = 0, 0
+        self._energy_stats = 0, 0
 
     @property
     def authorized_mode(self):
@@ -206,10 +206,10 @@ class FrontpanelController(object):
             self._master_stats = new_master_stats
 
             stats = self._energy_module_controller.get_communication_statistics()
-            new_power_stats = (stats['bytes_read'], stats['bytes_written'])
-            activity = self._power_stats[0] != new_power_stats[0] or self._power_stats[1] != new_power_stats[1]
+            new_energy_stats = (stats['bytes_read'], stats['bytes_written'])
+            activity = self._energy_stats[0] != new_energy_stats[0] or self._energy_stats[1] != new_energy_stats[1]
             self._report_serial_activity(FrontpanelController.SerialPorts.ENERGY, activity)
-            self._power_stats = new_power_stats
+            self._energy_stats = new_energy_stats
 
             p1_activity = None  # type: Optional[bool]
             exp_activity = None  # type: Optional[bool]
