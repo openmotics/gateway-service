@@ -172,6 +172,8 @@ def params_handler_v1(expect_body_type=None, **kwargs):
                     raise ParseException('Received a body, but no body is required')
                 elif expect_body_type == 'RAW':
                     pass
+                else:
+                    raise ValueError('Unexpected value for `expect_body_type`: {}'.format(expect_body_type))
                 request.params['request_body'] = parsed_body
             else:
                 if expect_body_type is not None:
@@ -836,13 +838,8 @@ class Rfid(RestAPIEndpoint):
     def put_start_add(self, rfid_id, auth_token, request_body):
         raise NotImplementedException("start add new rfid not implemented")
 
-<<<<<<< HEAD
-    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='NONE')
-    def put_cancel_add(self, rfid_id, auth_token):
-=======
     @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None)
-    def put_cancel_add(self, rfid_id, token):
->>>>>>> develop
+    def put_cancel_add(self, rfid_id, auth_token):
         raise NotImplementedException("start add new rfid not implemented")
 
     @openmotics_api_v1(auth=True, pass_token=True)
