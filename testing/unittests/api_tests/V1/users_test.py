@@ -15,7 +15,7 @@
 from __future__ import absolute_import
 
 import cherrypy
-import json
+import ujson as json
 import time
 import unittest
 
@@ -621,10 +621,11 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
             # Don't pass the role in
             status, headers, body = self.GET('/api/v1/users/available_code'.format(ROLE), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
             self.assertStatus('404 Not Found')
-            self.assert_body('{"msg":"Missing parameters: role","success":false}')
+            body_json = json.loads(body)
+            self.assertEqual({"msg": "Missing parameters: role", "success": False}, body_json)
 
             # pass in the wrong role
             status, headers, body = self.GET('/api/v1/users/available_code?role=WRONG'.format(ROLE), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
             self.assertStatus('400 Bad Request')
-            self.assert_body("Wrong input parameter: Role needs to be one of ['COURIER', 'ADMIN', 'USER', 'TECHNICIAN']")
+            self.assertTrue(body.startswith(b"Wrong input parameter: Role needs to be one of"))
 

@@ -112,10 +112,6 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
     def test_gc(self):
         pass
 
-    # some custom test functions
-    def assert_body(self, value, msg=None):
-        self.assertTrue(self.body.startswith(value), msg)
-
     # Function that is usefull for debugging
     def print_request_result(self):
         print('-----------------------')
