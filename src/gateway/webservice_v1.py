@@ -20,6 +20,7 @@ import base64
 import uuid
 
 import cherrypy
+from decorator import decorator
 import logging
 import ujson as json
 import time
@@ -31,11 +32,11 @@ from gateway.api.serializers import ApartmentSerializer, UserSerializer, Deliver
     SystemTouchscreenConfigSerializer, SystemGlobalConfigSerializer, SystemActivateUserConfigSerializer, \
     RfidSerializer
 from gateway.authentication_controller import AuthenticationToken
-from gateway.dto import ApartmentDTO, DeliveryDTO, UserDTO
+from gateway.dto import ApartmentDTO, DeliveryDTO
 from gateway.exceptions import *
 from gateway.models import User, Delivery
 from gateway.user_controller import UserController
-from gateway.webservice import params_handler, params_parser
+from gateway.webservice import params_parser
 
 if False:  # MyPy
     from gateway.apartment_controller import ApartmentController
@@ -52,58 +53,58 @@ logger = logging.getLogger(__name__)
 #  api decorator
 # ------------------------
 
-# api decorator
-def _openmotics_api_v1(f):
-    def wrapper(*args, **kwargs):
-        start = time.time()
-        timings = {}
-        status = 200  # OK
-        try:
-            data = f(*args, **kwargs)
-        except cherrypy.HTTPError as ex:
-            status = ex.status
-            data = ex._message
-        except UnAuthorizedException as ex:
-            status = 401
-            data = ex.message
-        except ForbiddenException as ex:
-            status = 403
-            data = ex.message
-        except ItemDoesNotExistException as ex:
-            status = 404
-            data = ex.message
-        except WrongInputParametersException as ex:
-            status = 400
-            data = ex.message
-        except ParseException as ex:
-            status = 400
-            data = ex.message
-        except TimeOutException as ex:
-            status = 500
-            data = ex.message
-        except InvalidOperationException as ex:
-            status = 409
-            data = ex.message
-        except NotImplementedException as ex:
-            status = 503
-            data = ex.message
-        except Exception as ex:
-            status = 500
-            data = ex
-            logger.error('General Error occurred during api call: {}'.format(data))
-            import traceback
-            print(traceback.print_exc())
 
-        timings['process'] = ('Processing', time.time() - start)
-        serialization_start = time.time()
-        contents = str(data).encode() if data is not None else None
-        timings['serialization'] = 'Serialization', time.time() - serialization_start
-        cherrypy.response.headers['Content-Type'] = 'application/json'
-        cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
-                                                               for key, value in timings.items()])
-        cherrypy.response.status = status
-        return contents
-    return wrapper
+# api decorator -> Use @decorator to not loose the function arguments
+@decorator
+def _openmotics_api_v1(f, *args, **kwargs):
+    start = time.time()
+    timings = {}
+    status = 200  # OK
+    try:
+        data = f(*args, **kwargs)
+    except cherrypy.HTTPError as ex:
+        status = ex.status
+        data = ex._message
+    except UnAuthorizedException as ex:
+        status = 401
+        data = ex.message
+    except ForbiddenException as ex:
+        status = 403
+        data = ex.message
+    except ItemDoesNotExistException as ex:
+        status = 404
+        data = ex.message
+    except WrongInputParametersException as ex:
+        status = 400
+        data = ex.message
+    except ParseException as ex:
+        status = 400
+        data = ex.message
+    except TimeOutException as ex:
+        status = 500
+        data = ex.message
+    except InvalidOperationException as ex:
+        status = 409
+        data = ex.message
+    except NotImplementedException as ex:
+        status = 503
+        data = ex.message
+    except Exception as ex:
+        status = 500
+        data = 'General Error occurred during api call: {}: {}'.format(type(ex).__name__, ex)
+        logger.error(data)
+        import traceback
+        print(traceback.print_exc())
+
+    timings['process'] = ('Processing', time.time() - start)
+    serialization_start = time.time()
+    contents = str(data).encode() if data is not None else None
+    timings['serialization'] = 'Serialization', time.time() - serialization_start
+    cherrypy.response.headers['Content-Type'] = 'application/json'
+    cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
+                                                           for key, value in timings.items()])
+    cherrypy.response.status = status
+    return contents
 
 
 def authentication_handler_v1(pass_token=False, pass_role=False, throw_error=True, allowed_user_roles=None):
@@ -294,7 +295,8 @@ class Users(RestAPIEndpoint):
         if auth_role is None or auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
             users = self._user_controller.load_users(roles=[User.UserRoles.USER], include_inactive=include_inactive)
         else:
-            users = self._user_controller.load_users(roles=[role], include_inactive=include_inactive)
+            roles = [role] if role is not None else None
+            users = self._user_controller.load_users(roles=roles, include_inactive=include_inactive)
 
         users_serial = [UserSerializer.serialize(user) for user in users]
         return json.dumps(users_serial)
@@ -314,14 +316,17 @@ class Users(RestAPIEndpoint):
         user_serial = UserSerializer.serialize(user)
         return json.dumps(user_serial)
 
-    @openmotics_api_v1(auth=False, pass_role=False)
-    def get_available_code(self):
+    @openmotics_api_v1(auth=False, pass_role=False, check={'role': str})
+    def get_available_code(self, role):
+        roles = [x for x in User.UserRoles.__dict__ if not x.startswith('_')]
+        if role not in roles:
+            raise WrongInputParametersException('Role needs to be one of {}'.format(roles))
         api_secret = cherrypy.request.headers.get('X-API-Secret')
         if api_secret is None:
             raise UnAuthorizedException('Cannot create a new available code without the X-API-Secret')
         elif not self._user_controller.authentication_controller.check_api_secret(api_secret):
             raise UnAuthorizedException('X-API-Secret is incorrect')
-        return str(self._user_controller.generate_new_pin_code())
+        return str(self._user_controller.generate_new_pin_code(UserController.PinCodeLength[role]))
 
     @openmotics_api_v1(auth=False, pass_role=True, expect_body_type='JSON')
     def post_user(self, auth_role, request_body):
@@ -347,7 +352,7 @@ class Users(RestAPIEndpoint):
 
         user_dto.username = uuid.uuid4().hex
         # add a custom user code
-        user_dto.pin_code = str(self._user_controller.generate_new_pin_code()).rjust(UserController.PinCodeLength[user_dto.role], '0')
+        user_dto.pin_code = str(self._user_controller.generate_new_pin_code(UserController.PinCodeLength[user_dto.role]))
         user_dto.accepted_terms = True
         # Generate a random password as a dummy to fill in the gap
         random_password = uuid.uuid4().hex

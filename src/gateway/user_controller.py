@@ -122,8 +122,7 @@ class UserController(object):
         users = []
         query = User.select()
         if roles is not None:
-            clauses = [(User.role == role) for role in roles]
-            query = query.where(reduce(operator.or_, clauses))
+            query = query.where(User.role.in_(roles))
         if not include_inactive:
             query = query.where(User.is_active == 1)
         for user_orm in query:
@@ -181,15 +180,21 @@ class UserController(object):
         result = self.authentication_controller.check_token(token)
         return result is not None
 
-    def generate_new_pin_code(self):
-        # type: () -> int
+    def generate_new_pin_code(self, length=4):
+        # type: (int) -> str
         _ = self
         current_pin_codes = User.select(User.pin_code).execute()
+        # Split this up for testing reasons
+        return UserController._generate_new_pin_code(length, current_pin_codes)
+
+    @staticmethod
+    def _generate_new_pin_code(length, current_pin_codes):
         while True:
-            new_pin = random.randint(0, 9999)
+            max_int = int('9' * length)
+            new_pin = random.randint(0, max_int)
             if new_pin not in current_pin_codes:
                 break
-        return new_pin
+        return str(new_pin).rjust(length, '0')
 
     def check_if_pin_exists(self, pin):
         _ = self
