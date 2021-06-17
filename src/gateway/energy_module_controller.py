@@ -302,7 +302,7 @@ class EnergyModuleController(BaseController):
         if not self._enabled:
             return
 
-        energy_module = EnergyModule.select().where(EnergyModule.number == module_id)
+        energy_module = EnergyModule.select().where(EnergyModule.number == module_id).first()
         self._get_helper(energy_module.version).set_module_voltage(energy_module, voltage)
 
     def get_energy_time(self, module_id, input_id=None):
@@ -311,7 +311,7 @@ class EnergyModuleController(BaseController):
             return {}
 
         # TODO: Use DTO
-        energy_module = EnergyModule.select().where(EnergyModule.number == module_id)
+        energy_module = EnergyModule.select().where(EnergyModule.number == module_id).first()
         return self._get_helper(energy_module.version).get_energy_time(energy_module, input_id=input_id)
 
     def get_energy_frequency(self, module_id, input_id=None):
@@ -319,7 +319,7 @@ class EnergyModuleController(BaseController):
             return {}
 
         # TODO: Use DTO
-        energy_module = EnergyModule.select().where(EnergyModule.number == module_id)
+        energy_module = EnergyModule.select().where(EnergyModule.number == module_id).first()
         return self._get_helper(energy_module.version).get_energy_frequency(energy_module, input_id=input_id)
 
     def do_raw_energy_command(self, address, mode, command, data):
