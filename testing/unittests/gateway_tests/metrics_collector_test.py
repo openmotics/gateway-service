@@ -47,8 +47,7 @@ class MetricsCollectorTest(unittest.TestCase):
         self.em_controller.get_realtime_p1.return_value = {}
         self.em_controller.get_total_energy.return_value = {}
         self.sensor_controller = mock.Mock(SensorController)
-        SetUpTestInjections(gateway_api=mock.Mock(),  # TODO: Remove
-                            energy_module_controller=self.em_controller,
+        SetUpTestInjections(energy_module_controller=self.em_controller,
                             pulse_counter_controller=mock.Mock(),
                             thermostat_controller=mock.Mock(),
                             output_controller=mock.Mock(),

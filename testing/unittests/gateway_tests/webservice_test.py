@@ -24,7 +24,6 @@ from gateway.dto import DimmerConfigurationDTO, LegacyScheduleDTO, \
     LegacyStartupActionDTO, ModuleDTO, OutputStatusDTO, ScheduleDTO, \
     SensorDTO, SensorSourceDTO, SensorStatusDTO, UserDTO, VentilationDTO, \
     VentilationSourceDTO, VentilationStatusDTO
-from gateway.gateway_api import GatewayApi
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
 from gateway.input_controller import InputController
@@ -55,10 +54,8 @@ class WebInterfaceTest(unittest.TestCase):
         self.scheduling_controller = mock.Mock(SchedulingController)
         self.sensor_controller = mock.Mock(SensorController)
         self.ventilation_controller = mock.Mock(VentilationController)
-        self.gateway_api = mock.Mock(GatewayApi)
         self.module_controller = mock.Mock(ModuleController)
         SetUpTestInjections(frontpanel_controller=mock.Mock(FrontpanelController),
-                            gateway_api=self.gateway_api,
                             group_action_controller=mock.Mock(GroupActionController),
                             input_controller=mock.Mock(InputController),
                             maintenance_controller=mock.Mock(MaintenanceController),

@@ -46,7 +46,6 @@ def cmd_shell(args):
     @Inject
     def f(cloud_api_client=INJECTED,
           event_sender=INJECTED,
-          gateway_api=INJECTED,
           group_action_controller=INJECTED,
           input_controller=INJECTED,
           maintenance_controller=INJECTED,

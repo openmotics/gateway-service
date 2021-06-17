@@ -74,7 +74,6 @@ from toolbox import Toolbox
 if False:  # MYPY
     from typing import Dict, Optional, Any, List, Literal, Union
     from bus.om_bus_client import MessageClient
-    from gateway.gateway_api import GatewayApi
     from gateway.energy_module_controller import EnergyModuleController
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.frontpanel_controller import FrontpanelController
@@ -350,7 +349,7 @@ class WebInterface(object):
     """ This class defines the web interface served by cherrypy. """
 
     @Inject
-    def __init__(self, user_controller=INJECTED, gateway_api=INJECTED, maintenance_controller=INJECTED,
+    def __init__(self, user_controller=INJECTED, maintenance_controller=INJECTED,
                  message_client=INJECTED, scheduling_controller=INJECTED,
                  thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED,
                  room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
@@ -377,7 +376,6 @@ class WebInterface(object):
         self._system_controller = system_controller  # type: SystemController
         self._energy_module_controller = energy_module_controller  # type: EnergyModuleController
 
-        self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
         self._message_client = message_client  # type: Optional[MessageClient]
         self._plugin_controller = None  # type: Optional[PluginController]
@@ -1049,7 +1047,7 @@ class WebInterface(object):
         :param humidity: The humidity to set in percentage
         :param brightness: The brightness to set in percentage
         """
-        self._gateway_api.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
+        self._sensor_controller.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
         return {}
 
     @openmotics_api(auth=True)

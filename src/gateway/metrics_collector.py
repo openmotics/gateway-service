@@ -42,7 +42,6 @@ if False:  # MYPY
     from gateway.module_controller import ModuleController
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.pulse_counter_controller import PulseCounterController
-    from gateway.gateway_api import GatewayApi
     from gateway.dto import InputDTO, SensorDTO, OutputDTO, PulseCounterDTO
 
 logger = logging.getLogger(__name__)
@@ -72,7 +71,7 @@ class MetricsCollector(object):
                            255: 'light'}
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, pulse_counter_controller=INJECTED, thermostat_controller=INJECTED,
+    def __init__(self, pulse_counter_controller=INJECTED, thermostat_controller=INJECTED,
                  output_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
                  module_controller=INJECTED, energy_module_controller=INJECTED):
         self._start = time.time()
@@ -100,7 +99,6 @@ class MetricsCollector(object):
                                         'start': 0,
                                         'end': 0} for metric_type in self._min_intervals}  # type: Dict[str,Dict[str,Any]]
 
-        self._gateway_api = gateway_api  # type: GatewayApi
         self._thermostat_controller = thermostat_controller  # type: ThermostatController
         self._pulse_counter_controller = pulse_counter_controller  # type: PulseCounterController
         self._output_controller = output_controller  # type: OutputController
