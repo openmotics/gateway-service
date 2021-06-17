@@ -31,8 +31,8 @@ from gateway.models import EnergyModule, EnergyCT, Module
 from gateway.dto import ModuleDTO
 from gateway.enums import EnergyEnums
 from ioc import INJECTED, Inject
-from energy.energy_api import EnergyAPI, BROADCAST_ADDRESS, NORMAL_MODE, ADDRESS_MODE
-from energy.energy_command import EnergyCommand
+from gateway.energy.energy_api import EnergyAPI, BROADCAST_ADDRESS, NORMAL_MODE, ADDRESS_MODE
+from gateway.energy.energy_command import EnergyCommand
 from serial_utils import CommunicationStatus, CommunicationTimedOutException, \
     Printable
 

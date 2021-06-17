@@ -266,7 +266,7 @@ class SensorController(BaseController):
 
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         """ Set the temperature, humidity and brightness value of a (master) virtual sensor. """
-        self.__master_controller.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
+        self._master_controller.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
 
     def _translate_legacy_statuses(self, physical_quantity):  # type: (str) -> List[Optional[float]]
         sensors = Sensor.select() \

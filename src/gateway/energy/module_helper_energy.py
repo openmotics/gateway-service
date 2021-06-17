@@ -25,8 +25,8 @@ from gateway.dto import RealtimeEnergyDTO
 from gateway.enums import EnergyEnums
 from gateway.exceptions import UnsupportedException
 from gateway.models import EnergyModule
-from energy.energy_api import EnergyAPI
-from energy.module_helper import ModuleHelper
+from gateway.energy.energy_api import EnergyAPI
+from gateway.energy.module_helper import ModuleHelper
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY

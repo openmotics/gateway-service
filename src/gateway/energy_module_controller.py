@@ -30,9 +30,9 @@ from gateway.enums import EnergyEnums
 from gateway.maintenance_controller import InMaintenanceModeException
 from gateway.mappers import EnergyModuleMapper
 from gateway.models import EnergyModule, Module, EnergyCT
-from energy.module_helper_energy import EnergyModuleHelper, PowerModuleHelper
-from energy.module_helper_p1c import P1ConcentratorHelper
-from energy.energy_api import DAY, NIGHT, EnergyAPI
+from gateway.energy.module_helper_energy import EnergyModuleHelper, PowerModuleHelper
+from gateway.energy.module_helper_p1c import P1ConcentratorHelper
+from gateway.energy.energy_api import DAY, NIGHT, EnergyAPI
 from peewee import prefetch
 from serial_utils import CommunicationTimedOutException
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -40,8 +40,8 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 if False:  # MYPY
     from typing import Dict, List, Any, Optional
     from gateway.hal.master_controller import MasterController
-    from energy.module_helper import ModuleHelper
-    from energy.energy_communicator import EnergyCommunicator
+    from gateway.energy.module_helper import ModuleHelper
+    from gateway.energy.energy_communicator import EnergyCommunicator
 
 logger = logging.getLogger('openmotics')
 

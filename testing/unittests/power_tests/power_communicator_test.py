@@ -26,7 +26,7 @@ from pytest import mark
 import os
 import tempfile
 
-from energy.energy_api import EnergyAPI, BROADCAST_ADDRESS, ADDRESS_MODE, NORMAL_MODE
+from gateway.energy.energy_api import EnergyAPI, BROADCAST_ADDRESS, ADDRESS_MODE, NORMAL_MODE
 from peewee import SqliteDatabase
 from gateway.enums import EnergyEnums
 from gateway.pubsub import PubSub
@@ -34,7 +34,7 @@ from gateway.hal.master_event import MasterEvent
 from gateway.models import Module, EnergyModule, EnergyCT
 from gateway.dto import ModuleDTO
 from ioc import SetTestMode, SetUpTestInjections
-from energy.energy_communicator import InAddressModeException, EnergyCommunicator
+from gateway.energy.energy_communicator import InAddressModeException, EnergyCommunicator
 from serial_test import SerialMock, sin, sout
 from serial_utils import RS485, CommunicationTimedOutException
 

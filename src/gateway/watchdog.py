@@ -33,7 +33,7 @@ from serial_utils import CommunicationStatus
 if False:  # MYPY
     from typing import Callable, Literal, Optional, Union, Dict, Any
     from gateway.hal.master_controller import MasterController
-    from energy.energy_communicator import EnergyCommunicator
+    from gateway.energy.energy_communicator import EnergyCommunicator
 
     HEALTH = Literal['success', 'unstable', 'failure']
 

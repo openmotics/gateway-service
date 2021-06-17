@@ -67,7 +67,7 @@ from gateway.websockets import EventsSocket, MaintenanceSocket, \
 from ioc import INJECTED, Inject, Injectable, Singleton
 from logs import Logs
 from platform_utils import Hardware, Platform, System
-from energy.energy_communicator import InAddressModeException
+from gateway.energy.energy_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 

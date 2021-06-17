@@ -23,11 +23,11 @@ from gateway.dto import RealtimeEnergyDTO
 from gateway.enums import EnergyEnums
 from gateway.exceptions import UnsupportedException
 from gateway.models import EnergyModule
-from energy.module_helper import ModuleHelper
-from energy.energy_api import EnergyAPI
+from gateway.energy.module_helper import ModuleHelper
+from gateway.energy.energy_api import EnergyAPI
 
 if False:  # MYPY
-    from energy.energy_command import EnergyCommand
+    from gateway.energy.energy_command import EnergyCommand
     from typing import Dict, Optional, List, Tuple, Any, Callable, Union, TypeVar
     T = TypeVar('T', bound=Union[int, float])
 

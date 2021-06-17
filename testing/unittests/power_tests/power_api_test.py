@@ -16,7 +16,7 @@ from __future__ import absolute_import
 
 import unittest
 
-from energy.energy_api import EnergyAPI, BROADCAST_ADDRESS, ADDRESS_MODE
+from gateway.energy.energy_api import EnergyAPI, BROADCAST_ADDRESS, ADDRESS_MODE
 from gateway.enums import EnergyEnums
 
 

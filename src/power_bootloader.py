@@ -27,13 +27,13 @@ import time
 from ioc import INJECTED, Inject
 from logs import Logs
 from serial_utils import CommunicationTimedOutException
-from energy.energy_api import EnergyAPI
+from gateway.energy.energy_api import EnergyAPI
 from gateway.enums import EnergyEnums
 from gateway.initialize import setup_minimal_energy_platform
 
 if False:  # MYPY
     from typing import Tuple
-    from energy.energy_communicator import EnergyCommunicator
+    from gateway.energy.energy_communicator import EnergyCommunicator
     from gateway.energy_module_controller import EnergyModuleController
     from serial_utils import RS485
 

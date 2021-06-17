@@ -25,7 +25,7 @@ from gateway.models import EnergyModule
 
 if False:  # MYPY
     from typing import Dict, Tuple, Optional, List, Any, TypeVar, Union
-    from energy.energy_communicator import EnergyCommunicator
+    from gateway.energy.energy_communicator import EnergyCommunicator
     T = TypeVar('T', bound=Union[int, float])
 
 logger = logging.getLogger(__name__)

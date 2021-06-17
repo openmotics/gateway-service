@@ -18,7 +18,7 @@ Contains the definition of the power modules Api.
 
 from __future__ import absolute_import
 
-from energy.energy_command import EnergyCommand, EnergyModuleType
+from gateway.energy.energy_command import EnergyCommand, EnergyModuleType
 from gateway.exceptions import UnsupportedException
 from gateway.enums import EnergyEnums
 
