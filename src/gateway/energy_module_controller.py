@@ -27,6 +27,7 @@ from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from gateway.dto import RealtimeEnergyDTO, ModuleDTO, TotalEnergyDTO, EnergyModuleDTO
 from gateway.enums import EnergyEnums
+from gateway.maintenance_controller import InMaintenanceModeException
 from gateway.mappers import EnergyModuleMapper
 from gateway.models import EnergyModule, Module, EnergyCT
 from energy.module_helper_energy import EnergyModuleHelper, PowerModuleHelper
@@ -175,6 +176,8 @@ class EnergyModuleController(BaseController):
                 output[str(energy_module.number)] = [TotalEnergyDTO(day=day_counters[port_id] or 0,
                                                                     night=night_counters[port_id] or 0)
                                                      for port_id in range(EnergyEnums.NUMBER_OF_PORTS[energy_module.version])]
+            except InMaintenanceModeException:
+                logger.info('Could not load total energy from {0}: In maintenance mode'.format(energy_module.number))
             except CommunicationTimedOutException as ex:
                 logger.error('Communication timeout while fetching total energy from {0}: {1}'.format(energy_module.number, ex))
             except Exception as ex:
@@ -196,6 +199,8 @@ class EnergyModuleController(BaseController):
             try:
                 data = self._get_helper(version=energy_module.version).get_realtime(energy_module)
                 output[str(energy_module.number)] = [data[port_id] for port_id in range(EnergyEnums.NUMBER_OF_PORTS[energy_module.version])]
+            except InMaintenanceModeException:
+                logger.info('Could not load realtime energy from {0}: In maintenance mode'.format(energy_module.number))
             except CommunicationTimedOutException as ex:
                 logger.error('Communication timeout while fetching realtime energy from {0}: {1}'.format(energy_module.number, ex))
             except Exception as ex:
