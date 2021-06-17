@@ -298,6 +298,7 @@ class EnergyCommunicator(object):
                     # Make sure the module is registered in the ORM
                     new_address, old_module = EnergyCommunicator._get_address_and_module(old_address)
                     if old_module is None:
+                        logger.info('Registering new Energy Module with address {0}'.format(new_address))
                         module = Module(source=ModuleDTO.Source.GATEWAY,
                                         address=str(new_address),
                                         hardware_type=ModuleDTO.HardwareType.PHYSICAL)
@@ -312,6 +313,8 @@ class EnergyCommunicator(object):
                                           times='',  # No times by default (all night)
                                           energy_module=energy_module)
                             ct.save()
+                    else:
+                        logger.info('Confirming existing Energy Module with address {0}'.format(new_address))
 
                     # Send new address to module
                     if version == EnergyEnums.Version.P1_CONCENTRATOR:
