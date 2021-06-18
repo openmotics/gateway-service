@@ -21,13 +21,16 @@ import unittest
 
 from peewee import SqliteDatabase
 
+from gateway.authentication_controller import AuthenticationController, TokenStore
 from gateway.dto import DeliveryDTO, UserDTO
 from gateway.mappers import UserMapper, DeliveryMapper
-from gateway.models import Delivery, User
+from gateway.models import Delivery, User, Apartment
 from gateway.delivery_controller import DeliveryController
-from ioc import SetTestMode
+from gateway.user_controller import UserController
+from ioc import SetTestMode, SetUpTestInjections
 
-MODELS = [Delivery, User]
+MODELS = [Delivery, User, Apartment]
+
 
 class DeliveryControllerTest(unittest.TestCase):
     """ Tests for DeliveryController. """
@@ -36,7 +39,7 @@ class DeliveryControllerTest(unittest.TestCase):
     def setUpClass(cls):
         super(DeliveryControllerTest, cls).setUpClass()
         SetTestMode()
-        cls.test_db = SqliteDatabase(':memory:')
+        cls.test_db = SqliteDatabase(':memory:', pragmas={'foreign_keys': '1'})  # important to mimic the behavior of the real database connection
 
     @classmethod
     def tearDownClass(cls):
@@ -46,7 +49,16 @@ class DeliveryControllerTest(unittest.TestCase):
         self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
-        self.controller = DeliveryController
+        SetUpTestInjections(token_timeout=3)
+        self.token_store = TokenStore(token_timeout=3)
+        SetUpTestInjections(token_store=self.token_store)
+        self.auth_controller = AuthenticationController(token_timeout=3, token_store=self.token_store)
+        SetUpTestInjections(authentication_controller=self.auth_controller)
+        SetUpTestInjections(config={'username': 'test', 'password': 'test'})
+        self.user_controller = UserController()
+        SetUpTestInjections(user_controller=self.user_controller)
+        self.controller = DeliveryController()
+        SetUpTestInjections(delivery_controller=self.controller)
 
         self.test_user_1 = UserDTO(
             username='test_user_1',
@@ -66,12 +78,16 @@ class DeliveryControllerTest(unittest.TestCase):
         )
         self.test_user_3.set_password('test')
 
-        self.all_users = [self.test_user_1, self.test_user_2, self.test_user_3]
+        self.test_user_4 = UserDTO(
+            username='test_user_4',
+            role='COURIER'
+        )
+        self.test_user_4.set_password('test')
+
+        self.all_users = [self.test_user_1, self.test_user_2, self.test_user_3, self.test_user_4]
         for user in self.all_users:
             user_orm = UserMapper.dto_to_orm(user)
             user_orm.save()
-
-
 
         self.test_delivery_1 = DeliveryDTO(
             type='DELIVERY',
@@ -91,8 +107,15 @@ class DeliveryControllerTest(unittest.TestCase):
             type='RETURN',
             parcelbox_rebus_id=10,
             courier_firm='TEST',
-            user_pickup=self.test_user_2,
-            user_delivery=self.test_user_3
+            user_delivery=self.test_user_2,
+            user_pickup=self.test_user_3
+        )
+        self.test_return_2 = DeliveryDTO(
+            type='RETURN',
+            parcelbox_rebus_id=11,
+            courier_firm='TEST',
+            user_delivery=self.test_user_1,
+            user_pickup=self.test_user_4
         )
 
     def tearDown(self):
@@ -223,6 +246,33 @@ class DeliveryControllerTest(unittest.TestCase):
 
         delivery_2_orm = Delivery.get_by_id(delivery_2_id)
         self.assertIsNotNone(delivery_2_orm.timestamp_pickup)
+
+    def test_pickup_return(self):
+        result_1 = self.controller.save_delivery(self.test_return_1)
+        result_2 = self.controller.save_delivery(self.test_return_2)
+        return_1_id = result_1.id
+        return_2_id = result_2.id
+        self.assertEqual(len(self.all_users), self.user_controller.get_number_of_users())
+
+        result = self.controller.pickup_delivery(return_1_id)
+        self.assertIsNotNone(result.timestamp_pickup)
+        self.assertEqual(len(self.all_users) - 1, self.user_controller.get_number_of_users())  # this should be one less since the courier needs to be removed
+
+        return_1_orm = Delivery.get_by_id(return_1_id)
+        self.assertIsNotNone(return_1_orm.timestamp_pickup)
+        delivery_2_orm = Delivery.get_by_id(return_2_id)
+        self.assertIsNone(delivery_2_orm.timestamp_pickup)
+
+        result = self.controller.pickup_delivery(return_2_id)
+        self.assertIsNotNone(result.timestamp_pickup)
+        self.assertEqual(len(self.all_users) - 2, self.user_controller.get_number_of_users())  # this should be one less since the courier needs to be removed
+
+        delivery_2_orm = Delivery.get_by_id(return_2_id)
+        self.assertIsNotNone(delivery_2_orm.timestamp_pickup)
+
+        # Test the double pickup for return deliveries
+        with self.assertRaises(RuntimeError):
+            result = self.controller.pickup_delivery(return_2_id)
 
     def test_pickup_delivery_double_pickup(self):
         result_1 = self.controller.save_delivery(self.test_delivery_1)
