@@ -25,8 +25,8 @@ from gateway.hal.master_controller import MasterController
 from gateway.models import Module
 from gateway.module_controller import ModuleController
 from gateway.pubsub import PubSub
+from gateway.energy_module_controller import EnergyModuleController
 from ioc import SetTestMode, SetUpTestInjections
-from power.power_controller import PowerController
 
 MODELS = [Module]
 
@@ -44,11 +44,16 @@ class ModuleControllerTest(unittest.TestCase):
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub)
         self.master_controller = mock.Mock(MasterController)
-        self.power_controller = mock.Mock(PowerController)
+        self.energy_module_controller=mock.Mock(EnergyModuleController)
         SetUpTestInjections(master_controller=self.master_controller,
-                            power_controller=self.power_controller,
-                            maintenance_controller=mock.Mock())
+                            maintenance_controller=mock.Mock(),
+                            energy_module_controller=self.energy_module_controller)
         self.controller = ModuleController()
+        module = Module.create(address=2,
+                               source=ModuleDTO.Source.GATEWAY,
+                               hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                               module_type=ModuleDTO.ModuleType.ENERGY)
+        module.save()
 
     def tearDown(self):
         self.test_db.drop_tables(MODELS)
@@ -67,11 +72,11 @@ class ModuleControllerTest(unittest.TestCase):
                                     module_type=ModuleDTO.ModuleType.ENERGY,
                                     address='2',
                                     hardware_type=ModuleDTO.HardwareType.PHYSICAL,
-                                    firmware_version='1.2.3',
-                                    order=0,
-                                    online=True)]
+                                    firmware_version=None,
+                                    hardware_version=None,
+                                    order=None)]
         self.master_controller.get_modules_information.return_value = master_modules
-        self.power_controller.get_modules_information.return_value = energy_modules
+        self.energy_module_controller.get_modules_information.return_value = []  # Empty, should not remove EM
         self.controller.run_sync_orm()
         self.assertEqual(master_modules, self.controller.load_master_modules())
         self.assertEqual(energy_modules, self.controller.load_energy_modules())
@@ -86,7 +91,6 @@ class ModuleControllerTest(unittest.TestCase):
                         hardware_version='4',
                         order=0)
         self.master_controller.get_modules_information.return_value = [dto]
-        self.power_controller.get_modules_information.return_value = []
         self.controller.run_sync_orm()
         received_dto = self.controller.load_master_modules()[0]
         self.assertIsNone(received_dto.firmware_version)

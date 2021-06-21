@@ -203,8 +203,7 @@ class SchedulingControllerTest(BaseSchedulingTest):
                             group_action_controller=group_action_controller,
                             module_controller=Mock(),
                             uart_controller=Mock(),
-                            master_controller=Mock(),
-                            gateway_api=Mock())
+                            master_controller=Mock())
         controller = SchedulingController()
         SetUpTestInjections(scheduling_controller=controller)
         controller.set_webinterface(WebInterface())

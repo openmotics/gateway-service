@@ -52,3 +52,15 @@ class IndicateType(object):
     OUTPUT = 0
     INPUT = 1
     SENSOR = 2
+
+
+class EnergyEnums(object):
+    class Version(object):
+        POWER_MODULE = 8
+        ENERGY_MODULE = 12
+        P1_CONCENTRATOR = 1
+
+    NUMBER_OF_PORTS = {Version.POWER_MODULE: 8,
+                       Version.ENERGY_MODULE: 12,
+                       Version.P1_CONCENTRATOR: 8}
+    LARGEST_MODULE_TYPE = Version.ENERGY_MODULE  # Update if needed

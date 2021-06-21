@@ -178,6 +178,31 @@ class Module(BaseModel):
     last_online_update = Optional[MixedIntegerField]
 
 
+class ModuleForeignKeyField(Module, ForeignKeyField): ...
+
+
+class EnergyModule(BaseModel):
+    id: MixedPrimaryKeyField
+    number: MixedIntegerField
+    version: MixedIntegerField
+    name: str
+    module: ModuleForeignKeyField
+    cts: List[EnergyCT]
+
+
+class EnergyModuleForeignKeyField(EnergyModule, ForeignKeyField): ...
+
+
+class EnergyCT(BaseModel):
+    id: MixedPrimaryKeyField
+    number: MixedIntegerField
+    name: str
+    sensor_type: int
+    times: str
+    inverted: bool
+    energy_module: EnergyModuleForeignKeyField
+
+
 class DataMigration(BaseModel):
     id: MixedPrimaryKeyField
     name: str

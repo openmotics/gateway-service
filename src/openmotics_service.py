@@ -30,17 +30,14 @@ from signal import SIGTERM, signal
 from bus.om_bus_client import MessageClient
 from bus.om_bus_service import MessageService
 from gateway.initialize import initialize
-from gateway.migrations.rooms import RoomsMigrator
-from gateway.migrations.features_data_migrations import FeatureMigrator
-from gateway.migrations.inputs import InputMigrator
-from gateway.migrations.schedules import ScheduleMigrator
-from gateway.migrations.users import UserMigrator
-from gateway.migrations.config import ConfigMigrator
+from gateway.migrations import RoomsMigrator, FeatureMigrator, InputMigrator, \
+    ScheduleMigrator, UserMigrator, ConfigMigrator, EnergyModulesMigrator
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from logs import Logs
 
 if False:  # MYPY
+    from gateway.energy_module_controller import EnergyModuleController
     from gateway.output_controller import OutputController
     from gateway.group_action_controller import GroupActionController
     from gateway.input_controller import InputController
@@ -64,7 +61,6 @@ if False:  # MYPY
     from gateway.hal.frontpanel_controller import FrontpanelController
     from gateway.uart_controller import UARTController
     from plugins.base import PluginController
-    from power.power_communicator import PowerCommunicator
     from master.classic.passthrough import PassthroughService
     from cloud.events import EventSender
     from serial_utils import RS485
@@ -120,8 +116,7 @@ class OpenmoticsService(object):
     @Inject
     def start(master_controller=INJECTED,  # type: MasterController
               maintenance_controller=INJECTED,  # type: MaintenanceController
-              power_communicator=INJECTED,  # type: PowerCommunicator
-              power_serial=INJECTED,  # type: RS485
+              energy_serial=INJECTED,  # type: RS485
               metrics_controller=INJECTED,  # type: MetricsController
               passthrough_service=INJECTED,  # type: PassthroughService
               scheduling_controller=INJECTED,  # type: SchedulingController
@@ -145,7 +140,8 @@ class OpenmoticsService(object):
               ventilation_controller=INJECTED,  # type: VentilationController
               pubsub=INJECTED,  # type: PubSub
               web_service_v1=INJECTED,  # type: WebServiceV1
-              uart_controller=INJECTED  # type: UARTController
+              uart_controller=INJECTED,  # type: UARTController
+              energy_module_controller=INJECTED  # type: EnergyModuleController
               ):
         """ Main function. """
         logger.info('Starting OM core service...')
@@ -168,12 +164,12 @@ class OpenmoticsService(object):
         ScheduleMigrator.migrate()
         UserMigrator.migrate()
         ConfigMigrator.migrate()
+        EnergyModulesMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()
-        if power_communicator:
-            power_serial.start()
-            power_communicator.start()
+        if energy_serial:
+            energy_serial.start()
         metrics_controller.start()
         if passthrough_service:
             passthrough_service.start()
@@ -190,6 +186,7 @@ class OpenmoticsService(object):
         event_sender.start()
         watchdog.start()
         plugin_controller.start()
+        energy_module_controller.start()
         output_controller.start()
         input_controller.start()
         pulse_counter_controller.start()
@@ -211,6 +208,7 @@ class OpenmoticsService(object):
             watchdog.stop()
             if uart_controller:
                 uart_controller.stop()
+            energy_module_controller.stop()
             output_controller.stop()
             input_controller.stop()
             pulse_counter_controller.stop()
@@ -219,8 +217,6 @@ class OpenmoticsService(object):
             shutter_controller.stop()
             group_action_controller.stop()
             web_service.stop()
-            if power_communicator:
-                power_communicator.stop()
             master_controller.stop()
             maintenance_controller.stop()
             metrics_collector.stop()

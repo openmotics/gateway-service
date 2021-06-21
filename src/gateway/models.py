@@ -158,6 +158,29 @@ class Module(BaseModel):
     last_online_update = IntegerField(null=True)
 
 
+class EnergyModule(BaseModel):
+    id = AutoField()
+    number = IntegerField(unique=True)
+    version = IntegerField()
+    name = CharField(default='')
+    module = ForeignKeyField(Module, on_delete='CASCADE', backref='energy_modules', unique=True)
+
+
+class EnergyCT(BaseModel):
+    id = AutoField()
+    number = IntegerField()
+    name = CharField(default='')
+    sensor_type = IntegerField()
+    times = CharField()
+    inverted = BooleanField(default=False)
+    energy_module = ForeignKeyField(EnergyModule, on_delete='CASCADE', backref='cts')
+
+    class Meta:
+        indexes = (
+            (('number', 'energy_module_id'), True),
+        )
+
+
 class DataMigration(BaseModel):
     id = AutoField()
     name = CharField()

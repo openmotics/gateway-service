@@ -29,7 +29,7 @@ from gateway.mappers.module import ModuleMapper
 if False:  # MYPY
     from typing import Dict, List, Optional, Any
     from gateway.hal.master_controller import MasterController
-    from power.power_controller import PowerController
+    from gateway.energy_module_controller import EnergyModuleController
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +39,10 @@ logger = logging.getLogger(__name__)
 class ModuleController(BaseController):
 
     @Inject
-    def __init__(self, master_controller=INJECTED, power_controller=INJECTED):
-        # type: (MasterController, Optional[PowerController]) -> None
+    def __init__(self, master_controller=INJECTED, energy_module_controller=INJECTED):
+        # type: (MasterController, EnergyModuleController) -> None
         super(ModuleController, self).__init__(master_controller, sync_interval=None)
-        self._power_controller = power_controller
+        self._energy_module_controller = energy_module_controller
 
     def _sync_orm(self):
         # type: () -> bool
@@ -55,19 +55,19 @@ class ModuleController(BaseController):
 
         amounts = {None: 0, True: 0, False: 0}
         try:
+            # Master slave modules (update/insert/delete)
             ids = []
-            module_dtos = []
-            module_dtos += self._master_controller.get_modules_information()
-            if self._power_controller:
-                module_dtos += self._power_controller.get_modules_information()
-            for dto in module_dtos:
+            for dto in self._master_controller.get_modules_information():
                 module = Module.get_or_none(source=dto.source,
                                             address=dto.address)
                 if module is None:
-                    module = Module(source=dto.source,
-                                    address=dto.address)
-                module.module_type = dto.module_type
-                module.hardware_type = dto.hardware_type
+                    module = Module.create(source=dto.source,
+                                           address=dto.address,
+                                           module_type=dto.module_type,
+                                           hardware_type=dto.hardware_type)
+                else:
+                    module.module_type = dto.module_type
+                    module.hardware_type = dto.hardware_type
                 if dto.online:
                     module.firmware_version = dto.firmware_version
                     module.hardware_version = dto.hardware_version
@@ -76,13 +76,26 @@ class ModuleController(BaseController):
                 module.save()
                 amounts[dto.online] += 1
                 ids.append(module.id)
-            Module.delete().where(Module.id.not_in(ids)).execute()  # type: ignore
+            Module.delete().where((Module.id.not_in(ids)) & (Module.source == ModuleDTO.Source.MASTER)).execute()  # type: ignore
+            # Energy modules (online update live metadata)
+            for dto in self._energy_module_controller.get_modules_information():
+                module = Module.get_or_none(source=dto.source,
+                                            address=dto.address)
+                if module is None:
+                    logger.warning('ORM sync (Modules): Could not find EnergyModule {0}'.format(dto.address))
+                    continue
+                if dto.online:
+                    module.firmware_version = dto.firmware_version
+                    module.hardware_version = dto.hardware_version
+                    module.last_online_update = int(time.time())
+                    module.save()
+                amounts[dto.online] += 1
             logger.info('ORM sync (Modules): completed ({0} online, {1} offline, {2} emulated/virtual)'.format(
                 amounts[True], amounts[False], amounts[None]
             ))
         except CommunicationTimedOutException as ex:
             logger.error('ORM sync (Modules): Failed: {0}'.format(ex))
-        except Exception:
+        except Exception as ex:
             logger.exception('ORM sync (Modules): Failed')
         finally:
             self._sync_running = False

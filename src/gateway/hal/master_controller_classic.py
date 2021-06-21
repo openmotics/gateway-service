@@ -1317,11 +1317,11 @@ class MasterClassicController(MasterController):
 
     @communication_enabled
     @Inject
-    def power_cycle_bus(self, power_communicator=INJECTED):
+    def power_cycle_bus(self, energy_communicator=INJECTED):
         """ Turns the power of both bussed off for 5 seconds """
         self.do_basic_action(master_api.BA_POWER_CYCLE_BUS, 0)
-        if power_communicator:
-            power_communicator.reset_communication_statistics()  # TODO cleanup, use an event instead?
+        if energy_communicator:
+            energy_communicator.reset_communication_statistics()  # TODO cleanup, use an event instead?
 
     @communication_enabled
     def restore(self, data):

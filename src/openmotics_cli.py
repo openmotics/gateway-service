@@ -46,7 +46,6 @@ def cmd_shell(args):
     @Inject
     def f(cloud_api_client=INJECTED,
           event_sender=INJECTED,
-          gateway_api=INJECTED,
           group_action_controller=INJECTED,
           input_controller=INJECTED,
           maintenance_controller=INJECTED,
@@ -57,7 +56,7 @@ def cmd_shell(args):
           module_controller=INJECTED,
           output_controller=INJECTED,
           plugin_controller=INJECTED,
-          power_controller=INJECTED,
+          energy_module_controller=INJECTED,
           pubsub=INJECTED,
           pulse_counter_controller=INJECTED,
           room_controller=INJECTED,

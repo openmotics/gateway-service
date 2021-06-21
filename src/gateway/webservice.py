@@ -49,7 +49,8 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     ThermostatAircoStatusSerializer, PumpGroupSerializer, \
     GlobalRTD10Serializer, RTD10Serializer, GlobalFeedbackSerializer, \
     LegacyStartupActionSerializer, LegacyScheduleSerializer, \
-    DimmerConfigurationSerializer, SensorStatusSerializer
+    DimmerConfigurationSerializer, SensorStatusSerializer, \
+    EnergyModuleSerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import GlobalRTD10DTO, ModuleDTO, RoomDTO, ScheduleDTO, \
     UserDTO, InputStatusDTO
@@ -66,14 +67,14 @@ from gateway.websockets import EventsSocket, MaintenanceSocket, \
 from ioc import INJECTED, Inject, Injectable, Singleton
 from logs import Logs
 from platform_utils import Hardware, Platform, System
-from power.power_communicator import InAddressModeException
+from gateway.energy.energy_communicator import InAddressModeException
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Dict, Optional, Any, List, Literal, Union
     from bus.om_bus_client import MessageClient
-    from gateway.gateway_api import GatewayApi
+    from gateway.energy_module_controller import EnergyModuleController
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.frontpanel_controller import FrontpanelController
     from gateway.input_controller import InputController
@@ -348,13 +349,13 @@ class WebInterface(object):
     """ This class defines the web interface served by cherrypy. """
 
     @Inject
-    def __init__(self, user_controller=INJECTED, gateway_api=INJECTED, maintenance_controller=INJECTED,
+    def __init__(self, user_controller=INJECTED, maintenance_controller=INJECTED,
                  message_client=INJECTED, scheduling_controller=INJECTED,
                  thermostat_controller=INJECTED, shutter_controller=INJECTED, output_controller=INJECTED,
                  room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
                  frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED,
-                 uart_controller=INJECTED, system_controller=INJECTED):
+                 uart_controller=INJECTED, system_controller=INJECTED, energy_module_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -373,8 +374,8 @@ class WebInterface(object):
         self._ventilation_controller = ventilation_controller  # type: VentilationController
         self._uart_controller = uart_controller  # type: UARTController
         self._system_controller = system_controller  # type: SystemController
+        self._energy_module_controller = energy_module_controller  # type: EnergyModuleController
 
-        self._gateway_api = gateway_api  # type: GatewayApi
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
         self._message_client = message_client  # type: Optional[MessageClient]
         self._plugin_controller = None  # type: Optional[PluginController]
@@ -382,7 +383,7 @@ class WebInterface(object):
         self._metrics_controller = None  # type: Optional[MetricsController]
 
         self._ws_metrics_registered = False
-        self._power_dirty = False
+        self._energy_dirty = False
         self._service_state = False
 
     def in_authorized_mode(self):
@@ -1046,7 +1047,7 @@ class WebInterface(object):
         :param humidity: The humidity to set in percentage
         :param brightness: The brightness to set in percentage
         """
-        self._gateway_api.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
+        self._sensor_controller.set_virtual_sensor(sensor_id, temperature, humidity, brightness)
         return {}
 
     @openmotics_api(auth=True)
@@ -1179,11 +1180,11 @@ class WebInterface(object):
             errors = []
 
         master_last = self._module_controller.master_last_success()
-        power_last = self._gateway_api.power_last_success()
+        energy_last = self._energy_module_controller.last_success()
 
         return {'errors': errors,
                 'master_last_success': master_last,
-                'power_last_success': power_last}
+                'power_last_success': energy_last}
 
     @openmotics_api(auth=True)
     def master_clear_error_list(self):
@@ -1891,12 +1892,12 @@ class WebInterface(object):
         """
         Gets the dirty flags, and immediately clears them
         """
-        power_dirty = self._power_dirty
-        self._power_dirty = False
+        energy_dirty = self._energy_dirty
+        self._energy_dirty = False
         orm_dirty = Database.get_dirty_flag()
         # eeprom key used here for compatibility
         return {'eeprom': self._module_controller.get_configuration_dirty_flag(),
-                'power': power_dirty,
+                'power': energy_dirty,
                 'orm': orm_dirty}
 
     @openmotics_api(auth=True, check=types(level=str, logger_name=str))
@@ -1945,70 +1946,51 @@ class WebInterface(object):
         Get information on the power modules. The times format is a comma seperated list of
         HH:MM formatted times times (index 0 = start Monday, index 1 = stop Monday,
         index 2 = start Tuesday, ...).
-
-        :returns: 'modules': list of dictionaries with the following keys: 'id', 'name', \
-            'address', 'input0', 'input1', 'input2', 'input3', 'input4', 'input5', 'input6', \
-            'input7', 'sensor0', 'sensor1', 'sensor2', 'sensor3', 'sensor4', 'sensor5', 'sensor6', \
-            'sensor7', 'times0', 'times1', 'times2', 'times3', 'times4', 'times5', 'times6', 'times7'.
-        :rtype: dict
         """
-        return {'modules': self._gateway_api.get_power_modules()}
+        return {'modules': [EnergyModuleSerializer.serialize(energy_module_dto=energy_module_dto, fields=None)
+                            for energy_module_dto in self._energy_module_controller.load_modules()]}
 
-    @openmotics_api(auth=True)
+    @openmotics_api(auth=True, check=types(modules='json'))
     def set_power_modules(self, modules):
-        """
-        Set information for the power modules.
-
-        :param modules: json encoded list of dicts with keys: 'id', 'name', 'input0', 'input1', \
-            'input2', 'input3', 'input4', 'input5', 'input6', 'input7', 'sensor0', 'sensor1', \
-            'sensor2', 'sensor3', 'sensor4', 'sensor5', 'sensor6', 'sensor7', 'times0', 'times1', \
-            'times2', 'times3', 'times4', 'times5', 'times6', 'times7'.
-        :type modules: str
-        """
-        return self._gateway_api.set_power_modules(json.loads(modules))
+        """ Set information for the power modules. """
+        module_dtos = [EnergyModuleSerializer.deserialize(module) for module in modules]
+        return self._energy_module_controller.save_modules(module_dtos)
 
     @openmotics_api(auth=True)
     def get_realtime_power(self):
-        """
-        Get the realtime power measurements.
-
-        :returns: module id as the keys: [voltage, frequency, current, power].
-        :rtype: dict
-        """
-        response = {}  # type: Dict[str,List[List[float]]]
-        for module_id, items in self._gateway_api.get_realtime_power().items():
+        """ Get the realtime power measurements. """
+        response = {}  # type: Dict[str, List[List[float]]]
+        for module_id, items in self._energy_module_controller.get_realtime_energy().items():
             response[module_id] = []
             for realtime_power in items:
                 response[module_id].append([realtime_power.voltage,
                                             realtime_power.frequency,
                                             realtime_power.current,
                                             realtime_power.power])
-        return response
+        return response  # TODO: Use serializer
 
     @openmotics_api(auth=True)
     def get_total_energy(self):
-        """
-        Get the total energy (Wh) consumed by the power modules.
-
-        :returns: modules id as key: [day, night].
-        :rtype: dict
-        """
-        return self._gateway_api.get_total_energy()
+        """ Get the total energy (Wh) consumed by the power modules. """
+        return dict((module_id, [[entry.day, entry.night] for entry in data])
+                    for module_id, data in self._energy_module_controller.get_total_energy().items())
 
     @openmotics_api(auth=True)
     def start_power_address_mode(self):
         """
         Start the address mode on the power modules.
         """
-        return self._gateway_api.start_power_address_mode()
+        self._energy_module_controller.start_address_mode()
+        return {}
 
     @openmotics_api(auth=True)
     def stop_power_address_mode(self):
         """
         Stop the address mode on the power modules.
         """
-        self._power_dirty = True
-        return self._gateway_api.stop_power_address_mode()
+        self._energy_dirty = True
+        self._energy_module_controller.stop_address_mode()
+        return {}
 
     @openmotics_api(auth=True)
     def in_power_address_mode(self):
@@ -2018,65 +2000,55 @@ class WebInterface(object):
         :returns: 'address_mode': Boolean
         :rtype: dict
         """
-        return self._gateway_api.in_power_address_mode()
+        return {'address_mode': self._energy_module_controller.in_address_mode()}
 
     @openmotics_api(auth=True, check=types(module_id=int, voltage=float))
     def set_power_voltage(self, module_id, voltage):
         """
         Set the voltage for a given module.
-
         :param module_id: The id of the power module.
-        :type module_id: int
         :param voltage: The voltage to set for the power module.
-        :type voltage: float
         """
-        return self._gateway_api.set_power_voltage(module_id, voltage)
+        self._energy_module_controller.calibrate_module_voltage(module_id, voltage)
+        return {}
 
     @openmotics_api(auth=True, check=types(module_id=int, input_id=int))
     def get_energy_time(self, module_id, input_id=None):
+        # type: (int, Optional[int]) -> Dict[str, Any]
         """
         Gets 1 period of given module and optional input (no input means all).
 
         :param module_id: The id of the power module.
-        :type module_id: int
         :param input_id: The id of the input on the given power module
-        :type input_id: int or None
         :returns: A dict with the input_id(s) as key, and as value another dict with
                   (up to 80) voltage and current samples.
-        :rtype: dict
         """
-        return self._gateway_api.get_energy_time(module_id, input_id)
+        return self._energy_module_controller.get_energy_time(module_id, input_id)
 
     @openmotics_api(auth=True, check=types(module_id=int, input_id=int))
     def get_energy_frequency(self, module_id, input_id=None):
+        # type: (int, Optional[int]) -> Dict[str, Any]
         """
         Gets the frequency components for a given module and optional input (no input means all)
 
         :param module_id: The id of the power module
-        :type module_id: int
         :param input_id: The id of the input on the given power module
-        :type input_id: int | None
         :returns: A dict with the input_id(s) as key, and as value another dict with for
                   voltage and current the 20 frequency components
-        :rtype: dict
         """
-        return self._gateway_api.get_energy_frequency(module_id, input_id)
+        return self._energy_module_controller.get_energy_frequency(module_id, input_id)
 
     @openmotics_api(auth=True, check=types(address=int), plugin_exposed=False)
     def do_raw_energy_command(self, address, mode, command, data):
+        # type: (int, str, str, str) -> Dict[str, Any]
         """
         Perform a raw energy module command, for debugging purposes.
 
         :param address: The address of the energy module
-        :type address: int
         :param mode: 1 char: S or G
-        :type mode: str
         :param command: 3 char power command
-        :type command: str
         :param data: comma seperated list of Bytes
-        :type data: str
         :returns: dict with 'data': comma separated list of Bytes
-        :rtype: dict
         """
         if mode not in ['S', 'G']:
             raise ValueError("mode not in [S, G]: %s" % mode)
@@ -2089,7 +2061,7 @@ class WebInterface(object):
         else:
             bdata = []
 
-        ret = self._gateway_api.do_raw_energy_command(address, mode, command, bdata)
+        ret = self._energy_module_controller.do_raw_energy_command(address, mode, command, bdata)
         return {'data': ",".join([str(d) for d in ret])}
 
     @openmotics_api(auth=True)

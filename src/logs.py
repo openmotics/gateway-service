@@ -90,7 +90,7 @@ class Logs(object):
     @staticmethod
     def _get_service_loggers():
         for logger_namespace in logging.root.manager.loggerDict:  # type: ignore
-            if re.match("^openmotics.*|^gateway.*|^master.*|^plugins.*|^power.*", logger_namespace):
+            if re.match("^openmotics.*|^gateway.*|^master.*|^plugins.*|^energy.*", logger_namespace):
                 yield logging.getLogger(logger_namespace)
 
     @staticmethod
