@@ -1,7 +1,9 @@
-#!/bin/sh
+#!/usr/bin/env bash
+
+set -e
 
 # General script variables
-SCRIPT_DIR_NAME=$(dirname $(readlink -f $0))
+SCRIPT_DIR_NAME=$(dirname $(realpath $0))
 GATEWAY_ROOT_DIR=$SCRIPT_DIR_NAME/../../
 
 GATEWAY_CONFIG_DIR="$SCRIPT_DIR_NAME/config"
@@ -20,7 +22,7 @@ DOCKER_INTERACTIVE='-it'
 DOCKER_DAEMON='-d'
 
 DOCKER_OPTIONS='
--v '$GATEWAY_ROOT_DIR':/app 
+-v '$GATEWAY_ROOT_DIR':/app
 -v '$GATEWAY_CONFIG_DIR/openvpn':/etc/openvpn/client
 -w /app
 -e TERM=xterm-color
@@ -36,7 +38,7 @@ DOCKER_OPTIONS_USER='--user='$(id -u):$(id -g)
 DOCKER_OPTIONS_XORG='-e DISPLAY=$(DISPLAY) -v /tmp/.X11-unix:/tmp/.X11-unix'
 DOCKER_OPTIONS_PRIVILEGED='--privileged'
 
-DOCKER_RUN_CMD="$DOCKER_BASE_CMD 
+DOCKER_RUN_CMD="$DOCKER_BASE_CMD
 	$DOCKER_RM_CMD
 	$DOCKER_INTERACTIVE
 	$DOCKER_OPTIONS
@@ -47,14 +49,21 @@ DOCKER_RUN_CMD="$DOCKER_BASE_CMD
 VENV_NAME=gw_venv
 VENV_FOLDER="$SCRIPT_DIR_NAME/$VENV_NAME"
 
+if [ $(uname -s) == 'Darwin' ]
+then
+    SED_CMD="gsed"  # You need gnu-sed
+else
+    SED_CMD="sed"
+fi
 
 
 # create the venv
 create_venv () {
     $DOCKER_RUN_CMD \
     bash -c "
+        cd /app/docker/runner &&
         python3 -m virtualenv $VENV_NAME &&
-        source /app/docker/runner/$VENV_NAME/bin/activate &&
+        source $VENV_NAME/bin/activate &&
         pip install -r /app/requirements-py3.txt"
 }
 
@@ -100,16 +109,18 @@ setup_config () {
     echo "   => Done"
 
     echo " * Changing the openmotics.config file to the correct spec"
-    sed -i '/controller_serial/d' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
-    sed -i '/passthrough_serial/d' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
-    sed -i '/cli_serial/d' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
-    sed -i '/power_serial/d' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
-    sed -i '/leds_i2c_address/d' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
-    sed -i '7 a http_port=8088' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
-    sed -i '8 a https_port=8443' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
-    sed -i '9 a vpn_supervisor=False' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
+    $SED_CMD -i '/controller_serial/d' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
+    $SED_CMD -i '/passthrough_serial/d' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
+    $SED_CMD -i '/cli_serial/d' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
+    $SED_CMD -i '/power_serial/d' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
+    $SED_CMD -i '/leds_i2c_address/d' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
+    $SED_CMD -i '/platform/d' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
+    $SED_CMD -i '6 a platform=DUMMY' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
+    $SED_CMD -i '7 a http_port=8088' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
+    $SED_CMD -i '8 a https_port=8443' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
+    $SED_CMD -i '9 a vpn_supervisor=False' $GATEWAY_CONFIG_DIR/etc/openmotics.conf
     echo "   => Done"
-    
+
     echo " * Remove artifacts"
     rm -rf $CLIENT_UNPACKED
     echo "   => Done"
