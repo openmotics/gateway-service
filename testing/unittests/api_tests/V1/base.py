@@ -14,8 +14,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import time
 
+import cherrypy
 from cherrypy.test import helper
 import mock
+import ujson as json
 
 from gateway.authentication_controller import AuthenticationToken, TokenStore, AuthenticationController
 from gateway.user_controller import UserController
@@ -33,6 +35,23 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
     def setUpClass(cls):
         super(BaseCherryPyUnitTester, cls).setUpClass()
         SetTestMode()
+
+        # setting the same error return values as the web service
+        def error_generic(status, message, *args, **kwargs):
+            _ = args, kwargs
+            cherrypy.response.headers["Content-Type"] = "application/json"
+            cherrypy.response.status = status
+            return json.dumps({"success": False, "msg": message})
+
+        def error_unexpected():
+            cherrypy.response.headers["Content-Type"] = "application/json"
+            cherrypy.response.status = 500  # Internal Server Error
+            return json.dumps({"success": False, "msg": "unknown_error"})
+
+        cherrypy.config.update({'error_page.404': error_generic,
+                                'error_page.401': error_generic,
+                                'error_page.503': error_generic,
+                                'request.error_response': error_unexpected})
 
     def tearDown(self):
         super(BaseCherryPyUnitTester, self).tearDown()
@@ -57,8 +76,10 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
         else:
             token = None
         with mock.patch.object(self.users_controller, 'check_token', return_value=token), \
-                mock.patch.object(self.auth_controller, 'check_token', return_value=token):
-            headers = headers or []
+                mock.patch.object(self.auth_controller, 'check_token', return_value=token), \
+                mock.patch.object(self.auth_controller, 'check_api_secret', wraps=lambda secret: secret == 'Test-Secret'):
+            headers = headers or {}
+            headers = [(k, v) for k, v in headers.items()]
             if token is not None:
                 headers.append(('Authorization', 'Bearer {}'.format(token.token)))
             if body is not None:
@@ -90,3 +111,11 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
     # Do not run the standard test to check if the tree is mounted, the other tests will also fail
     def test_gc(self):
         pass
+
+    # Function that is usefull for debugging
+    def print_request_result(self):
+        print('-----------------------')
+        print('Status:  {}'.format(self.status))
+        print('Headers: {}'.format(self.headers))
+        print('Body:    {}'.format(self.body))
+        print('-----------------------')

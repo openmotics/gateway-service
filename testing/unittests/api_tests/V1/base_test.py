@@ -109,18 +109,18 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
                 return 'get_method_auth_courier'
 
             @openmotics_api_v1(auth=False, pass_role=True, pass_token=False)
-            def post_rest_no_auth_no_body(self, role):
-                return json.dumps({'role': role})
+            def post_rest_no_auth_no_body(self, auth_role):
+                return json.dumps({'role': auth_role})
 
             @openmotics_api_v1(auth=True, pass_role=True, pass_token=False,
                                expect_body_type='JSON')
-            def post_rest_auth_json(self, role, request_body):
-                return json.dumps({'role': role, 'request_body': request_body})
+            def post_rest_auth_json(self, auth_role, request_body):
+                return json.dumps({'role': auth_role, 'request_body': request_body})
 
             @openmotics_api_v1(auth=True, pass_role=False, pass_token=True,
                                expect_body_type='RAW')
-            def put_rest_auth_raw(self, token, request_body):
-                return json.dumps({'token_userrole': token.user.role, 'request_body': request_body})
+            def put_rest_auth_raw(self, auth_token, request_body):
+                return json.dumps({'token_userrole': auth_token.user.role, 'request_body': request_body})
 
             @openmotics_api_v1(auth=True, pass_role=False, pass_token=False)
             def delete_rest_auth(self):

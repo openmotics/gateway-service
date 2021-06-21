@@ -21,13 +21,14 @@ import datetime
 from dateutil.tz import tzlocal
 import logging
 
-from gateway.models import Delivery, User
-from gateway.mappers import DeliveryMapper
-from gateway.dto import DeliveryDTO
+from gateway.models import Delivery, User, Database
+from gateway.mappers import DeliveryMapper, UserMapper
+from gateway.dto import DeliveryDTO, UserDTO
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MyPy
     from typing import List, Optional
+    from gateway.user_controller import UserController
 
 logger = logging.getLogger(__name__)
 
@@ -35,28 +36,38 @@ logger = logging.getLogger(__name__)
 @Injectable.named('delivery_controller')
 @Singleton
 class DeliveryController(object):
-    def __init__(self):
-        pass
+
+    @Inject
+    def __init__(self, user_controller=INJECTED):
+        # type: (UserController) -> None
+        self.user_controller = user_controller
 
     @staticmethod
-    def load_delivery(delivery_id):
+    def load_delivery(delivery_id, include_picked_up=False):
         # type: (int) -> Optional[DeliveryDTO]
-        delivery_orm = Delivery.select().where(Delivery.id == delivery_id).where(Delivery.timestamp_pickup.is_null()).first()
+        if include_picked_up:
+            delivery_orm = Delivery.select().where(Delivery.id == delivery_id).first()
+        else:
+            delivery_orm = Delivery.select().where(Delivery.id == delivery_id).where(Delivery.timestamp_pickup.is_null()).first()
         if delivery_orm is None:
             return None
         delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
         return delivery_dto
 
     @staticmethod
-    def load_deliveries(user_id=None):
+    def load_deliveries(user_id=None, include_picked_up=False):
         # type: (Optional[int]) -> List[DeliveryDTO]
         deliveries = []
-        if user_id is None:
-            query = Delivery.select().where(Delivery.timestamp_pickup.is_null())
-        else:
-            query = Delivery.select().where((Delivery.timestamp_pickup.is_null()) &
-                                            ((Delivery.user_delivery_id == user_id) |
-                                             (Delivery.user_pickup_id == user_id)))
+        query = Delivery.select()
+        # filter on user id when needed
+        if user_id is not None:
+            query = query.where(
+                ((Delivery.user_delivery_id == user_id) |
+                 (Delivery.user_pickup_id == user_id))
+            )
+        # filter on picked up when needed
+        if not include_picked_up:
+            query = query.where(Delivery.timestamp_pickup.is_null())
 
         for delivery_orm in query:
             delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
@@ -75,8 +86,7 @@ class DeliveryController(object):
         ids = (x.id for x in deliveries)
         return delivery_id in ids
 
-    @staticmethod
-    def save_delivery(delivery_dto):
+    def save_delivery(self, delivery_dto):
         # type: (DeliveryDTO) -> Optional[DeliveryDTO]
         # TODO: Check if parcelbox id exists!
         if delivery_dto.parcelbox_rebus_id is None:
@@ -114,9 +124,8 @@ class DeliveryController(object):
         timestamp = datetime.datetime.now(tzlocal())
         return cls.datetime_to_string_format(timestamp)
 
-    @staticmethod
-    def pickup_delivery(delivery_id):
-        delivery_dto = DeliveryController.load_delivery(delivery_id)
+    def pickup_delivery(self, delivery_id):
+        delivery_dto = DeliveryController.load_delivery(delivery_id, include_picked_up=True)
         if delivery_dto is None:
             raise RuntimeError('Cannot update the delivery with id {}: Delivery does not exists'.format(delivery_id))
 
@@ -124,17 +133,28 @@ class DeliveryController(object):
             raise RuntimeError('Cannot update the delivery with id: {}: Delivery has already been picked up'.format(delivery_id))
 
         delivery_dto.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
-        return DeliveryController.save_delivery(delivery_dto)
+        if delivery_dto.type == Delivery.DeliveryType.RETURN:
+            pickup_user_dto = delivery_dto.user_pickup
+            delivery_dto.user_pickup = delivery_dto.user_delivery
+            delivery_dto_saved = self.save_delivery(delivery_dto)
+            self.user_controller.remove_user(pickup_user_dto)
+        else:
+            delivery_dto_saved = self.save_delivery(delivery_dto)
+        return delivery_dto_saved
 
     @staticmethod
     def _validate_delivery_type(delivery_dto):
         # type: (DeliveryDTO) -> None
         if delivery_dto.type == Delivery.DeliveryType.RETURN:
-            # check that the pickup user is filled in and is an courier user
+            # Delivery needs a delivery user, otherwise it does not come from one of the local users
             if delivery_dto.user_delivery is None:
-                raise ValueError('Delivery needs an pickup user when it is a return delivery')
-            if delivery_dto.user_delivery.role is not User.UserRoles.COURIER:
-                raise ValueError('Delivery should have a courier as a pickup user')
+                raise ValueError('Delivery needs an delivery user when it is a return delivery')
+
+            # Delivery needs a courier when it is not picked up, otherwise the user needs to be deleted.
+            if delivery_dto.timestamp_pickup is None:
+                # not picked up
+                if delivery_dto.user_pickup is None or delivery_dto.user_pickup.role != User.UserRoles.COURIER:
+                    raise ValueError('when the delivery is not picked up, the delivery needs a COURIER pickup user')
         else:
             if delivery_dto.user_delivery is not None:
                 raise ValueError('Delivery cannot have a delivery user when the delivery is of type DELIVERY')

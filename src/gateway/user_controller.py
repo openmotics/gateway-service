@@ -18,18 +18,20 @@ and authenticating users.
 """
 
 from __future__ import absolute_import
+
+from functools import reduce
 import logging
-import uuid
-import time
+import operator
 import random
 import six
-from ioc import Injectable, Inject, Singleton, INJECTED
+
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken
-from gateway.exceptions import ItemDoesNotExistException
-from gateway.models import User
-from gateway.mappers.user import UserMapper
 from gateway.dto.user import UserDTO
 from gateway.enums import UserEnums
+from gateway.mappers.user import UserMapper
+from gateway.models import User
+
+from ioc import Injectable, Inject, Singleton, INJECTED
 
 if False:  # MYPY
     from typing import Tuple, List, Optional, Dict, Union
@@ -40,6 +42,12 @@ logger = logging.getLogger(__name__)
 @Singleton
 class UserController(object):
     """ The UserController provides methods for the creation and authentication of users. """
+    PinCodeLength = {
+        'COURIER': 4,
+        'USER': 4,
+        'ADMIN': 6,
+        'TECHNICIAN': 6
+    }
 
     @Inject
     def __init__(self, config=INJECTED, authentication_controller=INJECTED):
@@ -90,7 +98,6 @@ class UserController(object):
         user_dto_saved = UserMapper.orm_to_dto(user_orm)
         return user_dto_saved
 
-
     def save_users(self, users):
         # type: (List[UserDTO]) -> None
         """ Create or update a new user using a user DTO object """
@@ -108,12 +115,17 @@ class UserController(object):
         user_dto.clear_password()
         return user_dto
 
-    def load_users(self):
-        # type: () -> List[UserDTO]
+    def load_users(self, roles=None, include_inactive=False):
+        # type: (List[str], bool) -> List[UserDTO]
         """  Returns a list of UserDTOs with all the usernames """
         _ = self
         users = []
-        for user_orm in User.select():
+        query = User.select()
+        if roles is not None:
+            query = query.where(User.role.in_(roles))
+        if not include_inactive:
+            query = query.where(User.is_active == 1)
+        for user_orm in query:
             user_dto = UserMapper.orm_to_dto(user_orm)
             user_dto.clear_password()
             users.append(user_dto)
@@ -168,15 +180,21 @@ class UserController(object):
         result = self.authentication_controller.check_token(token)
         return result is not None
 
-    def generate_new_pin_code(self):
-        # type: () -> int
+    def generate_new_pin_code(self, length=4):
+        # type: (int) -> str
         _ = self
         current_pin_codes = User.select(User.pin_code).execute()
+        # Split this up for testing reasons
+        return UserController._generate_new_pin_code(length, current_pin_codes)
+
+    @staticmethod
+    def _generate_new_pin_code(length, current_pin_codes):
         while True:
-            new_pin = random.randint(0, 9999)
+            max_int = int('9' * length)
+            new_pin = random.randint(0, max_int)
             if new_pin not in current_pin_codes:
                 break
-        return new_pin
+        return str(new_pin).rjust(length, '0')
 
     def check_if_pin_exists(self, pin):
         _ = self

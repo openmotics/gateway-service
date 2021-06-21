@@ -296,9 +296,9 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual('om', users_in_controller[0].username)
 
         user_to_add = User(
-            username='test',
+            username='admin_1',
             password=UserDTO._hash_password('test'),
-            pin_code='1234',
+            pin_code='1111',
             role=User.UserRoles.ADMIN,
             accepted_terms=True
         )
@@ -308,12 +308,60 @@ class UserControllerTest(unittest.TestCase):
         users_in_controller = self.controller.load_users()
         self.assertEqual(2, len(users_in_controller))
         self.assertEqual('om', users_in_controller[0].username)
-        self.assertEqual('test', users_in_controller[1].username)
+        self.assertEqual('admin_1', users_in_controller[1].username)
 
         # check if the number of users is correct
         num_users = self.controller.get_number_of_users()
         self.assertEqual(2, num_users)
 
+        # Add a normal user and then load only normal users
+        user_to_add = User(
+            username='user_1',
+            password=UserDTO._hash_password('test'),
+            pin_code='2222',
+            role=User.UserRoles.USER,
+            accepted_terms=True
+        )
+        user_to_add.save()
+
+        user_to_add = User(
+            username='user_2',
+            password=UserDTO._hash_password('test'),
+            pin_code='3333',
+            role=User.UserRoles.USER,
+            accepted_terms=True,
+            is_active=False
+        )
+        user_to_add.save()
+
+        user_to_add = User(
+            username='courier_1',
+            password=UserDTO._hash_password('test'),
+            pin_code='4444',
+            role=User.UserRoles.COURIER,
+            accepted_terms=True
+        )
+        user_to_add.save()
+
+        # check if the number of users is correct
+        num_users = self.controller.get_number_of_users()
+        self.assertEqual(5, num_users)
+
+        loaded_users = self.controller.load_users(roles=[User.UserRoles.USER], include_inactive=False)
+        self.assertEqual(1, len(loaded_users))
+        for user in loaded_users:
+            self.assertEqual('USER', user.role)
+
+        loaded_users = self.controller.load_users(roles=[User.UserRoles.USER], include_inactive=True)
+        self.assertEqual(2, len(loaded_users))
+        for user in loaded_users:
+            self.assertEqual('USER', user.role)
+
+        roles = [User.UserRoles.USER, User.UserRoles.ADMIN]
+        loaded_users = self.controller.load_users(roles=roles)
+        self.assertEqual(3, len(loaded_users))  # 2 admin users plus one regular user
+        for user in loaded_users:
+            self.assertIn(user.role, roles)
 
     def test_remove_user(self):
         """ Test removing a user. """
