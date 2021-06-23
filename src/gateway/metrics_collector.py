@@ -607,11 +607,12 @@ class MetricsCollector(object):
                              'R': 'Shutter',
                              'C': 'CAN',
                              'L': 'OLED'}
+                    module_type = types.get(om_module[0], 'Unknown {0}'.format(om_module[0]))
                     self._enqueue_metrics(metric_type=metric_type,
                                           values={'value': int(count)},
-                                          tags={'type': types[om_module[0]],
+                                          tags={'type': module_type,
                                                 'id': om_module,
-                                                'name': '{0} {1}'.format(types[om_module[0]], om_module)},
+                                                'name': '{0} {1}'.format(module_type, om_module)},
                                           timestamp=now)
             except CommunicationFailure as ex:
                 logger.error('Error getting module errors: {}'.format(ex))

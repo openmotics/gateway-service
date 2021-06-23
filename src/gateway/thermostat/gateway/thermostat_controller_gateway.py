@@ -162,9 +162,9 @@ class ThermostatControllerGateway(ThermostatController):
                     m, s = divmod(int(seconds_of_day), 60)
                     h, m = divmod(m, 60)
                     if schedule.mode == 'heating':
-                        args = [thermostat_number, None, new_setpoint, None]
+                        args = [thermostat_number, new_setpoint, None]
                     else:
-                        args = [thermostat_number, None, None, new_setpoint]
+                        args = [thermostat_number, None, new_setpoint]
                     if schedule_length % 7 == 0:
                         self._scheduler.add_job(ThermostatControllerGateway.set_setpoint_from_scheduler, 'cron',
                                                 start_date=start_date,
