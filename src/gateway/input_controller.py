@@ -128,7 +128,6 @@ class InputController(BaseController):
                 input_dto = self._master_controller.load_input(input_id=input_.number)
             except TypeError as ex:
                 logger.error('Could not load input {0}: {1}'.format(input_.number, ex))
-                self.request_sync_orm()  # This likely is caused by module reconfigurations
                 continue
             input_dto.room = input_.room.number if input_.room is not None else None
             input_dto.event_enabled = input_.event_enabled
