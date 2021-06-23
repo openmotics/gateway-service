@@ -29,7 +29,7 @@ from playhouse.signals import Model, post_save
 import constants
 
 if False:  # MYPY
-    from typing import Dict, List, Any
+    from typing import Dict, List, Any, TypeVar
     T = TypeVar('T')
 
 logger = logging.getLogger(__name__)
@@ -156,6 +156,29 @@ class Module(BaseModel):
     hardware_version = CharField(null=True)
     order = IntegerField(null=True)
     last_online_update = IntegerField(null=True)
+
+
+class EnergyModule(BaseModel):
+    id = AutoField()
+    number = IntegerField(unique=True)
+    version = IntegerField()
+    name = CharField(default='')
+    module = ForeignKeyField(Module, on_delete='CASCADE', backref='energy_modules', unique=True)
+
+
+class EnergyCT(BaseModel):
+    id = AutoField()
+    number = IntegerField()
+    name = CharField(default='')
+    sensor_type = IntegerField()
+    times = CharField()
+    inverted = BooleanField(default=False)
+    energy_module = ForeignKeyField(EnergyModule, on_delete='CASCADE', backref='cts')
+
+    class Meta:
+        indexes = (
+            (('number', 'energy_module_id'), True),
+        )
 
 
 class DataMigration(BaseModel):

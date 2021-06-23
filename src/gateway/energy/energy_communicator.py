@@ -27,17 +27,18 @@ from gateway.daemon_thread import BaseThread
 from gateway.hal.master_controller import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
+from gateway.models import EnergyModule, EnergyCT, Module
+from gateway.dto import ModuleDTO
+from gateway.enums import EnergyEnums
 from ioc import INJECTED, Inject
-from power import power_api
-from power.power_command import PowerCommand
-from power.time_keeper import TimeKeeper
+from gateway.energy.energy_api import EnergyAPI, BROADCAST_ADDRESS, NORMAL_MODE, ADDRESS_MODE
+from gateway.energy.energy_command import EnergyCommand
 from serial_utils import CommunicationStatus, CommunicationTimedOutException, \
     Printable
 
 if False:  # MYPY:
     from typing import Any, Dict, List, Literal, Optional, Tuple, Union
     from serial_utils import RS485
-    from power.power_store import PowerStore
     DataType = Union[float, int, str]
 
     HEALTH = Literal['success', 'unstable', 'failure']
@@ -45,21 +46,14 @@ if False:  # MYPY:
 logger = logging.getLogger(__name__)
 
 
-class PowerCommunicator(object):
+class EnergyCommunicator(object):
     """ Uses a serial port to communicate with the power modules. """
 
     @Inject
-    def __init__(self, power_serial=INJECTED, power_store=INJECTED, pubsub=INJECTED, time_keeper_period=60,
-                 address_mode_timeout=300):
-        # type: (RS485, PowerStore, PubSub, int, int) -> None
-        """ Default constructor.
-
-        :param power_serial: Serial port to communicate with
-        :type power_serial: Instance of :class`RS485`
-        :param verbose: Print all serial communication to stdout.
-        """
+    def __init__(self, energy_serial=INJECTED, pubsub=INJECTED, address_mode_timeout=300):
+        # type: (RS485, PubSub, int) -> None
         self.__verbose = logger.level >= logging.DEBUG
-        self.__serial = power_serial
+        self.__serial = energy_serial
         self.__serial_lock = RLock()
         self.__cid = 1
 
@@ -67,15 +61,9 @@ class PowerCommunicator(object):
         self.__address_mode_stop = False
         self.__address_thread = None  # type: Optional[Thread]
         self.__address_mode_timeout = address_mode_timeout
-        self.__power_store = power_store
         self.__pubsub = pubsub
 
         self.__last_success = 0  # type: float
-
-        if time_keeper_period != 0:
-            self.__time_keeper = TimeKeeper(self, power_store, time_keeper_period)  # type: Optional[TimeKeeper]
-        else:
-            self.__time_keeper = None
 
         self.__communication_stats_calls = {'calls_succeeded': [],
                                             'calls_timedout': []}  # type: Dict[str, List]
@@ -86,17 +74,6 @@ class PowerCommunicator(object):
         self.__debug_buffer = {'read': {},
                                'write': {}}  # type: Dict[str,Dict[float,str]]
         self.__debug_buffer_duration = 300
-
-    def start(self):
-        # type: () -> None
-        """ Start the power communicator. """
-        if self.__time_keeper is not None:
-            self.__time_keeper.start()
-
-    def stop(self):
-        # type: () -> None
-        if self.__time_keeper is not None:
-            self.__time_keeper.stop()
 
     def get_communication_statistics(self):
         # type: () -> Dict[str, Any]
@@ -189,7 +166,7 @@ class PowerCommunicator(object):
                 del self.__debug_buffer['write'][t]
 
     def do_command(self, address, cmd, *data):
-        # type: (int, PowerCommand, DataType) -> Tuple[Any, ...]
+        # type: (int, EnergyCommand, DataType) -> Tuple[Any, ...]
         """ Send a command over the serial port and block until an answer is received.
         If the power module does not respond within the timeout period, a
         CommunicationTimedOutException is raised.
@@ -206,14 +183,14 @@ class PowerCommunicator(object):
             raise InAddressModeException()
 
         def do_once(_address, _cmd, *_data):
-            # type: (int, PowerCommand, DataType) -> Tuple[Any, ...]
+            # type: (int, EnergyCommand, DataType) -> Tuple[Any, ...]
             """ Send the command once. """
             try:
                 cid = self.__get_cid()
                 send_data = _cmd.create_input(_address, cid, *_data)
                 self.__write_to_serial(send_data)
 
-                if _address == power_api.BROADCAST_ADDRESS:
+                if _address == BROADCAST_ADDRESS:
                     self.__communication_stats_calls['calls_succeeded'].append(time.time())
                     self.__communication_stats_calls['calls_succeeded'] = self.__communication_stats_calls['calls_succeeded'][-50:]
                     return ()  # No reply on broadcast messages !
@@ -251,7 +228,7 @@ class PowerCommunicator(object):
             except UnkownCommandException:
                 # This happens when the module is stuck in the bootloader.
                 logger.error("Got UnkownCommandException")
-                do_once(address, power_api.bootloader_jump_application())
+                do_once(address, EnergyAPI.bootloader_jump_application())
                 time.sleep(1)
                 return self.do_command(address, cmd, *data)
             except CommunicationTimedOutException:
@@ -282,28 +259,19 @@ class PowerCommunicator(object):
     def __do_address_mode(self):
         # type: () -> None
         """ This code is running in a thread when in address mode. """
-        if self.__power_store is None:
-            self.__address_mode = False
-            self.__address_thread = None
-            return
-
         expire = time.time() + self.__address_mode_timeout
-        address_mode = power_api.set_addressmode(power_api.ENERGY_MODULE)
-        address_mode_p1c = power_api.set_addressmode(power_api.P1_CONCENTRATOR)
-        want_an_address_8 = power_api.want_an_address(power_api.POWER_MODULE)
-        want_an_address_12 = power_api.want_an_address(power_api.ENERGY_MODULE)
-        want_an_address_p1c = power_api.want_an_address(power_api.P1_CONCENTRATOR)
-        set_address = power_api.set_address(power_api.ENERGY_MODULE)
-        set_address_p1c = power_api.set_address(power_api.P1_CONCENTRATOR)
+        address_mode = EnergyAPI.set_addressmode(EnergyEnums.Version.ENERGY_MODULE)
+        address_mode_p1c = EnergyAPI.set_addressmode(EnergyEnums.Version.P1_CONCENTRATOR)
+        want_an_address_8 = EnergyAPI.want_an_address(EnergyEnums.Version.POWER_MODULE)
+        want_an_address_12 = EnergyAPI.want_an_address(EnergyEnums.Version.ENERGY_MODULE)
+        want_an_address_p1c = EnergyAPI.want_an_address(EnergyEnums.Version.P1_CONCENTRATOR)
+        set_address = EnergyAPI.set_address(EnergyEnums.Version.ENERGY_MODULE)
+        set_address_p1c = EnergyAPI.set_address(EnergyEnums.Version.P1_CONCENTRATOR)
 
         # AGT start
-        data = address_mode.create_input(power_api.BROADCAST_ADDRESS,
-                                         self.__get_cid(),
-                                         power_api.ADDRESS_MODE)
+        data = address_mode.create_input(BROADCAST_ADDRESS, self.__get_cid(), ADDRESS_MODE)
         self.__write_to_serial(data)
-        data = address_mode_p1c.create_input(power_api.BROADCAST_ADDRESS,
-                                             self.__get_cid(),
-                                             power_api.ADDRESS_MODE)
+        data = address_mode_p1c.create_input(BROADCAST_ADDRESS, self.__get_cid(),ADDRESS_MODE)
         self.__write_to_serial(data)
 
         # Wait for WAA and answer.
@@ -316,26 +284,40 @@ class PowerCommunicator(object):
 
                 version = None
                 if want_an_address_8.check_header_partial(header):
-                    version = power_api.POWER_MODULE
+                    version = EnergyEnums.Version.POWER_MODULE
                 elif want_an_address_12.check_header_partial(header):
-                    version = power_api.ENERGY_MODULE
+                    version = EnergyEnums.Version.ENERGY_MODULE
                 elif want_an_address_p1c.check_header_partial(header):
-                    version = power_api.P1_CONCENTRATOR
+                    version = EnergyEnums.Version.P1_CONCENTRATOR
 
                 if version is None:
                     logger.warning("Received unexpected message in address mode")
                 else:
                     (old_address, cid) = (header[:2][1], header[2:3])
-                    # Ask power_controller for new address, and register it.
-                    new_address = self.__power_store.get_free_address()
 
-                    if self.__power_store.module_exists(old_address):
-                        self.__power_store.readdress_power_module(old_address, new_address)
+                    # Make sure the module is registered in the ORM
+                    new_address, old_module = EnergyCommunicator._get_address_and_module(old_address)
+                    if old_module is None:
+                        logger.info('Registering new Energy Module with address {0}'.format(new_address))
+                        module = Module(source=ModuleDTO.Source.GATEWAY,
+                                        address=str(new_address),
+                                        hardware_type=ModuleDTO.HardwareType.PHYSICAL)
+                        module.save()
+                        energy_module = EnergyModule(number=new_address,
+                                                     version=version,
+                                                     module=module)
+                        energy_module.save()
+                        for port_id in range(EnergyEnums.NUMBER_OF_PORTS[version]):
+                            ct = EnergyCT(number=port_id,
+                                          sensor_type=2,  # Default of 12.5A
+                                          times='',  # No times by default (all night)
+                                          energy_module=energy_module)
+                            ct.save()
                     else:
-                        self.__power_store.register_power_module(new_address, version)
+                        logger.info('Confirming existing Energy Module with address {0}'.format(new_address))
 
                     # Send new address to module
-                    if version == power_api.P1_CONCENTRATOR:
+                    if version == EnergyEnums.Version.P1_CONCENTRATOR:
                         address_data = set_address_p1c.create_input(old_address, ord(cid), new_address)
                     else:
                         # Both power- and energy module share the same API
@@ -348,16 +330,32 @@ class PowerCommunicator(object):
                 logger.exception("Got exception in address mode: %s", exception)
 
         # AGT stop
-        data = address_mode.create_input(power_api.BROADCAST_ADDRESS,
-                                         self.__get_cid(),
-                                         power_api.NORMAL_MODE)
+        data = address_mode.create_input(BROADCAST_ADDRESS, self.__get_cid(), NORMAL_MODE)
         self.__write_to_serial(data)
-        data = address_mode_p1c.create_input(power_api.BROADCAST_ADDRESS,
-                                             self.__get_cid(),
-                                             power_api.NORMAL_MODE)
+        data = address_mode_p1c.create_input(BROADCAST_ADDRESS, self.__get_cid(), NORMAL_MODE)
         self.__write_to_serial(data)
 
         self.__address_mode = False
+
+    @staticmethod
+    def _get_address_and_module(old_address):
+        modules = Module.select().where(Module.source == ModuleDTO.Source.GATEWAY,
+                                        Module.hardware_type == ModuleDTO.HardwareType.PHYSICAL)
+        new_address = 2
+        old_module = None  # type: Optional[Module]
+        if len(modules) > 0:
+            matching_modules = [module for module in modules if module.address == str(old_address)]
+            old_module = None if len(matching_modules) == 0 else matching_modules[0]
+            if old_module is None:
+                existing_addresses = [int(module.address) for module in modules]
+                while new_address in existing_addresses and new_address < 255:
+                    new_address += 1
+                if new_address == 255:
+                    raise RuntimeError('No free EnergyModule address found')
+            else:
+                new_address = int(old_module.address)
+
+        return new_address, old_module
 
     def stop_address_mode(self):
         # type: () -> None
@@ -374,12 +372,12 @@ class PowerCommunicator(object):
 
     def in_address_mode(self):
         # type: () -> bool
-        """ Returns whether the PowerCommunicator is in address mode. """
+        """ Returns whether the EnergyCommunicator is in address mode. """
         return self.__address_mode
 
     def __read_from_serial(self):
         # type: () -> Tuple[bytearray, bytearray]
-        """ Read a PowerCommand from the serial port. """
+        """ Read a EnergyCommand from the serial port. """
         phase = 0
         index = 0
 
@@ -440,7 +438,7 @@ class PowerCommunicator(object):
                         phase = 8
                     else:
                         raise Exception("Unexpected character")
-            if PowerCommand.get_crc(header, data) != crc:
+            if EnergyCommand.get_crc(header, data) != crc:
                 raise Exception('CRC doesn\'t match')
         except Empty:
             raise CommunicationTimedOutException('Communication timed out')

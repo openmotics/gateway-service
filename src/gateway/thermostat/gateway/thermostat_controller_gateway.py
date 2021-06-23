@@ -41,7 +41,6 @@ from ioc import INJECTED, Inject
 
 if False:  # MYPY
     from typing import Dict, List, Literal, Tuple, Optional
-    from gateway.gateway_api import GatewayApi
     from gateway.output_controller import OutputController
     from gateway.system_controller import SystemController
     from gateway.sensor_controller import SensorController
@@ -60,10 +59,9 @@ class ThermostatControllerGateway(ThermostatController):
     SYNC_CONFIG_INTERVAL = 900
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, output_controller=INJECTED, sensor_controller=INJECTED, pubsub=INJECTED, system_controller=INJECTED):
-        # type: (GatewayApi, OutputController, SensorController, PubSub, SystemController) -> None
+    def __init__(self, output_controller=INJECTED, sensor_controller=INJECTED, pubsub=INJECTED, system_controller=INJECTED):
+        # type: (OutputController, SensorController, PubSub, SystemController) -> None
         super(ThermostatControllerGateway, self).__init__(output_controller)
-        self._gateway_api = gateway_api
         self._sensor_controller = sensor_controller
         self._pubsub = pubsub
         self._running = False
@@ -164,9 +162,9 @@ class ThermostatControllerGateway(ThermostatController):
                     m, s = divmod(int(seconds_of_day), 60)
                     h, m = divmod(m, 60)
                     if schedule.mode == 'heating':
-                        args = [thermostat_number, None, new_setpoint, None]
+                        args = [thermostat_number, new_setpoint, None]
                     else:
-                        args = [thermostat_number, None, None, new_setpoint]
+                        args = [thermostat_number, None, new_setpoint]
                     if schedule_length % 7 == 0:
                         self._scheduler.add_job(ThermostatControllerGateway.set_setpoint_from_scheduler, 'cron',
                                                 start_date=start_date,

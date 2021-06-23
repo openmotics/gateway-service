@@ -52,9 +52,7 @@ from master.classic.master_communicator import MasterCommunicator
 from master.core.core_communicator import CoreCommunicator
 from master.core.maintenance import MaintenanceCoreCommunicator
 from master.core.memory_file import MemoryFile, MemoryTypes
-from power.power_communicator import PowerCommunicator
-from power.power_controller import P1Controller, PowerController
-from power.power_store import PowerStore
+from gateway.energy.energy_communicator import EnergyCommunicator
 from serial_utils import RS485
 
 
@@ -192,19 +190,19 @@ def setup_target_platform(target_platform, message_client_name):
     # abstract implementations depending on e.g. the platform (classic vs core) or certain settings (classic
     # thermostats vs gateway thermostats)
     from plugins import base
-    from gateway import (metrics_controller, webservice, scheduling_controller, gateway_api, metrics_collector,
+    from gateway import (metrics_controller, webservice, scheduling_controller, metrics_collector,
                          maintenance_controller, user_controller, pulse_counter_controller,
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
                          shutter_controller, system_controller, group_action_controller, module_controller,
                          ventilation_controller, webservice_v1, apartment_controller, delivery_controller,
-                         system_config_controller, rfid_controller)
+                         system_config_controller, rfid_controller, energy_module_controller)
     from cloud import events
-    _ = (metrics_controller, webservice, scheduling_controller, gateway_api, metrics_collector,
+    _ = (metrics_controller, webservice, scheduling_controller, metrics_collector,
          maintenance_controller, base, events, user_controller,
          pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
          sensor_controller, shutter_controller, system_controller, group_action_controller, module_controller,
          ventilation_controller, webservice_v1, apartment_controller, delivery_controller, system_config_controller,
-         rfid_controller)
+         rfid_controller, energy_module_controller)
 
     # IPC
     message_client = None
@@ -247,23 +245,16 @@ def setup_target_platform(target_platform, message_client_name):
 
     # Energy Controller
     try:
-        power_serial_port = config.get('OpenMotics', 'power_serial')
+        energy_serial_port = config.get('OpenMotics', 'power_serial')
     except NoOptionError:
-        power_serial_port = ''
-    if power_serial_port:
-        Injectable.value(power_db=constants.get_power_database_file())
-        Injectable.value(power_store=PowerStore())
+        energy_serial_port = ''
+    if energy_serial_port:
         # TODO: make non blocking?
-        Injectable.value(power_serial=RS485(Serial(power_serial_port, 115200, timeout=None)))
-        Injectable.value(power_communicator=PowerCommunicator())
-        Injectable.value(power_controller=PowerController())
-        Injectable.value(p1_controller=P1Controller())
+        Injectable.value(energy_serial=RS485(Serial(energy_serial_port, 115200, timeout=None)))
+        Injectable.value(energy_communicator=EnergyCommunicator())
     else:
-        Injectable.value(power_serial=None)
-        Injectable.value(power_store=None)
-        Injectable.value(power_communicator=None)  # TODO: remove from gateway_api
-        Injectable.value(power_controller=None)
-        Injectable.value(p1_controller=None)
+        Injectable.value(energy_serial=None)
+        Injectable.value(energy_communicator=None)
 
     # UART Controller
     try:
@@ -382,21 +373,20 @@ def setup_minimal_master_platform(port):
         logger.warning('Unhandled master implementation for %s', platform)
 
 
-def setup_minimal_power_platform():
+def setup_minimal_energy_platform():
     # type: () -> None
     config = ConfigParser()
     config.read(constants.get_config_file())
-    power_serial_port = config.get('OpenMotics', 'power_serial')
-    if power_serial_port:
-        Injectable.value(power_db=constants.get_power_database_file())
-        Injectable.value(power_store=PowerStore())
-        Injectable.value(power_serial=RS485(Serial(power_serial_port, 115200, timeout=None)))
-        Injectable.value(power_communicator=PowerCommunicator())
-        Injectable.value(power_controller=PowerController())
-        Injectable.value(p1_controller=P1Controller())
+    energy_serial_port = config.get('OpenMotics', 'power_serial')
+    if energy_serial_port:
+        Injectable.value(energy_serial=RS485(Serial(energy_serial_port, 115200, timeout=None)))
+        Injectable.value(energy_communicator=EnergyCommunicator())
     else:
-        Injectable.value(power_store=None)
-        Injectable.value(power_communicator=None)
-        Injectable.value(power_controller=None)
-        Injectable.value(p1_controller=None)
-        Injectable.value(power_serial=None)
+        Injectable.value(energy_communicator=None)
+        Injectable.value(energy_serial=None)
+    Injectable.value(master_controller=None)
+    Injectable.value(maintenance_communicator=None)
+    Injectable.value(ssl_private_key=constants.get_ssl_private_key_file())
+    Injectable.value(ssl_certificate=constants.get_ssl_certificate_file())
+    from gateway import energy_module_controller
+    _ = energy_module_controller

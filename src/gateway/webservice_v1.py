@@ -20,6 +20,7 @@ import base64
 import uuid
 
 import cherrypy
+from decorator import decorator
 import logging
 import ujson as json
 import time
@@ -30,17 +31,18 @@ from gateway.api.serializers import ApartmentSerializer, UserSerializer, Deliver
     SystemDoorbellConfigSerializer, SystemRFIDConfigSerializer, SystemRFIDSectorBlockConfigSerializer, \
     SystemTouchscreenConfigSerializer, SystemGlobalConfigSerializer, SystemActivateUserConfigSerializer, \
     RfidSerializer
+from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import ApartmentDTO, DeliveryDTO
 from gateway.exceptions import *
 from gateway.models import User, Delivery
-from gateway.webservice import params_handler, params_parser
+from gateway.user_controller import UserController
+from gateway.webservice import params_parser
 
 if False:  # MyPy
     from gateway.apartment_controller import ApartmentController
     from gateway.delivery_controller import DeliveryController
     from gateway.authentication_controller import AuthenticationToken
     from gateway.rfid_controller import RfidController
-    from gateway.user_controller import UserController
     from gateway.system_config_controller import SystemConfigController
     from gateway.webservice import WebService
     from typing import Optional, List, Dict
@@ -51,58 +53,58 @@ logger = logging.getLogger(__name__)
 #  api decorator
 # ------------------------
 
-# api decorator
-def _openmotics_api_v1(f):
-    def wrapper(*args, **kwargs):
-        start = time.time()
-        timings = {}
-        status = 200  # OK
-        try:
-            data = f(*args, **kwargs)
-        except cherrypy.HTTPError as ex:
-            status = ex.status
-            data = ex._message
-        except UnAuthorizedException as ex:
-            status = 401
-            data = ex.message
-        except ForbiddenException as ex:
-            status = 403
-            data = ex.message
-        except ItemDoesNotExistException as ex:
-            status = 404
-            data = ex.message
-        except WrongInputParametersException as ex:
-            status = 400
-            data = ex.message
-        except ParseException as ex:
-            status = 400
-            data = ex.message
-        except TimeOutException as ex:
-            status = 500
-            data = ex.message
-        except InvalidOperationException as ex:
-            status = 409
-            data = ex.message
-        except NotImplementedException as ex:
-            status = 503
-            data = ex.message
-        except Exception as ex:
-            status = 500
-            data = ex
-            logger.error('General Error occurred during api call: {}'.format(data))
-            import traceback
-            print(traceback.print_exc())
 
-        timings['process'] = ('Processing', time.time() - start)
-        serialization_start = time.time()
-        contents = str(data).encode() if data is not None else None
-        timings['serialization'] = 'Serialization', time.time() - serialization_start
-        cherrypy.response.headers['Content-Type'] = 'application/json'
-        cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
-                                                               for key, value in timings.items()])
-        cherrypy.response.status = status
-        return contents
-    return wrapper
+# api decorator -> Use @decorator to not loose the function arguments
+@decorator
+def _openmotics_api_v1(f, *args, **kwargs):
+    start = time.time()
+    timings = {}
+    status = 200  # OK
+    try:
+        data = f(*args, **kwargs)
+    except cherrypy.HTTPError as ex:
+        status = ex.status
+        data = ex._message
+    except UnAuthorizedException as ex:
+        status = 401
+        data = ex.message
+    except ForbiddenException as ex:
+        status = 403
+        data = ex.message
+    except ItemDoesNotExistException as ex:
+        status = 404
+        data = ex.message
+    except WrongInputParametersException as ex:
+        status = 400
+        data = ex.message
+    except ParseException as ex:
+        status = 400
+        data = ex.message
+    except TimeOutException as ex:
+        status = 500
+        data = ex.message
+    except InvalidOperationException as ex:
+        status = 409
+        data = ex.message
+    except NotImplementedException as ex:
+        status = 503
+        data = ex.message
+    except Exception as ex:
+        status = 500
+        data = 'General Error occurred during api call: {}: {}'.format(type(ex).__name__, ex)
+        logger.error(data)
+        import traceback
+        print(traceback.print_exc())
+
+    timings['process'] = ('Processing', time.time() - start)
+    serialization_start = time.time()
+    contents = str(data).encode() if data is not None else None
+    timings['serialization'] = 'Serialization', time.time() - serialization_start
+    cherrypy.response.headers['Content-Type'] = 'application/json'
+    cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
+                                                           for key, value in timings.items()])
+    cherrypy.response.status = status
+    return contents
 
 
 def authentication_handler_v1(pass_token=False, pass_role=False, throw_error=True, allowed_user_roles=None):
@@ -139,12 +141,12 @@ def authentication_handler_v1(pass_token=False, pass_role=False, throw_error=Tru
             if allowed_user_roles is not None and checked_token.user.role not in allowed_user_roles:
                 raise UnAuthorizedException('User role is not allowed for this API call: Allowed: {}, Got: {}'.format(allowed_user_roles, checked_token.user.role))
         if pass_token is True:
-            request.params['token'] = checked_token
+            request.params['auth_token'] = checked_token
         if pass_role is True:
             if checked_token is not None:
-                request.params['role'] = checked_token.user.role
+                request.params['auth_role'] = checked_token.user.role
             else:
-                request.params['role'] = None
+                request.params['auth_role'] = None
     except UnAuthorizedException as ex:
         cherrypy.response.headers['Content-Type'] = 'application/json'
         cherrypy.response.status = 401  # Unauthorized
@@ -167,10 +169,12 @@ def params_handler_v1(expect_body_type=None, **kwargs):
                         parsed_body = json.loads(body)
                     except Exception:
                         raise ParseException('Could not parse the json body type')
-                elif expect_body_type == 'NONE':
+                elif expect_body_type is None:
                     raise ParseException('Received a body, but no body is required')
                 elif expect_body_type == 'RAW':
                     pass
+                else:
+                    raise ValueError('Unexpected value for `expect_body_type`: {}'.format(expect_body_type))
                 request.params['request_body'] = parsed_body
             else:
                 if expect_body_type is not None:
@@ -286,17 +290,19 @@ class Users(RestAPIEndpoint):
                                       controller=self, action='delete_user',
                                       conditions={'method': ['DELETE']})
 
-    @openmotics_api_v1(auth=False, pass_role=True)
-    def get_users(self, role=None):
-        users = self._user_controller.load_users()
-        # Filter the users when no role is provided or when the role is not admin
-        if role is None or role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
-            users = [user for user in users if user.role in [User.UserRoles.USER]]
+    @openmotics_api_v1(auth=False, pass_role=True, check={'role': str, 'include_inactive': bool})
+    def get_users(self, auth_role=None, role=None, include_inactive=False):
+        if auth_role is None or auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            users = self._user_controller.load_users(roles=[User.UserRoles.USER], include_inactive=include_inactive)
+        else:
+            roles = [role] if role is not None else None
+            users = self._user_controller.load_users(roles=roles, include_inactive=include_inactive)
+
         users_serial = [UserSerializer.serialize(user) for user in users]
         return json.dumps(users_serial)
 
     @openmotics_api_v1(auth=False, pass_role=True)
-    def get_user(self, user_id, role=None):
+    def get_user(self, user_id, auth_role=None):
         # return the requested user
         if user_id is None:
             raise WrongInputParametersException('Could not get the user_id from the request')
@@ -304,23 +310,26 @@ class Users(RestAPIEndpoint):
         if user is None:
             raise ItemDoesNotExistException('User with id {} does not exists'.format(user_id))
         # Filter the users when no role is provided or when the role is not admin
-        if role is None or role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_role is None or auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
             if user.role in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
                 raise UnAuthorizedException('Cannot request an admin or technician user when not authenticated as one')
         user_serial = UserSerializer.serialize(user)
         return json.dumps(user_serial)
 
-    @openmotics_api_v1(auth=False, pass_role=False)
-    def get_available_code(self):
+    @openmotics_api_v1(auth=False, pass_role=False, check={'role': str})
+    def get_available_code(self, role):
+        roles = [x for x in User.UserRoles.__dict__ if not x.startswith('_')]
+        if role not in roles:
+            raise WrongInputParametersException('Role needs to be one of {}'.format(roles))
         api_secret = cherrypy.request.headers.get('X-API-Secret')
         if api_secret is None:
             raise UnAuthorizedException('Cannot create a new available code without the X-API-Secret')
         elif not self._user_controller.authentication_controller.check_api_secret(api_secret):
             raise UnAuthorizedException('X-API-Secret is incorrect')
-        return str(self._user_controller.generate_new_pin_code())
+        return str(self._user_controller.generate_new_pin_code(UserController.PinCodeLength[role]))
 
     @openmotics_api_v1(auth=False, pass_role=True, expect_body_type='JSON')
-    def post_user(self, role, request_body):
+    def post_user(self, auth_role, request_body):
         # Authentication:
         # only ADMIN & TECHNICIAN can create new USER, ADMIN, TECHNICIAN user types,
         # anyone can create a new COURIER
@@ -343,13 +352,14 @@ class Users(RestAPIEndpoint):
 
         user_dto.username = uuid.uuid4().hex
         # add a custom user code
-        user_dto.pin_code = str(self._user_controller.generate_new_pin_code())
+        user_dto.pin_code = str(self._user_controller.generate_new_pin_code(UserController.PinCodeLength[user_dto.role]))
+        user_dto.accepted_terms = True
         # Generate a random password as a dummy to fill in the gap
         random_password = uuid.uuid4().hex
         user_dto.set_password(random_password)
 
         # Authenticated as a technician or admin, creating the user
-        if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
             # if the user is not an admin or technician, check if the user to create is a COURIER
             if user_dto.role != User.UserRoles.COURIER:
                 raise UnAuthorizedException('As a normal user, you can only create a COURIER user')
@@ -358,7 +368,10 @@ class Users(RestAPIEndpoint):
             user_dto_saved = self._user_controller.save_user(user_dto)
         except RuntimeError as e:
             raise WrongInputParametersException('The user could not be saved: {}'.format(e))
-        return json.dumps(UserSerializer.serialize(user_dto_saved))
+        user_dto_serial = UserSerializer.serialize(user_dto_saved)
+        # explicitly add the pin code when a new user is created, this way, the generated pin code is known to the user when created.
+        user_dto_serial['pin_code'] = user_dto.pin_code
+        return json.dumps(user_dto_serial)
 
     @openmotics_api_v1(auth=False, pass_role=False, expect_body_type='JSON')
     def post_activate_user(self, user_id, request_body):
@@ -379,10 +392,10 @@ class Users(RestAPIEndpoint):
         return 'OK'
 
     @openmotics_api_v1(auth=True, pass_role=False, pass_token=True, expect_body_type='JSON')
-    def put_update_user(self, user_id, token=None, request_body=None, **kwargs):
+    def put_update_user(self, user_id, auth_token=None, request_body=None, **kwargs):
         user_json = request_body
-        if token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
-            if token.user.id != user_id:
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            if auth_token.user.id != user_id:
                 raise UnAuthorizedException('As a non admin or technician user, you cannot change another user')
 
         # check if the pin code or rfid tag is changed
@@ -404,16 +417,16 @@ class Users(RestAPIEndpoint):
         return json.dumps(UserSerializer.serialize(saved_user))
 
     @openmotics_api_v1(auth=False, pass_role=False, pass_token=True)
-    def delete_user(self, user_id, token=None):
+    def delete_user(self, user_id, auth_token=None):
         user_to_delete_dto = self._user_controller.load_user(user_id)
         if user_to_delete_dto is None:
             raise ItemDoesNotExistException('Cannot delete an user that does not exists')
 
-        if token is None:
+        if auth_token is None:
             if user_to_delete_dto.role != User.UserRoles.COURIER:
                 raise UnAuthorizedException('As a non logged in user, you only can delete a Courier type')
         else:
-            if token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
                 raise UnAuthorizedException('As a non admin or technician user, you cannot delete another user')
 
         self._user_controller.remove_user(user_to_delete_dto)
@@ -535,10 +548,10 @@ class Apartments(RestAPIEndpoint):
         return json.dumps([ApartmentSerializer.serialize(apartment_dto) for apartment_dto in updated_apartments])
 
     @openmotics_api_v1(auth=True, pass_role=True, pass_token=False)
-    def delete_apartment(self, apartment_id, role=None):
-        if role is None:
+    def delete_apartment(self, apartment_id, auth_role=None):
+        if auth_role is None:
             raise UnAuthorizedException('Authentication is needed when updating an apartment')
-        if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
             raise UnAuthorizedException('You need to be logged in as an admin or technician to update an apartment')
         apartment_dto = ApartmentDTO(id=apartment_id)
         self.apartment_controller.delete_apartment(apartment_dto)
@@ -573,10 +586,10 @@ class Deliveries(RestAPIEndpoint):
                                       conditions={'method': ['PUT']})
 
     @openmotics_api_v1(auth=True, pass_token=True)
-    def get_deliveries(self, token):
+    def get_deliveries(self, auth_token):
         # type: (AuthenticationToken) -> str
-        role = token.user.role
-        user_id = token.user.id
+        role = auth_token.user.role
+        user_id = auth_token.user.id
 
         # get all the deliveries
         deliveries = self.delivery_controller.load_deliveries()  # type: List[DeliveryDTO]
@@ -589,13 +602,13 @@ class Deliveries(RestAPIEndpoint):
         return json.dumps(deliveries_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True)
-    def get_delivery(self, delivery_id, token):
+    def get_delivery(self, delivery_id, auth_token):
         # type: (int, AuthenticationToken) -> str
         delivery = self.delivery_controller.load_delivery(delivery_id)
         if delivery is None:
             raise ItemDoesNotExistException('Could not find the delivery with id: {}'.format(delivery_id))
-        user_id = token.user.id
-        user_role = token.user.role
+        user_id = auth_token.user.id
+        user_role = auth_token.user.role
         if user_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
             if user_id not in [delivery.user_id_delivery, delivery.user_id_pickup]:
                 raise UnAuthorizedException('You are not allowed to request this delivery')
@@ -603,13 +616,13 @@ class Deliveries(RestAPIEndpoint):
         return json.dumps(deliveries_serial)
 
     @openmotics_api_v1(auth=False, pass_token=True, expect_body_type='JSON')
-    def post_delivery(self, token=None, request_body=None):
+    def post_delivery(self, auth_token=None, request_body=None):
         try:
             delivery_dto = DeliverySerializer.deserialize(request_body)
         except Exception as ex:
             raise ParseException('Could not create a valid delivery from the passed json data: {}'.format(ex))
         if delivery_dto.type == Delivery.DeliveryType.RETURN:
-            if token is None or token.user.role == User.UserRoles.COURIER:
+            if auth_token is None or auth_token.user.role == User.UserRoles.COURIER:
                 raise UnAuthorizedException('To create a return delivery, you need to be logged in as USER, ADMIN or TECHNICIAN')
 
         saved_delivery = self.delivery_controller.save_delivery(delivery_dto)
@@ -619,14 +632,14 @@ class Deliveries(RestAPIEndpoint):
         return json.dumps(saved_delivery_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True)
-    def put_delivery_pickup(self, delivery_id, token):
+    def put_delivery_pickup(self, delivery_id, auth_token):
         # type: (int, AuthenticationToken) -> str
         delivery_dto = self.delivery_controller.load_delivery(delivery_id)
         if delivery_dto is None:
             raise ItemDoesNotExistException('Cannot pickup a delivery that does not exists: id: {}'.format(delivery_id))
 
-        if token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
-            auth_user_id = token.user.id
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            auth_user_id = auth_token.user.id
             if auth_user_id not in [delivery_dto.user_id_delivery, delivery_dto.user_id_pickup]:
                 raise UnAuthorizedException('Cannot pick up a package that is not yours when you are not admin or technician')
 
@@ -801,52 +814,99 @@ class Rfid(RestAPIEndpoint):
                                       conditions={'method': ['DELETE']})
 
     @openmotics_api_v1(auth=True, pass_token=True)
-    def get_rfids(self, token=None):
+    def get_rfids(self, auth_token=None):
         rfids = self.rfid_controller.load_rfids()
 
         # filter the rfids if the role is not a super user
-        if token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
-            rfids = [rfid for rfid in rfids if rfid.user.id == token.user.id]
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            rfids = [rfid for rfid in rfids if rfid.user.id == auth_token.user.id]
 
         rfids_serial = [RfidSerializer.serialize(rfid) for rfid in rfids]
         return json.dumps(rfids_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True)
-    def get_rfid(self, rfid_id, token=None):
+    def get_rfid(self, rfid_id, auth_token=None):
         rfid = self.rfid_controller.load_rfid(rfid_id)
 
         if rfid is None:
             raise ItemDoesNotExistException('RFID tag with id {} does not exists'.format(rfid_id))
 
         # filter the rfids if the role is not a super user
-        if token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
-            if rfid.user.id != token.user.id:
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            if rfid.user.id != auth_token.user.id:
                 raise UnAuthorizedException('As a non admin or technician, you cannot request an rfid that is not yours')
 
         rfid_serial = RfidSerializer.serialize(rfid)
         return json.dumps(rfid_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON')
-    def put_start_add(self, rfid_id, token, request_body):
+    def put_start_add(self, rfid_id, auth_token, request_body):
         raise NotImplementedException("start add new rfid not implemented")
 
-    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='NONE')
-    def put_cancel_add(self, rfid_id, token):
+    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None)
+    def put_cancel_add(self, rfid_id, auth_token):
         raise NotImplementedException("start add new rfid not implemented")
 
     @openmotics_api_v1(auth=True, pass_token=True)
-    def delete_rfid(self, rfid_id, token=None):
+    def delete_rfid(self, rfid_id, auth_token=None):
         # first fetch the rfid tag to check if it exists and if the deletion is authorized
         rfid = self.rfid_controller.load_rfid(rfid_id)
         if rfid is None:
             raise ItemDoesNotExistException("Cannot delete RFID: tag with id '{}' does not exist".format(rfid_id))
 
-        if token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
-            if rfid.user.id != token.user.id:
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            if rfid.user.id != auth_token.user.id:
                 raise UnAuthorizedException('As a non admin or technician, you cannot delete an rfid that is not yours')
 
         self.rfid_controller.delete_rfid(rfid_id)
         return 'OK'
+
+
+class Authentication(RestAPIEndpoint):
+    API_ENDPOINT = '/api/v1'
+
+    @Inject
+    def __init__(self):
+        # type: () -> None
+        super(Authentication, self).__init__()
+        self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
+        # --- POST ---
+        self.route_dispatcher.connect('authenticate_pin_code', '/authenticate/pin_code',
+                                      controller=self, action='authenticate_pin_code',
+                                      conditions={'method': ['POST']})
+        self.route_dispatcher.connect('authenticate_rfid_tag', '/authenticate/rfid_tag',
+                                      controller=self, action='authenticate_rfid_tag',
+                                      conditions={'method': ['POST']})
+        self.route_dispatcher.connect('deauthenticate', '/deauthenticate',
+                                      controller=self, action='deauthenticate',
+                                      conditions={'method': ['POST']})
+
+    @openmotics_api_v1(auth=False, expect_body_type='JSON')
+    def authenticate_pin_code(self, request_body):
+        if 'code' not in request_body:
+            raise WrongInputParametersException('Expected a code in the request body json')
+        success, data = self._user_controller.authentication_controller.login_with_user_code(pin_code=request_body['code'])
+        return self.handle_authentication_result(success, data)
+
+    @openmotics_api_v1(auth=False, expect_body_type='JSON')
+    def authenticate_rfid_tag(self, request_body):
+        if 'rfid_tag' not in request_body:
+            raise WrongInputParametersException('Expected an rfid_tag in the request body json')
+        success, data = self._user_controller.authentication_controller.login_with_rfid_tag(rfid_tag_string=request_body['rfid_tag'])
+        return self.handle_authentication_result(success, data)
+
+    def handle_authentication_result(self, success, data):
+        _ = self
+        if success:
+            if not isinstance(data, AuthenticationToken):
+                raise RuntimeError('Retrieved success as true, but no authentication token')
+            return json.dumps(data.to_dict())
+        else:
+            raise UnAuthorizedException('could not authenticate user: {}'.format(data))
+
+    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None)
+    def deauthenticate(self, token):
+        self._user_controller.logout(token)
 
 
 @Injectable.named('web_service_v1')
@@ -860,7 +920,8 @@ class WebServiceV1(object):
             Apartments(),
             Deliveries(),
             SystemConfiguration(),
-            Rfid()
+            Rfid(),
+            Authentication()
         ]
 
     def start(self):

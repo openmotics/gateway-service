@@ -18,6 +18,7 @@ import logging
 import time
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
+from gateway.maintenance_communicator import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import master_api
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
@@ -105,6 +106,8 @@ class MasterHeartbeat(object):
             self._failures += 1
             logger.error('Master heartbeat %s failures', self._failures)
             raise DaemonThreadWait()
+        except InMaintenanceModeException:
+            logger.info('Skipped master status check: In maintenance mode')
         except Exception:
             logger.error('Master heartbeat unhandled exception')
             raise

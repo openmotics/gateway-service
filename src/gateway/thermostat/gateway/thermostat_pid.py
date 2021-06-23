@@ -22,7 +22,6 @@ from gateway.models import ThermostatGroup, Thermostat
 
 if False:  # MYPY
     from typing import Optional, List, Callable
-    from gateway.gateway_api import GatewayApi
     from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
     from gateway.sensor_controller import SensorController
 

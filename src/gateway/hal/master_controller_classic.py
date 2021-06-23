@@ -1208,42 +1208,51 @@ class MasterClassicController(MasterController):
             port = controller_serial.port  # type: ignore
             baudrate = str(controller_serial.baudrate)  # type: ignore
             base_command = ['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate]
+            timings = [[2, 2, 2, 2], [2, 2, 2, 1],
+                       [2, 2, 3, 2], [2, 2, 3, 1],
+                       [2, 2, 4, 2], [2, 2, 4, 1]]
 
             logger.info('Updating master...')
             logger.info('* Enter bootloader...')
-            # Setting this condition will assert a break condition on TX to which the bootloader will react.
-            controller_serial.break_condition = True
-            time.sleep(2)
-            MasterClassicController._set_master_power(False)
-            time.sleep(2)
-            MasterClassicController._set_master_power(True)
-            time.sleep(2)
-            # After the bootloader is active, release the break condition to free up TX for subsequent communications
-            controller_serial.break_condition = False
-            time.sleep(2)
+            bootloader_active = False
+            for timing in timings:
+                # Setting this condition will assert a break condition on TX to which the bootloader will react.
+                controller_serial.break_condition = True
+                time.sleep(timing[0])
+                MasterClassicController._set_master_power(False)
+                time.sleep(timing[1])
+                MasterClassicController._set_master_power(True)
+                time.sleep(timing[2])
+                # After the bootloader is active, release the break condition to free up TX for subsequent communications
+                controller_serial.break_condition = False
+                time.sleep(timing[3])
 
-            logger.info('* Verify bootloader...')
-            try:
-                response = str(subprocess.check_output(base_command + ['-s']))
-                # Expected response:
-                # > Serial Bootloader AN1310 v1.05r
-                # > Copyright (c) 2010-2011, Microchip Technology Inc.
-                # >
-                # > Using /dev/ttyO5 at 115200 bps
-                # > Connecting...
-                # > Bootloader Firmware v1.05
-                # > PIC18F67J11 Revision 10
-                match = re.findall(pattern=r'Bootloader Firmware (v[0-9]+\.[0-9]+).*(PIC.*) Revision',
-                                   string=response,
-                                   flags=re.DOTALL)
-                if not match:
-                    raise RuntimeError('Bootloader response did not match: {0}'.format(response))
-                logger.debug(response)
-                logger.info('  * Bootloader information: {1} bootloader {0}'.format(*match[0]))
-            except subprocess.CalledProcessError as ex:
-                logger.info(ex.output)
-                raise
-
+                logger.info('* Verify bootloader...')
+                try:
+                    response = str(subprocess.check_output(base_command + ['-s']))
+                    # Expected response:
+                    # > Serial Bootloader AN1310 v1.05r
+                    # > Copyright (c) 2010-2011, Microchip Technology Inc.
+                    # >
+                    # > Using /dev/ttyO5 at 115200 bps
+                    # > Connecting...
+                    # > Bootloader Firmware v1.05
+                    # > PIC18F67J11 Revision 10
+                    match = re.findall(pattern=r'Bootloader Firmware (v[0-9]+\.[0-9]+).*(PIC.*) Revision',
+                                       string=response,
+                                       flags=re.DOTALL)
+                    if not match:
+                        logger.info('Bootloader response did not match: {0}'.format(response))
+                        continue
+                    logger.debug(response)
+                    logger.info('  * Bootloader information: {1} bootloader {0}'.format(*match[0]))
+                    bootloader_active = True
+                    break
+                except subprocess.CalledProcessError as ex:
+                    logger.info(ex.output)
+                    raise
+            if bootloader_active is False:
+                raise RuntimeError('Failed to go into Bootloader - try other timings')
             logger.info('* Flashing...')
             try:
                 response = str(subprocess.check_output(base_command + ['-p ', '-c', hex_filename]))
@@ -1308,11 +1317,11 @@ class MasterClassicController(MasterController):
 
     @communication_enabled
     @Inject
-    def power_cycle_bus(self, power_communicator=INJECTED):
+    def power_cycle_bus(self, energy_communicator=INJECTED):
         """ Turns the power of both bussed off for 5 seconds """
         self.do_basic_action(master_api.BA_POWER_CYCLE_BUS, 0)
-        if power_communicator:
-            power_communicator.reset_communication_statistics()  # TODO cleanup, use an event instead?
+        if energy_communicator:
+            energy_communicator.reset_communication_statistics()  # TODO cleanup, use an event instead?
 
     @communication_enabled
     def restore(self, data):

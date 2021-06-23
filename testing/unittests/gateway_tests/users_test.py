@@ -28,14 +28,15 @@ from peewee import SqliteDatabase
 from pytest import mark
 
 from gateway.authentication_controller import AuthenticationController, TokenStore
-from gateway.dto import UserDTO
+from gateway.dto import UserDTO, RfidDTO
 from gateway.enums import UserEnums
 from gateway.mappers.user import UserMapper
-from gateway.models import User
+from gateway.models import User, RFID
+from gateway.rfid_controller import RfidController
 from gateway.user_controller import UserController
 from ioc import SetTestMode, SetUpTestInjections
 
-MODELS = [User]
+MODELS = [User, RFID]
 
 
 class UserControllerTest(unittest.TestCase):
@@ -60,7 +61,9 @@ class UserControllerTest(unittest.TestCase):
         self.test_db.create_tables(MODELS)
         SetUpTestInjections(config={'username': 'om', 'password': 'pass'},
                             token_timeout=UserControllerTest.TOKEN_TIMEOUT)
-        SetUpTestInjections(token_store = TokenStore())
+        SetUpTestInjections(token_store=TokenStore())
+        self.rfid_controller = RfidController()
+        SetUpTestInjections(rfid_controller=self.rfid_controller)
         SetUpTestInjections(authentication_controller=AuthenticationController())
         self.controller = UserController()
         self.controller.start()
@@ -293,9 +296,9 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual('om', users_in_controller[0].username)
 
         user_to_add = User(
-            username='test',
+            username='admin_1',
             password=UserDTO._hash_password('test'),
-            pin_code='1234',
+            pin_code='1111',
             role=User.UserRoles.ADMIN,
             accepted_terms=True
         )
@@ -305,12 +308,60 @@ class UserControllerTest(unittest.TestCase):
         users_in_controller = self.controller.load_users()
         self.assertEqual(2, len(users_in_controller))
         self.assertEqual('om', users_in_controller[0].username)
-        self.assertEqual('test', users_in_controller[1].username)
+        self.assertEqual('admin_1', users_in_controller[1].username)
 
         # check if the number of users is correct
         num_users = self.controller.get_number_of_users()
         self.assertEqual(2, num_users)
 
+        # Add a normal user and then load only normal users
+        user_to_add = User(
+            username='user_1',
+            password=UserDTO._hash_password('test'),
+            pin_code='2222',
+            role=User.UserRoles.USER,
+            accepted_terms=True
+        )
+        user_to_add.save()
+
+        user_to_add = User(
+            username='user_2',
+            password=UserDTO._hash_password('test'),
+            pin_code='3333',
+            role=User.UserRoles.USER,
+            accepted_terms=True,
+            is_active=False
+        )
+        user_to_add.save()
+
+        user_to_add = User(
+            username='courier_1',
+            password=UserDTO._hash_password('test'),
+            pin_code='4444',
+            role=User.UserRoles.COURIER,
+            accepted_terms=True
+        )
+        user_to_add.save()
+
+        # check if the number of users is correct
+        num_users = self.controller.get_number_of_users()
+        self.assertEqual(5, num_users)
+
+        loaded_users = self.controller.load_users(roles=[User.UserRoles.USER], include_inactive=False)
+        self.assertEqual(1, len(loaded_users))
+        for user in loaded_users:
+            self.assertEqual('USER', user.role)
+
+        loaded_users = self.controller.load_users(roles=[User.UserRoles.USER], include_inactive=True)
+        self.assertEqual(2, len(loaded_users))
+        for user in loaded_users:
+            self.assertEqual('USER', user.role)
+
+        roles = [User.UserRoles.USER, User.UserRoles.ADMIN]
+        loaded_users = self.controller.load_users(roles=roles)
+        self.assertEqual(3, len(loaded_users))  # 2 admin users plus one regular user
+        for user in loaded_users:
+            self.assertIn(user.role, roles)
 
     def test_remove_user(self):
         """ Test removing a user. """
@@ -474,3 +525,48 @@ class UserControllerTest(unittest.TestCase):
         user_dto.set_password('test')
         convert_back_and_forth(user_dto)
         validate_two_way(user_dto)
+
+    def test_login_user_code(self):
+        user_dto = UserDTO(username='fred', pin_code='1234', role=User.UserRoles.USER)
+        user_dto.set_password('test')
+        self.controller.save_users([user_dto])
+        self.assertEqual(2, self.controller.get_number_of_users())
+
+        success, data = self.controller.authentication_controller.login_with_user_code('1234', accept_terms=True)
+        self.assertTrue(success)
+        self.assertEqual(data.user.username, 'fred')
+
+        success, data = self.controller.authentication_controller.login_with_user_code('9876', accept_terms=True)
+        self.assertFalse(success)
+        self.assertEqual(data, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS)
+
+    def test_login_rfid_tags(self):
+        user_dto = UserDTO(username='fred', pin_code='1234', role=User.UserRoles.USER)
+        user_dto.set_password('test')
+        user_dto = self.controller.save_user(user_dto)
+        self.assertEqual(2, self.controller.get_number_of_users())
+
+        # add an rfid to fred to test the login
+        rfid_dto = RfidDTO(tag_string='rfid-test-tag', label='test-badge', user=user_dto, enter_count=-1, uid_manufacturer='test-uid-manufact')
+        rfid_dto = self.rfid_controller.save_rfid(rfid_dto)
+
+        success, data = self.controller.authentication_controller.login_with_rfid_tag('rfid-test-tag', accept_terms=True)
+        self.assertTrue(success)
+        self.assertEqual(data.user.username, 'fred')
+
+        success, data = self.controller.authentication_controller.login_with_rfid_tag('9876', accept_terms=True)
+        self.assertFalse(success)
+        self.assertEqual(data, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS)
+
+        # Add in a third user
+        user_pol_dto = UserDTO(username='pol', pin_code='9876', role=User.UserRoles.USER)
+        user_pol_dto.set_password('test')
+        user_pol_dto = self.controller.save_user(user_pol_dto)
+        self.assertEqual(3, self.controller.get_number_of_users())
+        # add an rfid to pol to test the login
+        rfid_pol_dto = RfidDTO(tag_string='rfid-test-tag-pol', label='test-badge', user=user_pol_dto, enter_count=-1, uid_manufacturer='test-uid-manufact_pol')
+        rfid_pol_dto = self.rfid_controller.save_rfid(rfid_pol_dto)
+
+        success, data = self.controller.authentication_controller.login_with_rfid_tag('rfid-test-tag-pol', accept_terms=True)
+        self.assertTrue(success)
+        self.assertEqual(data.user.username, 'pol')

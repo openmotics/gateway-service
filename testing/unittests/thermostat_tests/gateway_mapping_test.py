@@ -21,7 +21,6 @@ from mock import Mock
 from peewee import SqliteDatabase
 
 from gateway.dto import ThermostatDTO, ThermostatScheduleDTO, SensorStatusDTO
-from gateway.gateway_api import GatewayApi
 from gateway.models import DaySchedule, Feature, Output, \
     OutputToThermostatGroup, Preset, Pump, PumpToValve, Room, Sensor, \
     Thermostat, ThermostatGroup, Valve, ValveToThermostat
@@ -56,15 +55,10 @@ class GatewayThermostatMappingTests(unittest.TestCase):
 
     @staticmethod
     def _create_controller(get_sensor_temperature_status=None):
-        gateway_api = Mock(GatewayApi)
-        gateway_api.get_timezone = lambda: 'Europe/Brussels'
-        gateway_api.get_sensor_temperature_status = get_sensor_temperature_status
-
         sensor_controller = Mock(SensorController)
         sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(x, value=10.0)
 
-        SetUpTestInjections(gateway_api=gateway_api,
-                            message_client=Mock(),
+        SetUpTestInjections(message_client=Mock(),
                             output_controller=Mock(OutputController),
                             sensor_controller=sensor_controller,
                             pubsub=Mock(PubSub))
