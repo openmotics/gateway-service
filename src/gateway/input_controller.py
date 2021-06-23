@@ -31,6 +31,7 @@ from gateway.dto import InputDTO
 from gateway.events import GatewayEvent
 from gateway.models import Input, Room
 from gateway.hal.master_event import MasterEvent
+from gateway.hal.master_controller import CommunicationFailure
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.pubsub import PubSub
 from serial_utils import CommunicationTimedOutException
@@ -38,7 +39,7 @@ from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Tuple, Any
-    from gateway.hal.master_controller import MasterController, CommunicationFailure
+    from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,12 @@ class InputController(BaseController):
         inputs_dtos = []
         for input_ in list(Input.select(Input, Room)
                                 .join_from(Input, Room, join_type=JOIN.LEFT_OUTER)):  # TODO: Load dicts
-            input_dto = self._master_controller.load_input(input_id=input_.number)
+            try:
+                input_dto = self._master_controller.load_input(input_id=input_.number)
+            except TypeError as ex:
+                logger.error('Could not load input {0}: {1}'.format(input_.number, ex))
+                self.request_sync_orm()  # This likely is caused by module reconfigurations
+                continue
             input_dto.room = input_.room.number if input_.room is not None else None
             input_dto.event_enabled = input_.event_enabled
             inputs_dtos.append(input_dto)
