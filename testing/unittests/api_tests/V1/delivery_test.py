@@ -25,6 +25,7 @@ import mock
 from gateway.api.serializers import DeliverySerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import DeliveryDTO, UserDTO
+from gateway.esafe_controller import EsafeController
 from gateway.exceptions import *
 from gateway.delivery_controller import DeliveryController
 from gateway.mappers import DeliveryMapper
@@ -44,7 +45,8 @@ class ApiDeliveriesTests(unittest.TestCase):
     def setUp(self):
         self.user_controller = mock.Mock(UserController)
         self.delivery_controller = mock.Mock(DeliveryController)
-        SetUpTestInjections(user_controller=self.user_controller, delivery_controller=self.delivery_controller)
+        self.esafe_controller = mock.Mock(EsafeController)
+        SetUpTestInjections(user_controller=self.user_controller, delivery_controller=self.delivery_controller, esafe_controller=self.esafe_controller)
         self.web = Deliveries()
 
         self.test_admin_1 = UserDTO(

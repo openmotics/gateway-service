@@ -275,12 +275,26 @@ def setup_target_platform(target_platform, message_client_name):
     if controller_serial_port:
         Injectable.value(controller_serial=Serial(controller_serial_port, 115200, exclusive=True))
     if target_platform in [Platform.Type.DUMMY, Platform.Type.ESAFE]:
+        Injectable.value(esafe_controller=None)
         Injectable.value(maintenance_communicator=None)
         Injectable.value(passthrough_service=None)
         Injectable.value(master_controller=MasterDummyController())
         Injectable.value(eeprom_db=None)
         from gateway.hal.master_controller_dummy import DummyEepromObject
         Injectable.value(eeprom_extension=DummyEepromObject())
+        try:
+            esafe_rebus_device = config.get('OpenMotics', 'rebus_device')
+            Injectable.value(rebus_device=esafe_rebus_device)
+        except NoOptionError:
+            Injectable.value(rebus_devuce=None)
+
+        if target_platform == Platform.Type.ESAFE:
+            try:
+                from gateway.esafe_controller import EsafeController
+                Injectable.value(esafe_controller=EsafeController())
+            except ImportError:
+                Injectable.value(esafe_controller=None)
+
     elif target_platform in Platform.CoreTypes:
         # FIXME don't create singleton for optional controller?
         from master.core import ucan_communicator, slave_communicator

@@ -19,13 +19,16 @@ Tests for the delivery module.
 from __future__ import absolute_import
 import unittest
 
+import mock.mock
 from peewee import SqliteDatabase
 
 from gateway.authentication_controller import AuthenticationController, TokenStore
 from gateway.dto import DeliveryDTO, UserDTO
+from gateway.esafe_controller import EsafeController
 from gateway.mappers import UserMapper, DeliveryMapper
 from gateway.models import Delivery, User, Apartment
 from gateway.delivery_controller import DeliveryController
+from gateway.rfid_controller import RfidController
 from gateway.user_controller import UserController
 from ioc import SetTestMode, SetUpTestInjections
 
@@ -52,11 +55,14 @@ class DeliveryControllerTest(unittest.TestCase):
         SetUpTestInjections(token_timeout=3)
         self.token_store = TokenStore(token_timeout=3)
         SetUpTestInjections(token_store=self.token_store)
-        self.auth_controller = AuthenticationController(token_timeout=3, token_store=self.token_store)
+        self.rfid_controller = RfidController()
+        self.auth_controller = AuthenticationController(token_timeout=3, token_store=self.token_store, rfid_controller=self.rfid_controller)
         SetUpTestInjections(authentication_controller=self.auth_controller)
         SetUpTestInjections(config={'username': 'test', 'password': 'test'})
         self.user_controller = UserController()
         SetUpTestInjections(user_controller=self.user_controller)
+        self.esafe_controller = mock.Mock(EsafeController)
+        SetUpTestInjections(esafe_controller=self.esafe_controller)
         self.controller = DeliveryController()
         SetUpTestInjections(delivery_controller=self.controller)
 
@@ -166,6 +172,10 @@ class DeliveryControllerTest(unittest.TestCase):
         self.test_delivery_1.id = result.id
         self.assert_deliveries_equal(self.test_delivery_1, result)
         self.assert_delivery_in_db(result.id, self.test_delivery_1)
+
+        with mock.patch.object(self.esafe_controller, 'verify_device_exists', return_value=False):
+            with self.assertRaises(ValueError):
+                result = self.controller.save_delivery(self.test_delivery_1)
 
     def test_create_delivery_multiple(self):
         """ Test the create delivery functionality """
