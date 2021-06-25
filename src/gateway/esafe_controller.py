@@ -17,12 +17,14 @@ eSafe controller will communicate over rebus with the esafe hardware
 """
 
 from gateway.daemon_thread import DaemonThread
+from gateway.pubsub import PubSub
 from ioc import Inject, INJECTED
 
 try:
     from rebus import Rebus
     from rebus import Utils
     from rebus import RebusComponent, RebusComponentEsafeLock, RebusComponentEsafeEightChannelOutput
+    from rebus import EsafeBoxType
 except ImportError:
     pass
 
@@ -31,15 +33,18 @@ import time
 logger = logging.getLogger(__name__)
 
 if False:  # MYPY
-    from typing import Dict
+    from typing import Dict, List
 
 
 class EsafeController(object):
     @Inject
-    def __init__(self, rebus_port=INJECTED):
+    def __init__(self, rebus_port=INJECTED, pub_sub=INJECTED):
+        # type: (str, PubSub) -> None
         self.rebus_device = Rebus(rebus_port, power_off_on_del=False)
+        self.pub_sub = pub_sub
         self.devices = {}  # type: Dict[int, RebusComponent]
-        self.polling_thread = DaemonThread(name='eSafe status polling', target=self.get_esafe_status, interval=5, delay=5)
+        self.polling_thread = DaemonThread(name='eSafe status polling', target=self._get_esafe_status, interval=5, delay=5)
+        self.open_locks = []  # type: List[int]
 
     ######################
     # Controller Functions
@@ -51,8 +56,30 @@ class EsafeController(object):
     def stop(self):
         self.polling_thread.stop()
 
-    def get_esafe_status(self):
-        pass
+    def _get_esafe_status(self):
+        for lock_id in self.open_locks:
+            is_lock_open = self.get_lock_status(lock_id)
+            if not is_lock_open:
+                # TODO: Raise event that lock has just closed
+                pass
+        time.sleep(0.5)
+
+    def get_mailboxes(self):
+        mailboxes = []
+        for id, device in self.devices.items():
+            if isinstance(device, RebusComponentEsafeLock):
+                if device.type is EsafeBoxType.MAILBOX:
+                    mailboxes.append(device)
+        return mailboxes
+
+    def get_parcelboxes(self):
+        parcelboxes = []
+        for id, device in self.devices.items():
+            if isinstance(device, RebusComponentEsafeLock):
+                if device.type is EsafeBoxType.PARCELBOX:
+                    parcelboxes.append(device)
+        return parcelboxes
+
 
     ######################
     # DISCOVERY
