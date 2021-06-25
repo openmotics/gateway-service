@@ -29,12 +29,12 @@ import fakesleep
 from gateway.dto import ShutterDTO
 from gateway.enums import ShutterEnums
 from gateway.hal.master_controller_classic import MasterClassicController
-from gateway.models import Floor, Room, Shutter
+from gateway.models import Room, Shutter
 from gateway.pubsub import PubSub
 from gateway.shutter_controller import ShutterController
 from ioc import SetTestMode, SetUpTestInjections
 
-MODELS = [Shutter, Room, Floor]
+MODELS = [Shutter, Room]
 
 
 class ShutterControllerTest(unittest.TestCase):

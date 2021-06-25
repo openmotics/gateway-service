@@ -48,8 +48,7 @@ class MasterEvent(object):
       {'type': str,                   # APITypes
        'data': {...}}
       * SET_LIGHTS
-        {'action': 'ON/OFF/TOGGLE',
-         'floor_id': Optional[int]}
+        {'action': 'ON/OFF/TOGGLE'}
     """
 
     class Types(object):

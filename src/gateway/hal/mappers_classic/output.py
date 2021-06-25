@@ -38,7 +38,6 @@ class OutputMapper(object):
                          module_type=data['module_type'],
                          name=data['name'],
                          timer=Toolbox.nonify(data['timer'], OutputMapper.WORD_MAX),
-                         floor=Toolbox.nonify(data['floor'], OutputMapper.BYTE_MAX),
                          output_type=data['type'],
                          lock_bit_id=Toolbox.nonify(data['lock_bit_id'], OutputMapper.BYTE_MAX),
                          can_led_1=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_1_id'], OutputMapper.BYTE_MAX),
@@ -59,7 +58,6 @@ class OutputMapper(object):
             if dto_field in output_dto.loaded_fields:
                 data[data_field] = getattr(output_dto, dto_field)
         for dto_field, (data_field, default) in {'timer': ('timer', OutputMapper.WORD_MAX),
-                                                 'floor': ('floor', OutputMapper.BYTE_MAX),
                                                  'lock_bit_id': ('lock_bit_id', OutputMapper.BYTE_MAX)}.items():
             if dto_field in output_dto.loaded_fields:
                 data[data_field] = Toolbox.denonify(getattr(output_dto, dto_field), default)

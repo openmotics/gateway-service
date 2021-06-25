@@ -767,16 +767,20 @@ class WebInterface(object):
 
     @openmotics_api(auth=True, check=types(floor=int))
     def set_all_lights_floor_off(self, floor):
-        """ Turn all lights on a given floor off. """
+        """ Turn all lights off. """
         floor = Toolbox.nonify(floor, 255)
-        self._output_controller.set_all_lights(action='OFF', floor_id=floor)
+        if floor is not None:
+            raise UnsupportedException()
+        self._output_controller.set_all_lights(action='OFF')
         return {}
 
     @openmotics_api(auth=True, check=types(floor=int))
     def set_all_lights_floor_on(self, floor):
-        """ Turn all lights on a given floor on. """
+        """ Turn all lights on. """
         floor = Toolbox.nonify(floor, 255)
-        self._output_controller.set_all_lights(action='ON', floor_id=floor)
+        if floor is not None:
+            raise UnsupportedException()
+        self._output_controller.set_all_lights(action='ON')
         return {}
 
     @openmotics_api(auth=True)

@@ -17,7 +17,6 @@ from gateway.dto.apartment import ApartmentDTO
 from gateway.dto.delivery import DeliveryDTO
 from gateway.dto.energy import RealtimeEnergyDTO, TotalEnergyDTO, EnergyModuleDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
-from gateway.dto.floor import FloorDTO
 from gateway.dto.global_feedback import GlobalFeedbackDTO
 from gateway.dto.group_action import GroupActionDTO
 from gateway.dto.input import InputDTO, InputStatusDTO

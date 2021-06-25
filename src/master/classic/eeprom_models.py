@@ -75,7 +75,6 @@ class OutputConfiguration(EepromModel):
     module_type = EepromString(1, lambda mid: (33 + mid / 8, 0), read_only=True, shared=True)
     name = EepromString(16, page_per_module(8, 33, 20, 16))
     timer = EepromWord(page_per_module(8, 33, 4, 2))
-    floor = EepromByte(page_per_module(8, 33, 157, 1))
     type = EepromByte(page_per_module(8, 33, 149, 1))
     lock_bit_id = EepromByte(lambda mid: (231, mid))
     can_led_1_id = EepromByte(gen_address(221, 32, 0))

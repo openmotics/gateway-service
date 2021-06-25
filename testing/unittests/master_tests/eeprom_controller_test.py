@@ -92,7 +92,7 @@ class Model9(EepromModel):
     """ Dummy model with multiple fields, including eext fields, without an id. """
     id = EepromId(10)
     name = EextString()
-    floor = EextByte()
+    foo = EextByte()
 
 
 def get_eeprom_file_dummy(banks):
@@ -425,7 +425,7 @@ class EepromControllerTest(unittest.TestCase):
 
         batch = []
         for i in range(ids):
-            batch.append(Model9.deserialize({'id': i, 'name': 'Room {0}'.format(i), 'floor': i // 2}))
+            batch.append(Model9.deserialize({'id': i, 'name': 'Room {0}'.format(i), 'foo': i // 2}))
 
         controller.write_batch(batch)
 
@@ -435,7 +435,7 @@ class EepromControllerTest(unittest.TestCase):
         for i in range(ids):
             self.assertEqual(i, models[i].id)
             self.assertEqual('Room {0}'.format(i), models[i].name)
-            self.assertEqual(i // 2, models[i].floor)
+            self.assertEqual(i // 2, models[i].foo)
 
     def test_eeprom_events(self):
         """ Test read. """

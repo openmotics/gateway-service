@@ -159,15 +159,11 @@ class MasterCoreController(MasterController):
         if action == 0:
             if extra_parameter not in [0, 1, 2]:
                 return
-            floor_id = None  # type: Optional[int]
-            if device_nr != 65535:
-                floor_id = device_nr
             event_action = {0: 'OFF', 1: 'ON', 2: 'TOGGLE'}[extra_parameter]
             self._pubsub.publish_master_event(topic=PubSub.MasterTopics.OUTPUT,
                                               master_event=MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
                                                                        data={'type': MasterEvent.APITypes.SET_LIGHTS,
-                                                                             'data': {'action': event_action,
-                                                                                      'floor_id': floor_id}}))
+                                                                             'data': {'action': event_action}}))
 
     def _handle_output_state(self, output_id, state_dto):
         # type: (int, OutputStatusDTO) -> None
@@ -1166,10 +1162,8 @@ class MasterCoreController(MasterController):
 
     # All lights actions
 
-    def set_all_lights(self, action, floor_id=None, output_ids=None):
-        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int], Optional[List[int]]) -> None
-        _ = floor_id  # Ignored, the Core Master does not know about floors
-
+    def set_all_lights(self, action, output_ids=None):
+        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[List[int]]) -> None
         if output_ids is None and action == 'OFF':
             # All lights off
             self._master_communicator.do_basic_action(BasicAction(action_type=0,
