@@ -1505,8 +1505,8 @@ class MasterClassicController(MasterController):
         if action_type < 0 or action_type > 254:
             raise ValueError('action_type not in [0, 254]: %d' % action_type)
 
-        if action_number < 0 or action_number > 254:
-            raise ValueError('action_number not in [0, 254]: %d' % action_number)
+        if action_number < 0 or action_number > 255:
+            raise ValueError('action_number not in [0, 255]: %d' % action_number)
 
         fields = {'action_type': action_type,
                   'action_number': action_number}

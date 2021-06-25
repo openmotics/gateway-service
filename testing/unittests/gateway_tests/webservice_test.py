@@ -281,7 +281,6 @@ class WebInterfaceTest(unittest.TestCase):
 
             floor_expectations = [(255, None), (2, 'Unsupported'), (0, 'Unsupported')]
             for expectation in floor_expectations:
-                self.web.set_all_lights_floor_off(floor=expectation[0])
                 response = json.loads(self.web.set_all_lights_floor_off(floor=expectation[0]))
                 if expectation[1] is None:
                     self.assertTrue(response.get('success'))
@@ -293,12 +292,18 @@ class WebInterfaceTest(unittest.TestCase):
                 set_status.reset_mock()
 
     def test_set_all_lights_on(self):
-        expectations = [(255, None), (2, 2), (0, 0)]
+        expectations = [(255, None), (2, 'Unsupported'), (0, 'Unsupported')]
         with mock.patch.object(self.output_controller, 'set_all_lights',
                                return_value={}) as set_status:
             for expectation in expectations:
-                self.web.set_all_lights_floor_on(floor=expectation[0])
-                set_status.assert_called_with(action='ON', floor_id=expectation[1])
+                response = json.loads(self.web.set_all_lights_floor_on(floor=expectation[0]))
+                if expectation[1] is None:
+                    set_status.assert_called_with(action='ON')
+                else:
+                    self.assertFalse(response.get('success'))
+                    self.assertEqual(expectation[1], response['msg'])
+                    set_status.assert_not_called()
+                set_status.reset_mock()
 
     def test_get_modules_information(self):
         master_modules = [ModuleDTO(source=ModuleDTO.Source.MASTER,
