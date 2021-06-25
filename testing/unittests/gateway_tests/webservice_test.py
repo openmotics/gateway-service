@@ -71,6 +71,7 @@ class WebInterfaceTest(unittest.TestCase):
                             user_controller=self.user_controller,
                             ventilation_controller=self.ventilation_controller,
                             module_controller=self.module_controller,
+                            energy_module_controller=mock.Mock(),
                             uart_controller=mock.Mock())
         self.web = WebInterface()
 
@@ -276,11 +277,20 @@ class WebInterfaceTest(unittest.TestCase):
                                return_value={}) as set_status:
             self.web.set_all_lights_off()
             set_status.assert_called_with(action='OFF')
+            set_status.reset_mock()
 
-            floor_expectations = [(255, None), (2, 2), (0, 0)]
+            floor_expectations = [(255, None), (2, 'Unsupported'), (0, 'Unsupported')]
             for expectation in floor_expectations:
                 self.web.set_all_lights_floor_off(floor=expectation[0])
-                set_status.assert_called_with(action='OFF', floor_id=expectation[1])
+                response = json.loads(self.web.set_all_lights_floor_off(floor=expectation[0]))
+                if expectation[1] is None:
+                    self.assertTrue(response.get('success'))
+                    set_status.assert_called_with(action='OFF')
+                else:
+                    self.assertFalse(response.get('success'))
+                    self.assertEqual(expectation[1], response['msg'])
+                    set_status.assert_not_called()
+                set_status.reset_mock()
 
     def test_set_all_lights_on(self):
         expectations = [(255, None), (2, 2), (0, 0)]

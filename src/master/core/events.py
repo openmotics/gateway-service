@@ -54,6 +54,7 @@ class Event(object):
         POWER_OUT_ON = 'POWER_OUT_ON'
         POWER_OUT_OFF = 'POWER_OUT_OFF'
         I2C_ERROR = 'I2C_ERROR'
+        RESTARTED = 'RESTARTED'
         UNKNOWN = 'UNKNOWN'
 
     class SensorType(object):
@@ -228,6 +229,8 @@ class Event(object):
                 event_data['type'] = Event.UCANEventTypes.POWER_OUT_OFF
             elif self._data[2] == 2 and self._data[3] == 3:
                 event_data['type'] = Event.UCANEventTypes.POWER_OUT_ON
+            elif self._data[2] == 3:
+                event_data['type'] = Event.UCANEventTypes.RESTARTED
             elif self._data[2] == 1:
                 event_data.update({'type': Event.UCANEventTypes.I2C_ERROR,
                                    'i2c_address': self._data[3]})

@@ -90,20 +90,10 @@ class Database(object):
 class BaseModel(Model): ...
 
 
-class Floor(BaseModel):
-    id: MixedPrimaryKeyField
-    number: MixedIntegerField
-    name: Optional[MixedCharField]
-
-
-class FloorForeignKeyField(Floor, ForeignKeyField): ...
-
-
 class Room(BaseModel):
     id: MixedPrimaryKeyField
     number: MixedIntegerField
     name: Optional[MixedCharField]
-    floor: Optional[FloorForeignKeyField]
 
 
 class RoomForeignKeyField(Room, ForeignKeyField): ...
