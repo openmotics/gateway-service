@@ -17,6 +17,7 @@ eSafe controller will communicate over rebus with the esafe hardware
 """
 
 from gateway.daemon_thread import DaemonThread
+from gateway.dto.box import ParcelBoxDTO, MailBoxDTO
 from gateway.pubsub import PubSub
 from ioc import Inject, INJECTED
 
@@ -80,6 +81,14 @@ class EsafeController(object):
                     parcelboxes.append(device)
         return parcelboxes
 
+    ######################
+    # HELPERS
+    ######################
+
+    def _rebus_parcelbox_to_dto(self, rebus_device):
+        # type: (RebusComponentEsafeLock) -> ParcelBoxDTO
+        return ParcelBoxDTO(height=rebus_device.)
+        pass
 
     ######################
     # DISCOVERY

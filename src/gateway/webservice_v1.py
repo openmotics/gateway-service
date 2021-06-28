@@ -33,6 +33,7 @@ from gateway.api.serializers import ApartmentSerializer, UserSerializer, Deliver
     RfidSerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import ApartmentDTO, DeliveryDTO
+from gateway.esafe_controller import EsafeController
 from gateway.exceptions import *
 from gateway.models import User, Delivery
 from gateway.user_controller import UserController
@@ -908,6 +909,32 @@ class Authentication(RestAPIEndpoint):
     def deauthenticate(self, token):
         self._user_controller.logout(token)
 
+
+class ParcelBox(RestAPIEndpoint):
+    API_ENDPOINT = '/api/v1/parcelboxes'
+
+    @Inject
+    def __init__(self, esafe_controller=INJECTED):
+        # type: (EsafeController) -> None
+        super(ParcelBox, self).__init__()
+        self.esafe_controller = esafe_controller
+        # Set a custom route dispatcher in the class so that you have full
+        # control over how the routes are defined.
+        self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
+        # --- GET ---
+        self.route_dispatcher.connect('get_parcelboxes', '',
+                                      controller=self, action='get_parcelboxes',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_parcelbox', '/:delivery_id',
+                                      controller=self, action='get_parcelbox',
+                                      conditions={'method': ['GET']})
+
+    def get_parcelboxes(self):
+        boxes = self.esafe_controller.get_parcelboxes()
+        pass
+
+    def get_parcelbox(self):
+        pass
 
 @Injectable.named('web_service_v1')
 @Singleton

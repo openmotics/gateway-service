@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from gateway.dto.apartment import ApartmentDTO
+from gateway.dto.box import ParcelBoxDTO, MailBoxDTO
 from gateway.dto.delivery import DeliveryDTO
 from gateway.dto.energy import RealtimeEnergyDTO, TotalEnergyDTO, EnergyModuleDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
