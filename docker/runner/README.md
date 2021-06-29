@@ -12,9 +12,9 @@ From `docer/runner`, the docker container can be build with the command:
 ./container.sh build
 ```
 
-> Note: on OSX this requires coreutils, which can be installed using
+> Note: on OSX this requires a few dependencies, which can be installed using
 > ``` shell
-> brew install coreutils
+> brew install coreutils gnu-sed
 > ```
 
 
