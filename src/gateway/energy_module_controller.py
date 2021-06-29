@@ -27,7 +27,7 @@ from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from gateway.dto import RealtimeEnergyDTO, ModuleDTO, TotalEnergyDTO, EnergyModuleDTO
 from gateway.enums import EnergyEnums
-from gateway.maintenance_controller import InMaintenanceModeException
+from gateway.exceptions import InMaintenanceModeException, CommunicationFailure
 from gateway.mappers import EnergyModuleMapper
 from gateway.models import EnergyModule, Module, EnergyCT
 from gateway.energy.module_helper_energy import EnergyModuleHelper, PowerModuleHelper
@@ -284,6 +284,8 @@ class EnergyModuleController(BaseController):
         for energy_module in energy_modules:
             try:
                 realtime += self._get_helper(energy_module.version).get_realtime_p1(energy_module)
+            except CommunicationFailure as ex:
+                logger.error('Got communication failure while fetching realtime P1C information from {0}: {1}'.format(energy_module.number, ex))
             except Exception as ex:
                 logger.exception('Got exception while fetching realtime P1C information from {0}: {1}'.format(energy_module.number, ex))
         return realtime

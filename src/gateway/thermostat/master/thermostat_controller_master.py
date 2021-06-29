@@ -21,7 +21,7 @@ from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, \
     ThermostatAircoStatusDTO, ThermostatDTO, ThermostatGroupDTO, \
     ThermostatGroupStatusDTO, ThermostatStatusDTO, ThermostatScheduleDTO
 from gateway.events import GatewayEvent
-from gateway.hal.master_controller import CommunicationFailure
+from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
 from gateway.models import Sensor
 from gateway.pubsub import PubSub

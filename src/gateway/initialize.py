@@ -51,7 +51,7 @@ from master.classic.maintenance import MaintenanceClassicCommunicator
 from master.classic.master_communicator import MasterCommunicator
 from master.core.core_communicator import CoreCommunicator
 from master.core.maintenance import MaintenanceCoreCommunicator
-from master.core.memory_file import MemoryFile, MemoryTypes
+from master.core.memory_file import MemoryFile
 from gateway.energy.energy_communicator import EnergyCommunicator
 from serial_utils import RS485
 

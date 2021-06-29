@@ -24,7 +24,7 @@ from __future__ import absolute_import
 import logging
 
 from gateway.daemon_thread import BaseThread
-from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.exceptions import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
 from master.classic.master_command import Printable
 

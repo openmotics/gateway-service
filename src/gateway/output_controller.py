@@ -28,7 +28,7 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import OutputDTO, OutputStatusDTO, GlobalFeedbackDTO, \
     DimmerConfigurationDTO
 from gateway.events import GatewayEvent
-from gateway.hal.master_controller import CommunicationFailure
+from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
 from gateway.models import Output, Room
 from gateway.pubsub import PubSub

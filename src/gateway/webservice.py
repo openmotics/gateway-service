@@ -57,8 +57,7 @@ from gateway.dto import GlobalRTD10DTO, ModuleDTO, RoomDTO, ScheduleDTO, \
 from gateway.enums import ShutterEnums, UserEnums
 from gateway.exceptions import UnsupportedException, FeatureUnavailableException, \
     ItemDoesNotExistException, WrongInputParametersException, ParseException
-from gateway.hal.master_controller import CommunicationFailure
-from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.exceptions import CommunicationFailure, InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
 from gateway.models import Config, Database, Feature, User
 from gateway.uart_controller import UARTController

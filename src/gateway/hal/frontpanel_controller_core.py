@@ -118,7 +118,7 @@ class FrontpanelCoreController(FrontpanelController):
                         state_tracker.set_mode(core_event.data['leds'][led_id])
                         changed, state = state_tracker.get_state()
                         if changed:
-                            logger.info('Led {0} state: {1}'.format(led_name, state))
+                            logger.debug('Led {0} state: {1}'.format(led_name, state))
         elif core_event.type == MasterCoreEvent.Types.LED_ON:
             with self._led_event_lock:
                 chip = core_event.data['chip']
