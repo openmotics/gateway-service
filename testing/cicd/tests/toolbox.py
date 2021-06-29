@@ -546,7 +546,7 @@ class Toolbox(object):
         since = time.time()
         modules = []
         while since > time.time() - timeout:
-            modules += self.dut.get('/load_modules')['modules']
+            modules += self.dut.get('/get_modules_information')['modules']
             if len(modules) >= count:
                 logger.debug('discovered {} modules, done'.format(count))
                 return modules
