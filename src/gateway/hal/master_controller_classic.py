@@ -42,8 +42,8 @@ from gateway.hal.mappers_classic import DimmerConfigurationMapper, \
     PulseCounterMapper, PumpGroupMapper, RTD10Mapper, SensorMapper, \
     ShutterGroupMapper, ShutterMapper, ThermostatGroupMapper, \
     ThermostatMapper
-from gateway.hal.master_controller import CommunicationFailure, \
-    MasterController
+from gateway.exceptions import CommunicationFailure
+from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject

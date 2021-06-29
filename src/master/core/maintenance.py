@@ -23,7 +23,7 @@ import time
 from threading import Lock
 
 from gateway.daemon_thread import BaseThread
-from gateway.maintenance_communicator import MaintenanceCommunicator
+from master.maintenance_communicator import MaintenanceCommunicator
 from ioc import INJECTED, Inject
 
 logger = logging.getLogger(__name__)

@@ -76,6 +76,9 @@ class EnergyModulesMigrator(BaseMigrator):
                         energy_module.save()
 
                         for i in range(EnergyModulesMigrator.NUM_CTS[version]):
+                            times = row_data['times{0}'.format(i)]
+                            if times is None:
+                                times = ''
                             ct = EnergyCT.get_or_none(energy_module=energy_module,
                                                       number=i)
                             if ct is None:
@@ -83,12 +86,12 @@ class EnergyModulesMigrator(BaseMigrator):
                                                      number=i,
                                                      name=row_data['input{0}'.format(i)],
                                                      sensor_type=int(row_data['sensor{0}'.format(i)]),
-                                                     times=row_data['times{0}'.format(i)],
+                                                     times=times,
                                                      inverted=row_data['inverted{0}'.format(i)] == 1)
                             else:
                                 ct.name = row_data['input{0}'.format(i)]
                                 ct.sensor_type = int(row_data['sensor{0}'.format(i)])
-                                ct.times = row_data['times{0}'.format(i)]
+                                ct.times = times
                                 ct.inverted = row_data['inverted{0}'.format(i)] == 1
                             ct.save()
                     except Exception:

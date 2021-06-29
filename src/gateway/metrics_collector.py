@@ -28,7 +28,7 @@ import six
 from gateway.daemon_thread import BaseThread
 from gateway.events import GatewayEvent
 from gateway.enums import EnergyEnums
-from gateway.hal.master_controller import CommunicationFailure
+from gateway.exceptions import CommunicationFailure
 from gateway.models import Database
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Hardware

@@ -33,8 +33,8 @@ from gateway.enums import IndicateType, ShutterEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
-from gateway.hal.master_controller import CommunicationFailure, \
-    MasterController
+from gateway.exceptions import CommunicationFailure
+from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
@@ -1067,7 +1067,21 @@ class MasterCoreController(MasterController):
     # Generic
 
     def power_cycle_bus(self):
-        raise NotImplementedError()
+        # TODO: Replace by cycle instruction as soon as it's available in the firmware
+        try:
+            logger.warning('Powering down RS485 bus...')
+            self._master_communicator.do_basic_action(BasicAction(action_type=253,
+                                                                  action=0,
+                                                                  device_nr=0))  # Power off
+            logger.info('Powering down RS485 bus... Done')
+        except Exception as ex:
+            logger.critical('Exception when changing bus power: {0}'.format(ex))
+        time.sleep(5)
+        logger.warning('Powering on RS485 bus...')
+        self._master_communicator.do_basic_action(BasicAction(action_type=253,
+                                                              action=0,
+                                                              device_nr=1))  # Power on
+        logger.info('Powering on RS485 bus... Done')
 
     def get_status(self):
         firmware_version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']

@@ -24,7 +24,7 @@ import struct
 from six.moves.queue import Queue
 
 from gateway.daemon_thread import BaseThread
-from gateway.hal.master_controller import CommunicationFailure
+from gateway.exceptions import CommunicationFailure
 
 if False:  # MYPY
     from typing import Literal, Any
@@ -39,7 +39,7 @@ class CommunicationTimedOutException(CommunicationFailure):
         super(CommunicationTimedOutException, self).__init__(message)
 
 
-class CommunicationStatus:
+class CommunicationStatus(object):
     SUCCESS = 'success'  # type: Literal['success', 'unstable', 'failure']
     UNSTABLE = 'unstable'  # type: Literal['success', 'unstable', 'failure']
     FAILURE = 'failure'  # type: Literal['success', 'unstable', 'failure']

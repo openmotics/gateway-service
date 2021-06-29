@@ -32,10 +32,6 @@ if False:  # MYPY
     HEALTH = Literal['success', 'unstable', 'failure']
 
 
-class CommunicationFailure(Exception):
-    pass
-
-
 class MasterController(object):
 
     def __init__(self, master_communicator):
