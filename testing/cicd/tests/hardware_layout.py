@@ -202,18 +202,18 @@ _ENERGY_MODULE_LAYOUTS = {
     TestPlatform.DEBIAN: [
         Module(name='energy_module', mtype='E',
                hardware_type=Module.HardwareType.PHYSICAL,
-               cts=[CT(module_id=1, ct_id=0),
-                    CT(module_id=1, ct_id=1),
-                    CT(module_id=1, ct_id=2),
-                    CT(module_id=1, ct_id=3),
-                    CT(module_id=1, ct_id=4),
-                    CT(module_id=1, ct_id=5),
-                    CT(module_id=1, ct_id=6),
-                    CT(module_id=1, ct_id=7),
-                    CT(module_id=1, ct_id=8),
-                    CT(module_id=1, ct_id=9),
-                    CT(module_id=1, ct_id=10),
-                    CT(module_id=1, ct_id=11)])
+               cts=[CT(module_id=2, ct_id=0),
+                    CT(module_id=2, ct_id=1),
+                    CT(module_id=2, ct_id=2),
+                    CT(module_id=2, ct_id=3),
+                    CT(module_id=2, ct_id=4),
+                    CT(module_id=2, ct_id=5),
+                    CT(module_id=2, ct_id=6),
+                    CT(module_id=2, ct_id=7),
+                    CT(module_id=2, ct_id=8),
+                    CT(module_id=2, ct_id=9),
+                    CT(module_id=2, ct_id=10),
+                    CT(module_id=2, ct_id=11)])
     ]
 }
 ENERGY_MODULE_LAYOUT = _ENERGY_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]
