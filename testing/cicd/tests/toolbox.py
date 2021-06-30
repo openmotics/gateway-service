@@ -739,7 +739,7 @@ class Toolbox(object):
         since = time.time()
         while since > time.time() - timeout:
             data = self.dut.get('/get_shutter_status')
-            if _shutter.shutter_id in data['detail']:
+            if str(_shutter.shutter_id) in data['detail']:
                 logger.debug('shutter {} with status discovered, after {:.2f}s'.format(_shutter, time.time() - since))
                 return
             time.sleep(2)
