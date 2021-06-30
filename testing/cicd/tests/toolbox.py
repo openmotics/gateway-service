@@ -740,7 +740,7 @@ class Toolbox(object):
         while since > time.time() - timeout:
             data = self.dut.get('/get_shutter_status')
             try:
-                next(x for x in data['status'] if x['id'] == _shutter.shutter_id)
+                next(x for x in data['detail'] if x['id'] == _shutter.shutter_id)
                 logger.debug('shutter {} with status discovered, after {:.2f}s'.format(_shutter, time.time() - since))
                 return
             except StopIteration:
