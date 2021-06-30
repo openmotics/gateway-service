@@ -739,12 +739,9 @@ class Toolbox(object):
         since = time.time()
         while since > time.time() - timeout:
             data = self.dut.get('/get_shutter_status')
-            try:
-                next(x for x in data['detail'] if x['id'] == _shutter.shutter_id)
+            if _shutter.shutter_id in data['detail']:
                 logger.debug('shutter {} with status discovered, after {:.2f}s'.format(_shutter, time.time() - since))
                 return
-            except StopIteration:
-                pass
             time.sleep(2)
         raise AssertionError('shutter {} status missing, timeout after {:.2f}s'.format(_shutter, time.time() - since))
 
