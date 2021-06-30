@@ -217,6 +217,7 @@ class MasterClassicController(MasterController):
         # type: () -> None
         """
         Checks master settings such as:
+        * Enable large installation
         * Enable async messages
         * Enable multi-tenancy
         * Enable 32 thermostats
@@ -255,6 +256,15 @@ class MasterClassicController(MasterController):
             self._master_communicator.do_command(
                 master_api.write_eeprom(),
                 {'bank': 0, 'address': 28, 'data': bytearray([0])}
+            )
+            write = True
+
+        large_installation = eeprom_data[27]
+        if large_installation == 255:
+            logger.info('Enabling large installation mode.')
+            self._master_communicator.do_command(
+                master_api.write_eeprom(),
+                {'bank': 0, 'address': 27, 'data': bytearray([0])}
             )
             write = True
 
