@@ -198,7 +198,7 @@ class TesterGateway(object):
         current_status = None
         while timeout is None or since > time.time() - timeout:
             data = self.get('/get_input_status')
-            current_status = {s['id']: s['status'] for s in data['status']}.get(input_id, None)
+            current_status = {s['id']: s['status'] == 1 for s in data['status']}.get(input_id, None)
             if input_status == current_status:
                 logger.debug('Get status {} status={}, after {:.2f}s'.format(entity, input_status, time.time() - since))
                 return True
@@ -684,7 +684,7 @@ class Toolbox(object):
                                                       input_status=to_status == 'going_down',
                                                       between=(0, Toolbox._remaining_timeout(timeout, start)))
             if not up_ok or not down_ok:
-                raise AssertionError('expected events {} status={}'.format(shutter, to_status))
+                raise AssertionError('expected events {} status={}, up_ok={}, down_ok={}'.format(shutter, to_status, up_ok, down_ok))
 
     def assert_output_changed(self, output, status, between=(0, 5)):
         # type: (Output, bool, Tuple[float,float]) -> None
@@ -718,7 +718,7 @@ class Toolbox(object):
                                                     input_status=status == 'going_down',
                                                     timeout=Toolbox._remaining_timeout(timeout, start))
         if not up_ok or not down_ok:
-            raise AssertionError('Expected {} status={}'.format(shutter, status))
+            raise AssertionError('Expected {} status={}, up_ok={}, down_ok={}'.format(shutter, status, up_ok, down_ok))
 
     def ensure_output_exists(self, output, timeout=30):
         # type: (Output, float) -> None
