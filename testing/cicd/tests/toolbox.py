@@ -27,7 +27,7 @@ from requests.exceptions import ConnectionError, RequestException, Timeout
 
 from tests.hardware_layout import INPUT_MODULE_LAYOUT, OUTPUT_MODULE_LAYOUT, \
     TEMPERATURE_MODULE_LAYOUT, TEST_PLATFORM, TESTER, Input, Module, Output, \
-    TestPlatform, Shutter
+    TestPlatform, Shutter, SHUTTER_MODULE_LAYOUT
 
 logger = logging.getLogger(__name__)
 
@@ -262,7 +262,7 @@ class Toolbox(object):
 
         expected_modules = {Module.HardwareType.VIRTUAL: {},
                             Module.HardwareType.PHYSICAL: {}}  # Limit it to physical and virtual for now
-        for module in OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT + TEMPERATURE_MODULE_LAYOUT:
+        for module in OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT + TEMPERATURE_MODULE_LAYOUT + SHUTTER_MODULE_LAYOUT:
             hardware_type = Module.HardwareType.VIRTUAL if module.hardware_type == Module.HardwareType.VIRTUAL else Module.HardwareType.PHYSICAL
             if module.mtype not in expected_modules[hardware_type]:
                 expected_modules[hardware_type][module.mtype] = 0
@@ -317,6 +317,9 @@ class Toolbox(object):
         for module in INPUT_MODULE_LAYOUT:
             if module.inputs:
                 self.ensure_input_exists(module.inputs[-1], timeout=300)
+        for module in SHUTTER_MODULE_LAYOUT:
+            if module.shutters:
+                self.ensure_shutter_exists(module.shutters[-1], timeout=300)
 
     def print_logs(self):
         # type: () -> None
@@ -730,6 +733,20 @@ class Toolbox(object):
                 pass
             time.sleep(2)
         raise AssertionError('output {} status missing, timeout after {:.2f}s'.format(output, time.time() - since))
+
+    def ensure_shutter_exists(self, _shutter, timeout=30):
+        # type: (Shutter, float) -> None
+        since = time.time()
+        while since > time.time() - timeout:
+            data = self.dut.get('/get_shutter_status')
+            try:
+                next(x for x in data['status'] if x['id'] == _shutter.shutter_id)
+                logger.debug('shutter {} with status discovered, after {:.2f}s'.format(_shutter, time.time() - since))
+                return
+            except StopIteration:
+                pass
+            time.sleep(2)
+        raise AssertionError('shutter {} status missing, timeout after {:.2f}s'.format(_shutter, time.time() - since))
 
     def ensure_input_exists(self, _input, timeout=30):
         # type: (Input, float) -> None
