@@ -675,14 +675,18 @@ class Toolbox(object):
         start = time.time()
         self.assert_shutter_status(shutter, to_status, timeout=timeout)
         if from_status != to_status:
-            up_ok = self.tester.receive_input_event(entity=shutter,
-                                                    input_id=shutter.tester_input_id_up,
-                                                    input_status=to_status == 'going_up',
-                                                    between=(0, Toolbox._remaining_timeout(timeout, start)))
-            down_ok = self.tester.receive_input_event(entity=shutter,
-                                                      input_id=shutter.tester_input_id_down,
-                                                      input_status=to_status == 'going_down',
-                                                      between=(0, Toolbox._remaining_timeout(timeout, start)))
+            up_ok = True
+            if (from_status == 'going_up') != (to_status == 'going_up'):
+                up_ok = self.tester.receive_input_event(entity=shutter,
+                                                        input_id=shutter.tester_input_id_up,
+                                                        input_status=to_status == 'going_up',
+                                                        between=(0, Toolbox._remaining_timeout(timeout, start)))
+            down_ok = True
+            if (from_status == 'going_down') != (to_status == 'going_down'):
+                down_ok = self.tester.receive_input_event(entity=shutter,
+                                                          input_id=shutter.tester_input_id_down,
+                                                          input_status=to_status == 'going_down',
+                                                          between=(0, Toolbox._remaining_timeout(timeout, start)))
             if not up_ok or not down_ok:
                 raise AssertionError('expected events {} status={}, up_ok={}, down_ok={}'.format(shutter, to_status, up_ok, down_ok))
 
