@@ -27,12 +27,12 @@ from requests.exceptions import ConnectionError, RequestException, Timeout
 
 from tests.hardware_layout import INPUT_MODULE_LAYOUT, OUTPUT_MODULE_LAYOUT, \
     TEMPERATURE_MODULE_LAYOUT, TEST_PLATFORM, TESTER, Input, Module, Output, \
-    TestPlatform
+    TestPlatform, Shutter
 
 logger = logging.getLogger(__name__)
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Optional, Tuple
+    from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 class Client(object):
@@ -170,26 +170,42 @@ class TesterGateway(object):
         # type: () -> None
         self._inputs = {}
 
-    def receive_input_event(self, output, output_status, between):
-        # type: (Output, bool, Tuple[float, float]) -> bool
+    def receive_input_event(self, entity, input_id, input_status, between):
+        # type: (Union[Output, Shutter], int, bool, Tuple[float, float]) -> bool
         cooldown, deadline = between
         timeout = deadline - cooldown
-        if output.tester_input_id is None:
-            raise ValueError('Invalid {} for events, is not connected to a tester input'.format(output))
+        if input_id is None:
+            raise ValueError('Invalid {} for events, is not connected to a tester input'.format(entity))
         if cooldown > 0:
             logger.debug('Waiting {:.2f}s before event'.format(cooldown))
             self.reset()
             time.sleep(cooldown)
         since = time.time()
         while since > time.time() - timeout:
-            if output.tester_input_id in self._inputs and output_status == self._inputs[output.tester_input_id]:
-                logger.debug('Received event {} status={} after {:.2f}s'.format(output, self._inputs[output.tester_input_id], time.time() - since))
+            if input_id in self._inputs and input_status == self._inputs[input_id]:
+                logger.debug('Received event {} status={} after {:.2f}s'.format(entity, self._inputs[input_id], time.time() - since))
                 return True
             if self.update_events():
                 continue
             time.sleep(0.2)
-        logger.error('Did not receive event {} status={} after {:.2f}s'.format(output, output_status, time.time() - since))
+        logger.error('Did not receive event {} status={} after {:.2f}s'.format(entity, input_status, time.time() - since))
         self.log_events()
+        return False
+
+    def wait_for_input_status(self, entity, input_id, input_status, timeout):
+        # type: (Union[Output, Shutter], int, bool, Optional[float]) -> bool
+        since = time.time()
+        current_status = None
+        while timeout is None or since > time.time() - timeout:
+            data = self.get('/get_input_status')
+            current_status = {s['id']: s['status'] for s in data['status']}.get(input_id, None)
+            if input_status == current_status:
+                logger.debug('Get status {} status={}, after {:.2f}s'.format(entity, input_status, time.time() - since))
+                return True
+            if timeout is None:
+                break  # Immediate check
+            time.sleep(max(0.2, timeout / 10.0))
+        logger.error('Get status {} status={} != expected {}, timeout after {:.2f}s'.format(entity, current_status, input_status, time.time() - since))
         return False
 
 
@@ -630,6 +646,17 @@ class Toolbox(object):
         logger.debug('set output {} -> {}'.format(output, status))
         self.dut.get('/set_output', {'id': output.output_id, 'is_on': status})
 
+    def configure_shutter(self, shutter, config):
+        # type: (Shutter, Dict[str, Any]) -> None
+        config_data = {'id': shutter.shutter_id}
+        config_data.update(**config)
+        logger.debug('configure shutter {} with {}'.format(shutter, config))
+        self.dut.get('/set_shutter_configuration', {'config': json.dumps(config_data)})
+
+    def set_shutter(self, shutter, direction):
+        # type: (Shutter, str) -> None
+        self.dut.get('/do_shutter_{}'.format(direction), {'id': shutter.shutter_id})
+
     def press_input(self, _input):
         # type: (Input) -> None
         self.tester.get('/set_output', {'id': _input.tester_output_id, 'is_on': False})  # ensure start status
@@ -639,28 +666,56 @@ class Toolbox(object):
         self.tester.toggle_output(_input.tester_output_id, is_dimmer=_input.is_dimmer)
         logger.debug('Toggled {} -> True -> False'.format(_input))
 
+    def assert_shutter_changed(self, shutter, from_status, to_status, timeout=5):
+        # type: (Shutter, str, str, float) -> None
+        hypothesis.note('assert {} status changed {} -> {}'.format(shutter, from_status, to_status))
+        start = time.time()
+        self.assert_shutter_status(shutter, to_status, timeout=timeout)
+        if from_status != to_status:
+            up_ok = self.tester.receive_input_event(entity=shutter,
+                                                    input_id=shutter.tester_input_id_up,
+                                                    input_status=to_status == 'going_up',
+                                                    between=(0, Toolbox._remaining_timeout(timeout, start)))
+            down_ok = self.tester.receive_input_event(entity=shutter,
+                                                      input_id=shutter.tester_input_id_down,
+                                                      input_status=to_status == 'going_down',
+                                                      between=(0, Toolbox._remaining_timeout(timeout, start)))
+            if not up_ok or not down_ok:
+                raise AssertionError('expected events {} status={}'.format(shutter, to_status))
+
     def assert_output_changed(self, output, status, between=(0, 5)):
         # type: (Output, bool, Tuple[float,float]) -> None
-        hypothesis.note('assert output {} status changed {} -> {}'.format(output, not status, status))
-        if self.tester.receive_input_event(output, status, between=between):
+        hypothesis.note('assert {} status changed {} -> {}'.format(output, not status, status))
+        if self.tester.receive_input_event(entity=output,
+                                           input_id=output.tester_input_id,
+                                           input_status=status,
+                                           between=between):
             return
         raise AssertionError('expected event {} status={}'.format(output, status))
 
     def assert_output_status(self, output, status, timeout=5):
         # type: (Output, bool, float) -> None
         hypothesis.note('assert output {} status is {}'.format(output, status))
-        since = time.time()
-        current_status = None
-        while since > time.time() - timeout:
-            data = self.dut.get('/get_output_status')
-            current_status = data['status'][output.output_id]['status']
-            if status == bool(current_status):
-                logger.debug('get output {} status={}, after {:.2f}s'.format(output, status, time.time() - since))
-                return
-            time.sleep(2)
-        logger.error('get status {} status={} != expected {}, timeout after {:.2f}s'.format(output, bool(current_status), status, time.time() - since))
-        self.tester.log_events()
-        raise AssertionError('get status {} status={} != expected {}, timeout after {:.2f}s'.format(output, bool(current_status), status, time.time() - since))
+        if self.tester.wait_for_input_status(entity=output,
+                                             input_id=output.tester_input_id,
+                                             input_status=status,
+                                             timeout=timeout):
+            return
+        raise AssertionError('Expected {} status={}'.format(output, status))
+
+    def assert_shutter_status(self, shutter, status, timeout=5):
+        # type: (Shutter, str, float) -> None
+        start = time.time()
+        up_ok = self.tester.wait_for_input_status(entity=shutter,
+                                                  input_id=shutter.tester_input_id_up,
+                                                  input_status=status == 'going_up',
+                                                  timeout=Toolbox._remaining_timeout(timeout, start))
+        down_ok = self.tester.wait_for_input_status(entity=shutter,
+                                                    input_id=shutter.tester_input_id_down,
+                                                    input_status=status == 'going_down',
+                                                    timeout=Toolbox._remaining_timeout(timeout, start))
+        if not up_ok or not down_ok:
+            raise AssertionError('Expected {} status={}'.format(shutter, status))
 
     def ensure_output_exists(self, output, timeout=30):
         # type: (Output, float) -> None
@@ -689,3 +744,7 @@ class Toolbox(object):
                 pass
             time.sleep(2)
         raise AssertionError('input {} status missing, timeout after {:.2f}s'.format(_input, time.time() - since))
+
+    @staticmethod
+    def _remaining_timeout(timeout, start):
+        return timeout - time.time() - start

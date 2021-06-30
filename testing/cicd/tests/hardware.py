@@ -1,6 +1,8 @@
 import hypothesis
 from hypothesis.strategies import composite, integers, just, lists, one_of
-from tests.hardware_layout import OUTPUT_MODULE_LAYOUT, INPUT_MODULE_LAYOUT, ENERGY_MODULE_LAYOUT, Module, TEST_PLATFORM
+from tests.hardware_layout import \
+    OUTPUT_MODULE_LAYOUT, INPUT_MODULE_LAYOUT, ENERGY_MODULE_LAYOUT, SHUTTER_MODULE_LAYOUT, \
+    Module, TEST_PLATFORM
 
 
 def output_types(virtual=False):
@@ -29,6 +31,34 @@ def outputs(draw, types=None, virtual=False):
 
 def multiple_outputs(size, types=output_types()):
     return lists(outputs(types=types), min_size=size, max_size=size, unique_by=lambda x: x.output_id)
+
+
+def shutter_types(virtual=False):
+    module_types = [module.mtype for module in SHUTTER_MODULE_LAYOUT
+                    if module.shutters and (virtual is True or module.hardware_type != Module.HardwareType.VIRTUAL)]
+    return one_of([just(x) for x in module_types])
+
+
+@composite
+def shutters(draw, types=None, virtual=False):
+    if types is None:
+        types = shutter_types(virtual=virtual)
+    module_type = draw(types)
+    assert module_type in ['R', 'r'], 'Invalid shutter type {}'.format(module_type)
+    _shutters = []
+    for module in SHUTTER_MODULE_LAYOUT:
+        if module.mtype != module_type:
+            continue
+        if not virtual and module.hardware_type == Module.HardwareType.VIRTUAL:
+            continue
+        _shutters += module.shutters
+    shutter = _shutters[draw(integers(min_value=0, max_value=len(_shutters) - 1))]
+    hypothesis.note('Using {} {}'.format(shutter.module.name, shutter))
+    return shutter
+
+
+def multiple_shutters(size, types=shutter_types()):
+    return lists(shutters(types=types), min_size=size, max_size=size, unique_by=lambda x: x.shutter_id)
 
 
 def input_types():
