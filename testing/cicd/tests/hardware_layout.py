@@ -160,14 +160,14 @@ _OUTPUT_MODULE_LAYOUTS = {
                outputs=[]),
         Module(name='virtual output', mtype='o',
                hardware_type=Module.HardwareType.VIRTUAL,
-               outputs=[Output(output_id=24, tester_input_id=None),
-                        Output(output_id=25, tester_input_id=None),
-                        Output(output_id=26, tester_input_id=None),
-                        Output(output_id=27, tester_input_id=None),
-                        Output(output_id=28, tester_input_id=None),
-                        Output(output_id=29, tester_input_id=None),
-                        Output(output_id=30, tester_input_id=None),
-                        Output(output_id=31, tester_input_id=None)])
+               outputs=[Output(output_id=16, tester_input_id=None),
+                        Output(output_id=17, tester_input_id=None),
+                        Output(output_id=18, tester_input_id=None),
+                        Output(output_id=19, tester_input_id=None),
+                        Output(output_id=20, tester_input_id=None),
+                        Output(output_id=21, tester_input_id=None),
+                        Output(output_id=22, tester_input_id=None),
+                        Output(output_id=23, tester_input_id=None)])
     ]
 }
 OUTPUT_MODULE_LAYOUT = _OUTPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Module]

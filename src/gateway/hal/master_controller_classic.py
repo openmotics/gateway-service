@@ -259,6 +259,7 @@ class MasterClassicController(MasterController):
             )
             write = True
 
+        # TODO: Remove
         large_installation = eeprom_data[27]
         if large_installation == 255:
             logger.info('Enabling large installation mode.')
