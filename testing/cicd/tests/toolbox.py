@@ -660,6 +660,10 @@ class Toolbox(object):
         # type: (Shutter, str) -> None
         self.dut.get('/do_shutter_{}'.format(direction), {'id': shutter.shutter_id})
 
+    def lock_shutter(self, shutter, locked):
+        # type: (Shutter, bool) -> None
+        self.dut.get('/do_basic_action', {'action_type': 113, 'action_number': 1 if locked else 0})
+
     def press_input(self, _input):
         # type: (Input) -> None
         self.tester.get('/set_output', {'id': _input.tester_output_id, 'is_on': False})  # ensure start status
