@@ -33,7 +33,7 @@ def test_shutter_moving(toolbox, shutter):
     # type: (Toolbox, Shutter) -> None
     toolbox.configure_shutter(shutter, {'timer_up': 10,
                                         'timer_down': 10,
-                                        'up_down_config': 0})
+                                        'up_down_config': 255})
     logger.debug('shutter {} stopping'.format(shutter))
     toolbox.set_shutter(shutter, 'stop')
     toolbox.assert_shutter_status(shutter, 'stopped', timeout=15)
