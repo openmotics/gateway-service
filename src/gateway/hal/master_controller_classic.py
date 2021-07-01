@@ -259,16 +259,6 @@ class MasterClassicController(MasterController):
             )
             write = True
 
-        # TODO: Remove
-        large_installation = eeprom_data[27]
-        if large_installation == 255:
-            logger.info('Enabling large installation mode.')
-            self._master_communicator.do_command(
-                master_api.write_eeprom(),
-                {'bank': 0, 'address': 27, 'data': bytearray([0])}
-            )
-            write = True
-
         thermostat_mode = eeprom_data[14]
         if thermostat_mode & 64 == 0:
             logger.info('Enabling multi-tenant thermostats.')
@@ -1363,6 +1353,8 @@ class MasterClassicController(MasterController):
 
         self._master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0},
                                              timeout=5)
+        self.cold_reset()
+
         ret.append('Activated eeprom')
         self._eeprom_controller.invalidate_cache()
 
