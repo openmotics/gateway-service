@@ -669,22 +669,27 @@ class Toolbox(object):
         self.tester.toggle_output(_input.tester_output_id, is_dimmer=_input.is_dimmer)
         logger.debug('Toggled {} -> True -> False'.format(_input))
 
-    def assert_shutter_changed(self, shutter, from_status, to_status, timeout=5):
+    def assert_shutter_changed(self, shutter, from_status, to_status, timeout=5, inverted=False):
         # type: (Shutter, str, str, float) -> None
         hypothesis.note('assert {} status changed {} -> {}'.format(shutter, from_status, to_status))
+        input_id_up = shutter.tester_input_id_down if inverted else shutter.tester_input_id_up
+        input_id_down = shutter.tester_input_id_up if inverted else shutter.tester_input_id_down
         start = time.time()
-        self.assert_shutter_status(shutter, to_status, timeout=timeout)
+        self.assert_shutter_status(shutter=shutter,
+                                   status=to_status,
+                                   timeout=timeout,
+                                   inverted=inverted)
         if from_status != to_status:
             up_ok = True
             if (from_status == 'going_up') != (to_status == 'going_up'):
                 up_ok = self.tester.receive_input_event(entity=shutter,
-                                                        input_id=shutter.tester_input_id_up,
+                                                        input_id=input_id_up,
                                                         input_status=to_status == 'going_up',
                                                         between=(0, Toolbox._remaining_timeout(timeout, start)))
             down_ok = True
             if (from_status == 'going_down') != (to_status == 'going_down'):
                 down_ok = self.tester.receive_input_event(entity=shutter,
-                                                          input_id=shutter.tester_input_id_down,
+                                                          input_id=input_id_down,
                                                           input_status=to_status == 'going_down',
                                                           between=(0, Toolbox._remaining_timeout(timeout, start)))
             if not up_ok or not down_ok:
@@ -710,15 +715,17 @@ class Toolbox(object):
             return
         raise AssertionError('Expected {} status={}'.format(output, status))
 
-    def assert_shutter_status(self, shutter, status, timeout=5):
+    def assert_shutter_status(self, shutter, status, timeout=5, inverted=False):
         # type: (Shutter, str, float) -> None
+        input_id_up = shutter.tester_input_id_down if inverted else shutter.tester_input_id_up
+        input_id_down = shutter.tester_input_id_up if inverted else shutter.tester_input_id_down
         start = time.time()
         up_ok = self.tester.wait_for_input_status(entity=shutter,
-                                                  input_id=shutter.tester_input_id_up,
+                                                  input_id=input_id_up,
                                                   input_status=status == 'going_up',
                                                   timeout=Toolbox._remaining_timeout(timeout, start))
         down_ok = self.tester.wait_for_input_status(entity=shutter,
-                                                    input_id=shutter.tester_input_id_down,
+                                                    input_id=input_id_down,
                                                     input_status=status == 'going_down',
                                                     timeout=Toolbox._remaining_timeout(timeout, start))
         if not up_ok or not down_ok:
