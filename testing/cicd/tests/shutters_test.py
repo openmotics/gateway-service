@@ -36,9 +36,9 @@ def test_shutter_moving(toolbox, shutter, primary_direction, inverted):
     direction = 'up' if primary_direction else 'down'
     inverted_direction = 'down' if primary_direction else 'up'
 
-    hypothesis.note('Testing {} with primary direction {}, {}inverted'.format(shutter,
-                                                                              primary_direction,
-                                                                              '' if inverted else 'not '))
+    logger.info('Testing {} with primary direction {}, {}inverted'.format(
+        shutter, primary_direction, '' if inverted else 'not '
+    ))
 
     toolbox.configure_shutter(shutter, {'timer_up': 10,
                                         'timer_down': 10,
