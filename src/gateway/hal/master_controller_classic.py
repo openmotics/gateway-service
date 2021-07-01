@@ -217,6 +217,7 @@ class MasterClassicController(MasterController):
         # type: () -> None
         """
         Checks master settings such as:
+        * Enable large installation
         * Enable async messages
         * Enable multi-tenancy
         * Enable 32 thermostats
@@ -1352,6 +1353,8 @@ class MasterClassicController(MasterController):
 
         self._master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0},
                                              timeout=5)
+        self.cold_reset()
+
         ret.append('Activated eeprom')
         self._eeprom_controller.invalidate_cache()
 
