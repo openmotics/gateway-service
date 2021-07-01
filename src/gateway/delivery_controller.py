@@ -110,7 +110,7 @@ class DeliveryController(object):
         return DeliveryMapper.orm_to_dto(delivery_orm)
 
     @staticmethod
-    def parcel_id_available(parcelbox_id, delivery_id):
+    def parcel_id_available(parcelbox_id, delivery_id=None):
         if delivery_id is None:
             delivery_id = -1
         query = Delivery.select().where((Delivery.parcelbox_rebus_id == parcelbox_id) &

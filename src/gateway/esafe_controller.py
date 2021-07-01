@@ -16,36 +16,43 @@
 eSafe controller will communicate over rebus with the esafe hardware
 """
 
+from gateway.apartment_controller import ApartmentController
 from gateway.daemon_thread import DaemonThread
+from gateway.delivery_controller import DeliveryController
 from gateway.dto.box import ParcelBoxDTO, MailBoxDTO
 from gateway.pubsub import PubSub
-from ioc import Inject, INJECTED
+from ioc import Inject, INJECTED, Injectable, Singleton
 
-try:
-    from rebus import Rebus
-    from rebus import Utils
-    from rebus import RebusComponent, RebusComponentEsafeLock, RebusComponentEsafeEightChannelOutput
-    from rebus import EsafeBoxType
-except ImportError:
-    pass
+from rebus import Rebus
+from rebus import Utils
+from rebus import RebusComponent, RebusComponentEsafeLock, RebusComponentEsafeEightChannelOutput
+from rebus import EsafeBoxType
 
 import logging
 import time
 logger = logging.getLogger(__name__)
 
 if False:  # MYPY
-    from typing import Dict, List
+    from typing import Dict, List, Optional
 
 
 class EsafeController(object):
     @Inject
-    def __init__(self, rebus_port=INJECTED, pub_sub=INJECTED):
-        # type: (str, PubSub) -> None
-        self.rebus_device = Rebus(rebus_port, power_off_on_del=False)
-        self.pub_sub = pub_sub
+    def __init__(self, rebus_device=INJECTED, pubsub=INJECTED, apartment_controller=INJECTED):
+        # type: (str, PubSub, ApartmentController) -> None
+        logger.info('Creating esafe controller')
+        self.rebus_device = Rebus(rebus_device, power_off_on_del=False)
+        self.rebus_device.power_on()
+        time.sleep(0.2)
+        logger.info('Created rebus device')
+        self.pub_sub = pubsub
+        self.apartment_controller = apartment_controller
         self.devices = {}  # type: Dict[int, RebusComponent]
         self.polling_thread = DaemonThread(name='eSafe status polling', target=self._get_esafe_status, interval=5, delay=5)
         self.open_locks = []  # type: List[int]
+        self.done_discovering = False
+        logger.info('Starting up discovery')
+        self.discover_devices()
 
     ######################
     # Controller Functions
@@ -65,21 +72,48 @@ class EsafeController(object):
                 pass
         time.sleep(0.5)
 
-    def get_mailboxes(self):
+    def get_mailboxes(self, rebus_id=None):
+        # type: (Optional[int]) -> list[MailBoxDTO]
+        logger.info('Getting mailboxes')
+        if not self.done_discovering:
+            return []
         mailboxes = []
-        for id, device in self.devices.items():
-            if isinstance(device, RebusComponentEsafeLock):
-                if device.type is EsafeBoxType.MAILBOX:
-                    mailboxes.append(device)
-        return mailboxes
 
-    def get_parcelboxes(self):
-        parcelboxes = []
-        for id, device in self.devices.items():
-            if isinstance(device, RebusComponentEsafeLock):
-                if device.type is EsafeBoxType.PARCELBOX:
-                    parcelboxes.append(device)
-        return parcelboxes
+        if rebus_id is None:
+            for rebus_id, device in self.devices.items():
+                if isinstance(device, RebusComponentEsafeLock):
+                    if device.type is EsafeBoxType.MAILBOX:
+                        mailboxes.append(device)
+        else:
+            mailbox = self.devices.get(rebus_id)
+            mailboxes = [mailbox] if mailbox is not None and mailbox.type is EsafeBoxType.MAILBOX else []
+        return [self._rebus_mailbox_to_dto(mailbox) for mailbox in mailboxes]
+
+    def get_parcelboxes(self, size=None, rebus_id=None):
+        # type: (Optional[str], Optional[int]) -> List[ParcelBoxDTO]
+        logger.info('Getting parcelboxes, size: {}, rebus_id: {}'.format(size, rebus_id))
+        if not self.done_discovering:
+            return []
+        parcelboxes = []  # type: List[RebusComponentEsafeLock]
+
+        # if no rebus id is given, get all the parcelboxes
+        if rebus_id is None:
+            for _, device in self.devices.items():
+                if isinstance(device, RebusComponentEsafeLock):
+                    if device.type is EsafeBoxType.PARCELBOX:
+                        parcelboxes.append(device)
+        # else get the one parcelbox
+        else:
+            parcelbox = self.devices.get(rebus_id)
+            logger.info('Requesting specific parcelbox: {}'.format(parcelbox))
+            parcelboxes = [parcelbox] if parcelbox is not None and parcelbox.type is EsafeBoxType.PARCELBOX else []
+
+        # filter out the sizes
+        if size is not None:
+            size = size.lower()
+            parcelboxes = [parcelbox for parcelbox in parcelboxes if parcelbox.size.value.lower() == size]
+
+        return [self._rebus_parcelbox_to_dto(mailbox) for mailbox in parcelboxes]
 
     ######################
     # HELPERS
@@ -87,18 +121,29 @@ class EsafeController(object):
 
     def _rebus_parcelbox_to_dto(self, rebus_device):
         # type: (RebusComponentEsafeLock) -> ParcelBoxDTO
-        return ParcelBoxDTO(height=rebus_device.)
-        pass
+        _ = self  # suppress 'may be static' warning
+        return ParcelBoxDTO(id=rebus_device.get_rebus_id(), label=rebus_device.get_rebus_id(), height=rebus_device.height, width=rebus_device.width, size=rebus_device.size)
+
+    def _rebus_mailbox_to_dto(self, rebus_device):
+        # type: (RebusComponentEsafeLock) -> MailBoxDTO
+        apartment_dto = self.apartment_controller.load_apartment_by_mailbox_id(rebus_device.get_rebus_id())
+        return MailBoxDTO(id=rebus_device.get_rebus_id(), label=rebus_device.get_rebus_id(), apartment=apartment_dto)
 
     ######################
     # DISCOVERY
     ######################
 
     def discover_devices(self):
+        logger.info('Discovering rebus devices')
         self.rebus_device.discover(callback=self.discover_callback)
 
     def discover_callback(self):
-        self.devices = {device: device for device in self.rebus_device.get_discovered_devices()}
+        logger.info('Discovering Callback called')
+        self.devices = {device.get_rebus_id(): device for device in self.rebus_device.get_discovered_devices()}
+        for dev_id, dev in self.devices.items():
+            logger.info('Discovered device: {}: {}'.format(dev_id, dev))
+        logger.info(self.devices.get(64))
+        self.done_discovering = True
 
     ######################
     # REBUS COMMANDS

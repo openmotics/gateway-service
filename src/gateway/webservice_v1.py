@@ -30,7 +30,7 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.api.serializers import ApartmentSerializer, UserSerializer, DeliverySerializer, \
     SystemDoorbellConfigSerializer, SystemRFIDConfigSerializer, SystemRFIDSectorBlockConfigSerializer, \
     SystemTouchscreenConfigSerializer, SystemGlobalConfigSerializer, SystemActivateUserConfigSerializer, \
-    RfidSerializer
+    RfidSerializer, MailboxSerializer, ParcelBoxSerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import ApartmentDTO, DeliveryDTO
 from gateway.esafe_controller import EsafeController
@@ -914,10 +914,11 @@ class ParcelBox(RestAPIEndpoint):
     API_ENDPOINT = '/api/v1/parcelboxes'
 
     @Inject
-    def __init__(self, esafe_controller=INJECTED):
-        # type: (EsafeController) -> None
+    def __init__(self, esafe_controller=INJECTED, delivery_controller=INJECTED):
+        # type: (EsafeController, DeliveryController) -> None
         super(ParcelBox, self).__init__()
         self.esafe_controller = esafe_controller
+        self.delivery_controller = delivery_controller
         # Set a custom route dispatcher in the class so that you have full
         # control over how the routes are defined.
         self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
@@ -925,16 +926,77 @@ class ParcelBox(RestAPIEndpoint):
         self.route_dispatcher.connect('get_parcelboxes', '',
                                       controller=self, action='get_parcelboxes',
                                       conditions={'method': ['GET']})
-        self.route_dispatcher.connect('get_parcelbox', '/:delivery_id',
+        self.route_dispatcher.connect('get_parcelbox', '/:rebus_id',
                                       controller=self, action='get_parcelbox',
                                       conditions={'method': ['GET']})
 
-    def get_parcelboxes(self):
-        boxes = self.esafe_controller.get_parcelboxes()
-        pass
+    @openmotics_api_v1(auth=False, expect_body_type=None, check={'size': str, 'available': bool})
+    def get_parcelboxes(self, size=None, available=None):
+        self._check_controller()
+        boxes = self.esafe_controller.get_parcelboxes(size=size)
+        if available is True:
+            boxes = [box for box in boxes if self.delivery_controller.parcel_id_available(box.id)]
+        boxes_serial = [ParcelBoxSerializer.serialize(box) for box in boxes]
+        return json.dumps(boxes_serial)
 
-    def get_parcelbox(self):
-        pass
+    @openmotics_api_v1(auth=False, expect_body_type=None, check={'rebus_id': int})
+    def get_parcelbox(self, rebus_id):
+        self._check_controller()
+        boxes = self.esafe_controller.get_parcelboxes(rebus_id=rebus_id)
+        box = None
+        if len(boxes) == 1:
+            box = boxes[0]
+        box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
+        return json.dumps(box_serial)
+
+    def _check_controller(self):
+        if self.esafe_controller is None:
+            raise UnsupportedException('Cannot check mailboxes, eSafe controller is None')
+
+
+class MailBox(RestAPIEndpoint):
+    API_ENDPOINT = '/api/v1/mailboxes'
+
+    @Inject
+    def __init__(self, esafe_controller=INJECTED, delivery_controller=INJECTED):
+        # type: (EsafeController, DeliveryController) -> None
+        super(MailBox, self).__init__()
+        self.esafe_controller = esafe_controller
+        self.delivery_controller = delivery_controller
+        # Set a custom route dispatcher in the class so that you have full
+        # control over how the routes are defined.
+        self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
+        # --- GET ---
+        self.route_dispatcher.connect('get_mailboxes', '',
+                                      controller=self, action='get_mailboxes',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_mailbox', '/:rebus_id',
+                                      controller=self, action='get_mailbox',
+                                      conditions={'method': ['GET']})
+
+    @openmotics_api_v1(auth=False, expect_body_type=None)
+    def get_mailboxes(self):
+        # type: () -> str
+        self._check_controller()
+        boxes = self.esafe_controller.get_mailboxes()
+        boxes_serial = [MailboxSerializer.serialize(box) for box in boxes]
+        return json.dumps(boxes_serial)
+
+    @openmotics_api_v1(auth=False, expect_body_type=None, check={'rebus_id': str})
+    def get_mailbox(self, rebus_id):
+        # type: (Optional[str]) -> str
+        self._check_controller()
+        boxes = self.esafe_controller.get_mailboxes(rebus_id=rebus_id)
+        box = None
+        if len(boxes) == 1:
+            box = boxes[0]
+        box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
+        return json.dumps(box_serial)
+
+    def _check_controller(self):
+        if self.esafe_controller is None:
+            raise UnsupportedException('Cannot check mailboxes, eSafe controller is None')
+
 
 @Injectable.named('web_service_v1')
 @Singleton
@@ -948,7 +1010,9 @@ class WebServiceV1(object):
             Deliveries(),
             SystemConfiguration(),
             Rfid(),
-            Authentication()
+            Authentication(),
+            ParcelBox(),
+            MailBox()
         ]
 
     def start(self):
