@@ -386,6 +386,7 @@ def setup_minimal_energy_platform():
         Injectable.value(energy_serial=None)
     Injectable.value(master_controller=None)
     Injectable.value(maintenance_communicator=None)
+    Injectable.value(maintenance_controller=None)
     Injectable.value(ssl_private_key=constants.get_ssl_private_key_file())
     Injectable.value(ssl_certificate=constants.get_ssl_certificate_file())
     from gateway import energy_module_controller
