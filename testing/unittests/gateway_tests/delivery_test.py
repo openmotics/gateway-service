@@ -62,8 +62,8 @@ class DeliveryControllerTest(unittest.TestCase):
         self.user_controller = UserController()
         SetUpTestInjections(user_controller=self.user_controller)
         self.esafe_controller = mock.Mock(EsafeController)
-        SetUpTestInjections(esafe_controller=self.esafe_controller)
         self.controller = DeliveryController()
+        self.controller.set_esafe_controller(self.esafe_controller)
         SetUpTestInjections(delivery_controller=self.controller)
 
         self.test_user_1 = UserDTO(

@@ -951,15 +951,17 @@ class ParcelBox(RestAPIEndpoint):
     def get_parcelbox(self, rebus_id):
         self._check_controller()
         boxes = self.esafe_controller.get_parcelboxes(rebus_id=rebus_id)
-        box = boxes[0] if len(boxes) == 1 else None
-        box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
+        if len(boxes) != 1:
+            raise ItemDoesNotExistException('Cannot find parcelbox with rebus id: {}'.format(rebus_id))
+        box = boxes[0]
+        box_serial = ParcelBoxSerializer.serialize(box)
         return json.dumps(box_serial)
 
     @openmotics_api_v1(auth=False, expect_body_type=None, check={'size': str})
     def put_parcelboxes(self, size):
         logger.info('opening random parcelbox with size: {}'.format(size))
         self._check_controller()
-        boxes = self.esafe_controller.get_parcelboxes(size=size)
+        boxes = self.esafe_controller.get_parcelboxes(size=size, available=True)
         random_index = random.randint(0, len(boxes)-1)
         box = self.esafe_controller.open_box(boxes[random_index].id)
         box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
@@ -972,7 +974,17 @@ class ParcelBox(RestAPIEndpoint):
             ValueError('Expected json body with the open parameter')
         boxes = self.esafe_controller.get_parcelboxes(rebus_id=rebus_id)
         box = boxes[0] if len(boxes) == 1 else None
-        if request_body['open'] is True and box is not None:
+
+        if box is None:
+            raise ItemDoesNotExistException('Cannot open mailbox with id: {}: it does not exists'.format(rebus_id))
+
+        # auth check
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            delivery = self.delivery_controller.load_delivery_by_pickup_user(auth_token.user.id)
+            if delivery is None or delivery.parcelbox_rebus_id is not rebus_id:
+                raise UnAuthorizedException('Cannot open parcelbox with id: {}: You are not admin, technician and the box does not belong to you'.format(rebus_id))
+
+        if request_body['open'] is True:
             box = self.esafe_controller.open_box(box.id)
         box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
         return json.dumps(box_serial)
@@ -1014,23 +1026,39 @@ class MailBox(RestAPIEndpoint):
         boxes_serial = [MailboxSerializer.serialize(box) for box in boxes]
         return json.dumps(boxes_serial)
 
-    @openmotics_api_v1(auth=False, expect_body_type=None, check={'rebus_id': str})
+    @openmotics_api_v1(auth=False, expect_body_type=None, check={'rebus_id': int})
     def get_mailbox(self, rebus_id):
-        # type: (Optional[str]) -> str
+        # type: (int) -> str
         self._check_controller()
         boxes = self.esafe_controller.get_mailboxes(rebus_id=rebus_id)
-        box = boxes[0] if len(boxes) == 1 else None
-        box_serial = MailboxSerializer.serialize(box) if box is not None else {}
+        if len(boxes) != 1:
+            raise ItemDoesNotExistException('Cannot find mailbox with rebus id: {}'.format(rebus_id))
+        box = boxes[0]
+        box_serial = MailboxSerializer.serialize(box)
         return json.dumps(box_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON', check={'rebus_id': int})
     def put_open_mailbox(self, rebus_id, request_body, auth_token):
+        # type: (int, Dict[str, str], AuthenticationToken) -> str
         self._check_controller()
         if 'open' not in request_body:
             ValueError('Expected json body with the open parameter')
         boxes = self.esafe_controller.get_mailboxes(rebus_id=rebus_id)
         box = boxes[0] if len(boxes) == 1 else None
-        if request_body['open'] is True and box is not None:
+
+        if box is None:
+            raise ItemDoesNotExistException('Cannot open mailbox with id: {}: it does not exists'.format(rebus_id))
+
+        # auth check
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            if box.apartment is None:
+                raise UnAuthorizedException('Cannot open mailbox with id: {}: You are not admin, techinican and the box has no owner'.format(rebus_id))
+            apartment_id = box.apartment.id
+            user_dto = self._user_controller.load_user_by_apartment_id(apartment_id)
+            if user_dto.id != auth_token.user.id:
+                raise UnAuthorizedException('UnAuthorized to open mailbox with id: {}: you are not admin, technician or the owner of the mailbox'.format(rebus_id))
+
+        if request_body['open'] is True:
             box = self.esafe_controller.open_box(box.id)
         box_serial = MailboxSerializer.serialize(box) if box is not None else {}
         return json.dumps(box_serial)

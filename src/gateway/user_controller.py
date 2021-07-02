@@ -115,6 +115,15 @@ class UserController(object):
         user_dto.clear_password()
         return user_dto
 
+    def load_user_by_apartment_id(self, apartment_id):
+        _ = self
+        user_orm = User.select().where(User.apartment_id == apartment_id).first()
+        if user_orm is None:
+            return None
+        user_dto = UserMapper.orm_to_dto(user_orm)
+        user_dto.clear_password()
+        return user_dto
+
     def load_users(self, roles=None, include_inactive=False):
         # type: (List[str], bool) -> List[UserDTO]
         """  Returns a list of UserDTOs with all the usernames """

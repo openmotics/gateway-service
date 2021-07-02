@@ -24,10 +24,13 @@ from gateway.dto.doorbell import DoorbellDTO
 from gateway.pubsub import PubSub
 from ioc import Inject, INJECTED, Injectable, Singleton
 
-from rebus import Rebus
-from rebus import Utils
-from rebus import RebusComponent, RebusComponentEsafeLock, RebusComponentEsafeEightChannelOutput
-from rebus import EsafeBoxType
+try:
+    from rebus import Rebus
+    from rebus import Utils
+    from rebus import RebusComponent, RebusComponentEsafeLock, RebusComponentEsafeEightChannelOutput
+    from rebus import EsafeBoxType
+except ImportError:
+    pass
 
 import logging
 import time
@@ -78,7 +81,7 @@ class EsafeController(object):
     # Mailbox Functions
 
     def get_mailboxes(self, rebus_id=None):
-        # type: (Optional[int]) -> list[MailBoxDTO]
+        # type: (Optional[int]) -> List[MailBoxDTO]
         logger.info('Getting mailboxes')
         if not self.done_discovering:
             return []
@@ -96,7 +99,7 @@ class EsafeController(object):
 
     # ParcelBox Functions
 
-    def get_parcelboxes(self, size=None, rebus_id=None):
+    def get_parcelboxes(self, size=None, rebus_id=None, available=False):
         # type: (Optional[str], Optional[int]) -> List[ParcelBoxDTO]
         logger.info('Getting parcelboxes, size: {}, rebus_id: {}'.format(size, rebus_id))
         if not self.done_discovering:
@@ -109,6 +112,8 @@ class EsafeController(object):
                 if isinstance(device, RebusComponentEsafeLock):
                     if device.type is EsafeBoxType.PARCELBOX:
                         parcelboxes.append(device)
+            if available is True:
+                parcelboxes = [box for box in parcelboxes if self.delivery_controller.parcel_id_available(box.get_rebus_id())]
         # else get the one parcelbox
         else:
             parcelbox = self.devices.get(rebus_id)
@@ -161,8 +166,6 @@ class EsafeController(object):
         time.sleep(0.5)
         doorbell.set_output(doorbell_index, False)
         return
-
-
 
     ######################
     # HELPERS

@@ -40,12 +40,12 @@ class DeliveryController(object):
 
     @Inject
     def __init__(self, user_controller=INJECTED):
-        # type: (UserController, EsafeController) -> None
+        # type: (UserController) -> None
         self.user_controller = user_controller
-        self.esafe_controller = None
+        self.esafe_controller = None  # type: Optional[EsafeController]
 
     def set_esafe_controller(self, esafe_controller):
-        # type: (EsafeController) -> None
+        # type: (Optional[EsafeController]) -> None
         self.esafe_controller = esafe_controller
 
     @staticmethod
@@ -55,6 +55,15 @@ class DeliveryController(object):
             delivery_orm = Delivery.select().where(Delivery.id == delivery_id).first()
         else:
             delivery_orm = Delivery.select().where(Delivery.id == delivery_id).where(Delivery.timestamp_pickup.is_null()).first()
+        if delivery_orm is None:
+            return None
+        delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
+        return delivery_dto
+
+    @staticmethod
+    def load_delivery_by_pickup_user(pickup_user_id):
+        # type: (int) -> Optional[DeliveryDTO]
+        delivery_orm = Delivery.select().where(Delivery.user_pickup_id == pickup_user_id).first()
         if delivery_orm is None:
             return None
         delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
