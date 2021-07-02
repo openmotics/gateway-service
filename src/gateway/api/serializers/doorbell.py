@@ -13,16 +13,15 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Box Serializer (mailbox and parcelbox_
+Doorbell Serializer
 """
-
 from __future__ import absolute_import
 
 import logging
 
 from gateway.api.serializers.base import SerializerToolbox
 from gateway.api.serializers import ApartmentSerializer
-from gateway.dto import ParcelBoxDTO, MailBoxDTO
+from gateway.dto import DoorbellDTO
 from ioc import Inject, INJECTED
 
 if False:  # MYPY
@@ -31,13 +30,12 @@ if False:  # MYPY
 logger = logging.getLogger(__name__)
 
 
-class MailboxSerializer(object):
+class DoorbellSerializer(object):
     @staticmethod
     def serialize(dto_object, fields=None):
-        # type: (MailBoxDTO, Optional[List[str]]) -> Dict[str,Any]
+        # type: (DoorbellDTO, Optional[List[str]]) -> Dict[str,Any]
         data = {'id': dto_object.id,
                 'label': dto_object.label,
-                'open': dto_object.is_open,
                 'apartment': None}
         if dto_object.apartment is not None:
             data['apartment'] = [ApartmentSerializer.serialize(dto_object.apartment)]
@@ -45,24 +43,6 @@ class MailboxSerializer(object):
 
     @staticmethod
     def deserialize(api_data):
-        # type: (Dict[str,Any]) -> MailBoxDTO
+        # type: (Dict[str,Any]) -> DoorbellDTO
         raise NotImplementedError('Api should never receive mailbox serial data')
 
-
-class ParcelBoxSerializer(object):
-    @staticmethod
-    def serialize(dto_object, fields=None):
-        # type: (ParcelBoxDTO, Optional[List[str]]) -> Dict[str,Any]
-        data = {'id': dto_object.id,
-                'label': dto_object.label,
-                'height': dto_object.height,
-                'width': dto_object.width,
-                'size': dto_object.size.name,
-                'available': dto_object.available,
-                'open': dto_object.is_open}
-        return SerializerToolbox.filter_fields(data, fields)
-
-    @staticmethod
-    def deserialize(api_data):
-        # type: (Dict[str,Any]) -> MailBoxDTO
-        raise NotImplementedError('Api should never receive parcelbox serial data')

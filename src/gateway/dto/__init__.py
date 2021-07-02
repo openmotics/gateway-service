@@ -16,6 +16,7 @@
 from gateway.dto.apartment import ApartmentDTO
 from gateway.dto.box import ParcelBoxDTO, MailBoxDTO
 from gateway.dto.delivery import DeliveryDTO
+from gateway.dto.doorbell import DoorbellDTO
 from gateway.dto.energy import RealtimeEnergyDTO, TotalEnergyDTO, EnergyModuleDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
 from gateway.dto.floor import FloorDTO

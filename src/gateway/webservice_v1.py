@@ -17,6 +17,7 @@
 
 from __future__ import absolute_import
 import base64
+import random
 import uuid
 
 import cherrypy
@@ -30,7 +31,7 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.api.serializers import ApartmentSerializer, UserSerializer, DeliverySerializer, \
     SystemDoorbellConfigSerializer, SystemRFIDConfigSerializer, SystemRFIDSectorBlockConfigSerializer, \
     SystemTouchscreenConfigSerializer, SystemGlobalConfigSerializer, SystemActivateUserConfigSerializer, \
-    RfidSerializer, MailboxSerializer, ParcelBoxSerializer
+    RfidSerializer, MailboxSerializer, ParcelBoxSerializer, DoorbellSerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import ApartmentDTO, DeliveryDTO
 from gateway.esafe_controller import EsafeController
@@ -929,6 +930,13 @@ class ParcelBox(RestAPIEndpoint):
         self.route_dispatcher.connect('get_parcelbox', '/:rebus_id',
                                       controller=self, action='get_parcelbox',
                                       conditions={'method': ['GET']})
+        # --- PUT ---
+        self.route_dispatcher.connect('put_open_random_parcelbox', '/open',
+                                      controller=self, action='put_parcelboxes',
+                                      conditions={'method': ['PUT']})
+        self.route_dispatcher.connect('put_open_specific_parcelbox', '/:rebus_id',
+                                      controller=self, action='put_parcelbox',
+                                      conditions={'method': ['PUT']})
 
     @openmotics_api_v1(auth=False, expect_body_type=None, check={'size': str, 'available': bool})
     def get_parcelboxes(self, size=None, available=None):
@@ -943,9 +951,29 @@ class ParcelBox(RestAPIEndpoint):
     def get_parcelbox(self, rebus_id):
         self._check_controller()
         boxes = self.esafe_controller.get_parcelboxes(rebus_id=rebus_id)
-        box = None
-        if len(boxes) == 1:
-            box = boxes[0]
+        box = boxes[0] if len(boxes) == 1 else None
+        box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
+        return json.dumps(box_serial)
+
+    @openmotics_api_v1(auth=False, expect_body_type=None, check={'size': str})
+    def put_parcelboxes(self, size):
+        logger.info('opening random parcelbox with size: {}'.format(size))
+        self._check_controller()
+        boxes = self.esafe_controller.get_parcelboxes(size=size)
+        random_index = random.randint(0, len(boxes)-1)
+        box = self.esafe_controller.open_box(boxes[random_index].id)
+        box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
+        return json.dumps(box_serial)
+
+    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON', check={'rebus_id': int})
+    def put_parcelbox(self, rebus_id, request_body, auth_token):
+        self._check_controller()
+        if 'open' not in request_body:
+            ValueError('Expected json body with the open parameter')
+        boxes = self.esafe_controller.get_parcelboxes(rebus_id=rebus_id)
+        box = boxes[0] if len(boxes) == 1 else None
+        if request_body['open'] is True and box is not None:
+            box = self.esafe_controller.open_box(box.id)
         box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
         return json.dumps(box_serial)
 
@@ -973,6 +1001,10 @@ class MailBox(RestAPIEndpoint):
         self.route_dispatcher.connect('get_mailbox', '/:rebus_id',
                                       controller=self, action='get_mailbox',
                                       conditions={'method': ['GET']})
+        # --- PUT ---
+        self.route_dispatcher.connect('put_open_mailbox', '/:rebus_id',
+                                      controller=self, action='put_open_mailbox',
+                                      conditions={'method': ['PUT']})
 
     @openmotics_api_v1(auth=False, expect_body_type=None)
     def get_mailboxes(self):
@@ -987,11 +1019,63 @@ class MailBox(RestAPIEndpoint):
         # type: (Optional[str]) -> str
         self._check_controller()
         boxes = self.esafe_controller.get_mailboxes(rebus_id=rebus_id)
-        box = None
-        if len(boxes) == 1:
-            box = boxes[0]
-        box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
+        box = boxes[0] if len(boxes) == 1 else None
+        box_serial = MailboxSerializer.serialize(box) if box is not None else {}
         return json.dumps(box_serial)
+
+    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON', check={'rebus_id': int})
+    def put_open_mailbox(self, rebus_id, request_body, auth_token):
+        self._check_controller()
+        if 'open' not in request_body:
+            ValueError('Expected json body with the open parameter')
+        boxes = self.esafe_controller.get_mailboxes(rebus_id=rebus_id)
+        box = boxes[0] if len(boxes) == 1 else None
+        if request_body['open'] is True and box is not None:
+            box = self.esafe_controller.open_box(box.id)
+        box_serial = MailboxSerializer.serialize(box) if box is not None else {}
+        return json.dumps(box_serial)
+
+    def _check_controller(self):
+        if self.esafe_controller is None:
+            raise UnsupportedException('Cannot check mailboxes, eSafe controller is None')
+
+
+class Doorbell(RestAPIEndpoint):
+    API_ENDPOINT = '/api/v1/doorbells'
+
+    @Inject
+    def __init__(self, esafe_controller=INJECTED):
+        # type: (EsafeController) -> None
+        super(Doorbell, self).__init__()
+        self.esafe_controller = esafe_controller
+        # Set a custom route dispatcher in the class so that you have full
+        # control over how the routes are defined.
+        self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
+        # --- GET ---
+        self.route_dispatcher.connect('get_doorbells', '',
+                                      controller=self, action='get_doorbells',
+                                      conditions={'method': ['GET']})
+        # --- PUT ---
+        self.route_dispatcher.connect('put_open_mailbox', '/ring/:rebus_id',
+                                      controller=self, action='put_ring_doorbell',
+                                      conditions={'method': ['PUT']})
+
+    @openmotics_api_v1(auth=False, expect_body_type=None)
+    def get_doorbells(self):
+        # type: () -> str
+        self._check_controller()
+        doorbells = self.esafe_controller.get_doorbells()
+        doorbells_serial = [DoorbellSerializer.serialize(box) for box in doorbells]
+        return json.dumps(doorbells_serial)
+
+    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None, check={'rebus_id': int})
+    def put_ring_doorbell(self, rebus_id, auth_token):
+        self._check_controller()
+        doorbells = self.esafe_controller.get_doorbells()
+        if rebus_id not in [doorbell.id for doorbell in doorbells]:
+            raise ItemDoesNotExistException('Cannot ring doorbell with id: {}. Doorbell does not exists'.format(rebus_id))
+        self.esafe_controller.ring_doorbell(rebus_id)
+        return
 
     def _check_controller(self):
         if self.esafe_controller is None:
@@ -1012,7 +1096,8 @@ class WebServiceV1(object):
             Rfid(),
             Authentication(),
             ParcelBox(),
-            MailBox()
+            MailBox(),
+            Doorbell()
         ]
 
     def start(self):

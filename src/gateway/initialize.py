@@ -285,7 +285,7 @@ def setup_target_platform(target_platform, message_client_name):
             esafe_rebus_device = config.get('OpenMotics', 'rebus_device')
             Injectable.value(rebus_device=esafe_rebus_device)
         except NoOptionError:
-            Injectable.value(rebus_devuce=None)
+            Injectable.value(rebus_device=None)
 
     elif target_platform in Platform.CoreTypes:
         # FIXME don't create singleton for optional controller?
@@ -336,7 +336,6 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(esafe_controller=EsafeController())
     else:
         Injectable.value(esafe_controller=None)
-
 
     # Thermostats
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')

@@ -39,9 +39,13 @@ logger = logging.getLogger(__name__)
 class DeliveryController(object):
 
     @Inject
-    def __init__(self, user_controller=INJECTED, esafe_controller=INJECTED):
+    def __init__(self, user_controller=INJECTED):
         # type: (UserController, EsafeController) -> None
         self.user_controller = user_controller
+        self.esafe_controller = None
+
+    def set_esafe_controller(self, esafe_controller):
+        # type: (EsafeController) -> None
         self.esafe_controller = esafe_controller
 
     @staticmethod
