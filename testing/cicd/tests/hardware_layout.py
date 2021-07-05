@@ -19,7 +19,7 @@ class ClassicTesterOutputs(object):
         bus1 = 2  # PWR_DUT_CL_BUS1
         cc = 3  # PWR_DUT_CL_CAN
         dali = 4  # PWR_DUT_CL_DALI
-        temp = 5  # PWR_DUT_CL_TMEP
+        temp = 5  # PWR_DUT_CL_TEMP
 
     class Buttons(object):
         dut = [8]  # BTN_DUT_CL
@@ -27,15 +27,34 @@ class ClassicTesterOutputs(object):
     class Button(object):
         energy = 9  # BTN_DUT_CL_EY
         input = 10  # BTN_DUT_CL_IN
-        output = 11  # BTN_DUT_CL_OUT
-        shutter = 12  # BTN_DUT_CL_SHT
-        dimmer = 13  # BTN_DUT_CL_DIM
+        output = 11  # BTN_DUT_CL_OT
+        shutter = 12  # BTN_DUT_CL_SR
+        dimmer = 13  # BTN_DUT_CL_DL
         temp = 14  # BTN_DUT_CL_TMP
         can = 15  # BTN_DUT_CL_CC
 
 
-# TODO: handle Core+ here
-TESTER = ClassicTesterOutputs
+class CorePlusTesterOutputs(object):
+    class Power(object):
+        dut = 6  # PWR_DUT_BS
+        bus1 = 7  # PWR_DUT_BS_BUS1
+
+    class Buttons(object):
+        dut = [32, 35]  # BTN_DUT_BS_ACT (action) and BTN_DUT_BS_STP (setup)
+
+    class Button(object):
+        action = 32  # BTN_DUT_BS_ACT
+        select = 33  # BTN_DUT_BS_SEL
+        can_power = 34  # BTN_DUT_BS_CPWR
+        setup = 35  # BTN_DUT_BS_STP
+        input = 36  # BTN_DUT_BS_IT
+        output = 37  # BTN_DUT_BS_RY
+
+
+if TEST_PLATFORM == TestPlatform.DEBIAN:
+    TESTER = ClassicTesterOutputs
+else:
+    TESTER = CorePlusTesterOutputs
 
 
 class Output(object):
