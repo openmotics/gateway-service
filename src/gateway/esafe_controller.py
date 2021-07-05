@@ -99,9 +99,9 @@ class EsafeController(object):
 
     # ParcelBox Functions
 
-    def get_parcelboxes(self, size=None, rebus_id=None, available=False):
-        # type: (Optional[str], Optional[int]) -> List[ParcelBoxDTO]
-        logger.info('Getting parcelboxes, size: {}, rebus_id: {}'.format(size, rebus_id))
+    def get_parcelboxes(self, rebus_id=None, size=None, available=False):
+        # type: (Optional[int], Optional[str], bool) -> List[ParcelBoxDTO]
+        logger.debug('Getting parcelboxes, size: {}, rebus_id: {}'.format(size, rebus_id))
         if not self.done_discovering:
             return []
         parcelboxes = []  # type: List[RebusComponentEsafeLock]
@@ -117,7 +117,7 @@ class EsafeController(object):
         # else get the one parcelbox
         else:
             parcelbox = self.devices.get(rebus_id)
-            logger.info('Requesting specific parcelbox: {}'.format(parcelbox))
+            logger.debug('Requesting specific parcelbox: {}'.format(parcelbox))
             parcelboxes = [parcelbox] if parcelbox is not None and parcelbox.type is EsafeBoxType.PARCELBOX else []
 
         # filter out the sizes

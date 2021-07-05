@@ -44,5 +44,5 @@ class DoorbellSerializer(object):
     @staticmethod
     def deserialize(api_data):
         # type: (Dict[str,Any]) -> DoorbellDTO
-        raise NotImplementedError('Api should never receive mailbox serial data')
+        raise NotImplementedError('Api should never receive doorbell serial data')
 

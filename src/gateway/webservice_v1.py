@@ -47,7 +47,7 @@ if False:  # MyPy
     from gateway.rfid_controller import RfidController
     from gateway.system_config_controller import SystemConfigController
     from gateway.webservice import WebService
-    from typing import Optional, List, Dict
+    from typing import Optional, List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +157,8 @@ def authentication_handler_v1(pass_token=False, pass_role=False, throw_error=Tru
         # do not handle the request, just return the unauthorized message
         request.handler = None
 
-def params_handler_v1(expect_body_type=None, **kwargs):
+
+def params_handler_v1(expect_body_type=None, check_for_missing=True, **kwargs):
     """ Converts/parses/loads specified request params. """
     request = cherrypy.request
     response = cherrypy.response
@@ -200,6 +201,13 @@ def params_handler_v1(expect_body_type=None, **kwargs):
         contents = WrongInputParametersException.DESC
         response.body = contents.encode()
         request.handler = None
+    if check_for_missing:
+        if not set(kwargs).issubset(set(request.params)):
+            response.status = 400
+            contents = WrongInputParametersException.DESC
+            contents += ': Missing parameters'
+            response.body = contents.encode()
+            request.handler = None
 
 
 # Assign the v1 authentication handler
@@ -207,7 +215,7 @@ cherrypy.tools.authenticated_v1 = cherrypy.Tool('before_handler', authentication
 cherrypy.tools.params_v1 = cherrypy.Tool('before_handler', params_handler_v1)
 
 
-def openmotics_api_v1(_func=None, check=None, auth=False, pass_token=False, pass_role=False, allowed_user_roles=None, expect_body_type=None):
+def openmotics_api_v1(_func=None, check=None, check_for_missing=False, auth=False, pass_token=False, pass_role=False, allowed_user_roles=None, expect_body_type=None):
     def decorator_openmotics_api_v1(func):
         func = _openmotics_api_v1(func)  # First layer decorator
         if auth is True:
@@ -215,9 +223,13 @@ def openmotics_api_v1(_func=None, check=None, auth=False, pass_token=False, pass
             func = cherrypy.tools.authenticated_v1(pass_token=pass_token, pass_role=pass_role, allowed_user_roles=allowed_user_roles)(func)
         elif pass_token or pass_role:
             func = cherrypy.tools.authenticated_v1(pass_token=pass_token, pass_role=pass_role, allowed_user_roles=allowed_user_roles, throw_error=False)(func)
+        _check = None
         if check is not None:
             check['expect_body_type'] = expect_body_type
-        func = cherrypy.tools.params_v1(**(check or {'expect_body_type': expect_body_type}))(func)
+            check['check_for_missing'] = check_for_missing
+        else:
+            _check = {'expect_body_type': expect_body_type, 'check_for_missing': False}  # default check_for_missing to false when there is nothing to check
+        func = cherrypy.tools.params_v1(**(check or _check))(func)
         return func
     if _func is None:
         return decorator_openmotics_api_v1
@@ -957,11 +969,13 @@ class ParcelBox(RestAPIEndpoint):
         box_serial = ParcelBoxSerializer.serialize(box)
         return json.dumps(box_serial)
 
-    @openmotics_api_v1(auth=False, expect_body_type=None, check={'size': str})
+    @openmotics_api_v1(auth=False, expect_body_type=None, check={'size': str}, check_for_missing=True)
     def put_parcelboxes(self, size):
         logger.info('opening random parcelbox with size: {}'.format(size))
         self._check_controller()
         boxes = self.esafe_controller.get_parcelboxes(size=size, available=True)
+        if len(boxes) == 0:
+            raise InvalidOperationException('Cannot open box of size: {}, no boxes available'.format(size))
         random_index = random.randint(0, len(boxes)-1)
         box = self.esafe_controller.open_box(boxes[random_index].id)
         box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
@@ -991,7 +1005,7 @@ class ParcelBox(RestAPIEndpoint):
 
     def _check_controller(self):
         if self.esafe_controller is None:
-            raise UnsupportedException('Cannot check mailboxes, eSafe controller is None')
+            raise InvalidOperationException('Cannot check mailboxes, eSafe controller is None')
 
 
 class MailBox(RestAPIEndpoint):
@@ -1039,7 +1053,7 @@ class MailBox(RestAPIEndpoint):
 
     @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON', check={'rebus_id': int})
     def put_open_mailbox(self, rebus_id, request_body, auth_token):
-        # type: (int, Dict[str, str], AuthenticationToken) -> str
+        # type: (int, Dict[str, Any], AuthenticationToken) -> str
         self._check_controller()
         if 'open' not in request_body:
             ValueError('Expected json body with the open parameter')
@@ -1065,7 +1079,7 @@ class MailBox(RestAPIEndpoint):
 
     def _check_controller(self):
         if self.esafe_controller is None:
-            raise UnsupportedException('Cannot check mailboxes, eSafe controller is None')
+            raise InvalidOperationException('Cannot check mailboxes, eSafe controller is None')
 
 
 class Doorbell(RestAPIEndpoint):
@@ -1084,7 +1098,7 @@ class Doorbell(RestAPIEndpoint):
                                       controller=self, action='get_doorbells',
                                       conditions={'method': ['GET']})
         # --- PUT ---
-        self.route_dispatcher.connect('put_open_mailbox', '/ring/:rebus_id',
+        self.route_dispatcher.connect('put_ring_doorbell', '/ring/:rebus_id',
                                       controller=self, action='put_ring_doorbell',
                                       conditions={'method': ['PUT']})
 
@@ -1096,8 +1110,8 @@ class Doorbell(RestAPIEndpoint):
         doorbells_serial = [DoorbellSerializer.serialize(box) for box in doorbells]
         return json.dumps(doorbells_serial)
 
-    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None, check={'rebus_id': int})
-    def put_ring_doorbell(self, rebus_id, auth_token):
+    @openmotics_api_v1(auth=False, expect_body_type=None, check={'rebus_id': int})
+    def put_ring_doorbell(self, rebus_id):
         self._check_controller()
         doorbells = self.esafe_controller.get_doorbells()
         if rebus_id not in [doorbell.id for doorbell in doorbells]:
@@ -1107,7 +1121,7 @@ class Doorbell(RestAPIEndpoint):
 
     def _check_controller(self):
         if self.esafe_controller is None:
-            raise UnsupportedException('Cannot check mailboxes, eSafe controller is None')
+            raise InvalidOperationException('Cannot check doorbells, eSafe controller is None')
 
 
 @Injectable.named('web_service_v1')

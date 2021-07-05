@@ -25,6 +25,7 @@ import mock
 from gateway.dto import UserDTO, ParcelBoxDTO, ApartmentDTO, DeliveryDTO
 from gateway.delivery_controller import DeliveryController
 from gateway.esafe_controller import EsafeController
+from gateway.exceptions import WrongInputParametersException
 from gateway.api.serializers import ParcelBoxSerializer
 from gateway.webservice_v1 import ParcelBox
 
@@ -196,6 +197,51 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
             get_parcelbox_func.assert_called_once_with(rebus_id=32)
             get_parcelbox_func.reset_mock()
             open_box_func.assert_called_once_with(32)
+            open_box_func.reset_mock()
+            load_delivery_func.assert_not_called()
+            load_delivery_func.reset_mock()
+
+            # random box
+            status, headers, response = self.PUT('/api/v1/parcelboxes/open?size=m', login_user=self.test_user_1, headers=None)
+            self.assertStatus('200 OK')
+            self.assertBody(json.dumps(ParcelBoxSerializer.serialize(self.test_parcelbox_1)))
+            get_parcelbox_func.assert_called_once_with(available=True, size='m')
+            get_parcelbox_func.reset_mock()
+            open_box_func.assert_called_once_with(self.test_parcelbox_1.id)
+            open_box_func.reset_mock()
+            load_delivery_func.assert_not_called()
+            load_delivery_func.reset_mock()
+
+            # random box
+            status, headers, response = self.PUT('/api/v1/parcelboxes/open?size=m', login_user=None, headers=None)
+            self.assertStatus('200 OK')
+            self.assertBody(json.dumps(ParcelBoxSerializer.serialize(self.test_parcelbox_1)))
+            get_parcelbox_func.assert_called_once_with(available=True, size='m')
+            get_parcelbox_func.reset_mock()
+            open_box_func.assert_called_once_with(self.test_parcelbox_1.id)
+            open_box_func.reset_mock()
+            load_delivery_func.assert_not_called()
+            load_delivery_func.reset_mock()
+
+            # random box, with no known size
+            get_parcelbox_func.return_value = []
+            status, headers, response = self.PUT('/api/v1/parcelboxes/open?size=foo', login_user=None, headers=None)
+            self.assertStatus('409 Conflict')
+            get_parcelbox_func.assert_called_once_with(available=True, size='foo')
+            get_parcelbox_func.reset_mock()
+            open_box_func.assert_not_called()
+            open_box_func.reset_mock()
+            load_delivery_func.assert_not_called()
+            load_delivery_func.reset_mock()
+
+            # random box, no size provided
+            get_parcelbox_func.return_value = []
+            status, headers, response = self.PUT('/api/v1/parcelboxes/open', login_user=None, headers=None)
+            self.assertStatus('400 Bad Request')
+            self.assertBody(WrongInputParametersException.bytes_message() + b': Missing parameters')
+            get_parcelbox_func.assert_not_called()
+            get_parcelbox_func.reset_mock()
+            open_box_func.assert_not_called()
             open_box_func.reset_mock()
             load_delivery_func.assert_not_called()
             load_delivery_func.reset_mock()
