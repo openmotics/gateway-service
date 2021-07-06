@@ -816,7 +816,55 @@ class MasterCoreController(MasterController):
         self._pubsub.publish_master_event(PubSub.MasterTopics.MODULE, master_event)
 
     def get_module_log(self):  # type: () -> List[Dict[str, Any]]
-        raise NotImplementedError()  # No need to implement. Not used and rather obsolete code anyway
+        # TODO: This is incorrect and uses passthrough EEPROM reads to emulate a more-or-less compatible
+        #  response which should work for the integration tests. It must be replaced by decent events.
+
+        # Log format: {'code': '<NEW|EXISTING|DUPLCATE|UNKNOWN>',
+        #              'module_nr': <module number in its category>,
+        #              'category': '<SHUTTER|INPUT|OUTPUT>',
+        #              'module_type': '<I|O|T|D|i|o|t|d|C>,
+        #              'address': '<module address>'}
+
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
+        log = []
+        device_type_normalize = {'b': 'I', 'r': 'o', 'R': 'O'}
+
+        global_configuration = GlobalConfiguration(bypass_read_cache=True)
+        nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
+        for module_id in range(nr_of_input_modules):
+            input_module_info = InputModuleConfiguration(module_id, bypass_read_cache=True)
+            device_type = input_module_info.device_type
+            module = {'code': 'EXISTING',
+                      'module_nr': module_id,
+                      'category': 'INPUT',
+                      'module_type': device_type_normalize.get(device_type, device_type),
+                      'address': input_module_info.address}
+            log.append(module)
+
+        nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
+        for module_id in range(nr_of_output_modules):
+            output_module_info = OutputModuleConfiguration(module_id, bypass_read_cache=True)
+            device_type = output_module_info.device_type
+            module = {'code': 'EXISTING',
+                      'module_nr': module_id,
+                      'category': 'OUTPUT',
+                      'module_type': device_type_normalize.get(device_type, device_type),
+                      'address': output_module_info.address}
+            log.append(module)
+
+        nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
+        for module_id in range(nr_of_can_controls):
+            can_control_module_info = CanControlModuleConfiguration(module_id, bypass_read_cache=True)
+            module = {'code': 'EXISTING',
+                      'module_nr': nr_of_input_modules + module_id,
+                      'category': 'INPUT',
+                      'module_type': 'C',
+                      'address': can_control_module_info.address}
+            log.append(module)
+
+        return log
 
     def get_modules(self):
         def _default_if_255(value, default):

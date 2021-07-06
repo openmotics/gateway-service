@@ -44,7 +44,8 @@ class MemoryModelDefinition(object):
     _cache_lock = Lock()
 
     @Inject
-    def __init__(self, id, memory_file=INJECTED, verbose=False):  # type: (Optional[int], MemoryFile, bool) -> None
+    def __init__(self, id, memory_file=INJECTED, verbose=False, bypass_read_cache=False):
+        # type: (Optional[int], MemoryFile, bool, bool) -> None
         self._id = id
         self._id_field = self.__class__._get_id_field()  # TODO: Make sure that an id field is mandatory for id-lookups
         if self._id_field is not None:
@@ -63,12 +64,14 @@ class MemoryModelDefinition(object):
         for field_name, field_type in self.__class__._get_field_dict().items():
             memory_field_container = MemoryFieldContainer(name=field_name,
                                                           memory_field=field_type,
-                                                          memory_address=address_cache[field_name])
+                                                          memory_address=address_cache[field_name],
+                                                          bypass_read_cache=bypass_read_cache)
             if field_type._checksum is not None:
                 memory_field_container.set_checksum_container(MemoryChecksumContainer(check=field_type._checksum._check,
                                                                                       field_container=MemoryFieldContainer(name=field_name,
                                                                                                                            memory_field=field_type._checksum._field,
-                                                                                                                           memory_address=field_type._checksum._field.get_address(self._id)),
+                                                                                                                           memory_address=field_type._checksum._field.get_address(self._id),
+                                                                                                                           bypass_read_cache=bypass_read_cache),
                                                                                       default=field_type._checksum._default))
             setattr(self, '_{0}'.format(field_name), memory_field_container)
             self._add_property(field_name)
@@ -79,7 +82,8 @@ class MemoryModelDefinition(object):
             if relation._field is not None:
                 relation_container.set_field_container(MemoryFieldContainer(name=field_name,
                                                                             memory_field=relation._field,
-                                                                            memory_address=relation._field.get_address(self._id)))
+                                                                            memory_address=relation._field.get_address(self._id),
+                                                                            bypass_read_cache=bypass_read_cache))
             setattr(self, '_{0}'.format(field_name), relation_container)
             self._add_relation(field_name)
             self._relations.append(field_name)
@@ -89,7 +93,8 @@ class MemoryModelDefinition(object):
                                                                           field_id=self._id,
                                                                           field_container=MemoryFieldContainer(name=field_name,
                                                                                                                memory_field=composition._field,
-                                                                                                               memory_address=composition._field.get_address(self._id))))
+                                                                                                               memory_address=composition._field.get_address(self._id),
+                                                                                                               bypass_read_cache=bypass_read_cache)))
             self._add_composition(field_name)
             self._compositions.append(field_name)
 
@@ -252,8 +257,10 @@ class GlobalMemoryModelDefinition(MemoryModelDefinition):
     Represents a model definition
     """
 
-    def __init__(self):
-        super(GlobalMemoryModelDefinition, self).__init__(None)
+    def __init__(self, bypass_read_cache):
+        # type: (bool) -> None
+        super(GlobalMemoryModelDefinition, self).__init__(id=None,
+                                                          bypass_read_cache=bypass_read_cache)
 
 
 class MemoryFieldContainer(object):
@@ -262,12 +269,13 @@ class MemoryFieldContainer(object):
     """
 
     @Inject
-    def __init__(self, name, memory_field, memory_address, memory_file=INJECTED):
-        # type: (str, MemoryField, MemoryAddress, MemoryFile) -> None
+    def __init__(self, name, memory_field, memory_address, bypass_read_cache, memory_file=INJECTED):
+        # type: (str, MemoryField, MemoryAddress, bool, MemoryFile) -> None
         self._field_name = name
         self._memory_field = memory_field
         self._memory_address = memory_address
         self._memory_file = memory_file
+        self._bypass_read_cache = bypass_read_cache
         self._data = None  # type: Optional[bytearray]
         self._checksum_container = None  # type: Optional[MemoryChecksumContainer]
 
@@ -275,7 +283,7 @@ class MemoryFieldContainer(object):
         self._checksum_container = checksum_container
 
     def _read_data(self):  # type: () -> None
-        self._data = self._memory_file.read([self._memory_address])[self._memory_address]
+        self._data = self._memory_file.read([self._memory_address], self._bypass_read_cache)[self._memory_address]
 
     def encode(self, value):  # type: (Any) -> None
         """ Encodes changes a high-level value such as a string or large integer into a memory byte array (array of 0 <= x <= 255) """
