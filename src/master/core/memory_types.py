@@ -51,7 +51,7 @@ class MemoryModelDefinition(object):
         if self._id_field is not None:
             if id is None:
                 raise RuntimeError('An id is mandatory')
-            self._id_field.validate(self.__class__.__name__, id)
+            self._id_field.validate(self.__class__.__name__, id, bypass_read_cache)
             setattr(self.__class__, 'id', property(lambda s: s._id))
         self._verbose = verbose
         self._memory_file = memory_file
@@ -644,7 +644,7 @@ class IdField(object):
             raise ValueError('Limits should be generated at runtime if a field is given')
 
     @Inject
-    def validate(self, class_name, id):  # type: (str, Optional[int]) -> None
+    def validate(self, class_name, id, bypass_read_cache):  # type: (str, Optional[int], bool) -> None
         if self._field is None:
             if not isinstance(self._limits, tuple):
                 raise RuntimeError('Expected a fixed limit')
@@ -654,7 +654,8 @@ class IdField(object):
                 raise RuntimeError('Expected a limit generator')
             container = MemoryFieldContainer(name='id',
                                              memory_field=self._field,
-                                             memory_address=self._field.get_address(None))
+                                             memory_address=self._field.get_address(None),
+                                             bypass_read_cache=bypass_read_cache)
             limits = self._limits(container.decode())
         if id is None or not (limits[0] <= id <= limits[1]):
             if limits[0] > limits[1]:
