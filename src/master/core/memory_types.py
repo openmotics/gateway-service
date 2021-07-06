@@ -257,7 +257,7 @@ class GlobalMemoryModelDefinition(MemoryModelDefinition):
     Represents a model definition
     """
 
-    def __init__(self, bypass_read_cache):
+    def __init__(self, bypass_read_cache=False):
         # type: (bool) -> None
         super(GlobalMemoryModelDefinition, self).__init__(id=None,
                                                           bypass_read_cache=bypass_read_cache)
