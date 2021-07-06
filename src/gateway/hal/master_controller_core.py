@@ -1187,7 +1187,8 @@ class MasterCoreController(MasterController):
             data_structure[page] = page_data
         self._restore(data_structure)
 
-    def factory_reset(self):
+    def factory_reset(self, can=False):
+        # TODO: Include factory of CAN Controls
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         data_set = {page: bytearray([255] * page_length) for page in range(pages)}
         # data_set[0][0] = 1  # Needed to validate Brain+ with no front panel attached
