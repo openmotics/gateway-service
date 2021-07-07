@@ -122,7 +122,7 @@ class MemoryFile(object):
             read_map[address.memory_type].add(address.page)
         return read_map
 
-    def read(self, addresses, bypass_read_cache):  # type: (List[MemoryAddress], bool) -> Dict[MemoryAddress, bytearray]
+    def read(self, addresses, bypass_read_cache=False):  # type: (List[MemoryAddress], bool) -> Dict[MemoryAddress, bytearray]
         read_map = MemoryFile._create_read_map(addresses)
         raw_data = self._load_data(read_map, bypass_read_cache)
         data = {}
