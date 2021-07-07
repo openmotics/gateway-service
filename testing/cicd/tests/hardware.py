@@ -62,14 +62,15 @@ def multiple_shutters(size, types=shutter_types()):
 
 
 def input_types():
-    module_types = [module.mtype for module in INPUT_MODULE_LAYOUT]
+    module_types = [module.mtype for module in INPUT_MODULE_LAYOUT
+                    if module.mtype != 'C']
     return one_of([just(x) for x in module_types])
 
 
 @composite
 def inputs(draw, types=input_types()):
     module_type = draw(types)
-    assert module_type in ['I', 'i', 'C'], 'Invalid input type {}'.format(module_type)
+    assert module_type in ['I', 'i'], 'Invalid input type {}'.format(module_type)
     _inputs = []
     for module in INPUT_MODULE_LAYOUT:
         if module.mtype != module_type:

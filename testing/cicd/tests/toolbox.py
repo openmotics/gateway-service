@@ -275,11 +275,6 @@ class Toolbox(object):
         for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
             if modules.get(mtype, 0) == 0:
                 missing_modules.add(mtype)
-        modules_info = self.list_modules()['master'].values()
-        if not any(v['type'] == 'C' for v in modules_info):
-            missing_modules.add('C')
-        if not any(v['type'] == 'I' and v['is_can'] for v in modules_info):
-            missing_modules.add('C')
         if missing_modules:
             logger.info('Discovering modules...')
             self.discover_modules(output_modules='O' in missing_modules,
