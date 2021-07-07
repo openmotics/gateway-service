@@ -1174,7 +1174,7 @@ class MasterCoreController(MasterController):
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         for page in range(pages):
             page_address = MemoryAddress(memory_type=MemoryTypes.EEPROM, page=page, offset=0, length=page_length)
-            data += self._memory_file.read([page_address], bypass_read_cache=False)[page_address]
+            data += self._memory_file.read([page_address])[page_address]
         return ''.join(str(chr(entry)) for entry in data)
 
     def restore(self, data):
