@@ -160,7 +160,7 @@ class Module(object):
 
 _OUTPUT_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [
-        Module(name='internal output module 0-7', mtype='O',
+        Module(name='internal output module 0-7', mtype='o',
                hardware_type=Module.HardwareType.INTERNAL,
                outputs=[Output(output_id=0, tester_input_id=16),
                         Output(output_id=1, tester_input_id=17),
@@ -170,7 +170,7 @@ _OUTPUT_MODULE_LAYOUTS = {
                         Output(output_id=5, tester_input_id=21),
                         Output(output_id=6, tester_input_id=22),
                         Output(output_id=7, tester_input_id=23)]),
-        Module(name='internal output module 8-15', mtype='O',
+        Module(name='internal output module 8-15', mtype='o',
                hardware_type=Module.HardwareType.INTERNAL,
                outputs=[Output(output_id=8, tester_input_id=24),
                         Output(output_id=9, tester_input_id=25),
@@ -180,7 +180,7 @@ _OUTPUT_MODULE_LAYOUTS = {
                         Output(output_id=13, tester_input_id=29),
                         Output(output_id=14, tester_input_id=30),
                         Output(output_id=15, tester_input_id=31)]),
-        Module(name='internal open collector module', mtype='O',
+        Module(name='internal open collector module', mtype='l',
                hardware_type=Module.HardwareType.INTERNAL,
                outputs=[Output(output_id=23, tester_input_id=39)])
     ],
@@ -215,13 +215,13 @@ OUTPUT_MODULE_LAYOUT = _OUTPUT_MODULE_LAYOUTS[TEST_PLATFORM]  # type: List[Modul
 _SHUTTER_MODULE_LAYOUT = {
     TestPlatform.CORE_PLUS: [
         # TODO: Change code to support flexible output/shutter changes
-        Module(name='internal output module 0-7 as shutter', mtype='R',
+        Module(name='internal output module 0-7 as shutter', mtype='r',
                hardware_type=Module.HardwareType.INTERNAL,
                shutters=[Shutter(shutter_id=0, tester_input_id_up=16, tester_input_id_down=17),
                          Shutter(shutter_id=1, tester_input_id_up=18, tester_input_id_down=19),
                          Shutter(shutter_id=2, tester_input_id_up=20, tester_input_id_down=21),
                          Shutter(shutter_id=3, tester_input_id_up=22, tester_input_id_down=23)]),
-        Module(name='internal output module 8-15 as shutter', mtype='R',
+        Module(name='internal output module 8-15 as shutter', mtype='r',
                hardware_type=Module.HardwareType.INTERNAL,
                shutters=[Shutter(shutter_id=4, tester_input_id_up=24, tester_input_id_down=25),
                          Shutter(shutter_id=5, tester_input_id_up=26, tester_input_id_down=27),

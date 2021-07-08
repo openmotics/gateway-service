@@ -985,9 +985,18 @@ class MasterCoreController(MasterController):
                             module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
+            shutter_dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+                                    address='114.{0}'.format(output_module_info.address[4:]),
+                                    module_type=ModuleDTO.ModuleType.SHUTTER,
+                                    hardware_type=hardware_type,
+                                    order=module_id)
             if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(output_module_info.address)
+                shutter_dto.online = dto.online
+                shutter_dto.hardware_version = dto.hardware_version
+                shutter_dto.firmware_version = dto.firmware_version
             information.append(dto)
+            information.append(shutter_dto)
 
         nr_of_sensor_modules = _default_if_255(global_configuration.number_of_sensor_modules, 0)
         for module_id in range(nr_of_sensor_modules):
