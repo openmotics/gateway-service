@@ -261,9 +261,12 @@ class Toolbox(object):
         # TODO: Change this in the future, as it needs a new API call on the GW.
 
         expected_modules = {Module.HardwareType.VIRTUAL: {},
-                            Module.HardwareType.PHYSICAL: {}}  # Limit it to physical and virtual for now
+                            Module.HardwareType.PHYSICAL: {},
+                            Module.HardwareType.INTERNAL: {}}
         for module in OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT + TEMPERATURE_MODULE_LAYOUT + SHUTTER_MODULE_LAYOUT:
-            hardware_type = Module.HardwareType.VIRTUAL if module.hardware_type == Module.HardwareType.VIRTUAL else Module.HardwareType.PHYSICAL
+            hardware_type = module.hardware_type
+            if hardware_type == Module.HardwareType.EMULATED:
+                hardware_type = Module.HardwareType.PHYSICAL  # Emulated moduled are (for testing purposes) considered physical
             if module.mtype not in expected_modules[hardware_type]:
                 expected_modules[hardware_type][module.mtype] = 0
             expected_modules[hardware_type][module.mtype] += 1
@@ -287,7 +290,10 @@ class Toolbox(object):
 
         modules = self.count_modules('master')
         logger.info('Discovered modules: {0}'.format(modules))
-        for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
+        for mtype in set(list(expected_modules[Module.HardwareType.PHYSICAL].keys()) +
+                         list(expected_modules[Module.HardwareType.INTERNAL].keys())):
+            expected_amount = (expected_modules[Module.HardwareType.PHYSICAL].get(mtype, 0) +
+                               expected_modules[Module.HardwareType.INTERNAL].get(mtype, 0))
             assert modules.get(mtype, 0) == expected_amount, 'Expected {0} modules {1}'.format(expected_amount, mtype)
 
         try:
