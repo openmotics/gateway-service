@@ -294,7 +294,7 @@ class Toolbox(object):
                          list(expected_modules[Module.HardwareType.INTERNAL].keys())):
             expected_amount = (expected_modules[Module.HardwareType.PHYSICAL].get(mtype, 0) +
                                expected_modules[Module.HardwareType.INTERNAL].get(mtype, 0))
-            assert modules.get(mtype, 0) == expected_amount, 'Expected {0} modules {1}'.format(expected_amount, mtype)
+            assert modules.get(mtype, 0) >= expected_amount, 'Expected {0} modules {1}'.format(expected_amount, mtype)
 
         try:
             for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
