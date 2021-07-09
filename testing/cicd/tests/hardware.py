@@ -16,7 +16,7 @@ def outputs(draw, types=None, virtual=False):
     if types is None:
         types = output_types(virtual=virtual)
     module_type = draw(types)
-    assert module_type in ['O', 'o'], 'Invalid output type {}'.format(module_type)
+    assert module_type in ['O', 'o', 'l'], 'Invalid output type {}'.format(module_type)
     _outputs = []
     for module in OUTPUT_MODULE_LAYOUT:
         if module.mtype != module_type:
