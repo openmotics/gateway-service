@@ -84,7 +84,7 @@ class MasterCoreController(MasterController):
         self._sensor_states = {}  # type: Dict[int,Dict[str,None]]
         self._shutters_interval = 600
         self._shutters_last_updated = 0.0
-        self._shutter_status = {}  # type: Dict[int, Tuple[bool, bool]]
+        self._shutter_status = {}  # type: Dict[int, Tuple[Optional[bool], Optional[bool]]]
         self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
         self._firmware_versions = {}  # type: Dict[str, Optional[str]]
@@ -183,12 +183,16 @@ class MasterCoreController(MasterController):
         # type: (ShutterConfiguration, Optional[bool], Optional[bool]) -> None
         if shutter.outputs.output_0 == 255 * 2:
             return
-        shutter_outputs = self._shutter_status.get(shutter.id, (None, None))
+
+        previous_shutter_outputs = self._shutter_status.get(shutter.id, (None, None))
         if output_0_on is None:
-            output_0_on = shutter_outputs[0]
+            output_0_on = previous_shutter_outputs[0]
         if output_1_on is None:
-            output_1_on = shutter_outputs[1]
-        if (output_0_on, output_1_on) == shutter_outputs:
+            output_1_on = previous_shutter_outputs[1]
+        new_shutter_outputs = (output_0_on, output_1_on)
+        self._shutter_status[shutter.id] = new_shutter_outputs
+
+        if previous_shutter_outputs != (None, None) and new_shutter_outputs == previous_shutter_outputs:
             logger.info('Shutter {0} status did not change while output changed'.format(shutter.id))
             return
 
@@ -210,7 +214,6 @@ class MasterCoreController(MasterController):
                       'location': {'room_id': 255}}  # TODO: rooms
         master_event = MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data)
         self._pubsub.publish_master_event(PubSub.MasterTopics.SHUTTER, master_event)
-        self._shutter_status[shutter.id] = (output_0_on, output_1_on)
 
     def _synchronize(self):
         # type: () -> None
