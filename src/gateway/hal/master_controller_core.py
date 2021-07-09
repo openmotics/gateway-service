@@ -183,12 +183,13 @@ class MasterCoreController(MasterController):
         # type: (ShutterConfiguration, Optional[bool], Optional[bool]) -> None
         if shutter.outputs.output_0 == 255 * 2:
             return
+        shutter_outputs = self._shutter_status.get(shutter.id, (None, None))
         if output_0_on is None:
-            output_0_on = self._shutter_status[shutter.id][0]
+            output_0_on = shutter_outputs[0]
         if output_1_on is None:
-            output_1_on = self._shutter_status[shutter.id][1]
-        if (output_0_on, output_1_on) == self._shutter_status.get(shutter.id, (None, None)):
-            logger.error('shutter status did not change')
+            output_1_on = shutter_outputs[1]
+        if (output_0_on, output_1_on) == shutter_outputs:
+            logger.info('Shutter {0} status did not change while output changed'.format(shutter.id))
             return
 
         output_module = OutputConfiguration(shutter.outputs.output_0).module
