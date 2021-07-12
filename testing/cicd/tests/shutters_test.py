@@ -43,19 +43,19 @@ def test_shutter_moving(toolbox, shutter, primary_direction, inverted):
 
     toolbox.configure_shutter(shutter, {'timer_up': 10,
                                         'timer_down': 10,
-                                        'up_down_config': 0 if inverted else 255})
-    logger.debug('shutter {} stopping'.format(shutter))
+                                        'up_down_config': 0 if inverted else 1})
+    logger.debug('Shutter {} stopping'.format(shutter))
     toolbox.set_shutter(shutter=shutter, direction='stop')
     toolbox.assert_shutter_status(shutter=shutter, status='stopped', timeout=15, inverted=inverted)
 
-    logger.debug('shutter {} going {} (validate automatic stop)'.format(shutter, direction))
+    logger.debug('Shutter {} going {} (validate automatic stop)'.format(shutter, direction))
     toolbox.set_shutter(shutter=shutter, direction=direction)
     toolbox.assert_shutter_changed(shutter=shutter, from_status='stopped', to_status='going_{}'.format(direction), timeout=3, inverted=inverted)
     toolbox.tester.reset()
     toolbox.assert_shutter_changed(shutter=shutter, from_status='going_{}'.format(direction), to_status='stopped', timeout=13, inverted=inverted)
     toolbox.tester.reset()
 
-    logger.debug('shutter {} going {} (manual stop)'.format(shutter, direction))
+    logger.debug('Shutter {} going {} (manual stop)'.format(shutter, direction))
     toolbox.set_shutter(shutter=shutter, direction=direction)
     toolbox.assert_shutter_changed(shutter=shutter, from_status='stopped', to_status='going_{}'.format(direction), timeout=3, inverted=inverted)
     toolbox.tester.reset()
@@ -63,7 +63,7 @@ def test_shutter_moving(toolbox, shutter, primary_direction, inverted):
     toolbox.assert_shutter_changed(shutter=shutter, from_status='going_{}'.format(direction), to_status='stopped', timeout=3, inverted=inverted)
     toolbox.tester.reset()
 
-    logger.debug('shutter {} going {} -> {} (direction change)'.format(shutter, direction, inverted_direction))
+    logger.debug('Shutter {} going {} -> {} (direction change)'.format(shutter, direction, inverted_direction))
     toolbox.set_shutter(shutter=shutter, direction=direction)
     toolbox.assert_shutter_changed(shutter=shutter, from_status='stopped', to_status='going_{}'.format(direction), timeout=3, inverted=inverted)
     toolbox.tester.reset()
@@ -76,7 +76,7 @@ def test_shutter_moving(toolbox, shutter, primary_direction, inverted):
     # Clear shutter (as is mandatory for shared outputs/shutters)
     toolbox.configure_shutter(shutter, {'timer_up': 0,
                                         'timer_down': 0,
-                                        'up_down_config': 255})
+                                        'up_down_config': 1})
 
 
 @pytest.mark.smoke
@@ -88,12 +88,12 @@ def test_shutter_lock(toolbox, shutter):
 
     toolbox.configure_shutter(shutter, {'timer_up': 10,
                                         'timer_down': 10,
-                                        'up_down_config': 255})
-    logger.debug('shutter {} stopping'.format(shutter))
+                                        'up_down_config': 1})
+    logger.debug('Shutter {} stopping'.format(shutter))
     toolbox.set_shutter(shutter=shutter, direction='stop')
     toolbox.assert_shutter_status(shutter=shutter, status='stopped', timeout=15)
 
-    logger.debug('shutter {} going up (manual stop)'.format(shutter))
+    logger.debug('Shutter {} going up (manual stop)'.format(shutter))
     toolbox.set_shutter(shutter=shutter, direction='up')
     toolbox.assert_shutter_changed(shutter=shutter, from_status='stopped', to_status='going_up', timeout=3)
     toolbox.tester.reset()
@@ -103,7 +103,7 @@ def test_shutter_lock(toolbox, shutter):
 
     toolbox.lock_shutter(shutter=shutter, locked=True)
 
-    logger.debug('shutter {} going down (manual stop)'.format(shutter))
+    logger.debug('Shutter {} going down (manual stop)'.format(shutter))
     toolbox.set_shutter(shutter=shutter, direction='down')
     toolbox.assert_shutter_status(shutter=shutter, status='stopped', timeout=3)
     time.sleep(3)
@@ -111,7 +111,7 @@ def test_shutter_lock(toolbox, shutter):
 
     toolbox.lock_shutter(shutter=shutter, locked=False)
 
-    logger.debug('shutter {} going down (manual stop)'.format(shutter))
+    logger.debug('Shutter {} going down (manual stop)'.format(shutter))
     toolbox.set_shutter(shutter=shutter, direction='down')
     toolbox.assert_shutter_changed(shutter=shutter, from_status='stopped', to_status='going_down', timeout=3)
     toolbox.tester.reset()
@@ -122,4 +122,4 @@ def test_shutter_lock(toolbox, shutter):
     # Clear shutter (as is mandatory for shared outputs/shutters)
     toolbox.configure_shutter(shutter, {'timer_up': 0,
                                         'timer_down': 0,
-                                        'up_down_config': 255})
+                                        'up_down_config': 1})
