@@ -34,9 +34,11 @@ logger = logging.getLogger(__name__)
 def clean_shutters(toolbox_session):
     toolbox = toolbox_session
     toolbox.dirty_shutters = []
-    yield
-    for shutter in toolbox.dirty_shutters:
-        toolbox.configure_shutter(shutter, {'timer_up': 0, 'timer_down': 0, 'up_down_config': 1})
+    try:
+        yield
+    finally:
+        for shutter in toolbox.dirty_shutters:
+            toolbox.configure_shutter(shutter, {'timer_up': 0, 'timer_down': 0, 'up_down_config': 1})
 
 
 @pytest.mark.smoke
@@ -88,6 +90,7 @@ def test_shutter_moving(toolbox, clean_shutters, shutter, primary_direction, inv
 
 @pytest.mark.smoke
 @hypothesis.given(shutters())
+# @pytest.mark.skipif(skip_on_platforms([TestPlatform.CORE_PLUS]), reason='Shutter locking not implemented on the Core(+) yet')
 def test_shutter_lock(toolbox, clean_shutters, shutter):
     # type: (Toolbox, Any, Shutter) -> None
     _ = clean_shutters
