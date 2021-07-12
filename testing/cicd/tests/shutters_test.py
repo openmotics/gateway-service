@@ -20,7 +20,7 @@ import hypothesis
 import pytest
 from hypothesis.strategies import booleans
 
-from tests.hardware import shutters
+from tests.hardware import shutters, skip_on_platforms
 
 if False:  # MYPY
     from typing import Any
