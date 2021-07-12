@@ -90,7 +90,7 @@ def test_shutter_moving(toolbox, clean_shutters, shutter, primary_direction, inv
 
 @pytest.mark.smoke
 @hypothesis.given(shutters())
-# @pytest.mark.skipif(skip_on_platforms([TestPlatform.CORE_PLUS]), reason='Shutter locking not implemented on the Core(+) yet')
+@pytest.mark.skipif(skip_on_platforms([TestPlatform.CORE_PLUS]), reason='Shutter locking not implemented on the Core(+) yet')
 def test_shutter_lock(toolbox, clean_shutters, shutter):
     # type: (Toolbox, Any, Shutter) -> None
     _ = clean_shutters
