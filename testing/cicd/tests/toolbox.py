@@ -55,7 +55,7 @@ class Client(object):
         # type: (bool, float) -> Optional[str]
         if self._auth:
             self._token = None
-            params = {'username': self._auth[0], 'password': self._auth[1], 'accept_terms': True}
+            params = {'username': self._auth[0], 'password': self._auth[1], 'accept_terms': True, 'timeout': 60 * 60 * 3}
             data = self.get('/login', params=params, use_token=False, success=success, timeout=timeout)
             if 'token' in data:
                 return data['token']
