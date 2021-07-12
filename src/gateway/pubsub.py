@@ -25,10 +25,11 @@ from ioc import Injectable, Singleton
 
 if False:  # MYPY
     from typing import Callable, Dict, List, Literal, Tuple
-    from gateway.events import GatewayEvent
+    from gateway.events import GatewayEvent, EsafeEvent
     from gateway.hal.master_event import MasterEvent
     GATEWAY_TOPIC = Literal['config', 'state']
     MASTER_TOPIC = Literal['eeprom', 'maintenance', 'module', 'power', 'output', 'input', 'shutter', 'sensor']
+    ESAFE_TOPIC = Literal['delivery', 'lock']
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +52,18 @@ class PubSub(object):
         CONFIG = 'config'  # type: GATEWAY_TOPIC
         STATE = 'state'  # type: GATEWAY_TOPIC
 
+    class EsafeTopics(object):
+        DELIVERY = 'delivery'   # type: ESAFE_TOPIC
+        LOCK = 'lock'           # type: ESAFE_TOPIC
+
     def __init__(self):
         # type: () -> None
         self._gateway_topics = defaultdict(list)  # type: Dict[GATEWAY_TOPIC,List[Callable[[GatewayEvent],None]]]
         self._master_topics = defaultdict(list)  # type: Dict[MASTER_TOPIC,List[Callable[[MasterEvent],None]]]
+        self._esafe_topics = defaultdict(list)  # type: Dict[ESAFE_TOPIC,List[Callable[[EsafeEvent],None]]]
         self._master_events = Queue()  # type: Queue  # Queue[Tuple[str, MasterEvent]]
         self._gateway_events = Queue()  # type: Queue  # Queue[Tuple[str, GatewayEvent]]
+        self._esafe_events = Queue()  # type: Queue  # Queue[Tuple[str, GatewayEvent]]
         self._pub_thread = DaemonThread(name='pubsub', target=self._publisher_loop, interval=0.1, delay=0.2)
         self._is_running = False
 
@@ -70,6 +77,7 @@ class PubSub(object):
         self._is_running = False
         self._master_events.put(None)
         self._gateway_events.put(None)
+        self._esafe_events.put(None)
         self._pub_thread.stop()
 
     def _publisher_loop(self):
@@ -91,6 +99,14 @@ class PubSub(object):
                 if event is None:
                     return
                 self._publish_gateway_event(*event)
+            except Empty:
+                break
+        while True:
+            try:
+                event = self._esafe_events.get(block=True, timeout=0.25)
+                if event is None:
+                    return
+                self._publish_esafe_event(*event)
             except Empty:
                 break
 
@@ -135,5 +151,28 @@ class PubSub(object):
             try:
                 logger.debug('Executing callback {} with {}'.format(callback.__name__, gateway_event))
                 callback(gateway_event)
+            except Exception:
+                logger.exception('Failed to call handle %s for topic %s', callback, topic)
+
+    def subscribe_esafe_events(self, topic, callback):
+        # type: (ESAFE_TOPIC, Callable[[EsafeEvent],None]) -> None
+        self._esafe_topics[topic].append(callback)
+
+    def publish_esafe_event(self, topic, esafe_event):
+        # type: (ESAFE_TOPIC, EsafeEvent) -> None
+        self._esafe_events.put((topic, esafe_event))
+
+    def _publish_esafe_event(self, topic, esafe_event):
+        # type: (ESAFE_TOPIC, EsafeEvent) -> None
+        logger.debug('Publishing esafe event {} {}'.format(topic, esafe_event))
+        callbacks = self._esafe_topics[topic]
+        if callbacks:
+            logger.debug('Received esafe event %s on topic "%s"', esafe_event.type, topic)
+        else:
+            logger.warning('Received esafe event %s on topic "%s" without subscribers', esafe_event.type, topic)
+        for callback in callbacks:
+            try:
+                logger.debug('Executing callback {} with {}'.format(callback.__name__, esafe_event))
+                callback(esafe_event)
             except Exception:
                 logger.exception('Failed to call handle %s for topic %s', callback, topic)
