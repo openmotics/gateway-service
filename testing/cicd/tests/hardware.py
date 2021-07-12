@@ -57,7 +57,9 @@ def shutters(draw, types=None, virtual=False):
     return shutter
 
 
-def multiple_shutters(size, types=shutter_types()):
+def multiple_shutters(size, types=None):
+    if types is None:
+        types = shutter_types()
     return lists(shutters(types=types), min_size=size, max_size=size, unique_by=lambda x: x.shutter_id)
 
 

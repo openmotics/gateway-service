@@ -215,6 +215,7 @@ class Toolbox(object):
         self._tester = None  # type: Optional[TesterGateway]
         self._dut = None  # type: Optional[Client]
         self._dut_energy_cts = None  # type: Optional[List[Tuple[int, int]]]
+        self.dirty_shutters = []  # type: List[Shutter]
 
     @property
     def tester(self):

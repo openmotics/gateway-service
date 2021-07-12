@@ -23,16 +23,27 @@ from hypothesis.strategies import booleans
 from tests.hardware import shutters
 
 if False:  # MYPY
+    from typing import Any
     from tests.toolbox import Toolbox
     from tests.hardware_layout import Shutter
 
 logger = logging.getLogger(__name__)
 
 
+@pytest.fixture(scope='module')
+def clean_shutters(toolbox_session):
+    toolbox = toolbox_session
+    toolbox.dirty_shutters = []
+    yield
+    for shutter in toolbox.dirty_shutters:
+        toolbox.configure_shutter(shutter, {'timer_up': 0, 'timer_down': 0, 'up_down_config': 1})
+
+
 @pytest.mark.smoke
 @hypothesis.given(shutters(), booleans(), booleans())
-def test_shutter_moving(toolbox, shutter, primary_direction, inverted):
-    # type: (Toolbox, Shutter, bool, bool) -> None
+def test_shutter_moving(toolbox, clean_shutters, shutter, primary_direction, inverted):
+    # type: (Toolbox, Any, Shutter, bool, bool) -> None
+    _ = clean_shutters
 
     direction = 'up' if primary_direction else 'down'
     inverted_direction = 'down' if primary_direction else 'up'
@@ -41,6 +52,7 @@ def test_shutter_moving(toolbox, shutter, primary_direction, inverted):
         shutter, direction, '' if inverted else 'not '
     ))
 
+    toolbox.dirty_shutters.append(shutter)
     toolbox.configure_shutter(shutter, {'timer_up': 10,
                                         'timer_down': 10,
                                         'up_down_config': 0 if inverted else 1})
@@ -73,19 +85,16 @@ def test_shutter_moving(toolbox, shutter, primary_direction, inverted):
     toolbox.assert_shutter_changed(shutter=shutter, from_status='going_{}'.format(inverted_direction), to_status='stopped', timeout=13, inverted=inverted)
     toolbox.tester.reset()
 
-    # Clear shutter (as is mandatory for shared outputs/shutters)
-    toolbox.configure_shutter(shutter, {'timer_up': 0,
-                                        'timer_down': 0,
-                                        'up_down_config': 1})
-
 
 @pytest.mark.smoke
 @hypothesis.given(shutters())
-def test_shutter_lock(toolbox, shutter):
-    # type: (Toolbox, Shutter) -> None
+def test_shutter_lock(toolbox, clean_shutters, shutter):
+    # type: (Toolbox, Any, Shutter) -> None
+    _ = clean_shutters
 
     logger.info('Testing {} lock'.format(shutter))
 
+    toolbox.dirty_shutters.append(shutter)
     toolbox.configure_shutter(shutter, {'timer_up': 10,
                                         'timer_down': 10,
                                         'up_down_config': 1})
@@ -118,8 +127,3 @@ def test_shutter_lock(toolbox, shutter):
     toolbox.set_shutter(shutter=shutter, direction='stop')
     toolbox.assert_shutter_changed(shutter=shutter, from_status='going_down', to_status='stopped', timeout=3)
     toolbox.tester.reset()
-
-    # Clear shutter (as is mandatory for shared outputs/shutters)
-    toolbox.configure_shutter(shutter, {'timer_up': 0,
-                                        'timer_down': 0,
-                                        'up_down_config': 1})
