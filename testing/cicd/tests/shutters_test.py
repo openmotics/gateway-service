@@ -73,6 +73,11 @@ def test_shutter_moving(toolbox, shutter, primary_direction, inverted):
     toolbox.assert_shutter_changed(shutter=shutter, from_status='going_{}'.format(inverted_direction), to_status='stopped', timeout=13, inverted=inverted)
     toolbox.tester.reset()
 
+    # Clear shutter (as is mandatory for shared outputs/shutters)
+    toolbox.configure_shutter(shutter, {'timer_up': 0,
+                                        'timer_down': 0,
+                                        'up_down_config': 255})
+
 
 @pytest.mark.smoke
 @hypothesis.given(shutters())
@@ -113,3 +118,8 @@ def test_shutter_lock(toolbox, shutter):
     toolbox.set_shutter(shutter=shutter, direction='stop')
     toolbox.assert_shutter_changed(shutter=shutter, from_status='going_down', to_status='stopped', timeout=3)
     toolbox.tester.reset()
+
+    # Clear shutter (as is mandatory for shared outputs/shutters)
+    toolbox.configure_shutter(shutter, {'timer_up': 0,
+                                        'timer_down': 0,
+                                        'up_down_config': 255})
