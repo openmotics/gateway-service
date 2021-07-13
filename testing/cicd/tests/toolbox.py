@@ -18,7 +18,7 @@ import logging
 import os
 import time
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import hypothesis
 import requests
@@ -55,7 +55,7 @@ class Client(object):
         # type: (bool, float) -> Optional[str]
         if self._auth:
             self._token = None
-            params = {'username': self._auth[0], 'password': self._auth[1], 'accept_terms': True, 'timeout': 60 * 60 * 3}
+            params = {'username': self._auth[0], 'password': self._auth[1], 'accept_terms': True, 'timeout': timedelta(hours=3).seconds}
             data = self.get('/login', params=params, use_token=False, success=success, timeout=timeout)
             if 'token' in data:
                 return data['token']

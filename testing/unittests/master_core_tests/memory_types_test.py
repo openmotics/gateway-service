@@ -162,7 +162,7 @@ class MemoryTypesTest(unittest.TestCase):
                                          memory_field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)),
                                          memory_address=address,
                                          memory_file=memory_file_mock,
-                                         bypass_read_cache=False)
+                                         read_through=False)
         data = container.decode()
         self.assertEqual(1, data)
         memory_file_mock.read.assert_called_with([address], False)

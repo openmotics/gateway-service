@@ -835,10 +835,10 @@ class MasterCoreController(MasterController):
         log = []
         device_type_normalize = {'b': 'I', 'r': 'o', 'R': 'O'}
 
-        global_configuration = GlobalConfiguration(bypass_read_cache=True)
+        global_configuration = GlobalConfiguration(read_through=True)
         nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
         for module_id in range(nr_of_input_modules):
-            input_module_info = InputModuleConfiguration(module_id, bypass_read_cache=True)
+            input_module_info = InputModuleConfiguration(module_id, read_through=True)
             device_type = input_module_info.device_type
             module = {'code': 'EXISTING',
                       'module_nr': module_id,
@@ -849,7 +849,7 @@ class MasterCoreController(MasterController):
 
         nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
         for module_id in range(nr_of_output_modules):
-            output_module_info = OutputModuleConfiguration(module_id, bypass_read_cache=True)
+            output_module_info = OutputModuleConfiguration(module_id, read_through=True)
             device_type = output_module_info.device_type
             module = {'code': 'EXISTING',
                       'module_nr': module_id,
@@ -860,7 +860,7 @@ class MasterCoreController(MasterController):
 
         nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
         for module_id in range(nr_of_can_controls):
-            can_control_module_info = CanControlModuleConfiguration(module_id, bypass_read_cache=True)
+            can_control_module_info = CanControlModuleConfiguration(module_id, read_through=True)
             module = {'code': 'EXISTING',
                       'module_nr': nr_of_input_modules + module_id,
                       'category': 'INPUT',

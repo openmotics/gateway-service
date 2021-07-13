@@ -31,8 +31,8 @@ class OutputMapperTest(unittest.TestCase):
     def setUp(self):
         self.memory_map = {0: bytearray([0, 1])}
 
-        def _read(addresses, bypass_read_cache=False):
-            _ = bypass_read_cache
+        def _read(addresses, read_through=False):
+            _ = read_through
             data_ = {}
             for address in addresses:
                 data_[address] = self.memory_map[address.page][address.offset:address.offset + address.length]
