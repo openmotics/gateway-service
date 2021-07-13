@@ -209,7 +209,7 @@ class Event(object):
                 sensor_values += [{'type': Event.SensorType.HUMIDITY,
                                    'value': Humidity.system_value_to_humidity(self._data[1])}]
             elif self._action == 2:
-                sensor_values += [{'tye': Event.SensorType.BRIGHTNESS,
+                sensor_values += [{'type': Event.SensorType.BRIGHTNESS,
                                    'value': self._word_decode(self._data[0:2])}]
             elif self._action == 3:
                 sensor_values += [{'type': Event.SensorType.CO2,

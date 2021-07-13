@@ -70,6 +70,8 @@ class MasterEvent(object):
         TEMPERATURE = 'TEMPERATURE'
         HUMIDITY = 'HUMIDITY'
         BRIGHTNESS = 'BRIGHTNESS'
+        VOC = 'VOC'
+        CO2 = 'CO2'
 
     def __init__(self, event_type, data):
         # type: (str, Dict[str,Any]) -> None

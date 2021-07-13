@@ -34,7 +34,7 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Set, Tuple
-    from gateway.master_controller import MasterController
+    from gateway.hal.master_controller import MasterController
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,9 @@ class SensorController(BaseController):
         # type: (MasterEvent) -> None
         super(SensorController, self)._handle_master_event(master_event)
         if master_event.type == MasterEvent.Types.SENSOR_VALUE:
-            sensor_type = SensorController.MASTER_TYPES[master_event.data['type']]
+            sensor_type = SensorController.MASTER_TYPES.get(master_event.data['type'])
+            if sensor_type is None:
+                return  # TODO: Support more sensors
             key = (sensor_type, master_event.data['sensor'])
             sensor_dto = self._master_cache.get(key)
             if sensor_dto is not None:
