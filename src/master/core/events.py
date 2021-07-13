@@ -252,7 +252,7 @@ class Event(object):
         if self.type == Event.Types.GENERIC_DATA:
             if self._action == 0:
                 return {'action': Event.GenericDataTypes.PCB_TEMPERATURE,
-                        'temperature': (self._device_nr >> 8) & 0xFF}
+                        'temperature': self._device_nr & 0xFF}
             return {'action': Event.GenericDataTypes.UNKNOWN,
                     'device_nr': self._device_nr,
                     'data': self._data}
