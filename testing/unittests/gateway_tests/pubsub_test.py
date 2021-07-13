@@ -74,3 +74,14 @@ class PubSubTest(unittest.TestCase):
         self.sub_esafe_mock.assert_has_calls([call(es_event) for _ in range(num_events)], any_order=False)
         self.assertEqual(self.sub_gateway_mock.call_count, num_events)
         self.assertEqual(self.sub_esafe_mock.call_count, num_events)
+
+    def test_pubsub_event_topic_filter(self):
+        gw_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'data': 'Some Test Data'})
+        es_event_1 = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {'delivery_id': 37, 'delivery_type': 'RETURN'})
+        es_event_2 = EsafeEvent(EsafeEvent.Types.LOCK_CHANGE, {'lock_id': 37, 'lock_type': 'XL'})
+        self.pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gw_event)
+        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, es_event_1)
+        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.LOCK, es_event_2)
+        self.pubsub._publish_all_events()
+        self.sub_gateway_mock.assert_not_called()
+        self.sub_esafe_mock.assert_called_once_with(es_event_1)

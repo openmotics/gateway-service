@@ -117,7 +117,7 @@ class EsafeEvent(BaseEvent):
 
     * LOCK_CHANGE
       {'id': int,      # Rebus lock id
-       'action': str}  # action type: OPEN or CLOSE
+       'status': str}  # action type: 'open' or 'close'
     """
 
     class Types(object):
