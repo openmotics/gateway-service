@@ -84,7 +84,7 @@ class MasterCoreController(MasterController):
         self._sensor_states = {}  # type: Dict[int,Dict[str,None]]
         self._shutters_interval = 600
         self._shutters_last_updated = 0.0
-        self._shutter_status = {}  # type: Dict[int, Tuple[bool, bool]]
+        self._shutter_status = {}  # type: Dict[int, Tuple[Optional[bool], Optional[bool]]]
         self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
         self._firmware_versions = {}  # type: Dict[str, Optional[str]]
@@ -183,12 +183,17 @@ class MasterCoreController(MasterController):
         # type: (ShutterConfiguration, Optional[bool], Optional[bool]) -> None
         if shutter.outputs.output_0 == 255 * 2:
             return
+
+        previous_shutter_outputs = self._shutter_status.get(shutter.id, (None, None))
         if output_0_on is None:
-            output_0_on = self._shutter_status[shutter.id][0]
+            output_0_on = previous_shutter_outputs[0]
         if output_1_on is None:
-            output_1_on = self._shutter_status[shutter.id][1]
-        if (output_0_on, output_1_on) == self._shutter_status.get(shutter.id, (None, None)):
-            logger.error('shutter status did not change')
+            output_1_on = previous_shutter_outputs[1]
+        new_shutter_outputs = (output_0_on, output_1_on)
+        self._shutter_status[shutter.id] = new_shutter_outputs
+
+        if previous_shutter_outputs != (None, None) and new_shutter_outputs == previous_shutter_outputs:
+            logger.info('Shutter {0} status did not change while output changed'.format(shutter.id))
             return
 
         output_module = OutputConfiguration(shutter.outputs.output_0).module
@@ -209,7 +214,6 @@ class MasterCoreController(MasterController):
                       'location': {'room_id': 255}}  # TODO: rooms
         master_event = MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data)
         self._pubsub.publish_master_event(PubSub.MasterTopics.SHUTTER, master_event)
-        self._shutter_status[shutter.id] = (output_0_on, output_1_on)
 
     def _synchronize(self):
         # type: () -> None
@@ -816,7 +820,55 @@ class MasterCoreController(MasterController):
         self._pubsub.publish_master_event(PubSub.MasterTopics.MODULE, master_event)
 
     def get_module_log(self):  # type: () -> List[Dict[str, Any]]
-        raise NotImplementedError()  # No need to implement. Not used and rather obsolete code anyway
+        # TODO: This is incorrect and uses passthrough EEPROM reads to emulate a more-or-less compatible
+        #  response which should work for the integration tests. It must be replaced by decent events.
+
+        # Log format: {'code': '<NEW|EXISTING|DUPLCATE|UNKNOWN>',
+        #              'module_nr': <module number in its category>,
+        #              'category': '<SHUTTER|INPUT|OUTPUT>',
+        #              'module_type': '<I|O|T|D|i|o|t|d|C>,
+        #              'address': '<module address>'}
+
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
+        log = []
+        device_type_normalize = {'b': 'I', 'r': 'o', 'R': 'O'}
+
+        global_configuration = GlobalConfiguration(read_through=True)
+        nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
+        for module_id in range(nr_of_input_modules):
+            input_module_info = InputModuleConfiguration(module_id, read_through=True)
+            device_type = input_module_info.device_type
+            module = {'code': 'EXISTING',
+                      'module_nr': module_id,
+                      'category': 'INPUT',
+                      'module_type': device_type_normalize.get(device_type, device_type),
+                      'address': input_module_info.address}
+            log.append(module)
+
+        nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
+        for module_id in range(nr_of_output_modules):
+            output_module_info = OutputModuleConfiguration(module_id, read_through=True)
+            device_type = output_module_info.device_type
+            module = {'code': 'EXISTING',
+                      'module_nr': module_id,
+                      'category': 'OUTPUT',
+                      'module_type': device_type_normalize.get(device_type, device_type),
+                      'address': output_module_info.address}
+            log.append(module)
+
+        nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
+        for module_id in range(nr_of_can_controls):
+            can_control_module_info = CanControlModuleConfiguration(module_id, read_through=True)
+            module = {'code': 'EXISTING',
+                      'module_nr': nr_of_input_modules + module_id,
+                      'category': 'INPUT',
+                      'module_type': 'C',
+                      'address': can_control_module_info.address}
+            log.append(module)
+
+        return log
 
     def get_modules(self):
         def _default_if_255(value, default):
@@ -937,9 +989,18 @@ class MasterCoreController(MasterController):
                             module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
+            shutter_dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+                                    address='114.{0}'.format(output_module_info.address[4:]),
+                                    module_type=ModuleDTO.ModuleType.SHUTTER,
+                                    hardware_type=hardware_type,
+                                    order=module_id)
             if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(output_module_info.address)
+                shutter_dto.online = dto.online
+                shutter_dto.hardware_version = dto.hardware_version
+                shutter_dto.firmware_version = dto.firmware_version
             information.append(dto)
+            information.append(shutter_dto)
 
         nr_of_sensor_modules = _default_if_255(global_configuration.number_of_sensor_modules, 0)
         for module_id in range(nr_of_sensor_modules):
@@ -1139,7 +1200,8 @@ class MasterCoreController(MasterController):
             data_structure[page] = page_data
         self._restore(data_structure)
 
-    def factory_reset(self):
+    def factory_reset(self, can=False):
+        # TODO: Include factory of CAN Controls
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         data_set = {page: bytearray([255] * page_length) for page in range(pages)}
         # data_set[0][0] = 1  # Needed to validate Brain+ with no front panel attached

@@ -18,7 +18,7 @@ import logging
 import os
 import time
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import hypothesis
 import requests
@@ -55,7 +55,7 @@ class Client(object):
         # type: (bool, float) -> Optional[str]
         if self._auth:
             self._token = None
-            params = {'username': self._auth[0], 'password': self._auth[1], 'accept_terms': True}
+            params = {'username': self._auth[0], 'password': self._auth[1], 'accept_terms': True, 'timeout': timedelta(hours=3).seconds}
             data = self.get('/login', params=params, use_token=False, success=success, timeout=timeout)
             if 'token' in data:
                 return data['token']
@@ -215,6 +215,7 @@ class Toolbox(object):
         self._tester = None  # type: Optional[TesterGateway]
         self._dut = None  # type: Optional[Client]
         self._dut_energy_cts = None  # type: Optional[List[Tuple[int, int]]]
+        self.dirty_shutters = []  # type: List[Shutter]
 
     @property
     def tester(self):
@@ -261,9 +262,12 @@ class Toolbox(object):
         # TODO: Change this in the future, as it needs a new API call on the GW.
 
         expected_modules = {Module.HardwareType.VIRTUAL: {},
-                            Module.HardwareType.PHYSICAL: {}}  # Limit it to physical and virtual for now
+                            Module.HardwareType.PHYSICAL: {},
+                            Module.HardwareType.INTERNAL: {}}
         for module in OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT + TEMPERATURE_MODULE_LAYOUT + SHUTTER_MODULE_LAYOUT:
-            hardware_type = Module.HardwareType.VIRTUAL if module.hardware_type == Module.HardwareType.VIRTUAL else Module.HardwareType.PHYSICAL
+            hardware_type = module.hardware_type
+            if hardware_type == Module.HardwareType.EMULATED:
+                hardware_type = Module.HardwareType.PHYSICAL  # Emulated moduled are (for testing purposes) considered physical
             if module.mtype not in expected_modules[hardware_type]:
                 expected_modules[hardware_type][module.mtype] = 0
             expected_modules[hardware_type][module.mtype] += 1
@@ -275,11 +279,6 @@ class Toolbox(object):
         for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
             if modules.get(mtype, 0) == 0:
                 missing_modules.add(mtype)
-        modules_info = self.list_modules()['master'].values()
-        if not any(v['type'] == 'C' for v in modules_info):
-            missing_modules.add('C')
-        if not any(v['type'] == 'I' and v['is_can'] for v in modules_info):
-            missing_modules.add('C')
         if missing_modules:
             logger.info('Discovering modules...')
             self.discover_modules(output_modules='O' in missing_modules,
@@ -292,8 +291,11 @@ class Toolbox(object):
 
         modules = self.count_modules('master')
         logger.info('Discovered modules: {0}'.format(modules))
-        for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
-            assert modules.get(mtype, 0) == expected_amount, 'Expected {0} modules {1}'.format(expected_amount, mtype)
+        for mtype in set(list(expected_modules[Module.HardwareType.PHYSICAL].keys()) +
+                         list(expected_modules[Module.HardwareType.INTERNAL].keys())):
+            expected_amount = (expected_modules[Module.HardwareType.PHYSICAL].get(mtype, 0) +
+                               expected_modules[Module.HardwareType.INTERNAL].get(mtype, 0))
+            assert modules.get(mtype, 0) >= expected_amount, 'Expected {0} modules {1}'.format(expected_amount, mtype)
 
         try:
             for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():

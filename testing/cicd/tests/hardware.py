@@ -16,7 +16,7 @@ def outputs(draw, types=None, virtual=False):
     if types is None:
         types = output_types(virtual=virtual)
     module_type = draw(types)
-    assert module_type in ['O', 'o'], 'Invalid output type {}'.format(module_type)
+    assert module_type in ['O', 'o', 'l'], 'Invalid output type {}'.format(module_type)
     _outputs = []
     for module in OUTPUT_MODULE_LAYOUT:
         if module.mtype != module_type:
@@ -57,19 +57,22 @@ def shutters(draw, types=None, virtual=False):
     return shutter
 
 
-def multiple_shutters(size, types=shutter_types()):
+def multiple_shutters(size, types=None):
+    if types is None:
+        types = shutter_types()
     return lists(shutters(types=types), min_size=size, max_size=size, unique_by=lambda x: x.shutter_id)
 
 
 def input_types():
-    module_types = [module.mtype for module in INPUT_MODULE_LAYOUT]
+    module_types = [module.mtype for module in INPUT_MODULE_LAYOUT
+                    if module.mtype != 'C']
     return one_of([just(x) for x in module_types])
 
 
 @composite
 def inputs(draw, types=input_types()):
     module_type = draw(types)
-    assert module_type in ['I', 'i', 'C'], 'Invalid input type {}'.format(module_type)
+    assert module_type in ['I', 'i'], 'Invalid input type {}'.format(module_type)
     _inputs = []
     for module in INPUT_MODULE_LAYOUT:
         if module.mtype != module_type:

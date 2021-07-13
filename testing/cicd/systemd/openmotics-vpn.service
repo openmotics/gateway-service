@@ -10,6 +10,8 @@ ExecStart=/usr/bin/python2 vpn_service.py
 WorkingDirectory=/opt/openmotics/python
 Restart=always
 RestartSec=10
+TimeoutSec=5
+Environment="OPENMOTICS_PREFIX=/opt/openmotics"
 
 [Install]
 WantedBy=openmotics.service
