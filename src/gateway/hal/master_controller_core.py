@@ -130,26 +130,31 @@ class MasterCoreController(MasterController):
             logger.info('Got master event: {0}'.format(core_event))
         if core_event.type == MasterCoreEvent.Types.OUTPUT:
             output_id = core_event.data['output']
-            if core_event.data['type'] == MasterCoreEvent.OutputEventTypes.STATUS:
+            if core_event.data['type'] == MasterCoreEvent.IOEventTypes.STATUS:
                 # Update internal state cache
                 state_dto = OutputStatusDTO(id=output_id,
                                             status=core_event.data['status'],
                                             dimmer=core_event.data['dimmer_value'],
                                             ctimer=core_event.data['timer'])
-            else:  # elif core_event.data['type'] == MasterCoreEvent.OutputEventTypes.LOCKING:
+            else:  # elif core_event.data['type'] == MasterCoreEvent.IOEventTypes.LOCKING:
                 state_dto = OutputStatusDTO(id=output_id,
                                             locked=core_event.data['locked'])
             self._handle_output_state(output_id, state_dto)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
-            master_event = self._input_state.handle_event(core_event)
-            self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
+            if core_event.data['type'] == MasterCoreEvent.IOEventTypes.STATUS:
+                master_event = self._input_state.handle_event(core_event)
+                self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
+            # TODO: Implement input locking
         elif core_event.type == MasterCoreEvent.Types.SENSOR:
-            master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, data=core_event.data)
-            self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
             sensor_id = core_event.data['sensor']
             if sensor_id not in self._sensor_states:
                 return
-            self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
+            for value in core_event.data['values']:
+                master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, data={'sensor': sensor_id,
+                                                                                 'type': value['type'],
+                                                                                 'value': value['value']})
+                self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+                self._sensor_states[sensor_id][value['type']] = value['value']
         elif core_event.type == MasterCoreEvent.Types.EXECUTE_GATEWAY_API:
             self._handle_execute_event(action=core_event.data['action'],
                                        device_nr=core_event.data['device_nr'],
