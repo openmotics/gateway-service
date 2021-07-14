@@ -48,11 +48,11 @@ class EsafeController(object):
     @Inject
     def __init__(self, rebus_device=INJECTED, pubsub=INJECTED, apartment_controller=INJECTED, delivery_controller=INJECTED):
         # type: (str, PubSub, ApartmentController, DeliveryController) -> None
-        logger.info('Creating esafe controller')
+        logger.debug('Creating esafe controller')
         self.rebus_device = Rebus(rebus_device, power_off_on_del=False)
         self.rebus_device.power_on()
         time.sleep(0.2)
-        logger.info('Created rebus device')
+        logger.debug('Created rebus device')
         self.pub_sub = pubsub
         self.apartment_controller = apartment_controller
         self.delivery_controller = delivery_controller
@@ -93,7 +93,7 @@ class EsafeController(object):
 
     def get_mailboxes(self, rebus_id=None):
         # type: (Optional[int]) -> List[MailBoxDTO]
-        logger.info('Getting mailboxes')
+        logger.debug('Getting mailboxes')
         if not self.done_discovering:
             return []
         mailboxes = []
@@ -147,9 +147,9 @@ class EsafeController(object):
         success = device.open_lock(blocking=True)
         if success:
             if device.type == EsafeBoxType.PARCELBOX:
-                return self._rebus_parcelbox_to_dto(device)
+                return self._rebus_parcelbox_to_dto(device, force_latest_status=True)
             elif device.type == EsafeBoxType.MAILBOX:
-                return self._rebus_mailbox_to_dto(device)
+                return self._rebus_mailbox_to_dto(device, force_latest_status=True)
         return None
 
     # Doorbells
@@ -182,17 +182,23 @@ class EsafeController(object):
     # HELPERS
     ######################
 
-    def _rebus_parcelbox_to_dto(self, rebus_device):
-        # type: (RebusComponentEsafeLock) -> ParcelBoxDTO
+    def _rebus_parcelbox_to_dto(self, rebus_device, force_latest_status=False):
+        # type: (RebusComponentEsafeLock, bool) -> ParcelBoxDTO
         _ = self  # suppress 'may be static' warning
         available = self.delivery_controller.parcel_id_available(rebus_device.get_rebus_id())
-        is_open = self.lock_status[rebus_device.get_rebus_id()]
+        if not force_latest_status:
+            is_open = self.lock_status[rebus_device.get_rebus_id()]
+        else:
+            is_open = rebus_device.get_lock_status()
         return ParcelBoxDTO(id=rebus_device.get_rebus_id(), label=rebus_device.get_rebus_id(), height=rebus_device.height, width=rebus_device.width, size=rebus_device.size, available=available, is_open=is_open)
 
-    def _rebus_mailbox_to_dto(self, rebus_device):
-        # type: (RebusComponentEsafeLock) -> MailBoxDTO
+    def _rebus_mailbox_to_dto(self, rebus_device, force_latest_status=False):
+        # type: (RebusComponentEsafeLock, bool) -> MailBoxDTO
         apartment_dto = self.apartment_controller.load_apartment_by_mailbox_id(rebus_device.get_rebus_id())
-        is_open = self.lock_status[rebus_device.get_rebus_id()]
+        if not force_latest_status:
+            is_open = self.lock_status[rebus_device.get_rebus_id()]
+        else:
+            is_open = rebus_device.get_lock_status()
         return MailBoxDTO(id=rebus_device.get_rebus_id(), label=rebus_device.get_rebus_id(), apartment=apartment_dto, is_open=is_open)
 
     ######################
@@ -200,14 +206,14 @@ class EsafeController(object):
     ######################
 
     def discover_devices(self):
-        logger.info('Discovering rebus devices')
+        logger.debug('Discovering rebus devices')
         self.rebus_device.discover(callback=self.discover_callback)
 
     def discover_callback(self):
-        logger.info('Discovering Callback called')
+        logger.debug('Discovering Callback called')
         self.devices = {device.get_rebus_id(): device for device in self.rebus_device.get_discovered_devices()}
         for dev_id, dev in self.devices.items():
-            logger.info('Discovered device: {}: {}'.format(dev_id, dev))
+            logger.debug('Discovered device: {}: {}'.format(dev_id, dev))
         self.done_discovering = True
         self.lock_ids = [lock_id for lock_id, lock in self.devices.items() if isinstance(lock, RebusComponentEsafeLock)]
         self.polling_thread.start()
