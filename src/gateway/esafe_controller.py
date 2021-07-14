@@ -44,11 +44,8 @@ class EsafeController(object):
     @Inject
     def __init__(self, rebus_device=INJECTED, pubsub=INJECTED, apartment_controller=INJECTED, delivery_controller=INJECTED):
         # type: (str, PubSub, ApartmentController, DeliveryController) -> None
-        logger.info('Creating esafe controller')
-        self.rebus_device = Rebus(rebus_device, power_off_on_del=False)
-        self.rebus_device.power_on()
-        time.sleep(0.2)
-        logger.info('Created rebus device')
+        logger.debug('Creating esafe controller')
+        self.rebus_dev_file = rebus_device
         self.pub_sub = pubsub
         self.apartment_controller = apartment_controller
         self.delivery_controller = delivery_controller
@@ -62,6 +59,7 @@ class EsafeController(object):
     ######################
 
     def start(self):
+        self.rebus_device = Rebus(self.rebus_dev_file, power_off_on_del=False)
         self.toggle_rebus_power()
         self.discover_devices()
         # self.polling_thread.start()
@@ -88,7 +86,7 @@ class EsafeController(object):
         mailboxes = []
 
         if rebus_id is None:
-            for rebus_id, device in self.devices.items():
+            for device in self.devices.values():
                 if isinstance(device, RebusComponentEsafeLock):
                     if device.type is EsafeBoxType.MAILBOX:
                         mailboxes.append(device)
@@ -108,24 +106,26 @@ class EsafeController(object):
 
         # if no rebus id is given, get all the parcelboxes
         if rebus_id is None:
-            for _, device in self.devices.items():
+            for device in self.devices.values():
                 if isinstance(device, RebusComponentEsafeLock):
                     if device.type is EsafeBoxType.PARCELBOX:
                         parcelboxes.append(device)
-            if available is True:
-                parcelboxes = [box for box in parcelboxes if self.delivery_controller.parcel_id_available(box.get_rebus_id())]
         # else get the one parcelbox
         else:
             parcelbox = self.devices.get(rebus_id)
             logger.debug('Requesting specific parcelbox: {}'.format(parcelbox))
             parcelboxes = [parcelbox] if parcelbox is not None and parcelbox.type is EsafeBoxType.PARCELBOX else []
 
+        # filter out the available packages
+        if available is True:
+            parcelboxes = [box for box in parcelboxes if self.delivery_controller.parcel_id_available(box.get_rebus_id())]
+
         # filter out the sizes
         if size is not None:
             size = size.lower()
             parcelboxes = [parcelbox for parcelbox in parcelboxes if parcelbox.size.name.lower() == size]
 
-        return [self._rebus_parcelbox_to_dto(mailbox) for mailbox in parcelboxes]
+        return [self._rebus_parcelbox_to_dto(parcelbox) for parcelbox in parcelboxes]
 
     # Generic Functions (parcelbox and mailbox)
 
@@ -151,7 +151,7 @@ class EsafeController(object):
             for i in range(8):
                 doorbell_id = rebus_id + i + 1
                 apartment = self.apartment_controller.load_apartment_by_doorbell_id(doorbell_id)
-                doorbells.append(DoorbellDTO(id=doorbell_id, label=doorbell_id, apartment=apartment))
+                doorbells.append(DoorbellDTO(id=doorbell_id, label=str(doorbell_id), apartment=apartment))
         return doorbells
 
     def ring_doorbell(self, doorbell_id):
