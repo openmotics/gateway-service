@@ -112,8 +112,11 @@ class EsafeEvent(BaseEvent):
       {'type': str}  # config type: Global, Doorbell, RFID
 
     * DELIVERY_CHANGE
-      {'type': str,    # Delivery type: DELIVERY or RETURN
-       'action': str}  # action type: DELIVERY or PICKUP
+      {'type': str,              # Delivery type: DELIVERY or RETURN
+       'action': str,            # action type: DELIVERY or PICKUP
+       'user_delivery_id': int,  # ID of the delivery user (can be None)
+       'user_pickup_id': int,    # ID of the pickup user (Always has a value, but can be a courier)
+       'parcel_rebus_id': int}   # Rebus id of the used parcelbox
 
     * LOCK_CHANGE
       {'id': int,      # Rebus lock id
@@ -124,3 +127,4 @@ class EsafeEvent(BaseEvent):
         CONFIG_CHANGE = 'CONFIG_CHANGE'
         DELIVERY_CHANGE = 'DELIVERY_DELIVERY'
         LOCK_CHANGE = 'LOCK_CHANGE'
+        RFID_SCAN = 'RFID_SCAN'

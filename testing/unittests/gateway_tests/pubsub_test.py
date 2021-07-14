@@ -85,3 +85,16 @@ class PubSubTest(unittest.TestCase):
         self.pubsub._publish_all_events()
         self.sub_gateway_mock.assert_not_called()
         self.sub_esafe_mock.assert_called_once_with(es_event_1)
+
+    def test_pubsub_esafe_event_delivery(self):
+        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {
+            'type': 'RETURN',
+            'action': 'PICKUP',
+            'user_delivery_id': 3,
+            'user_pickup_id': 4,
+            'parcel_rebus_id': 37
+        })
+        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
+        self.pubsub._publish_all_events()
+        self.sub_gateway_mock.assert_not_called()
+        self.sub_esafe_mock.assert_called_once_with(event)
