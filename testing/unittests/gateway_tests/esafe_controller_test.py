@@ -42,6 +42,7 @@ try:
 except ImportError:
     pass
 
+
 @unittest.skipIf(six.PY2, "Not running when in py2")
 class EsafeControllerTest(unittest.TestCase):
     """ Tests for EsafeController. """
@@ -53,7 +54,10 @@ class EsafeControllerTest(unittest.TestCase):
     def setUp(self):
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub)
-        self.apartment_controller = ApartmentController()
+        self.apartment_controller = mock.Mock(ApartmentController())
+        # Set custom return values for apartments
+        self.apartment_controller.load_apartment_by_doorbell_id.return_value = None
+        self.apartment_controller.load_apartment_by_mailbox_id.return_value = None
         SetUpTestInjections(apartment_controller=self.apartment_controller)
         SetUpTestInjections(token_timeout=3)
         self.token_store = TokenStore(token_timeout=3)
@@ -62,9 +66,9 @@ class EsafeControllerTest(unittest.TestCase):
         self.auth_controller = AuthenticationController(token_timeout=3, token_store=self.token_store, rfid_controller=self.rfid_controller)
         SetUpTestInjections(authentication_controller=self.auth_controller)
         SetUpTestInjections(config={'username': 'test', 'password': 'test'})
-        self.user_controller = mock.Mock(UserController())
+        self.user_controller = mock.Mock(UserController)
         SetUpTestInjections(user_controller=self.user_controller)
-        self.delivery_controller = mock.Mock(DeliveryController())
+        self.delivery_controller = mock.Mock(DeliveryController)
         SetUpTestInjections(delivery_controller=self.delivery_controller)
         SetUpTestInjections(rebus_device='TEST_DEVICE')
         self.esafe_controller = EsafeController()
