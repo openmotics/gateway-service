@@ -51,6 +51,8 @@ class EsafeControllerTest(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
+        self.pubsub = PubSub()
+        SetUpTestInjections(pubsub=self.pubsub)
         self.apartment_controller = ApartmentController()
         SetUpTestInjections(apartment_controller=self.apartment_controller)
         SetUpTestInjections(token_timeout=3)
@@ -60,13 +62,11 @@ class EsafeControllerTest(unittest.TestCase):
         self.auth_controller = AuthenticationController(token_timeout=3, token_store=self.token_store, rfid_controller=self.rfid_controller)
         SetUpTestInjections(authentication_controller=self.auth_controller)
         SetUpTestInjections(config={'username': 'test', 'password': 'test'})
-        self.user_controller = UserController()
+        self.user_controller = mock.Mock(UserController())
         SetUpTestInjections(user_controller=self.user_controller)
         self.delivery_controller = mock.Mock(DeliveryController())
         SetUpTestInjections(delivery_controller=self.delivery_controller)
         SetUpTestInjections(rebus_device='TEST_DEVICE')
-        self.pubsub = PubSub()
-        SetUpTestInjections(pubsub=self.pubsub)
         self.esafe_controller = EsafeController()
         self.delivery_controller.set_esafe_controller(self.esafe_controller)
         self.rebus = mock.Mock()
