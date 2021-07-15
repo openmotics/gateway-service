@@ -1,1 +1,1 @@
-rebus
+openmotics_rebus == 0.0.2
