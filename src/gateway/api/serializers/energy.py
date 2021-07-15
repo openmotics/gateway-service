@@ -43,8 +43,8 @@ class EnergyModuleSerializer(object):
 
     @staticmethod
     def deserialize(api_data):  # type: (Dict) -> EnergyModuleDTO
-        kwargs = {}
+        kwargs = {'address': None}  # Address is read-only anyway
         for field in EnergyModuleSerializer.DTO_FIELDS:
             if field in api_data:
-                kwargs[field] = field
+                kwargs[field] = api_data[field]
         return EnergyModuleDTO(**kwargs)
