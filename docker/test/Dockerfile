@@ -21,6 +21,7 @@ RUN if command -v virtualenv; then\
   fi
 
 ARG OM_PYPI_INDEX_URL
+COPY requirements-openmotics-py3.txt /app/
 # install the openmotics requirements depending on the python version
 RUN if [ -n "$OM_PYPI_INDEX_URL" ]; then\
     venv/bin/pip install --extra-index-url "$OM_PYPI_INDEX_URL" -r requirements-openmotics-py3.txt;\
