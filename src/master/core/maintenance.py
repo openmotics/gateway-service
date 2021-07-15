@@ -41,7 +41,6 @@ class MaintenanceCoreCommunicator(MaintenanceCommunicator):
         self._write_lock = Lock()
 
         self._receiver_callback = None
-        self._deactivated_callback = None
         self._maintenance_active = False
         self._stopped = True
         self._read_data_thread = None
@@ -65,14 +64,9 @@ class MaintenanceCoreCommunicator(MaintenanceCommunicator):
     def deactivate(self, join=True):
         _ = join
         self._active = False  # Core has a separate serial port
-        if self._deactivated_callback is not None:
-            self._deactivated_callback()
 
     def set_receiver(self, callback):
         self._receiver_callback = callback
-
-    def set_deactivated(self, callback):
-        self._deactivated_callback = callback
 
     def _read_data(self):
         data = ''
