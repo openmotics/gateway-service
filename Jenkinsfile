@@ -24,7 +24,7 @@ pipeline {
             agent {
                 dockerfile {
                     filename 'docker/test/Dockerfile'
-                    additionalBuildArgs '--build-arg TAG=3.8-buster --build-arg OM_PYPI_INDEX_URL=${env.OM_PYPI_INDEX_URL}'
+                    additionalBuildArgs "--build-arg TAG=3.8-buster --build-arg OM_PYPI_INDEX_URL=${env.OM_PYPI_INDEX_URL}"
                 }
             }
             steps {
@@ -62,7 +62,7 @@ pipeline {
             agent {
                 dockerfile {
                     filename 'docker/test/Dockerfile'
-                    additionalBuildArgs '--build-arg TAG=3.8-buster --build-arg OM_PYPI_INDEX_URL=${env.OM_PYPI_INDEX_URL}'
+                    additionalBuildArgs "--build-arg TAG=3.8-buster --build-arg OM_PYPI_INDEX_URL=${env.OM_PYPI_INDEX_URL}"
                 }
             }
             steps {
