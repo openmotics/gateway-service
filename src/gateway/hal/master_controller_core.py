@@ -106,6 +106,9 @@ class MasterCoreController(MasterController):
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.ucan_module_information(), 0, lambda i: logger.info('Got ucan module information: {0}'.format(i)))
         )
+        self._master_communicator.register_consumer(
+            BackgroundConsumer(CoreAPI.module_added(), 0, lambda i: logger.info('New module added: {0}'.format(i)))
+        )
 
     #################
     # Private stuff #

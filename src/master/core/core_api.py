@@ -70,6 +70,12 @@ class CoreAPI(object):
         return CoreCommandSpec(instruction='FW',
                                response_fields=[AddressField('address'), VersionField('version')])
 
+    @staticmethod
+    def module_added():  # type: () -> CoreCommandSpec
+        """ A module was added """
+        return CoreCommandSpec(instruction='AM',
+                               response_fields=[ByteField('module_type'), ByteField('line_number'), AddressField('address')])
+
     # Generic information and configuration
 
     @staticmethod
