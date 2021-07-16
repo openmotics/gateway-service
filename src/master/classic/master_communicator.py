@@ -27,8 +27,7 @@ import six
 from six.moves.queue import Empty, Queue
 from collections import Counter
 from gateway.daemon_thread import BaseThread
-from gateway.hal.master_controller import CommunicationFailure
-from gateway.maintenance_controller import InMaintenanceModeException
+from gateway.exceptions import CommunicationFailure, InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import master_api
 from master.classic.master_command import Field, MasterCommandSpec, Printable

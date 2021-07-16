@@ -32,10 +32,6 @@ if False:  # MYPY
     HEALTH = Literal['success', 'unstable', 'failure']
 
 
-class CommunicationFailure(Exception):
-    pass
-
-
 class MasterController(object):
 
     def __init__(self, master_communicator):
@@ -521,8 +517,8 @@ class MasterController(object):
 
     # All lights
 
-    def set_all_lights(self, action, floor_id=None, output_ids=None):
-        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int], Optional[List[int]]) -> None
+    def set_all_lights(self, action, output_ids=None):
+        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[List[int]]) -> None
         raise NotImplementedError()
 
     # Validation bits

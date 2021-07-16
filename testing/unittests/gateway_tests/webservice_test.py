@@ -23,7 +23,8 @@ from bus.om_bus_client import MessageClient
 from gateway.dto import DimmerConfigurationDTO, LegacyScheduleDTO, \
     LegacyStartupActionDTO, ModuleDTO, OutputStatusDTO, ScheduleDTO, \
     SensorDTO, SensorSourceDTO, SensorStatusDTO, UserDTO, VentilationDTO, \
-    VentilationSourceDTO, VentilationStatusDTO
+    VentilationSourceDTO, VentilationStatusDTO, EnergyModuleDTO
+from gateway.energy_module_controller import EnergyModuleController
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
 from gateway.input_controller import InputController
@@ -55,6 +56,7 @@ class WebInterfaceTest(unittest.TestCase):
         self.sensor_controller = mock.Mock(SensorController)
         self.ventilation_controller = mock.Mock(VentilationController)
         self.module_controller = mock.Mock(ModuleController)
+        self.energy_module_controller = mock.Mock(EnergyModuleController)
         SetUpTestInjections(frontpanel_controller=mock.Mock(FrontpanelController),
                             group_action_controller=mock.Mock(GroupActionController),
                             input_controller=mock.Mock(InputController),
@@ -71,6 +73,7 @@ class WebInterfaceTest(unittest.TestCase):
                             user_controller=self.user_controller,
                             ventilation_controller=self.ventilation_controller,
                             module_controller=self.module_controller,
+                            energy_module_controller=self.energy_module_controller,
                             uart_controller=mock.Mock())
         self.web = WebInterface()
 
@@ -276,19 +279,33 @@ class WebInterfaceTest(unittest.TestCase):
                                return_value={}) as set_status:
             self.web.set_all_lights_off()
             set_status.assert_called_with(action='OFF')
+            set_status.reset_mock()
 
-            floor_expectations = [(255, None), (2, 2), (0, 0)]
+            floor_expectations = [(255, None), (2, 'Unsupported'), (0, 'Unsupported')]
             for expectation in floor_expectations:
-                self.web.set_all_lights_floor_off(floor=expectation[0])
-                set_status.assert_called_with(action='OFF', floor_id=expectation[1])
+                response = json.loads(self.web.set_all_lights_floor_off(floor=expectation[0]))
+                if expectation[1] is None:
+                    self.assertTrue(response.get('success'))
+                    set_status.assert_called_with(action='OFF')
+                else:
+                    self.assertFalse(response.get('success'))
+                    self.assertEqual(expectation[1], response['msg'])
+                    set_status.assert_not_called()
+                set_status.reset_mock()
 
     def test_set_all_lights_on(self):
-        expectations = [(255, None), (2, 2), (0, 0)]
+        expectations = [(255, None), (2, 'Unsupported'), (0, 'Unsupported')]
         with mock.patch.object(self.output_controller, 'set_all_lights',
                                return_value={}) as set_status:
             for expectation in expectations:
-                self.web.set_all_lights_floor_on(floor=expectation[0])
-                set_status.assert_called_with(action='ON', floor_id=expectation[1])
+                response = json.loads(self.web.set_all_lights_floor_on(floor=expectation[0]))
+                if expectation[1] is None:
+                    set_status.assert_called_with(action='ON')
+                else:
+                    self.assertFalse(response.get('success'))
+                    self.assertEqual(expectation[1], response['msg'])
+                    set_status.assert_not_called()
+                set_status.reset_mock()
 
     def test_get_modules_information(self):
         master_modules = [ModuleDTO(source=ModuleDTO.Source.MASTER,
@@ -361,3 +378,37 @@ class WebInterfaceTest(unittest.TestCase):
             api_response = json.loads(self.web.set_dimmer_configuration(config=config))
             self.assertEqual({'success': True}, api_response)
             save_dimmer_configuration.assert_called_with(DimmerConfigurationDTO(dim_memory=2, dim_step=1, dim_wait_cycle=0))
+
+    def test_set_power_modules(self):
+        with mock.patch.object(self.energy_module_controller, 'save_modules') as save_modules:
+            api_response = json.loads(self.web.set_power_modules(modules=[{'id': 2, 'version': 12, 'name': '',
+                                                                           'input0': 'test', 'input1': '', 'input2': '', 'input3': '', 'input4': '', 'input5': '', 'input6': '', 'input7': '', 'input8': '', 'input9': '', 'input10': '', 'input11': '',
+                                                                           'inverted0': 0, 'inverted1': False, 'inverted2': False, 'inverted3': False, 'inverted4': False, 'inverted5': False, 'inverted6': False, 'inverted7': False, 'inverted8': False, 'inverted9': False, 'inverted10': False, 'inverted11': False,
+                                                                           'sensor0': 3, 'sensor1': 2, 'sensor2': 2, 'sensor3': 3, 'sensor4': 2, 'sensor5': 2, 'sensor6': 2, 'sensor7': 2, 'sensor8': 2, 'sensor9': 2, 'sensor10': 2, 'sensor11': 2,
+                                                                           'times0': '', 'times1': '', 'times2': '', 'times3': '', 'times4': '', 'times5': '', 'times6': '', 'times7': '', 'times8': '', 'times9': '', 'times10': '', 'times11': ''}]))
+            self.assertEqual({'success': True}, api_response)
+            extra_kwargs = {}
+            for i in range(12):
+                extra_kwargs.update({'input{0}'.format(i): '',
+                                     'inverted{0}'.format(i): False,
+                                     'sensor{0}'.format(i): 2,
+                                     'times{0}'.format(i): ''})
+            extra_kwargs.update({'input0': 'test',
+                                 'inverted0': 0,
+                                 'sensor0': 3, 'sensor3': 3})
+            save_modules.assert_called_once_with([EnergyModuleDTO(id=2, version=12, name='', address=None,
+                                                                  **extra_kwargs)])
+        with mock.patch.object(self.energy_module_controller, 'load_modules') as load_modules:
+            extra_kwargs.update({'input0': 'foobar',
+                                 'inverted0': True,
+                                 'sensor0': 4})
+            load_modules.side_effect = [[EnergyModuleDTO(id=2, version=12, name='bar', address=32,
+                                                         **extra_kwargs)]]
+            api_response = json.loads(self.web.get_power_modules())
+            self.assertEqual({'success': True,
+                              'modules': [{'id': 2, 'version': 12, 'name': 'bar', 'address': 'E32',
+                                           'input0': 'foobar', 'input1': '', 'input2': '', 'input3': '', 'input4': '', 'input5': '', 'input6': '', 'input7': '', 'input8': '', 'input9': '', 'input10': '', 'input11': '',
+                                           'inverted0': True, 'inverted1': False, 'inverted2': False, 'inverted3': False, 'inverted4': False, 'inverted5': False, 'inverted6': False, 'inverted7': False, 'inverted8': False, 'inverted9': False, 'inverted10': False, 'inverted11': False,
+                                           'sensor0': 4, 'sensor1': 2, 'sensor2': 2, 'sensor3': 3, 'sensor4': 2, 'sensor5': 2, 'sensor6': 2, 'sensor7': 2, 'sensor8': 2, 'sensor9': 2, 'sensor10': 2, 'sensor11': 2,
+                                           'times0': '', 'times1': '', 'times2': '', 'times3': '', 'times4': '', 'times5': '', 'times6': '', 'times7': '', 'times8': '', 'times9': '', 'times10': '', 'times11': ''}]}, api_response)
+

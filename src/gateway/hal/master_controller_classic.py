@@ -42,8 +42,8 @@ from gateway.hal.mappers_classic import DimmerConfigurationMapper, \
     PulseCounterMapper, PumpGroupMapper, RTD10Mapper, SensorMapper, \
     ShutterGroupMapper, ShutterMapper, ThermostatGroupMapper, \
     ThermostatMapper
-from gateway.hal.master_controller import CommunicationFailure, \
-    MasterController
+from gateway.exceptions import CommunicationFailure
+from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
@@ -217,6 +217,7 @@ class MasterClassicController(MasterController):
         # type: () -> None
         """
         Checks master settings such as:
+        * Enable large installation
         * Enable async messages
         * Enable multi-tenancy
         * Enable 32 thermostats
@@ -1352,6 +1353,8 @@ class MasterClassicController(MasterController):
 
         self._master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0},
                                              timeout=5)
+        self.cold_reset()
+
         ret.append('Activated eeprom')
         self._eeprom_controller.invalidate_cache()
 
@@ -1505,8 +1508,8 @@ class MasterClassicController(MasterController):
         if action_type < 0 or action_type > 254:
             raise ValueError('action_type not in [0, 254]: %d' % action_type)
 
-        if action_number < 0 or action_number > 254:
-            raise ValueError('action_number not in [0, 254]: %d' % action_number)
+        if action_number < 0 or action_number > 255:
+            raise ValueError('action_number not in [0, 255]: %d' % action_number)
 
         fields = {'action_type': action_type,
                   'action_number': action_number}
@@ -1609,19 +1612,15 @@ class MasterClassicController(MasterController):
     # All lights functions
 
     @communication_enabled
-    def set_all_lights(self, action, floor_id=None, output_ids=None):
-        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int], Optional[List[int]]) -> None
-        _ = output_ids  # Ignored, as the Classic Master knows about the floor
-        floor_id = Toolbox.denonify(floor_id, 255)
+    def set_all_lights(self, action, output_ids=None):
+        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[List[int]]) -> None
+        # TODO: Use output_ids if needed
         if action == 'OFF':
-            if floor_id == 255:
-                self.do_basic_action(master_api.BA_ALL_LIGHTS_OFF, 0)
-            else:
-                self.do_basic_action(master_api.BA_LIGHTS_OFF_FLOOR, floor_id)
+            self.do_basic_action(master_api.BA_ALL_LIGHTS_OFF, 0)
         elif action == 'ON':
-            self.do_basic_action(master_api.BA_LIGHTS_ON_FLOOR, floor_id)
+            self.do_basic_action(master_api.BA_LIGHTS_ON_FLOOR, 255)
         elif action == 'TOGGLE':
-            self.do_basic_action(master_api.BA_LIGHTS_TOGGLE_FLOOR, floor_id)
+            self.do_basic_action(master_api.BA_LIGHTS_TOGGLE_FLOOR, 255)
 
     # Sensors
 

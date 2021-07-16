@@ -24,7 +24,7 @@ from threading import RLock, Thread
 from six.moves.queue import Empty
 
 from gateway.daemon_thread import BaseThread
-from gateway.hal.master_controller import CommunicationFailure
+from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from gateway.models import EnergyModule, EnergyCT, Module
@@ -145,10 +145,12 @@ class EnergyCommunicator(object):
         (ret, self.__cid) = (self.__cid, (self.__cid % 255) + 1)
         return ret
 
-    def __debug(self, action, data):
-        # type: (str, Optional[bytearray]) -> None
+    @staticmethod
+    def _log_data(action, data, error=False):
+        # type: (str, Optional[bytearray], bool) -> None
         if data is not None:
-            logger.debug("%.3f %s power: %s", time.time(), action, Printable(data))
+            logger_ = logger.debug if not error else logger.error
+            logger_("%.3f %s energy bus: %s", time.time(), action, Printable(data))
 
     def __write_to_serial(self, data):
         # type: (bytearray) -> None
@@ -156,7 +158,7 @@ class EnergyCommunicator(object):
 
         :param data: the data to write
         """
-        self.__debug('writing to', data)
+        EnergyCommunicator._log_data('writing to', data)
         self.__serial.write(data)
         self.__communication_stats_bytes['bytes_written'] += len(data)
         threshold = time.time() - self.__debug_buffer_duration
@@ -443,10 +445,10 @@ class EnergyCommunicator(object):
         except Empty:
             raise CommunicationTimedOutException('Communication timed out')
         except Exception:
-            self.__debug('reading from', command)
+            EnergyCommunicator._log_data('reading from', command, error=True)
             raise
         finally:
-            self.__debug('reading from', command)
+            EnergyCommunicator._log_data('reading from', command)
 
         threshold = time.time() - self.__debug_buffer_duration
         self.__debug_buffer['read'][time.time()] = str(Printable(command))

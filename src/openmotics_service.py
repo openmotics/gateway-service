@@ -21,7 +21,6 @@ import constants
 from platform_utils import System
 System.import_libs()
 
-import logging
 import logging.handlers
 import time
 import sys
@@ -236,7 +235,7 @@ class OpenmoticsService(object):
             metrics_collector.stop()
             metrics_controller.stop()
             user_controller.stop()
-            ventilation_controller.start()
+            ventilation_controller.stop()
             thermostat_controller.stop()
             plugin_controller.stop()
             if frontpanel_controller:

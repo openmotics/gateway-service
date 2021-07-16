@@ -8,11 +8,23 @@ pipeline {
         ))
     }
     stages {
+        stage('Setup pypi credentials') {
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'om-pypi-index-url', variable: 'OM_PYPI_INDEX_URL'),
+                    ])
+                    {
+                        env.OM_PYPI_INDEX_URL = "${OM_PYPI_INDEX_URL}"
+                    }
+                }
+            }
+        }
         stage('Run mypy typechecks') {
             agent {
                 dockerfile {
                     filename 'docker/test/Dockerfile'
-                    additionalBuildArgs '--build-arg TAG=3.8-buster'
+                    additionalBuildArgs "--build-arg TAG=3.8-buster --build-arg OM_PYPI_INDEX_URL=${env.OM_PYPI_INDEX_URL}"
                 }
             }
             steps {
@@ -50,7 +62,7 @@ pipeline {
             agent {
                 dockerfile {
                     filename 'docker/test/Dockerfile'
-                    additionalBuildArgs '--build-arg TAG=3.8-buster'
+                    additionalBuildArgs "--build-arg TAG=3.8-buster --build-arg OM_PYPI_INDEX_URL=${env.OM_PYPI_INDEX_URL}"
                 }
             }
             steps {

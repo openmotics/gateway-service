@@ -16,7 +16,9 @@
 
 class GatewayException(Exception):
     DESC = 'General Gateway Exception'
+
     def __init__(self, msg=None, *args):
+        _ = args  # Discard any other argument
         self.extra_message = msg
 
     @property
@@ -83,3 +85,11 @@ class NotImplementedException(GatewayException):
 
 class ForbiddenException(GatewayException):
     DESC = 'Action forbidden'
+
+
+class CommunicationFailure(Exception):
+    pass
+
+
+class InMaintenanceModeException(CommunicationFailure):
+    pass

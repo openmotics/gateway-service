@@ -26,7 +26,7 @@ if False:  # MYPY
 
 
 class OutputDTO(BaseDTO):
-    def __init__(self, id, name='', module_type='O', timer=None, floor=None, output_type=None,
+    def __init__(self, id, name='', module_type='O', timer=None, output_type=None,
                  can_led_1=None,  # type: Optional[FeedbackLedDTO]
                  can_led_2=None,  # type: Optional[FeedbackLedDTO]
                  can_led_3=None,  # type: Optional[FeedbackLedDTO]
@@ -38,7 +38,6 @@ class OutputDTO(BaseDTO):
         self.name = name  # type: str
         self.module_type = module_type  # type: str
         self.timer = timer  # type: Optional[int]
-        self.floor = floor  # type: Optional[int]
         self.output_type = output_type  # type: int
         self.room = room  # type: Optional[int]
         self.lock_bit_id = lock_bit_id  # type: Optional[int]
@@ -57,7 +56,6 @@ class OutputDTO(BaseDTO):
                 self.name == other.name and
                 self.module_type == other.module_type and
                 self.timer == other.timer and
-                self.floor == other.floor and
                 self.output_type == other.output_type and
                 self.room == other.room and
                 self.lock_bit_id == other.lock_bit_id and

@@ -33,8 +33,8 @@ from gateway.enums import IndicateType, ShutterEnums
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
-from gateway.hal.master_controller import CommunicationFailure, \
-    MasterController
+from gateway.exceptions import CommunicationFailure
+from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
@@ -84,7 +84,7 @@ class MasterCoreController(MasterController):
         self._sensor_states = {}  # type: Dict[int,Dict[str,None]]
         self._shutters_interval = 600
         self._shutters_last_updated = 0.0
-        self._shutter_status = {}  # type: Dict[int, Tuple[bool, bool]]
+        self._shutter_status = {}  # type: Dict[int, Tuple[Optional[bool], Optional[bool]]]
         self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
         self._firmware_versions = {}  # type: Dict[str, Optional[str]]
@@ -105,6 +105,9 @@ class MasterCoreController(MasterController):
         )
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.ucan_module_information(), 0, lambda i: logger.info('Got ucan module information: {0}'.format(i)))
+        )
+        self._master_communicator.register_consumer(
+            BackgroundConsumer(CoreAPI.module_added(), 0, lambda i: logger.info('New module added: {0}'.format(i)))
         )
 
     #################
@@ -130,26 +133,31 @@ class MasterCoreController(MasterController):
             logger.info('Got master event: {0}'.format(core_event))
         if core_event.type == MasterCoreEvent.Types.OUTPUT:
             output_id = core_event.data['output']
-            if core_event.data['type'] == MasterCoreEvent.OutputEventTypes.STATUS:
+            if core_event.data['type'] == MasterCoreEvent.IOEventTypes.STATUS:
                 # Update internal state cache
                 state_dto = OutputStatusDTO(id=output_id,
                                             status=core_event.data['status'],
                                             dimmer=core_event.data['dimmer_value'],
                                             ctimer=core_event.data['timer'])
-            else:  # elif core_event.data['type'] == MasterCoreEvent.OutputEventTypes.LOCKING:
+            else:  # elif core_event.data['type'] == MasterCoreEvent.IOEventTypes.LOCKING:
                 state_dto = OutputStatusDTO(id=output_id,
                                             locked=core_event.data['locked'])
             self._handle_output_state(output_id, state_dto)
         elif core_event.type == MasterCoreEvent.Types.INPUT:
-            master_event = self._input_state.handle_event(core_event)
-            self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
+            if core_event.data['type'] == MasterCoreEvent.IOEventTypes.STATUS:
+                master_event = self._input_state.handle_event(core_event)
+                self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
+            # TODO: Implement input locking
         elif core_event.type == MasterCoreEvent.Types.SENSOR:
-            master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, data=core_event.data)
-            self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
             sensor_id = core_event.data['sensor']
             if sensor_id not in self._sensor_states:
                 return
-            self._sensor_states[sensor_id][core_event.data['type']] = core_event.data['value']
+            for value in core_event.data['values']:
+                master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, data={'sensor': sensor_id,
+                                                                                 'type': value['type'],
+                                                                                 'value': value['value']})
+                self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+                self._sensor_states[sensor_id][value['type']] = value['value']
         elif core_event.type == MasterCoreEvent.Types.EXECUTE_GATEWAY_API:
             self._handle_execute_event(action=core_event.data['action'],
                                        device_nr=core_event.data['device_nr'],
@@ -159,15 +167,11 @@ class MasterCoreController(MasterController):
         if action == 0:
             if extra_parameter not in [0, 1, 2]:
                 return
-            floor_id = None  # type: Optional[int]
-            if device_nr != 65535:
-                floor_id = device_nr
             event_action = {0: 'OFF', 1: 'ON', 2: 'TOGGLE'}[extra_parameter]
             self._pubsub.publish_master_event(topic=PubSub.MasterTopics.OUTPUT,
                                               master_event=MasterEvent(event_type=MasterEvent.Types.EXECUTE_GATEWAY_API,
                                                                        data={'type': MasterEvent.APITypes.SET_LIGHTS,
-                                                                             'data': {'action': event_action,
-                                                                                      'floor_id': floor_id}}))
+                                                                             'data': {'action': event_action}}))
 
     def _handle_output_state(self, output_id, state_dto):
         # type: (int, OutputStatusDTO) -> None
@@ -187,12 +191,17 @@ class MasterCoreController(MasterController):
         # type: (ShutterConfiguration, Optional[bool], Optional[bool]) -> None
         if shutter.outputs.output_0 == 255 * 2:
             return
+
+        previous_shutter_outputs = self._shutter_status.get(shutter.id, (None, None))
         if output_0_on is None:
-            output_0_on = self._shutter_status[shutter.id][0]
+            output_0_on = previous_shutter_outputs[0]
         if output_1_on is None:
-            output_1_on = self._shutter_status[shutter.id][1]
-        if (output_0_on, output_1_on) == self._shutter_status.get(shutter.id, (None, None)):
-            logger.error('shutter status did not change')
+            output_1_on = previous_shutter_outputs[1]
+        new_shutter_outputs = (output_0_on, output_1_on)
+        self._shutter_status[shutter.id] = new_shutter_outputs
+
+        if previous_shutter_outputs != (None, None) and new_shutter_outputs == previous_shutter_outputs:
+            logger.info('Shutter {0} status did not change while output changed'.format(shutter.id))
             return
 
         output_module = OutputConfiguration(shutter.outputs.output_0).module
@@ -213,7 +222,6 @@ class MasterCoreController(MasterController):
                       'location': {'room_id': 255}}  # TODO: rooms
         master_event = MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data)
         self._pubsub.publish_master_event(PubSub.MasterTopics.SHUTTER, master_event)
-        self._shutter_status[shutter.id] = (output_0_on, output_1_on)
 
     def _synchronize(self):
         # type: () -> None
@@ -820,7 +828,55 @@ class MasterCoreController(MasterController):
         self._pubsub.publish_master_event(PubSub.MasterTopics.MODULE, master_event)
 
     def get_module_log(self):  # type: () -> List[Dict[str, Any]]
-        raise NotImplementedError()  # No need to implement. Not used and rather obsolete code anyway
+        # TODO: This is incorrect and uses passthrough EEPROM reads to emulate a more-or-less compatible
+        #  response which should work for the integration tests. It must be replaced by decent events.
+
+        # Log format: {'code': '<NEW|EXISTING|DUPLCATE|UNKNOWN>',
+        #              'module_nr': <module number in its category>,
+        #              'category': '<SHUTTER|INPUT|OUTPUT>',
+        #              'module_type': '<I|O|T|D|i|o|t|d|C>,
+        #              'address': '<module address>'}
+
+        def _default_if_255(value, default):
+            return value if value != 255 else default
+
+        log = []
+        device_type_normalize = {'b': 'I', 'r': 'o', 'R': 'O'}
+
+        global_configuration = GlobalConfiguration(read_through=True)
+        nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
+        for module_id in range(nr_of_input_modules):
+            input_module_info = InputModuleConfiguration(module_id, read_through=True)
+            device_type = input_module_info.device_type
+            module = {'code': 'EXISTING',
+                      'module_nr': module_id,
+                      'category': 'INPUT',
+                      'module_type': device_type_normalize.get(device_type, device_type),
+                      'address': input_module_info.address}
+            log.append(module)
+
+        nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
+        for module_id in range(nr_of_output_modules):
+            output_module_info = OutputModuleConfiguration(module_id, read_through=True)
+            device_type = output_module_info.device_type
+            module = {'code': 'EXISTING',
+                      'module_nr': module_id,
+                      'category': 'OUTPUT',
+                      'module_type': device_type_normalize.get(device_type, device_type),
+                      'address': output_module_info.address}
+            log.append(module)
+
+        nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
+        for module_id in range(nr_of_can_controls):
+            can_control_module_info = CanControlModuleConfiguration(module_id, read_through=True)
+            module = {'code': 'EXISTING',
+                      'module_nr': nr_of_input_modules + module_id,
+                      'category': 'INPUT',
+                      'module_type': 'C',
+                      'address': can_control_module_info.address}
+            log.append(module)
+
+        return log
 
     def get_modules(self):
         def _default_if_255(value, default):
@@ -941,9 +997,18 @@ class MasterCoreController(MasterController):
                             module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
+            shutter_dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+                                    address='114.{0}'.format(output_module_info.address[4:]),
+                                    module_type=ModuleDTO.ModuleType.SHUTTER,
+                                    hardware_type=hardware_type,
+                                    order=module_id)
             if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(output_module_info.address)
+                shutter_dto.online = dto.online
+                shutter_dto.hardware_version = dto.hardware_version
+                shutter_dto.firmware_version = dto.firmware_version
             information.append(dto)
+            information.append(shutter_dto)
 
         nr_of_sensor_modules = _default_if_255(global_configuration.number_of_sensor_modules, 0)
         for module_id in range(nr_of_sensor_modules):
@@ -1071,7 +1136,21 @@ class MasterCoreController(MasterController):
     # Generic
 
     def power_cycle_bus(self):
-        raise NotImplementedError()
+        # TODO: Replace by cycle instruction as soon as it's available in the firmware
+        try:
+            logger.warning('Powering down RS485 bus...')
+            self._master_communicator.do_basic_action(BasicAction(action_type=253,
+                                                                  action=0,
+                                                                  device_nr=0))  # Power off
+            logger.info('Powering down RS485 bus... Done')
+        except Exception as ex:
+            logger.critical('Exception when changing bus power: {0}'.format(ex))
+        time.sleep(5)
+        logger.warning('Powering on RS485 bus...')
+        self._master_communicator.do_basic_action(BasicAction(action_type=253,
+                                                              action=0,
+                                                              device_nr=1))  # Power on
+        logger.info('Powering on RS485 bus... Done')
 
     def get_status(self):
         firmware_version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
@@ -1129,7 +1208,8 @@ class MasterCoreController(MasterController):
             data_structure[page] = page_data
         self._restore(data_structure)
 
-    def factory_reset(self):
+    def factory_reset(self, can=False):
+        # TODO: Include factory of CAN Controls
         pages, page_length = MemoryFile.SIZES[MemoryTypes.EEPROM]
         data_set = {page: bytearray([255] * page_length) for page in range(pages)}
         # data_set[0][0] = 1  # Needed to validate Brain+ with no front panel attached
@@ -1166,10 +1246,8 @@ class MasterCoreController(MasterController):
 
     # All lights actions
 
-    def set_all_lights(self, action, floor_id=None, output_ids=None):
-        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int], Optional[List[int]]) -> None
-        _ = floor_id  # Ignored, the Core Master does not know about floors
-
+    def set_all_lights(self, action, output_ids=None):
+        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[List[int]]) -> None
         if output_ids is None and action == 'OFF':
             # All lights off
             self._master_communicator.do_basic_action(BasicAction(action_type=0,

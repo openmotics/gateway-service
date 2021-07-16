@@ -174,14 +174,14 @@ class P1ControllerTest(unittest.TestCase):
                                return_value=[1.0, 2.3, 0.0, 12.0]), \
              mock.patch.object(self.helper, '_get_tariff_indicator',
                                return_value=[1.0, 2.0, 0.0, 12.0]), \
-             mock.patch.object(self.helper, '_get_currents',
+             mock.patch.object(self.helper, '_get_phase_currents',
                                return_value=[
                                    {'phase1': 1.0, 'phase2': 1.0, 'phase3': 1.0},
                                    {'phase1': 2.0, 'phase2': 2.0, 'phase3': 2.0},
                                    {'phase1': 0.0, 'phase2': 0.0, 'phase3': 0.0},
                                    {'phase1': 12.0, 'phase2': 12.0, 'phase3': 12.0},
                                ]), \
-             mock.patch.object(self.helper, '_get_voltages',
+             mock.patch.object(self.helper, '_get_phase_voltages',
                                return_value=[
                                    {'phase1': 1.0, 'phase2': 1.0, 'phase3': 1.0},
                                    {'phase1': 2.3, 'phase2': 2.3, 'phase3': 2.3},

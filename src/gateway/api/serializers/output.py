@@ -37,7 +37,6 @@ class OutputSerializer(object):
                 'module_type': output_dto.module_type,
                 'name': output_dto.name,
                 'timer': Toolbox.denonify(output_dto.timer, OutputSerializer.WORD_MAX),
-                'floor': Toolbox.denonify(output_dto.floor, OutputSerializer.BYTE_MAX),
                 'type': Toolbox.denonify(output_dto.output_type, OutputSerializer.BYTE_MAX),
                 'lock_bit_id': Toolbox.denonify(output_dto.lock_bit_id, OutputSerializer.BYTE_MAX),
                 'can_led_1_id': Toolbox.denonify(output_dto.can_led_1.id, OutputSerializer.BYTE_MAX),
@@ -62,7 +61,6 @@ class OutputSerializer(object):
                      'type': ('output_type', None),
                      'lock_bit_id': ('lock_bit_id', OutputSerializer.BYTE_MAX),
                      'timer': ('timer', OutputSerializer.WORD_MAX),
-                     'floor': ('floor', OutputSerializer.BYTE_MAX),
                      'room': ('room', OutputSerializer.BYTE_MAX)}
         )
         for i in range(4):

@@ -31,7 +31,7 @@ from gateway.dto import InputDTO
 from gateway.events import GatewayEvent
 from gateway.models import Input, Room
 from gateway.hal.master_event import MasterEvent
-from gateway.hal.master_controller import CommunicationFailure
+from gateway.exceptions import CommunicationFailure
 from gateway.base_controller import BaseController, SyncStructure
 from gateway.pubsub import PubSub
 from serial_utils import CommunicationTimedOutException

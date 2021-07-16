@@ -26,12 +26,12 @@ from gateway.events import GatewayEvent
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_controller import MaintenanceController
-from gateway.models import Output, Room, Floor
+from gateway.models import Output, Room
 from gateway.output_controller import OutputController, OutputStateCache
 from gateway.pubsub import PubSub
 from ioc import SetTestMode, SetUpTestInjections
 
-MODELS = [Output, Room, Floor]
+MODELS = [Output, Room]
 
 
 class OutputControllerTest(unittest.TestCase):
@@ -238,8 +238,7 @@ class OutputControllerTest(unittest.TestCase):
             load.assert_called_with(output_id=42)
 
     def test_output_actions(self):
-        floor = Floor.create(number=5)
-        room = Room.create(number=10, floor=floor)
+        room = Room.create(number=10)
         Output.create(number=2, room=room)
         Output.create(number=3)
 
@@ -249,15 +248,6 @@ class OutputControllerTest(unittest.TestCase):
         with mock.patch.object(self.master_controller, 'set_all_lights') as call:
             self.controller.set_all_lights(action='ON')
             call.assert_called_once_with(action='ON')
-        with mock.patch.object(self.master_controller, 'set_all_lights') as call:
-            self.controller.set_all_lights(action='OFF', floor_id=1)
-            call.assert_called_once_with(action='OFF', floor_id=1, output_ids=[])
-        with mock.patch.object(self.master_controller, 'set_all_lights') as call:
-            self.controller.set_all_lights(action='OFF', floor_id=5)
-            call.assert_called_once_with(action='OFF', floor_id=5, output_ids=[2])
-        with mock.patch.object(self.master_controller, 'set_all_lights') as call:
-            self.controller.set_all_lights(action='ON', floor_id=5)
-            call.assert_called_once_with(action='ON', floor_id=5, output_ids=[2])
 
 
 class OutputStateCacheTest(unittest.TestCase):

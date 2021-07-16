@@ -12,6 +12,13 @@ From `docer/runner`, the docker container can be build with the command:
 ./container.sh build
 ```
 
+> Note: on OSX this requires a few dependencies, which can be installed using
+> ``` shell
+> brew install coreutils gnu-sed
+> ```
+
+
+
 ### Credentials
 
 The local runner requires a set of certificates to be able to connect to the cloud. These credentials are provided in a tarball named `client.tar.gz` from OpenMotics.

@@ -28,7 +28,7 @@ import six
 from gateway.daemon_thread import BaseThread
 from gateway.events import GatewayEvent
 from gateway.enums import EnergyEnums
-from gateway.hal.master_controller import CommunicationFailure
+from gateway.exceptions import CommunicationFailure
 from gateway.models import Database
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Hardware
@@ -270,8 +270,7 @@ class MetricsCollector(object):
                     tags = {'id': output_id,
                             'name': output_name,
                             'module_type': MetricsCollector.OUTPUT_MODULE_TYPES[output_dto.module_type],
-                            'type': MetricsCollector.OUTPUT_OUTPUT_TYPES[output_dto.output_type],
-                            'floor': output_dto.floor}
+                            'type': MetricsCollector.OUTPUT_OUTPUT_TYPES[output_dto.output_type]}
                     self._enqueue_metrics(metric_type=metric_type,
                                           values={'value': int(level)},
                                           tags=tags,
@@ -1100,7 +1099,7 @@ class MetricsCollector(object):
                           'unit': 'event'}]},
             # output
             {'type': 'output',
-             'tags': ['id', 'name', 'module_type', 'type', 'floor'],
+             'tags': ['id', 'name', 'module_type', 'type'],
              'metrics': [{'name': 'value',
                           'description': 'Output state',
                           'type': 'gauge',

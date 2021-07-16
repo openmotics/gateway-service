@@ -19,10 +19,10 @@ Room (de)serializer
 from __future__ import absolute_import
 from toolbox import Toolbox
 from gateway.api.serializers.base import SerializerToolbox
-from gateway.dto import RoomDTO, FloorDTO
+from gateway.dto import RoomDTO
 
 if False:  # MYPY
-    from typing import Dict, Optional, List, Tuple
+    from typing import Dict, Optional, List
 
 
 class RoomSerializer(object):
@@ -31,7 +31,7 @@ class RoomSerializer(object):
     def serialize(room_dto, fields):  # type: (RoomDTO, Optional[List[str]]) -> Dict
         data = {'id': room_dto.id,
                 'name': Toolbox.denonify(room_dto.name, ''),
-                'floor': 255 if room_dto.floor is None else room_dto.floor.id}
+                'floor': 255}
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod
@@ -39,8 +39,4 @@ class RoomSerializer(object):
         room_dto = RoomDTO(id=api_data['id'])
         if 'name' in api_data:
             room_dto.name = Toolbox.nonify(api_data['name'], '')
-        if 'floor' in api_data:
-            floor_id = api_data['floor']
-            if floor_id != 255:
-                room_dto.floor = FloorDTO(id=floor_id)
         return room_dto

@@ -75,4 +75,4 @@ class MockedCore(object):
         _ = timeout, log
         if basic_action.action_type == 200 and basic_action.action == 1:
             # Send EEPROM_ACTIVATE event
-            self.memory_file._handle_event({'type': 254, 'action': 0, 'device_nr': 0, 'data': 0})
+            self.memory_file._handle_event({'type': 248, 'action': 0, 'device_nr': 0, 'data': 0})
