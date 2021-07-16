@@ -889,10 +889,10 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
-            if device_type == 'o' and output_module_info.address[4:15] in ['000.000.000',
-                                                                           '000.000.001',
-                                                                           '000.000.002']:
-                outputs.append('P')  # Internal output module
+            if output_module_info.address[4:15] in ['000.000.000', '000.000.001',
+                                                    '000.000.002', '000.000.003']:
+                outputs.append({'o': 'P',
+                                'd': 'F'}.get(device_type, device_type))
             else:
                 # Use device_type, except for shutters, which are now kinda output module alike
                 outputs.append({'r': 'o',
@@ -919,12 +919,13 @@ class MasterCoreController(MasterController):
                 inputs.append('T')
             elif device_type == 's':
                 can_inputs.append('T')  # uCAN sensor "module"
-        for module_id in range(nr_of_can_controls - 1):
+        for module_id in range(nr_of_can_controls):
             can_inputs.append('C')
         can_inputs.append('E')
 
         # i/I/J = Virtual/physical/internal Input module
         # o/O/P = Virtual/physical/internal Ouptut module
+        # d/D/F = Virtual/physical/internal 0/1-10V module
         # l = OpenCollector module
         # T/t = Physical/internal Temperature module
         # C/E = Physical/internal CAN Control
