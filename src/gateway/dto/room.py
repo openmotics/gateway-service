@@ -17,19 +17,16 @@
 Room DTO
 """
 from gateway.dto.base import BaseDTO
-from gateway.dto.floor import FloorDTO
 
 if False:  # MYPY
     from typing import Optional
 
 
 class RoomDTO(BaseDTO):
-    def __init__(self, id, name=None, floor=None):
+    def __init__(self, id, name=None):
         self.id = id  # type: int
         self.name = name  # type: Optional[str]
-        self.floor = floor  # type: Optional[FloorDTO]
 
     @property
     def in_use(self):
-        return ((self.name is not None and self.name != '') or
-                self.floor is not None)
+        return self.name is not None and self.name != ''

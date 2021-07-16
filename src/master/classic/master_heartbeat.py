@@ -18,7 +18,7 @@ import logging
 import time
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.exceptions import InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import master_api
 from serial_utils import CommunicationStatus, CommunicationTimedOutException

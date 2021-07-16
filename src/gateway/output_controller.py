@@ -28,9 +28,9 @@ from gateway.daemon_thread import DaemonThread, DaemonThreadWait
 from gateway.dto import OutputDTO, OutputStatusDTO, GlobalFeedbackDTO, \
     DimmerConfigurationDTO
 from gateway.events import GatewayEvent
-from gateway.hal.master_controller import CommunicationFailure
+from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
-from gateway.models import Output, Room, Floor
+from gateway.models import Output, Room
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 from serial_utils import CommunicationTimedOutException
@@ -85,8 +85,7 @@ class OutputController(BaseController):
         if master_event.type == MasterEvent.Types.EXECUTE_GATEWAY_API:
             if master_event.data['type'] == MasterEvent.APITypes.SET_LIGHTS:
                 action = master_event.data['data']['action']  # type: Literal['ON', 'OFF', 'TOGGLE']
-                floor_id = master_event.data['data']['floor_id']  # type: Optional[int]
-                self.set_all_lights(action=action, floor_id=floor_id)
+                self.set_all_lights(action=action)
 
     def _handle_output_status(self, state_dto):
         # type: (OutputStatusDTO) -> None
@@ -175,24 +174,9 @@ class OutputController(BaseController):
         # type: (DimmerConfigurationDTO) -> None
         self._master_controller.save_dimmer_configuration(dimmer_configuration_dto)
 
-    def set_all_lights(self, action, floor_id=None):  # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int]) -> None
+    def set_all_lights(self, action):  # type: (Literal['ON', 'OFF', 'TOGGLE']) -> None
         # TODO: Also include other sources (e.g. plugins) once implemented
-        if floor_id is None:
-            self._master_controller.set_all_lights(action=action)
-            return
-
-        # TODO: Filter on output type "light" once available
-        query = Output.select(Output.number) \
-                      .join_from(Output, Room, join_type=JOIN.INNER) \
-                      .join_from(Room, Floor, join_type=JOIN.INNER) \
-                      .where(Floor.number == floor_id)
-        output_ids = [output['number'] for output in query.dicts()]
-
-        # It is unknown whether `floor` is known to the Master implementation. So pass both the floor_id
-        # and the list of Output ids to the MasterController
-        self._master_controller.set_all_lights(action=action,
-                                               floor_id=floor_id,
-                                               output_ids=output_ids)
+        self._master_controller.set_all_lights(action=action)
 
     def set_output_status(self, output_id, is_on, dimmer=None, timer=None):
         # type: (int, bool, Optional[int], Optional[int]) -> None

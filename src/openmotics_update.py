@@ -290,14 +290,21 @@ def update_master_firmware(master_type, hexfile, version):
     elif master_type == 'master_coreplus':
         arguments += ['--master-firmware-core', hexfile]
     try:
+        # If the master is stuck in BL, the version call fails, but we should still be able to flash the master
         output = subprocess.check_output(['python', master_tool, '--version'])
         current_version, _, _ = output.decode('utf-8').rstrip().partition(' ')
+    except Exception as exc:
+        current_version = 'unknown'
+        logger.warning('Checking master firmware version failed - proceeding with flashing')
+    # Retry logic for flashing should be placed in the master_controller if deemed necessary
+    try:
         if current_version == version:
             logger.info('Master is already v{}, skipped'.format(version))
         else:
             logger.info('Master {} -> {}'.format(current_version, version if version else 'unknown'))
             cmd(['python', master_tool, '--update'] + arguments)
             cmd(['cp', hexfile, os.path.join(PREFIX, 'firmware.hex')])
+            logger.info("Success Flashing master")
     except Exception as exc:
         logger.exception('Updating Master firmware failed')
         return exc

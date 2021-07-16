@@ -48,8 +48,7 @@ class MasterEvent(object):
       {'type': str,                   # APITypes
        'data': {...}}
       * SET_LIGHTS
-        {'action': 'ON/OFF/TOGGLE',
-         'floor_id': Optional[int]}
+        {'action': 'ON/OFF/TOGGLE'}
     """
 
     class Types(object):
@@ -71,6 +70,8 @@ class MasterEvent(object):
         TEMPERATURE = 'TEMPERATURE'
         HUMIDITY = 'HUMIDITY'
         BRIGHTNESS = 'BRIGHTNESS'
+        VOC = 'VOC'
+        CO2 = 'CO2'
 
     def __init__(self, event_type, data):
         # type: (str, Dict[str,Any]) -> None

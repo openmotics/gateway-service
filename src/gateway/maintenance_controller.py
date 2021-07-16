@@ -22,9 +22,13 @@ import random
 import socket
 
 from gateway.daemon_thread import BaseThread
-from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.exceptions import InMaintenanceModeException
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import System
+
+if False:  # MYPY
+    from typing import Dict, Optional, Callable, Any
+    from master.maintenance_communicator import MaintenanceCommunicator
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +41,11 @@ class MaintenanceController(object):
 
     @Inject
     def __init__(self, maintenance_communicator=INJECTED, ssl_private_key=INJECTED, ssl_certificate=INJECTED):
+        # type: (MaintenanceCommunicator, str, str) -> None
         """
         :type maintenance_communicator: gateway.maintenance_communicator.MaintenanceCommunicator
         """
-        self._consumers = {}
+        self._consumers = {}  # type: Dict[int, Optional[Callable[[str], Any]]]
         self._privatekey_filename = ssl_private_key
         self._certificate_filename = ssl_certificate
         self._maintenance_communicator = maintenance_communicator

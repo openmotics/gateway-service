@@ -23,7 +23,7 @@ import time
 from intelhex import IntelHex
 from ioc import Inject, INJECTED
 from master.core.core_communicator import CoreCommunicator
-from master.core.maintenance import MaintenanceCommunicator
+from master.maintenance_communicator import MaintenanceCommunicator
 
 if False:  # MYPY
     from typing import Optional

@@ -1,4 +1,4 @@
-# Copyright (C) 2020 OpenMotics BV
+# Copyright (C) 2019 OpenMotics BV
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -12,30 +12,31 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 """
-Floor Mapper
+The maintenance module contains the MaintenanceService class.
 """
 from __future__ import absolute_import
-from gateway.dto.floor import FloorDTO
-from gateway.models import Floor
-
-if False:  # MYPY
-    from typing import List, Optional
 
 
-class FloorMapper(object):
+class MaintenanceCommunicator(object):
 
-    @staticmethod
-    def orm_to_dto(orm_object):  # type: (Floor) -> FloorDTO
-        return FloorDTO(id=orm_object.number,
-                        name=orm_object.name)
+    def start(self):
+        raise NotImplementedError()
 
-    @staticmethod
-    def dto_to_orm(floor_dto):  # type: (FloorDTO) -> Floor
-        floor = Floor.get_or_none(number=floor_dto.id)
-        if floor is None:
-            floor = Floor(number=floor_dto.id)
-        if 'name' in floor_dto.loaded_fields:
-            floor.name = floor_dto.name
-        return floor
+    def stop(self):
+        raise NotImplementedError()
+
+    def set_receiver(self, callback):
+        raise NotImplementedError()
+
+    def is_active(self):
+        raise NotImplementedError()
+
+    def activate(self):
+        raise NotImplementedError()
+
+    def deactivate(self, join=True):
+        raise NotImplementedError()
+
+    def write(self, message):
+        raise NotImplementedError()

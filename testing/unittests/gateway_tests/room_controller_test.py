@@ -23,13 +23,13 @@ import unittest
 
 import mock
 import xmlrunner
-from gateway.dto import FloorDTO, RoomDTO
-from gateway.models import Database, Floor, Room
+from gateway.dto import RoomDTO
+from gateway.models import Database, Room
 from gateway.room_controller import RoomController
 from ioc import SetTestMode
 from peewee import SqliteDatabase
 
-MODELS = [Room, Floor]
+MODELS = [Room]
 
 
 class RoomControllerTest(unittest.TestCase):
@@ -57,7 +57,7 @@ class RoomControllerTest(unittest.TestCase):
             rooms = controller.load_rooms()
             self.assertEqual(1, len(rooms))
             self.assertEqual(room_dto_1, rooms[0])
-            room_dto_2 = RoomDTO(id=2, name='two', floor=FloorDTO(id=1))
+            room_dto_2 = RoomDTO(id=2, name='two')
             controller.save_rooms([room_dto_2])
             rooms = controller.load_rooms()
             self.assertEqual(2, len(rooms))

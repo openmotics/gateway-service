@@ -23,7 +23,7 @@ from threading import Thread, Timer
 
 from gateway.daemon_thread import BaseThread
 from gateway.hal.master_event import MasterEvent
-from gateway.maintenance_communicator import MaintenanceCommunicator
+from master.maintenance_communicator import MaintenanceCommunicator
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 

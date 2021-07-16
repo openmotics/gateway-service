@@ -20,8 +20,8 @@ from __future__ import absolute_import
 import logging
 from peewee import JOIN
 from gateway.dto import RoomDTO
-from gateway.mappers import FloorMapper, RoomMapper
-from gateway.models import Database, Room, Floor
+from gateway.mappers import RoomMapper
+from gateway.models import Database, Room
 from ioc import Injectable, Singleton
 
 if False:  # MYPY
@@ -39,24 +39,17 @@ class RoomController(object):
 
     def load_room(self, room_id):  # type: (int) -> RoomDTO
         _ = self
-        room = Room.select(Room, Floor) \
-                   .join_from(Room, Floor, join_type=JOIN.LEFT_OUTER) \
+        room = Room.select(Room) \
                    .where(Room.number == room_id) \
                    .get()  # type: Room  # TODO: Load dict
         room_dto = RoomMapper.orm_to_dto(room)
-        if room.floor is not None:
-            room_dto.floor = FloorMapper.orm_to_dto(room.floor)
         return room_dto
 
     def load_rooms(self):  # type: () -> List[RoomDTO]
         _ = self
         room_dtos = []
-        for room in list(Room.select(Room, Floor)
-                             .join_from(Room, Floor, join_type=JOIN.LEFT_OUTER)):  # TODO: Load dicts
-            room_dto = RoomMapper.orm_to_dto(room)
-            if room.floor is not None:
-                room_dto.floor = FloorMapper.orm_to_dto(room.floor)
-            room_dtos.append(room_dto)
+        for room in Room.select():  # TODO: Load dicts
+            room_dtos.append(RoomMapper.orm_to_dto(room))
         return room_dtos
 
     def save_rooms(self, rooms):  # type: (List[RoomDTO]) -> None
@@ -65,12 +58,6 @@ class RoomController(object):
             for room_dto in rooms:
                 if room_dto.in_use:
                     room = RoomMapper.dto_to_orm(room_dto)
-                    if 'floor' in room_dto.loaded_fields:
-                        floor = None
-                        if room_dto.floor is not None:
-                            floor = FloorMapper.dto_to_orm(room_dto.floor)
-                            floor.save()
-                        room.floor = floor
                     room.save()
                 else:
                     Room.delete().where(Room.number == room_dto.id).execute()

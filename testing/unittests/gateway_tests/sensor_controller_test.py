@@ -26,12 +26,12 @@ from gateway.events import GatewayEvent
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_controller import MaintenanceController
-from gateway.models import Floor, Plugin, Room, Sensor
+from gateway.models import Plugin, Room, Sensor
 from gateway.pubsub import PubSub
 from gateway.sensor_controller import SensorController
 from ioc import SetTestMode, SetUpTestInjections
 
-MODELS = [Sensor, Room, Floor, Plugin]
+MODELS = [Sensor, Room, Plugin]
 
 
 class SensorControllerTest(unittest.TestCase):

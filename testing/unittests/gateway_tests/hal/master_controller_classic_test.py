@@ -286,13 +286,13 @@ class MasterClassicControllerTest(unittest.TestCase):
         controller._master_communicator.do_command.assert_called_with(mock.ANY,
                                                                       fields={'action_type': 163, 'action_number': 0},
                                                                       timeout=2)
-        controller.set_all_lights('ON', 1)
+        controller.set_all_lights('ON')
         controller._master_communicator.do_command.assert_called_with(mock.ANY,
-                                                                      fields={'action_type': 172, 'action_number': 1},
+                                                                      fields={'action_type': 172, 'action_number': 255},
                                                                       timeout=2)
-        controller.set_all_lights('TOGGLE', 1)
+        controller.set_all_lights('TOGGLE')
         controller._master_communicator.do_command.assert_called_with(mock.ANY,
-                                                                      fields={'action_type': 173, 'action_number': 1},
+                                                                      fields={'action_type': 173, 'action_number': 255},
                                                                       timeout=2)
 
     def test_set_input(self):

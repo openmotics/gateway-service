@@ -114,7 +114,8 @@ class SensorStatusSerializer(object):
 
     @staticmethod
     def deserialize(api_data):  # type: (Dict) -> SensorStatusDTO
-        status_dto = SensorStatusDTO(api_data['id'])
+        sensor_id = int(api_data['id'])
+        status_dto = SensorStatusDTO(sensor_id)
         SerializerToolbox.deserialize(
             dto=status_dto,
             api_data=api_data,

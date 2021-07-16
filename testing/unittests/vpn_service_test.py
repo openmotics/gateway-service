@@ -6,6 +6,8 @@ import time
 import ujson as json
 from unittest import TestCase
 
+from requests import Session
+
 import fakesleep
 from bus.om_bus_client import MessageClient
 from bus.om_bus_events import OMBusEvents
@@ -57,7 +59,7 @@ class VPNServiceTest(TestCase):
                                   ({key: i for i, key in enumerate(['sleep_time', 'open_vpn', 'configuration', 'intervals'])},
                                    {key: i for i, key in enumerate(['sleep_time', 'open_vpn', 'configuration', 'intervals'])}),
                                   ({'sleep_time': 0, 'foo': 'bar'}, {'sleep_time': 0})]:
-            with mock.patch.object(requests, 'post', return_value=type('Response', (), {'text': json.dumps(response)})) as post:
+            with mock.patch.object(Session, 'post', return_value=type('Response', (), {'text': json.dumps(response)})) as post:
                 cloud_response = cloud.call_home(payload)
                 post.assert_called_once_with(url, data={'extra_data': json.dumps(payload, sort_keys=True)}, timeout=10.0)
                 expected_response = response
@@ -309,7 +311,7 @@ class VPNServiceTest(TestCase):
                 now = time.time()
 
                 response = {'success': False}
-                with mock.patch.object(requests, 'post', return_value=VPNServiceTest._fake_response(response)):
+                with mock.patch.object(Session, 'post', return_value=VPNServiceTest._fake_response(response)):
                     heartbeat._beat()
                     tasks = heartbeat._task_executor._tasks.pop()
                     self.assertEqual({'connectivity': now,
@@ -321,7 +323,7 @@ class VPNServiceTest(TestCase):
                 time.sleep(5)
                 now += 5
                 response = {'success': True}
-                with mock.patch.object(requests, 'post', return_value=VPNServiceTest._fake_response(response)):
+                with mock.patch.object(Session, 'post', return_value=VPNServiceTest._fake_response(response)):
                     heartbeat._beat()
                     tasks = heartbeat._task_executor._tasks.pop()
                     self.assertEqual({'connectivity': now,
@@ -343,7 +345,7 @@ class VPNServiceTest(TestCase):
                             'sleep_time': 2,
                             'intervals': {'foo': 0},
                             'configuration': {'foo': 1}}
-                with mock.patch.object(requests, 'post', return_value=VPNServiceTest._fake_response(response)) as post:
+                with mock.patch.object(Session, 'post', return_value=VPNServiceTest._fake_response(response)) as post:
                     heartbeat._beat()
                     tasks = heartbeat._task_executor._tasks.pop()
                     self.assertEqual({'connectivity': now,
