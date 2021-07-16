@@ -58,11 +58,11 @@ class ThermostatControllerMaster(ThermostatController):
 
         self._monitor_thread = DaemonThread(name='thermostatctl',
                                             target=self._monitor,
-                                            interval=30, delay=10)
+                                            interval=1, delay=10)
 
         self._thermostat_status = ThermostatStatusMaster(on_thermostat_change=self._thermostat_changed,
                                                          on_thermostat_group_change=self._thermostat_group_changed)
-        self._thermostats_original_interval = 30
+        self._thermostats_original_interval = 60
         self._thermostats_interval = self._thermostats_original_interval
         self._thermostats_last_updated = 0.0
         self._thermostats_restore = 0
