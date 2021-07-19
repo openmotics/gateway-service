@@ -36,7 +36,9 @@ from ioc import INJECTED, Inject
 from logs import Logs
 
 if False:  # MYPY
+    from gateway.delivery_controller import DeliveryController
     from gateway.energy_module_controller import EnergyModuleController
+    from gateway.esafe_controller import EsafeController
     from gateway.output_controller import OutputController
     from gateway.group_action_controller import GroupActionController
     from gateway.input_controller import InputController
@@ -81,7 +83,9 @@ class OpenmoticsService(object):
                 web_service=INJECTED,  # type: WebService
                 event_sender=INJECTED,  # type: EventSender
                 master_controller=INJECTED,  # type: MasterController
-                frontpanel_controller=INJECTED  # type: FrontpanelController
+                frontpanel_controller=INJECTED,  # type: FrontpanelController
+                esafe_controller=INJECTED,  # type: EsafeController
+                delivery_controller=INJECTED  # type: DeliveryController
             ):
 
         # TODO: Fix circular dependencies
@@ -107,6 +111,7 @@ class OpenmoticsService(object):
         plugin_controller.set_metrics_controller(metrics_controller)
         plugin_controller.set_metrics_collector(metrics_collector)
         master_controller.set_plugin_controller(plugin_controller)
+        delivery_controller.set_esafe_controller(esafe_controller)
 
         if frontpanel_controller:
             message_client.add_event_handler(frontpanel_controller.event_receiver)
@@ -140,7 +145,8 @@ class OpenmoticsService(object):
               pubsub=INJECTED,  # type: PubSub
               web_service_v1=INJECTED,  # type: WebServiceV1
               uart_controller=INJECTED,  # type: UARTController
-              energy_module_controller=INJECTED  # type: EnergyModuleController
+              energy_module_controller=INJECTED,  # type: EnergyModuleController
+              esafe_controller=INJECTED  # type: EsafeController
               ):
         """ Main function. """
         logger.info('Starting OM core service...')
@@ -196,6 +202,8 @@ class OpenmoticsService(object):
         if uart_controller:
             uart_controller.start()
         pubsub.start()
+        if esafe_controller is not None:
+            esafe_controller.start()
 
         web_interface.set_service_state(True)
         signal_request = {'stop': False}
@@ -228,6 +236,8 @@ class OpenmoticsService(object):
                 frontpanel_controller.stop()
             event_sender.stop()
             pubsub.stop()
+            if esafe_controller is not None:
+                esafe_controller.stop()
             logger.info('Stopping OM core service... Done')
             signal_request['stop'] = True
 

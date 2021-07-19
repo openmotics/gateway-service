@@ -45,6 +45,24 @@ class ApartmentController(object):
         return apartment_dto
 
     @staticmethod
+    def load_apartment_by_mailbox_id(mailbox_id):
+        # type: (int) -> Optional[ApartmentDTO]
+        apartment_orm = Apartment.select().where(Apartment.mailbox_rebus_id == mailbox_id).first()
+        if apartment_orm is None:
+            return None
+        apartment_dto = ApartmentMapper.orm_to_dto(apartment_orm)
+        return apartment_dto
+
+    @staticmethod
+    def load_apartment_by_doorbell_id(doorbell_id):
+        # type: (int) -> Optional[ApartmentDTO]
+        apartment_orm = Apartment.select().where(Apartment.doorbell_rebus_id == doorbell_id).first()
+        if apartment_orm is None:
+            return None
+        apartment_dto = ApartmentMapper.orm_to_dto(apartment_orm)
+        return apartment_dto
+
+    @staticmethod
     def load_apartments():
         # type: () -> List[ApartmentDTO]
         apartments = []
