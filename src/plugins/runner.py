@@ -507,15 +507,24 @@ class RunnerWatchdog(object):
         self._plugin_runner.logger('[Watchdog] Stopped')
 
     def _run(self):
+        starting = False
         try:
             score = self._plugin_runner.error_score()
             if score > self._threshold:
+                starting = False
                 self._plugin_runner.logger('[Watchdog] Stopping unhealthy runner')
                 self._plugin_runner.stop()
             if not self._plugin_runner.is_running():
+                starting = True
                 self._plugin_runner.logger('[Watchdog] Starting stopped runner')
                 self._plugin_runner.start()
             return True
         except Exception as e:
-            self._plugin_runner.logger('[Watchdog] Exception in watchdog: {0}'.format(e))
+            sting = 'starting' if starting else 'stopping'
+            self._plugin_runner.logger('[Watchdog] Exception while {0} runner: {1}'.format(sting, e))
+            try:
+                self._plugin_runner.logger('[Watchdog] Stopping failed runner')
+                self._plugin_runner.stop()
+            except Exception as se:
+                self._plugin_runner.logger('[Watchdog] Exception while {0} failed runner: {1}'.format(sting, se))
             return False
