@@ -400,6 +400,7 @@ class PluginRuntime(object):
         except Exception as exception:
             return {'success': False, 'exception': str(exception), 'stacktrace': traceback.format_exc()}
 
+
 def start_runtime(plugin_location=None):
     if plugin_location is None and (len(sys.argv) < 3 or sys.argv[1] != 'start_plugin'):
         sys.stderr.write('Usage: python {0} start_plugin <path>\n'.format(sys.argv[0]))
