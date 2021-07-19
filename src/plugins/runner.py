@@ -520,11 +520,12 @@ class RunnerWatchdog(object):
                 self._plugin_runner.start()
             return True
         except Exception as e:
-            sting = 'starting' if starting else 'stopping'
-            self._plugin_runner.logger('[Watchdog] Exception while {0} runner: {1}'.format(sting, e))
+            self._plugin_runner.logger('[Watchdog] Exception while {0} runner: {1}'.format(
+                'starting' if starting else 'stopping', e
+            ))
             try:
                 self._plugin_runner.logger('[Watchdog] Stopping failed runner')
                 self._plugin_runner.stop()
             except Exception as se:
-                self._plugin_runner.logger('[Watchdog] Exception while {0} failed runner: {1}'.format(sting, se))
+                self._plugin_runner.logger('[Watchdog] Exception while stopping failed runner: {0}'.format(se))
             return False
