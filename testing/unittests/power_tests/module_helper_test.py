@@ -61,7 +61,7 @@ class EnergyModuleHelperTest(unittest.TestCase):
                         hardware_type=ModuleDTO.HardwareType.PHYSICAL)
         module.save()
         energy_module = EnergyModule(version=version,
-                                     number=1,
+                                     number=address,
                                      module=module)
         energy_module.save()
         for i in range(8):
@@ -153,24 +153,35 @@ class P1ControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
+        cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):
+        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        self.test_db.connect()
+        self.test_db.create_tables(MODELS)
         self.energy_communicator = mock.Mock()
         SetUpTestInjections(energy_communicator=self.energy_communicator)
         self.helper = P1ConcentratorHelper()
+
+    def tearDown(self):
+        self.test_db.drop_tables(MODELS)
+        self.test_db.close()
 
     def _setup_module(self, version, address):
         module = Module(address=address,
                         source=ModuleDTO.Source.GATEWAY,
                         hardware_type=ModuleDTO.HardwareType.PHYSICAL)
+        module.save()
         energy_module = EnergyModule(version=version,
                                      number=1,
                                      module=module)
+        energy_module.save()
         for i in range(EnergyEnums.NUMBER_OF_PORTS[version]):
-            EnergyCT(number=i,
-                     sensor_type=2,
-                     times='',
-                     energy_module=energy_module)
+            ct = EnergyCT(number=i,
+                          sensor_type=2,
+                          times='',
+                          energy_module=energy_module)
+            ct.save()
         return energy_module
 
     def test_get_realtime_p1(self):
