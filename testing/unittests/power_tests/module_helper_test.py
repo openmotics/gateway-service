@@ -30,32 +30,46 @@ from ioc import SetTestMode, SetUpTestInjections
 from gateway.energy.energy_command import EnergyCommand
 from gateway.energy.module_helper_energy import EnergyModuleHelper
 from gateway.energy.module_helper_p1c import P1ConcentratorHelper
+from peewee import SqliteDatabase
+
+MODELS = [Module, EnergyModule, EnergyCT]
 
 
 class EnergyModuleHelperTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
+        cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):
+        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        self.test_db.connect()
+        self.test_db.create_tables(MODELS)
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub)
         self.energy_communicator = mock.Mock()
         SetUpTestInjections(energy_communicator=self.energy_communicator)
         self.helper = EnergyModuleHelper()
 
+    def tearDown(self):
+        self.test_db.drop_tables(MODELS)
+        self.test_db.close()
+
     def _setup_module(self, version, address):
         module = Module(address=address,
                         source=ModuleDTO.Source.GATEWAY,
                         hardware_type=ModuleDTO.HardwareType.PHYSICAL)
+        module.save()
         energy_module = EnergyModule(version=version,
                                      number=1,
                                      module=module)
+        energy_module.save()
         for i in range(8):
-            EnergyCT(number=i,
-                     sensor_type=2,
-                     times='',
-                     energy_module=energy_module)
+            ct = EnergyCT(number=i,
+                          sensor_type=2,
+                          times='',
+                          energy_module=energy_module)
+            ct.save()
         return energy_module
 
     def test_get_currents(self):
@@ -116,6 +130,19 @@ class EnergyModuleHelperTest(unittest.TestCase):
         with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
             self.helper.get_night_counters(energy_module)
             self.assertEqual([mock.call(11, EnergyCommand('G', 'ENI', '', '8L', module_type=bytearray(b'E')))],
+                             cmd.call_args_list)
+
+    def test_configure_cts(self):
+        energy_module = self._setup_module(version=EnergyEnums.Version.ENERGY_MODULE,
+                                           address='11')
+        with mock.patch.object(self.energy_communicator, 'do_command') as cmd:
+            ct = energy_module.cts[0]
+            ct.sensor_type = 5
+            ct.inverted = True
+            ct.save()
+            self.helper.configure_cts(energy_module=energy_module)
+            self.assertEqual([mock.call(11, EnergyCommand('S', 'CCF', '12f', ''), 4.0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5),
+                              mock.call(11, EnergyCommand('S', 'SCI', '=12B', ''), 1, 0, 0, 0, 0, 0, 0, 0)],
                              cmd.call_args_list)
 
 

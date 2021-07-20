@@ -103,7 +103,7 @@ class EnergyModuleHelper(ModuleHelper):
         address = int(energy_module.module.address)
         sensor_settings = []
         inverted_settings = []
-        for ct in sorted(energy_module.cts, key=lambda c: c.ct_id):
+        for ct in sorted(energy_module.cts, key=lambda c: c.number):
             sensor_settings.append(_convert_ccf(ct.sensor_type))
             inverted_settings.append(_convert_sci(ct.inverted))
 
@@ -210,7 +210,7 @@ class PowerModuleHelper(EnergyModuleHelper):
     def configure_cts(self, energy_module):  # type: (EnergyModule) -> None
         address = int(energy_module.module.address)
         sensor_settings = []
-        for ct in sorted(energy_module.cts, key=lambda c: c.ct_id):
+        for ct in sorted(energy_module.cts, key=lambda c: c.number):
             if ct.sensor_type in [2, 3]:
                 sensor_settings.append(ct.sensor_type)
             else:
