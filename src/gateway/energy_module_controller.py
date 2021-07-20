@@ -253,12 +253,14 @@ class EnergyModuleController(BaseController):
         if not self._enabled:
             return
 
-        energy_modules = dict((energy_module.number, energy_module)
-                              for energy_module in EnergyModule.select(EnergyModule, Module, EnergyCT)
-                                                               .join_from(EnergyModule, Module)
-                                                               .join_from(EnergyModule, EnergyCT))  # type: Dict[int, EnergyModule]
+        energy_modules = EnergyModule.select(EnergyModule, Module) \
+                                     .join_from(EnergyModule, Module)  # type: List[EnergyModule]
+        energy_cts = EnergyCT.select()
+        merged_energy_modules = dict((module.number, module)
+                                     for module in prefetch(energy_modules, energy_cts))  # type: Dict[int, EnergyModule]
+
         for energy_module_dto in energy_module_dtos:
-            energy_module = energy_modules.get(energy_module_dto.id)
+            energy_module = merged_energy_modules.get(energy_module_dto.id)
             if energy_module is None:
                 continue
 
