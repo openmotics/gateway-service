@@ -46,5 +46,8 @@ class EnergyModuleSerializer(object):
         kwargs = {'address': None}  # Address is read-only anyway
         for field in EnergyModuleSerializer.DTO_FIELDS:
             if field in api_data:
-                kwargs[field] = api_data[field]
+                if 'inverted' in field:
+                    kwargs[field] = bool(api_data[field])
+                else:
+                    kwargs[field] = api_data[field]
         return EnergyModuleDTO(**kwargs)

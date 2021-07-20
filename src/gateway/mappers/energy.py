@@ -19,7 +19,6 @@ Energy Mappers
 from __future__ import absolute_import
 from gateway.dto import EnergyModuleDTO
 from gateway.models import EnergyModule
-from gateway.enums import EnergyEnums
 
 
 class EnergyModuleMapper(object):
@@ -48,17 +47,16 @@ class EnergyModuleMapper(object):
             if field in energy_module_dto.loaded_fields:
                 setattr(energy_module_orm, field, getattr(energy_module_dto, field))
 
-        for port_id in range(EnergyEnums.NUMBER_OF_PORTS[energy_module_orm.version]):
-            ct_orm = [ct for ct in energy_module_orm.cts if ct.number == port_id][0]
-            field = 'input{0}'.format(port_id)
+        for ct_orm in energy_module_orm.cts:
+            field = 'input{0}'.format(ct_orm.number)
             if field in energy_module_dto.loaded_fields:
                 ct_orm.name = getattr(energy_module_dto, field)
-            field = 'times{0}'.format(port_id)
+            field = 'times{0}'.format(ct_orm.number)
             if field in energy_module_dto.loaded_fields:
                 ct_orm.times = getattr(energy_module_dto, field)
-            field = 'sensor{0}'.format(port_id)
+            field = 'sensor{0}'.format(ct_orm.number)
             if field in energy_module_dto.loaded_fields:
                 ct_orm.sensor_type = getattr(energy_module_dto, field)
-            field = 'inverted{0}'.format(port_id)
+            field = 'inverted{0}'.format(ct_orm.number)
             if field in energy_module_dto.loaded_fields:
                 ct_orm.inverted = getattr(energy_module_dto, field)
