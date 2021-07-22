@@ -58,7 +58,7 @@ from master.core.system_value import Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union
+    from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar
     T_co = TypeVar('T_co', bound=None, covariant=True)
     HEALTH = Literal['success', 'unstable', 'failure']
 
