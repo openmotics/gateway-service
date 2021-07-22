@@ -22,7 +22,7 @@ from gateway.api.serializers.base import SerializerToolbox
 from gateway.dto import EnergyModuleDTO
 
 if False:  # MYPY
-    from typing import Dict, Optional, List
+    from typing import Dict, Optional, List, Any
 
 
 class EnergyModuleSerializer(object):
@@ -43,8 +43,11 @@ class EnergyModuleSerializer(object):
 
     @staticmethod
     def deserialize(api_data):  # type: (Dict) -> EnergyModuleDTO
-        kwargs = {'address': None}  # Address is read-only anyway
+        kwargs = {'address': None}  # type: Dict[str, Any]  # Address is read-only anyway
         for field in EnergyModuleSerializer.DTO_FIELDS:
             if field in api_data:
-                kwargs[field] = api_data[field]
+                if 'inverted' in field:
+                    kwargs[field] = bool(api_data[field])
+                else:
+                    kwargs[field] = api_data[field]
         return EnergyModuleDTO(**kwargs)

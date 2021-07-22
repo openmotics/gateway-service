@@ -21,7 +21,7 @@ import logging
 import struct
 import time
 from datetime import datetime
-from threading import Timer
+from threading import Timer, Event as ThreadingEvent
 
 from peewee import DoesNotExist
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
@@ -41,7 +41,7 @@ from ioc import INJECTED, Inject
 from master.core.basic_action import BasicAction
 from master.core.can_feedback import CANFeedbackController
 from master.core.core_api import CoreAPI
-from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
+from master.core.core_communicator import BackgroundConsumer, CoreCommunicator, CoreCommandSpec
 from master.core.core_updater import CoreUpdater
 from master.core.errors import Error
 from master.core.events import Event as MasterCoreEvent
@@ -58,7 +58,8 @@ from master.core.system_value import Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union
+    from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar
+    T_co = TypeVar('T_co', bound=None, covariant=True)
     HEALTH = Literal['success', 'unstable', 'failure']
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,8 @@ class MasterCoreController(MasterController):
         self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
         self._firmware_versions = {}  # type: Dict[str, Optional[str]]
+        self._master_restarting = ThreadingEvent()
+        self._master_restarting.set()
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_eeprom_event)
 
@@ -162,6 +165,15 @@ class MasterCoreController(MasterController):
             self._handle_execute_event(action=core_event.data['action'],
                                        device_nr=core_event.data['device_nr'],
                                        extra_parameter=core_event.data['extra_parameter'])
+        elif core_event.type == MasterCoreEvent.Types.RESET_ACTION:
+            if core_event.data.get('type') == MasterCoreEvent.ResetTypes.HEALTH_CHECK:
+                logger.warning('Master reset announced, holding further communications')
+                self._master_restarting.clear()
+        elif core_event.type == MasterCoreEvent.Types.SYSTEM:
+            if core_event.data.get('type') == MasterCoreEvent.SystemEventTypes.EEPROM_ACTIVATE:
+                if not self._master_restarting.is_set():
+                    logger.info('Master back online, releasing held communications')
+                self._master_restarting.set()
 
     def _handle_execute_event(self, action, device_nr, extra_parameter):  # type: (int, int, int) -> None
         if action == 0:
@@ -245,18 +257,29 @@ class MasterCoreController(MasterController):
             # This is an expected situation
             raise DaemonThreadWait()
 
+    def _execute(self, command, fields, timeout=2):
+        # type: (CoreCommandSpec, Dict[str, Any], Union[T_co, int]) -> Union[T_co, Dict[str, Any]]
+        if not self._master_restarting.is_set():
+            logger.info('Master might be restarting, holding call')
+        if not self._master_restarting.wait(timeout=15):
+            logger.warning('Holding window expired')
+            raise CommunicationTimedOutException()
+        return self._master_communicator.do_command(command=command,
+                                                    fields=fields,
+                                                    timeout=timeout)
+
     def _set_master_state(self, online):
         if online != self._master_online:
             self._master_online = online
 
     def _enumerate_io_modules(self, module_type, amount_per_module=8):
         cmd = CoreAPI.general_configuration_number_of_modules()
-        module_count = self._master_communicator.do_command(cmd, {})[module_type]
+        module_count = self._execute(cmd, {})[module_type]
         return range(module_count * amount_per_module)
 
     def _check_master_time(self):
         # type: () -> None
-        date_time = self._master_communicator.do_command(CoreAPI.get_date_time(), {})
+        date_time = self._execute(CoreAPI.get_date_time(), {})
         if date_time is None:
             return
         try:
@@ -316,7 +339,7 @@ class MasterCoreController(MasterController):
         def _default_if_255(value, default):
             return value if value != 255 else default
 
-        max_specs = self._master_communicator.do_command(CoreAPI.general_configuration_max_specs(), {})
+        max_specs = self._execute(CoreAPI.general_configuration_max_specs(), {})
         global_configuration = GlobalConfiguration()
         logger.info('General core information:')
         logger.info('* Modules:')
@@ -393,14 +416,14 @@ class MasterCoreController(MasterController):
         return CommunicationStatus.FAILURE
 
     def get_firmware_version(self):
-        version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
+        version = self._execute(CoreAPI.get_firmware_version(), {})['version']
         return tuple(version.split('.'))
 
     def sync_time(self):
         # type: () -> None
         logger.info('Setting the time on the core.')
         now = datetime.now()
-        self._master_communicator.do_command(
+        self._execute(
             CoreAPI.set_date_time(),
             {'hours': now.hour, 'minutes': now.minute, 'seconds': now.second,
              'weekday': now.isoweekday(), 'day': now.day, 'month': now.month, 'year': now.year % 100}
@@ -438,7 +461,7 @@ class MasterCoreController(MasterController):
         refresh = self._input_state.should_refresh()
         if refresh:
             cmd = CoreAPI.device_information_list_inputs()
-            data = self._master_communicator.do_command(cmd, {})
+            data = self._execute(cmd, {})
             if data is not None:
                 for master_event in self._input_state.refresh(data['information']):
                     self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
@@ -506,7 +529,7 @@ class MasterCoreController(MasterController):
         # type: () -> List[OutputStatusDTO]
         output_status = []
         for i in self._enumerate_io_modules('output'):
-            data = self._master_communicator.do_command(CoreAPI.output_detail(), {'device_nr': i})
+            data = self._execute(CoreAPI.output_detail(), {'device_nr': i})
             timer = SVTTimer.event_timer_type_to_seconds(data['timer_type'], data['timer'])
             output = OutputConfiguration(i)
             output_status.append(OutputStatusDTO(id=i,
@@ -679,7 +702,7 @@ class MasterCoreController(MasterController):
         return self._sensor_states.get(sensor_id, {}).get('TEMPERATURE')
 
     def get_sensors_temperature(self):
-        amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
+        amount_sensor_modules = self._execute(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
         temperatures = []
         for sensor_id in range(amount_sensor_modules * 8):
             temperatures.append(self.get_sensor_temperature(sensor_id))
@@ -689,7 +712,7 @@ class MasterCoreController(MasterController):
         return self._sensor_states.get(sensor_id, {}).get('HUMIDITY')
 
     def get_sensors_humidity(self):
-        amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
+        amount_sensor_modules = self._execute(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
         humidities = []
         for sensor_id in range(amount_sensor_modules * 8):
             humidities.append(self.get_sensor_humidity(sensor_id))
@@ -703,7 +726,7 @@ class MasterCoreController(MasterController):
         return int(float(brightness) / 65535.0 * 100)
 
     def get_sensors_brightness(self):
-        amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
+        amount_sensor_modules = self._execute(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
         brightnesses = []
         for sensor_id in range(amount_sensor_modules * 8):
             brightnesses.append(self.get_sensor_brightness(sensor_id))
@@ -726,11 +749,11 @@ class MasterCoreController(MasterController):
         MemoryActivator.activate()
 
     def _refresh_sensor_states(self):
-        amount_sensor_modules = self._master_communicator.do_command(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
+        amount_sensor_modules = self._execute(CoreAPI.general_configuration_number_of_modules(), {})['sensor']
         for module_nr in range(amount_sensor_modules):
-            temperature_values = self._master_communicator.do_command(CoreAPI.sensor_temperature_values(), {'module_nr': module_nr})['values']
-            brightness_values = self._master_communicator.do_command(CoreAPI.sensor_brightness_values(), {'module_nr': module_nr})['values']
-            humidity_values = self._master_communicator.do_command(CoreAPI.sensor_humidity_values(), {'module_nr': module_nr})['values']
+            temperature_values = self._execute(CoreAPI.sensor_temperature_values(), {'module_nr': module_nr})['values']
+            brightness_values = self._execute(CoreAPI.sensor_brightness_values(), {'module_nr': module_nr})['values']
+            humidity_values = self._execute(CoreAPI.sensor_humidity_values(), {'module_nr': module_nr})['values']
             for i in range(8):
                 sensor_id = module_nr * 8 + i
                 self._sensor_states[sensor_id] = {'TEMPERATURE': temperature_values[i],
@@ -889,10 +912,10 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
-            if device_type == 'o' and output_module_info.address[4:15] in ['000.000.000',
-                                                                           '000.000.001',
-                                                                           '000.000.002']:
-                outputs.append('P')  # Internal output module
+            if output_module_info.address[4:15] in ['000.000.000', '000.000.001',
+                                                    '000.000.002', '000.000.003']:
+                outputs.append({'o': 'P',
+                                'd': 'F'}.get(device_type, device_type))
             else:
                 # Use device_type, except for shutters, which are now kinda output module alike
                 outputs.append({'r': 'o',
@@ -919,12 +942,13 @@ class MasterCoreController(MasterController):
                 inputs.append('T')
             elif device_type == 's':
                 can_inputs.append('T')  # uCAN sensor "module"
-        for module_id in range(nr_of_can_controls - 1):
+        for module_id in range(nr_of_can_controls):
             can_inputs.append('C')
         can_inputs.append('E')
 
         # i/I/J = Virtual/physical/internal Input module
         # o/O/P = Virtual/physical/internal Ouptut module
+        # d/D/F = Virtual/physical/internal 0/1-10V module
         # l = OpenCollector module
         # T/t = Physical/internal Temperature module
         # C/E = Physical/internal CAN Control
@@ -937,8 +961,8 @@ class MasterCoreController(MasterController):
             return value if value != 255 else default
 
         self._firmware_versions = {}
-        self._master_communicator.do_command(command=CoreAPI.request_slave_firmware_versions(),
-                                             fields={})
+        self._execute(command=CoreAPI.request_slave_firmware_versions(),
+                      fields={})
 
         def _wait_for_version(address_, timeout=3):
             threshold = time.time() + timeout
@@ -1153,9 +1177,9 @@ class MasterCoreController(MasterController):
         logger.info('Powering on RS485 bus... Done')
 
     def get_status(self):
-        firmware_version = self._master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
-        rs485_mode = self._master_communicator.do_command(CoreAPI.get_master_modes(), {})['rs485_mode']
-        date_time = self._master_communicator.do_command(CoreAPI.get_date_time(), {})
+        firmware_version = self._execute(CoreAPI.get_firmware_version(), {})['version']
+        rs485_mode = self._execute(CoreAPI.get_master_modes(), {})['rs485_mode']
+        date_time = self._execute(CoreAPI.get_date_time(), {})
         return {'time': '{0:02}:{1:02}'.format(date_time['hours'], date_time['minutes']),
                 'date': '{0:02}/{1:02}/20{2:02}'.format(date_time['day'], date_time['month'], date_time['year']),
                 'mode': {CoreAPI.SlaveBusMode.INIT: 'I',
@@ -1274,9 +1298,9 @@ class MasterCoreController(MasterController):
                                                                       action=ba_action,
                                                                       device_nr=chunk_output_ids[0]))
             else:
-                self._master_communicator.do_command(command=CoreAPI.execute_basic_action_series(len(chunk_output_ids)),
-                                                     fields={'type': 0, 'action': ba_action, 'extra_parameter': 0,
-                                                             'device_nrs': chunk_output_ids})
+                self._execute(command=CoreAPI.execute_basic_action_series(len(chunk_output_ids)),
+                              fields={'type': 0, 'action': ba_action, 'extra_parameter': 0,
+                                      'device_nrs': chunk_output_ids})
 
     def get_configuration_dirty_flag(self):
         return False  # TODO: Implement
