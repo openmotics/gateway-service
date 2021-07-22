@@ -15,26 +15,46 @@
 """
 RFID BLL
 """
+import abc
 import datetime
-from dateutil.tz import tzlocal
-import logging
 
+import six
+from dateutil.tz import tzlocal
+import enum
+import logging
+from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
+import os
+
+import constants
 from gateway.models import RFID, User
 from gateway.mappers import RfidMapper
-from gateway.dto import RfidDTO
+from gateway.dto import RfidDTO, UserDTO
+from gateway.pubsub import PubSub
+from rfid.idtronic_M890.idtronic_M890 import IdTronicM890
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MyPy
-    from typing import List, Optional
+    from typing import List, Optional, Type
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('rfid_controller')
 @Singleton
 class RfidController(object):
     def __init__(self):
-        pass
+        config = ConfigParser()
+        config.read(constants.get_config_file())
+        try:
+            rfid_device_file = config.get('OpenMotics', 'rfid_device')
+        except NoOptionError:
+            rfid_device_file = None
+        self.rfid_context = RfidContext(self)
+        if rfid_device_file is not None and not os.path.exists(rfid_device_file):
+            self.rfid_device = IdTronicM890(rfid_device_file)
+            self.rfid_device.set_new_scan_callback(self.rfid_context.handle_rfid_scan)
+        else:
+            self.rfid_device = None
 
     @staticmethod
     def load_rfid(rfid_id):
@@ -99,3 +119,80 @@ class RfidController(object):
         # type: () -> str
         timestamp = datetime.datetime.now(tzlocal())
         return RfidController.datetime_to_string_format(timestamp)
+
+    def start_add_rfid_session(self, user, label):
+        # type: (UserDTO, str) -> None
+        self.rfid_context.set_add_badge_state(user, label)
+
+    def stop_add_rfid_session(self):
+        self.rfid_context.stop_add_badge_state()
+
+    def get_current_add_rfid_session_info(self):
+        """
+        Returns info about the add rfid session info.
+         - When no session is running, Returns None
+         - When a session is running, Returns the user_id Type: int
+        """
+        if self.rfid_context.rfid_state == RfidAddBadgeState:
+            return self.rfid_context.user.id
+        return None
+
+
+# RFID state machine
+# This will house the actions to take with the rfid device
+# The states are:
+# stand-by
+# add-badge
+
+
+@six.add_metaclass(abc.ABCMeta)
+class RfidState(object):
+    @staticmethod
+    @abc.abstractmethod
+    def handle_rfid_scan(context):
+        # type: (RfidContext) -> None
+        pass
+
+
+class RfidStandByState(RfidState):
+
+    @staticmethod
+    @Inject
+    def handle_rfid_scan(context, pubsub=INJECTED):
+        # type: (RfidContext, PubSub) -> None
+        logger.info('Got a new rfid scanned')
+        # ToDo add the events here
+
+
+class RfidAddBadgeState(RfidState):
+    @staticmethod
+    def handle_rfid_scan(context):
+        rfid_dto = RfidDTO(tag_string=context.last_scanned_uuid,
+                           label=context.label,
+                           user=context.user)
+        context.rfid_controller.save_rfid(rfid_dto)
+
+
+class RfidContext(object):
+    def __init__(self, rfid_controller):
+        self.rfid_controller = rfid_controller
+        self.last_scanned_uuid = None
+        self.rfid_state = RfidStandByState  # type: Type[RfidState]
+
+        self.label = None
+        self.user = None
+
+    def handle_rfid_scan(self, rfid_uuid):
+        self.last_scanned_uuid = rfid_uuid
+        self.rfid_state.handle_rfid_scan(self.last_scanned_uuid)
+
+    def set_add_badge_state(self, label, user):
+        self.label = label
+        self.user = user
+        self.rfid_state = RfidAddBadgeState
+
+    def stop_add_badge_state(self):
+        self.label = None
+        self.user = None
+        self.rfid_state = RfidStandByState
+

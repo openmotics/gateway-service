@@ -682,7 +682,7 @@ class SystemConfiguration(RestAPIEndpoint):
         self.route_dispatcher.connect('put_doorbell_delivery', '/configuration/doorbell',
                                       controller=self, action='put_doorbell_config',
                                       conditions={'method': ['PUT']})
-        self.route_dispatcher.connect('put_rfid_delivery', '/configuration/rfid',
+        self.route_dispatcher.connect('put_rfid_config', '/configuration/rfid',
                                       controller=self, action='put_rfid_config',
                                       conditions={'method': ['PUT']})
         self.route_dispatcher.connect('put_rfid_sector_block_delivery', '/configuration/rfid_sector_block',
@@ -839,13 +839,55 @@ class Rfid(RestAPIEndpoint):
         rfid_serial = RfidSerializer.serialize(rfid)
         return json.dumps(rfid_serial)
 
-    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON')
-    def put_start_add(self, rfid_id, auth_token, request_body):
-        raise NotImplementedException("start add new rfid not implemented")
+    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON',
+                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.USER])
+    def put_start_add(self, auth_token, request_body):
+        # Authentication - only ADMIN & TECHNICIAN can create new rfid entry for everyone.
+        # USER can only create new rfid entry linked to itself.
+        # Pass X-API-Secret when adding rfid tag
 
-    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None)
-    def put_cancel_add(self, rfid_id, auth_token):
-        raise NotImplementedException("start add new rfid not implemented")
+        # check the api secret
+        api_secret = cherrypy.request.headers.get('X-API-Secret')
+        if api_secret is None:
+            raise UnAuthorizedException('Cannot start an add rfid session without the X-API-Secret')
+        elif not self._user_controller.authentication_controller.check_api_secret(api_secret):
+            raise UnAuthorizedException('X-API-Secret is incorrect')
+        if 'user_id' not in request_body or 'label' not in request_body:
+            raise WrongInputParametersException('When adding a new rfid, there is the need for the user_id and a label in the request body.')
+        user_id = request_body['user_id']
+        label = request_body['label']
+
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            if user_id != auth_token.user.id:
+                raise UnAuthorizedException('Cannot start an add_rfid_badge session: As a normal user, you only can add a badge to yourselves')
+
+        if not self._user_controller.user_id_exists(user_id):
+            raise ItemDoesNotExistException('Cannot start add_rfid_badge session: There is no user with user_id: {}'.format(user_id))
+
+        user = self._user_controller.load_user(user_id)
+        self.rfid_controller.start_add_rfid_session(user, label)
+
+    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None,
+                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.USER])
+    def put_cancel_add(self, auth_token):
+        # Authentication - only ADMIN & TECHNICIAN can always cancel 'add new rfid mode'.
+        # USER can only cancel mode if adding rfid to his account
+        # Pass X-API-Secret when adding rfid tag
+        # Check the X-API-Secret key for this
+        api_secret = cherrypy.request.headers.get('X-API-Secret')
+        if api_secret is None:
+            raise UnAuthorizedException('Cannot start an add rfid session without the X-API-Secret')
+        elif not self._user_controller.authentication_controller.check_api_secret(api_secret):
+            raise UnAuthorizedException('X-API-Secret is incorrect')
+        current_rfid_user_id = self.rfid_controller.get_current_add_rfid_session_info()
+        # When there is no session running, simply return
+        if current_rfid_user_id is None:
+            return
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            if current_rfid_user_id != auth_token.user.id:
+                raise UnAuthorizedException('Cannot start an add_rfid_badge session: As a normal user, you only can add a badge to yourselves')
+
+        self.rfid_controller.stop_add_rfid_session()
 
     @openmotics_api_v1(auth=True, pass_token=True)
     def delete_rfid(self, rfid_id, auth_token=None):
