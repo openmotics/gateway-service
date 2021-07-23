@@ -214,21 +214,6 @@ class ModuleController(BaseController):
         self._master_controller.update_slave_modules(short_module_type, target_filename, firmware_version)
         ModuleController._archive_firmwares(filename_base, firmware_version)
 
-    @staticmethod
-    def _archive_firmwares(filename_base, firmware_version):
-        if not os.path.exists(ModuleController.FIRMWARE_ARCHIVE_DIR):
-            os.mkdir(ModuleController.FIRMWARE_ARCHIVE_DIR)
-        current_filename = filename_base.format('current')  # e.g. OMFXY_current.hex
-        previous_filename = filename_base.format('previous')  # e.g. OMFXY_previous.hex
-        current_target = os.readlink(current_filename)  # e.g. OMFXY_1.0.1.hex
-        new_target = filename_base.format(firmware_version)  # e.g. OMFXY_1.0.2.hex
-        if new_target == current_target:
-            return  # No real update, no need to remove the previous
-        os.unlink(previous_filename)
-        os.unlink(current_filename)
-        os.link(current_target, previous_filename)  # OMFXY_previous.hex -> OMFXY_1.0.1.hex
-        os.link(new_target, current_filename)  # OMFXY_current.hex -> OMFXY_1.0.2.hex
-
     def module_discover_start(self, timeout=900):  # type: (int) -> None
         self._master_controller.module_discover_start(timeout)
 
@@ -327,3 +312,23 @@ class ModuleController(BaseController):
         calculated_hash = hasher.hexdigest()
         if calculated_hash != data['sha256']:
             raise ValueError('Firmware {0} checksum sha256:{1} does not match'.format(module_type, calculated_hash))
+
+    @staticmethod
+    def _archive_firmwares(filename_base, firmware_version):
+        archive_dir = ModuleController.FIRMWARE_ARCHIVE_DIR
+        if not os.path.exists(archive_dir):
+            os.mkdir(archive_dir)
+        current_filename = os.path.join(archive_dir, filename_base.format('current'))  # e.g. /foo/OMFXY_current.hex
+        current_target = None
+        if os.path.exists(current_filename):
+            current_target = os.readlink(current_filename)  # e.g. /foo/OMFXY_1.0.1.hex
+        previous_filename = os.path.join(archive_dir, filename_base.format('previous'))  # e.g. /foo/OMFXY_previous.hex
+        new_target = os.path.join(archive_dir, filename_base.format(firmware_version))  # e.g. /foo/OMFXY_1.0.2.hex
+        if new_target == current_target:
+            return  # No real update, no need to remove the previous
+        if os.path.exists(previous_filename):
+            os.unlink(previous_filename)
+        if os.path.exists(current_filename):
+            os.unlink(current_filename)
+        os.link(current_target, previous_filename)  # OMFXY_previous.hex -> OMFXY_1.0.1.hex
+        os.link(new_target, current_filename)  # OMFXY_current.hex -> OMFXY_1.0.2.hex

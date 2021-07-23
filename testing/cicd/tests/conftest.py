@@ -87,14 +87,16 @@ def firmware_updates(toolbox_session):
     # TODO: Add support for Core+ firmwares
     force_update = os.environ.get('OPENMOTICS_FORCE_UPDATE', '0') == '1'
 
-    master_firmware = os.environ.get('OPENMOTICS_MASTER_CLASSIC_FIRMWARE')
-    if master_firmware and (force_update or master_firmware != versions['M']):
-        logger.info('master firmware {} -> {}...'.format(versions['M'], master_firmware))
-        firmware['master_classic'] = master_firmware
-    master_firmware = os.environ.get('OPENMOTICS_MASTER_CORE_FIRMWARE')
-    if master_firmware and (force_update or master_firmware != versions['M']):
-        logger.info('master firmware {} -> {}...'.format(versions['M'], master_firmware))
-        firmware['master_core'] = master_firmware
+    if TEST_PLATFORM == TestPlatform.DEBIAN:
+        master_firmware = os.environ.get('OPENMOTICS_MASTER_CLASSIC_FIRMWARE')
+        if master_firmware and (force_update or master_firmware != versions['M']):
+            logger.info('master classic firmware {} -> {}...'.format(versions['M'], master_firmware))
+            firmware['master_classic'] = master_firmware
+    if TEST_PLATFORM == TestPlatform.CORE_PLUS:
+        master_firmware = os.environ.get('OPENMOTICS_MASTER_CORE_FIRMWARE')
+        if master_firmware and (force_update or master_firmware != versions['M']):
+            logger.info('master core firmware {} -> {}...'.format(versions['M'], master_firmware))
+            firmware['master_core'] = master_firmware
 
     output_firmware = os.environ.get('OPENMOTICS_OUTPUT_FIRMWARE')
     if output_firmware and (force_update or output_firmware != versions['O']):
