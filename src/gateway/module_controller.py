@@ -188,8 +188,8 @@ class ModuleController(BaseController):
         generation = 3 if parsed_version >= (6, 0, 0) else 2
         filename_code = ModuleController.FIRMWARE_MAP[module_type][generation][1]
 
+        platform = Platform.get_platform()
         if module_type in ['master_classic', 'master_core']:
-            platform = Platform.get_platform()
             platform_match = (
                 (platform in Platform.CoreTypes and module_type == 'master_core') or
                 (platform in Platform.ClassicTypes and module_type == 'master_classic')
@@ -203,6 +203,9 @@ class ModuleController(BaseController):
             self._master_controller.update_master(target_filename)
             ModuleController._archive_firmwares(filename_base, firmware_version)
             return
+
+        if platform in Platform.ClassicTypes and module_type == 'ucan':
+            return  # A uCAN cannot be updated on the Classic platform for now
 
         filename_base = ModuleController.FIRMWARE_BASE_NAME.format(filename_code)
         short_module_type = ModuleController.FIRMWARE_MAP[module_type][generation][0]
