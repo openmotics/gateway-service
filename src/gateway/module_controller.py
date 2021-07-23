@@ -330,6 +330,6 @@ class ModuleController(BaseController):
             os.unlink(previous_filename)
         if os.path.exists(current_filename):
             os.unlink(current_filename)
-        if os.path.exists(current_target):
+        if current_target is not None:
             os.link(current_target, previous_filename)  # /foo/OMFXY_previous.hex -> /foo/OMFXY_1.0.1.hex
         os.link(new_target, current_filename)  # /foo/OMFXY_current.hex -> /foo/OMFXY_1.0.2.hex
