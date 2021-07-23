@@ -62,7 +62,7 @@ class EsafeControllerTest(unittest.TestCase):
         SetUpTestInjections(token_timeout=3)
         self.token_store = TokenStore(token_timeout=3)
         SetUpTestInjections(token_store=self.token_store)
-        self.rfid_controller = RfidController()
+        self.rfid_controller = mock.Mock(RfidController)
         self.auth_controller = AuthenticationController(token_timeout=3, token_store=self.token_store, rfid_controller=self.rfid_controller)
         SetUpTestInjections(authentication_controller=self.auth_controller)
         SetUpTestInjections(config={'username': 'test', 'password': 'test'})

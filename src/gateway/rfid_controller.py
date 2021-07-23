@@ -22,7 +22,9 @@ from gateway.models import RFID, User
 from gateway.mappers import RfidMapper
 from gateway.dto import RfidDTO, UserDTO
 from gateway.pubsub import PubSub
+from gateway.system_config_controller import SystemConfigController
 from rfid.idtronic_M890.idtronic_M890 import IdTronicM890
+from rfid.rfid_exception import RfidException
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 import abc
@@ -42,25 +44,28 @@ logger = logging.getLogger(__name__)
 @Injectable.named('rfid_controller')
 @Singleton
 class RfidController(object):
-    def __init__(self):
+    @Inject
+    def __init__(self, system_config_controller=INJECTED):
+        # type: (SystemConfigController) -> None
         logger.debug('Creating rfid_controller')
+        self.system_config_controller = system_config_controller
         logger.debug(' -> Reading out the config file')
         config = ConfigParser()
         config.read(constants.get_config_file())
+        rfid_device_file = None
         try:
             rfid_device_file = config.get('OpenMotics', 'rfid_device')
         except NoOptionError:
-            rfid_device_file = None
+            pass
         logger.debug(' -> Result: {}'.format(rfid_device_file))
         logger.debug(' -> Creating rfid context')
         self.rfid_context = RfidContext(self)
+        self.rfid_device = None
         if rfid_device_file is not None and os.path.exists(rfid_device_file):
             logger.debug(' -> Creating rfid device')
             self.rfid_device = IdTronicM890(rfid_device_file)
             logger.debug(' -> Setting the callback')
             self.rfid_device.set_new_scan_callback(self.rfid_context.handle_rfid_scan)
-        else:
-            self.rfid_device = None
 
     def start(self):
         logger.debug('Starting the rfid reader')
@@ -84,18 +89,24 @@ class RfidController(object):
         return rfid_dto
 
     @staticmethod
-    def load_rfids():
-        # type: () -> List[RfidDTO]
+    def load_rfids(user_id=None):
+        # type: (Optional[int]) -> List[RfidDTO]
         rfids = []
-        for rfid_orm in RFID.select():
+        query = RFID.select()
+        if user_id is not None and isinstance(user_id, int):
+            query = query.where(RFID.user_id == user_id)
+        for rfid_orm in query:
             rfid_dto = RfidMapper.orm_to_dto(rfid_orm)
             rfids.append(rfid_dto)
         return rfids
 
     @staticmethod
-    def get_rfid_count():
-        # type: () -> int
-        return RFID.select().count()
+    def get_rfid_count(user_id=None):
+        # type: (Optional[int]) -> int
+        query = RFID.select()
+        if user_id is not None and isinstance(user_id, int):
+            query = query.where(RFID.user_id == user_id)
+        return query.count()
 
     @staticmethod
     def check_rfid_tag_for_login(rfid_tag_string):
@@ -140,6 +151,14 @@ class RfidController(object):
 
     def start_add_rfid_session(self, user, label):
         # type: (UserDTO, str) -> None
+        # check that it is allowed for this user to add an extra badge
+        rfid_config = self.system_config_controller.get_rfid_config()
+        max_rfid = rfid_config.max_tags
+        if max_rfid is None:
+            raise RfidException('Cannot request the max_rfid config value')
+        num_tags = self.get_rfid_count(user_id=user.id)
+        if num_tags >= max_rfid:
+            raise RfidException('Cannot start the add rfid session: Max number of tags ({}) is reached for user: "{}"'.format(max_rfid, user.username))
         logger.debug('Starting add rfid badge session: {} {}'.format(user, label))
         self.rfid_context.set_add_badge_state(label=label, user=user)
 
