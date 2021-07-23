@@ -395,7 +395,7 @@ class Toolbox(object):
 
     def get_firmware_versions(self):
         # type: () -> Dict[str,str]
-        modules = self.dut.get('/get_modules_information')['modules']['master']
+        modules = self.dut.get('/get_modules_information?refresh=True')['modules']['master']
         versions = {'M': self.dut.get('/get_status')['version']}
         for data in (x for x in modules.values() if 'firmware' in x):
             module = 'C' if data.get('is_can', False) else data['type']

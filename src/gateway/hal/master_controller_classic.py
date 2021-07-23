@@ -134,8 +134,8 @@ class MasterClassicController(MasterController):
         # type: () -> None
         try:
             if not self._communication_enabled:
-                logger.info('synchronization, skipped')
-                return
+                logger.debug('Unable to synchronize since communication is disabled, waiting 10 seconds.')
+                raise DaemonThreadWait
 
             now = time.time()
             if self._master_version is None or self._master_version_last_updated < now - 300:

@@ -621,12 +621,15 @@ class WebInterface(object):
         return self._module_controller.get_modules()
 
     @openmotics_api(auth=True, check=types(address=str, fields='json'))
-    def get_modules_information(self, address=None, fields=None):  # type: (Optional[str], Optional[List[str]]) -> Dict[str, Any]
+    def get_modules_information(self, address=None, fields=None, refresh=False):  # type: (Optional[str], Optional[List[str]], bool) -> Dict[str, Any]
         """
         Gets an overview of all modules and information
         :param address: Optional address filter
         :param fields: The field of the module information to get, None if all
+        :param refresh: Indicates whether data should be refreshed before returning it
         """
+        if refresh:
+            self._module_controller.run_sync_orm()
         return {'modules': {'master': {module_dto.address: ModuleSerializer.serialize(module_dto=module_dto, fields=fields)
                                        for module_dto in self._module_controller.load_master_modules(address)},
                             'energy': {module_dto.address: ModuleSerializer.serialize(module_dto=module_dto, fields=fields)
