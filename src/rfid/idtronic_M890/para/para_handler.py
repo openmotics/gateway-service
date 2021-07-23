@@ -16,7 +16,11 @@
 Para packet handler
 """
 
-from rfid.idtronic_M890.para.para_packet import ParaPacketType, ParaPacket
+from rfid.idtronic_M890.para.para_packet import ParaPacketType, ParaPacket, CardType
+from rfid.idtronic_M890.para.para_exception import ParaException
+
+import logging
+logger = logging.getLogger(__name__)
 
 if False:  # MyPy
     from typing import Any, Dict, Callable
@@ -26,6 +30,7 @@ if False:  # MyPy
 class ParaPacketHandler(object):
     """ Packet handler for the ParaPackets, this can be extended in the future for multiple requests, and for keeping state of the reader"""
     # At this point only one kind of packet is implemented, but can be extended in the future
+
 
     def __init__(self, new_scan_callback):
         self.handlers = {
@@ -44,6 +49,27 @@ class ParaPacketHandler(object):
     def handle_auto_list(self, para_packet):
         # type: (ParaPacket) -> Any
         _ = self
-        scanned_uuid = para_packet.data
-        if scanned_uuid:
-            self.new_scan_callback(scanned_uuid)
+        # Ignore the empty list packets
+        if not para_packet.data:
+            return
+        # General scan parameters
+        card_type = para_packet.data[0]
+        # scan_period = para_packet.data[1]
+        # scanned_antenna = para_packet.data[2]
+        # notice_type = para_packet.data[3]
+        # reserved_future_use = para_packet.data[4]
+
+        if card_type in [CardType.ISO14443A.value, CardType.ISO14443B.value]:
+            # auto reporting format for ISO14443 cards
+            # ATQL = para_packet.data[5]
+            # ATQH = para_packet.data[6]
+            # SAK = para_packet.data[7]
+            uuid_length = para_packet.data[8]
+            logger.debug('Detected new ISO14443 card scan: Card type: {}, uuid_length: {}'.format(card_type, uuid_length))
+            scanned_uuid = para_packet.data[-uuid_length:]
+        elif card_type == CardType.ISO15693.value:
+            scanned_uuid = para_packet.data[5:]
+        else:
+            raise ParaException('Cannot handle auto list packet: Cannot detect card type')
+        scanned_uuid_str = ''.join('{:02X}'.format(x) for x in scanned_uuid)
+        self.new_scan_callback(scanned_uuid_str)

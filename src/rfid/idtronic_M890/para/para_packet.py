@@ -46,6 +46,14 @@ class TwoWayDict(dict):
             return default
 
 
+class CardType(Enum):
+    ISO14443A = 0x01
+    ISO14443B = 0x02
+    ISO15693 = 0x04
+    SONY_FELICA = 0x08
+    ALL = 0xFF
+
+
 class ParaPacketType(Enum):
     AutoListCard = 0x23
     I2_inventory = 0xA1

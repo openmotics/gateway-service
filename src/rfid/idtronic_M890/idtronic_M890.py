@@ -18,8 +18,11 @@ IdTronic M890 wrapper
 
 from rfid.idtronic_M890.para.para_handler import ParaPacketHandler
 from rfid.idtronic_M890.para.para_transceiver import ParaSender
-
 from rfid.rfid_device import RfidDevice
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class IdTronicM890(RfidDevice):
@@ -29,6 +32,7 @@ class IdTronicM890(RfidDevice):
         self.para_sender = ParaSender(self.device_location, self.packet_callback)
         self.packet_handler = ParaPacketHandler(new_scan_callback=self.new_scan_callback)
         super(IdTronicM890, self).__init__(callback)
+        logger.debug('Created an idtronic M890 RFID reader.')
 
     def start(self):
         self.para_sender.start()
