@@ -22,7 +22,7 @@ from collections import deque
 
 from cloud.cloud_api_client import APIException, CloudAPIClient
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.events import GatewayEvent
+from gateway.events import GatewayEvent, EsafeEvent, BaseEvent
 from gateway.input_controller import InputController
 from gateway.models import Config
 from ioc import INJECTED, Inject, Injectable, Singleton
@@ -57,6 +57,7 @@ class EventSender(object):
         self._events_thread.stop()
 
     def enqueue_event(self, event):
+        # type: (BaseEvent) -> None
         if Config.get_entry('cloud_enabled', False) is False:
             return
         if event.type == GatewayEvent.Types.CONFIG_CHANGE:

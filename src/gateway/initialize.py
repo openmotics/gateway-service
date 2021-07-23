@@ -15,8 +15,6 @@
 
 from __future__ import absolute_import
 
-import re
-
 from logs import Logs
 from platform_utils import Platform, System
 System.import_libs()
@@ -24,6 +22,7 @@ System.import_libs()
 import fcntl
 import logging
 import os
+import six
 import time
 from contextlib import contextmanager
 from threading import Lock
@@ -274,6 +273,7 @@ def setup_target_platform(target_platform, message_client_name):
 
     if controller_serial_port:
         Injectable.value(controller_serial=Serial(controller_serial_port, 115200, exclusive=True))
+
     if target_platform in [Platform.Type.DUMMY, Platform.Type.ESAFE]:
         Injectable.value(maintenance_communicator=None)
         Injectable.value(passthrough_service=None)
@@ -281,6 +281,12 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(eeprom_db=None)
         from gateway.hal.master_controller_dummy import DummyEepromObject
         Injectable.value(eeprom_extension=DummyEepromObject())
+        try:
+            esafe_rebus_device = config.get('OpenMotics', 'rebus_device')
+            Injectable.value(rebus_device=esafe_rebus_device)
+        except NoOptionError:
+            Injectable.value(rebus_device=None)
+
     elif target_platform in Platform.CoreTypes:
         # FIXME don't create singleton for optional controller?
         from master.core import ucan_communicator, slave_communicator
@@ -323,6 +329,13 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(frontpanel_controller=FrontpanelClassicController())
     else:
         logger.warning('Unhandled frontpanel implementation for %s', target_platform)
+
+    # eSafe controller
+    if target_platform == Platform.Type.ESAFE and six.PY3:
+        from gateway.esafe_controller import EsafeController
+        Injectable.value(esafe_controller=EsafeController())
+    else:
+        Injectable.value(esafe_controller=None)
 
     # Thermostats
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')

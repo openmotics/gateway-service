@@ -23,7 +23,45 @@ if False:  # MYPY
     from typing import Any, Dict
 
 
-class GatewayEvent(object):
+"""
+This class represents the base template for any type of events
+"""
+class BaseEvent(object):
+    VERSION = None
+
+    def __init__(self, event_type, data):
+        # type: (str, Dict[str,Any]) -> None
+        self.type = event_type
+        self.data = data
+
+    def serialize(self):
+        # type: () -> Dict[str,Any]
+        return {'type': self.type,
+                'data': self.data,
+                '_version': 1.0}  # Add version so that event processing code can handle multiple formats
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        return isinstance(other, self.__class__) \
+               and self.type == other.type \
+               and self.data == other.data
+
+    def __repr__(self):
+        # type: () -> str
+        return '<{} {} {}>'.format(self.__class__.__name__, self.type, self.data)
+
+    def __str__(self):
+        # type: () -> str
+        return json.dumps(self.serialize())
+
+    @classmethod
+    def deserialize(cls, data):
+        # type: (Dict[str,Any]) -> BaseEvent
+        return cls(event_type=data['type'],
+                   data=data['data'])
+
+
+class GatewayEvent(BaseEvent):
     """
     GatewayEvent object
 
@@ -63,33 +101,30 @@ class GatewayEvent(object):
         PING = 'PING'
         PONG = 'PONG'
 
-    def __init__(self, event_type, data):
-        # type: (str, Dict[str,Any]) -> None
-        self.type = event_type
-        self.data = data
 
-    def serialize(self):
-        # type: () -> Dict[str,Any]
-        return {'type': self.type,
-                'data': self.data,
-                '_version': 1.0}  # Add version so that event processing code can handle multiple formats
+class EsafeEvent(BaseEvent):
+    """
+    eSafeEvent object
 
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        return isinstance(other, GatewayEvent) \
-            and self.type == other.type \
-            and self.data == other.data
+    Data formats:
 
-    def __repr__(self):
-        # type: () -> str
-        return '<GatewayEvent {} {}>'.format(self.type, self.data)
+    * CONFIG_CHANGE
+      {'type': str}  # config type: Global, Doorbell, RFID
 
-    def __str__(self):
-        # type: () -> str
-        return json.dumps(self.serialize())
+    * DELIVERY_CHANGE
+      {'type': str,              # Delivery type: DELIVERY or RETURN
+       'action': str,            # action type: DELIVERY or PICKUP
+       'user_delivery_id': int,  # ID of the delivery user (can be None)
+       'user_pickup_id': int,    # ID of the pickup user (Always has a value, but can be a courier)
+       'parcel_rebus_id': int}   # Rebus id of the used parcelbox
 
-    @staticmethod
-    def deserialize(data):
-        # type: (Dict[str,Any]) -> GatewayEvent
-        return GatewayEvent(event_type=data['type'],
-                            data=data['data'])
+    * LOCK_CHANGE
+      {'id': int,      # Rebus lock id
+       'status': str}  # action type: 'open' or 'close'
+    """
+
+    class Types(object):
+        CONFIG_CHANGE = 'CONFIG_CHANGE'
+        DELIVERY_CHANGE = 'DELIVERY_DELIVERY'
+        LOCK_CHANGE = 'LOCK_CHANGE'
+        RFID_SCAN = 'RFID_SCAN'

@@ -21,14 +21,17 @@ import datetime
 from dateutil.tz import tzlocal
 import logging
 
+from gateway.dto import DeliveryDTO, UserDTO
+from gateway.events import EsafeEvent
 from gateway.models import Delivery, User, Database
 from gateway.mappers import DeliveryMapper, UserMapper
-from gateway.dto import DeliveryDTO, UserDTO
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MyPy
     from typing import List, Optional
     from gateway.user_controller import UserController
+    from gateway.esafe_controller import EsafeController
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +41,19 @@ logger = logging.getLogger(__name__)
 class DeliveryController(object):
 
     @Inject
-    def __init__(self, user_controller=INJECTED):
-        # type: (UserController) -> None
+    def __init__(self, user_controller=INJECTED, pubsub=INJECTED):
+        # type: (UserController, PubSub) -> None
         self.user_controller = user_controller
+        self.pubsub = pubsub
+        self.esafe_controller = None  # type: Optional[EsafeController]
+
+    def set_esafe_controller(self, esafe_controller):
+        # type: (Optional[EsafeController]) -> None
+        self.esafe_controller = esafe_controller
 
     @staticmethod
     def load_delivery(delivery_id, include_picked_up=False):
-        # type: (int) -> Optional[DeliveryDTO]
+        # type: (int, bool) -> Optional[DeliveryDTO]
         if include_picked_up:
             delivery_orm = Delivery.select().where(Delivery.id == delivery_id).first()
         else:
@@ -55,8 +64,17 @@ class DeliveryController(object):
         return delivery_dto
 
     @staticmethod
+    def load_delivery_by_pickup_user(pickup_user_id):
+        # type: (int) -> Optional[DeliveryDTO]
+        delivery_orm = Delivery.select().where(Delivery.user_pickup_id == pickup_user_id).first()
+        if delivery_orm is None:
+            return None
+        delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
+        return delivery_dto
+
+    @staticmethod
     def load_deliveries(user_id=None, include_picked_up=False):
-        # type: (Optional[int]) -> List[DeliveryDTO]
+        # type: (Optional[int], bool) -> List[DeliveryDTO]
         deliveries = []
         query = Delivery.select()
         # filter on user id when needed
@@ -88,7 +106,12 @@ class DeliveryController(object):
 
     def save_delivery(self, delivery_dto):
         # type: (DeliveryDTO) -> Optional[DeliveryDTO]
-        # TODO: Check if parcelbox id exists!
+        if self.esafe_controller is not None:
+            exists = self.esafe_controller.verify_device_exists(delivery_dto.parcelbox_rebus_id)
+            if not exists:
+                raise ValueError('Could not save the delivery, the parcelbox_id "{}" does not exists'.format(delivery_dto.parcelbox_rebus_id))
+        else:
+            raise RuntimeError('Cannot verify if parcelbox exists, not saving delivery')
         if delivery_dto.parcelbox_rebus_id is None:
             raise RuntimeError('Could not save the delivery since the parcelbox id is not defined')
         if not DeliveryController.parcel_id_available(delivery_dto.parcelbox_rebus_id, delivery_dto.id):
@@ -100,10 +123,18 @@ class DeliveryController(object):
 
         delivery_orm = DeliveryMapper.dto_to_orm(delivery_dto)
         delivery_orm.save()
+        event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
+            'type': delivery_dto.type,
+            'action': 'DELIVERY',
+            'user_delivery_id': delivery_dto.user_id_delivery,
+            'user_pickup_id': delivery_dto.user_id_pickup,
+            'parcel_rebus_id': delivery_dto.parcelbox_rebus_id
+        })
+        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
         return DeliveryMapper.orm_to_dto(delivery_orm)
 
     @staticmethod
-    def parcel_id_available(parcelbox_id, delivery_id):
+    def parcel_id_available(parcelbox_id, delivery_id=None):
         if delivery_id is None:
             delivery_id = -1
         query = Delivery.select().where((Delivery.parcelbox_rebus_id == parcelbox_id) &
@@ -140,6 +171,16 @@ class DeliveryController(object):
             self.user_controller.remove_user(pickup_user_dto)
         else:
             delivery_dto_saved = self.save_delivery(delivery_dto)
+
+        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {
+            'type': delivery_dto.type,
+            'action': 'PICKUP',
+            'user_delivery_id': delivery_dto.user_id_delivery,
+            'user_pickup_id': delivery_dto.user_id_pickup,
+            'parcel_rebus_id': delivery_dto.parcelbox_rebus_id
+        })
+        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
+
         return delivery_dto_saved
 
     @staticmethod

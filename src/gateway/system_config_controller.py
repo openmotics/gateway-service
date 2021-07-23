@@ -18,7 +18,9 @@ System config BLL
 import os
 
 import constants
+from gateway.events import EsafeEvent
 from gateway.models import Config
+from gateway.pubsub import PubSub
 from gateway.dto import SystemDoorbellConfigDTO, SystemRFIDConfigDTO, \
     SystemRFIDSectorBlockConfigDTO, SystemTouchscreenConfigDTO, SystemGlobalConfigDTO, \
     SystemActivateUserConfigDTO
@@ -48,6 +50,13 @@ class SystemConfigController(object):
         'rfid_auth_key_B': '',
 
     }
+
+    @classmethod
+    @Inject
+    def send_event(cls, event_type, pubsub=INJECTED):
+        # type: (str, PubSub) -> None
+        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': event_type})
+        pubsub.publish_esafe_event(PubSub.EsafeTopics.CONFIG, event)
 
     @classmethod
     def get_config_value(cls, config_name):
@@ -95,6 +104,7 @@ class SystemConfigController(object):
     def save_doorbell_config(cls, config_dto):
         # type: (SystemDoorbellConfigDTO) -> None
         cls.save_config_value('doorbell_config', {x: getattr(config_dto, x) for x in config_dto.loaded_fields})
+        cls.send_event('doorbell')
 
     @classmethod
     def get_rfid_config(cls):
@@ -106,6 +116,7 @@ class SystemConfigController(object):
     def save_rfid_config(cls, config_dto):
         # type: (SystemRFIDConfigDTO) -> None
         cls.save_config_value('rfid_config', {x: getattr(config_dto, x) for x in config_dto.loaded_fields})
+        cls.send_event('rfid')
 
     @classmethod
     def get_rfid_sector_block_config(cls):
@@ -117,6 +128,7 @@ class SystemConfigController(object):
     def save_rfid_sector_block_config(cls, config_dto):
         # type: (SystemRFIDSectorBlockConfigDTO) -> None
         cls.save_config_value('rfid_sector_block_config', {x: getattr(config_dto, x) for x in config_dto.loaded_fields})
+        cls.send_event('rfid_sector_block')
 
     @classmethod
     @Inject
@@ -129,6 +141,7 @@ class SystemConfigController(object):
     def save_touchscreen_config(cls, system_controller=INJECTED):
         # type: (SystemController) -> None
         system_controller.calibrate_esafe_touchscreen()
+        cls.send_event('touchscreen')
 
     @classmethod
     def get_global_config(cls):
@@ -140,6 +153,7 @@ class SystemConfigController(object):
     def save_global_config(cls, config_dto):
         # type: (SystemGlobalConfigDTO) -> None
         cls.save_config_value('global_config', {x: getattr(config_dto, x) for x in config_dto.loaded_fields})
+        cls.send_event('global')
 
     @classmethod
     def get_activate_user_config(cls):
@@ -151,3 +165,4 @@ class SystemConfigController(object):
     def save_activate_user_config(cls, config_dto):
         # type: (SystemActivateUserConfigDTO) -> None
         cls.save_config_value('activate_user_config', {x: getattr(config_dto, x) for x in config_dto.loaded_fields})
+        cls.send_event('activate_user')

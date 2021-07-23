@@ -457,6 +457,6 @@ class Delivery(BaseModel):
     signature_delivery: MixedCharField
     signature_pickup: MixedCharField
     parcelbox_rebus_id: MixedIntegerField
-    user_id_delivery: UserForeignKeyField
-    user_id_pickup: UserForeignKeyField
+    user_delivery: UserForeignKeyField
+    user_pickup: UserForeignKeyField
 

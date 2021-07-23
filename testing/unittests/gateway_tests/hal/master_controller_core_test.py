@@ -227,7 +227,7 @@ class MasterCoreControllerTest(unittest.TestCase):
         global_configuration.number_of_output_modules = 5
         global_configuration.number_of_input_modules = 4
         global_configuration.number_of_sensor_modules = 2
-        global_configuration.number_of_can_control_modules = 2
+        global_configuration.number_of_can_control_modules = 1
         global_configuration.save()
         for module_id, module_class, device_type, address in [(0, InputModuleConfiguration, 'I', '{0}.123.123.123'.format(ord('I'))),
                                                               (1, InputModuleConfiguration, 'i', '{0}.123.123.123'.format(ord('i'))),

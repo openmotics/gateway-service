@@ -1957,7 +1957,8 @@ class WebInterface(object):
     def set_power_modules(self, modules):
         """ Set information for the power modules. """
         module_dtos = [EnergyModuleSerializer.deserialize(module) for module in modules]
-        return self._energy_module_controller.save_modules(module_dtos)
+        self._energy_module_controller.save_modules(module_dtos)
+        return {}
 
     @openmotics_api(auth=True)
     def get_realtime_power(self):

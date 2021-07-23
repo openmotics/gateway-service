@@ -310,7 +310,7 @@ class Event(object):
                     'power': self._data[0 > 1]}
         if self.type == Event.Types.RESET_ACTION:
             data = {'type': Event.ResetTypes.UNKNOWN,
-                    'address': self._address_helper.decode(self._data[1:4])}
+                    'version': self._address_helper.decode(self._data[1:4])}
             if self._action == 2:
                 data.update({'type': Event.ResetTypes.HEALTH_CHECK,
                              'cause': {1: Event.HealthResetCauses.I2C_1,
