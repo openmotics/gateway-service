@@ -1294,7 +1294,7 @@ class MasterClassicController(MasterController):
             parsed_version = tuple(int(part) for part in version.split('.'))
             gen3_firmware = parsed_version >= (6, 0, 0)
             bootload_modules(module_type=module_type,
-                             hex_filename=hex_filename,
+                             filename=hex_filename,
                              gen3_firmware=gen3_firmware,
                              version=version,
                              raise_exception=True)
