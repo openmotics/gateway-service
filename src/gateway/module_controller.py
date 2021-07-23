@@ -47,7 +47,7 @@ class ModuleController(BaseController):
 
     FIRMWARE_ARCHIVE_DIR = os.path.join(OPENMOTICS_PREFIX, 'firmwares')
     FIRMWARE_BASE_NAME = 'OMF{0}_{{0}}.hex'
-    FIRMWARE_MAP = {'sensor': {2: ('T', 'TE')},
+    FIRMWARE_MAP = {'temperature': {2: ('T', 'TE')},
                     'input': {2: ('I', 'IT'), 3: ('I', 'IT')},
                     'output': {2: ('O', 'OT'), 3: ('O', 'RY')},
                     'shutter': {2: ('R', 'OT')},
