@@ -28,6 +28,7 @@ from gateway.esafe_controller import EsafeController
 from gateway.mappers import UserMapper, DeliveryMapper
 from gateway.models import Delivery, User, Apartment
 from gateway.delivery_controller import DeliveryController
+from gateway.pubsub import PubSub
 from gateway.rfid_controller import RfidController
 from gateway.user_controller import UserController
 from ioc import SetTestMode, SetUpTestInjections
@@ -52,6 +53,8 @@ class DeliveryControllerTest(unittest.TestCase):
         self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
+        self.pubsub = PubSub()
+        SetUpTestInjections(pubsub=self.pubsub)
         SetUpTestInjections(token_timeout=3)
         self.token_store = TokenStore(token_timeout=3)
         SetUpTestInjections(token_store=self.token_store)

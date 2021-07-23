@@ -21,9 +21,11 @@ import datetime
 from dateutil.tz import tzlocal
 import logging
 
+from gateway.dto import DeliveryDTO, UserDTO
+from gateway.events import EsafeEvent
 from gateway.models import Delivery, User, Database
 from gateway.mappers import DeliveryMapper, UserMapper
-from gateway.dto import DeliveryDTO, UserDTO
+from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MyPy
@@ -39,9 +41,10 @@ logger = logging.getLogger(__name__)
 class DeliveryController(object):
 
     @Inject
-    def __init__(self, user_controller=INJECTED):
-        # type: (UserController) -> None
+    def __init__(self, user_controller=INJECTED, pubsub=INJECTED):
+        # type: (UserController, PubSub) -> None
         self.user_controller = user_controller
+        self.pubsub = pubsub
         self.esafe_controller = None  # type: Optional[EsafeController]
 
     def set_esafe_controller(self, esafe_controller):
@@ -120,6 +123,14 @@ class DeliveryController(object):
 
         delivery_orm = DeliveryMapper.dto_to_orm(delivery_dto)
         delivery_orm.save()
+        event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {
+            'type': delivery_dto.type,
+            'action': 'DELIVERY',
+            'user_delivery_id': delivery_dto.user_id_delivery,
+            'user_pickup_id': delivery_dto.user_id_pickup,
+            'parcel_rebus_id': delivery_dto.parcelbox_rebus_id
+        })
+        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
         return DeliveryMapper.orm_to_dto(delivery_orm)
 
     @staticmethod
@@ -160,6 +171,16 @@ class DeliveryController(object):
             self.user_controller.remove_user(pickup_user_dto)
         else:
             delivery_dto_saved = self.save_delivery(delivery_dto)
+
+        event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {
+            'type': delivery_dto.type,
+            'action': 'PICKUP',
+            'user_delivery_id': delivery_dto.user_id_delivery,
+            'user_pickup_id': delivery_dto.user_id_pickup,
+            'parcel_rebus_id': delivery_dto.parcelbox_rebus_id
+        })
+        self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
+
         return delivery_dto_saved
 
     @staticmethod
