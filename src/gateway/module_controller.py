@@ -47,15 +47,15 @@ class ModuleController(BaseController):
 
     FIRMWARE_ARCHIVE_DIR = os.path.join(OPENMOTICS_PREFIX, 'firmwares')
     FIRMWARE_BASE_NAME = 'OMF{0}_{{0}}.hex'
-    FIRMWARE_MAP = {'temperature': {2: ('T', 'TE')},
-                    'input': {2: ('I', 'IT'), 3: ('I', 'IT')},
-                    'output': {2: ('O', 'OT'), 3: ('O', 'RY')},
-                    'shutter': {2: ('R', 'OT')},
-                    'dim_control': {2: ('D', 'DL'), 3: ('D', 'ZL')},
-                    'can_control': {2: ('C', 'CL'), 3: ('C', 'CL')},
-                    'ucan': {3: ('UC', 'MN')},
-                    'master_classic': {2: ('M', 'GY')},
-                    'master_core': {3: ('M', 'BN')}}
+    FIRMWARE_MAP = {'temperature': {2: ('T', 'TE', 'temperature')},
+                    'input': {2: ('I', 'IT', 'input'), 3: ('I', 'IT', 'input_gen3')},
+                    'output': {2: ('O', 'OT', 'output'), 3: ('O', 'RY', 'output_gen3')},
+                    'shutter': {2: ('R', 'OT', 'output')},
+                    'dim_control': {2: ('D', 'DL', 'dimmer'), 3: ('D', 'ZL', 'dimmer_gen3')},
+                    'can_control': {2: ('C', 'CL', 'can'), 3: ('C', 'CL', 'can_gen3')},
+                    'ucan': {3: ('UC', 'MN', 'ucan')},
+                    'master_classic': {2: ('M', 'GY', 'master_classic')},
+                    'master_core': {3: ('M', 'BN', 'master_coreplus')}}
 
     @Inject
     def __init__(self, master_controller=INJECTED, energy_module_controller=INJECTED):
@@ -189,6 +189,7 @@ class ModuleController(BaseController):
         if generation not in ModuleController.FIRMWARE_MAP[module_type]:
             raise RuntimeError('Dynamic update for {0} generation {1} not yet supported'.format(module_type, generation))
         filename_code = ModuleController.FIRMWARE_MAP[module_type][generation][1]
+        firmware_cloud_code = ModuleController.FIRMWARE_MAP[module_type][generation][2]
 
         platform = Platform.get_platform()
         if module_type in ['master_classic', 'master_core']:
@@ -201,7 +202,7 @@ class ModuleController(BaseController):
 
             filename_base = ModuleController.FIRMWARE_BASE_NAME.format(filename_code)
             target_filename = os.path.join(ModuleController.FIRMWARE_ARCHIVE_DIR, filename_base.format(firmware_version))
-            self._download_firmware(module_type, firmware_version, target_filename)
+            self._download_firmware(firmware_cloud_code, firmware_version, target_filename)
             self._master_controller.update_master(target_filename)
             ModuleController._archive_firmwares(target_filename, filename_base, firmware_version)
             return
@@ -212,7 +213,7 @@ class ModuleController(BaseController):
         filename_base = ModuleController.FIRMWARE_BASE_NAME.format(filename_code)
         short_module_type = ModuleController.FIRMWARE_MAP[module_type][generation][0]
         target_filename = os.path.join(ModuleController.FIRMWARE_ARCHIVE_DIR, filename_base.format(firmware_version))
-        self._download_firmware(module_type, firmware_version, target_filename)
+        self._download_firmware(firmware_cloud_code, firmware_version, target_filename)
         self._master_controller.update_slave_modules(short_module_type, target_filename, firmware_version)
         ModuleController._archive_firmwares(target_filename, filename_base, firmware_version)
 

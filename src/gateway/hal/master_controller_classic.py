@@ -1293,7 +1293,11 @@ class MasterClassicController(MasterController):
             self._heartbeat.stop()
             parsed_version = tuple(int(part) for part in version.split('.'))
             gen3_firmware = parsed_version >= (6, 0, 0)
-            bootload_modules(module_type, hex_filename, gen3_firmware, version)
+            bootload_modules(module_type=module_type,
+                             hex_filename=hex_filename,
+                             gen3_firmware=gen3_firmware,
+                             version=version,
+                             raise_exception=True)
         finally:
             self._heartbeat.start()
             self._communication_enabled = True

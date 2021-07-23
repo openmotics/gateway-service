@@ -294,8 +294,8 @@ def bootload(address, ihex, crc, blocks, version, gen3_firmware, master_communic
 
 
 @Inject
-def bootload_modules(module_type, filename, gen3_firmware, version):
-    # type: (str, str, bool, Optional[str]) -> bool
+def bootload_modules(module_type, filename, gen3_firmware, version, raise_exception=False):
+    # type: (str, str, bool, Optional[str], bool) -> bool
     """
     Bootload all modules of the given type with the firmware in the given filename.
 
@@ -303,6 +303,7 @@ def bootload_modules(module_type, filename, gen3_firmware, version):
     :param filename: The filename for the hex file to load
     :param gen3_firmware: Indicates whether it's a gen3 firmware
     :param version: The version of the hexfile, if known
+    :param raise_exception: Whether an exception should be logged or just raised
     """
 
     logger.info('Loading module addresses...')
@@ -318,6 +319,8 @@ def bootload_modules(module_type, filename, gen3_firmware, version):
         try:
             bootload(address, ihex, crc, blocks, version, gen3_firmware)
         except Exception:
+            if raise_exception:
+                raise
             update_success = False
             logger.info('Bootloading failed:')
             logger.info(traceback.format_exc())
