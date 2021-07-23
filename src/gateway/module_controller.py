@@ -198,10 +198,10 @@ class ModuleController(BaseController):
                 raise RuntimeError('Cannot update {0} on platform {1}'.format(module_type, platform))
 
             filename_base = ModuleController.FIRMWARE_BASE_NAME.format(filename_code)
-            target_filename = '/tmp/{0}'.format(filename_base.format(firmware_version))
+            target_filename = os.path.join(ModuleController.FIRMWARE_ARCHIVE_DIR, filename_base.format(firmware_version))
             self._download_firmware(module_type, firmware_version, target_filename)
             self._master_controller.update_master(target_filename)
-            ModuleController._archive_firmwares(filename_base, firmware_version)
+            ModuleController._archive_firmwares(target_filename, filename_base, firmware_version)
             return
 
         if platform in Platform.ClassicTypes and module_type == 'ucan':
@@ -209,10 +209,10 @@ class ModuleController(BaseController):
 
         filename_base = ModuleController.FIRMWARE_BASE_NAME.format(filename_code)
         short_module_type = ModuleController.FIRMWARE_MAP[module_type][generation][0]
-        target_filename = '/tmp/{0}'.format(filename_base.format(firmware_version))
+        target_filename = os.path.join(ModuleController.FIRMWARE_ARCHIVE_DIR, filename_base.format(firmware_version))
         self._download_firmware(module_type, firmware_version, target_filename)
         self._master_controller.update_slave_modules(short_module_type, target_filename, firmware_version)
-        ModuleController._archive_firmwares(filename_base, firmware_version)
+        ModuleController._archive_firmwares(target_filename, filename_base, firmware_version)
 
     def module_discover_start(self, timeout=900):  # type: (int) -> None
         self._master_controller.module_discover_start(timeout)
@@ -295,6 +295,9 @@ class ModuleController(BaseController):
 
     def _download_firmware(self, module_type, version, target_filename):
         # type: (str, str, str) -> None
+        target_dir = os.path.basename(target_filename)
+        if not os.path.exists(target_dir):
+            os.mkdir(target_dir)
         url = self._get_firmware_url(module_type, version)
         response = requests.get(url)
         if response.status_code != 200:
@@ -314,7 +317,8 @@ class ModuleController(BaseController):
             raise ValueError('Firmware {0} checksum sha256:{1} does not match'.format(module_type, calculated_hash))
 
     @staticmethod
-    def _archive_firmwares(filename_base, firmware_version):
+    def _archive_firmwares(target_filename, filename_base, firmware_version):
+        # type: (str, str, str) -> None
         archive_dir = ModuleController.FIRMWARE_ARCHIVE_DIR
         if not os.path.exists(archive_dir):
             os.mkdir(archive_dir)
@@ -323,8 +327,7 @@ class ModuleController(BaseController):
         if os.path.exists(current_filename):
             current_target = os.readlink(current_filename)  # e.g. /foo/OMFXY_1.0.1.hex
         previous_filename = os.path.join(archive_dir, filename_base.format('previous'))  # e.g. /foo/OMFXY_previous.hex
-        new_target = os.path.join(archive_dir, filename_base.format(firmware_version))  # e.g. /foo/OMFXY_1.0.2.hex
-        if new_target == current_target:
+        if target_filename == current_target:
             return  # No real update, no need to remove the previous
         if os.path.exists(previous_filename):
             os.unlink(previous_filename)
@@ -332,4 +335,4 @@ class ModuleController(BaseController):
             os.unlink(current_filename)
         if current_target is not None:
             os.link(current_target, previous_filename)  # /foo/OMFXY_previous.hex -> /foo/OMFXY_1.0.1.hex
-        os.link(new_target, current_filename)  # /foo/OMFXY_current.hex -> /foo/OMFXY_1.0.2.hex
+        os.link(target_filename, current_filename)  # /foo/OMFXY_current.hex -> /foo/OMFXY_1.0.2.hex
