@@ -127,7 +127,8 @@ def firmware_updates(toolbox_session):
             for _ in range(8):
                 try:
                     toolbox.health_check(timeout=120)
-                    toolbox.dut.get('/update_firmware', {module: version})
+                    toolbox.dut.get('/update_firmware', {'module_type': module,
+                                                         'firmware_version': version})
                     time.sleep(5)
                     toolbox.health_check(timeout=120)
                     break
