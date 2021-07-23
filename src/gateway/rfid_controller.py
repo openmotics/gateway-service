@@ -15,23 +15,23 @@
 """
 RFID BLL
 """
-import abc
-import datetime
-
-import six
-from dateutil.tz import tzlocal
-import enum
-import logging
-from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
-import os
 
 import constants
+from gateway.events import EsafeEvent
 from gateway.models import RFID, User
 from gateway.mappers import RfidMapper
 from gateway.dto import RfidDTO, UserDTO
 from gateway.pubsub import PubSub
 from rfid.idtronic_M890.idtronic_M890 import IdTronicM890
 from ioc import INJECTED, Inject, Injectable, Singleton
+
+import abc
+import datetime
+from dateutil.tz import tzlocal
+import logging
+import os
+import six
+from six.moves.configparser import ConfigParser, NoOptionError
 
 if False:  # MyPy
     from typing import List, Optional, Type
@@ -163,7 +163,6 @@ class RfidController(object):
 # stand-by
 # add-badge
 
-
 @six.add_metaclass(abc.ABCMeta)
 class RfidState(object):
     @staticmethod
@@ -180,12 +179,18 @@ class RfidStandByState(RfidState):
     def handle_rfid_scan(context, pubsub=INJECTED):
         # type: (RfidContext, PubSub) -> None
         logger.debug('Got a new rfid scanned: {}'.format(context.last_scanned_uuid))
-        # ToDo add the events here
+        event_data = {
+            'uuid': context.last_scanned_uuid,
+            'action': 'SCAN'
+        }
+        event = EsafeEvent(EsafeEvent.Types.RFID_CHANGE, event_data)
+        pubsub.publish_esafe_event(PubSub.EsafeTopics.RFID, event)
 
 
 class RfidAddBadgeState(RfidState):
     @staticmethod
-    def handle_rfid_scan(context):
+    @Inject
+    def handle_rfid_scan(context, pubsub=INJECTED):
         logger.info('Saving the new scanned badge for user: {}: {}'.format(context.user.username, context.last_scanned_uuid))
         rfid_dto = RfidDTO(tag_string=context.last_scanned_uuid,
                            label=context.label,
@@ -193,6 +198,12 @@ class RfidAddBadgeState(RfidState):
                            enter_count=-1,
                            uid_manufacturer=context.last_scanned_uuid)
         context.rfid_controller.save_rfid(rfid_dto)
+        event_data = {
+            'uuid': context.last_scanned_uuid,
+            'action': 'REGISTER'
+        }
+        event = EsafeEvent(EsafeEvent.Types.RFID_CHANGE, event_data)
+        pubsub.publish_esafe_event(PubSub.EsafeTopics.RFID, event)
         context.rfid_state = RfidStandByState
 
 
