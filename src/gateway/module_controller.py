@@ -309,7 +309,7 @@ class ModuleController(BaseController):
         return urlunparse((uri.scheme, uri.netloc, path, '', query, ''))
 
     def _download_firmware(self, module_type, version, target_filename):
-        # type: (str, str) -> None
+        # type: (str, str, str) -> None
         url = self._get_firmware_url(module_type, version)
         response = requests.get(url)
         if response.status_code != 200:
