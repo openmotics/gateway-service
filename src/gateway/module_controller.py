@@ -186,6 +186,8 @@ class ModuleController(BaseController):
 
         parsed_version = tuple(int(part) for part in firmware_version.split('.'))
         generation = 3 if parsed_version >= (6, 0, 0) else 2
+        if generation not in ModuleController.FIRMWARE_MAP[module_type]:
+            raise RuntimeError('Dynamic update for {0} generation {1} not yet supported'.format(module_type, generation))
         filename_code = ModuleController.FIRMWARE_MAP[module_type][generation][1]
 
         platform = Platform.get_platform()
