@@ -78,13 +78,12 @@ def firmware_updates(toolbox_session):
     toolbox = toolbox_session
 
     if os.environ.get('OPENMOTICS_UPDATE'):
-        logger.debug('firmware updates, skipped')
+        logger.debug('Firmware updates skipped')
         return
 
     versions = toolbox.get_firmware_versions()
-    logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in versions.items())))
+    logger.info('Current firmwares: {}'.format(', '.join('{}={}'.format(k, v) for k, v in versions.items())))
     firmware = {}
-    # TODO: Add support for Core+ firmwares
     force_update = os.environ.get('OPENMOTICS_FORCE_UPDATE', '0') == '1'
 
     if TEST_PLATFORM == TestPlatform.DEBIAN:
@@ -137,7 +136,23 @@ def firmware_updates(toolbox_session):
                 except Exception:
                     logger.error('updating {} failed, retrying'.format(module))
                     time.sleep(30)
-        logger.info('firmware {}'.format(' '.join('{}={}'.format(k, v) for k, v in firmware.items())))
+
+        versions = toolbox.get_firmware_versions()
+        logger.info('Post-update firmwares: {}'.format(', '.join('{}={}'.format(k, v) for k, v in versions.items())))
+        mismatches = []
+        for expected, current in [('master_classic', 'M'),
+                                  ('master_core', 'M'),
+                                  ('output', 'O'),
+                                  ('dim_control', 'D'),
+                                  ('input', 'I'),
+                                  ('temperature', 'T'),
+                                  ('can_control', 'C')]:
+            if expected in firmware:
+                if firmware[expected] != versions[current]:
+                    mismatches.append('{0}({1}!={2})'.format(current, firmware[expected], versions[current]))
+        if mismatches:
+            logger.info('Firmware mismatches: {0}'.format(', '.join(mismatches)))
+            assert False  # Fail
 
 
 @fixture
