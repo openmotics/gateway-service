@@ -935,6 +935,8 @@ class MasterCoreController(MasterController):
     def get_modules_information(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
         """ Gets module information """
 
+        # TODO: Unclude uCAN version information
+
         def _default_if_255(value, default):
             return value if value != 255 else default
 

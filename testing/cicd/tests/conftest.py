@@ -117,8 +117,8 @@ def firmware_updates(toolbox_session):
         logger.info('CAN Control firmware {} -> {}...'.format(versions['C'], can_control_firmware))
         firmware['can_control'] = can_control_firmware
     ucan_firmware = os.environ.get('OPENMOTICS_MICRO_CAN_FIRMWARE')
-    if ucan_firmware and (force_update or ucan_firmware != versions['UC']):
-        logger.info('uCAN firmware {} -> {}...'.format(versions['UC'], ucan_firmware))
+    if ucan_firmware:  # TODO: Implement uCAN version check
+        logger.info('uCAN firmware -> {}...'.format(ucan_firmware))
         firmware['ucan'] = ucan_firmware
 
     if firmware:
