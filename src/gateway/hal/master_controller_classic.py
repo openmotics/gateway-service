@@ -1286,12 +1286,14 @@ class MasterClassicController(MasterController):
             self._communication_enabled = True
 
     @Inject
-    def update_slave_modules(self, module_type, hex_filename):
-        # type: (str, str) -> None
+    def update_slave_modules(self, module_type, hex_filename, version):
+        # type: (str, str, str) -> None
         try:
             self._communication_enabled = False
             self._heartbeat.stop()
-            bootload_modules(module_type, hex_filename, False, None)
+            parsed_version = tuple(int(part) for part in version.split('.'))
+            gen3_firmware = parsed_version >= (6, 0, 0)
+            bootload_modules(module_type, hex_filename, gen3_firmware, version)
         finally:
             self._heartbeat.start()
             self._communication_enabled = True

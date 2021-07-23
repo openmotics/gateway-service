@@ -17,14 +17,21 @@ Module BLL
 """
 from __future__ import absolute_import
 import logging
+import os
 import six
 import time
+import hashlib
+import requests
+import shutil
+from constants import OPENMOTICS_PREFIX
 from ioc import Injectable, Inject, INJECTED, Singleton
 from serial_utils import CommunicationTimedOutException
 from gateway.dto import ModuleDTO
 from gateway.base_controller import BaseController
 from gateway.models import Module
 from gateway.mappers.module import ModuleMapper
+from six.moves.urllib.parse import urlparse, urlunparse
+from platform_utils import Platform
 
 if False:  # MYPY
     from typing import Dict, List, Optional, Any
@@ -37,6 +44,18 @@ logger = logging.getLogger(__name__)
 @Injectable.named('module_controller')
 @Singleton
 class ModuleController(BaseController):
+
+    FIRMWARE_ARCHIVE_DIR = os.path.join(OPENMOTICS_PREFIX, 'firmwares')
+    FIRMWARE_BASE_NAME = 'OMF{0}_{{0}}.hex'
+    FIRMWARE_MAP = {'sensor': {2: ('T', 'TE')},
+                    'input': {2: ('I', 'IT'), 3: ('I', 'IT')},
+                    'output': {2: ('O', 'OT'), 3: ('O', 'RY')},
+                    'shutter': {2: ('R', 'OT')},
+                    'dim_control': {2: ('D', 'DL'), 3: ('D', 'ZL')},
+                    'can_control': {2: ('C', 'CL'), 3: ('C', 'CL')},
+                    'ucan': {3: ('UC', 'MN')},
+                    'master_classic': {2: ('M', 'GY')},
+                    'master_core': {3: ('M', 'BN')}}
 
     @Inject
     def __init__(self, master_controller=INJECTED, energy_module_controller=INJECTED):
@@ -159,11 +178,53 @@ class ModuleController(BaseController):
         else:
             raise RuntimeError('Adding a virtual module of type `{0}` is not supported'.format(module_type))
 
-    def update_master_firmware(self, hex_filename):
-        self._master_controller.update_master(hex_filename)
+    def update_firmware(self, module_type, firmware_version):
+        # type: (str, str) -> None
 
-    def update_slave_firmware(self, module_type, hex_filename):
-        self._master_controller.update_slave_modules(module_type, hex_filename)
+        if module_type not in ModuleController.FIRMWARE_MAP:
+            raise RuntimeError('Dynamic update for {0} not yet supported'.format(module_type))
+
+        parsed_version = tuple(int(part) for part in firmware_version.split('.'))
+        generation = 3 if parsed_version >= (6, 0, 0) else 2
+        filename_code = ModuleController.FIRMWARE_MAP[module_type][generation][1]
+
+        if module_type in ['master_classic', 'master_core']:
+            platform = Platform.get_platform()
+            platform_match = (
+                (platform in Platform.CoreTypes and module_type == 'master_core') or
+                (platform in Platform.ClassicTypes and module_type == 'master_classic')
+            )
+            if not platform_match:
+                raise RuntimeError('Cannot update {0} on platform {1}'.format(module_type, platform))
+
+            filename_base = ModuleController.FIRMWARE_BASE_NAME.format(filename_code)
+            target_filename = '/tmp/{0}'.format(filename_base.format(firmware_version))
+            self._download_firmware(module_type, firmware_version, target_filename)
+            self._master_controller.update_master(target_filename)
+            ModuleController._archive_firmwares(filename_base, firmware_version)
+            return
+
+        filename_base = ModuleController.FIRMWARE_BASE_NAME.format(filename_code)
+        short_module_type = ModuleController.FIRMWARE_MAP[module_type][generation][0]
+        target_filename = '/tmp/{0}'.format(filename_base.format(firmware_version))
+        self._download_firmware(module_type, firmware_version, target_filename)
+        self._master_controller.update_slave_modules(short_module_type, target_filename, firmware_version)
+        ModuleController._archive_firmwares(filename_base, firmware_version)
+
+    @staticmethod
+    def _archive_firmwares(filename_base, firmware_version):
+        if not os.path.exists(ModuleController.FIRMWARE_ARCHIVE_DIR):
+            os.mkdir(ModuleController.FIRMWARE_ARCHIVE_DIR)
+        current_filename = filename_base.format('current')  # e.g. OMFXY_current.hex
+        previous_filename = filename_base.format('previous')  # e.g. OMFXY_previous.hex
+        current_target = os.readlink(current_filename)  # e.g. OMFXY_1.0.1.hex
+        new_target = filename_base.format(firmware_version)  # e.g. OMFXY_1.0.2.hex
+        if new_target == current_target:
+            return  # No real update, no need to remove the previous
+        os.unlink(previous_filename)
+        os.unlink(current_filename)
+        os.link(current_target, previous_filename)  # OMFXY_previous.hex -> OMFXY_1.0.1.hex
+        os.link(new_target, current_filename)  # OMFXY_current.hex -> OMFXY_1.0.2.hex
 
     def module_discover_start(self, timeout=900):  # type: (int) -> None
         self._master_controller.module_discover_start(timeout)
@@ -235,3 +296,31 @@ class ModuleController(BaseController):
     def get_configuration_dirty_flag(self):
         # type: () -> bool
         return self._master_controller.get_configuration_dirty_flag()
+
+    @Inject
+    def _get_firmware_url(self, module_type, version, firmware_url=INJECTED, gateway_uuid=INJECTED):
+        # type: (str, str, str, str) -> str
+        uri = urlparse(firmware_url)
+        path = '{0}/{1}/{2}/'.format(uri.path, module_type, version)
+        query = 'uuid={0}'.format(gateway_uuid)
+        return urlunparse((uri.scheme, uri.netloc, path, '', query, ''))
+
+    def _download_firmware(self, module_type, version, target_filename):
+        # type: (str, str) -> None
+        url = self._get_firmware_url(module_type, version)
+        response = requests.get(url)
+        if response.status_code != 200:
+            raise ValueError('Failed to retrieve {0} firmware from {1}: {2}'.format(module_type, url, response.status_code))
+        data = response.json()
+        logger.info('Downloading {0} firmware from {1} ...'.format(module_type, data['url']))
+        response = requests.get(data['url'], stream=True)
+        with open(target_filename, 'wb') as f:
+            shutil.copyfileobj(response.raw, f)
+        logger.info('Downloading {0} firmware from {1} ... Done'.format(module_type, data['url']))
+
+        hasher = hashlib.sha256()
+        with open(target_filename, 'rb') as f:
+            hasher.update(f.read())
+        calculated_hash = hasher.hexdigest()
+        if calculated_hash != data['sha256']:
+            raise ValueError('Firmware {0} checksum sha256:{1} does not match'.format(module_type, calculated_hash))

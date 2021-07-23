@@ -53,6 +53,7 @@ from master.core.memory_models import CanControlModuleConfiguration, \
     SensorModuleConfiguration, ShutterConfiguration
 from master.core.memory_types import MemoryActivator, MemoryAddress
 from master.core.slave_communicator import SlaveCommunicator
+from master.core.slave_updater import SlaveUpdater
 from master.core.system_value import Humidity, Temperature
 from master.core.system_value import Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
@@ -1190,6 +1191,15 @@ class MasterCoreController(MasterController):
     def update_master(self, hex_filename):
         # type: (str) -> None
         CoreUpdater.update(hex_filename=hex_filename)
+
+    def update_slave_modules(self, module_type, hex_filename, version):
+        # type: (str, str, str) -> None
+        parsed_version = tuple(int(part) for part in version.split('.'))
+        gen3_firmware = parsed_version >= (6, 0, 0)
+        SlaveUpdater.update_all(module_type=module_type,
+                                hex_filename=hex_filename,
+                                gen3_firmware=gen3_firmware,
+                                version=version)
 
     def get_backup(self):
         data = bytearray()
