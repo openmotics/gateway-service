@@ -241,7 +241,7 @@ SHUTTER_MODULE_LAYOUT = _SHUTTER_MODULE_LAYOUT[TEST_PLATFORM]  # type: List[Modu
 
 _INPUT_MODULE_LAYOUTS = {
     TestPlatform.CORE_PLUS: [
-        Module(name='internal input module', mtype='I',
+        Module(name='internal input module', mtype='i',
                hardware_type=Module.HardwareType.INTERNAL,
                inputs=[Input(input_id=0, tester_output_id=40),
                        Input(input_id=1, tester_output_id=41),
