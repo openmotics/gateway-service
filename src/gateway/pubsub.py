@@ -86,10 +86,10 @@ class PubSub(object):
         while self._is_running:
             self._publish_all_events()
 
-    def _publish_all_events(self):
+    def _publish_all_events(self, blocking=True):
         while True:
             try:
-                event = self._master_events.get(block=True, timeout=0.25)
+                event = self._master_events.get(block=blocking, timeout=0.25)
                 if event is None:
                     return
                 self._publish_master_event(*event)
@@ -97,7 +97,7 @@ class PubSub(object):
                 break
         while True:
             try:
-                event = self._gateway_events.get(block=True, timeout=0.25)
+                event = self._gateway_events.get(block=blocking, timeout=0.25)
                 if event is None:
                     return
                 self._publish_gateway_event(*event)
@@ -105,7 +105,7 @@ class PubSub(object):
                 break
         while True:
             try:
-                event = self._esafe_events.get(block=True, timeout=0.25)
+                event = self._esafe_events.get(block=blocking, timeout=0.25)
                 if event is None:
                     return
                 self._publish_esafe_event(*event)

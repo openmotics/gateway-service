@@ -57,7 +57,7 @@ class MasterCoreControllerTest(unittest.TestCase):
         self.controller._handle_event({'type': 0, 'device_nr': 2, 'action': 1, 'data': bytearray([100, 2, 0xff, 0xfe])})
         self.controller._handle_event({'type': 0, 'device_nr': 4, 'action': 2, 'data': bytearray([1, 0, 0, 0])})
         self.controller._handle_event({'type': 0, 'device_nr': 6, 'action': 2, 'data': bytearray([0, 0, 0, 0])})
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         self.assertEqual([MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStatusDTO(id=0, status=False, dimmer=255, ctimer=0)}),
                           MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStatusDTO(id=2, status=True, dimmer=100, ctimer=65534)}),
                           MasterEvent(MasterEvent.Types.OUTPUT_STATUS, {'state': OutputStatusDTO(id=4, locked=True)}),
@@ -77,34 +77,34 @@ class MasterCoreControllerTest(unittest.TestCase):
                                           11: OutputStatusDTO(id=11, status=False)}
         self.controller._output_shutter_map = {10: 1, 11: 1}
         self.controller._shutter_status = {1: (False, False)}
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
 
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy):
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 0, 'data': [None, 0, 0, 0]})
             self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 0, 'data': [None, 0, 0, 0]})
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert [] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 1, 'data': [None, 0, 0, 0]})
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_up', 'location': {'room_id': 255}})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 1, 'data': [None, 0, 0, 0]})
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 10, 'action': 0, 'data': [None, 0, 0, 0]})
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_down', 'location': {'room_id': 255}})] == events
 
             events = []
             self.controller._handle_event({'type': 0, 'device_nr': 11, 'action': 0, 'data': [None, 0, 0, 0]})
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
     def test_master_shutter_refresh(self):
@@ -124,7 +124,7 @@ class MasterCoreControllerTest(unittest.TestCase):
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
             events = []
             self.controller._refresh_shutter_states()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'stopped', 'location': {'room_id': 255}})] == events
 
         output_status = [OutputStatusDTO(id=0, status=False, dimmer=0),
@@ -136,7 +136,7 @@ class MasterCoreControllerTest(unittest.TestCase):
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
             events = []
             self.controller._refresh_shutter_states()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_up', 'location': {'room_id': 255}})] == events
 
         output_status = [OutputStatusDTO(id=0, status=False, dimmer=0),
@@ -148,7 +148,7 @@ class MasterCoreControllerTest(unittest.TestCase):
              mock.patch.object(self.controller, 'load_output_status', return_value=output_status):
             events = []
             self.controller._refresh_shutter_states()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert [MasterEvent('SHUTTER_CHANGE', {'id': 1, 'status': 'going_down', 'location': {'room_id': 255}})] == events
 
     def test_input_module_type(self):
@@ -212,7 +212,7 @@ class MasterCoreControllerTest(unittest.TestCase):
                       'data': {}}
         with mock.patch.object(Queue, 'get', return_value=event_data):
             consumer_list[0].deliver()
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
 
         expected_event = MasterEvent.deserialize({'type': 'INPUT_CHANGE',
                                                   'data': {'state': InputStatusDTO(id=2, status=True)}})
@@ -254,7 +254,7 @@ class MasterCoreControllerTest(unittest.TestCase):
         master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
         self.controller._output_last_updated = 1603178386.0
         self.pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         assert self.controller._output_last_updated == 0
 
     def test_can_feedback_controller_calls(self):

@@ -53,12 +53,12 @@ class PubSubTest(unittest.TestCase):
 
         event = GatewayEvent(GatewayEvent.Types.INPUT_CHANGE, {'data': 'Some Test Data'})
         self.pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, event)
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         self.sub_gateway_mock.assert_called_once_with(event)
 
         event = EsafeEvent(EsafeEvent.Types.DELIVERY_CHANGE, {'delivery_id': 37, 'delivery_type': 'RETURN'})
         self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         self.sub_esafe_mock.assert_called_once_with(event)
 
     def test_pubsub_multiple(self):
@@ -69,7 +69,7 @@ class PubSubTest(unittest.TestCase):
             self.pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gw_event)
         for _ in range(num_events):
             self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, es_event)
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         self.sub_gateway_mock.assert_has_calls([call(gw_event) for _ in range(num_events)], any_order=False)
         self.sub_esafe_mock.assert_has_calls([call(es_event) for _ in range(num_events)], any_order=False)
         self.assertEqual(self.sub_gateway_mock.call_count, num_events)
@@ -82,7 +82,7 @@ class PubSubTest(unittest.TestCase):
         self.pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gw_event)
         self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, es_event_1)
         self.pubsub.publish_esafe_event(PubSub.EsafeTopics.LOCK, es_event_2)
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         self.sub_gateway_mock.assert_not_called()
         self.sub_esafe_mock.assert_called_once_with(es_event_1)
 
@@ -95,6 +95,6 @@ class PubSubTest(unittest.TestCase):
             'parcel_rebus_id': 37
         })
         self.pubsub.publish_esafe_event(PubSub.EsafeTopics.DELIVERY, event)
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         self.sub_gateway_mock.assert_not_called()
         self.sub_esafe_mock.assert_called_once_with(event)

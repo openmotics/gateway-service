@@ -58,7 +58,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
                       'output1': None}
             self.controller._thermostats_config = {1: ThermostatDTO(1)}
             self.controller._thermostat_status._report_change(1, status)
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             event_data = {'id': 1,
                           'status': {'preset': 'AUTO',
                                      'current_setpoint': None,
@@ -72,7 +72,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
         master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
         with mock.patch.object(self.controller, 'invalidate_cache') as handle_event:
             self.pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             handle_event.assert_called()
 
     def test_saving_reading_sane_values(self):
