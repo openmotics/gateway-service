@@ -298,7 +298,7 @@ class ModuleController(BaseController):
 
     def _download_firmware(self, module_type, version, target_filename):
         # type: (str, str, str) -> None
-        target_dir = os.path.basename(target_filename)
+        target_dir = os.path.dirname(target_filename)
         if not os.path.exists(target_dir):
             os.mkdir(target_dir)
         url = self._get_firmware_url(module_type, version)
