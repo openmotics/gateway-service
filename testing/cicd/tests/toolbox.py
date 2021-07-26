@@ -418,7 +418,6 @@ class Toolbox(object):
         self.dut.get('/module_discover_stop')
 
     def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, temp_modules=False, can_controls=False, ucans=False, timeout=120):
-        # TODO: Does not work yet for the Core(+) as they don't have this call implemented.
         logger.debug('Discovering modules')
         since = time.time()
         # [WIP] tried to disable ucan logic for the factory reset test (CAN FX call)

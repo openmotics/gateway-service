@@ -24,7 +24,7 @@ class ClassicTesterOutputs(object):
     class Buttons(object):
         dut = [8]  # BTN_DUT_CL
 
-    class Button(object):
+    class Button(object):  # TODO: Move to module layout by adding the buttons as a property to the module
         energy = 9  # BTN_DUT_CL_EY
         input = 10  # BTN_DUT_CL_IN
         output = 11  # BTN_DUT_CL_OT
@@ -42,7 +42,7 @@ class CorePlusTesterOutputs(object):
     class Buttons(object):
         dut = [32, 35]  # BTN_DUT_BS_ACT (action) and BTN_DUT_BS_STP (setup)
 
-    class Button(object):
+    class Button(object):  # TODO: Move to module layout by adding the buttons as a property to the module
         action = 32  # BTN_DUT_BS_ACT
         select = 33  # BTN_DUT_BS_SEL
         can_power = 34  # BTN_DUT_BS_CPWR
@@ -248,6 +248,16 @@ _INPUT_MODULE_LAYOUTS = {
                        Input(input_id=2, tester_output_id=42),
                        Input(input_id=3, tester_output_id=43),
                        Input(input_id=4, tester_output_id=44)]),
+        Module(name='input module', mtype='I',
+               hardware_type=Module.HardwareType.PHYSICAL,
+               inputs=[Input(input_id=8, tester_output_id=48),
+                       Input(input_id=9, tester_output_id=49),
+                       Input(input_id=10, tester_output_id=50),
+                       Input(input_id=11, tester_output_id=51),
+                       Input(input_id=12, tester_output_id=52),
+                       Input(input_id=13, tester_output_id=53),
+                       Input(input_id=14, tester_output_id=54),
+                       Input(input_id=15, tester_output_id=55)]),
     ],
     TestPlatform.DEBIAN: [
         Module(name='input module', mtype='I',
