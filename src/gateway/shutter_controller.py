@@ -128,12 +128,14 @@ class ShutterController(BaseController):
             logger.exception('ORM sync (Shutter config): Failed')
 
     def update_config(self, config):  # type: (List[ShutterDTO]) -> None
+        changed = False
+        shutter_ids = []
         with self._config_lock:
-            shutter_ids = []
             for shutter_dto in config:
                 shutter_id = shutter_dto.id
                 shutter_ids.append(shutter_id)
                 if shutter_dto != self._shutters.get(shutter_id):
+                    changed |= True
                     self._shutters[shutter_id] = shutter_dto
                     self._states[shutter_id] = (0.0, ShutterEnums.State.STOPPED)
                     self._actual_positions[shutter_id] = None
@@ -143,12 +145,15 @@ class ShutterController(BaseController):
 
             for shutter_id in list(self._shutters.keys()):
                 if shutter_id not in shutter_ids:
+                    changed |= True
                     del self._shutters[shutter_id]
                     del self._states[shutter_id]
                     del self._actual_positions[shutter_id]
                     del self._desired_positions[shutter_id]
                     del self._directions[shutter_id]
                     del self._position_accuracy[shutter_id]
+        if changed:
+            self._publish_config()
 
     # Allow shutter positions to be reported
 
@@ -545,3 +550,10 @@ class ShutterController(BaseController):
                                            'location': {'room_id': Toolbox.nonify(shutter_data.room, 255)}})
         logger.debug('_publish_shutter_change: {}'.format(gateway_event))
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.STATE, gateway_event)
+
+    def _publish_config(self):  # type: () -> None
+        for structure in self.SYNC_STRUCTURES:
+            orm_model = structure.orm_model
+            type_name = orm_model.__name__.lower()
+            gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': type_name})
+            self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
