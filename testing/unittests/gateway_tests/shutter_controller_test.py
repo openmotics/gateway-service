@@ -375,10 +375,10 @@ class ShutterControllerTest(unittest.TestCase):
             calls.setdefault(event.data['id'], []).append(event.data['status']['state'])
 
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, shutter_callback)
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
 
         def validate(_shutter_id, _entry):
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             self.assertEqual(controller._actual_positions.get(_shutter_id), _entry[0])
             self.assertEqual(controller._desired_positions.get(_shutter_id), _entry[1])
             self.assertEqual(controller._directions.get(_shutter_id), _entry[2])
@@ -389,7 +389,7 @@ class ShutterControllerTest(unittest.TestCase):
                 self.assertEqual(calls[_shutter_id].pop(), _entry[3][1].upper())
 
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00000000})
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         for shutter_id in range(3):
             #                     +- actual position
             #                     |     +- desired position
@@ -406,12 +406,12 @@ class ShutterControllerTest(unittest.TestCase):
 
         for shutter_id in range(3):
             controller.shutter_down(shutter_id, None)
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
         time.sleep(20)
 
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00011001})
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         #                             +- actual position
         #                             |     +- desired position
         #                             |     |     +- direction                      +- state
@@ -420,13 +420,13 @@ class ShutterControllerTest(unittest.TestCase):
                                   1: [0, 99, ShutterEnums.Direction.DOWN,   (20, ShutterEnums.State.GOING_DOWN)],  # this shutter is inverted
                                   2: [0, 79,   ShutterEnums.Direction.DOWN, (20, ShutterEnums.State.GOING_DOWN)]}.items():
             validate(shutter_id, entry)
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
         time.sleep(50)  # Standard shutters will still be going down
 
         controller._actual_positions[2] = 20  # Simulate position reporting
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00011000})  # First shutter motor stop
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         #                             +- actual position
         #                             |     +- desired position
         #                             |     |     +- direction                      +- state                        +- optional skip call check
@@ -435,7 +435,7 @@ class ShutterControllerTest(unittest.TestCase):
                                   1: [0, 99, ShutterEnums.Direction.DOWN,   (20, ShutterEnums.State.GOING_DOWN),   False],
                                   2: [20,   79,   ShutterEnums.Direction.DOWN, (20, ShutterEnums.State.GOING_DOWN), False]}.items():
             validate(shutter_id, entry)
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
         time.sleep(50)  # Standard shutters will be down now
 

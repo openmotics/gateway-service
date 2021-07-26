@@ -242,12 +242,12 @@ class VentilationControllerTest(unittest.TestCase):
                                              device_type='model-0',
                                              device_serial='device-000001')
             self.controller.save_ventilation(ventilation_dto)
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert len(events) == 0, events  # No change
 
             ventilation_dto.name = 'bar'
             self.controller.save_ventilation(ventilation_dto)
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'ventilation'}) in events
             assert len(events) == 1, events
 
@@ -263,7 +263,7 @@ class VentilationControllerTest(unittest.TestCase):
                                return_value=[get_ventilation(42), get_ventilation(43)]):
             self.controller.set_status(VentilationStatusDTO(42, 'manual', level=0))
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             events = []
 
@@ -273,7 +273,7 @@ class VentilationControllerTest(unittest.TestCase):
 
             self.controller.set_status(VentilationStatusDTO(42, 'manual', level=0))
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE,
                                 {'id': 43, 'mode': 'manual', 'level': 2, 'timer': 60.0,
                                  'remaining_time': None,'is_connected': True}) in events
@@ -297,7 +297,7 @@ class VentilationControllerTest(unittest.TestCase):
 
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0,
                                                             last_seen=(time.time() - 600)))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             assert GatewayEvent(GatewayEvent.Types.VENTILATION_CHANGE,
                                 {'id': 43, 'mode': 'manual', 'level': 2, 'timer': 60.0,
@@ -322,13 +322,13 @@ class VentilationControllerTest(unittest.TestCase):
 
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0,
                                                             last_seen=(time.time() - 600)))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(1, len(events))
             self.assertEqual(1, len(self.controller._status))
 
             self.controller._check_connected_timeout()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             self.assertEqual(2, len(events))
             self.assertEqual(1, len(self.controller._status))
 
@@ -338,13 +338,13 @@ class VentilationControllerTest(unittest.TestCase):
             self.assertEqual(None, last_event.data['level'])
 
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(3, len(events))
             self.assertEqual(1, len(self.controller._status))
 
             self.controller._check_connected_timeout()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             # Now there would no timeout occur
             self.assertEqual(3, len(events))
             self.assertEqual(1, len(self.controller._status))
@@ -368,7 +368,7 @@ class VentilationControllerTest(unittest.TestCase):
             # first timer is running
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=2, timer=60.0, remaining_time=5.0,
                                                             last_seen=(time.time() - 10)))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(1, len(events))
             self.assertEqual(1, len(self.controller._status))
@@ -377,7 +377,7 @@ class VentilationControllerTest(unittest.TestCase):
             self.controller._check_connected_timeout()
             # This should trigger an update event.
             self.controller._periodic_event_update()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             self.assertEqual(2, len(events))
             self.assertEqual(1, len(self.controller._status))
 
@@ -387,7 +387,7 @@ class VentilationControllerTest(unittest.TestCase):
             # event that timer has been done
             self.controller.set_status(VentilationStatusDTO(43, 'automatic', level=1, timer=None, remaining_time=None,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(1, len(events))
             self.assertEqual(1, len(self.controller._status))
@@ -400,7 +400,7 @@ class VentilationControllerTest(unittest.TestCase):
             # event that timer has been started
             self.controller.set_status(VentilationStatusDTO(43, 'automatic', level=1, timer=30, remaining_time=None,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(1, len(events))
             self.assertEqual(1, len(self.controller._status))
@@ -413,7 +413,7 @@ class VentilationControllerTest(unittest.TestCase):
             # event from ventilation plugin
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=1, timer=None, remaining_time=29,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(1, len(events))
             self.assertEqual(1, len(self.controller._status))
@@ -426,7 +426,7 @@ class VentilationControllerTest(unittest.TestCase):
             # event from ventilation plugin
             self.controller.set_status(VentilationStatusDTO(43, 'automatic', level=1, timer=None, remaining_time=15,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(1, len(events))
             self.assertEqual(1, len(self.controller._status))
@@ -439,7 +439,7 @@ class VentilationControllerTest(unittest.TestCase):
             # event from ventilation plugin (same value)
             self.controller.set_status(VentilationStatusDTO(43, 'automatic', level=1, timer=None, remaining_time=15,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(0, len(events))
             self.assertEqual(1, len(self.controller._status))
@@ -447,7 +447,7 @@ class VentilationControllerTest(unittest.TestCase):
             # event from ventilation plugin
             self.controller.set_status(VentilationStatusDTO(43, 'automatic', level=1, timer=None, remaining_time=14,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(1, len(events))
             self.assertEqual(1, len(self.controller._status))
@@ -460,7 +460,7 @@ class VentilationControllerTest(unittest.TestCase):
             # event from ventilation plugin -> Timer has expired, but is still in manual mode
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=1, timer=None, remaining_time=None,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(1, len(events))
             self.assertEqual(1, len(self.controller._status))
@@ -486,7 +486,7 @@ class VentilationControllerTest(unittest.TestCase):
             # event that ventilation box is running in automatic mode
             self.controller.set_status(VentilationStatusDTO(43, 'automatic', level=1, timer=None, remaining_time=None,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(1, len(events))
             self.assertEqual(1, len(self.controller._status))
@@ -499,7 +499,7 @@ class VentilationControllerTest(unittest.TestCase):
             # event that timer has been started
             self.controller.set_status(VentilationStatusDTO(43, 'automatic', level=1, timer=30, remaining_time=None,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(1, len(events))
             self.assertEqual(1, len(self.controller._status))
@@ -514,7 +514,7 @@ class VentilationControllerTest(unittest.TestCase):
                 mode = 'automatic' if i % 2 == 0 else 'manual'
                 self.controller.set_status(VentilationStatusDTO(43, mode, level=1, timer=None, remaining_time=i,
                                                                 last_seen=time.time()))
-                self.pubsub._publish_all_events()
+                self.pubsub._publish_all_events(blocking=False)
 
                 self.assertEqual(1, len(events))
                 self.assertEqual(1, len(self.controller._status))
@@ -527,7 +527,7 @@ class VentilationControllerTest(unittest.TestCase):
             # event from ventilation plugin -> Timer has expired, and has switched to automatic mode
             self.controller.set_status(VentilationStatusDTO(43, 'automatic', level=1, timer=None, remaining_time=None,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(1, len(events))
             self.assertEqual(1, len(self.controller._status))
@@ -583,14 +583,14 @@ class VentilationControllerTest(unittest.TestCase):
                     remaining_time=event.data['timer'],
                 )
                 self.controller.set_status(status_dto)
-                self.pubsub._publish_all_events()
+                self.pubsub._publish_all_events(blocking=False)
 
             self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, callback)
 
             # event that ventilation box is running in automatic mode
             self.controller.set_status(VentilationStatusDTO(43, 'automatic', level=1, timer=None, remaining_time=None,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertEqual(1, len(events))
 
@@ -600,20 +600,20 @@ class VentilationControllerTest(unittest.TestCase):
             # event that timer has been started
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=1, timer=30, remaining_time=None,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertGreaterEqual(10, len(events))
 
             # event that timer is running
             self.controller.set_status(VentilationStatusDTO(43, 'manual', level=1, timer=None, remaining_time=15,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertGreaterEqual(10, len(events))
 
             # event that timer is done
             self.controller.set_status(VentilationStatusDTO(43, 'automatic', level=1, timer=None, remaining_time=None,
                                                             last_seen=time.time()))
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
             self.assertGreaterEqual(10, len(events))
