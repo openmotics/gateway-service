@@ -74,7 +74,7 @@ class InputControllerTest(unittest.TestCase):
         input_dto = InputDTO(id=42)
         with mock.patch.object(self.master_controller, 'load_inputs', return_value=[input_dto]):
             self.controller.run_sync_orm()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert Input.select().where(Input.number == input_dto.id).count() == 1
             assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'input'}) in events
             assert len(events) == 1
@@ -154,7 +154,7 @@ class InputControllerTest(unittest.TestCase):
                                              InputStatusDTO(id=40, status=True)]):
             self.controller.load_inputs()
             self.controller._sync_state()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             self.assertListEqual([GatewayEvent('INPUT_CHANGE',
                                   {'id': 2, 'status': True, "location": {"room_id": 255}}),
                                   GatewayEvent('INPUT_CHANGE',
@@ -171,7 +171,7 @@ class InputControllerTest(unittest.TestCase):
                                              InputStatusDTO(id=40, status=False)]):
             events = []
             self.controller._sync_state()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             self.assertListEqual([GatewayEvent('INPUT_CHANGE',
                                   {'id': 2, 'status': True, "location": {"room_id": 255}}),
                                   GatewayEvent('INPUT_CHANGE',
@@ -209,7 +209,7 @@ class InputControllerTest(unittest.TestCase):
         #         self.controller.start()
         #         # after >10 seconds delay, the controller should publish events at startup
         #         frozen_datetime.tick(delta=datetime.timedelta(seconds=15))
-        #         self.pubsub._publish_all_events()
+        #         self.pubsub._publish_all_events(blocking=False)
         #         self.assertListEqual([GatewayEvent('INPUT_CHANGE',
         #                                            {'id': 2, 'status': True, "location": {"room_id": 255}}),
         #                               GatewayEvent('INPUT_CHANGE',
@@ -217,7 +217,7 @@ class InputControllerTest(unittest.TestCase):
         #         # after >10 more minutes, the controller should also periodically publish events regardless of changes
         #         events = []
         #         frozen_datetime.tick(delta=datetime.timedelta(minutes=11))
-        #         self.pubsub._publish_all_events()
+        #         self.pubsub._publish_all_events(blocking=False)
         #         self.assertListEqual([GatewayEvent('INPUT_CHANGE',
         #                                            {'id': 2, 'status': True, "location": {"room_id": 255}}),
         #                               GatewayEvent('INPUT_CHANGE',

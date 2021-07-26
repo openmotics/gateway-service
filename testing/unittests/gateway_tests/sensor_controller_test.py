@@ -75,14 +75,14 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None]), \
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[None, 21.0, None]):
             self.controller.run_sync_orm()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
         assert GatewayEvent('SENSOR_CHANGE', {'id': 42, 'value': 21.0}) in events
         assert len(events) == 1
         events.pop()
 
         master_event = MasterEvent(MasterEvent.Types.SENSOR_VALUE, {'sensor': 1, 'type': 'TEMPERATURE', 'value': 22.5})
         self.pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
 
         assert GatewayEvent('SENSOR_CHANGE', {'id': 42, 'value': 22.5}) in events
         assert len(events) == 1
@@ -105,7 +105,7 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None, None, 49.0]), \
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[21.0, None, None]):
             self.controller.run_sync_orm()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
         assert len(events) == 1
 
@@ -144,7 +144,7 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None, 49.0]), \
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[None, 21.0]):
             self.controller.run_sync_orm()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
         assert len(events) == 1
 
@@ -176,7 +176,7 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[21.0, None, None]):
             self.controller.run_sync_orm()
             self.controller.run_sync_orm()  # recover after failed sync
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
         assert Sensor.select().count() == 3
         sensor_ids = list(i for (i,) in Sensor.select(Sensor.id).tuples())
@@ -223,7 +223,7 @@ class SensorControllerTest(unittest.TestCase):
         sensor_dto = SensorDTO(id=42, physical_quantity='temperature', unit='celcius', name='foo', room=2)
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
             self.controller.save_sensors([sensor_dto])
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             save.assert_called_with([MasterSensorDTO(id=0, name='foo')])
 
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
@@ -253,7 +253,7 @@ class SensorControllerTest(unittest.TestCase):
                                name='foo')
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
             self.controller.save_sensors([sensor_dto])
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             save.assert_not_called()
 
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
@@ -284,7 +284,7 @@ class SensorControllerTest(unittest.TestCase):
                                name='foo')
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
             self.controller.save_sensors([sensor_dto])
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             save.assert_not_called()
 
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
@@ -314,7 +314,7 @@ class SensorControllerTest(unittest.TestCase):
                                virtual=True)
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
             self.controller.save_sensors([sensor_dto])
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             save.assert_called_with([MasterSensorDTO(id=31, name='foo', virtual=True)])
 
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
@@ -342,7 +342,7 @@ class SensorControllerTest(unittest.TestCase):
              mock.patch.object(self.master_controller, 'get_sensors_humidity', return_value=[None, None, 49.0]), \
              mock.patch.object(self.master_controller, 'get_sensors_temperature', return_value=[21.0, None, None]):
             self.controller.run_sync_orm()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             values = {s.id: s for s in self.controller.get_sensors_status()}
 
         assert Sensor.select().count() == 3

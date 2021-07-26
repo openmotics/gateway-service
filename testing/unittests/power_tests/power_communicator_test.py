@@ -177,12 +177,12 @@ class EnergyCommunicatorTest(unittest.TestCase):
 
         self.communicator.start_address_mode()
         self.assertTrue(self.communicator.in_address_mode())
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         time.sleep(0.5)
         assert [] == events
 
         self.communicator.stop_address_mode()
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         assert MasterEvent(MasterEvent.Types.POWER_ADDRESS_EXIT, {}) in events
         assert len(events) == 1
 
