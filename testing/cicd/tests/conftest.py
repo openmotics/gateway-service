@@ -86,41 +86,27 @@ def firmware_updates(toolbox_session):
     firmware = {}
     force_update = os.environ.get('OPENMOTICS_FORCE_UPDATE', '0') == '1'
 
-    if TEST_PLATFORM == TestPlatform.DEBIAN:
-        master_firmware = os.environ.get('OPENMOTICS_MASTER_CLASSIC_FIRMWARE')
-        if master_firmware and (force_update or master_firmware != versions['M']):
-            logger.info('master classic firmware {} -> {}...'.format(versions['M'], master_firmware))
-            firmware['master_classic'] = master_firmware
-    if TEST_PLATFORM == TestPlatform.CORE_PLUS:
-        master_firmware = os.environ.get('OPENMOTICS_MASTER_CORE_FIRMWARE')
-        if master_firmware and (force_update or master_firmware != versions['M']):
-            logger.info('master core firmware {} -> {}...'.format(versions['M'], master_firmware))
-            firmware['master_core'] = master_firmware
+    def _check_and_schedule(letter, firmware_type, desired_version):
+        if desired_version:
+            if letter in versions:
+                if force_update or desired_version != versions[letter]:
+                    logger.info('Firmware {}: {} -> {}...'.format(firmware_type, versions[letter], desired_version))
+                    firmware[firmware_type] = desired_version
+            else:
+                logger.info('Skipping {0} - no module found'.format(firmware_type))
 
-    output_firmware = os.environ.get('OPENMOTICS_OUTPUT_FIRMWARE')
-    if output_firmware and (force_update or output_firmware != versions.get('O')):
-        logger.info('Output firmware {} -> {}...'.format(versions.get('O'), output_firmware))
-        firmware['output'] = output_firmware
-    dim_control_firmware = os.environ.get('OPENMOTICS_DIM_CONTROL_FIRMWARE')
-    if dim_control_firmware and (force_update or dim_control_firmware != versions.get('D')):
-        logger.info('Dim Control firmware {} -> {}...'.format(versions.get('D'), dim_control_firmware))
-        firmware['dim_control'] = dim_control_firmware
-    input_firmware = os.environ.get('OPENMOTICS_INPUT_FIRMWARE')
-    if input_firmware and (force_update or input_firmware != versions.get('I')):
-        logger.info('Input firmware {} -> {}...'.format(versions.get('I'), input_firmware))
-        firmware['input'] = input_firmware
-    temperature_firmware = os.environ.get('OPENMOTICS_TEMPERATURE_FIRMWARE')
-    if temperature_firmware and (force_update or temperature_firmware != versions.get('T')):
-        logger.info('Temperature firmware {} -> {}...'.format(versions.get('T'), temperature_firmware))
-        firmware['temperature'] = temperature_firmware
-    can_control_firmware = os.environ.get('OPENMOTICS_CAN_CONTROL_FIRMWARE')
-    if can_control_firmware and (force_update or can_control_firmware != versions.get('C')):
-        logger.info('CAN Control firmware {} -> {}...'.format(versions.get('C'), can_control_firmware))
-        firmware['can_control'] = can_control_firmware
-    ucan_firmware = os.environ.get('OPENMOTICS_MICRO_CAN_FIRMWARE')
-    if ucan_firmware:  # TODO: Implement uCAN version check
-        logger.info('uCAN firmware -> {}...'.format(ucan_firmware))
-        firmware['ucan'] = ucan_firmware
+    if TEST_PLATFORM == TestPlatform.DEBIAN:
+        _check_and_schedule('M', 'master_classic', os.environ.get('OPENMOTICS_MASTER_CLASSIC_FIRMWARE'))
+    if TEST_PLATFORM == TestPlatform.CORE_PLUS:
+        _check_and_schedule('M', 'master_core', os.environ.get('OPENMOTICS_MASTER_CORE_FIRMWARE'))
+
+    _check_and_schedule('O', 'output', os.environ.get('OPENMOTICS_OUTPUT_FIRMWARE'))
+    _check_and_schedule('D', 'dim_control', os.environ.get('OPENMOTICS_DIM_CONTROL_FIRMWARE'))
+    _check_and_schedule('I', 'input', os.environ.get('OPENMOTICS_INPUT_FIRMWARE'))
+    _check_and_schedule('T', 'temperature', os.environ.get('OPENMOTICS_TEMPERATURE_FIRMWARE'))
+    _check_and_schedule('C', 'can_control', os.environ.get('OPENMOTICS_CAN_CONTROL_FIRMWARE'))
+    if TEST_PLATFORM == TestPlatform.CORE_PLUS:
+        _check_and_schedule('UC', 'ucan', os.environ.get('OPENMOTICS_MICRO_CAN_FIRMWARE'))
 
     if firmware:
         for module, version in firmware.items():
@@ -147,9 +133,8 @@ def firmware_updates(toolbox_session):
                                   ('input', 'I'),
                                   ('temperature', 'T'),
                                   ('can_control', 'C')]:
-            if expected in firmware:
-                if firmware[expected] != versions.get(current):
-                    mismatches.append('{0}({1}!={2})'.format(current, firmware[expected], versions.get(current)))
+            if expected in firmware and current in versions and firmware[expected] != versions[current]:
+                mismatches.append('{0}({1}!={2})'.format(current, firmware[expected], versions[current]))
         if mismatches:
             logger.info('Firmware mismatches: {0}'.format(', '.join(mismatches)))
             assert False  # Fail
