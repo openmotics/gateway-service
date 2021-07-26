@@ -127,7 +127,7 @@ class ShutterController(BaseController):
         except Exception:
             logger.exception('ORM sync (Shutter config): Failed')
 
-    def update_config(self, config):  # type: (List[ShutterDTO]) -> None
+    def update_config(self, config):  # type: (List[ShutterDTO]) -> bool
         changed = False
         shutter_ids = []
         with self._config_lock:
@@ -152,8 +152,7 @@ class ShutterController(BaseController):
                     del self._desired_positions[shutter_id]
                     del self._directions[shutter_id]
                     del self._position_accuracy[shutter_id]
-        if changed:
-            self._publish_config()
+        return changed
 
     # Allow shutter positions to be reported
 
@@ -224,7 +223,9 @@ class ShutterController(BaseController):
                 shutter.save()
             shutters_to_save.append(shutter_dto)
         self._master_controller.save_shutters(shutters_to_save)
-        self.update_config(self.load_shutters())
+        changed = self.update_config(self.load_shutters())
+        if changed:
+            self._publish_config()
 
     def load_shutter_group(self, group_id):  # type: (int) -> ShutterGroupDTO
         shutter_group = ShutterGroup.select(Room) \
@@ -258,6 +259,7 @@ class ShutterController(BaseController):
                 shutter_group.save()
             shutter_groups_to_save.append(shutter_group_dto)
         self._master_controller.save_shutter_groups(shutter_groups_to_save)
+        self._publish_config()
 
     # Control shutters
 
