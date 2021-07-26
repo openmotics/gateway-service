@@ -148,8 +148,8 @@ def firmware_updates(toolbox_session):
                                   ('temperature', 'T'),
                                   ('can_control', 'C')]:
             if expected in firmware:
-                if firmware[expected] != versions[current]:
-                    mismatches.append('{0}({1}!={2})'.format(current, firmware[expected], versions[current]))
+                if firmware[expected] != versions.get(current):
+                    mismatches.append('{0}({1}!={2})'.format(current, firmware[expected], versions.get(current)))
         if mismatches:
             logger.info('Firmware mismatches: {0}'.format(', '.join(mismatches)))
             assert False  # Fail
