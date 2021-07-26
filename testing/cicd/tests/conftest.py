@@ -98,24 +98,24 @@ def firmware_updates(toolbox_session):
             firmware['master_core'] = master_firmware
 
     output_firmware = os.environ.get('OPENMOTICS_OUTPUT_FIRMWARE')
-    if output_firmware and (force_update or output_firmware != versions['O']):
-        logger.info('Output firmware {} -> {}...'.format(versions['O'], output_firmware))
+    if output_firmware and (force_update or output_firmware != versions.get('O')):
+        logger.info('Output firmware {} -> {}...'.format(versions.get('O'), output_firmware))
         firmware['output'] = output_firmware
     dim_control_firmware = os.environ.get('OPENMOTICS_DIM_CONTROL_FIRMWARE')
-    if dim_control_firmware and (force_update or dim_control_firmware != versions['D']):
-        logger.info('Dim Control firmware {} -> {}...'.format(versions['D'], dim_control_firmware))
+    if dim_control_firmware and (force_update or dim_control_firmware != versions.get('D')):
+        logger.info('Dim Control firmware {} -> {}...'.format(versions.get('D'), dim_control_firmware))
         firmware['dim_control'] = dim_control_firmware
     input_firmware = os.environ.get('OPENMOTICS_INPUT_FIRMWARE')
-    if input_firmware and (force_update or input_firmware != versions['I']):
-        logger.info('Input firmware {} -> {}...'.format(versions['I'], input_firmware))
+    if input_firmware and (force_update or input_firmware != versions.get('I')):
+        logger.info('Input firmware {} -> {}...'.format(versions.get('I'), input_firmware))
         firmware['input'] = input_firmware
     temperature_firmware = os.environ.get('OPENMOTICS_TEMPERATURE_FIRMWARE')
-    if temperature_firmware and (force_update or temperature_firmware != versions['T']):
-        logger.info('Temperature firmware {} -> {}...'.format(versions['T'], temperature_firmware))
+    if temperature_firmware and (force_update or temperature_firmware != versions.get('T')):
+        logger.info('Temperature firmware {} -> {}...'.format(versions.get('T'), temperature_firmware))
         firmware['temperature'] = temperature_firmware
     can_control_firmware = os.environ.get('OPENMOTICS_CAN_CONTROL_FIRMWARE')
-    if can_control_firmware and (force_update or can_control_firmware != versions['C']):
-        logger.info('CAN Control firmware {} -> {}...'.format(versions['C'], can_control_firmware))
+    if can_control_firmware and (force_update or can_control_firmware != versions.get('C')):
+        logger.info('CAN Control firmware {} -> {}...'.format(versions.get('C'), can_control_firmware))
         firmware['can_control'] = can_control_firmware
     ucan_firmware = os.environ.get('OPENMOTICS_MICRO_CAN_FIRMWARE')
     if ucan_firmware:  # TODO: Implement uCAN version check
