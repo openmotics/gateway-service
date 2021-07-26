@@ -16,8 +16,6 @@
 Para packets transceiver
 """
 import logging
-import os
-import select
 import serial
 from threading import Thread
 from rfid.idtronic_M890.para.para_packet import ParaPacket
@@ -34,9 +32,9 @@ class ParaSender(object):
         # Set the correct serial device parameters according to the specifications in the datasheet
         self.serial_device = serial.Serial(port=self.serial_endpoint,
                                            baudrate=115200,
-                                           bytesize=serial.EIGHTBITS,
-                                           parity=serial.PARITY_NONE,
-                                           stopbits=serial.STOPBITS_ONE,
+                                           bytesize=serial.EIGHTBITS,  # type: ignore
+                                           parity=serial.PARITY_NONE,  # type: ignore
+                                           stopbits=serial.STOPBITS_ONE,  # type: ignore
                                            timeout=1,
                                            write_timeout=1)
         logger.debug('ParaSender is created: {}'.format({'endpoint': self.serial_endpoint, 'is_running': self.is_running}))
@@ -97,26 +95,3 @@ class ParaSender(object):
             self.serial_device.write(para_packet.serialize())
         except Exception as ex:
             logger.error("Could not send the para-packet: {}".format(ex))
-
-
-if __name__ == '__main__':
-    import time
-
-    def cb(pp):
-        print(">> {}".format(pp.get_oneliner()))
-
-
-    ps = ParaSender('/dev/rfid')
-    ps.set_callback(cb)
-    print('Starting...')
-    ps.start()
-    print('Started')
-
-    time.sleep(2)
-    # Send set buzzer command
-    # pp = ParaPacket(bytes([0x50, 0x00, 0x02, 0x02, 0x03, 0x04, 0x57]))
-    # send led command
-    pp = ParaPacket(bytes([0x50, 0x00, 0x02, 0x03, 0x03, 0x04, 0x56]))
-    print("<< {}".format(pp.get_oneliner()))
-    ps.send(pp)
-

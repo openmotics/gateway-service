@@ -17,7 +17,9 @@ Para packet definition
 """
 from functools import reduce
 from operator import xor
+import struct
 
+import six
 from enum import Enum
 
 if False:  #  MyPy
@@ -154,16 +156,21 @@ class ParaPacketHeader(object):
 class ParaPacket(object):
 
     @classmethod
-    def create(cls, type, data):
+    def create(cls, packet_type, data):
         # type: (ParaPacketType, List[int]) -> ParaPacket
         """ Function to create a para-packet from the most basic info """
         data_length = len(data)
-        data_length_h, data_length_l = (data_length & 0xFFFF).to_bytes(2, 'big')
+        if data_length >= 65536:
+            raise ValueError('Cannot create parapacket with data length exceeding 2 ** 16')
+
+        data_length_h, data_length_l = struct.pack('>H', (data_length & 0xFFFF))
+        if six.PY2:
+            data_length_h, data_length_l = ord(data_length_h), ord(data_length_l)
         packet = cls()
         packet.append_byte(0x50)  # protocol version
         packet.append_byte(data_length_h)
         packet.append_byte(data_length_l)
-        packet.append_byte(type.value)
+        packet.append_byte(packet_type.value)
         for b in data:
             packet.append_byte(b)
         packet.append_crc_check_value()
@@ -193,7 +200,7 @@ class ParaPacket(object):
 
     def append_byte(self, byte):
         if isinstance(byte, bytes):
-            byte = int.from_bytes(byte, "big")
+            byte = struct.unpack('B', byte)[0]
         if not self.is_complete():
             self.raw.append(byte)
             current_len = len(self.raw)
@@ -212,9 +219,9 @@ class ParaPacket(object):
                     self.xor = self.raw[-1]
                     return True
             else:
-                raise Exception("para-packet: Unknown case, should not happen, byte: {}, len: {}".format(byte, current_len))
+                raise ValueError("para-packet: Unknown case, should not happen, byte: {}, len: {}".format(byte, current_len))
         else:
-            raise Exception("appending byte: package is already full")
+            raise ValueError("appending byte: package is already full")
 
     def crc_check(self):
         calc_xor = reduce(xor, self.raw[:-1])
@@ -247,7 +254,7 @@ class ParaPacket(object):
     def get_cmd_type_name(self):
         return self.header.get_command_type_string()
 
-    def __str__(self):
+    def get_extended_str(self):
         res = "Para_packet:\n"
         res += "-----------\n"
         res += "Header:\n"
@@ -275,8 +282,20 @@ class ParaPacket(object):
             '0x{:02X}'.format(self.xor)
         )
 
+    def __str__(self):
+        return "ParaPacket: " + self.get_oneliner()
+
+    def __repr__(self):
+        return "ParaPacket: " + self.get_oneliner()
+
     def __len__(self):
         return len(self.raw)
+
+    def __eq__(self, other):
+        if not isinstance(other, ParaPacket):
+            return False
+
+        return self.raw == other.raw
 
 
 class ParaPacketFactory(object):
@@ -289,30 +308,3 @@ class ParaPacketFactory(object):
         #       Card type,       period, antenna, notice, reserved for future use
         packet = ParaPacket.create(ParaPacketType.AutoListCard, data)
         return packet
-
-if __name__ == "__main__":
-    # normal package
-    pp = ParaPacket()
-    pp.append_byte(bytes([0x50]))
-    pp.append_byte(bytes([0x00]))
-    pp.append_byte(bytes([0x02]))
-    pp.append_byte(bytes([0x23]))
-    pp.append_byte(bytes([0x00]))
-    pp.append_byte(bytes([0x00]))
-    pp.append_byte(bytes([0x71]))
-    # print(pp)
-    print(pp.get_oneliner())
-    print(pp.crc_check())
-    print(pp.is_complete())
-
-    pp = ParaPacket()
-    pp.append_byte(bytes([0xF0]))
-    pp.append_byte(bytes([0x00]))
-    pp.append_byte(bytes([0x01]))
-    pp.append_byte(bytes([0x23]))
-    pp.append_byte(bytes([0xE0]))
-    pp.append_byte(bytes([0x32]))
-    # print(pp)
-    print(pp.get_oneliner())
-    print(pp.crc_check())
-    print(pp.is_complete())

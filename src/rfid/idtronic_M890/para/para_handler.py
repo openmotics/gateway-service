@@ -31,7 +31,6 @@ class ParaPacketHandler(object):
     """ Packet handler for the ParaPackets, this can be extended in the future for multiple requests, and for keeping state of the reader"""
     # At this point only one kind of packet is implemented, but can be extended in the future
 
-
     def __init__(self, new_scan_callback):
         self.handlers = {
             ParaPacketType.AutoListCard.value: self.handle_auto_list
