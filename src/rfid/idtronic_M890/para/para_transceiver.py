@@ -18,6 +18,7 @@ Para packets transceiver
 import logging
 import os
 import select
+import serial
 from threading import Thread
 from rfid.idtronic_M890.para.para_packet import ParaPacket
 
@@ -30,8 +31,14 @@ class ParaSender(object):
         self.callback = callback
         self.reader_thread = Thread(target=self.reader_runner, name='reader-thread', daemon=False)
         self.is_running = False
-        self.device_fd = os.open(self.serial_endpoint, os.O_RDWR)
-        os.set_blocking(self.device_fd, False)
+        # Set the correct serial device parameters according to the specifications in the datasheet
+        self.serial_device = serial.Serial(port=self.serial_endpoint,
+                                           baudrate=115200,
+                                           bytesize=serial.EIGHTBITS,
+                                           parity=serial.PARITY_NONE,
+                                           stopbits=serial.STOPBITS_ONE,
+                                           timeout=1,
+                                           write_timeout=1)
         logger.debug('ParaSender is created: {}'.format({'endpoint': self.serial_endpoint, 'is_running': self.is_running}))
 
     def __del__(self):
@@ -52,31 +59,27 @@ class ParaSender(object):
         logger.debug('Stopping ParaSender')
         self.is_running = False
         self.reader_thread.join()
-        os.close(self.device_fd)
+        self.serial_device.close()
 
     def reader_runner(self):
         packet = ParaPacket()
-        # use an epoll instance to get notified when there is data and keep an timeout
-        # to be able to exit hte while loop
-        ep = select.epoll(1)
-        ep.register(self.device_fd, select.EPOLLIN)
         while self.is_running:
             try:
-                # poll the file descriptor with a timeout of 0.25s
-                for _, _ in ep.poll(0.25):
-                    byte = os.read(self.device_fd, 1)
-                    if byte == b'':
-                        break
-                    if not packet.is_complete():
-                        packet.append_byte(byte)
+                byte = self.serial_device.read(1)
+                # Ignore empty send bytes: This means that the serial device can't read any bytes
+                if byte == b'':
+                    continue
+                if not packet.is_complete():
+                    packet.append_byte(byte)
+                else:
+                    raise Exception("received a new byte for an already full package: 0x{}".format(byte.hex()))
+                if packet.is_complete():
+                    if packet.crc_check():
+                        logger.debug('received a para-packet: {}'.format(packet.get_oneliner()))
+                        self.callback(packet)
+                        packet = ParaPacket()
                     else:
-                        raise Exception("received a new byte for an already full package: 0x{}".format(byte.hex()))
-                    if packet.is_complete():
-                        if packet.crc_check():
-                            self.callback(packet)
-                            packet = ParaPacket()
-                        else:
-                            raise Exception("Received package with non matching XOR: {}".format(packet.get_oneliner()))
+                        raise Exception("Received package with non matching XOR: {}".format(packet.get_oneliner()))
             except KeyboardInterrupt:
                 return
             except Exception as ex:
@@ -90,12 +93,10 @@ class ParaSender(object):
             if not para_packet.is_complete():
                 raise Exception("package is not complete!!")
 
-            print("sending:  {}".format(para_packet.get_oneliner()))
-            res = os.write(self.device_fd, para_packet.serialize())
-            if res != len(para_packet):
-                raise Exception('Could not write package to reader, send length does not match length of package: {}'.format(para_packet))
+            logger.debug("para_transceiver: sending:  {}".format(para_packet.get_oneliner()))
+            self.serial_device.write(para_packet.serialize())
         except Exception as ex:
-            print("Could not send the para-packet: {}".format(ex))
+            logger.error("Could not send the para-packet: {}".format(ex))
 
 
 if __name__ == '__main__':

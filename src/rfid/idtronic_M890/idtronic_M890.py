@@ -16,6 +16,7 @@
 IdTronic M890 wrapper
 """
 
+from rfid.idtronic_M890.para.para_packet import ParaPacketFactory, ParaPacketType, CardType
 from rfid.idtronic_M890.para.para_handler import ParaPacketHandler
 from rfid.idtronic_M890.para.para_transceiver import ParaSender
 from rfid.rfid_device import RfidDevice
@@ -36,6 +37,8 @@ class IdTronicM890(RfidDevice):
 
     def start(self):
         self.para_sender.start()
+        start_auto_list_packet = ParaPacketFactory.get_auto_listing_request(card_type=CardType.ALL, period=0x64, antenna=0x00, notice=0x01)
+        self.para_sender.send(start_auto_list_packet)
 
     def stop(self):
         self.para_sender.stop()

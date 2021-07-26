@@ -20,30 +20,8 @@ from operator import xor
 
 from enum import Enum
 
-# https://stackoverflow.com/questions/1456373/two-way-reverse-map/13276237
-class TwoWayDict(dict):
-    def __setitem__(self, key, value):
-        # Remove any previous connections with these values
-        if key in self:
-            del self[key]
-        if value in self:
-            del self[value]
-        dict.__setitem__(self, key, value)
-        dict.__setitem__(self, value, key)
-
-    def __delitem__(self, key):
-        dict.__delitem__(self, self[key])
-        dict.__delitem__(self, key)
-
-    def __len__(self):
-        """Returns the number of connections"""
-        return dict.__len__(self) // 2
-
-    def get_item_default(self, key, default=None):
-        if key in self:
-            return self[key]
-        else:
-            return default
+if False:  #  MyPy
+    from typing import List
 
 
 class CardType(Enum):
@@ -66,6 +44,50 @@ class ParaPacketType(Enum):
     MFCBackupValue = 0x1C
     MFCReadValue = 0x1D
     ERROR_RESPONSE = 0xF
+
+
+class ParaPacketError(Enum):
+    LRC_err = 0xF1
+    NoThisCmd_err = 0xF2
+    Set_err = 0xF3
+    Para_err = 0xF4
+    NoCard_err = 0xB1
+    AntiColl_err = 0xB2
+    Select_err = 0xB3
+    Halt_err = 0xB4
+    Auth_err = 0xB6
+    Read_err = 0xB7
+    Write_err = 0xB8
+    ValueOp_err = 0xB9
+    ValueBack_err = 0xBA
+    RATS_err = 0xBC
+    TPCL_err = 0xBE
+    PwrUp_err = 0xD1
+    PwrOff_err = 0xD2
+    APDU_err = 0xD3
+    PTS_err = 0xD4
+    NoSlot_err = 0xD5
+    Chack_err = 0xD6
+    TimeoutRcv_err = 0x10
+    BIF_LRC_err = 0x11
+    RxBufFull_err = 0x12
+    WrHwParam_err = 0x30
+    ChkSmHwParam_err = 0x31
+    HwParam_err = 0x32
+    UnknownCmdType_err = 0x20
+    UnknownCmd_err = 0x21
+    ParamNotCorr_err = 0x22
+    ISO14443AHalt_err = 0xA0
+    ISO14443AAuth_err = 0xA1
+    ISO14443ANotAuth_err = 0xA2
+    ISO14443AMifare_err = 0xA3
+    NoResponse_err = 0xE0
+    Framing_err = 0xE1
+    Collision_err = 0xE2
+    Parity_err = 0xE3
+    CRC_err = 0xE4
+    InvalidResp_err = 0xE5
+    SubCarrierDetection_err = 0xE
 
 
 class ParaPacketHeader(object):
@@ -130,51 +152,22 @@ class ParaPacketHeader(object):
 
 
 class ParaPacket(object):
-    para_error = TwoWayDict()
-    for key, value in {
-        "LRC_err": 0xF1,
-        "NoThisCmd_err": 0xF2,
-        "Set_err": 0xF3,
-        "Para_err": 0xF4,
-        "NoCard_err": 0xB1,
-        "AntiColl_err": 0xB2,
-        "Select_err": 0xB3,
-        "Halt_err": 0xB4,
-        "Auth_err": 0xB6,
-        "Read_err": 0xB7,
-        "Write_err": 0xB8,
-        "ValueOp_err": 0xB9,
-        "ValueBack_err": 0xBA,
-        "RATS_err": 0xBC,
-        "TPCL_err": 0xBE,
-        "PwrUp_err": 0xD1,
-        "PwrOff_err": 0xD2,
-        "APDU_err": 0xD3,
-        "PTS_err": 0xD4,
-        "NoSlot_err": 0xD5,
-        "Chack_err": 0xD6,
-        "TimeoutRcv_err": 0x10,
-        "BIF_LRC_err": 0x11,
-        "RxBufFull_err": 0x12,
-        "WrHwParam_err": 0x30,
-        "ChkSmHwParam_err": 0x31,
-        "HwParam_err": 0x32,
-        "UnknownCmdType_err": 0x20,
-        "UnknownCmd_err": 0x21,
-        "ParamNotCorr_err": 0x22,
-        "ISO14443AHalt_err": 0xA0,
-        "ISO14443AAuth_err": 0xA1,
-        "ISO14443ANotAuth_err": 0xA2,
-        "ISO14443AMifare_err": 0xA3,
-        "NoResponse_err": 0xE0,
-        "Framing_err": 0xE1,
-        "Collision_err": 0xE2,
-        "Parity_err": 0xE3,
-        "CRC_err": 0xE4,
-        "InvalidResp_err": 0xE5,
-        "SubCarrierDetection_err": 0xE6
-    }.items():
-        para_error[key] = value
+
+    @classmethod
+    def create(cls, type, data):
+        # type: (ParaPacketType, List[int]) -> ParaPacket
+        """ Function to create a para-packet from the most basic info """
+        data_length = len(data)
+        data_length_h, data_length_l = (data_length & 0xFFFF).to_bytes(2, 'big')
+        packet = cls()
+        packet.append_byte(0x50)  # protocol version
+        packet.append_byte(data_length_h)
+        packet.append_byte(data_length_l)
+        packet.append_byte(type.value)
+        for b in data:
+            packet.append_byte(b)
+        packet.append_crc_check_value()
+        return packet
 
     def __init__(self, data=None):
         if data is not None:
@@ -236,7 +229,7 @@ class ParaPacket(object):
 
     def get_error_value(self):
         err_value = None
-        if self.header.version == ParaPacketHeader.command_type['ERROR_RESPONSE']:
+        if self.header.version == ParaPacketType['ERROR_RESPONSE'].value:
             err_value = self.data[0]
         return err_value
 
@@ -244,7 +237,7 @@ class ParaPacket(object):
         err_name = None
         err_value = self.get_error_value()
         if err_value is not None:
-            err_name = ParaPacket.para_error[err_value]
+            err_name = ParaPacketError(err_value).name
         return err_name
 
     def data_hex(self):
@@ -285,6 +278,17 @@ class ParaPacket(object):
     def __len__(self):
         return len(self.raw)
 
+
+class ParaPacketFactory(object):
+    """ Class that will contain functions to create para-packets."""
+
+    @staticmethod
+    def get_auto_listing_request(card_type, period, antenna, notice=0x00):
+        # type: (CardType, int, int, int) -> ParaPacket
+        data = [card_type.value, period, antenna, notice, 0x00]
+        #       Card type,       period, antenna, notice, reserved for future use
+        packet = ParaPacket.create(ParaPacketType.AutoListCard, data)
+        return packet
 
 if __name__ == "__main__":
     # normal package
