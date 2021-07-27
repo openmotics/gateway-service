@@ -99,7 +99,7 @@ class Client(object):
                 assert response.status_code != 404, 'Call `{0}` not found: {1}'.format(path, response.content)
                 data = response.json()
                 if 'success' in data:
-                    if data['success'] is False and data.get('msg') == 'invalid_token':
+                    if data['success'] is False and data.get('msg') == 'invalid_token' and use_token:
                         self.login(success=success, timeout=timeout - time.time() + since)
                     if success:
                         assert data['success'], 'Call failed: Content = {}'.format(response.content.decode())
