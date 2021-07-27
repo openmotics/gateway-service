@@ -134,8 +134,8 @@ class MasterClassicController(MasterController):
         # type: () -> None
         try:
             if not self._communication_enabled:
-                logger.info('synchronization, skipped')
-                return
+                logger.debug('Unable to synchronize since communication is disabled, waiting 10 seconds.')
+                raise DaemonThreadWait
 
             now = time.time()
             if self._master_version is None or self._master_version_last_updated < now - 300:
@@ -1286,12 +1286,18 @@ class MasterClassicController(MasterController):
             self._communication_enabled = True
 
     @Inject
-    def update_slave_modules(self, module_type, hex_filename):
-        # type: (str, str) -> None
+    def update_slave_modules(self, module_type, hex_filename, version):
+        # type: (str, str, str) -> None
         try:
             self._communication_enabled = False
             self._heartbeat.stop()
-            bootload_modules(module_type, hex_filename, False, None)
+            parsed_version = tuple(int(part) for part in version.split('.'))
+            gen3_firmware = parsed_version >= (6, 0, 0)
+            bootload_modules(module_type=module_type,
+                             filename=hex_filename,
+                             gen3_firmware=gen3_firmware,
+                             version=version,
+                             raise_exception=True)
         finally:
             self._heartbeat.start()
             self._communication_enabled = True

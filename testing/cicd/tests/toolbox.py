@@ -60,7 +60,7 @@ class Client(object):
             if 'token' in data:
                 return data['token']
             else:
-                raise Exception('unexpected response {}'.format(data))
+                raise Exception('Unexpected response: {}'.format(data))
         else:
             return None
 
@@ -96,7 +96,7 @@ class Client(object):
             try:
                 response = f(uri, params=params, data=data, files=files,
                              headers=headers, **self._default_kwargs)
-                assert response.status_code != 404, 'not found {0}: {1}'.format(path, response.content)
+                assert response.status_code != 404, 'Call `{0}` not found: {1}'.format(path, response.content)
                 data = response.json()
                 if success and 'success' in data:
                     assert data['success'], 'content={}'.format(response.content.decode())
@@ -395,7 +395,7 @@ class Toolbox(object):
 
     def get_firmware_versions(self):
         # type: () -> Dict[str,str]
-        modules = self.dut.get('/get_modules_information')['modules']['master']
+        modules = self.dut.get('/get_modules_information?refresh=True')['modules']['master']
         versions = {'M': self.dut.get('/get_status')['version']}
         for data in (x for x in modules.values() if 'firmware' in x):
             module = 'C' if data.get('is_can', False) else data['type']
@@ -418,7 +418,6 @@ class Toolbox(object):
         self.dut.get('/module_discover_stop')
 
     def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, temp_modules=False, can_controls=False, ucans=False, timeout=120):
-        # TODO: Does not work yet for the Core(+) as they don't have this call implemented.
         logger.debug('Discovering modules')
         since = time.time()
         # [WIP] tried to disable ucan logic for the factory reset test (CAN FX call)
