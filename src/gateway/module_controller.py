@@ -184,14 +184,18 @@ class ModuleController(BaseController):
         if module_type not in ModuleController.FIRMWARE_MAP:
             raise RuntimeError('Dynamic update for {0} not yet supported'.format(module_type))
 
+        platform = Platform.get_platform()
+
         parsed_version = tuple(int(part) for part in firmware_version.split('.'))
-        generation = 3 if parsed_version >= (6, 0, 0) else 2
+        if module_type in ['master_classic', 'master_core']:
+            generation = 3 if parsed_version < (2, 0, 0) else 2  # Core = 1.x.x, classic = 3.x.x
+        else:
+            generation = 3 if parsed_version >= (6, 0, 0) else 2  # Gen3 = 6.x.x, gen2 = 3.x.x
         if generation not in ModuleController.FIRMWARE_MAP[module_type]:
             raise RuntimeError('Dynamic update for {0} generation {1} not yet supported'.format(module_type, generation))
         filename_code = ModuleController.FIRMWARE_MAP[module_type][generation][1]
         firmware_cloud_code = ModuleController.FIRMWARE_MAP[module_type][generation][2]
 
-        platform = Platform.get_platform()
         if module_type in ['master_classic', 'master_core']:
             platform_match = (
                 (platform in Platform.CoreTypes and module_type == 'master_core') or
