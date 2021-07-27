@@ -182,7 +182,17 @@ _OUTPUT_MODULE_LAYOUTS = {
                         Output(output_id=15, tester_input_id=31)]),
         Module(name='internal open collector module', mtype='l',
                hardware_type=Module.HardwareType.INTERNAL,
-               outputs=[Output(output_id=23, tester_input_id=39)])
+               outputs=[Output(output_id=23, tester_input_id=39)]),
+        Module(name='output module', mtype='O',
+               hardware_type=Module.HardwareType.PHYSICAL,
+               outputs=[Output(output_id=32, tester_input_id=40),
+                        Output(output_id=33, tester_input_id=41),
+                        Output(output_id=34, tester_input_id=42),
+                        Output(output_id=35, tester_input_id=43),
+                        Output(output_id=36, tester_input_id=44),
+                        Output(output_id=37, tester_input_id=45),
+                        Output(output_id=38, tester_input_id=46),
+                        Output(output_id=39, tester_input_id=47)]),
     ],
     TestPlatform.DEBIAN: [
         Module(name='output module', mtype='O',
