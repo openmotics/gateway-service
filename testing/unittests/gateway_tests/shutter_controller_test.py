@@ -561,6 +561,59 @@ class ShutterControllerTest(unittest.TestCase):
         controller.load_shutters = _raise
         controller._sync_orm()  # Should not raise an exception
 
+    def test_sync_orm(self):
+        events = []
+
+        def handle_event(gateway_event):
+            events.append(gateway_event)
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
+
+        master_controller = Mock()
+        SetUpTestInjections(master_controller=master_controller,
+                            maintenance_controller=Mock())
+        controller = ShutterController()
+
+        Shutter.create(id=42, number=1)  # unused
+        Shutter.create(id=43, number=2)  # removed
+
+        master_shutters = [ShutterDTO(id=0, name='foo'),
+                           ShutterDTO(id=1, name='bar'),
+                           ShutterDTO(id=2, name='baz')]
+        with mock.patch.object(master_controller, 'load_shutters', return_value=master_shutters):
+            controller._sync_orm()
+            self.pubsub._publish_all_events(blocking=False)
+
+        assert GatewayEvent('CONFIG_CHANGE', {'type': 'shutter'}) in events
+        assert len(events) == 2
+
+    def test_save_shutters(self):
+        events = []
+
+        def handle_event(gateway_event):
+            events.append(gateway_event)
+
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
+
+        master_controller = Mock()
+        SetUpTestInjections(master_controller=master_controller,
+                            maintenance_controller=Mock())
+        controller = ShutterController()
+
+        Shutter.create(id=42, number=1)  # unused
+        Shutter.create(id=43, number=2)  # removed
+
+        shutters = [ShutterDTO(id=0, name='foo'),
+                    ShutterDTO(id=1, name='bar'),
+                    ShutterDTO(id=2, name='baz')]
+        with mock.patch.object(master_controller, 'save_shutters', return_value=None):
+            controller.save_shutters(shutters)
+            self.pubsub._publish_all_events(blocking=False)
+
+        print(events)
+        assert GatewayEvent('CONFIG_CHANGE', {'type': 'shutter'}) in events
+        assert GatewayEvent('CONFIG_CHANGE', {'type': 'shuttergroup'}) in events
+        assert len(events) == 2
+
 
 if __name__ == '__main__':
     unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))
