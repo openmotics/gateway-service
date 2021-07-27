@@ -60,7 +60,7 @@ class Client(object):
             if 'token' in data:
                 return data['token']
             else:
-                raise Exception('unexpected response {}'.format(data))
+                raise Exception('Unexpected response: {}'.format(data))
         else:
             return None
 
@@ -96,10 +96,13 @@ class Client(object):
             try:
                 response = f(uri, params=params, data=data, files=files,
                              headers=headers, **self._default_kwargs)
-                assert response.status_code != 404, 'not found {0}: {1}'.format(path, response.content)
+                assert response.status_code != 404, 'Call `{0}` not found: {1}'.format(path, response.content)
                 data = response.json()
-                if success and 'success' in data:
-                    assert data['success'], 'content={}'.format(response.content.decode())
+                if 'success' in data:
+                    if data['success'] is False and data.get('msg') == 'invalid_token':
+                        self.login(success=success, timeout=timeout - time.time() + since)
+                    if success:
+                        assert data['success'], 'Call failed: Content = {}'.format(response.content.decode())
                 return data
             except (ConnectionError, RequestException) as exc:
                 logger.debug('Request {} {} failed {}, retrying...'.format(self._id, path, exc))
