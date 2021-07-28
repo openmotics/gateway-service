@@ -64,3 +64,55 @@ class EnergyEnums(object):
                        Version.ENERGY_MODULE: 12,
                        Version.P1_CONCENTRATOR: 8}
     LARGEST_MODULE_TYPE = Version.ENERGY_MODULE  # Update if needed
+
+
+class Leds(object):
+    EXPANSION = 'EXPANSION'
+    STATUS_GREEN = 'STATUS_GREEN'
+    STATUS_RED = 'STATUS_RED'
+    CAN_STATUS_GREEN = 'CAN_STATUS_GREEN'
+    CAN_STATUS_RED = 'CAN_STATUS_RED'
+    CAN_COMMUNICATION = 'CAN_COMMUNICATION'
+    P1 = 'P1'
+    LAN_GREEN = 'LAN_GREEN'
+    LAN_RED = 'LAN_RED'
+    CLOUD = 'CLOUD'
+    SETUP = 'SETUP'
+    RELAYS_1_8 = 'RELAYS_1_8'
+    RELAYS_9_16 = 'RELAYS_9_16'
+    OUTPUTS_DIG_1_4 = 'OUTPUTS_DIG_1_4'
+    OUTPUTS_DIG_5_7 = 'OUTPUTS_DIG_5_7'
+    OUTPUTS_ANA_1_4 = 'OUTPUTS_ANA_1_4'
+    INPUTS = 'INPUTS'
+    POWER = 'POWER'
+    ALIVE = 'ALIVE'
+    VPN = 'VPN'
+    COMMUNICATION_1 = 'COMMUNICATION_1'
+    COMMUNICATION_2 = 'COMMUNICATION_2'
+
+
+class LedStates(object):
+    OFF = 'OFF'
+    BLINKING_25 = 'BLINKING_25'
+    BLINKING_50 = 'BLINKING_50'
+    BLINKING_75 = 'BLINKING_75'
+    SOLID = 'SOLID'
+
+
+class Buttons(object):
+    SELECT = 'SELECT'
+    SETUP = 'SETUP'
+    ACTION = 'ACTION'
+    CAN_POWER = 'CAN_POWER'
+
+
+class ButtonStates(object):
+    PRESSED = 'PRESSED'
+    RELEASED = 'RELEASED'
+
+
+class SerialPorts(object):
+    MASTER_API = 'MASTER_API'
+    ENERGY = 'ENERGY'
+    P1 = 'P1'
+    EXPANSION = 'EXPANSION'

@@ -218,7 +218,11 @@ class MemoryFile(object):
                 logger.info('MEMORY: Activating')
                 self._self_activated = True
                 self._activation_event.clear()
-                self._core_communicator.do_basic_action(BasicAction(action_type=200, action=1), timeout=MemoryFile.ACTIVATE_TIMEOUT)
+                self._core_communicator.do_command(
+                    command=CoreAPI.basic_action(),
+                    fields={'type': 200, 'action': 1, 'device_nr': 0, 'extra_parameter': 0},
+                    timeout=MemoryFile.ACTIVATE_TIMEOUT
+                )
                 self._activation_event.wait(timeout=60.0)
             else:
                 logger.info('MEMORY: No activation requred')
