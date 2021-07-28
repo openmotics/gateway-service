@@ -28,6 +28,7 @@ from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
+    from master.core.basic_action import BasicAction
 
     HEALTH = Literal['success', 'unstable', 'failure']
 
@@ -390,8 +391,8 @@ class MasterController(object):
         # type: (str, int, Optional[bytearray]) -> Dict[str,Any]
         raise NotImplementedError()
 
-    def update_master(self, hex_filename):
-        # type: (str) -> None
+    def update_master(self, hex_filename, version):
+        # type: (str, str) -> None
         raise NotImplementedError()
 
     def update_slave_modules(self, module_type, hex_filename, version):
@@ -458,6 +459,10 @@ class MasterController(object):
         raise NotImplementedError()
 
     # (Group)Actions
+
+    def do_core_basic_action(self, basic_action, timeout=2):
+        # type: (BasicAction, Optional[int]) -> Optional[Dict[str, Any]]
+        raise NotImplementedError()
 
     def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
         raise NotImplementedError()

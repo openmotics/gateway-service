@@ -42,7 +42,7 @@ from gateway.hal.mappers_classic import DimmerConfigurationMapper, \
     PulseCounterMapper, PumpGroupMapper, RTD10Mapper, SensorMapper, \
     ShutterGroupMapper, ShutterMapper, ThermostatGroupMapper, \
     ThermostatMapper
-from gateway.exceptions import CommunicationFailure
+from gateway.exceptions import CommunicationFailure, MasterUnavailable
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
@@ -56,12 +56,11 @@ from master.classic.eeprom_models import CoolingConfiguration, \
     RTD10HeatingConfiguration, ScheduledActionConfiguration, \
     StartupActionConfiguration, ThermostatConfiguration
 from master.classic.master_communicator import BackgroundConsumer, \
-    MasterCommunicator, MasterUnavailable
+    MasterCommunicator
 from master.classic.master_heartbeat import MasterHeartbeat
 from master.classic.slave_updater import bootload_modules
 from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
-from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -1199,12 +1198,14 @@ class MasterClassicController(MasterController):
         return self._master_communicator.do_raw_action(action, size, data=data)
 
     @Inject
-    def update_master(self, hex_filename, controller_serial=INJECTED):
-        # type: (str, Serial) -> None
+    def update_master(self, hex_filename, version, controller_serial=INJECTED):
+        # type: (str, str, Serial) -> None
         try:
             self._communication_enabled = False
             self._heartbeat.stop()
             self._master_communicator.update_mode_start()
+
+            _ = version  # TODO: Skip if version is identical
 
             port = controller_serial.port  # type: ignore
             baudrate = str(controller_serial.baudrate)  # type: ignore

@@ -100,6 +100,9 @@ class CoreCommunicator(object):
             self._read_thread.join()
             self._read_thread = None
 
+    def is_running(self):
+        return not self._stop and self._read_thread is not None
+
     def get_communication_statistics(self):
         return self._communication_stats
 
@@ -204,19 +207,6 @@ class CoreCommunicator(object):
         if consumer in consumers:
             consumers.remove(consumer)
         self.discard_cid(consumer.cid)
-
-    def do_basic_action(self, basic_action, timeout=2):
-        # type: (BasicAction, Optional[int]) -> Optional[Dict[str, Any]]
-        """ Sends a basic action to the Core with the given action type and action number """
-        logger.info('BA: Executed {0}'.format(basic_action))
-        return self.do_command(
-            CoreAPI.basic_action(),
-            {'type': basic_action.action_type,
-             'action': basic_action.action,
-             'device_nr': basic_action.device_nr,
-             'extra_parameter': basic_action.extra_parameter},
-            timeout=timeout
-        )
 
     def do_command(self, command, fields, timeout=2):
         # type: (CoreCommandSpec, Dict[str, Any], Union[T_co, int]) -> Union[T_co, Dict[str, Any]]

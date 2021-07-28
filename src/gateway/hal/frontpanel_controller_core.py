@@ -260,10 +260,10 @@ class FrontpanelCoreController(FrontpanelController):
         state = self._led_drive_states.get(led)
         if state != (on, mode):
             extra_parameter = FrontpanelCoreController.BLINKING_MAP[mode]
-            self._master_communicator.do_basic_action(BasicAction(action_type=210,
-                                                                  action=action,
-                                                                  device_nr=1 if on else 0,
-                                                                  extra_parameter=extra_parameter))
+            self._master_controller.do_core_basic_action(BasicAction(action_type=210,
+                                                                     action=action,
+                                                                     device_nr=1 if on else 0,
+                                                                     extra_parameter=extra_parameter))
             self._led_drive_states[led] = on, mode
 
 

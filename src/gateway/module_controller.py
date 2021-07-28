@@ -207,7 +207,7 @@ class ModuleController(BaseController):
             filename_base = ModuleController.FIRMWARE_BASE_NAME.format(filename_code)
             target_filename = os.path.join(ModuleController.FIRMWARE_ARCHIVE_DIR, filename_base.format(firmware_version))
             self._download_firmware(firmware_cloud_code, firmware_version, target_filename)
-            self._master_controller.update_master(target_filename)
+            self._master_controller.update_master(target_filename, firmware_version)
             ModuleController._archive_firmwares(target_filename, filename_base, firmware_version)
             return
 
