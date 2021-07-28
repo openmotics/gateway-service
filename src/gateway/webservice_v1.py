@@ -32,7 +32,7 @@ from gateway.api.serializers import ApartmentSerializer, UserSerializer, Deliver
     SystemDoorbellConfigSerializer, SystemRFIDConfigSerializer, SystemRFIDSectorBlockConfigSerializer, \
     SystemTouchscreenConfigSerializer, SystemGlobalConfigSerializer, SystemActivateUserConfigSerializer, \
     RfidSerializer, MailboxSerializer, ParcelBoxSerializer, DoorbellSerializer
-from gateway.authentication_controller import AuthenticationToken
+from gateway.authentication_controller import AuthenticationToken, AuthenticationController
 from gateway.dto import ApartmentDTO, DeliveryDTO
 from gateway.esafe_controller import EsafeController
 from gateway.exceptions import *
@@ -43,7 +43,6 @@ from gateway.webservice import params_parser
 if False:  # MyPy
     from gateway.apartment_controller import ApartmentController
     from gateway.delivery_controller import DeliveryController
-    from gateway.authentication_controller import AuthenticationToken
     from gateway.rfid_controller import RfidController
     from gateway.system_config_controller import SystemConfigController
     from gateway.webservice import WebService
@@ -135,7 +134,7 @@ def authentication_handler_v1(pass_token=False, pass_role=False, throw_error=Tru
                     pass
         _self = request.handler.callable.__self__
         # Fetch the checkToken function that is placed under the main webservice or under the plugin webinterface.
-        check_token = _self._user_controller.authentication_controller.check_token
+        check_token = _self.authentication_controller.check_token
         checked_token = check_token(token)  # type: Optional[AuthenticationToken]
         if throw_error:
             if checked_token is None:
@@ -246,9 +245,10 @@ class RestAPIEndpoint(object):
     API_ENDPOINT = None  # type: Optional[str]
 
     @Inject
-    def __init__(self, user_controller=INJECTED):
-        # type: (UserController) -> None
-        self._user_controller = user_controller
+    def __init__(self, user_controller=INJECTED, authentication_controller=INJECTED):
+        # type: (UserController, AuthenticationController) -> None
+        self.user_controller = user_controller
+        self.authentication_controller = authentication_controller
 
     def GET(self):
         raise NotImplementedException
@@ -307,10 +307,10 @@ class Users(RestAPIEndpoint):
     @openmotics_api_v1(auth=False, pass_role=True, check={'role': str, 'include_inactive': bool})
     def get_users(self, auth_role=None, role=None, include_inactive=False):
         if auth_role is None or auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
-            users = self._user_controller.load_users(roles=[User.UserRoles.USER], include_inactive=include_inactive)
+            users = self.user_controller.load_users(roles=[User.UserRoles.USER], include_inactive=include_inactive)
         else:
             roles = [role] if role is not None else None
-            users = self._user_controller.load_users(roles=roles, include_inactive=include_inactive)
+            users = self.user_controller.load_users(roles=roles, include_inactive=include_inactive)
 
         users_serial = [UserSerializer.serialize(user) for user in users]
         return json.dumps(users_serial)
@@ -320,7 +320,7 @@ class Users(RestAPIEndpoint):
         # return the requested user
         if user_id is None:
             raise WrongInputParametersException('Could not get the user_id from the request')
-        user = self._user_controller.load_user(user_id=user_id)
+        user = self.user_controller.load_user(user_id=user_id)
         if user is None:
             raise ItemDoesNotExistException('User with id {} does not exists'.format(user_id))
         # Filter the users when no role is provided or when the role is not admin
@@ -338,9 +338,9 @@ class Users(RestAPIEndpoint):
         api_secret = cherrypy.request.headers.get('X-API-Secret')
         if api_secret is None:
             raise UnAuthorizedException('Cannot create a new available code without the X-API-Secret')
-        elif not self._user_controller.authentication_controller.check_api_secret(api_secret):
+        elif not self.authentication_controller.check_api_secret(api_secret):
             raise UnAuthorizedException('X-API-Secret is incorrect')
-        return str(self._user_controller.generate_new_pin_code(UserController.PinCodeLength[role]))
+        return str(self.user_controller.generate_new_pin_code(UserController.PinCodeLength[role]))
 
     @openmotics_api_v1(auth=False, pass_role=True, expect_body_type='JSON')
     def post_user(self, auth_role, request_body):
@@ -366,7 +366,7 @@ class Users(RestAPIEndpoint):
 
         user_dto.username = uuid.uuid4().hex
         # add a custom user code
-        user_dto.pin_code = str(self._user_controller.generate_new_pin_code(UserController.PinCodeLength[user_dto.role]))
+        user_dto.pin_code = str(self.user_controller.generate_new_pin_code(UserController.PinCodeLength[user_dto.role]))
         user_dto.accepted_terms = True
         # Generate a random password as a dummy to fill in the gap
         random_password = uuid.uuid4().hex
@@ -379,7 +379,7 @@ class Users(RestAPIEndpoint):
                 raise UnAuthorizedException('As a normal user, you can only create a COURIER user')
 
         try:
-            user_dto_saved = self._user_controller.save_user(user_dto)
+            user_dto_saved = self.user_controller.save_user(user_dto)
         except RuntimeError as e:
             raise WrongInputParametersException('The user could not be saved: {}'.format(e))
         user_dto_serial = UserSerializer.serialize(user_dto_saved)
@@ -394,7 +394,7 @@ class Users(RestAPIEndpoint):
         if request_code is None:
             raise WrongInputParametersException('when activating, a pin code or rfid tag is expected.')
 
-        user_dto = self._user_controller.load_user(user_id)
+        user_dto = self.user_controller.load_user(user_id)
         is_rfid = 'rfid_tag' in request_code
         if not is_rfid and request_code != user_dto.pin_code:
             raise UnAuthorizedException('pin code is not correct to authenticate the user')
@@ -402,7 +402,7 @@ class Users(RestAPIEndpoint):
             # TODO: Add the rfid check
             raise NotImplementedException('Rfid token check not implemented yet')
         # if all checks are passed, activate the user
-        self._user_controller.activate_user(user_id)
+        self.user_controller.activate_user(user_id)
         return 'OK'
 
     @openmotics_api_v1(auth=True, pass_role=False, pass_token=True, expect_body_type='JSON')
@@ -417,22 +417,21 @@ class Users(RestAPIEndpoint):
             api_secret = kwargs.get('X-API-Secret')
             if api_secret is None:
                 raise UnAuthorizedException('Cannot change the pin code or rfid data without the api secret')
-            if not self._user_controller.authentication_controller.check_api_secret(api_secret):
+            if not self.authentication_controller.check_api_secret(api_secret):
                 raise UnAuthorizedException('The api secret is not valid')
 
-        # user_dto_orig = self._user_controller.load_user(user_id, clear_password=False)
-        user_dto_orig = self._user_controller.load_user(user_id)
+        user_dto_orig = self.user_controller.load_user(user_id, clear_password=False)
         user_dto = UserSerializer.deserialize(user_json)
         for field in ['first_name', 'last_name', 'pin_code', 'language', 'apartment']:
             if field in user_dto.loaded_fields:
                 setattr(user_dto_orig, field, getattr(user_dto, field))
-        saved_user = self._user_controller.save_user(user_dto_orig)
+        saved_user = self.user_controller.save_user(user_dto_orig)
         saved_user.clear_password()
         return json.dumps(UserSerializer.serialize(saved_user))
 
     @openmotics_api_v1(auth=False, pass_role=False, pass_token=True)
     def delete_user(self, user_id, auth_token=None):
-        user_to_delete_dto = self._user_controller.load_user(user_id)
+        user_to_delete_dto = self.user_controller.load_user(user_id)
         if user_to_delete_dto is None:
             raise ItemDoesNotExistException('Cannot delete an user that does not exists')
 
@@ -443,7 +442,7 @@ class Users(RestAPIEndpoint):
             if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
                 raise UnAuthorizedException('As a non admin or technician user, you cannot delete another user')
 
-        self._user_controller.remove_user(user_to_delete_dto)
+        self.user_controller.remove_user(user_to_delete_dto)
         return 'OK'
 
 
@@ -899,14 +898,14 @@ class Authentication(RestAPIEndpoint):
     def authenticate_pin_code(self, request_body):
         if 'code' not in request_body:
             raise WrongInputParametersException('Expected a code in the request body json')
-        success, data = self._user_controller.authentication_controller.login_with_user_code(pin_code=request_body['code'])
+        success, data = self.authentication_controller.login_with_user_code(pin_code=request_body['code'])
         return self.handle_authentication_result(success, data)
 
     @openmotics_api_v1(auth=False, expect_body_type='JSON')
     def authenticate_rfid_tag(self, request_body):
         if 'rfid_tag' not in request_body:
             raise WrongInputParametersException('Expected an rfid_tag in the request body json')
-        success, data = self._user_controller.authentication_controller.login_with_rfid_tag(rfid_tag_string=request_body['rfid_tag'])
+        success, data = self.authentication_controller.login_with_rfid_tag(rfid_tag_string=request_body['rfid_tag'])
         return self.handle_authentication_result(success, data)
 
     def handle_authentication_result(self, success, data):
@@ -920,7 +919,7 @@ class Authentication(RestAPIEndpoint):
 
     @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None)
     def deauthenticate(self, token):
-        self._user_controller.logout(token)
+        self.user_controller.logout(token)
 
 
 class ParcelBox(RestAPIEndpoint):
@@ -1056,7 +1055,7 @@ class MailBox(RestAPIEndpoint):
         # type: (int, Dict[str, Any], AuthenticationToken) -> str
         self._check_controller()
         if 'open' not in request_body:
-            ValueError('Expected json body with the open parameter')
+            raise ValueError('Expected json body with the open parameter')
         boxes = self.esafe_controller.get_mailboxes(rebus_id=rebus_id)
         box = boxes[0] if len(boxes) == 1 else None
 
@@ -1068,7 +1067,7 @@ class MailBox(RestAPIEndpoint):
             if box.apartment is None:
                 raise UnAuthorizedException('Cannot open mailbox with id: {}: You are not admin, techinican and the box has no owner'.format(rebus_id))
             apartment_id = box.apartment.id
-            user_dto = self._user_controller.load_user_by_apartment_id(apartment_id)
+            user_dto = self.user_controller.load_user_by_apartment_id(apartment_id)
             if user_dto.id != auth_token.user.id:
                 raise UnAuthorizedException('UnAuthorized to open mailbox with id: {}: you are not admin, technician or the owner of the mailbox'.format(rebus_id))
 
@@ -1146,6 +1145,7 @@ class WebServiceV1(object):
         self.add_api_tree()
 
     def stop(self):
+        """ No use for the stop function at the moment """
         pass
 
     def set_web_service(self, web_service):

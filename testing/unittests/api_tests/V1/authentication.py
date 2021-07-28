@@ -24,7 +24,7 @@ import unittest
 
 import mock
 
-from gateway.authentication_controller import AuthenticationController, AuthenticationToken
+from gateway.authentication_controller import AuthenticationController, AuthenticationToken, LoginMethod
 from gateway.dto import UserDTO
 from gateway.enums import UserEnums
 from gateway.exceptions import *
@@ -117,7 +117,7 @@ class ApiAuthenticationTests(unittest.TestCase):
     # ----------------------------------------------------------------
 
     def test_authenticate_basic(self):
-        auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+        auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
         body = {'code': 'some-test-code'}
         with mock.patch.object(self.auth_controller, 'login_with_user_code', return_value=(True, auth_token)):
             response = self.web.authenticate_pin_code(request_body=body)
@@ -131,7 +131,7 @@ class ApiAuthenticationTests(unittest.TestCase):
             self.assertIn(UnAuthorizedException.bytes_message(), response)
 
     def test_authenticate_basic_rfid(self):
-        auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+        auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
         body = {'rfid_tag': 'some-test-tag'}
         with mock.patch.object(self.auth_controller, 'login_with_rfid_tag', return_value=(True, auth_token)):
             response = self.web.authenticate_rfid_tag(request_body=body)
@@ -152,7 +152,7 @@ class ApiAuthenticationTests(unittest.TestCase):
     # ----------------------------------------------------------------
 
     def test_deauthenticate_basic(self):
-        auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+        auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
         with mock.patch.object(self.users_controller, 'logout') as logout_func:
             response = self.web.deauthenticate(token=auth_token)
             logout_func.assert_called_once_with(auth_token)
@@ -181,7 +181,7 @@ class AuthenticationApiCherryPyTest(BaseCherryPyUnitTester):
         self.test_user_1.set_password('test')
 
     def test_authenticate_no_body(self):
-        auth_token = AuthenticationToken(user=self.test_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
+        auth_token = AuthenticationToken(user=self.test_user_1, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
         with mock.patch.object(self.auth_controller, 'login_with_user_code') as login_func:
             login_func.return_value = (True, auth_token)
             status, headers, response = self.POST('/api/v1/authenticate/pin_code', login_user=self.test_user_1, body=None)

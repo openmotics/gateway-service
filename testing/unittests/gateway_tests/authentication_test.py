@@ -23,7 +23,7 @@ import mock
 import time
 import unittest
 
-from gateway.authentication_controller import AuthenticationController, TokenStore
+from gateway.authentication_controller import AuthenticationController, TokenStore, LoginMethod
 from gateway.dto.user import UserDTO
 from gateway.rfid_controller import RfidController
 from ioc import SetTestMode, SetUpTestInjections
@@ -66,7 +66,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             accepted_terms=1
         )
         with mock.patch.object(self.token_store, '_get_full_user_dto', return_value=user_dto):
-            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             self.assertEqual(5, token.user.id)
             self.assertEqual('tester', token.user.username)
             self.assertLess(time.time() + AuthenticationControllerTest.TOKEN_TIMEOUT - 2, token.expire_timestamp)
@@ -83,7 +83,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             accepted_terms=1
         )
         with mock.patch.object(self.token_store, '_get_full_user_dto', return_value=user_dto):
-            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result = self.token_store.check_token(token)
             self.assertIsNotNone(result)
             self.assertEqual(token, result)
@@ -104,7 +104,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             accepted_terms=1
         )
         with mock.patch.object(self.token_store, '_get_full_user_dto', return_value=user_dto):
-            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result = self.token_store.check_token(token)
             self.assertIsNotNone(result)
             self.assertEqual(token, result)
@@ -114,7 +114,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             result = self.token_store.check_token(token)
             self.assertIsNone(result)
 
-            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result = self.token_store.check_token(token)
             self.assertIsNotNone(result)
             self.assertEqual(token, result)
@@ -146,7 +146,7 @@ class AuthenticationControllerTest(unittest.TestCase):
 
         with mock.patch.object(self.token_store, '_get_full_user_dto') as full_user_mock:
             full_user_mock.return_value = user_dto_1
-            token = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result = self.token_store.check_token(token)
             self.assertIsNotNone(result)
             self.assertEqual(token, result)
@@ -156,7 +156,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             result = self.token_store.check_token(token)
             self.assertIsNone(result)
 
-            token = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result = self.token_store.check_token(token)
             self.assertIsNotNone(result)
             self.assertEqual(token, result)
@@ -166,7 +166,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             result = self.token_store.check_token(token.token)
             self.assertIsNone(result)
 
-            token = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result = self.token_store.check_token(token)
             self.assertIsNotNone(result)
             self.assertEqual(token, result)
@@ -180,13 +180,13 @@ class AuthenticationControllerTest(unittest.TestCase):
 
             # multiple user
             full_user_mock.return_value = user_dto_1
-            token_1 = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token_1 = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result_1 = self.token_store.check_token(token_1)
             self.assertIsNotNone(result_1)
             self.assertEqual(token_1, result_1)
 
             full_user_mock.return_value = user_dto_2
-            token_2 = self.token_store.create_token(user_dto_2, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token_2 = self.token_store.create_token(user_dto_2, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result_2 = self.token_store.check_token(token_2)
             self.assertIsNotNone(result_2)
             self.assertEqual(token_2, result_2)

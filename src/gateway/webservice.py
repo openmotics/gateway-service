@@ -487,7 +487,7 @@ class WebInterface(object):
         """
         user_dto = UserDTO(username=username)
         user_dto.set_password(password)
-        success, token_or_error = self._user_controller.login(user_dto, accept_terms, timeout)
+        success, token_or_error = self._user_controller.login(user_dto, accept_terms, timeout, impersonate)
         if success is True and isinstance(token_or_error, AuthenticationToken):  # token_or_error is an actual token
             return {'token': token_or_error.token}
         if token_or_error == UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED:  # Check which error token_or_error contains

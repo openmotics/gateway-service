@@ -25,11 +25,11 @@ import time
 import unittest
 
 from peewee import SqliteDatabase
-from pytest import mark
 
-from gateway.authentication_controller import AuthenticationController, TokenStore
+from gateway.authentication_controller import AuthenticationController, TokenStore, LoginMethod, AuthenticationToken
 from gateway.dto import UserDTO, RfidDTO
 from gateway.enums import UserEnums
+from gateway.exceptions import GatewayException
 from gateway.mappers.user import UserMapper
 from gateway.models import User, RFID
 from gateway.rfid_controller import RfidController
@@ -67,6 +67,13 @@ class UserControllerTest(unittest.TestCase):
         SetUpTestInjections(authentication_controller=AuthenticationController())
         self.controller = UserController()
         self.controller.start()
+
+        self.test_super = UserDTO(
+            username='om',
+            role='SUPER',
+            language='English'
+        )
+        self.test_super.set_password('pass')
 
     def tearDown(self):
         self.controller.stop()
@@ -165,8 +172,6 @@ class UserControllerTest(unittest.TestCase):
 
     def test_all(self):
         """ Test all methods of UserController. """
-        fields = ['role', 'pin_code', 'first_name', 'last_name', 'password']
-
         # create a new user to test with
         user_dto = UserDTO(username='fred', pin_code='1234', role=User.UserRoles.ADMIN)
         user_dto.set_password('test')
@@ -441,8 +446,8 @@ class UserControllerTest(unittest.TestCase):
             last_user_dto = UserDTO(username='om')
             self.controller.remove_user(last_user_dto)
             self.fail('Should have raised exception !')
-        except Exception as exception:
-            self.assertEqual(UserEnums.DeleteErrors.LAST_ACCOUNT, str(exception))
+        except GatewayException as ex:
+            self.assertIn(UserEnums.DeleteErrors.LAST_ACCOUNT, ex.message)
 
     def test_case_insensitive(self):
         """ Test the case insensitivity of the username. """
@@ -482,15 +487,15 @@ class UserControllerTest(unittest.TestCase):
 
     def test_user_mapper(self):
 
-        def validate_two_way(user_dto):
-            user_orm = UserMapper.dto_to_orm(user_dto)
+        def validate_two_way(user):
+            user_orm = UserMapper.dto_to_orm(user)
             user_dto_converted = UserMapper.orm_to_dto(user_orm)
-            for field in user_dto.loaded_fields:
+            for field in user.loaded_fields:
                 if field != 'password':
-                    self.assertEqual(getattr(user_dto, field), getattr(user_dto_converted, field))
+                    self.assertEqual(getattr(user, field), getattr(user_dto_converted, field))
 
-        def convert_back_and_forth(user_dto):
-            user_orm = UserMapper.dto_to_orm(user_dto)
+        def convert_back_and_forth(user):
+            user_orm = UserMapper.dto_to_orm(user)
 
             self.assertEqual(True, hasattr(user_orm, "username"))
             self.assertEqual(True, hasattr(user_orm, "password"))
@@ -498,16 +503,16 @@ class UserControllerTest(unittest.TestCase):
             self.assertEqual(True, hasattr(user_orm, "role"))
 
             self.assertEqual(User.UserRoles.USER, user_orm.role)
-            self.assertEqual(user_dto.pin_code, user_orm.pin_code)
+            self.assertEqual(user.pin_code, user_orm.pin_code)
 
-            self.assertEqual(user_dto.username, user_orm.username)
+            self.assertEqual(user.username, user_orm.username)
             self.assertEqual(UserDTO._hash_password('test'), user_orm.password)
-            self.assertEqual(user_dto.accepted_terms, user_orm.accepted_terms)
+            self.assertEqual(user.accepted_terms, user_orm.accepted_terms)
 
             user_dto_converted = UserMapper.orm_to_dto(user_orm)
-            self.assertEqual(user_dto.username, user_dto_converted.username)
+            self.assertEqual(user.username, user_dto_converted.username)
             self.assertEqual(user_orm.password, user_dto_converted.hashed_password)
-            self.assertEqual(user_dto.accepted_terms, user_dto_converted.accepted_terms)
+            self.assertEqual(user.accepted_terms, user_dto_converted.accepted_terms)
 
         user_dto = UserDTO(username='test',
                            role=User.UserRoles.USER,
@@ -542,6 +547,7 @@ class UserControllerTest(unittest.TestCase):
         success, data = self.controller.authentication_controller.login_with_user_code('1234', accept_terms=True)
         self.assertTrue(success)
         self.assertEqual(data.user.username, 'fred')
+        self.assertEqual(LoginMethod.PIN_CODE, data.login_method)
 
         success, data = self.controller.authentication_controller.login_with_user_code('9876', accept_terms=True)
         self.assertFalse(success)
@@ -555,11 +561,12 @@ class UserControllerTest(unittest.TestCase):
 
         # add an rfid to fred to test the login
         rfid_dto = RfidDTO(tag_string='rfid-test-tag', label='test-badge', user=user_dto, enter_count=-1, uid_manufacturer='test-uid-manufact')
-        rfid_dto = self.rfid_controller.save_rfid(rfid_dto)
+        self.rfid_controller.save_rfid(rfid_dto)
 
         success, data = self.controller.authentication_controller.login_with_rfid_tag('rfid-test-tag', accept_terms=True)
         self.assertTrue(success)
         self.assertEqual(data.user.username, 'fred')
+        self.assertEqual(LoginMethod.RFID, data.login_method)
 
         success, data = self.controller.authentication_controller.login_with_rfid_tag('9876', accept_terms=True)
         self.assertFalse(success)
@@ -572,8 +579,32 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual(3, self.controller.get_number_of_users())
         # add an rfid to pol to test the login
         rfid_pol_dto = RfidDTO(tag_string='rfid-test-tag-pol', label='test-badge', user=user_pol_dto, enter_count=-1, uid_manufacturer='test-uid-manufact_pol')
-        rfid_pol_dto = self.rfid_controller.save_rfid(rfid_pol_dto)
+        self.rfid_controller.save_rfid(rfid_pol_dto)
 
         success, data = self.controller.authentication_controller.login_with_rfid_tag('rfid-test-tag-pol', accept_terms=True)
         self.assertTrue(success)
         self.assertEqual(data.user.username, 'pol')
+        self.assertEqual(LoginMethod.RFID, data.login_method)
+
+    def test_impersonate_happy(self):
+        user_dto = UserDTO(username='fred', pin_code='1234', role=User.UserRoles.USER)
+        user_dto.set_password('test')
+        user_dto = self.controller.save_user(user_dto)
+        self.assertEqual(2, self.controller.get_number_of_users())
+
+        success, data = self.controller.login(self.test_super, accept_terms=False, timeout=None, impersonate='fred')
+        self.assertTrue(success)
+        self.assertTrue(isinstance(data, AuthenticationToken))
+
+        impersonate_token = data
+
+        token_is_valid = self.controller.check_token(impersonate_token)
+        self.assertTrue(token_is_valid)
+
+        token = self.controller.authentication_controller.check_token(impersonate_token)
+        self.assertEqual('USER', token.user.role)
+        self.assertEqual('fred', token.user.username)
+        self.assertEqual(self.test_super.username, token.impersonator.username)
+        self.assertEqual(LoginMethod.PASSWORD, token.login_method)
+
+
