@@ -33,7 +33,7 @@ from dateutil.tz import tzlocal
 import logging
 import os
 import six
-from six.moves.configparser import ConfigParser, NoOptionError
+from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
 
 if False:  # MyPy
     from typing import List, Optional, Type
@@ -56,6 +56,8 @@ class RfidController(object):
         try:
             rfid_device_file = config.get('OpenMotics', 'rfid_device')
         except NoOptionError:
+            pass
+        except NoSectionError:  # This needs to be here for testing on Jenkins, there will be no config file
             pass
         logger.debug(' -> Result: {}'.format(rfid_device_file))
         logger.debug(' -> Creating rfid context')
