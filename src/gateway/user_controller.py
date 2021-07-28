@@ -175,10 +175,14 @@ class UserController(object):
 
         User.delete().where(User.username == username).execute()
 
-    def login(self, user_dto, accept_terms=False, timeout=None):
-        # type: (UserDTO, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
+    def login(self, user_dto, accept_terms=False, timeout=None, impersonate=None):
+        # type: (UserDTO, bool, Optional[float], Optional[str]) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a UserDTO """
-        success, token = self.authentication_controller.login(user_dto, accept_terms, timeout)
+        impersonate_user = None
+        impersonate_user_orm = User.select().where(User.username == impersonate).first()
+        if impersonate_user_orm is not None:
+            impersonate_user = UserMapper.orm_to_dto(impersonate_user_orm)
+        success, token = self.authentication_controller.login(user_dto, accept_terms, timeout, impersonate=impersonate_user)
         return success, token
 
     def logout(self, token):

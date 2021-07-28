@@ -60,9 +60,10 @@ class AuthenticationController(object):
         except Exception:
             return None
 
-    def login(self, user_dto, accept_terms=False, timeout=None):
-        # type: (UserDTO, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
+    def login(self, user_dto, accept_terms=False, timeout=None, impersonate=None):
+        # type: (UserDTO, bool, Optional[float], Optional[UserDTO]) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a UserDTO """
+        # Set the proper timeout value
         if timeout is not None:
             try:
                 timeout = int(timeout)
@@ -72,21 +73,32 @@ class AuthenticationController(object):
         if timeout is None:
             timeout = self._token_timeout
 
+        # Load the user that tries to login
         user_orm = User.select().where(
             (User.username == user_dto.username.lower()) &
             (User.password == user_dto.hashed_password)
         ).first()
 
+        # If the user does not exists
         if user_orm is None:
             return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
 
+        # check if the users wants to impersonate some other user
+        if impersonate is not None:
+            if user_orm.role != User.UserRole.SUPER:
+                return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
+            user_to_login = impersonate
+        else:
+            user_to_login = UserMapper.orm_to_dto(user_orm)
+
+        # Check if accepted terms
         if user_orm.accepted_terms == AuthenticationController.TERMS_VERSION:
-            token = self.token_store.create_token(UserMapper.orm_to_dto(user_orm), timeout=timeout)
+            token = self.token_store.create_token(user_to_login, timeout=timeout)
             return True, token
         if accept_terms is True:
             user_orm.accepted_terms = AuthenticationController.TERMS_VERSION
             user_orm.save()
-            token = self.token_store.create_token(UserMapper.orm_to_dto(user_orm), timeout=timeout)
+            token = self.token_store.create_token(user_to_login, timeout=timeout)
             return True, token
         return False, UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED
 

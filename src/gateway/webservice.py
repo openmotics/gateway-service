@@ -468,7 +468,7 @@ class WebInterface(object):
         return serve_file(os.path.join(static_dir, 'index.html'), content_type='text/html')
 
     @openmotics_api(check=types(accept_terms=bool, timeout=int), plugin_exposed=False)
-    def login(self, username, password, accept_terms=None, timeout=None):
+    def login(self, username, password, accept_terms=None, timeout=None, impersonate=None):
         """
         Login to the web service, returns a token if successful, returns HTTP status code 401 otherwise.
 
@@ -480,6 +480,8 @@ class WebInterface(object):
         :type accept_terms: bool | None
         :param timeout: Optional session timeout. 30d >= x >= 1h
         :type timeout: int
+        :param impersonate: Optional user to impersonate
+        :type impersonate: str
         :returns: Authentication token
         :rtype: str
         """
