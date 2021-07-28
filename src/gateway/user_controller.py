@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 class UserController(object):
     """ The UserController provides methods for the creation and authentication of users. """
     PinCodeLength = {
+        'SUPER': 10,
         'COURIER': 4,
         'USER': 4,
         'ADMIN': 6,
@@ -66,7 +67,7 @@ class UserController(object):
         cloud_user_dto = UserDTO(
             username=username,
             pin_code=None,
-            role=User.UserRoles.ADMIN,
+            role=User.UserRoles.SUPER,
             accepted_terms=AuthenticationController.TERMS_VERSION
         )
         cloud_user_dto.set_password(self._config['password'])

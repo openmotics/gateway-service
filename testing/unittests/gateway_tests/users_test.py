@@ -294,6 +294,7 @@ class UserControllerTest(unittest.TestCase):
         users_in_controller = self.controller.load_users()
         self.assertEqual(1, len(users_in_controller))
         self.assertEqual('om', users_in_controller[0].username)
+        self.assertEqual('SUPER', users_in_controller[0].role)
 
         user_to_add = User(
             username='admin_1',
@@ -359,7 +360,13 @@ class UserControllerTest(unittest.TestCase):
 
         roles = [User.UserRoles.USER, User.UserRoles.ADMIN]
         loaded_users = self.controller.load_users(roles=roles)
-        self.assertEqual(3, len(loaded_users))  # 2 admin users plus one regular user
+        self.assertEqual(2, len(loaded_users))  # 1 admin users plus one regular user
+        for user in loaded_users:
+            self.assertIn(user.role, roles)
+
+        roles = [User.UserRoles.USER, User.UserRoles.ADMIN, User.UserRoles.SUPER]
+        loaded_users = self.controller.load_users(roles=roles)
+        self.assertEqual(3, len(loaded_users))  # one super, one admin users plus one regular user
         for user in loaded_users:
             self.assertIn(user.role, roles)
 

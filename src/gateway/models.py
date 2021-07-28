@@ -586,6 +586,7 @@ class Apartment(BaseModel):
 
 class User(BaseModel):
     class UserRoles(object):
+        SUPER = 'SUPER'
         USER = 'USER'
         ADMIN = 'ADMIN'
         TECHNICIAN = 'TECHNICIAN'
@@ -607,7 +608,7 @@ class User(BaseModel):
     username = CharField(null=False, unique=True)
     first_name = CharField(null=True)
     last_name = CharField(null=True)
-    role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
+    role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER, SUPER
     pin_code = CharField(null=True, unique=True)
     language = CharField(null=False, default='English')  # options: See Userlanguages
     password = CharField()
