@@ -1419,6 +1419,9 @@ class MasterClassicController(MasterController):
         except Exception:
             logger.exception('Could not process initialization message')
 
+    def drive_led(self, led, on, mode):  # type: (str, bool, str) -> None
+        raise UnsupportedException()
+
     @communication_enabled
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()

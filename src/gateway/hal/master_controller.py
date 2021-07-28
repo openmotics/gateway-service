@@ -431,6 +431,9 @@ class MasterController(object):
 
     # Module functions
 
+    def drive_led(self, led, on, mode):  # type: (str, bool, str) -> None
+        raise NotImplementedError()
+
     def module_discover_start(self, timeout):  # type: (int) -> None
         raise NotImplementedError()
 
@@ -459,10 +462,6 @@ class MasterController(object):
         raise NotImplementedError()
 
     # (Group)Actions
-
-    def do_core_basic_action(self, basic_action, timeout=2):
-        # type: (BasicAction, Optional[int]) -> Optional[Dict[str, Any]]
-        raise NotImplementedError()
 
     def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
         raise NotImplementedError()

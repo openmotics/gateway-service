@@ -29,7 +29,7 @@ from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
     GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
     MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
     ShutterDTO, ShutterGroupDTO
-from gateway.enums import IndicateType, ShutterEnums
+from gateway.enums import IndicateType, ShutterEnums, Leds, LedStates
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
@@ -93,6 +93,7 @@ class MasterCoreController(MasterController):
         self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
         self._firmware_versions = {}  # type: Dict[str, Optional[str]]
+        self._led_drive_states = {}  # type: Dict[str, Tuple[bool, str]]
 
         self._master_restarting = ThreadingEvent()
         self._master_restarting.set()
@@ -856,11 +857,6 @@ class MasterCoreController(MasterController):
 
     # (Group)Actions
 
-    def do_core_basic_action(self, basic_action, timeout=2):
-        # type: (BasicAction, Optional[int]) -> Optional[Dict[str, Any]]
-        return self._do_basic_action(basic_action=basic_action,
-                                     timeout=timeout)
-
     def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
         basic_actions = GroupActionMapper.classic_actions_to_core_actions([action_type, action_number])
         for basic_action in basic_actions:
@@ -883,6 +879,30 @@ class MasterCoreController(MasterController):
         MemoryActivator.activate()
 
     # Module management
+
+    def drive_led(self, led, on, mode):  # type: (str, bool, str) -> None
+        led_to_action = {Leds.EXPANSION: 0,
+                         Leds.P1: 6,
+                         Leds.LAN_GREEN: 7,
+                         Leds.LAN_RED: 8,
+                         Leds.CLOUD: 9}
+        if led not in led_to_action:
+            return
+        action = led_to_action[led]
+        blinking_to_parameter = {LedStates.BLINKING_25: 25,
+                                 LedStates.BLINKING_50: 50,
+                                 LedStates.BLINKING_75: 75,
+                                 LedStates.SOLID: 100}
+        if mode not in blinking_to_parameter:
+            return
+        extra_parameter = blinking_to_parameter[mode]
+        state = self._led_drive_states.get(led)
+        if state != (on, mode):
+            self._do_basic_action(BasicAction(action_type=210,
+                                              action=action,
+                                              device_nr=1 if on else 0,
+                                              extra_parameter=extra_parameter))
+            self._led_drive_states[led] = on, mode
 
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
