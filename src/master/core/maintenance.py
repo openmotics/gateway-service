@@ -64,6 +64,7 @@ class MaintenanceCoreCommunicator(MaintenanceCommunicator):
     def deactivate(self, join=True):
         _ = join
         self._active = False  # Core has a separate serial port
+        # TODO: Send a bunch of events causing EEPROM cache invalidation and ORM sync
 
     def set_receiver(self, callback):
         self._receiver_callback = callback

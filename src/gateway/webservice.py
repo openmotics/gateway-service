@@ -49,9 +49,9 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     DimmerConfigurationSerializer, SensorStatusSerializer, \
     EnergyModuleSerializer
 from gateway.authentication_controller import AuthenticationToken
-from gateway.dto import GlobalRTD10DTO, ModuleDTO, RoomDTO, ScheduleDTO, \
+from gateway.dto import GlobalRTD10DTO, RoomDTO, ScheduleDTO, \
     UserDTO, InputStatusDTO
-from gateway.enums import ShutterEnums, UserEnums
+from gateway.enums import ShutterEnums, UserEnums, ModuleType
 from gateway.exceptions import UnsupportedException, FeatureUnavailableException, \
     ItemDoesNotExistException, WrongInputParametersException, ParseException
 from gateway.exceptions import CommunicationFailure, InMaintenanceModeException
@@ -1057,28 +1057,28 @@ class WebInterface(object):
     def add_virtual_output_module(self):
         # type: () -> Dict[str, Any]
         """ Adds a new virtual output module. """
-        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.OUTPUT)
+        self._module_controller.add_virtual_module(ModuleType.OUTPUT)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True)
     def add_virtual_input_module(self):
         # type: () -> Dict[str, Any]
         """ Adds a new virtual input module. """
-        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.INPUT)
+        self._module_controller.add_virtual_module(ModuleType.INPUT)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True)
     def add_virtual_dim_control_module(self):
         # type: () -> Dict[str, Any]
         """ Adds a new virtual dim control module """
-        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.DIM_CONTROL)
+        self._module_controller.add_virtual_module(ModuleType.DIM_CONTROL)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True)
     def add_virtual_sensor_module(self):
         # type: () -> Dict[str, Any]
         """ Adds a new virtual sensor module """
-        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.SENSOR)
+        self._module_controller.add_virtual_module(ModuleType.SENSOR)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(action_type=int, action_number=int))

@@ -28,7 +28,7 @@ import tempfile
 
 from gateway.energy.energy_api import EnergyAPI, BROADCAST_ADDRESS, ADDRESS_MODE, NORMAL_MODE
 from peewee import SqliteDatabase
-from gateway.enums import EnergyEnums
+from gateway.enums import EnergyEnums, HardwareType
 from gateway.pubsub import PubSub
 from gateway.hal.master_event import MasterEvent
 from gateway.models import Module, EnergyModule, EnergyCT
@@ -173,7 +173,7 @@ class EnergyCommunicatorTest(unittest.TestCase):
         self.serial.start()
 
         self.assertEqual(0, len(Module.select().where(Module.source == ModuleDTO.Source.GATEWAY,
-                                                      Module.hardware_type == ModuleDTO.HardwareType.PHYSICAL)))
+                                                      Module.hardware_type == HardwareType.PHYSICAL)))
 
         self.communicator.start_address_mode()
         self.assertTrue(self.communicator.in_address_mode())
@@ -187,7 +187,7 @@ class EnergyCommunicatorTest(unittest.TestCase):
         assert len(events) == 1
 
         modules = Module.select().where(Module.source == ModuleDTO.Source.GATEWAY,
-                                        Module.hardware_type == ModuleDTO.HardwareType.PHYSICAL)
+                                        Module.hardware_type == HardwareType.PHYSICAL)
         self.assertEqual(['2', '3', '4'], [module.address for module in modules])
 
         self.assertFalse(self.communicator.in_address_mode())

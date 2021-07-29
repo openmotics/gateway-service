@@ -34,7 +34,7 @@ from gateway.dto import RTD10DTO, DimmerConfigurationDTO, GlobalFeedbackDTO, \
     OutputStatusDTO, PulseCounterDTO, PumpGroupDTO, ShutterDTO, \
     ShutterGroupDTO, ThermostatAircoStatusDTO, ThermostatDTO, \
     ThermostatGroupDTO
-from gateway.enums import ShutterEnums
+from gateway.enums import ShutterEnums, HardwareType, ModuleType
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_classic import DimmerConfigurationMapper, \
     GlobalFeedbackMapper, GlobalRTD10Mapper, GroupActionMapper, InputMapper, \
@@ -1007,12 +1007,12 @@ class MasterClassicController(MasterController):
                 return False, None, None
 
         information = []
-        module_type_lookup = {'c': ModuleDTO.ModuleType.CAN_CONTROL,
-                              't': ModuleDTO.ModuleType.SENSOR,
-                              'i': ModuleDTO.ModuleType.INPUT,
-                              'o': ModuleDTO.ModuleType.OUTPUT,
-                              'r': ModuleDTO.ModuleType.SHUTTER,
-                              'd': ModuleDTO.ModuleType.DIM_CONTROL}
+        module_type_lookup = {'c': ModuleType.CAN_CONTROL,
+                              't': ModuleType.SENSOR,
+                              'i': ModuleType.INPUT,
+                              'o': ModuleType.OUTPUT,
+                              'r': ModuleType.SHUTTER,
+                              'd': ModuleType.DIM_CONTROL}
 
         no_modules = self._master_communicator.do_command(master_api.number_of_io_modules())
         for i in range(no_modules['in']):
@@ -1021,17 +1021,17 @@ class MasterClassicController(MasterController):
             module_type_letter = chr(module_address.bytes[0]).lower()
             is_virtual = chr(module_address.bytes[0]).islower()
             formatted_address = MasterClassicController._format_address(module_address.bytes)
-            hardware_type = ModuleDTO.HardwareType.PHYSICAL
+            hardware_type = HardwareType.PHYSICAL
             if is_virtual:
-                hardware_type = ModuleDTO.HardwareType.VIRTUAL
+                hardware_type = HardwareType.VIRTUAL
             elif is_can and module_type_letter != 'c':
-                hardware_type = ModuleDTO.HardwareType.EMULATED
+                hardware_type = HardwareType.EMULATED
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=formatted_address,
                             module_type=module_type_lookup.get(module_type_letter),
                             hardware_type=hardware_type,
                             order=i)
-            if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
+            if hardware_type == HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = get_master_version(module_address)
             information.append(dto)
 
@@ -1043,8 +1043,8 @@ class MasterClassicController(MasterController):
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=formatted_address,
                             module_type=module_type_lookup.get(module_type_letter),
-                            hardware_type=(ModuleDTO.HardwareType.VIRTUAL if is_virtual else
-                                           ModuleDTO.HardwareType.PHYSICAL),
+                            hardware_type=(HardwareType.VIRTUAL if is_virtual else
+                                           HardwareType.PHYSICAL),
                             order=i)
             if not is_virtual:
                 dto.online, dto.hardware_version, dto.firmware_version = get_master_version(module_address)
@@ -1058,8 +1058,8 @@ class MasterClassicController(MasterController):
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=formatted_address,
                             module_type=module_type_lookup.get(module_type_letter),
-                            hardware_type=(ModuleDTO.HardwareType.VIRTUAL if is_virtual else
-                                           ModuleDTO.HardwareType.PHYSICAL),
+                            hardware_type=(HardwareType.VIRTUAL if is_virtual else
+                                           HardwareType.PHYSICAL),
                             order=i)
             if not is_virtual:
                 dto.online, dto.hardware_version, dto.firmware_version = get_master_version(module_address)

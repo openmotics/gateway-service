@@ -24,6 +24,7 @@ from threading import RLock, Thread
 from six.moves.queue import Empty
 
 from gateway.daemon_thread import BaseThread
+from gateway.enums import HardwareType
 from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
@@ -303,7 +304,7 @@ class EnergyCommunicator(object):
                         logger.info('Registering new Energy Module with address {0}'.format(new_address))
                         module = Module(source=ModuleDTO.Source.GATEWAY,
                                         address=str(new_address),
-                                        hardware_type=ModuleDTO.HardwareType.PHYSICAL)
+                                        hardware_type=HardwareType.PHYSICAL)
                         module.save()
                         energy_module = EnergyModule(number=new_address,
                                                      version=version,
@@ -342,7 +343,7 @@ class EnergyCommunicator(object):
     @staticmethod
     def _get_address_and_module(old_address):
         modules = Module.select().where(Module.source == ModuleDTO.Source.GATEWAY,
-                                        Module.hardware_type == ModuleDTO.HardwareType.PHYSICAL)
+                                        Module.hardware_type == HardwareType.PHYSICAL)
         new_address = 2
         old_module = None  # type: Optional[Module]
         if len(modules) > 0:
