@@ -19,6 +19,7 @@ authentication manager manages logged in users in the system.
 from __future__ import absolute_import
 
 from enum import Enum
+import logging
 import json
 import time
 import uuid
@@ -27,10 +28,12 @@ import constants
 from ioc import Injectable, Inject, Singleton, INJECTED
 from gateway.dto import UserDTO, RfidDTO
 from gateway.enums import UserEnums
-from gateway.exceptions import ItemDoesNotExistException
+from gateway.exceptions import ItemDoesNotExistException, GatewayException
 from gateway.mappers.user import UserMapper
 from gateway.models import User, RFID
 from gateway.rfid_controller import RfidController
+
+logger = logging.getLogger(__name__)
 
 
 if False:  # MYPY
@@ -45,6 +48,7 @@ class LoginMethod(Enum):
 
 
 @Injectable.named('authentication_controller')
+@Singleton
 class AuthenticationController(object):
     TERMS_VERSION = 1
 
@@ -55,6 +59,11 @@ class AuthenticationController(object):
         self._token_timeout = token_timeout
         self.token_store = token_store  # type: TokenStore
         self.api_secret = AuthenticationController._retrieve_api_secret()
+        self.user_controller = None  # type: Optional[UserController]
+
+    def set_user_controller(self, user_controller):
+        # type: (UserController) -> None
+        self.user_controller = user_controller
 
     @staticmethod
     def _retrieve_api_secret():
@@ -68,7 +77,7 @@ class AuthenticationController(object):
             return None
 
     def login(self, user_dto, accept_terms=False, timeout=None, impersonate=None, login_method=LoginMethod.PASSWORD):
-        # type: (UserDTO, bool, Optional[float], Optional[UserDTO], LoginMethod) -> Tuple[bool, Union[str, AuthenticationToken]]
+        # type: (UserDTO, bool, Optional[float], Optional[str], LoginMethod) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a UserDTO """
         # Set the proper timeout value
         if timeout is not None:
@@ -90,14 +99,25 @@ class AuthenticationController(object):
         if user_orm is None:
             return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
 
+        # convert the user to a dto object
+        user_dto = UserMapper.orm_to_dto(user_orm)
+
         # check if the users wants to impersonate some other user
-        impersonator = UserMapper.orm_to_dto(user_orm)
+        impersonator = None  # type: Optional[UserDTO]
         if impersonate is not None:
-            if user_orm.role != User.UserRoles.SUPER:
+            if user_dto.role != User.UserRoles.SUPER:
                 return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
-            user_to_login = impersonate
+            if self.user_controller is not None:
+                user_impersonate = self.user_controller.load_user_by_username(impersonate)
+            else:
+                raise GatewayException('UserController is not present in the authentication controller')
+            if user_impersonate is None:
+                return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
+            user_to_login = user_impersonate
+            impersonator = user_dto
         else:
-            user_to_login = UserMapper.orm_to_dto(user_orm)
+            user_to_login = user_dto
+            impersonator = None
 
         # Check if accepted terms
         if user_orm.accepted_terms == AuthenticationController.TERMS_VERSION:
@@ -110,8 +130,8 @@ class AuthenticationController(object):
             return True, token
         return False, UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED
 
-    def login_with_user_code(self, pin_code, accept_terms=False, timeout=None):
-        # type: (str, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
+    def login_with_user_code(self, pin_code, accept_terms=False, timeout=None, impersonate=None):
+        # type: (str, bool, Optional[float], Optional[str]) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a pin_code """
         user_orm = User.select().where(
             (User.pin_code == pin_code)
@@ -121,15 +141,15 @@ class AuthenticationController(object):
             return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
 
         user_dto = UserMapper.orm_to_dto(user_orm)
-        return self.login(user_dto, accept_terms=accept_terms, timeout=timeout, login_method=LoginMethod.PIN_CODE)
+        return self.login(user_dto, accept_terms=accept_terms, timeout=timeout, login_method=LoginMethod.PIN_CODE, impersonate=impersonate)
 
-    def login_with_rfid_tag(self, rfid_tag_string, accept_terms=False, timeout=None):
-        # type: (str, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
+    def login_with_rfid_tag(self, rfid_tag_string, accept_terms=False, timeout=None, impersonate=None):
+        # type: (str, bool, Optional[float], Optional[str]) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user using an authorized RFID tag """
         rfid_dto = self._rfid_controller.check_rfid_tag_for_login(rfid_tag_string)
         if rfid_dto is None:
             return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
-        return self.login(rfid_dto.user, accept_terms=accept_terms, timeout=timeout, login_method=LoginMethod.RFID)
+        return self.login(rfid_dto.user, accept_terms=accept_terms, timeout=timeout, login_method=LoginMethod.RFID, impersonate=impersonate)
 
     def logout(self, token):
         self.token_store.remove_token(token)
@@ -185,6 +205,7 @@ class TokenStore(object):
         full_user = self._get_full_user_dto(user_dto)
         user_id = full_user.id
         if user_id in self.tokens:
+            logger.info(' -*****- token is being deleted: {}'.format(self.tokens[user_id].to_dict()))
             del self.tokens[user_id]
 
     def create_token(self, user_dto, login_method, timeout=None, impersonator=None):
@@ -199,6 +220,7 @@ class TokenStore(object):
             self.tokens[user_id] = AuthenticationToken.generate(full_user, token_timeout=timeout, impersonator=impersonator, login_method=login_method)
         else:
             self.tokens[user_id] = AuthenticationToken.generate(full_user, impersonator=impersonator, login_method=login_method)
+        logger.info(' -*****- New token created: {}'.format(self.tokens[user_id].to_dict()))
         return self.tokens[user_id]
 
     def check_token(self, token):

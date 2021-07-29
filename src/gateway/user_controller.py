@@ -118,6 +118,16 @@ class UserController(object):
             user_dto.clear_password()
         return user_dto
 
+    def load_user_by_username(self, username, clear_password=True):
+        _ = self
+        user_orm = User.select().where(User.username == username).first()
+        if user_orm is None:
+            return None
+        user_dto = UserMapper.orm_to_dto(user_orm)
+        if clear_password:
+            user_dto.clear_password()
+        return user_dto
+
     def load_user_by_apartment_id(self, apartment_id):
         _ = self
         user_orm = User.select().where(User.apartment_id == apartment_id).first()
@@ -179,11 +189,7 @@ class UserController(object):
     def login(self, user_dto, accept_terms=False, timeout=None, impersonate=None):
         # type: (UserDTO, bool, Optional[float], Optional[str]) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a UserDTO """
-        impersonate_user = None
-        impersonate_user_orm = User.select().where(User.username == impersonate).first()
-        if impersonate_user_orm is not None:
-            impersonate_user = UserMapper.orm_to_dto(impersonate_user_orm)
-        success, token = self.authentication_controller.login(user_dto, accept_terms, timeout, impersonate=impersonate_user)
+        success, token = self.authentication_controller.login(user_dto, accept_terms, timeout, impersonate=impersonate)
         return success, token
 
     def logout(self, token):

@@ -199,7 +199,7 @@ class ApiUsersTests(unittest.TestCase):
                     self.verify_user_not_in_output(user, response)
 
     def test_get_users_list_unauthenticated(self):
-        with mock.patch.object(self.users_controller, 'load_users', return_value=self.all_users):
+        with mock.patch.object(self.users_controller, 'load_users', return_value=self.normal_users):
             auth_token = None
             response = self.web.get_users(auth_role=None)
             self.verify_user_not_in_output(self.admin_user, response)
@@ -207,7 +207,7 @@ class ApiUsersTests(unittest.TestCase):
                 self.verify_user_in_output(user, response)
 
     def test_get_users_list_normal_user(self):
-        with mock.patch.object(self.users_controller, 'load_users', return_value=self.all_users):
+        with mock.patch.object(self.users_controller, 'load_users', return_value=self.normal_users):
             auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PIN_CODE)
             response = self.web.get_users(auth_role=auth_token.user.role)
             self.verify_user_not_in_output(self.admin_user, response)

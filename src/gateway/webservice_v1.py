@@ -306,7 +306,7 @@ class Users(RestAPIEndpoint):
 
     @openmotics_api_v1(auth=False, pass_role=True, check={'role': str, 'include_inactive': bool})
     def get_users(self, auth_role=None, role=None, include_inactive=False):
-        if auth_role is None or auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_role is None or auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             users = self.user_controller.load_users(roles=[User.UserRoles.USER], include_inactive=include_inactive)
         else:
             roles = [role] if role is not None else None
@@ -324,8 +324,8 @@ class Users(RestAPIEndpoint):
         if user is None:
             raise ItemDoesNotExistException('User with id {} does not exists'.format(user_id))
         # Filter the users when no role is provided or when the role is not admin
-        if auth_role is None or auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
-            if user.role in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_role is None or auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
+            if user.role in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
                 raise UnAuthorizedException('Cannot request an admin or technician user when not authenticated as one')
         user_serial = UserSerializer.serialize(user)
         return json.dumps(user_serial)
@@ -364,7 +364,8 @@ class Users(RestAPIEndpoint):
             user_dto.pin_code = None
             user_dto.loaded_fields.remove('pin_code')
 
-        user_dto.username = uuid.uuid4().hex
+        if user_dto.username is None:
+            user_dto.username = uuid.uuid4().hex
         # add a custom user code
         user_dto.pin_code = str(self.user_controller.generate_new_pin_code(UserController.PinCodeLength[user_dto.role]))
         user_dto.accepted_terms = True
@@ -373,7 +374,7 @@ class Users(RestAPIEndpoint):
         user_dto.set_password(random_password)
 
         # Authenticated as a technician or admin, creating the user
-        if auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             # if the user is not an admin or technician, check if the user to create is a COURIER
             if user_dto.role != User.UserRoles.COURIER:
                 raise UnAuthorizedException('As a normal user, you can only create a COURIER user')
@@ -408,7 +409,7 @@ class Users(RestAPIEndpoint):
     @openmotics_api_v1(auth=True, pass_role=False, pass_token=True, expect_body_type='JSON')
     def put_update_user(self, user_id, auth_token=None, request_body=None, **kwargs):
         user_json = request_body
-        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             if auth_token.user.id != user_id:
                 raise UnAuthorizedException('As a non admin or technician user, you cannot change another user')
 
@@ -439,7 +440,7 @@ class Users(RestAPIEndpoint):
             if user_to_delete_dto.role != User.UserRoles.COURIER:
                 raise UnAuthorizedException('As a non logged in user, you only can delete a Courier type')
         else:
-            if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
                 raise UnAuthorizedException('As a non admin or technician user, you cannot delete another user')
 
         self.user_controller.remove_user(user_to_delete_dto)
@@ -500,7 +501,7 @@ class Apartments(RestAPIEndpoint):
         return json.dumps(apartment_serial)
 
     @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
-                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN],
+                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER],
                        expect_body_type='JSON')
     def post_apartments(self, request_body):
         to_create_apartments = []
@@ -519,7 +520,7 @@ class Apartments(RestAPIEndpoint):
         return json.dumps(apartments_serial)
 
     @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
-                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN],
+                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER],
                        expect_body_type='JSON')
     def post_apartment(self, request_body=None):
         apartment_deserialized = ApartmentSerializer.deserialize(request_body)
@@ -532,7 +533,7 @@ class Apartments(RestAPIEndpoint):
         return json.dumps(apartment_serial)
 
     @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
-                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN],
+                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER],
                        expect_body_type='JSON')
     def put_apartment(self, apartment_id, request_body):
         try:
@@ -544,7 +545,7 @@ class Apartments(RestAPIEndpoint):
         return json.dumps(ApartmentSerializer.serialize(apartment_dto))
 
     @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
-                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN],
+                       allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER],
                        expect_body_type='JSON')
     def put_apartments(self, request_body):
         apartments_to_update = []
@@ -564,7 +565,7 @@ class Apartments(RestAPIEndpoint):
     def delete_apartment(self, apartment_id, auth_role=None):
         if auth_role is None:
             raise UnAuthorizedException('Authentication is needed when updating an apartment')
-        if auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             raise UnAuthorizedException('You need to be logged in as an admin or technician to update an apartment')
         apartment_dto = ApartmentDTO(id=apartment_id)
         self.apartment_controller.delete_apartment(apartment_dto)
@@ -608,7 +609,7 @@ class Deliveries(RestAPIEndpoint):
         deliveries = self.delivery_controller.load_deliveries()  # type: List[DeliveryDTO]
 
         # filter the deliveries for only the user id when they are not technician or admin
-        if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             deliveries = [delivery for delivery in deliveries if user_id in [delivery.user_id_delivery, delivery.user_id_pickup]]
 
         deliveries_serial = [DeliverySerializer.serialize(delivery) for delivery in deliveries]
@@ -622,7 +623,7 @@ class Deliveries(RestAPIEndpoint):
             raise ItemDoesNotExistException('Could not find the delivery with id: {}'.format(delivery_id))
         user_id = auth_token.user.id
         user_role = auth_token.user.role
-        if user_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if user_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             if user_id not in [delivery.user_id_delivery, delivery.user_id_pickup]:
                 raise UnAuthorizedException('You are not allowed to request this delivery')
         deliveries_serial = DeliverySerializer.serialize(delivery)
@@ -651,7 +652,7 @@ class Deliveries(RestAPIEndpoint):
         if delivery_dto is None:
             raise ItemDoesNotExistException('Cannot pickup a delivery that does not exists: id: {}'.format(delivery_id))
 
-        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             auth_user_id = auth_token.user.id
             if auth_user_id not in [delivery_dto.user_id_delivery, delivery_dto.user_id_pickup]:
                 raise UnAuthorizedException('Cannot pick up a package that is not yours when you are not admin or technician')
@@ -718,7 +719,7 @@ class SystemConfiguration(RestAPIEndpoint):
         config_serial = SystemDoorbellConfigSerializer.serialize(config_dto)
         return json.dumps(config_serial)
 
-    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER], expect_body_type='JSON')
     def put_doorbell_config(self, request_body):
         # type: (Dict) -> None
         config_dto = SystemDoorbellConfigSerializer.deserialize(request_body)
@@ -732,7 +733,7 @@ class SystemConfiguration(RestAPIEndpoint):
         config_serial = SystemRFIDConfigSerializer.serialize(config_dto)
         return json.dumps(config_serial)
 
-    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER], expect_body_type='JSON')
     def put_rfid_config(self, request_body):
         # type: (Dict) -> None
         config_dto = SystemRFIDConfigSerializer.deserialize(request_body)
@@ -746,7 +747,7 @@ class SystemConfiguration(RestAPIEndpoint):
         config_serial = SystemRFIDSectorBlockConfigSerializer.serialize(config_dto)
         return json.dumps(config_serial)
 
-    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER], expect_body_type='JSON')
     def put_rfid_sector_block_config(self, request_body):
         # type: (Dict) -> None
         config_dto = SystemRFIDSectorBlockConfigSerializer.deserialize(request_body)
@@ -760,7 +761,7 @@ class SystemConfiguration(RestAPIEndpoint):
         config_serial = SystemTouchscreenConfigSerializer.serialize(config_dto)
         return json.dumps(config_serial)
 
-    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN])
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER])
     def put_touchscreen_config(self):
         # type: () -> None
         try:
@@ -776,7 +777,7 @@ class SystemConfiguration(RestAPIEndpoint):
         config_serial = SystemGlobalConfigSerializer.serialize(config_dto)
         return json.dumps(config_serial)
 
-    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER], expect_body_type='JSON')
     def put_global_config(self, request_body):
         # type: (Dict) -> None
         config_dto = SystemGlobalConfigSerializer.deserialize(request_body)
@@ -790,7 +791,7 @@ class SystemConfiguration(RestAPIEndpoint):
         config_serial = SystemActivateUserConfigSerializer.serialize(config_dto)
         return json.dumps(config_serial)
 
-    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN], expect_body_type='JSON')
+    @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER], expect_body_type='JSON')
     def put_activate_user_config(self, request_body):
         # type: (Dict) -> None
         config_dto = SystemActivateUserConfigSerializer.deserialize(request_body)
@@ -831,7 +832,7 @@ class Rfid(RestAPIEndpoint):
         rfids = self.rfid_controller.load_rfids()
 
         # filter the rfids if the role is not a super user
-        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             rfids = [rfid for rfid in rfids if rfid.user.id == auth_token.user.id]
 
         rfids_serial = [RfidSerializer.serialize(rfid) for rfid in rfids]
@@ -845,7 +846,7 @@ class Rfid(RestAPIEndpoint):
             raise ItemDoesNotExistException('RFID tag with id {} does not exists'.format(rfid_id))
 
         # filter the rfids if the role is not a super user
-        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             if rfid.user.id != auth_token.user.id:
                 raise UnAuthorizedException('As a non admin or technician, you cannot request an rfid that is not yours')
 
@@ -867,7 +868,7 @@ class Rfid(RestAPIEndpoint):
         if rfid is None:
             raise ItemDoesNotExistException("Cannot delete RFID: tag with id '{}' does not exist".format(rfid_id))
 
-        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             if rfid.user.id != auth_token.user.id:
                 raise UnAuthorizedException('As a non admin or technician, you cannot delete an rfid that is not yours')
 
@@ -898,14 +899,20 @@ class Authentication(RestAPIEndpoint):
     def authenticate_pin_code(self, request_body):
         if 'code' not in request_body:
             raise WrongInputParametersException('Expected a code in the request body json')
-        success, data = self.authentication_controller.login_with_user_code(pin_code=request_body['code'])
+        impersonate_username = None
+        if 'impersonate' in request_body:
+            impersonate_username = request_body['impersonate']
+        success, data = self.authentication_controller.login_with_user_code(pin_code=request_body['code'], impersonate=impersonate_username)
         return self.handle_authentication_result(success, data)
 
     @openmotics_api_v1(auth=False, expect_body_type='JSON')
     def authenticate_rfid_tag(self, request_body):
         if 'rfid_tag' not in request_body:
             raise WrongInputParametersException('Expected an rfid_tag in the request body json')
-        success, data = self.authentication_controller.login_with_rfid_tag(rfid_tag_string=request_body['rfid_tag'])
+        impersonate_username = None
+        if 'impersonate' in request_body:
+            impersonate_username = request_body['impersonate']
+        success, data = self.authentication_controller.login_with_rfid_tag(rfid_tag_string=request_body['rfid_tag'], impersonate=impersonate_username)
         return self.handle_authentication_result(success, data)
 
     def handle_authentication_result(self, success, data):
@@ -992,7 +999,7 @@ class ParcelBox(RestAPIEndpoint):
             raise ItemDoesNotExistException('Cannot open mailbox with id: {}: it does not exists'.format(rebus_id))
 
         # auth check
-        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             delivery = self.delivery_controller.load_delivery_by_pickup_user(auth_token.user.id)
             if delivery is None or delivery.parcelbox_rebus_id is not rebus_id:
                 raise UnAuthorizedException('Cannot open parcelbox with id: {}: You are not admin, technician and the box does not belong to you'.format(rebus_id))
@@ -1063,7 +1070,7 @@ class MailBox(RestAPIEndpoint):
             raise ItemDoesNotExistException('Cannot open mailbox with id: {}: it does not exists'.format(rebus_id))
 
         # auth check
-        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             if box.apartment is None:
                 raise UnAuthorizedException('Cannot open mailbox with id: {}: You are not admin, techinican and the box has no owner'.format(rebus_id))
             apartment_id = box.apartment.id

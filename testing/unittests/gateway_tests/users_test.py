@@ -64,8 +64,10 @@ class UserControllerTest(unittest.TestCase):
         SetUpTestInjections(token_store=TokenStore())
         self.rfid_controller = RfidController()
         SetUpTestInjections(rfid_controller=self.rfid_controller)
-        SetUpTestInjections(authentication_controller=AuthenticationController())
+        self.auth_controller = AuthenticationController()
+        SetUpTestInjections(authentication_controller=self.auth_controller)
         self.controller = UserController()
+        self.auth_controller.set_user_controller(self.controller)
         self.controller.start()
 
         self.test_super = UserDTO(
@@ -417,6 +419,7 @@ class UserControllerTest(unittest.TestCase):
         success, token = self.controller.login(user_dto, accept_terms=True)
         self.assertTrue(success)
         self.assertTrue(self.controller.check_token(token))
+        self.assertEqual('ADMIN', token.user.role)
 
         # remove the newly created user
         self.controller.remove_user(user_dto)
@@ -593,7 +596,7 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual(2, self.controller.get_number_of_users())
 
         success, data = self.controller.login(self.test_super, accept_terms=False, timeout=None, impersonate='fred')
-        self.assertTrue(success)
+        self.assertTrue(success, "Did not successfully logged in: {}".format(data))
         self.assertTrue(isinstance(data, AuthenticationToken))
 
         impersonate_token = data
@@ -607,4 +610,32 @@ class UserControllerTest(unittest.TestCase):
         self.assertEqual(self.test_super.username, token.impersonator.username)
         self.assertEqual(LoginMethod.PASSWORD, token.login_method)
 
+    def test_impersonate_non_existing(self):
+        user_dto = UserDTO(username='fred', pin_code='1234', role=User.UserRoles.USER)
+        user_dto.set_password('test')
+        user_dto = self.controller.save_user(user_dto)
+        self.assertEqual(2, self.controller.get_number_of_users())
+
+        success, data = self.controller.login(self.test_super, accept_terms=False, timeout=None, impersonate='Pol')
+        self.assertFalse(success)
+        self.assertEqual(data, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS)
+
+        success, data = self.controller.login(self.test_super, accept_terms=False, timeout=None, impersonate='Jos')
+        self.assertFalse(success)
+        self.assertEqual(data, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS)
+
+    def test_impersonate_as_non_super(self):
+        user_dto = UserDTO(username='fred', pin_code='1234', role=User.UserRoles.USER)
+        user_dto.set_password('test')
+        user_dto = self.controller.save_user(user_dto)
+        self.assertEqual(2, self.controller.get_number_of_users())
+
+        user_dto = UserDTO(username='admin', pin_code='5678', role=User.UserRoles.ADMIN, accepted_terms=True)
+        user_dto.set_password('test')
+        admin_dto = self.controller.save_user(user_dto)
+        self.assertEqual(3, self.controller.get_number_of_users())
+
+        success, data = self.controller.login(admin_dto, accept_terms=False, timeout=None, impersonate='fred')
+        self.assertFalse(success)
+        self.assertEqual(data, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS)
 

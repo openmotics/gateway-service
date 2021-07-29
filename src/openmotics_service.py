@@ -36,6 +36,7 @@ from ioc import INJECTED, Inject
 from logs import Logs
 
 if False:  # MYPY
+    from gateway.authentication_controller import AuthenticationController
     from gateway.delivery_controller import DeliveryController
     from gateway.energy_module_controller import EnergyModuleController
     from gateway.esafe_controller import EsafeController
@@ -85,7 +86,9 @@ class OpenmoticsService(object):
                 master_controller=INJECTED,  # type: MasterController
                 frontpanel_controller=INJECTED,  # type: FrontpanelController
                 esafe_controller=INJECTED,  # type: EsafeController
-                delivery_controller=INJECTED  # type: DeliveryController
+                delivery_controller=INJECTED,  # type: DeliveryController
+                authentication_controller=INJECTED,  # type: AuthenticationController
+                user_controller=INJECTED  # type: UserController
             ):
 
         # TODO: Fix circular dependencies
@@ -118,6 +121,7 @@ class OpenmoticsService(object):
         plugin_controller.set_metrics_collector(metrics_collector)
         master_controller.set_plugin_controller(plugin_controller)
         delivery_controller.set_esafe_controller(esafe_controller)
+        authentication_controller.set_user_controller(user_controller)
 
         if frontpanel_controller:
             message_client.add_event_handler(frontpanel_controller.event_receiver)
