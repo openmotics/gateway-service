@@ -288,6 +288,9 @@ class Users(RestAPIEndpoint):
         self.route_dispatcher.connect('get_available_code', '/available_code',
                                       controller=self, action='get_available_code',
                                       conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_pin_code', '/:user_id/pin',
+                                      controller=self, action='get_pin_code',
+                                      conditions={'method': ['GET']})
         # --- POST ---
         self.route_dispatcher.connect('post_user', '',
                                       controller=self, action='post_user',
@@ -341,6 +344,20 @@ class Users(RestAPIEndpoint):
         elif not self.authentication_controller.check_api_secret(api_secret):
             raise UnAuthorizedException('X-API-Secret is incorrect')
         return str(self.user_controller.generate_new_pin_code(UserController.PinCodeLength[role]))
+
+    @openmotics_api_v1(auth=True, pass_token=True, check={'role': str})
+    def get_pin_code(self, user_id, auth_token):
+        # type: (int, AuthenticationToken) -> str
+        api_secret = cherrypy.request.headers.get('X-API-Secret')
+        if auth_token.user.role not in [User.UserRoles.SUPER, User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            if auth_token.impersonator is None and (api_secret is None or not self.authentication_controller.check_api_secret(api_secret)):
+                raise UnAuthorizedException('Cannot request the pin code for user_id: {}: Not authenticated as Admin or Technician, not impersonated, and no valid api_secret'.format(user_id))
+            else:
+                if auth_token.impersonator.role != User.UserRoles.SUPER:
+                    raise UnAuthorizedException('Cannot request the pin code for user_id: {}: Not impersonated as SUPER user'.format(user_id))
+
+        user_dto = self.user_controller.load_user(user_id)
+        return json.dumps({'pin_code': user_dto.pin_code})
 
     @openmotics_api_v1(auth=False, pass_role=True, expect_body_type='JSON')
     def post_user(self, auth_role, request_body):

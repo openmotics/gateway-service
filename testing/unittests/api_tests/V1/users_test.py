@@ -48,6 +48,17 @@ class ApiUsersTests(unittest.TestCase):
         SetUpTestInjections(user_controller=self.users_controller)
         self.web = Users()
 
+        self.super_user = UserDTO(
+            id=0,
+            username='SUPER',
+            first_name='',
+            last_name='',
+            role='SUPER',
+            pin_code='1234568',
+            apartment=None,
+            accepted_terms=1
+        )
+
         # setup some users that will be used throughout the tests
         self.admin_user = UserDTO(
             id=0,
@@ -239,6 +250,29 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = None
             response = self.web.get_user('0', auth_role=None)
             self.assertTrue(UnAuthorizedException.bytes_message() in response)
+
+    def test_get_user_pin_code(self):
+        with mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_1), \
+                mock.patch.object(self.authentication_controller, 'check_api_secret') as check_secret_func:
+            # As a admin user
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
+            response = self.web.get_pin_code(self.normal_user_1.id, auth_token=auth_token)
+            self.assertEqual(json.loads(response), {'pin_code': self.normal_user_1.pin_code})
+
+            # As a super user
+            auth_token = AuthenticationToken(user=self.super_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
+            response = self.web.get_pin_code(self.normal_user_1.id, auth_token=auth_token)
+            self.assertEqual(json.loads(response), {'pin_code': self.normal_user_1.pin_code})
+
+            # As a super user, impersonating normal user 1
+            auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD, impersonator=self.super_user)
+            response = self.web.get_pin_code(self.normal_user_1.id, auth_token=auth_token)
+            self.assertEqual(json.loads(response), {'pin_code': self.normal_user_1.pin_code})
+
+            # As a normal user without api secret
+            auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
+            response = self.web.get_pin_code(self.normal_user_1.id, auth_token=auth_token)
+            self.assertIn(UnAuthorizedException.bytes_message(), response)
 
     # ----------------------------------------------------------------
     # --- POST
