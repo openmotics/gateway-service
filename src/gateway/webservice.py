@@ -1415,16 +1415,18 @@ class WebInterface(object):
         """ Set one sensor_configuration. """
         data = SensorSerializer.deserialize(config)
         saved_sensors_dtos = self._sensor_controller.save_sensors([data])
-        return {'config': [SensorSerializer.serialize(sensor_dto=saved_sensors_dto, fields=None)
-                           for saved_sensors_dto in saved_sensors_dtos]}
+        config = [SensorSerializer.serialize(sensor_dto=saved_sensors_dto, fields=None)
+                           for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
+        return {'config': config}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_sensor_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
         """ Set multiple sensor_configurations. """
         data = [SensorSerializer.deserialize(entry) for entry in config]
         saved_sensors_dtos = self._sensor_controller.save_sensors(data)
-        return {'config': [SensorSerializer.serialize(sensor_dto=saved_sensors_dto, fields=None)
-                           for saved_sensors_dto in saved_sensors_dtos]}
+        config = [SensorSerializer.serialize(sensor_dto=saved_sensors_dto, fields=None)
+                           for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
+        return {'config': config}
 
     # Heating Pump Group
 
