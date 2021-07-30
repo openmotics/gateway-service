@@ -61,6 +61,7 @@ if False:  # MYPY
     from gateway.hal.master_controller import MasterController
     from gateway.hal.frontpanel_controller import FrontpanelController
     from gateway.uart_controller import UARTController
+    from gateway.rfid_controller import RfidController
     from plugins.base import PluginController
     from master.classic.passthrough import PassthroughService
     from cloud.events import EventSender
@@ -152,6 +153,7 @@ class OpenmoticsService(object):
               web_service_v1=INJECTED,  # type: WebServiceV1
               uart_controller=INJECTED,  # type: UARTController
               energy_module_controller=INJECTED,  # type: EnergyModuleController
+              rfid_controller=INJECTED,  # type: RfidController
               esafe_controller=INJECTED  # type: EsafeController
               ):
         """ Main function. """
@@ -208,6 +210,7 @@ class OpenmoticsService(object):
         if uart_controller:
             uart_controller.start()
         pubsub.start()
+        rfid_controller.start()
         if esafe_controller is not None:
             esafe_controller.start()
 
@@ -242,6 +245,7 @@ class OpenmoticsService(object):
                 frontpanel_controller.stop()
             event_sender.stop()
             pubsub.stop()
+            rfid_controller.start()
             if esafe_controller is not None:
                 esafe_controller.stop()
             logger.info('Stopping OM core service... Done')
