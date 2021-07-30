@@ -610,21 +610,25 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
 
     def setUp(self):
         self.test_admin = UserDTO(
+            id=1,
             username='ADMIN',
             role='ADMIN',
             pin_code='0000'
         )
         self.test_user = UserDTO(
+            id=2,
             username='USER',
             role='USER',
             pin_code='1111'
         )
         self.test_technician = UserDTO(
+            id=3,
             username='TECHNICIAN',
             role='TECHNICIAN',
             pin_code='2222'
         )
         self.test_courier = UserDTO(
+            id=4,
             username='COURIER',
             role='COURIER',
             pin_code='3333'
@@ -665,3 +669,13 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
             self.assertStatus('400 Bad Request')
             self.assertTrue(body.startswith(b"Wrong input parameter: Role needs to be one of"))
 
+    def test_get_user_pin_code(self):
+        with mock.patch.object(self.users_controller, 'load_user', return_value=self.test_user):
+            # Do not pass the api-secret
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_user)
+            self.assertStatus('401 Unauthorized')
+
+            # pass the api secret
+            status, headers, body = self.GET('/api/v1/users/{}/pin'.format(self.test_user.id), login_user=self.test_user, headers={'X-API-Secret': 'Test-Secret'})
+            self.assertStatus('200 OK')
+            self.assertEqual(json.loads(body), {'pin_code': self.test_user.pin_code})

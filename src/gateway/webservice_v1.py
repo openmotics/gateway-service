@@ -345,18 +345,29 @@ class Users(RestAPIEndpoint):
             raise UnAuthorizedException('X-API-Secret is incorrect')
         return str(self.user_controller.generate_new_pin_code(UserController.PinCodeLength[role]))
 
-    @openmotics_api_v1(auth=True, pass_token=True, check={'role': str})
+    @openmotics_api_v1(auth=True, pass_token=True, check={'user_id': int})
     def get_pin_code(self, user_id, auth_token):
         # type: (int, AuthenticationToken) -> str
+        # Authentication: When SUPER, ADMIN or TECHNICIAN, you can request all the pin codes
+        # When User or COURIER, you can only request your own pin code
+        #   - one of the following needs to be provided:
+        #     - X-API-Secret
+        #     - Impersonated by a SUPER user
+
         api_secret = cherrypy.request.headers.get('X-API-Secret')
+        user_dto = self.user_controller.load_user(user_id)
+
+        if user_dto is None:
+            raise ItemDoesNotExistException('Cannot request the pin code for user_id: {}: User does not exists'.format(user_id))
+
+        # check if requester is some kind of elevated role
         if auth_token.user.role not in [User.UserRoles.SUPER, User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
+            # If not, one of both api secret or impersonated need to be fulfilled.
             if auth_token.impersonator is None and (api_secret is None or not self.authentication_controller.check_api_secret(api_secret)):
                 raise UnAuthorizedException('Cannot request the pin code for user_id: {}: Not authenticated as Admin or Technician, not impersonated, and no valid api_secret'.format(user_id))
-            else:
-                if auth_token.impersonator.role != User.UserRoles.SUPER:
-                    raise UnAuthorizedException('Cannot request the pin code for user_id: {}: Not impersonated as SUPER user'.format(user_id))
+            if user_dto.id != user_id:
+                raise UnAuthorizedException('Cannot request pin code for user_id: {}: You cannot request a code for another user when not ADMIN or TECHNICIAN'.format(user_id))
 
-        user_dto = self.user_controller.load_user(user_id)
         return json.dumps({'pin_code': user_dto.pin_code})
 
     @openmotics_api_v1(auth=False, pass_role=True, expect_body_type='JSON')

@@ -112,7 +112,7 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
     def test_gc(self):
         pass
 
-    # Function that is usefull for debugging
+    # Function that is useful for debugging
     def print_request_result(self):
         print('-----------------------')
         print('Status:  {}'.format(self.status))
