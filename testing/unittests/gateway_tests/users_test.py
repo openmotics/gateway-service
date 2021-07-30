@@ -147,7 +147,6 @@ class UserControllerTest(unittest.TestCase):
         user_to_add = User(
             username='test',
             password=UserDTO._hash_password('test'),
-            accepted_terms=False,
             pin_code='1234',
             role=User.UserRoles.ADMIN
         )

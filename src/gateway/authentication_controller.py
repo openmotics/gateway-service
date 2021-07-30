@@ -126,12 +126,12 @@ class AuthenticationController(object):
         if accept_terms is True:
             user_orm.accepted_terms = AuthenticationController.TERMS_VERSION
             user_orm.save()
-            token = self.token_store.create_token(user_to_login, timeout=timeout, login_method=login_method)
+            token = self.token_store.create_token(user_to_login, timeout=timeout, impersonator=impersonator, login_method=login_method)
             return True, token
         return False, UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED
 
-    def login_with_user_code(self, pin_code, accept_terms=False, timeout=None, impersonate=None):
-        # type: (str, bool, Optional[float], Optional[str]) -> Tuple[bool, Union[str, AuthenticationToken]]
+    def login_with_user_code(self, pin_code, accept_terms=False, timeout=None):
+        # type: (str, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a pin_code """
         user_orm = User.select().where(
             (User.pin_code == pin_code)
@@ -141,15 +141,15 @@ class AuthenticationController(object):
             return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
 
         user_dto = UserMapper.orm_to_dto(user_orm)
-        return self.login(user_dto, accept_terms=accept_terms, timeout=timeout, login_method=LoginMethod.PIN_CODE, impersonate=impersonate)
+        return self.login(user_dto, accept_terms=accept_terms, timeout=timeout, login_method=LoginMethod.PIN_CODE)
 
-    def login_with_rfid_tag(self, rfid_tag_string, accept_terms=False, timeout=None, impersonate=None):
-        # type: (str, bool, Optional[float], Optional[str]) -> Tuple[bool, Union[str, AuthenticationToken]]
+    def login_with_rfid_tag(self, rfid_tag_string, accept_terms=False, timeout=None):
+        # type: (str, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user using an authorized RFID tag """
         rfid_dto = self._rfid_controller.check_rfid_tag_for_login(rfid_tag_string)
         if rfid_dto is None:
             return False, UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
-        return self.login(rfid_dto.user, accept_terms=accept_terms, timeout=timeout, login_method=LoginMethod.RFID, impersonate=impersonate)
+        return self.login(rfid_dto.user, accept_terms=accept_terms, timeout=timeout, login_method=LoginMethod.RFID)
 
     def logout(self, token):
         self.token_store.remove_token(token)

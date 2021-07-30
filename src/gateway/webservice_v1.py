@@ -899,20 +899,14 @@ class Authentication(RestAPIEndpoint):
     def authenticate_pin_code(self, request_body):
         if 'code' not in request_body:
             raise WrongInputParametersException('Expected a code in the request body json')
-        impersonate_username = None
-        if 'impersonate' in request_body:
-            impersonate_username = request_body['impersonate']
-        success, data = self.authentication_controller.login_with_user_code(pin_code=request_body['code'], impersonate=impersonate_username)
+        success, data = self.authentication_controller.login_with_user_code(pin_code=request_body['code'])
         return self.handle_authentication_result(success, data)
 
     @openmotics_api_v1(auth=False, expect_body_type='JSON')
     def authenticate_rfid_tag(self, request_body):
         if 'rfid_tag' not in request_body:
             raise WrongInputParametersException('Expected an rfid_tag in the request body json')
-        impersonate_username = None
-        if 'impersonate' in request_body:
-            impersonate_username = request_body['impersonate']
-        success, data = self.authentication_controller.login_with_rfid_tag(rfid_tag_string=request_body['rfid_tag'], impersonate=impersonate_username)
+        success, data = self.authentication_controller.login_with_rfid_tag(rfid_tag_string=request_body['rfid_tag'])
         return self.handle_authentication_result(success, data)
 
     def handle_authentication_result(self, success, data):

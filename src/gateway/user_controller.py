@@ -193,7 +193,7 @@ class UserController(object):
         return success, token
 
     def logout(self, token):
-        # type: (str) -> None
+        # type: (Union[str, AuthenticationToken]) -> None
         """  Removes the token from the controller.  """
         self.authentication_controller.logout(token)
 
