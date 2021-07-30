@@ -594,7 +594,7 @@ class User(BaseModel):
 
     class UserLanguages(object):
         EN = 'English'
-        DE = 'Deutsh'
+        DE = 'Deutsch'
         NL = 'Nederlands'
         FR = 'Francais'
         ALL = [

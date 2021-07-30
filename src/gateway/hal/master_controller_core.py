@@ -29,11 +29,11 @@ from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
     GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
     MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
     ShutterDTO, ShutterGroupDTO
-from gateway.enums import IndicateType, ShutterEnums
+from gateway.enums import IndicateType, ShutterEnums, Leds, LedStates
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
-from gateway.exceptions import CommunicationFailure
+from gateway.exceptions import CommunicationFailure, MasterUnavailable
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
@@ -68,6 +68,9 @@ logger = logging.getLogger(__name__)
 
 class MasterCoreController(MasterController):
 
+    MASTER_RESTARTING_TIMEOUT = 15
+    MASTER_UPDATING_TIMEOUT = 600
+
     @Inject
     def __init__(self, master_communicator=INJECTED, slave_communicator=INJECTED, memory_file=INJECTED, pubsub=INJECTED):
         # type: (CoreCommunicator, SlaveCommunicator, MemoryFile, PubSub) -> None
@@ -90,8 +93,14 @@ class MasterCoreController(MasterController):
         self._time_last_updated = 0.0
         self._output_shutter_map = {}  # type: Dict[int, int]
         self._firmware_versions = {}  # type: Dict[str, Optional[str]]
+        self._led_drive_states = {}  # type: Dict[str, Tuple[bool, str]]
+
         self._master_restarting = ThreadingEvent()
         self._master_restarting.set()
+        self._master_restarting_timer = None  # type: Optional[Timer]
+        self._master_updating = ThreadingEvent()
+        self._master_updating.set()
+        self._master_updating_timer = None  # type: Optional[Timer]
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_eeprom_event)
 
@@ -168,13 +177,11 @@ class MasterCoreController(MasterController):
                                        extra_parameter=core_event.data['extra_parameter'])
         elif core_event.type == MasterCoreEvent.Types.RESET_ACTION:
             if core_event.data.get('type') == MasterCoreEvent.ResetTypes.HEALTH_CHECK:
-                logger.warning('Master reset announced, holding further communications')
-                self._master_restarting.clear()
+                self._master_restarting_change(restarting=True)
+
         elif core_event.type == MasterCoreEvent.Types.SYSTEM:
             if core_event.data.get('type') == MasterCoreEvent.SystemEventTypes.EEPROM_ACTIVATE:
-                if not self._master_restarting.is_set():
-                    logger.info('Master back online, releasing held communications')
-                self._master_restarting.set()
+                self._master_restarting_change(restarting=False)
 
     def _handle_execute_event(self, action, device_nr, extra_parameter):  # type: (int, int, int) -> None
         if action == 0:
@@ -236,6 +243,46 @@ class MasterCoreController(MasterController):
         master_event = MasterEvent(event_type=MasterEvent.Types.SHUTTER_CHANGE, data=event_data)
         self._pubsub.publish_master_event(PubSub.MasterTopics.SHUTTER, master_event)
 
+    def _master_restarting_change(self, restarting):
+        def _timeout_release():
+            logger.warning('Restart holding window expired, releasing')
+            self._master_restarting_change(restarting=False)
+
+        if restarting:
+            logger.warning('Master reset announced, holding further communications')
+            self._master_restarting.clear()
+            if self._master_restarting_timer is not None:
+                self._master_restarting_timer.cancel()
+            self._master_restarting_timer = Timer(MasterCoreController.MASTER_RESTARTING_TIMEOUT,
+                                                  _timeout_release)
+            self._master_restarting_timer.start()
+        else:
+            if not self._master_restarting.is_set():
+                logger.info('Master back online, releasing held communications')
+            self._master_restarting.set()
+            if self._master_restarting_timer is not None:
+                self._master_restarting_timer.cancel()
+
+    def _master_updating_change(self, updating):
+        def _timeout_release():
+            logger.warning('Update holding window expired, releasing')
+            self._master_updating_change(updating=False)
+
+        if updating:
+            logger.warning('Master update announced, blocking further communications')
+            self._master_updating.clear()
+            if self._master_updating_timer is not None:
+                self._master_updating_timer.cancel()
+            self._master_updating_timer = Timer(MasterCoreController.MASTER_UPDATING_TIMEOUT,
+                                                _timeout_release)
+            self._master_updating_timer.start()
+        else:
+            if not self._master_updating.is_set():
+                logger.info('Master update finished, release communications block')
+            self._master_updating.set()
+            if self._master_updating_timer is not None:
+                self._master_updating_timer.cancel()
+
     def _synchronize(self):
         # type: () -> None
         try:
@@ -262,12 +309,24 @@ class MasterCoreController(MasterController):
         # type: (CoreCommandSpec, Dict[str, Any], Union[T_co, int]) -> Union[T_co, Dict[str, Any]]
         if not self._master_restarting.is_set():
             logger.info('Master might be restarting, holding call')
-        if not self._master_restarting.wait(timeout=15):
+        if not self._master_restarting.wait(timeout=MasterCoreController.MASTER_RESTARTING_TIMEOUT):
             logger.warning('Holding window expired')
             raise CommunicationTimedOutException()
+        if not self._master_updating.is_set():
+            raise MasterUnavailable('Update in progress')
         return self._master_communicator.do_command(command=command,
                                                     fields=fields,
                                                     timeout=timeout)
+
+    def _do_basic_action(self, basic_action, timeout=2):
+        # type: (BasicAction, Optional[int]) -> Optional[Dict[str, Any]]
+        logger.info('BA: Executing {0}'.format(basic_action))
+        return self._execute(CoreAPI.basic_action(),
+                             {'type': basic_action.action_type,
+                              'action': basic_action.action,
+                              'device_nr': basic_action.device_nr,
+                              'extra_parameter': basic_action.extra_parameter},
+                             timeout=timeout)
 
     def _set_master_state(self, online):
         if online != self._master_online:
@@ -478,28 +537,28 @@ class MasterCoreController(MasterController):
         if output.is_shutter:
             # Shutter outputs cannot be controlled
             return
-        self._master_communicator.do_basic_action(BasicAction(action_type=0,
-                                                              action=1 if state else 0,
-                                                              device_nr=output_id))
+        self._do_basic_action(BasicAction(action_type=0,
+                                          action=1 if state else 0,
+                                          device_nr=output_id))
         if dimmer is not None:
-            self._master_communicator.do_basic_action(BasicAction(action_type=0,
-                                                                  action=9,
-                                                                  device_nr=output_id,
-                                                                  extra_parameter=int(2.55 * dimmer)))  # Map 0-100 to 0-255
+            self._do_basic_action(BasicAction(action_type=0,
+                                              action=9,
+                                              device_nr=output_id,
+                                              extra_parameter=int(2.55 * dimmer)))  # Map 0-100 to 0-255
         if timer is not None:
-            self._master_communicator.do_basic_action(BasicAction(action_type=0,
-                                                                  action=11,
-                                                                  device_nr=output_id,
-                                                                  extra_parameter=timer))
+            self._do_basic_action(BasicAction(action_type=0,
+                                              action=11,
+                                              device_nr=output_id,
+                                              extra_parameter=timer))
 
     def toggle_output(self, output_id):
         output = OutputConfiguration(output_id)
         if output.is_shutter:
             # Shutter outputs cannot be controlled
             return
-        self._master_communicator.do_basic_action(BasicAction(action_type=0,
-                                                              action=16,
-                                                              device_nr=output_id))
+        self._do_basic_action(BasicAction(action_type=0,
+                                          action=16,
+                                          device_nr=output_id))
 
     def load_output(self, output_id):  # type: (int) -> OutputDTO
         output = OutputConfiguration(output_id)
@@ -545,21 +604,21 @@ class MasterCoreController(MasterController):
     def shutter_up(self, shutter_id, timer=None):
         if timer:
             raise NotImplementedError('Shutter timers are not supported')
-        self._master_communicator.do_basic_action(BasicAction(action_type=10,
-                                                              action=1,
-                                                              device_nr=shutter_id))
+        self._do_basic_action(BasicAction(action_type=10,
+                                          action=1,
+                                          device_nr=shutter_id))
 
     def shutter_down(self, shutter_id, timer=None):
         if timer:
             raise NotImplementedError('Shutter timers are not supported')
-        self._master_communicator.do_basic_action(BasicAction(action_type=10,
-                                                              action=2,
-                                                              device_nr=shutter_id))
+        self._do_basic_action(BasicAction(action_type=10,
+                                          action=2,
+                                          device_nr=shutter_id))
 
     def shutter_stop(self, shutter_id):
-        self._master_communicator.do_basic_action(BasicAction(action_type=10,
-                                                              action=0,
-                                                              device_nr=shutter_id))
+        self._do_basic_action(BasicAction(action_type=10,
+                                          action=0,
+                                          device_nr=shutter_id))
 
     def load_shutter(self, shutter_id):  # type: (int) -> ShutterDTO
         shutter = ShutterConfiguration(shutter_id)
@@ -630,21 +689,21 @@ class MasterCoreController(MasterController):
 
     def shutter_group_up(self, shutter_group_id):  # type: (int) -> None
         device_nr = shutter_group_id + 256
-        self._master_communicator.do_basic_action(BasicAction(action_type=10,
-                                                              action=1,
-                                                              device_nr=device_nr))
+        self._do_basic_action(BasicAction(action_type=10,
+                                          action=1,
+                                          device_nr=device_nr))
 
     def shutter_group_down(self, shutter_group_id):  # type: (int) -> None
         device_nr = shutter_group_id + 256
-        self._master_communicator.do_basic_action(BasicAction(action_type=10,
-                                                              action=2,
-                                                              device_nr=device_nr))
+        self._do_basic_action(BasicAction(action_type=10,
+                                          action=2,
+                                          device_nr=device_nr))
 
     def shutter_group_stop(self, shutter_group_id):  # type: (int) -> None
         device_nr = shutter_group_id + 256
-        self._master_communicator.do_basic_action(BasicAction(action_type=10,
-                                                              action=0,
-                                                              device_nr=device_nr))
+        self._do_basic_action(BasicAction(action_type=10,
+                                          action=0,
+                                          device_nr=device_nr))
 
     def load_shutter_group(self, shutter_group_id):  # type: (int) -> ShutterGroupDTO
         return ShutterGroupDTO(id=shutter_group_id)
@@ -766,16 +825,16 @@ class MasterCoreController(MasterController):
         sensor_configuration = SensorConfiguration(sensor_id)
         if sensor_configuration.module.device_type != 't':
             raise ValueError('Sensor ID {0} does not map to a virtual Sensor'.format(sensor_id))
-        self._master_communicator.do_basic_action(BasicAction(action_type=3,
-                                                              action=sensor_id,
-                                                              device_nr=Temperature.temperature_to_system_value(temperature)))
-        self._master_communicator.do_basic_action(BasicAction(action_type=4,
-                                                              action=sensor_id,
-                                                              device_nr=Humidity.humidity_to_system_value(humidity)))
-        self._master_communicator.do_basic_action(BasicAction(action_type=5,
-                                                              action=sensor_id,
-                                                              device_nr=brightness if brightness is not None else (2 ** 16 - 1),
-                                                              extra_parameter=3))  # Store full word-size brightness value
+        self._do_basic_action(BasicAction(action_type=3,
+                                          action=sensor_id,
+                                          device_nr=Temperature.temperature_to_system_value(temperature)))
+        self._do_basic_action(BasicAction(action_type=4,
+                                          action=sensor_id,
+                                          device_nr=Humidity.humidity_to_system_value(humidity)))
+        self._do_basic_action(BasicAction(action_type=5,
+                                          action=sensor_id,
+                                          device_nr=brightness if brightness is not None else (2 ** 16 - 1),
+                                          extra_parameter=3))  # Store full word-size brightness value
         self._refresh_sensor_states()
 
     # PulseCounters
@@ -801,10 +860,10 @@ class MasterCoreController(MasterController):
     def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
         basic_actions = GroupActionMapper.classic_actions_to_core_actions([action_type, action_number])
         for basic_action in basic_actions:
-            self._master_communicator.do_basic_action(basic_action)
+            self._do_basic_action(basic_action)
 
     def do_group_action(self, group_action_id):  # type: (int) -> None
-        self._master_communicator.do_basic_action(BasicAction(action_type=19, action=0, device_nr=group_action_id))
+        self._do_basic_action(BasicAction(action_type=19, action=0, device_nr=group_action_id))
 
     def load_group_action(self, group_action_id):  # type: (int) -> GroupActionDTO
         return GroupActionMapper.orm_to_dto(GroupActionController.load_group_action(group_action_id))
@@ -821,12 +880,36 @@ class MasterCoreController(MasterController):
 
     # Module management
 
+    def drive_led(self, led, on, mode):  # type: (str, bool, str) -> None
+        led_to_action = {Leds.EXPANSION: 0,
+                         Leds.P1: 6,
+                         Leds.LAN_GREEN: 7,
+                         Leds.LAN_RED: 8,
+                         Leds.CLOUD: 9}
+        if led not in led_to_action:
+            return
+        action = led_to_action[led]
+        blinking_to_parameter = {LedStates.BLINKING_25: 25,
+                                 LedStates.BLINKING_50: 50,
+                                 LedStates.BLINKING_75: 75,
+                                 LedStates.SOLID: 100}
+        if mode not in blinking_to_parameter:
+            return
+        extra_parameter = blinking_to_parameter[mode]
+        state = self._led_drive_states.get(led)
+        if state != (on, mode):
+            self._do_basic_action(BasicAction(action_type=210,
+                                              action=action,
+                                              device_nr=1 if on else 0,
+                                              extra_parameter=extra_parameter))
+            self._led_drive_states[led] = on, mode
+
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
 
-        self._master_communicator.do_basic_action(BasicAction(action_type=200,
-                                                              action=0,
-                                                              extra_parameter=0))
+        self._do_basic_action(BasicAction(action_type=200,
+                                          action=0,
+                                          extra_parameter=0))
 
         if self._discover_mode_timer is not None:
             self._discover_mode_timer.cancel()
@@ -838,9 +921,9 @@ class MasterCoreController(MasterController):
             self._discover_mode_timer.cancel()
             self._discover_mode_timer = None
 
-        self._master_communicator.do_basic_action(BasicAction(action_type=200,
-                                                              action=0,
-                                                              extra_parameter=255))
+        self._do_basic_action(BasicAction(action_type=200,
+                                          action=0,
+                                          extra_parameter=255))
         self._broadcast_module_discovery()
 
     def module_discover_status(self):  # type: () -> bool
@@ -1096,13 +1179,13 @@ class MasterCoreController(MasterController):
         if led_type == IndicateType.OUTPUT:
             output = OutputConfiguration(led_id)
             if output.is_shutter:
-                self._master_communicator.do_basic_action(BasicAction(action_type=10, action=200, device_nr=led_id // 2))
+                self._do_basic_action(BasicAction(action_type=10, action=200, device_nr=led_id // 2))
             else:
-                self._master_communicator.do_basic_action(BasicAction(action_type=0, action=200, device_nr=led_id))
+                self._do_basic_action(BasicAction(action_type=0, action=200, device_nr=led_id))
         elif led_type == IndicateType.INPUT:
-            self._master_communicator.do_basic_action(BasicAction(action_type=1, action=200, device_nr=led_id))
+            self._do_basic_action(BasicAction(action_type=1, action=200, device_nr=led_id))
         elif led_type == IndicateType.SENSOR:
-            self._master_communicator.do_basic_action(BasicAction(action_type=8, action=200, device_nr=led_id))
+            self._do_basic_action(BasicAction(action_type=8, action=200, device_nr=led_id))
         return 'OK'
 
     # Virtual modules
@@ -1147,18 +1230,18 @@ class MasterCoreController(MasterController):
         addresses_and_none.append(None)
         next_address = next(i for i, e in enumerate(addresses_and_none, 256) if i != e)
         new_address = bytearray([ord(module_type)]) + struct.pack('>I', next_address)[-3:]
-        self._master_communicator.do_basic_action(BasicAction(action_type={'output': 201,
-                                                                           'input': 202,
-                                                                           'sensor': 203}[module_type_name],
-                                                              action=number_of_modules,  # 0-based, so no +1 needed here
-                                                              device_nr=struct.unpack('>H', new_address[0:2])[0],
-                                                              extra_parameter=struct.unpack('>H', new_address[2:4])[0]))
-        self._master_communicator.do_basic_action(BasicAction(action_type=200,
-                                                              action=4,
-                                                              device_nr={'output': 0,
-                                                                         'input': 1,
-                                                                         'sensor': 2}[module_type_name],
-                                                              extra_parameter=number_of_modules + 1))
+        self._do_basic_action(BasicAction(action_type={'output': 201,
+                                                       'input': 202,
+                                                       'sensor': 203}[module_type_name],
+                                          action=number_of_modules,  # 0-based, so no +1 needed here
+                                          device_nr=struct.unpack('>H', new_address[0:2])[0],
+                                          extra_parameter=struct.unpack('>H', new_address[2:4])[0]))
+        self._do_basic_action(BasicAction(action_type=200,
+                                          action=4,
+                                          device_nr={'output': 0,
+                                                     'input': 1,
+                                                     'sensor': 2}[module_type_name],
+                                          extra_parameter=number_of_modules + 1))
 
     # Generic
 
@@ -1166,17 +1249,17 @@ class MasterCoreController(MasterController):
         # TODO: Replace by cycle instruction as soon as it's available in the firmware
         try:
             logger.warning('Powering down RS485 bus...')
-            self._master_communicator.do_basic_action(BasicAction(action_type=253,
-                                                                  action=0,
-                                                                  device_nr=0))  # Power off
+            self._do_basic_action(BasicAction(action_type=253,
+                                              action=0,
+                                              device_nr=0))  # Power off
             logger.info('Powering down RS485 bus... Done')
         except Exception as ex:
             logger.critical('Exception when changing bus power: {0}'.format(ex))
         time.sleep(5)
         logger.warning('Powering on RS485 bus...')
-        self._master_communicator.do_basic_action(BasicAction(action_type=253,
-                                                              action=0,
-                                                              device_nr=1))  # Power on
+        self._do_basic_action(BasicAction(action_type=253,
+                                          action=0,
+                                          device_nr=1))  # Power on
         logger.info('Powering on RS485 bus... Done')
 
     def get_status(self):
@@ -1193,7 +1276,7 @@ class MasterCoreController(MasterController):
 
     def reset(self):
         # type: () -> None
-        self._master_communicator.do_basic_action(BasicAction(action_type=254, action=0), timeout=None)
+        self._do_basic_action(BasicAction(action_type=254, action=0), timeout=None)
 
     def cold_reset(self, power_on=True):
         # type: (bool) -> None
@@ -1213,9 +1296,15 @@ class MasterCoreController(MasterController):
 
         self._master_communicator.reset_communication_statistics()
 
-    def update_master(self, hex_filename):
-        # type: (str) -> None
-        CoreUpdater.update(hex_filename=hex_filename)
+    def update_master(self, hex_filename, version):
+        # type: (str, str) -> None
+        try:
+            self._master_updating_change(updating=True)
+            CoreUpdater.update(hex_filename=hex_filename,
+                               version=version,
+                               raise_exception=True)
+        finally:
+            self._master_updating_change(updating=False)
 
     def update_slave_modules(self, module_type, hex_filename, version):
         # type: (str, str, str) -> None
@@ -1286,9 +1375,9 @@ class MasterCoreController(MasterController):
         # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[List[int]]) -> None
         if output_ids is None and action == 'OFF':
             # All lights off
-            self._master_communicator.do_basic_action(BasicAction(action_type=0,
-                                                                  action=255,
-                                                                  device_nr=1))
+            self._do_basic_action(BasicAction(action_type=0,
+                                              action=255,
+                                              device_nr=1))
             return
 
         ba_action = {'ON': 1, 'OFF': 0, 'TOGGLE': 16}[action]
@@ -1306,9 +1395,9 @@ class MasterCoreController(MasterController):
         for i in range(0, len(output_ids), 40):
             chunk_output_ids = output_ids[i:i + 40]
             if len(chunk_output_ids) == 1:
-                self._master_communicator.do_basic_action(BasicAction(action_type=0,
-                                                                      action=ba_action,
-                                                                      device_nr=chunk_output_ids[0]))
+                self._do_basic_action(BasicAction(action_type=0,
+                                                  action=ba_action,
+                                                  device_nr=chunk_output_ids[0]))
             else:
                 self._execute(command=CoreAPI.execute_basic_action_series(len(chunk_output_ids)),
                               fields={'type': 0, 'action': ba_action, 'extra_parameter': 0,

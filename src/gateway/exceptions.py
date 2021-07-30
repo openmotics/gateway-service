@@ -93,3 +93,7 @@ class CommunicationFailure(Exception):
 
 class InMaintenanceModeException(CommunicationFailure):
     pass
+
+
+class MasterUnavailable(CommunicationFailure):
+    pass

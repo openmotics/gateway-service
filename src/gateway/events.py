@@ -121,10 +121,14 @@ class EsafeEvent(BaseEvent):
     * LOCK_CHANGE
       {'id': int,      # Rebus lock id
        'status': str}  # action type: 'open' or 'close'
+
+    * RFID_CHANGE
+      {'uuid': str,      # RFID uuid
+       'action': str}    # action of the rfid change: "SCAN" or "REGISTER"
     """
 
     class Types(object):
         CONFIG_CHANGE = 'CONFIG_CHANGE'
         DELIVERY_CHANGE = 'DELIVERY_DELIVERY'
         LOCK_CHANGE = 'LOCK_CHANGE'
-        RFID_SCAN = 'RFID_SCAN'
+        RFID_CHANGE = 'RFID_CHANGE'

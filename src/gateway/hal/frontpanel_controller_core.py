@@ -21,13 +21,13 @@ import logging
 import time
 from threading import Lock
 
+from gateway.enums import Leds, Buttons, ButtonStates, SerialPorts, LedStates
 from gateway.daemon_thread import DaemonThread
 from gateway.hal.frontpanel_controller import FrontpanelController
 from ioc import INJECTED, Inject
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer
 from master.core.events import Event as MasterCoreEvent
-from master.core.basic_action import BasicAction
 from platform_utils import Platform
 
 if False:  # MYPY
@@ -38,48 +38,39 @@ logger = logging.getLogger(__name__)
 
 
 class FrontpanelCoreController(FrontpanelController):
-    LED_MAPPING_ID_TO_ENUM = {Platform.Type.CORE: {0: {4: FrontpanelController.Leds.STATUS_RED,
-                                                       5: FrontpanelController.Leds.STATUS_GREEN,
-                                                       13: FrontpanelController.Leds.SETUP,
-                                                       14: FrontpanelController.Leds.CLOUD},
-                                                   1: {4: FrontpanelController.Leds.CAN_STATUS_GREEN,
-                                                       5: FrontpanelController.Leds.CAN_STATUS_RED,
-                                                       11: FrontpanelController.Leds.LAN_RED,
-                                                       12: FrontpanelController.Leds.LAN_GREEN,
-                                                       13: FrontpanelController.Leds.P1,
-                                                       15: FrontpanelController.Leds.CAN_COMMUNICATION}},
-                              Platform.Type.CORE_PLUS: {0: {0: FrontpanelController.Leds.INPUTS,
-                                                            1: FrontpanelController.Leds.EXPANSION,
-                                                            2: FrontpanelController.Leds.STATUS_RED,
-                                                            3: FrontpanelController.Leds.STATUS_GREEN,
-                                                            5: FrontpanelController.Leds.LAN_RED,
-                                                            6: FrontpanelController.Leds.CLOUD,
-                                                            7: FrontpanelController.Leds.SETUP,
-                                                            8: FrontpanelController.Leds.LAN_GREEN,
-                                                            9: FrontpanelController.Leds.P1,
-                                                            10: FrontpanelController.Leds.CAN_COMMUNICATION,
-                                                            11: FrontpanelController.Leds.CAN_STATUS_RED,
-                                                            12: FrontpanelController.Leds.CAN_STATUS_GREEN,
-                                                            13: FrontpanelController.Leds.OUTPUTS_DIG_5_7,
-                                                            14: FrontpanelController.Leds.OUTPUTS_ANA_1_4,
-                                                            15: FrontpanelController.Leds.RELAYS_9_16},
-                                                        1: {6: FrontpanelController.Leds.RELAYS_1_8,
-                                                            7: FrontpanelController.Leds.OUTPUTS_DIG_1_4}}}
-    LED_TO_BA = {FrontpanelController.Leds.EXPANSION: 0,
-                 FrontpanelController.Leds.P1: 6,
-                 FrontpanelController.Leds.LAN_GREEN: 7,
-                 FrontpanelController.Leds.LAN_RED: 8,
-                 FrontpanelController.Leds.CLOUD: 9}
-    BLINKING_MAP = {FrontpanelController.LedStates.BLINKING_25: 25,
-                    FrontpanelController.LedStates.BLINKING_50: 50,
-                    FrontpanelController.LedStates.BLINKING_75: 75,
-                    FrontpanelController.LedStates.SOLID: 100}
-    BUTTON_STATE_MAPPING_ID_TO_ENUM = {0: FrontpanelController.ButtonStates.RELEASED,
-                                       1: FrontpanelController.ButtonStates.PRESSED}
-    BUTTON_MAPPING_ID_TO_ENUM = {0: FrontpanelController.Buttons.SETUP,
-                                 1: FrontpanelController.Buttons.ACTION,
-                                 2: FrontpanelController.Buttons.CAN_POWER,
-                                 3: FrontpanelController.Buttons.SELECT}
+    LED_MAPPING_ID_TO_ENUM = {Platform.Type.CORE: {0: {4: Leds.STATUS_RED,
+                                                       5: Leds.STATUS_GREEN,
+                                                       13: Leds.SETUP,
+                                                       14: Leds.CLOUD},
+                                                   1: {4: Leds.CAN_STATUS_GREEN,
+                                                       5: Leds.CAN_STATUS_RED,
+                                                       11: Leds.LAN_RED,
+                                                       12: Leds.LAN_GREEN,
+                                                       13: Leds.P1,
+                                                       15: Leds.CAN_COMMUNICATION}},
+                              Platform.Type.CORE_PLUS: {0: {0: Leds.INPUTS,
+                                                            1: Leds.EXPANSION,
+                                                            2: Leds.STATUS_RED,
+                                                            3: Leds.STATUS_GREEN,
+                                                            5: Leds.LAN_RED,
+                                                            6: Leds.CLOUD,
+                                                            7: Leds.SETUP,
+                                                            8: Leds.LAN_GREEN,
+                                                            9: Leds.P1,
+                                                            10: Leds.CAN_COMMUNICATION,
+                                                            11: Leds.CAN_STATUS_RED,
+                                                            12: Leds.CAN_STATUS_GREEN,
+                                                            13: Leds.OUTPUTS_DIG_5_7,
+                                                            14: Leds.OUTPUTS_ANA_1_4,
+                                                            15: Leds.RELAYS_9_16},
+                                                        1: {6: Leds.RELAYS_1_8,
+                                                            7: Leds.OUTPUTS_DIG_1_4}}}
+    BUTTON_STATE_MAPPING_ID_TO_ENUM = {0: ButtonStates.RELEASED,
+                                       1: ButtonStates.PRESSED}
+    BUTTON_MAPPING_ID_TO_ENUM = {0: Buttons.SETUP,
+                                 1: Buttons.ACTION,
+                                 2: Buttons.CAN_POWER,
+                                 3: Buttons.SELECT}
 
     @Inject
     def __init__(self, master_communicator=INJECTED):  # type: (CoreCommunicator) -> None
@@ -95,7 +86,6 @@ class FrontpanelCoreController(FrontpanelController):
         self._activity = False
         self._cloud = False
         self._vpn = False
-        self._led_drive_states = {}  # type: Dict[str, Tuple[bool, str]]
         self._check_buttons_thread = None
         self._authorized_mode_buttons = [False, False]
         self._authorized_mode_buttons_pressed_since = None  # type: Optional[float]
@@ -136,10 +126,10 @@ class FrontpanelCoreController(FrontpanelController):
                 button = FrontpanelCoreController.BUTTON_MAPPING_ID_TO_ENUM[core_event.data['button']]
                 logger.info('Button {0} was {1}'.format(button, state))
                 # Detect authorized mode
-                if button == FrontpanelController.Buttons.ACTION:
-                    self._authorized_mode_buttons[0] = state == FrontpanelController.ButtonStates.PRESSED
-                elif button == FrontpanelController.Buttons.SETUP:
-                    self._authorized_mode_buttons[1] = state == FrontpanelController.ButtonStates.PRESSED
+                if button == Buttons.ACTION:
+                    self._authorized_mode_buttons[0] = state == ButtonStates.PRESSED
+                elif button == Buttons.SETUP:
+                    self._authorized_mode_buttons[1] = state == ButtonStates.PRESSED
 
     def start(self):
         super(FrontpanelCoreController, self).start()
@@ -192,37 +182,37 @@ class FrontpanelCoreController(FrontpanelController):
 
     def _update_lan_leds(self):
         if not self._carrier or not self._connectivity:
-            self._set_led(led=FrontpanelController.Leds.LAN_GREEN,
-                          on=False,
-                          mode=FrontpanelController.LedStates.SOLID)
-            mode = FrontpanelController.LedStates.SOLID
+            self._master_controller.drive_led(led=Leds.LAN_GREEN,
+                                              on=False,
+                                              mode=LedStates.SOLID)
+            mode = LedStates.SOLID
             if self._carrier:
-                mode = FrontpanelController.LedStates.BLINKING_50
-            self._set_led(led=FrontpanelController.Leds.LAN_RED,
-                          on=True, mode=mode)
+                mode = LedStates.BLINKING_50
+            self._master_controller.drive_led(led=Leds.LAN_RED,
+                                              on=True, mode=mode)
         else:
-            self._set_led(led=FrontpanelController.Leds.LAN_RED,
-                          on=False,
-                          mode=FrontpanelController.LedStates.SOLID)
-            mode = FrontpanelController.LedStates.SOLID
+            self._master_controller.drive_led(led=Leds.LAN_RED,
+                                              on=False,
+                                              mode=LedStates.SOLID)
+            mode = LedStates.SOLID
             if self._activity:
-                mode = FrontpanelController.LedStates.BLINKING_50
-            self._set_led(led=FrontpanelController.Leds.LAN_GREEN,
-                          on=True, mode=mode)
+                mode = LedStates.BLINKING_50
+            self._master_controller.drive_led(led=Leds.LAN_GREEN,
+                                              on=True, mode=mode)
 
     def _report_serial_activity(self, serial_port, activity):
         # type: (str, Optional[bool]) -> None
-        led = {FrontpanelController.SerialPorts.P1: FrontpanelController.Leds.P1,
-               FrontpanelController.SerialPorts.EXPANSION: FrontpanelController.Leds.EXPANSION}.get(serial_port)
+        led = {SerialPorts.P1: Leds.P1,
+               SerialPorts.EXPANSION: Leds.EXPANSION}.get(serial_port)
         if led is None:
             return
-        mode = FrontpanelController.LedStates.SOLID
+        mode = LedStates.SOLID
         on = True
         if activity is None:
             on = False
         elif activity:
-            mode = FrontpanelController.LedStates.BLINKING_50
-        self._set_led(led=led, on=on, mode=mode)
+            mode = LedStates.BLINKING_50
+        self._master_controller.drive_led(led=led, on=on, mode=mode)
 
     def _report_cloud_reachable(self, reachable):
         # type: (bool) -> None
@@ -241,30 +231,15 @@ class FrontpanelCoreController(FrontpanelController):
         # * Solid: Heartbeat and VPN is open
         on = True
         if not self._cloud and not self._vpn:
-            mode = FrontpanelController.LedStates.SOLID
+            mode = LedStates.SOLID
             on = False
         elif self._cloud != self._vpn:
-            mode = FrontpanelController.LedStates.BLINKING_50
+            mode = LedStates.BLINKING_50
         else:
-            mode = FrontpanelController.LedStates.SOLID
-        self._set_led(led=FrontpanelController.Leds.CLOUD,
-                      on=on, mode=mode)
-
-    def _set_led(self, led, on, mode):
-        # type: (str, bool, str) -> None
-        if led not in FrontpanelCoreController.LED_TO_BA:
-            return
-        action = FrontpanelCoreController.LED_TO_BA[led]
-        if mode not in FrontpanelCoreController.BLINKING_MAP:
-            return
-        state = self._led_drive_states.get(led)
-        if state != (on, mode):
-            extra_parameter = FrontpanelCoreController.BLINKING_MAP[mode]
-            self._master_communicator.do_basic_action(BasicAction(action_type=210,
-                                                                  action=action,
-                                                                  device_nr=1 if on else 0,
-                                                                  extra_parameter=extra_parameter))
-            self._led_drive_states[led] = on, mode
+            mode = LedStates.SOLID
+        self._master_controller.drive_led(led=Leds.CLOUD,
+                                          on=on,
+                                          mode=mode)
 
 
 class LedStateTracker(object):
@@ -285,7 +260,7 @@ class LedStateTracker(object):
         if self._mode != mode:
             self._change_pending = True
         self._mode = mode
-        if self._mode == FrontpanelController.LedStates.OFF:
+        if self._mode == LedStates.OFF:
             if self._on:
                 self._change_pending = True
             self._on = False
@@ -293,9 +268,9 @@ class LedStateTracker(object):
     def get_state(self):
         # type: () -> Tuple[bool, str]
         if not self._on:
-            state = FrontpanelController.LedStates.OFF
+            state = LedStates.OFF
         else:
-            state = self._mode if self._mode else FrontpanelController.LedStates.SOLID
+            state = self._mode if self._mode else LedStates.SOLID
         return_data = self._change_pending, state
         self._change_pending = False
         return return_data
