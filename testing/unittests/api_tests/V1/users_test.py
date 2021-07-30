@@ -79,7 +79,8 @@ class ApiUsersTests(unittest.TestCase):
             pin_code='1111',
             apartment=None,
             language='English',
-            accepted_terms=1
+            accepted_terms=1,
+            email='user_1@test.com'
         )
         self.normal_user_2 = UserDTO(
             id=2,
@@ -89,7 +90,8 @@ class ApiUsersTests(unittest.TestCase):
             pin_code='2222',
             apartment=None,
             language='Nederlands',
-            accepted_terms=0
+            accepted_terms=0,
+            email='user_2@test.com'
         )
         self.normal_user_3 = UserDTO(
             id=3,
@@ -471,7 +473,8 @@ class ApiUsersTests(unittest.TestCase):
             'pin_code': '6789',
             'password': 'TEST',
             'accepted_terms': 1,
-            'role': 'USER'
+            'role': 'USER',
+            'email': 'tester@test.com'
         }
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func, \
                 mock.patch.object(self.users_controller, 'generate_new_pin_code', return_value='0123'):
@@ -514,7 +517,8 @@ class ApiUsersTests(unittest.TestCase):
 
     def test_update_user(self):
         user_to_update = {
-            'first_name': 'CHANGED'
+            'first_name': 'CHANGED',
+            'email': 'test@test.com'
         }
         # Change the user so that it will be correctly loaded
         self.normal_user_2.first_name = user_to_update['first_name']
@@ -534,6 +538,8 @@ class ApiUsersTests(unittest.TestCase):
             self.assertNotIn('pin_code', resp_dict)  # Do check that the pin code is not passed to the end user
             user_dto_response.pin_code = self.normal_user_2.pin_code  # Manually set the pin code since this is filtered out in the api
             self.assertEqual(self.normal_user_2, user_dto_response)
+            self.assertEqual('CHANGED', resp_dict['first_name'])
+            self.assertEqual('test@test.com', resp_dict['email'])
 
     def test_update_user_with_apartment(self):
         user_to_update = {
