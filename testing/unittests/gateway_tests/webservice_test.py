@@ -20,6 +20,7 @@ import unittest
 import mock
 
 from bus.om_bus_client import MessageClient
+from gateway.api.serializers import SensorSerializer
 from gateway.dto import DimmerConfigurationDTO, LegacyScheduleDTO, \
     LegacyStartupActionDTO, ModuleDTO, OutputStatusDTO, ScheduleDTO, \
     SensorDTO, SensorSourceDTO, SensorStatusDTO, UserDTO, VentilationDTO, \
@@ -175,15 +176,29 @@ class WebInterfaceTest(unittest.TestCase):
                 'virtual': False,
             }], json.loads(response)['config'])
 
-    def test_set_sensor_configurations(self):
+    def test_set_sensor_configuration(self):
+        config = {'id': 2,
+                  'name': 'foo',
+                  'room': 255,
+                  'offset': 0,
+                  'virtual': False}
+        sensor_dto = SensorSerializer.deserialize(config)
+        expected_response = [SensorSerializer.serialize(sensor_dto, fields=None)]
         with mock.patch.object(self.sensor_controller, 'save_sensors',
-                               return_value=None) as save:
-            config = {'id': 2,
-                      'name': 'foo',
-                      'room': 255,
-                      'offset': 0,
-                      'virtual': False}
-            self.web.set_sensor_configuration(config=config)
+                               return_value=[sensor_dto]) as save:
+            response = self.web.set_sensor_configuration(config=config)
+            self.assertEqual(expected_response, json.loads(response)['config'])
+            save.assert_called()
+
+    def test_set_sensor_configurations(self):
+        config = [{'id': 2, 'name': 'foo', 'room': 255, 'offset': 0, 'virtual': False},
+                  {'id': 3, 'name': 'foo2', 'room': 255, 'offset': 0, 'virtual': False}]
+        sensor_dtos = [SensorSerializer.deserialize(el) for el in config]
+        expected_response = [SensorSerializer.serialize(sensor_dto, fields=None) for sensor_dto in sensor_dtos]
+        with mock.patch.object(self.sensor_controller, 'save_sensors',
+                               return_value=sensor_dtos) as save:
+            response = self.web.set_sensor_configurations(config=config)
+            self.assertEqual(expected_response, json.loads(response)['config'])
             save.assert_called()
 
     def test_sensor_status(self):
