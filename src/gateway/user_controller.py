@@ -172,10 +172,7 @@ class UserController(object):
         # type: (UserDTO) -> None
         """  Remove a user. """
         # remove the token if one is there
-        try:
-            self.authentication_controller.remove_token_for_user(user_dto)
-        except:
-            pass
+        self.authentication_controller.remove_tokens_for_user(user_dto)
 
         # set username to lowercase to compare on username
         username = user_dto.username.lower()

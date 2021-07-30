@@ -28,7 +28,7 @@ import constants
 from ioc import Injectable, Inject, Singleton, INJECTED
 from gateway.dto import UserDTO, RfidDTO
 from gateway.enums import UserEnums
-from gateway.exceptions import ItemDoesNotExistException, GatewayException
+from gateway.exceptions import ItemDoesNotExistException, GatewayException, UnAuthorizedException
 from gateway.mappers.user import UserMapper
 from gateway.models import User, RFID
 from gateway.rfid_controller import RfidController
@@ -45,6 +45,7 @@ class LoginMethod(Enum):
     PIN_CODE = 'pin_code'
     RFID = 'rfid'
     PASSWORD = 'password'
+
 
 
 @Injectable.named('authentication_controller')
@@ -158,8 +159,8 @@ class AuthenticationController(object):
         # type: (Union[str, AuthenticationToken]) -> Optional[AuthenticationToken]
         return self.token_store.check_token(token)
 
-    def remove_token_for_user(self, user_dto):
-        self.token_store.remove_token_for_user(user_dto)
+    def remove_tokens_for_user(self, user_dto):
+        self.token_store.remove_tokens_for_user(user_dto)
 
     def check_api_secret(self, api_secret):
         return self.api_secret == api_secret
@@ -172,10 +173,7 @@ class TokenStore(object):
     def __init__(self, token_timeout=INJECTED):
         # type: (int) -> None
         self.token_timeout = token_timeout
-        self.tokens = {}  # type: Dict[int, AuthenticationToken]  # user_id, authToken
-
-    def has_user_token(self, user_id):
-        return user_id in self.tokens
+        self.tokens = {}  # type: Dict[AuthenticationTokenId, AuthenticationToken]  # user_id, authToken
 
     def remove_token(self, token):
         if isinstance(token, AuthenticationToken):
@@ -185,43 +183,42 @@ class TokenStore(object):
 
     def _remove_token(self, token):
         # type: (AuthenticationToken) -> None
-        user_id = token.user.id
-        if user_id in self.tokens:
-            del self.tokens[user_id]
+        token_id = AuthenticationTokenId.from_auth_token(token)
+        if token_id in self.tokens.keys():
+            del self.tokens[token_id]
         else:
             raise ItemDoesNotExistException('Token does not exist in the token store')
 
     def _remove_token_str(self, token):
         # type: (str) -> None
         found = False
-        for user_id, auth_token in dict(self.tokens).items():
+        for token_id, auth_token in dict(self.tokens).items():
             if auth_token.token == token:
-                del self.tokens[user_id]
+                del self.tokens[token_id]
                 found = True
         if not found:
             raise ItemDoesNotExistException('Token does not exist in the token store')
 
-    def remove_token_for_user(self, user_dto):
+    def remove_tokens_for_user(self, user_dto):
         full_user = self._get_full_user_dto(user_dto)
-        user_id = full_user.id
-        if user_id in self.tokens:
-            logger.info(' -*****- token is being deleted: {}'.format(self.tokens[user_id].to_dict()))
-            del self.tokens[user_id]
+        for token_id in list(self.tokens.keys()):
+            if token_id.user_id == full_user.id:
+                del self.tokens[token_id]
 
     def create_token(self, user_dto, login_method, timeout=None, impersonator=None):
         # type: (UserDTO, LoginMethod, int, Optional[UserDTO]) -> AuthenticationToken
         """ Creates an authentication token, and needs the user code to do so """
+        # Set the default timeout value
+        if timeout is None:
+            timeout = self.token_timeout
+
         full_user = self._get_full_user_dto(user_dto)
-        user_id = full_user.id
+        token_id = AuthenticationTokenId(user_dto, impersonator)
         # if there is already a token, just return the existing token
-        if user_id in self.tokens:
-            return self.tokens[user_id]
-        if timeout is not None:
-            self.tokens[user_id] = AuthenticationToken.generate(full_user, token_timeout=timeout, impersonator=impersonator, login_method=login_method)
-        else:
-            self.tokens[user_id] = AuthenticationToken.generate(full_user, impersonator=impersonator, login_method=login_method)
-        logger.info(' -*****- New token created: {}'.format(self.tokens[user_id].to_dict()))
-        return self.tokens[user_id]
+        if token_id in self.tokens.keys():
+            return self.tokens[token_id]
+        self.tokens[token_id] = AuthenticationToken.generate(user_dto=full_user, token_timeout=timeout, impersonator=impersonator, login_method=login_method)
+        return self.tokens[token_id]
 
     def check_token(self, token):
         # type: (Union[str, AuthenticationToken]) -> Optional[AuthenticationToken]
@@ -231,7 +228,7 @@ class TokenStore(object):
 
     def _check_token_str(self, token_str):
         # type: (str) -> Optional[AuthenticationToken]
-        for user_id, token in dict(self.tokens).items():
+        for token in dict(self.tokens).values():
             if token.token == token_str:
                 if not token.is_expired():
                     return token
@@ -251,7 +248,7 @@ class TokenStore(object):
 class AuthenticationToken(object):
 
     def __init__(self, user, token, expire_timestamp, login_method, impersonator=None):
-        # type: (UserDTO, str, int, LoginMethod, UserDTO) -> None
+        # type: (UserDTO, str, int, LoginMethod, Optional[UserDTO]) -> None
         self.user = user
         self.token = token
         self.expire_timestamp = expire_timestamp
@@ -259,9 +256,11 @@ class AuthenticationToken(object):
         self.impersonator = impersonator
 
     @staticmethod
-    def generate(user_dto, login_method, token_timeout=INJECTED, impersonator=None):
+    def generate(user_dto, login_method, token_timeout, impersonator=None):
         # type: (UserDTO, LoginMethod, int, Optional[UserDTO]) -> AuthenticationToken
         """ Creates an authentication token """
+        if impersonator is not None and impersonator.role != User.UserRoles.SUPER:
+            raise UnAuthorizedException("Cannot create an impersonated token for a non SUPER user")
         # TBD: Use the old style of tokens, or the shorter style that include the user_id
         # user_id = user_dto.id
         # token_postfix = uuid.uuid4().hex[:14]
@@ -297,3 +296,30 @@ class AuthenticationToken(object):
     def __repr__(self):
         return '<Auth Token: {}, username: {}, Expire_timestamp: {}>'.format(self.token, self.user.username, self.expire_timestamp)
 
+
+class AuthenticationTokenId(object):
+    """ Small object that will be used as an id to verify if a token exists in the token store"""
+    def __init__(self, user, impersonator):
+        if user is None or user.id is None:
+            raise ValueError('Need an user id to create an authentication token ID: passed user: {}'.format(user))
+        self.user_id = user.id
+        self.impersonator_id = impersonator.id if impersonator is not None else None
+
+    @staticmethod
+    def from_auth_token(auth_token):
+        # type: (AuthenticationToken) -> AuthenticationTokenId
+        return AuthenticationTokenId(auth_token.user, auth_token.impersonator)
+
+    def __str__(self):
+        return '<Auth_token_id: user_id: {}, impersonator_id: {}'.format(self.user_id, self.impersonator_id)
+
+    def __hash__(self):
+        hash_value = self.user_id
+        if self.impersonator_id is not None:
+            hash_value += self.impersonator_id * 65536
+        return hash_value
+
+    def __eq__(self, other):
+        if not isinstance(other, AuthenticationTokenId):
+            return False
+        return self.user_id == other.user_id and self.impersonator_id == other.impersonator_id
