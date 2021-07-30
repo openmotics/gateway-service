@@ -21,6 +21,7 @@ Tests for the users module.
 from __future__ import absolute_import
 
 import fakesleep
+import mock
 import time
 import unittest
 
@@ -33,6 +34,7 @@ from gateway.exceptions import GatewayException
 from gateway.mappers.user import UserMapper
 from gateway.models import User, RFID
 from gateway.rfid_controller import RfidController
+from gateway.system_config_controller import SystemConfigController
 from gateway.user_controller import UserController
 from ioc import SetTestMode, SetUpTestInjections
 
@@ -59,6 +61,8 @@ class UserControllerTest(unittest.TestCase):
         self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
+        self.sys_conf_controller = mock.Mock(SystemConfigController)
+        SetUpTestInjections(system_config_controller=self.sys_conf_controller)
         SetUpTestInjections(config={'username': 'om', 'password': 'pass'},
                             token_timeout=UserControllerTest.TOKEN_TIMEOUT)
         SetUpTestInjections(token_store=TokenStore())
@@ -94,12 +98,14 @@ class UserControllerTest(unittest.TestCase):
         # setup test credentials
         user_dto = UserDTO(username='fred',
                            role=User.UserRoles.ADMIN,
-                           pin_code='1234')
+                           pin_code='1234',
+                           email='fred@test.com')
         user_dto.set_password("test")
         self.controller.save_user(user_dto)
 
         user_orm = User.select().where(User.username == 'fred').first()
         self.assertIsNotNone(user_orm)
+        self.assertEqual('fred@test.com', user_orm.email)
 
         num_users = self.controller.get_number_of_users()
         self.assertEqual(2, num_users)

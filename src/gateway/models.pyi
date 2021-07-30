@@ -432,6 +432,7 @@ class User(BaseModel):
     apartment: ApartmentForeignKeyField
     is_active: ApartmentForeignKeyField
     accepted_terms: MixedIntegerField
+    email: MixedCharField
 class UserForeignKeyField(User, ForeignKeyField): ...
 
 

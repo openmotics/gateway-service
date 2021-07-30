@@ -615,6 +615,7 @@ class User(BaseModel):
     apartment = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
     is_active = BooleanField(default=True)
     accepted_terms = IntegerField(default=0)
+    email = CharField(null=True, unique=False)
 
 
 class RFID(BaseModel):
