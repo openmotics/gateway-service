@@ -20,11 +20,9 @@ import cherrypy
 import logging
 import ujson as json
 
+from gateway.authentication_controller import AuthenticationToken
 from gateway.exceptions import UnAuthorizedException, WrongInputParametersException
 from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
-
-if False:  # MyPy
-    from gateway.authentication_controller import AuthenticationToken
 
 logger = logging.getLogger(__name__)
 

@@ -146,7 +146,7 @@ class Apartments(RestAPIEndpoint):
             updated_apartments.append(apartment_dto)
         return json.dumps([ApartmentSerializer.serialize(apartment_dto) for apartment_dto in updated_apartments])
 
-    @openmotics_api_v1(auth=True, pass_role=True,
+    @openmotics_api_v1(auth=True, pass_role=False,
                        allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER])
     def delete_apartment(self, apartment_id):
         apartment_dto = ApartmentDTO(id=apartment_id)

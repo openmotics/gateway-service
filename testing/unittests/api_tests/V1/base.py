@@ -60,15 +60,15 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
     def setUp(self):
         super(BaseCherryPyUnitTester, self).setUp()
         SetUpTestInjections(token_timeout=3)
+        self.config = {'cloud_user': 'root', 'cloud_password': 'root'}
+        SetUpTestInjections(config=self.config)
         self.auth_controller = mock.Mock(AuthenticationController)
         SetUpTestInjections(authentication_controller=self.auth_controller)
         self.users_controller = mock.Mock(UserController)
-        self.config = {'cloud_user': 'root', 'cloud_password': 'root'}
         self.token_store = mock.Mock(TokenStore)
         SetUpTestInjections(token_store=self.token_store)
         self.users_controller.authentication_controller = self.auth_controller
-        SetUpTestInjections(user_controller=self.users_controller,
-                            config=self.config)
+        SetUpTestInjections(user_controller=self.users_controller)
 
     def general_request(self, url, method, login_user, login_method, headers, body=None):
         if login_user is not None:

@@ -27,7 +27,7 @@ from gateway.delivery_controller import DeliveryController
 from gateway.esafe_controller import EsafeController
 from gateway.exceptions import WrongInputParametersException
 from gateway.api.serializers import ParcelBoxSerializer
-from gateway.webservice_v1 import ParcelBox
+from gateway.api.V1.parcelbox import ParcelBox
 
 from ioc import SetUpTestInjections
 

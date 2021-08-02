@@ -35,7 +35,7 @@ from gateway.webservice import params_parser
 
 if False:  # MyPy
     from gateway.webservice import WebService
-    from typing import Optional, List, Dict, Any, ClassVar, Callable
+    from typing import Optional, List, Dict, Any, Type, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -296,30 +296,52 @@ class RestAPIEndpoint(object):
 
 
 @Inject
-def expose(cls, web_service_v1=INJECTED):
+def expose(cls, api_endpoint_register=INJECTED):
     """
     Decorator to expose a RestAPIEndpoint subclass
     This will register the api class to the V1 webservice
     """
     if not issubclass(cls, RestAPIEndpoint):
         raise GatewayException('Cannot expose a non "RestAPIEndpoint" subclass')
-    web_service_v1.register_api(cls)
+    api_endpoint_register.register(cls)
     return cls
+
+
+@Injectable.named('api_endpoint_register')
+@Singleton
+class APIEndpointRegister(object):
+    """ A class that will hold all the endpoints. This is to not have to include the complete webservice when registering an api"""
+    def __init__(self):
+        self.endpoints = []
+
+    def register(self, api):
+        # type: (Type[RestAPIEndpoint]) -> None
+        logger.info("Registering a new API: {:<20} @ {}".format(api.__name__, api.API_ENDPOINT))
+        self.endpoints.append(api)
+
+    def __len__(self):
+        return len(self.endpoints)
+
+    def __next__(self):
+        return next(self.endpoints)
+
+    def __iter__(self):
+        return iter(self.endpoints)
+
+    def __getitem__(self, item):
+        if not isinstance(item, int):
+            raise TypeError('Wrong type if item passed: Need a integer')
+        return self.endpoints[item]
 
 
 @Injectable.named('web_service_v1')
 @Singleton
 class WebServiceV1(object):
-    def __init__(self, web_service=INJECTED):
-        # type: (Optional[WebService]) -> None
+    def __init__(self, web_service=INJECTED, api_endpoint_register=INJECTED):
+        # type: (Optional[WebService], APIEndpointRegister) -> None
         logger.debug('Creating V1 webservice')
         self.web_service = web_service
-        self.endpoints = []  # type: List[ClassVar[RestAPIEndpoint]]
-
-    def register_api(self, api):
-        # type: (ClassVar[RestAPIEndpoint]) -> None
-        logger.info('Registering V1 API: {} @ {}'.format(api.__name__, api.API_ENDPOINT))
-        self.endpoints.append(api)
+        self.endpoints = api_endpoint_register
 
     def start(self):
         logger.info('Starting the V1 webservice: {}'.format(self))
@@ -340,6 +362,7 @@ class WebServiceV1(object):
         for endpoint in self.endpoints:
             # creating an instance of the class
             endpoint = endpoint()
+            logger.debug('Mounting api endpoint: {}'.format(endpoint))
             if endpoint.API_ENDPOINT is None:
                 logger.error('Could not add endpoint {}: No "ENDPOINT" variable defined in the endpoint object.'.format(endpoint))
                 continue

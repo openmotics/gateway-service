@@ -39,6 +39,7 @@ if False:  # MYPY
 
 logger = logging.getLogger(__name__)
 
+
 @Injectable.named('user_controller')
 @Singleton
 class UserController(object):

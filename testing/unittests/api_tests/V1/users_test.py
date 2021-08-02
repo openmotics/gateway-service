@@ -23,12 +23,12 @@ import mock
 
 from gateway.apartment_controller import ApartmentController
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken, LoginMethod
-from gateway.api.serializers.user import UserSerializer
 from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.dto import UserDTO, ApartmentDTO
-from gateway.exceptions import *
+from gateway.exceptions import UnAuthorizedException, WrongInputParametersException
 from gateway.user_controller import UserController
-from gateway.webservice_v1 import Users, AuthenticationLevel
+from gateway.webservice_v1 import AuthenticationLevel
+from gateway.api.V1.users import Users
 
 from .base import BaseCherryPyUnitTester
 
