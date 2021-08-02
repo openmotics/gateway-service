@@ -345,6 +345,9 @@ def setup_target_platform(target_platform, message_client_name):
     else:
         Injectable.value(thermostat_controller=ThermostatControllerMaster())
 
+    # V1 api
+    from gateway.api import V1
+
 
 def setup_minimal_vpn_platform(message_client_name):
     # type: (str) -> None

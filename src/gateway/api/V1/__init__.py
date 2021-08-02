@@ -13,5 +13,17 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-api init file
+V1 api init file
+This will parse all the files in this directory (V1) to make sure that all the api's are
+automatically exposed when required
 """
+
+# Add al the API files to the __all__ variable.
+# This will make sure that all the files are parsed when the import * statement is ran
+from os.path import dirname, basename, isfile, join
+import glob
+modules = glob.glob(join(dirname(__file__), "*.py"))
+__all__ = [basename(f)[:-3] for f in modules if isfile(f) and not f.endswith('__init__.py')]
+
+# Now import all the files defined in __all__
+from gateway.api.V1 import *
