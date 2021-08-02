@@ -17,12 +17,9 @@ Tests for the scheduling module.
 """
 from __future__ import absolute_import
 
-import os
-import tempfile
 import time
 import unittest
 
-import xmlrunner
 from mock import Mock
 from peewee import SqliteDatabase
 
@@ -38,30 +35,19 @@ MODELS = [Schedule]
 
 
 class BaseSchedulingTest(unittest.TestCase):
-    RETURN_DATA = {}
-    ORIGINAL_TIME = time.time
-    ORIGINAL_SLEEP = time.sleep
-    _db_filename = None
+    return_data = {}
 
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        cls._db_filename = tempfile.mktemp()
-        cls.test_db = SqliteDatabase(cls._db_filename)
-
-    @classmethod
-    def tearDownClass(cls):
-        if os.path.exists(cls._db_filename):
-            os.remove(cls._db_filename)
+        cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):
         self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
-        SchedulingControllerTest.RETURN_DATA = {}
 
     def tearDown(self):
-        SchedulingControllerTest.RETURN_DATA = {}
         self.test_db.drop_tables(MODELS)
         self.test_db.close()
 
@@ -169,18 +155,19 @@ class SchedulingTest(BaseSchedulingTest):
 
 
 class SchedulingControllerTest(BaseSchedulingTest):
-    @staticmethod
-    def _get_controller():
+    def setUp(self):
+        super(SchedulingControllerTest, self).setUp()
+
         def _do_group_action(group_action_id):
-            SchedulingControllerTest.RETURN_DATA['do_group_action'] = group_action_id
+            self.return_data['do_group_action'] = group_action_id
             return {}
 
         def _do_basic_action(action_type, action_number):
-            SchedulingControllerTest.RETURN_DATA['do_basic_action'] = (action_type, action_number)
+            self.return_data['do_basic_action'] = (action_type, action_number)
             return {}
 
         system_controller = Mock()
-        system_controller.get_timezone = lambda: 'UTC'
+        system_controller.get_timezone.return_value = 'UTC'
 
         group_action_controller = Mock()
         group_action_controller.do_group_action = _do_group_action
@@ -202,99 +189,93 @@ class SchedulingControllerTest(BaseSchedulingTest):
                             frontpanel_controller=Mock(),
                             group_action_controller=group_action_controller,
                             module_controller=Mock(),
+                            energy_module_controller=Mock(),
                             uart_controller=Mock(),
                             master_controller=Mock())
-        controller = SchedulingController()
-        SetUpTestInjections(scheduling_controller=controller)
-        controller.set_webinterface(WebInterface())
-        return controller
+        self.controller = SchedulingController()
+        SetUpTestInjections(scheduling_controller=self.controller)
+        self.controller.set_webinterface(WebInterface())
+        self.controller.start()
+
+    def tearDown(self):
+        super(SchedulingControllerTest, self).tearDown()
+        self.controller.stop()
 
     def test_save_load(self):
-        controller = SchedulingControllerTest._get_controller()
         dto = ScheduleDTO(id=None, name='schedule', start=0, action='GROUP_ACTION', arguments=0)
-        controller.save_schedules([dto])
-        loaded_dto = controller.load_schedule(schedule_id=1)
+        self.controller.save_schedules([dto])
+        loaded_dto = self.controller.load_schedule(schedule_id=1)
         for field in ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']:
             self.assertEqual(getattr(dto, field), getattr(loaded_dto, field))
         self.assertEqual('ACTIVE', loaded_dto.status)
-        controller = SchedulingControllerTest._get_controller()  # Force new controller
-        loaded_dto = controller.load_schedule(schedule_id=1)
+        self.controller._schedules = {}  # Clear cache
+        self.controller.reload_schedules()
+        loaded_dto = self.controller.load_schedule(schedule_id=1)
         for field in ['name', 'start', 'action', 'repeat', 'duration', 'end', 'arguments']:
             self.assertEqual(getattr(dto, field), getattr(loaded_dto, field))
         self.assertEqual('ACTIVE', loaded_dto.status)
 
     def test_base_validation(self):
-        controller = SchedulingControllerTest._get_controller()
         with self.assertRaises(RuntimeError):
             # Must have a name
             schedule = Schedule(name=None)
-            controller._validate(schedule)
+            self.controller._validate(schedule)
         with self.assertRaises(RuntimeError):
             # Unaccepted action
             schedule = Schedule(name='test', start=time.time(), action='FOO')
-            controller._validate(schedule)
+            self.controller._validate(schedule)
         with self.assertRaises(RuntimeError):
             # Duration too short
             schedule = Schedule(name='test', start=time.time(), action='GROUP_ACTION', duration=10)
-            controller._validate(schedule)
+            self.controller._validate(schedule)
         with self.assertRaises(RuntimeError):
             # End when not repeating
             schedule = Schedule(name='test', start=time.time(), action='GROUP_ACTION', end=time.time() + 1)
-            controller._validate(schedule)
+            self.controller._validate(schedule)
         with self.assertRaises(RuntimeError):
             # Invalid repeat string
             schedule = Schedule(name='test', start=time.time(), action='GROUP_ACTION', repeat='foo')
-            controller._validate(schedule)
+            self.controller._validate(schedule)
 
     def test_group_action(self):
-        controller = SchedulingControllerTest._get_controller()
-
-        # New controller is empty
-        self.assertEqual(0, len(controller.load_schedules()))
+        # New self.controller is empty
+        self.assertEqual(0, len(self.controller.load_schedules()))
 
         # Doesn't support duration
         with self.assertRaises(RuntimeError) as ctx:
-            SchedulingControllerTest._add_schedule(controller,
-                                                   name='schedule', start=0, action='GROUP_ACTION', duration=1000)
+            self._add_schedule(name='schedule', start=0, action='GROUP_ACTION', duration=1000)
         self.assertEqual('A schedule of type GROUP_ACTION does not have a duration. It is a one-time trigger',
                          str(ctx.exception))
 
         # Incorrect argument
         with self.assertRaises(RuntimeError) as ctx:
-            SchedulingControllerTest._add_schedule(controller,
-                                                   name='schedule', start=0, action='GROUP_ACTION', arguments='foo')
+            self._add_schedule(name='schedule', start=0, action='GROUP_ACTION', arguments='foo')
         self.assertEqual(
             'The arguments of a GROUP_ACTION schedule must be an integer, representing the Group Action to be executed',
             str(ctx.exception))
 
         # Normal
-        SchedulingControllerTest._add_schedule(controller,
-                                               name='schedule', start=time.time()+0.5, action='GROUP_ACTION', arguments=1)
-        schedules = controller.load_schedules()
+        self._add_schedule(name='schedule', start=time.time() + 0.5, action='GROUP_ACTION', arguments=1)
+        schedules = self.controller.load_schedules()
         self.assertEqual(1, len(schedules))
         schedule = schedules[0]
         self.assertEqual('schedule', schedule.name)
         self.assertEqual('ACTIVE', schedule.status)
 
-        controller.start(0.5)  # Set the interval of the DaemonThread really low
         while schedule.last_executed is None:
             time.sleep(0.1)  # Wait until the schedule has been executed
-        controller.stop()
-        schedule = controller.load_schedules()[0]
+        schedule = self.controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)
         self.assertEqual(schedule.status, 'COMPLETED')
-        self.assertEqual(1, SchedulingControllerTest.RETURN_DATA['do_group_action'])
+        self.assertEqual(1, self.return_data['do_group_action'])
 
     def test_basic_action(self):
-        controller = SchedulingControllerTest._get_controller()
-
-        # New controller is empty
-        self.assertEqual(0, len(controller.load_schedules()))
+        # New self.controller is empty
+        self.assertEqual(0, len(self.controller.load_schedules()))
 
         # Doesn't support duration
         with self.assertRaises(RuntimeError) as ctx:
-            SchedulingControllerTest._add_schedule(controller,
-                                                   name='schedule', start=0, action='BASIC_ACTION', duration=1000)
+            self._add_schedule(name='schedule', start=0, action='BASIC_ACTION', duration=1000)
         self.assertEqual('A schedule of type BASIC_ACTION does not have a duration. It is a one-time trigger',
                          str(ctx.exception))
 
@@ -302,43 +283,36 @@ class SchedulingControllerTest(BaseSchedulingTest):
         invalid_arguments_error = 'The arguments of a BASIC_ACTION schedule must be of type dict with arguments ' \
                                   '`action_type` and `action_number`'
         with self.assertRaises(RuntimeError) as ctx:
-            SchedulingControllerTest._add_schedule(controller,
-                                                   name='schedule', start=0, action='BASIC_ACTION', arguments='foo')
+            self._add_schedule(name='schedule', start=0, action='BASIC_ACTION', arguments='foo')
         self.assertEqual(invalid_arguments_error, str(ctx.exception))
         with self.assertRaises(RuntimeError) as ctx:
-            SchedulingControllerTest._add_schedule(controller,
-                                                   name='schedule', start=0, action='BASIC_ACTION',
-                                                   arguments={'action_type': 1})
+            self._add_schedule(name='schedule', start=0, action='BASIC_ACTION',
+                               arguments={'action_type': 1})
         self.assertEqual(invalid_arguments_error, str(ctx.exception))
 
         # Normal
-        dto = ScheduleDTO(id=None, name='schedule', start=time.time()+0.5, action='BASIC_ACTION',
+        dto = ScheduleDTO(id=None, name='schedule', start=time.time() + 0.5, action='BASIC_ACTION',
                           arguments={'action_type': 1, 'action_number': 2})
-        controller.save_schedules([dto])
-        schedules = controller.load_schedules()
+        self.controller.save_schedules([dto])
+        schedules = self.controller.load_schedules()
         self.assertEqual(1, len(schedules))
         schedule = schedules[0]
         self.assertEqual('schedule', schedule.name)
         self.assertEqual('ACTIVE', schedule.status)
-        controller.start(0.5)  # Set the interval of the DaemonThread really low
         while schedule.last_executed is None:
             time.sleep(0.1)  # Wait until the schedule has been executed
-        controller.stop()
-        schedule = controller.load_schedules()[0]
+        schedule = self.controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)
         self.assertEqual(schedule.status, 'COMPLETED')
-        self.assertEqual((1, 2), SchedulingControllerTest.RETURN_DATA['do_basic_action'])
+        self.assertEqual((1, 2), self.return_data['do_basic_action'])
 
     def test_local_api(self):
-        controller = SchedulingControllerTest._get_controller()
-
-        # New controller is empty
-        self.assertEqual(0, len(controller.load_schedules()))
+        # New self.controller is empty
+        self.assertEqual(0, len(self.controller.load_schedules()))
 
         # Doesn't support duration
         with self.assertRaises(RuntimeError) as ctx:
-            SchedulingControllerTest._add_schedule(controller,
-                                                   name='schedule', start=0, action='LOCAL_API', duration=1000)
+            self._add_schedule(name='schedule', start=0, action='LOCAL_API', duration=1000)
         self.assertEqual('A schedule of type LOCAL_API does not have a duration. It is a one-time trigger',
                          str(ctx.exception))
 
@@ -346,71 +320,60 @@ class SchedulingControllerTest(BaseSchedulingTest):
         invalid_arguments_error = 'The arguments of a LOCAL_API schedule must be of type dict with arguments `name` ' \
                                   'and `parameters`'
         with self.assertRaises(RuntimeError) as ctx:
-            SchedulingControllerTest._add_schedule(controller,
-                                                   name='schedule', start=0, action='LOCAL_API', arguments='foo')
+            self._add_schedule(name='schedule', start=0, action='LOCAL_API', arguments='foo')
         self.assertEqual(invalid_arguments_error, str(ctx.exception))
         with self.assertRaises(RuntimeError) as ctx:
-            SchedulingControllerTest._add_schedule(controller,
-                                                   name='schedule', start=0, action='LOCAL_API', arguments={'name': 1})
+            self._add_schedule(name='schedule', start=0, action='LOCAL_API', arguments={'name': 1})
         self.assertEqual(invalid_arguments_error, str(ctx.exception))
 
         # Not a valid call
         with self.assertRaises(RuntimeError) as ctx:
-            SchedulingControllerTest._add_schedule(controller,
-                                                   name='schedule', start=0, action='LOCAL_API',
-                                                   arguments={'name': 'foo', 'parameters': {}})
+            self._add_schedule(name='schedule', start=0, action='LOCAL_API',
+                               arguments={'name': 'foo', 'parameters': {}})
         self.assertEqual('The arguments of a LOCAL_API schedule must specify a valid and (plugin_)exposed call',
                          str(ctx.exception))
         with self.assertRaises(Exception) as ctx:
-            SchedulingControllerTest._add_schedule(controller,
-                                                   name='schedule', start=0, action='LOCAL_API',
-                                                   arguments={'name': 'do_basic_action',
-                                                              'parameters': {'action_type': 'foo',
-                                                                             'action_number': 4}})
+            self._add_schedule(name='schedule', start=0, action='LOCAL_API',
+                               arguments={'name': 'do_basic_action',
+                                          'parameters': {'action_type': 'foo',
+                                                         'action_number': 4}})
         self.assertIn('could not convert string to float', str(ctx.exception))
 
         # Normal
-        SchedulingControllerTest._add_schedule(controller,
-                                               name='schedule', start=time.time()+0.5, action='LOCAL_API',
-                                               arguments={'name': 'do_basic_action',
-                                                          'parameters': {'action_type': 3,
-                                                                         'action_number': 4}})
-        schedules = controller.load_schedules()
+        self._add_schedule(name='schedule', start=time.time() + 0.5, action='LOCAL_API',
+                           arguments={'name': 'do_basic_action',
+                                      'parameters': {'action_type': 3,
+                                                     'action_number': 4}})
+        schedules = self.controller.load_schedules()
         self.assertEqual(1, len(schedules))
         schedule = schedules[0]
         self.assertEqual('schedule', schedule.name)
         self.assertEqual('ACTIVE', schedule.status)
-        controller.start(0.5)  # Set the interval of the DaemonThread really low
         while schedule.last_executed is None:
             time.sleep(0.1)  # Wait until the schedule has been executed
-        controller.stop()
-        schedule = controller.load_schedules()[0]
+        schedule = self.controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)
         self.assertEqual(schedule.status, 'COMPLETED')
-        self.assertEqual((3, 4), SchedulingControllerTest.RETURN_DATA['do_basic_action'])
+        self.assertEqual((3, 4), self.return_data['do_basic_action'])
 
     def test_two_actions(self):
-        controller = SchedulingControllerTest._get_controller()
-        SchedulingControllerTest._add_schedule(controller,
-                                               name='basic_action', start=0, action='BASIC_ACTION',
-                                               arguments={'action_type': 1, 'action_number': 2})
-        SchedulingControllerTest._add_schedule(controller,
-                                               name='group_action', start=0, action='GROUP_ACTION',
-                                               arguments=1)
-        schedules = controller.load_schedules()
+        self._add_schedule(name='basic_action', start=0, action='BASIC_ACTION',
+                           arguments={'action_type': 1, 'action_number': 2})
+        self._add_schedule(name='group_action', start=0, action='GROUP_ACTION',
+                           arguments=1)
+        schedules = self.controller.load_schedules()
         self.assertEqual(2, len(schedules))
         self.assertEqual(['basic_action', 'group_action'], sorted(s.name for s in schedules))
         for s in schedules:
             if s.name == 'group_action':
-                controller.remove_schedules([s])
-        schedules = controller.load_schedules()
+                self.controller.remove_schedules([s])
+        schedules = self.controller.load_schedules()
         self.assertEqual(1, len(schedules))
         self.assertEqual('basic_action', schedules[0].name)
 
     def test_next_exec(self):  # Fixed scheduling bug, where a GW reboot set the DTO's next_exec to when the
         # Schedule started (in the past), and the schedule never got reloaded
         # Make a scheduleController object
-        controller = SchedulingControllerTest._get_controller()
         scheduledto = ScheduleDTO(id=1,
                                   name='schedule',
                                   start=0,  # Thursday, January 1, 1970 1:03:20 AM
@@ -421,19 +384,12 @@ class SchedulingControllerTest(BaseSchedulingTest):
                                   status='ACTIVE')
         scheduledto.next_execution = 56828400  # 1990
         # Manualy set the next_exec to avoid reloading the schedules
-        controller._schedules[1] = scheduledto, None
+        self.controller._schedules[1] = scheduledto, None
         # Start the thread
-        controller.start()
         time.sleep(0.5)
-        controller.stop()
-        sched = controller.load_schedules()[0]
+        sched = self.controller.load_schedules()[0]
         self.assertTrue(time.time() + 60 > sched.next_execution > time.time())
 
-    @staticmethod
-    def _add_schedule(controller, **kwargs):
+    def _add_schedule(self, **kwargs):
         dto = ScheduleDTO(id=None, **kwargs)
-        controller.save_schedules([dto])
-
-
-if __name__ == "__main__":
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='../gw-unit-reports'))
+        self.controller.save_schedules([dto])
