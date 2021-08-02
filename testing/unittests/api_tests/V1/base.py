@@ -19,7 +19,7 @@ from cherrypy.test import helper
 import mock
 import ujson as json
 
-from gateway.authentication_controller import AuthenticationToken, TokenStore, AuthenticationController
+from gateway.authentication_controller import AuthenticationToken, TokenStore, AuthenticationController, LoginMethod
 from gateway.user_controller import UserController
 
 from ioc import SetTestMode, SetUpTestInjections, TearDownTestInjections
@@ -72,7 +72,7 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
 
     def general_request(self, url, method, login_user, headers, body=None):
         if login_user is not None:
-            token = AuthenticationToken(login_user, token='test-token', expire_timestamp=(int(time.time()) + 3600))
+            token = AuthenticationToken(login_user, token='test-token', expire_timestamp=(int(time.time()) + 3600), login_method=LoginMethod.PASSWORD)
         else:
             token = None
         with mock.patch.object(self.users_controller, 'check_token', return_value=token), \

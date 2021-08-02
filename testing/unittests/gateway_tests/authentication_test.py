@@ -23,8 +23,9 @@ import mock
 import time
 import unittest
 
-from gateway.authentication_controller import AuthenticationController, TokenStore
+from gateway.authentication_controller import AuthenticationController, TokenStore, LoginMethod, AuthenticationToken, UnAuthorizedException
 from gateway.dto.user import UserDTO
+from gateway.models import User
 from gateway.rfid_controller import RfidController
 from ioc import SetTestMode, SetUpTestInjections
 
@@ -66,7 +67,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             accepted_terms=1
         )
         with mock.patch.object(self.token_store, '_get_full_user_dto', return_value=user_dto):
-            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             self.assertEqual(5, token.user.id)
             self.assertEqual('tester', token.user.username)
             self.assertLess(time.time() + AuthenticationControllerTest.TOKEN_TIMEOUT - 2, token.expire_timestamp)
@@ -83,7 +84,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             accepted_terms=1
         )
         with mock.patch.object(self.token_store, '_get_full_user_dto', return_value=user_dto):
-            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result = self.token_store.check_token(token)
             self.assertIsNotNone(result)
             self.assertEqual(token, result)
@@ -104,7 +105,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             accepted_terms=1
         )
         with mock.patch.object(self.token_store, '_get_full_user_dto', return_value=user_dto):
-            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result = self.token_store.check_token(token)
             self.assertIsNotNone(result)
             self.assertEqual(token, result)
@@ -114,7 +115,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             result = self.token_store.check_token(token)
             self.assertIsNone(result)
 
-            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result = self.token_store.check_token(token)
             self.assertIsNotNone(result)
             self.assertEqual(token, result)
@@ -146,7 +147,7 @@ class AuthenticationControllerTest(unittest.TestCase):
 
         with mock.patch.object(self.token_store, '_get_full_user_dto') as full_user_mock:
             full_user_mock.return_value = user_dto_1
-            token = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result = self.token_store.check_token(token)
             self.assertIsNotNone(result)
             self.assertEqual(token, result)
@@ -156,7 +157,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             result = self.token_store.check_token(token)
             self.assertIsNone(result)
 
-            token = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result = self.token_store.check_token(token)
             self.assertIsNotNone(result)
             self.assertEqual(token, result)
@@ -166,7 +167,7 @@ class AuthenticationControllerTest(unittest.TestCase):
             result = self.token_store.check_token(token.token)
             self.assertIsNone(result)
 
-            token = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result = self.token_store.check_token(token)
             self.assertIsNotNone(result)
             self.assertEqual(token, result)
@@ -180,13 +181,13 @@ class AuthenticationControllerTest(unittest.TestCase):
 
             # multiple user
             full_user_mock.return_value = user_dto_1
-            token_1 = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token_1 = self.token_store.create_token(user_dto_1, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result_1 = self.token_store.check_token(token_1)
             self.assertIsNotNone(result_1)
             self.assertEqual(token_1, result_1)
 
             full_user_mock.return_value = user_dto_2
-            token_2 = self.token_store.create_token(user_dto_2, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT)
+            token_2 = self.token_store.create_token(user_dto_2, timeout=AuthenticationControllerTest.TOKEN_TIMEOUT, login_method=LoginMethod.PASSWORD)
             result_2 = self.token_store.check_token(token_2)
             self.assertIsNotNone(result_2)
             self.assertEqual(token_2, result_2)
@@ -204,3 +205,163 @@ class AuthenticationControllerTest(unittest.TestCase):
             result_1 = self.token_store.check_token(token_1.token)
             self.assertIsNotNone(result_1)
             self.assertEqual(token_1, result_1)
+
+
+from peewee import SqliteDatabase
+from gateway.mappers import UserMapper
+from gateway.exceptions import ItemDoesNotExistException
+
+MODELS = [User]
+
+
+class TokenStoreTest(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        SetTestMode()
+        cls.test_db = SqliteDatabase(':memory:')
+
+    def save_user(self, user):
+        _ = self
+        user_orm = UserMapper.dto_to_orm(user)
+        user_orm.save()
+        user.id = user_orm.id
+
+    def setUp(self):
+        self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
+        self.test_db.connect()
+        self.test_db.create_tables(MODELS)
+
+        SetUpTestInjections(token_timeout=3)
+        self.store = TokenStore()
+
+        self.test_super_1 = UserDTO(
+            username='test_super_1',
+            role='SUPER'
+        )
+        self.test_super_1.set_password('test')
+        self.save_user(self.test_super_1)
+
+        self.test_super_2 = UserDTO(
+            username='test_super_2',
+            role='SUPER'
+        )
+        self.test_super_2.set_password('test')
+        self.save_user(self.test_super_2)
+
+        self.test_admin_1 = UserDTO(
+            username='test_admin_1',
+            role='ADMIN'
+        )
+        self.test_admin_1.set_password('test')
+        self.save_user(self.test_admin_1)
+
+        self.test_admin_2 = UserDTO(
+            username='test_admin_2',
+            role='ADMIN'
+        )
+        self.test_admin_2.set_password('test')
+        self.save_user(self.test_admin_2)
+
+        self.test_technician_1 = UserDTO(
+            username='test_technician_1',
+            role='TECHNICIAN'
+        )
+        self.test_technician_1.set_password('test')
+        self.save_user(self.test_technician_1)
+
+        self.test_user_1 = UserDTO(
+            username='test_user_1',
+            role='USER'
+        )
+        self.test_user_1.set_password('test')
+        self.save_user(self.test_user_1)
+        self.test_user_2 = UserDTO(
+            username='test_user_2',
+            role='USER'
+        )
+        self.test_user_2.set_password('test')
+        self.save_user(self.test_user_2)
+
+    def tearDown(self):
+        self.test_db.drop_tables(MODELS)
+        self.test_db.close()
+
+    def assert_token_valid(self, token):
+        # check both string and authentication token verification
+        self.assertEqual(token, self.store.check_token(token))
+        self.assertEqual(token, self.store.check_token(token.token))
+
+    def assert_token_not_valid(self, token):
+        # check both string and authentication token verification
+        self.assertIsNone(self.store.check_token(token))
+        self.assertIsNone(self.store.check_token(token.token))
+
+    def test_create_token(self):
+        token_1 = self.store.create_token(self.test_user_1, login_method=LoginMethod.PASSWORD)
+        self.assert_token_valid(token_1)
+
+        token_2 = self.store.create_token(self.test_user_2, login_method=LoginMethod.PASSWORD)
+        self.assert_token_valid(token_1)
+        self.assert_token_valid(token_2)
+
+        token_3 = self.store.create_token(self.test_admin_1, login_method=LoginMethod.PASSWORD)
+        self.assert_token_valid(token_1)
+        self.assert_token_valid(token_2)
+        self.assert_token_valid(token_3)
+
+        # Impersonate as test user 1 with super 1
+        token_4 = self.store.create_token(self.test_user_1, login_method=LoginMethod.PASSWORD, impersonator=self.test_super_1)
+        self.assert_token_valid(token_4)
+        self.assertNotEqual(token_1.token, token_4.token)
+        self.assertEqual('USER', token_4.user.role)
+
+        # Impersonate as test user 1 with super 2
+        token_5 = self.store.create_token(self.test_user_1, login_method=LoginMethod.PASSWORD, impersonator=self.test_super_2)
+        self.assert_token_valid(token_5)
+        self.assertNotEqual(token_1.token, token_5.token)
+        self.assertEqual('USER', token_5.user.role)
+
+        # Impersonate as test user 1 with Non super
+        with self.assertRaises(UnAuthorizedException):
+            token_5 = self.store.create_token(self.test_user_1, login_method=LoginMethod.PASSWORD, impersonator=self.test_admin_1)
+
+    def test_remove_token(self):
+        token_1 = self.store.create_token(self.test_user_1, login_method=LoginMethod.PASSWORD)
+        token_2 = self.store.create_token(self.test_user_2, login_method=LoginMethod.PASSWORD)
+        token_3 = self.store.create_token(self.test_admin_1, login_method=LoginMethod.PASSWORD)
+        token_4 = self.store.create_token(self.test_user_1, login_method=LoginMethod.PASSWORD, impersonator=self.test_super_1)
+        token_5 = self.store.create_token(self.test_user_1, login_method=LoginMethod.PASSWORD, impersonator=self.test_super_2)
+        token_6 = self.store.create_token(self.test_admin_2, login_method=LoginMethod.PASSWORD)
+
+        self.assert_token_valid(token_1)
+        self.assert_token_valid(token_2)
+        self.assert_token_valid(token_3)
+        self.assert_token_valid(token_4)
+        self.assert_token_valid(token_5)
+        self.assert_token_valid(token_6)
+
+        # Remove single tokens from the token store
+        self.store.remove_token(token_6.token)
+        self.assert_token_not_valid(token_6)
+        self.assert_token_valid(token_3)
+        self.assertEqual(5, len(self.store.tokens))
+
+        self.store.remove_token(token_3.token)
+        self.assert_token_not_valid(token_6)
+        self.assert_token_not_valid(token_3)
+        self.assertEqual(4, len(self.store.tokens))
+
+        # Remove all the tokens for one user, this is usefull when a user is deleted
+        self.store.remove_tokens_for_user(self.test_user_1)
+        self.assert_token_not_valid(token_1)
+        self.assert_token_not_valid(token_4)
+        self.assert_token_not_valid(token_5)
+        self.assertEqual(1, len(self.store.tokens))
+
+        # The only token left
+        self.assert_token_valid(token_2)
+
+        with self.assertRaises(ItemDoesNotExistException):
+            self.store.remove_token('un-existing_token')
+            self.store.remove_token(AuthenticationToken(self.test_user_1, token='un-existing', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD, impersonator=None))

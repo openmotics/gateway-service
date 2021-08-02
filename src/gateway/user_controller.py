@@ -28,6 +28,7 @@ import six
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken
 from gateway.dto.user import UserDTO
 from gateway.enums import UserEnums
+from gateway.exceptions import GatewayException
 from gateway.mappers.user import UserMapper
 from gateway.models import User
 
@@ -105,15 +106,26 @@ class UserController(object):
         for user_dto in users:
             self.save_user(user_dto)
 
-    def load_user(self, user_id):
-        # type: (int) -> Optional[UserDTO]
+    def load_user(self, user_id, clear_password=True):
+        # type: (int, bool) -> Optional[UserDTO]
         """  Returns a UserDTO of the requested user """
         _ = self
         user_orm = User.select().where(User.id == user_id).first()
         if user_orm is None:
             return None
         user_dto = UserMapper.orm_to_dto(user_orm)
-        user_dto.clear_password()
+        if clear_password:
+            user_dto.clear_password()
+        return user_dto
+
+    def load_user_by_username(self, username, clear_password=True):
+        _ = self
+        user_orm = User.select().where(User.username == username).first()
+        if user_orm is None:
+            return None
+        user_dto = UserMapper.orm_to_dto(user_orm)
+        if clear_password:
+            user_dto.clear_password()
         return user_dto
 
     def load_user_by_apartment_id(self, apartment_id):
@@ -139,7 +151,6 @@ class UserController(object):
             user_dto = UserMapper.orm_to_dto(user_orm)
             user_dto.clear_password()
             users.append(user_dto)
-        # self.user_cache = users
         return users
 
     def activate_user(self, user_id):
@@ -161,32 +172,30 @@ class UserController(object):
         # type: (UserDTO) -> None
         """  Remove a user. """
         # remove the token if one is there
-        try:
-            self.authentication_controller.remove_token_for_user(user_dto)
-        except:
-            pass
+        self.authentication_controller.remove_tokens_for_user(user_dto)
 
         # set username to lowercase to compare on username
         username = user_dto.username.lower()
 
         # check if the removed user is not the last admin user of the system
         if UserController.get_number_of_users() <= 1:
-            raise Exception(UserEnums.DeleteErrors.LAST_ACCOUNT)
+            raise GatewayException(UserEnums.DeleteErrors.LAST_ACCOUNT)
 
         User.delete().where(User.username == username).execute()
 
-    def login(self, user_dto, accept_terms=False, timeout=None):
-        # type: (UserDTO, bool, Optional[float]) -> Tuple[bool, Union[str, AuthenticationToken]]
+    def login(self, user_dto, accept_terms=False, timeout=None, impersonate=None):
+        # type: (UserDTO, bool, Optional[float], Optional[str]) -> Tuple[bool, Union[str, AuthenticationToken]]
         """  Login a user given a UserDTO """
-        success, token = self.authentication_controller.login(user_dto, accept_terms, timeout)
+        success, token = self.authentication_controller.login(user_dto, accept_terms, timeout, impersonate=impersonate)
         return success, token
 
     def logout(self, token):
-        # type: (str) -> None
+        # type: (Union[str, AuthenticationToken]) -> None
         """  Removes the token from the controller.  """
         self.authentication_controller.logout(token)
 
     def check_token(self, token):
+        # type: (Union[str, AuthenticationToken]) -> bool
         result = self.authentication_controller.check_token(token)
         return result is not None
 

@@ -468,7 +468,7 @@ class WebInterface(object):
         return serve_file(os.path.join(static_dir, 'index.html'), content_type='text/html')
 
     @openmotics_api(check=types(accept_terms=bool, timeout=int), plugin_exposed=False)
-    def login(self, username, password, accept_terms=None, timeout=None):
+    def login(self, username, password, accept_terms=None, timeout=None, impersonate=None):
         """
         Login to the web service, returns a token if successful, returns HTTP status code 401 otherwise.
 
@@ -480,12 +480,14 @@ class WebInterface(object):
         :type accept_terms: bool | None
         :param timeout: Optional session timeout. 30d >= x >= 1h
         :type timeout: int
+        :param impersonate: Optional user to impersonate
+        :type impersonate: str
         :returns: Authentication token
         :rtype: str
         """
         user_dto = UserDTO(username=username)
         user_dto.set_password(password)
-        success, token_or_error = self._user_controller.login(user_dto, accept_terms, timeout)
+        success, token_or_error = self._user_controller.login(user_dto, accept_terms, timeout, impersonate)
         if success is True and isinstance(token_or_error, AuthenticationToken):  # token_or_error is an actual token
             return {'token': token_or_error.token}
         if token_or_error == UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED:  # Check which error token_or_error contains

@@ -18,13 +18,16 @@ System configuration tests
 from __future__ import absolute_import
 import unittest
 
+import mock
 from peewee import SqliteDatabase
 
+from gateway.authentication_controller import AuthenticationController
 from gateway.dto import SystemDoorbellConfigDTO, SystemRFIDConfigDTO, SystemRFIDSectorBlockConfigDTO, \
     SystemTouchscreenConfigDTO, SystemGlobalConfigDTO, SystemActivateUserConfigDTO
 from gateway.models import Delivery, User, Config
+from gateway.pubsub import PubSub
 from gateway.system_config_controller import SystemConfigController
-from ioc import SetTestMode
+from ioc import SetTestMode, SetUpTestInjections
 
 MODELS = [Config]
 
@@ -47,6 +50,10 @@ class SystemConfigControllerTest(unittest.TestCase):
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
         self.controller = SystemConfigController
+        self.pubsub = mock.Mock(PubSub)
+        SetUpTestInjections(pubsub=self.pubsub)
+        self.auth_controller = mock.Mock(AuthenticationController)
+        SetUpTestInjections(authentication_controller=self.auth_controller)
 
     def tearDown(self):
         self.test_db.drop_tables(MODELS)
