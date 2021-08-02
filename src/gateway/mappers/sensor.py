@@ -53,7 +53,7 @@ class SensorMapper(object):
         if sensor_dto.id:
             query = Sensor.select().where(Sensor.id == sensor_dto.id)
         elif sensor_dto.source and sensor_dto.external_id and sensor_dto.physical_quantity:
-            if sensor_dto.source.is_plugin:
+            if sensor_dto.source and sensor_dto.source.is_plugin:
                 plugin = Plugin.get(name=sensor_dto.source.name)
             query = Sensor.select() \
                 .where(Sensor.source == sensor_dto.source.type) \
@@ -71,7 +71,7 @@ class SensorMapper(object):
                     .where(Sensor.physical_quantity.is_null())
                 sensor = query.first()
         if sensor is None:
-            if plugin is None and sensor_dto.source.is_plugin:
+            if plugin is None and sensor_dto.source and sensor_dto.source.is_plugin:
                 plugin = Plugin.get(name=sensor_dto.source.name)
             if 'room' in sensor_dto.loaded_fields:
                 room = Room.get_or_create(number=sensor_dto.room)
