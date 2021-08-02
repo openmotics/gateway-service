@@ -162,7 +162,7 @@ class SchedulingController(object):
         if not pending_schedules:
             return
         next_start = pending_schedules[0].next_execution
-        schedules_to_execute = [schedule for schedule in pending_schedules if schedule.next_execution < next_start + 60]
+        schedules_to_execute = [schedule_dto for schedule_dto in pending_schedules if schedule_dto.next_execution < next_start + 60]
         if not schedules_to_execute:
             return
         # Let this thread hang until it's time to execute the schedule
@@ -172,7 +172,7 @@ class SchedulingController(object):
             self._event.clear()
             return
         thread = BaseThread(name='schedulingexc',
-                            target=self._execute_schedule, args=(schedules_to_execute, schedule))
+                            target=self._execute_schedule, args=(schedules_to_execute,))
         thread.daemon = True
         thread.start()
 
@@ -188,14 +188,14 @@ class SchedulingController(object):
                                                pytz.timezone(SchedulingController.TIMEZONE)))
         return cron.get_next(ret_type=float)
 
-    def _execute_schedule(self, schedules_to_execute, schedule):
-        # type: (List[ScheduleDTO], Schedule) -> None
+    def _execute_schedule(self, schedules_to_execute):
+        # type: (List[ScheduleDTO]) -> None
         for schedule_dto in schedules_to_execute:
             if schedule_dto.running:
                 continue
             try:
                 schedule_dto.running = True
-                logger.debug('Executing schedule {0} ({1})'.format(schedule_dto.name, schedule_dto.action))
+                logger.info('Executing schedule {0} ({1})'.format(schedule_dto.name, schedule_dto.action))
                 if schedule_dto.arguments is None:
                     raise ValueError('Invalid schedule arguments')
                 # Execute
@@ -213,7 +213,7 @@ class SchedulingController(object):
                 schedule_dto.last_executed = time.time()
                 if schedule_dto.has_ended:
                     schedule_dto.status = 'COMPLETED'
-                    schedule.status = 'COMPLETED'
+                    schedule = ScheduleMapper.dto_to_orm(schedule_dto)
                     schedule.save()
             except CommunicationTimedOutException as ex:
                 logger.error('Got error while executing schedule: {0}'.format(ex))
