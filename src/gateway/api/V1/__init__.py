@@ -26,4 +26,7 @@ modules = glob.glob(join(dirname(__file__), "*.py"))
 __all__ = [basename(f)[:-3] for f in modules if isfile(f) and not f.endswith('__init__.py')]
 
 # Now import all the files defined in __all__
-from gateway.api.V1 import *
+try:
+    from gateway.api.V1 import *
+except Exception:
+    pass

@@ -18,10 +18,7 @@ System configuration API tests
 from __future__ import absolute_import
 
 import cherrypy
-import copy
-# import json
 import ujson as json
-import time
 import unittest
 
 import mock
@@ -31,10 +28,9 @@ from gateway.api.serializers import SystemDoorbellConfigSerializer, SystemRFIDCo
     SystemRFIDSectorBlockConfigSerializer, SystemGlobalConfigSerializer, SystemActivateUserConfigSerializer
 from gateway.dto import SystemDoorbellConfigDTO, SystemRFIDConfigDTO, SystemRFIDSectorBlockConfigDTO, \
     SystemGlobalConfigDTO, SystemActivateUserConfigDTO, UserDTO
-from gateway.exceptions import *
 from gateway.user_controller import UserController
 from gateway.system_config_controller import SystemConfigController
-from gateway.webservice_v1 import SystemConfiguration
+from gateway.api.V1.system_config import SystemConfiguration
 
 from ioc import SetTestMode, SetUpTestInjections
 

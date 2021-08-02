@@ -29,7 +29,7 @@ from gateway.dto import UserDTO
 from gateway.enums import UserEnums
 from gateway.exceptions import *
 from gateway.user_controller import UserController
-from gateway.webservice_v1 import Authentication
+from gateway.api.V1.authentication import Authentication
 
 from ioc import SetTestMode, SetUpTestInjections
 
