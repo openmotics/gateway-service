@@ -26,24 +26,27 @@ from gateway.daemon_thread import BaseThread
 from master.maintenance_communicator import MaintenanceCommunicator
 from ioc import INJECTED, Inject
 
+if False:  # MYPY
+    from typing import Optional
+    from master.core.memory_file import MemoryFile
+    from serial import Serial
+
 logger = logging.getLogger(__name__)
 
 
 class MaintenanceCoreCommunicator(MaintenanceCommunicator):
 
     @Inject
-    def __init__(self, cli_serial=INJECTED):
-        """
-        :param cli_serial: Serial port to communicate with
-        :type cli_serial: serial.Serial
-        """
+    def __init__(self, cli_serial=INJECTED, memory_file=INJECTED):
+        # type: (Serial, MemoryFile) -> None
         self._serial = cli_serial
+        self._memory_file = memory_file
         self._write_lock = Lock()
 
         self._receiver_callback = None
         self._maintenance_active = False
         self._stopped = True
-        self._read_data_thread = None
+        self._read_data_thread = None  # type: Optional[BaseThread]
         self._active = False
 
     def start(self):
@@ -64,13 +67,13 @@ class MaintenanceCoreCommunicator(MaintenanceCommunicator):
     def deactivate(self, join=True):
         _ = join
         self._active = False  # Core has a separate serial port
-        # TODO: Send a bunch of events causing EEPROM cache invalidation and ORM sync
+        self._memory_file.invalidate_cache(reason='maintenance exit')
 
     def set_receiver(self, callback):
         self._receiver_callback = callback
 
     def _read_data(self):
-        data = ''
+        data = bytearray()
         previous_length = 0
         while not self._stopped:
             # Read what's now on the buffer
@@ -83,17 +86,17 @@ class MaintenanceCoreCommunicator(MaintenanceCommunicator):
                 continue
             previous_length = len(data)
 
-            if '\n' not in data:
+            if b'\n' not in data:
                 continue
 
-            message, data = data.split('\n', 1)
+            message, data = data.split(b'\n', 1)
 
-            if 'DS30HexLoader' in message:
+            if b'DS30HexLoader' in message:
                 logger.critical('Detected master boot/reset')
 
             if self._receiver_callback is not None:
                 try:
-                    self._receiver_callback(message.rstrip())
+                    self._receiver_callback(message.decode().rstrip())
                 except Exception:
                     logger.exception('Unexpected exception during maintenance callback')
 
@@ -101,4 +104,4 @@ class MaintenanceCoreCommunicator(MaintenanceCommunicator):
         if message is None:
             return
         with self._write_lock:
-            self._serial.write('{0}\r\n'.format(message.strip()))
+            self._serial.write(bytearray('{0}\r\n'.format(message.strip()).encode()))

@@ -28,10 +28,7 @@ class MasterEvent(object):
     MasterEvent object
 
     Data formats:
-    * EEPROM_CHANGE                   # No payload
-    * MAINTENANCE_EXIT                # No payload
-    * POWER_ADDRESS_EXIT              # No payload
-    * MODULE_DISCOVERY                # No payload
+    * CONFIGURATION_CHANGE            # No payload
     * OUTPUT_STATUS
       {'id': int,                     # Output ID
        'status': bool,                # On/off
@@ -52,10 +49,7 @@ class MasterEvent(object):
     """
 
     class Types(object):
-        EEPROM_CHANGE = 'EEPROM_CHANGE'
-        MAINTENANCE_EXIT = ' MAINTENANCE_EXIT'
-        POWER_ADDRESS_EXIT = ' POWER_ADDRESS_EXIT'
-        MODULE_DISCOVERY = 'MODULE_DISCOVERY'
+        CONFIGURATION_CHANGE = 'CONFIGURATION_CHANGE'
         INPUT_CHANGE = 'INPUT_CHANGE'
         OUTPUT_CHANGE = 'OUTPUT_CHANGE'
         OUTPUT_STATUS = 'OUTPUT_STATUS'

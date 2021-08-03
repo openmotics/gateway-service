@@ -21,7 +21,7 @@ import logging
 import struct
 import time
 from datetime import datetime
-from threading import Timer, Event as ThreadingEvent
+from threading import Timer, Event as ThreadingEvent, Lock
 
 from peewee import DoesNotExist
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
@@ -94,6 +94,8 @@ class MasterCoreController(MasterController):
         self._output_shutter_map = {}  # type: Dict[int, int]
         self._firmware_versions = {}  # type: Dict[str, Optional[str]]
         self._led_drive_states = {}  # type: Dict[str, Tuple[bool, str]]
+        self._discovery_log = []  # type: List[Dict[str, Any]]
+        self._discovery_log_lock = Lock()
 
         self._master_restarting = ThreadingEvent()
         self._master_restarting.set()
@@ -102,7 +104,7 @@ class MasterCoreController(MasterController):
         self._master_updating.set()
         self._master_updating_timer = None  # type: Optional[Timer]
 
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_eeprom_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.CONFIGURATION, self._handle_master_event)
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
@@ -127,9 +129,9 @@ class MasterCoreController(MasterController):
     # Private stuff #
     #################
 
-    def _handle_eeprom_event(self, master_event):
+    def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
-        if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
+        if master_event.type == MasterEvent.Types.CONFIGURATION_CHANGE:
             self._output_shutter_map = {}
             self._shutters_last_updated = 0.0
             self._sensor_last_updated = 0.0
@@ -158,6 +160,7 @@ class MasterCoreController(MasterController):
                                    MasterCoreEvent.Types.LED_ON,
                                    MasterCoreEvent.Types.BUTTON_PRESS]:
             # Interesting for debug purposes, but not for everything
+            print('Got master event: {0}'.format(core_event))
             logger.info('Got master event: {0}'.format(core_event))
         if core_event.type == MasterCoreEvent.Types.OUTPUT:
             output_id = core_event.data['output']
@@ -199,9 +202,15 @@ class MasterCoreController(MasterController):
                                                MasterCoreEvent.SearchType.STOPPED]:
                 # If search is not active or it just stopped, the master was finished starting up
                 self._master_restarting_change(restarting=False)
-        # TODO: Handle MODULE_DISCOVERY:
-        #  * Replace the incorrect get_module_log implementation
-        #  * Execute (partial) EEPROM cache invalidation
+        elif core_event.type == MasterCoreEvent.Types.MODULE_DISCOVERY:
+            # TODO: Add partial EEPROM invalidation to speed things up
+            address_letter = chr(int(core_event.data['address'].split('.')[0]))
+            entry = {'code': core_event.data['discovery_type'],
+                     'module_nr': 0, 'category': '',  # Legacy, not used anymore
+                     'module_type': address_letter,
+                     'address': core_event.data['address']}
+            with self._discovery_log_lock:
+                self._discovery_log.append(entry)
 
     def _handle_execute_event(self, action, device_nr, extra_parameter):  # type: (int, int, int) -> None
         if action == 0:
@@ -927,6 +936,9 @@ class MasterCoreController(MasterController):
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
 
+        with self._discovery_log_lock:
+            self._discovery_log = []
+
         self._do_basic_action(BasicAction(action_type=200,
                                           action=0,
                                           extra_parameter=0))
@@ -951,59 +963,13 @@ class MasterCoreController(MasterController):
 
     def _broadcast_module_discovery(self):
         # type: () -> None
-        master_event = MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={})
-        self._pubsub.publish_master_event(PubSub.MasterTopics.MODULE, master_event)
+        self._memory_file.invalidate_cache(reason='manual discovery')
 
     def get_module_log(self):  # type: () -> List[Dict[str, Any]]
-        # TODO: This is incorrect and uses passthrough EEPROM reads to emulate a more-or-less compatible
-        #  response which should work for the integration tests. It must be replaced by decent events.
-
-        # Log format: {'code': '<NEW|EXISTING|DUPLCATE|UNKNOWN>',
-        #              'module_nr': <module number in its category>,
-        #              'category': '<SHUTTER|INPUT|OUTPUT>',
-        #              'module_type': '<I|O|T|D|i|o|t|d|C>,
-        #              'address': '<module address>'}
-
-        def _default_if_255(value, default):
-            return value if value != 255 else default
-
-        log = []
-        device_type_normalize = {'b': 'I', 'r': 'o', 'R': 'O'}
-
-        global_configuration = GlobalConfiguration(read_through=True)
-        nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
-        for module_id in range(nr_of_input_modules):
-            input_module_info = InputModuleConfiguration(module_id, read_through=True)
-            device_type = input_module_info.device_type
-            module = {'code': 'EXISTING',
-                      'module_nr': module_id,
-                      'category': 'INPUT',
-                      'module_type': device_type_normalize.get(device_type, device_type),
-                      'address': input_module_info.address}
-            log.append(module)
-
-        nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
-        for module_id in range(nr_of_output_modules):
-            output_module_info = OutputModuleConfiguration(module_id, read_through=True)
-            device_type = output_module_info.device_type
-            module = {'code': 'EXISTING',
-                      'module_nr': module_id,
-                      'category': 'OUTPUT',
-                      'module_type': device_type_normalize.get(device_type, device_type),
-                      'address': output_module_info.address}
-            log.append(module)
-
-        nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
-        for module_id in range(nr_of_can_controls):
-            can_control_module_info = CanControlModuleConfiguration(module_id, read_through=True)
-            module = {'code': 'EXISTING',
-                      'module_nr': nr_of_input_modules + module_id,
-                      'category': 'INPUT',
-                      'module_type': 'C',
-                      'address': can_control_module_info.address}
-            log.append(module)
-
-        return log
+        with self._discovery_log_lock:
+            log = self._discovery_log
+            self._discovery_log = []
+            return log
 
     def get_modules(self):
         def _default_if_255(value, default):

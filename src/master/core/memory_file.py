@@ -25,7 +25,6 @@ from threading import Lock, Event as ThreadingEvent
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
-from master.core.basic_action import BasicAction
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.events import Event
@@ -81,6 +80,8 @@ class MemoryFile(object):
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
         )
 
+        self.invalidate_cache(reason='startup')  # Clear caches & send events
+
     def _handle_event(self, data):  # type: (Dict[str, Any]) -> None
         core_event = Event(data)
         if core_event.type == Event.Types.SYSTEM:
@@ -88,7 +89,7 @@ class MemoryFile(object):
                 self._activation_event.set()
         elif core_event.type == Event.Types.SLAVE_SEARCH:
             if core_event.data['type'] in [Event.SearchType.DISABLED, Event.SearchType.STOPPED]:
-                self.invalidate_cache()
+                self.invalidate_cache(reason='automatic discovery')
 
     def _get_write_cache(self):  # type: () -> Tuple[Dict[str, Dict[int, Dict[int, int]]], Lock]
         thread_id = threading.current_thread().ident or 0
@@ -216,14 +217,18 @@ class MemoryFile(object):
                     timeout=MemoryFile.ACTIVATE_TIMEOUT
                 )
                 self._activation_event.wait(timeout=60.0)
+                self._notify_eeprom_changed()
             else:
                 logger.info('MEMORY: No activation requred')
 
-    def invalidate_cache(self):  # type: () -> None
+    def invalidate_cache(self, reason):  # type: (str) -> None
         for page in range(MemoryFile.SIZES[MemoryTypes.EEPROM][0]):
             self._eeprom_cache.pop(page, None)
         for page in range(MemoryFile.SIZES[MemoryTypes.FRAM][0]):
             self._fram_cache.pop(page, None)
-        logger.info('MEMORY: Cache cleared')
-        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
-        self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
+        logger.info('MEMORY: Cache cleared ({0})'.format(reason))
+        self._notify_eeprom_changed()
+
+    def _notify_eeprom_changed(self):
+        master_event = MasterEvent(MasterEvent.Types.CONFIGURATION_CHANGE, {})
+        self._pubsub.publish_master_event(PubSub.MasterTopics.CONFIGURATION, master_event)

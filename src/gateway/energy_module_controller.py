@@ -24,7 +24,6 @@ from gateway.base_controller import BaseController
 from gateway.daemon_thread import DaemonThread
 from gateway.enums import HardwareType, ModuleType
 from gateway.events import GatewayEvent
-from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from gateway.dto import RealtimeEnergyDTO, ModuleDTO, TotalEnergyDTO, EnergyModuleDTO
 from gateway.enums import EnergyEnums
@@ -66,13 +65,12 @@ class EnergyModuleController(BaseController):
 
         self._time_cache = {}  # type: Dict[int, List[int]]
 
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.POWER, self._handle_energy_event)
+        self._energy_communicator.subscribe_discovery_stopped(self._discovery_stopped)
 
-    def _handle_energy_event(self, master_event):
-        # type: (MasterEvent) -> None
-        if master_event.type == MasterEvent.Types.POWER_ADDRESS_EXIT:
-            gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'powermodule'})  # TODO: Should be called energymodule
-            self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
+    def _discovery_stopped(self):
+        # type: () -> None
+        gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'powermodule'})  # TODO: Should be called energymodule
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
 
     def start(self):
         # type: () -> None

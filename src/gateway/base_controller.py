@@ -56,16 +56,14 @@ class BaseController(object):
         self._pubsub = pubsub
         self._sync_orm_thread = None  # type: Optional[DaemonThread]
         self._sync_orm_interval = sync_interval
-        self._sync_dirty = True  # Always sync after restart.
+        self._sync_dirty = False  # As soon as a sync is needed, events will be send
         self._sync_running = False
 
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MODULE, self._handle_master_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.CONFIGURATION, self._handle_master_event)
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
-        if master_event.type in [MasterEvent.Types.EEPROM_CHANGE,
-                                 MasterEvent.Types.MODULE_DISCOVERY]:
+        if master_event.type in [MasterEvent.Types.CONFIGURATION_CHANGE]:
             self._sync_dirty = True
             self.request_sync_orm()
 

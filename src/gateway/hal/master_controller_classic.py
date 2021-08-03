@@ -113,8 +113,7 @@ class MasterClassicController(MasterController):
         self._discover_mode_timer = None  # type: Optional[Timer]
         self._module_log = []  # type: List[Dict[str, Any]]
 
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_eeprom_event)
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MAINTENANCE, self._handle_maintenance_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.CONFIGURATION, self._handle_configuration_event)
 
         self._background_consumers_registered = False
         self._master_communicator.register_consumer(
@@ -296,14 +295,9 @@ class MasterClassicController(MasterController):
                                                  timeout=5)
         self.set_status_leds(True)
 
-    def _handle_maintenance_event(self, master_event):
+    def _handle_configuration_event(self, master_event):
         # type: (MasterEvent) -> None
-        if master_event.type == MasterEvent.Types.MAINTENANCE_EXIT:
-            self._eeprom_controller.invalidate_cache()
-
-    def _handle_eeprom_event(self, master_event):
-        # type: (MasterEvent) -> None
-        if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
+        if master_event.type == MasterEvent.Types.CONFIGURATION_CHANGE:
             self._invalidate_caches()
 
     def _on_master_event(self, event_data):  # type: (Dict[str, Any]) -> None
@@ -1461,8 +1455,6 @@ class MasterClassicController(MasterController):
     def _broadcast_module_discovery(self):
         # type: () -> None
         self._eeprom_controller.invalidate_cache()
-        master_event = MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={})
-        self._pubsub.publish_master_event(PubSub.MasterTopics.MODULE, master_event)
 
     # Error functions
 
