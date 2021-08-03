@@ -17,14 +17,16 @@ Tests for the scheduling module.
 """
 from __future__ import absolute_import
 
+import logging
 import time
 import unittest
+from datetime import datetime, timedelta
 
 from mock import Mock
 from peewee import SqliteDatabase
 
-import fakesleep
 from gateway.dto import ScheduleDTO
+from gateway.group_action_controller import GroupActionController
 from gateway.models import Schedule
 from gateway.scheduling_controller import SchedulingController
 from gateway.ventilation_controller import VentilationController
@@ -34,9 +36,7 @@ from ioc import SetTestMode, SetUpTestInjections
 MODELS = [Schedule]
 
 
-class BaseSchedulingTest(unittest.TestCase):
-    return_data = {}
-
+class SchedulingControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
@@ -47,131 +47,12 @@ class BaseSchedulingTest(unittest.TestCase):
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
 
-    def tearDown(self):
-        self.test_db.drop_tables(MODELS)
-        self.test_db.close()
-
-
-class SchedulingTest(BaseSchedulingTest):
-    @classmethod
-    def setUpClass(cls):
-        super(SchedulingTest, cls).setUpClass()
-        fakesleep.monkey_patch()
-
-    @classmethod
-    def tearDownClass(cls):
-        super(SchedulingTest, cls).tearDownClass()
-        fakesleep.monkey_restore()
-
-    def test_one_minute_schedule(self):
-        now_offset = 1577836800  # 2020
-        minute = 60
-        fakesleep.reset(seconds=now_offset)
-        SchedulingController.TIMEZONE = 'Europe/Brussels'
-        schedule = ScheduleDTO(id=1,
-                               name='schedule',
-                               start=0 * minute,
-                               repeat='* * * * *',
-                               duration=None,
-                               end=now_offset + 60 * minute,
-                               action='GROUP_ACTION',
-                               arguments=1,
-                               status='ACTIVE')
-        schedule.next_execution = SchedulingController._get_next_execution(schedule)
-        self.assertFalse(schedule.is_due)
-        schedule.next_execution = SchedulingController._get_next_execution(schedule)
-        self.assertEqual(now_offset + 1 * minute, schedule.next_execution)
-        time.sleep(1 * minute)
-        self.assertTrue(schedule.is_due)
-        schedule.next_execution = SchedulingController._get_next_execution(schedule)
-        self.assertEqual(now_offset + 2 * minute, schedule.next_execution)
-        time.sleep(1 * minute)
-        self.assertTrue(schedule.is_due)
-        schedule.next_execution = SchedulingController._get_next_execution(schedule)
-        self.assertEqual(now_offset + 3 * minute, schedule.next_execution)
-
-    def test_midnight_crossover(self):
-        now_offset = 1615939080  # 16/03/21 23:58
-        minute = 60
-        fakesleep.reset(seconds=now_offset)  # Tricks the system to be in the time we specified
-        SchedulingController.TIMEZONE = 'Europe/Brussels'
-        schedule = ScheduleDTO(id=1,
-                               name='schedule',
-                               start=0 * minute,
-                               repeat='* * * * *',
-                               duration=None,
-                               end=now_offset + 10 * minute,
-                               action='GROUP_ACTION',
-                               arguments=1,
-                               status='ACTIVE')
-        schedule.next_execution = SchedulingController._get_next_execution(schedule)
-        self.assertFalse(schedule.is_due)
-        schedule.next_execution = SchedulingController._get_next_execution(schedule)
-        self.assertEqual(now_offset + 1 * minute, schedule.next_execution)
-        time.sleep(1 * minute)
-        self.assertTrue(schedule.is_due)
-        schedule.next_execution = SchedulingController._get_next_execution(schedule)
-        self.assertEqual(now_offset + 2 * minute, schedule.next_execution)
-        time.sleep(1 * minute)
-        self.assertTrue(schedule.is_due)
-        schedule.next_execution = SchedulingController._get_next_execution(schedule)
-        self.assertEqual(now_offset + 3 * minute, schedule.next_execution)
-
-    # test edge cases -> sunday evening until monday morning AND end of month till new month
-    def test_edge_cases_cron(self):
-        now_offset = 1616371020  # Date and time: Sunday, March 21, 2021 11:57:00 PM GMT
-        minute = 60
-        SchedulingController.TIMEZONE = 'Europe/Brussels'
-        fakesleep.reset(seconds=now_offset)
-        SchedulingController.TIMEZONE = 'Europe/Brussels'
-        schedule = ScheduleDTO(id=1,
-                               name='schedule',
-                               start=200,  # Thursday, January 1, 1970 1:03:20 AM
-                               repeat='* * * * *',  # every minute
-                               duration=None,
-                               end=now_offset + 10 * minute,  # for 10 minuted
-                               action='GROUP_ACTION',
-                               arguments=1,
-                               status='ACTIVE')
-        # Should be 1616371020 + 60 = 1616371080
-        schedule.next_execution = SchedulingController._get_next_execution(schedule)
-        self.assertFalse(schedule.is_due)
-        # Should still be 1616371020 + 60 = 1616371080
-        for i in range(1, 11):
-            schedule.next_execution = SchedulingController._get_next_execution(schedule)
-            self.assertEqual(now_offset + i * minute, schedule.next_execution)
-            time.sleep(minute)
-            self.assertTrue(schedule.is_due)
-
-        # now testing end of month behaviour
-        now_offset = 1617235020  # 2021-03-31 23:57:00
-        fakesleep.reset(seconds=now_offset)
-        schedule.end = now_offset + 10 * minute  # Update when the schedule should end
-        for i in range(1, 11):
-            schedule.next_execution = SchedulingController._get_next_execution(schedule)
-            self.assertEqual(now_offset + i * minute, schedule.next_execution)
-            time.sleep(minute)
-            self.assertTrue(schedule.is_due)
-
-
-class SchedulingControllerTest(BaseSchedulingTest):
-    def setUp(self):
-        super(SchedulingControllerTest, self).setUp()
-
-        def _do_group_action(group_action_id):
-            self.return_data['do_group_action'] = group_action_id
-            return {}
-
-        def _do_basic_action(action_type, action_number):
-            self.return_data['do_basic_action'] = (action_type, action_number)
-            return {}
-
         system_controller = Mock()
         system_controller.get_timezone.return_value = 'UTC'
 
-        group_action_controller = Mock()
-        group_action_controller.do_group_action = _do_group_action
-        group_action_controller.do_basic_action = _do_basic_action
+        self.group_action_controller = Mock(GroupActionController)
+        self.group_action_controller.do_group_action.return_value = {}
+        self.group_action_controller.do_basic_action.return_value = {}
 
         SetUpTestInjections(system_controller=system_controller,
                             user_controller=None,
@@ -187,7 +68,7 @@ class SchedulingControllerTest(BaseSchedulingTest):
                             sensor_controller=Mock(),
                             pulse_counter_controller=Mock(),
                             frontpanel_controller=Mock(),
-                            group_action_controller=group_action_controller,
+                            group_action_controller=self.group_action_controller,
                             module_controller=Mock(),
                             energy_module_controller=Mock(),
                             uart_controller=Mock(),
@@ -198,7 +79,8 @@ class SchedulingControllerTest(BaseSchedulingTest):
         self.controller.start()
 
     def tearDown(self):
-        super(SchedulingControllerTest, self).tearDown()
+        self.test_db.drop_tables(MODELS)
+        self.test_db.close()
         self.controller.stop()
 
     def test_save_load(self):
@@ -267,7 +149,7 @@ class SchedulingControllerTest(BaseSchedulingTest):
         schedule = self.controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)
         self.assertEqual(schedule.status, 'COMPLETED')
-        self.assertEqual(1, self.return_data['do_group_action'])
+        self.group_action_controller.do_group_action.assert_called_with(1)
 
     def test_basic_action(self):
         # New self.controller is empty
@@ -299,12 +181,14 @@ class SchedulingControllerTest(BaseSchedulingTest):
         schedule = schedules[0]
         self.assertEqual('schedule', schedule.name)
         self.assertEqual('ACTIVE', schedule.status)
-        while schedule.last_executed is None:
+        for _ in range(60):
+            if schedule.last_executed:
+                break
             time.sleep(0.1)  # Wait until the schedule has been executed
         schedule = self.controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)
         self.assertEqual(schedule.status, 'COMPLETED')
-        self.assertEqual((1, 2), self.return_data['do_basic_action'])
+        self.group_action_controller.do_basic_action.assert_called_with(action_number=2, action_type=1)
 
     def test_local_api(self):
         # New self.controller is empty
@@ -354,7 +238,7 @@ class SchedulingControllerTest(BaseSchedulingTest):
         schedule = self.controller.load_schedules()[0]
         self.assertIsNotNone(schedule.last_executed)
         self.assertEqual(schedule.status, 'COMPLETED')
-        self.assertEqual((3, 4), self.return_data['do_basic_action'])
+        self.group_action_controller.do_basic_action.assert_called_with(3, 4)
 
     def test_two_actions(self):
         self._add_schedule(name='basic_action', start=0, action='BASIC_ACTION',
@@ -371,24 +255,43 @@ class SchedulingControllerTest(BaseSchedulingTest):
         self.assertEqual(1, len(schedules))
         self.assertEqual('basic_action', schedules[0].name)
 
-    def test_next_exec(self):  # Fixed scheduling bug, where a GW reboot set the DTO's next_exec to when the
-        # Schedule started (in the past), and the schedule never got reloaded
-        # Make a scheduleController object
-        scheduledto = ScheduleDTO(id=1,
-                                  name='schedule',
-                                  start=0,  # Thursday, January 1, 1970 1:03:20 AM
-                                  repeat='* * * * *',  # every minute
-                                  duration=None,
-                                  action='GROUP_ACTION',
-                                  arguments=1,
-                                  status='ACTIVE')
-        scheduledto.next_execution = 56828400  # 1990
-        # Manualy set the next_exec to avoid reloading the schedules
-        self.controller._schedules[1] = scheduledto, None
-        # Start the thread
+    def test_execute_grace_time(self):
+        self._add_schedule(name='schedule',
+                           start=time.time() - 3000,  # 50m
+                           action='GROUP_ACTION',
+                           arguments=1,
+                           status='ACTIVE')
+        self.controller.refresh_schedules()
         time.sleep(0.5)
-        sched = self.controller.load_schedules()[0]
-        self.assertTrue(time.time() + 60 > sched.next_execution > time.time())
+        schedule = self.controller.load_schedules()[0]
+        self.assertEqual(schedule.status, 'COMPLETED')
+        self.assertTrue(time.time() - 10 < schedule.last_executed < time.time() + 10)
+
+    def test_skip_grace_time(self):
+        self._add_schedule(name='schedule',
+                           start=time.time() - 86400,  # yesterday
+                           action='GROUP_ACTION',
+                           arguments=1,
+                           status='ACTIVE')
+        self.controller.refresh_schedules()
+        time.sleep(0.5)
+        schedule = self.controller.load_schedules()[0]
+        self.assertEqual(schedule.status, 'ACTIVE')
+        self.assertIsNone(schedule.last_executed)
+
+    def test_expire_repeat_end(self):
+        self._add_schedule(name='schedule',
+                           start=time.time() - 86400,  # yesterday
+                           end=time.time() - 14400,  # 4h
+                           repeat='* * * * *',
+                           action='GROUP_ACTION',
+                           arguments=1,
+                           status='ACTIVE')
+        self.controller.refresh_schedules()
+        time.sleep(0.5)
+        schedule = self.controller.load_schedules()[0]
+        self.assertEqual(schedule.status, 'COMPLETED')
+        self.assertIsNone(schedule.last_executed)
 
     def _add_schedule(self, **kwargs):
         dto = ScheduleDTO(id=None, **kwargs)
