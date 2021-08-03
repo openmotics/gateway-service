@@ -34,6 +34,7 @@ from ioc import SetTestMode, SetUpTestInjections
 
 MODELS = [Apartment]
 
+
 class ApartmentControllerTest(unittest.TestCase):
     """ Tests for ApartmentController. """
 

@@ -69,9 +69,9 @@ class ThermostatControllerMasterTest(unittest.TestCase):
             assert GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE, event_data) in events
 
     def test_eeprom_events(self):
-        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        master_event = MasterEvent(MasterEvent.Types.CONFIGURATION_CHANGE, {})
         with mock.patch.object(self.controller, 'invalidate_cache') as handle_event:
-            self.pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
+            self.pubsub.publish_master_event(PubSub.MasterTopics.CONFIGURATION, master_event)
             self.pubsub._publish_all_events(blocking=False)
             handle_event.assert_called()
 

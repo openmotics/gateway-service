@@ -41,7 +41,6 @@ class InputControllerTest(unittest.TestCase):
         cls.test_db = SqliteDatabase(':memory:')
         fakesleep.monkey_patch()
 
-
     @classmethod
     def tearDownClass(cls):
         super(InputControllerTest, cls).tearDownClass()
@@ -73,6 +72,7 @@ class InputControllerTest(unittest.TestCase):
 
         input_dto = InputDTO(id=42)
         with mock.patch.object(self.master_controller, 'load_inputs', return_value=[input_dto]):
+            self.controller._sync_dirty = True  # Is usually set by e.g. a MasterEvent indicating sync is needed
             self.controller.run_sync_orm()
             self.pubsub._publish_all_events(blocking=False)
             assert Input.select().where(Input.number == input_dto.id).count() == 1

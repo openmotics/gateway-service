@@ -147,13 +147,6 @@ class EnergyCommunicatorTest(unittest.TestCase):
     @mark.slow
     def test_address_mode(self):
         """ Test the address mode. """
-        events = []
-
-        def handle_events(master_event):
-            events.append(master_event)
-
-        self.pubsub.subscribe_master_events(PubSub.MasterTopics.POWER, handle_events)
-
         sad = EnergyAPI.set_addressmode(EnergyEnums.Version.POWER_MODULE)
         sad_p1c = EnergyAPI.set_addressmode(EnergyEnums.Version.P1_CONCENTRATOR)
 
@@ -176,15 +169,10 @@ class EnergyCommunicatorTest(unittest.TestCase):
                                                       Module.hardware_type == HardwareType.PHYSICAL)))
 
         self.communicator.start_address_mode()
-        self.assertTrue(self.communicator.in_address_mode())
-        self.pubsub._publish_all_events(blocking=False)
         time.sleep(0.5)
-        assert [] == events
-
+        self.assertTrue(self.communicator.in_address_mode())
         self.communicator.stop_address_mode()
-        self.pubsub._publish_all_events(blocking=False)
-        assert MasterEvent(MasterEvent.Types.POWER_ADDRESS_EXIT, {}) in events
-        assert len(events) == 1
+        time.sleep(0.5)
 
         modules = Module.select().where(Module.source == ModuleDTO.Source.GATEWAY,
                                         Module.hardware_type == HardwareType.PHYSICAL)

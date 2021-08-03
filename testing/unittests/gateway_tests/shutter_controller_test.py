@@ -580,6 +580,7 @@ class ShutterControllerTest(unittest.TestCase):
                            ShutterDTO(id=1, name='bar'),
                            ShutterDTO(id=2, name='baz')]
         with mock.patch.object(master_controller, 'load_shutters', return_value=master_shutters):
+            controller._sync_dirty = True  # Is usually set by e.g. a MasterEvent indicating sync is needed
             controller._sync_orm()
             self.pubsub._publish_all_events(blocking=False)
 

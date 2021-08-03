@@ -75,9 +75,9 @@ class MasterCoreControllerTest(unittest.TestCase):
         self.controller._output_states = {0: OutputStatusDTO(id=0, status=False),
                                           10: OutputStatusDTO(id=10, status=False),
                                           11: OutputStatusDTO(id=11, status=False)}
+        self.pubsub._publish_all_events(blocking=False)
         self.controller._output_shutter_map = {10: 1, 11: 1}
         self.controller._shutter_status = {1: (False, False)}
-        self.pubsub._publish_all_events(blocking=False)
 
         with mock.patch.object(gateway.hal.master_controller_core, 'ShutterConfiguration',
                                side_effect=get_core_shutter_dummy):
@@ -251,9 +251,9 @@ class MasterCoreControllerTest(unittest.TestCase):
                           'shutters': []}, self.controller.get_modules())
 
     def test_master_eeprom_event(self):
-        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        master_event = MasterEvent(MasterEvent.Types.CONFIGURATION_CHANGE, {})
         self.controller._output_last_updated = 1603178386.0
-        self.pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
+        self.pubsub.publish_master_event(PubSub.MasterTopics.CONFIGURATION, master_event)
         self.pubsub._publish_all_events(blocking=False)
         assert self.controller._output_last_updated == 0
 
