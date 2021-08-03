@@ -28,7 +28,7 @@ from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.dto import UserDTO, ApartmentDTO
 from gateway.exceptions import *
 from gateway.user_controller import UserController
-from gateway.webservice_v1 import Users
+from gateway.webservice_v1 import Users, AuthenticationLevel
 
 from .base import BaseCherryPyUnitTester
 
@@ -500,6 +500,7 @@ class ApiUsersTests(unittest.TestCase):
             response = self.web.put_update_user('2',
                                                 auth_token=auth_token,
                                                 auth_role=auth_token.user.role,
+                                                auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
             resp_dict = json.loads(response)
@@ -537,6 +538,7 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_update_user(user_id=5,
                                                 auth_token=auth_token,
+                                                auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
             # manually fill in the apartment field since it will be converted back to full output
@@ -558,6 +560,7 @@ class ApiUsersTests(unittest.TestCase):
             response = self.web.put_update_user('2',
                                                 auth_token=auth_token,
                                                 auth_role=auth_token.user.role,
+                                                auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
             self.assertTrue(UnAuthorizedException.bytes_message() in response)

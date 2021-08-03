@@ -452,8 +452,8 @@ class Users(RestAPIEndpoint):
         self.user_controller.activate_user(user_id)
         return 'OK'
 
-    @openmotics_api_v1(auth=True, pass_role=False, pass_token=True, expect_body_type='JSON')
-    def put_update_user(self, user_id, auth_token=None, request_body=None, **kwargs):
+    @openmotics_api_v1(auth=True, pass_role=False, pass_token=True, pass_security_level=True, expect_body_type='JSON')
+    def put_update_user(self, user_id, auth_token, auth_security_level, request_body=None, **kwargs):
         user_json = request_body
         if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             if auth_token.user.id != user_id:
@@ -461,11 +461,8 @@ class Users(RestAPIEndpoint):
 
         # check if the pin code or rfid tag is changed
         if 'pin_code' in user_json or 'rfid' in user_json:
-            api_secret = kwargs.get('X-API-Secret')
-            if api_secret is None:
-                raise UnAuthorizedException('Cannot change the pin code or rfid data without the api secret')
-            if not self.authentication_controller.check_api_secret(api_secret):
-                raise UnAuthorizedException('The api secret is not valid')
+            if auth_security_level is not AuthenticationLevel.HIGH:
+                raise UnAuthorizedException('Cannot change the pin code or rfid data: You need to log in with password or pass X-API-Secret')
 
         user_dto_orig = self.user_controller.load_user(user_id, clear_password=False)
         user_dto = UserSerializer.deserialize(user_json)
@@ -899,19 +896,12 @@ class Rfid(RestAPIEndpoint):
         rfid_serial = RfidSerializer.serialize(rfid)
         return json.dumps(rfid_serial)
 
-    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON',
+    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON', auth_level=AuthenticationLevel.HIGH,
                        allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.USER])
     def put_start_add(self, auth_token, request_body):
         # Authentication - only ADMIN & TECHNICIAN can create new rfid entry for everyone.
         # USER can only create new rfid entry linked to itself.
-        # Pass X-API-Secret when adding rfid tag
 
-        # check the api secret
-        api_secret = cherrypy.request.headers.get('X-API-Secret')
-        if api_secret is None:
-            raise UnAuthorizedException('Cannot start an add rfid session without the X-API-Secret')
-        elif not self.authentication_controller.check_api_secret(api_secret):
-            raise UnAuthorizedException('X-API-Secret is incorrect')
         if 'user_id' not in request_body or 'label' not in request_body:
             raise WrongInputParametersException('When adding a new rfid, there is the need for the user_id and a label in the request body.')
         user_id = request_body['user_id']
@@ -927,18 +917,11 @@ class Rfid(RestAPIEndpoint):
         user = self.user_controller.load_user(user_id)
         self.rfid_controller.start_add_rfid_session(user, label)
 
-    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None,
+    @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None, auth_level=AuthenticationLevel.HIGH,
                        allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.USER])
     def put_cancel_add(self, auth_token):
         # Authentication - only ADMIN & TECHNICIAN can always cancel 'add new rfid mode'.
         # USER can only cancel mode if adding rfid to his account
-        # Pass X-API-Secret when adding rfid tag
-        # Check the X-API-Secret key for this
-        api_secret = cherrypy.request.headers.get('X-API-Secret')
-        if api_secret is None:
-            raise UnAuthorizedException('Cannot start an add rfid session without the X-API-Secret')
-        elif not self.authentication_controller.check_api_secret(api_secret):
-            raise UnAuthorizedException('X-API-Secret is incorrect')
         current_rfid_user_id = self.rfid_controller.get_current_add_rfid_session_info()
         # When there is no session running, simply return
         if current_rfid_user_id is None:

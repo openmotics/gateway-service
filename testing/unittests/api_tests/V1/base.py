@@ -87,19 +87,19 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
                 headers.append(('Content-Type', 'application/json'))
             return self.getPage(url, headers=headers, method=method, body=body)
 
-    def GET(self, url, login_user=None, login_method=LoginMethod.PASSWORD, headers=None):
+    def GET(self, url, login_user=None, login_method=LoginMethod.PIN_CODE, headers=None):
         # type: (str, Optional[UserDTO], LoginMethod, Optional[Dict]) -> str
         return self.general_request(url, method='GET', login_user=login_user, headers=headers, body=None, login_method=login_method)
 
-    def POST(self, url, login_user=None, login_method=LoginMethod.PASSWORD, headers=None, body=None):
+    def POST(self, url, login_user=None, login_method=LoginMethod.PIN_CODE, headers=None, body=None):
         # type: (str, Optional[UserDTO], LoginMethod, Optional[Dict], Optional[str]) -> str
         return self.general_request(url, method='POST', login_user=login_user, headers=headers, body=body, login_method=login_method)
 
-    def PUT(self, url, login_user=None, login_method=LoginMethod.PASSWORD, headers=None, body=None):
+    def PUT(self, url, login_user=None, login_method=LoginMethod.PIN_CODE, headers=None, body=None):
         # type: (str, Optional[UserDTO], LoginMethod, Optional[Dict], Optional[str]) -> str
         return self.general_request(url, method='PUT', login_user=login_user, headers=headers, body=body, login_method=login_method)
 
-    def DELETE(self, url, login_user=None, login_method=LoginMethod.PASSWORD, headers=None):
+    def DELETE(self, url, login_user=None, login_method=LoginMethod.PIN_CODE, headers=None):
         # type: (str, Optional[UserDTO], LoginMethod, Optional[Dict]) -> str
         return self.general_request(url, method='DELETE', login_user=login_user, headers=headers, body=None, login_method=login_method)
 
