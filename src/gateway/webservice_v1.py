@@ -17,6 +17,7 @@
 
 from __future__ import absolute_import
 import base64
+import enum
 import random
 import uuid
 
@@ -32,7 +33,7 @@ from gateway.api.serializers import ApartmentSerializer, UserSerializer, Deliver
     SystemDoorbellConfigSerializer, SystemRFIDConfigSerializer, SystemRFIDSectorBlockConfigSerializer, \
     SystemTouchscreenConfigSerializer, SystemGlobalConfigSerializer, SystemActivateUserConfigSerializer, \
     RfidSerializer, MailboxSerializer, ParcelBoxSerializer, DoorbellSerializer
-from gateway.authentication_controller import AuthenticationToken, AuthenticationController
+from gateway.authentication_controller import AuthenticationToken, AuthenticationController, LoginMethod
 from gateway.dto import ApartmentDTO, DeliveryDTO
 from gateway.esafe_controller import EsafeController
 from gateway.exceptions import *
@@ -46,7 +47,7 @@ if False:  # MyPy
     from gateway.rfid_controller import RfidController
     from gateway.system_config_controller import SystemConfigController
     from gateway.webservice import WebService
-    from typing import Optional, List, Dict, Any
+    from typing import Optional, List, Dict, Any, Callable, Union
 
 logger = logging.getLogger(__name__)
 
@@ -108,46 +109,73 @@ def _openmotics_api_v1(f, *args, **kwargs):
     return contents
 
 
-def authentication_handler_v1(pass_token=False, pass_role=False, throw_error=True, allowed_user_roles=None):
+def _check_authentication_security_level(auth_controller, checked_token):
+    # type: (AuthenticationController, AuthenticationToken) -> AuthenticationLevel
+    api_secret = cherrypy.request.headers.get('X-API-Secret')
+    if auth_controller.check_api_secret(api_secret):
+        return AuthenticationLevel.HIGH
+    if checked_token is not None and checked_token.login_method == LoginMethod.PASSWORD:
+        return AuthenticationLevel.HIGH
+    return AuthenticationLevel.NONE
+
+
+def _get_authentication_token_from_request():
+    request = cherrypy.request
+    token = None
+    # check if token is passed with the params
+    if 'token' in request.params:
+        token = request.params.pop('token')
+    # check if the token is passed as a Bearer token in the headers
+    if token is None:
+        header = request.headers.get('Authorization')
+        if header is not None and 'Bearer ' in header:
+            token = header.replace('Bearer ', '')
+    # check if the token is passed as a web-socket Bearer token
+    if token is None:
+        header = request.headers.get('Sec-WebSocket-Protocol')
+        if header is not None and 'authorization.bearer.' in header:
+            unpadded_base64_token = header.replace('authorization.bearer.', '')
+            base64_token = unpadded_base64_token + '=' * (-len(unpadded_base64_token) % 4)
+            try:
+                token = base64.decodestring(base64_token).decode('utf-8')
+            except Exception:
+                pass
+    return token
+
+
+class AuthenticationLevel(enum.Enum):
+    NONE = 'none'  # Not authenticated at all on any level
+    HIGH = 'high'  # Authenticated with username/password or having X-API-Secret or both
+
+
+def authentication_handler_v1(pass_token=False, pass_role=False, auth=False, auth_level=AuthenticationLevel.NONE, allowed_user_roles=None, pass_security_level=False):
     request = cherrypy.request
     if request.method == 'OPTIONS':
         return
     try:
-        token = None
-        # check if token is passed with the params
-        if 'token' in request.params:
-            token = request.params.pop('token')
-        # check if the token is passed as a Bearer token in the headers
-        if token is None:
-            header = request.headers.get('Authorization')
-            if header is not None and 'Bearer ' in header:
-                token = header.replace('Bearer ', '')
-        # check if hte token is passed as a web-socket Bearer token
-        if token is None:
-            header = request.headers.get('Sec-WebSocket-Protocol')
-            if header is not None and 'authorization.bearer.' in header:
-                unpadded_base64_token = header.replace('authorization.bearer.', '')
-                base64_token = unpadded_base64_token + '=' * (-len(unpadded_base64_token) % 4)
-                try:
-                    token = base64.decodestring(base64_token).decode('utf-8')
-                except Exception:
-                    pass
-        _self = request.handler.callable.__self__
+        token = _get_authentication_token_from_request()
+        auth_controller = request.handler.callable.__self__.authentication_controller  # type: AuthenticationController
         # Fetch the checkToken function that is placed under the main webservice or under the plugin webinterface.
-        check_token = _self.authentication_controller.check_token
+        check_token = auth_controller.check_token
         checked_token = check_token(token)  # type: Optional[AuthenticationToken]
-        if throw_error:
+
+        # check the security level for this call
+        if auth:
             if checked_token is None:
-                raise UnAuthorizedException('Unauthorized API call')
+                raise UnAuthorizedException('Unauthorized API call: No login information')
             if allowed_user_roles is not None and checked_token.user.role not in allowed_user_roles:
                 raise UnAuthorizedException('User role is not allowed for this API call: Allowed: {}, Got: {}'.format(allowed_user_roles, checked_token.user.role))
+        checked_auth_level = _check_authentication_security_level(auth_controller, checked_token)
+        if auth_level == AuthenticationLevel.HIGH and checked_auth_level != AuthenticationLevel.HIGH:
+            raise UnAuthorizedException('Unauthorized API call: You need to be logged in with password or make the call with X-API-Secret')
+
+        # Pass the appropriate data to the api call
         if pass_token is True:
             request.params['auth_token'] = checked_token
         if pass_role is True:
-            if checked_token is not None:
-                request.params['auth_role'] = checked_token.user.role
-            else:
-                request.params['auth_role'] = None
+            request.params['auth_role'] = checked_token.user.role if checked_token is not None else None
+        if pass_security_level is True:
+            request.params['auth_security_level'] = checked_auth_level
     except UnAuthorizedException as ex:
         cherrypy.response.headers['Content-Type'] = 'application/json'
         cherrypy.response.status = 401  # Unauthorized
@@ -200,13 +228,12 @@ def params_handler_v1(expect_body_type=None, check_for_missing=True, **kwargs):
         contents = WrongInputParametersException.DESC
         response.body = contents.encode()
         request.handler = None
-    if check_for_missing:
-        if not set(kwargs).issubset(set(request.params)):
-            response.status = 400
-            contents = WrongInputParametersException.DESC
-            contents += ': Missing parameters'
-            response.body = contents.encode()
-            request.handler = None
+    if check_for_missing and not set(kwargs).issubset(set(request.params)):
+        response.status = 400
+        contents = WrongInputParametersException.DESC
+        contents += ': Missing parameters'
+        response.body = contents.encode()
+        request.handler = None
 
 
 # Assign the v1 authentication handler
@@ -214,14 +241,23 @@ cherrypy.tools.authenticated_v1 = cherrypy.Tool('before_handler', authentication
 cherrypy.tools.params_v1 = cherrypy.Tool('before_handler', params_handler_v1)
 
 
-def openmotics_api_v1(_func=None, check=None, check_for_missing=False, auth=False, pass_token=False, pass_role=False, allowed_user_roles=None, expect_body_type=None):
+def openmotics_api_v1(_func=None, check=None, check_for_missing=False, auth=False, auth_level=AuthenticationLevel.NONE, pass_token=False, pass_role=False,
+                      allowed_user_roles=None, expect_body_type=None, pass_security_level=False):
+    # type: (Callable[..., Any], Dict[Any, Any], bool, bool, AuthenticationLevel, bool, bool, List[Any], Optional[str], bool) -> Callable[..., Any]
     def decorator_openmotics_api_v1(func):
-        func = _openmotics_api_v1(func)  # First layer decorator
-        if auth is True:
-            # Second layer decorator
-            func = cherrypy.tools.authenticated_v1(pass_token=pass_token, pass_role=pass_role, allowed_user_roles=allowed_user_roles)(func)
-        elif pass_token or pass_role:
-            func = cherrypy.tools.authenticated_v1(pass_token=pass_token, pass_role=pass_role, allowed_user_roles=allowed_user_roles, throw_error=False)(func)
+        # First layer decorator: Error handling
+        func = _openmotics_api_v1(func)
+
+        # Second layer decorator: Authentication
+        func = cherrypy.tools.authenticated_v1(pass_token=pass_token,
+                                               pass_role=pass_role,
+                                               allowed_user_roles=allowed_user_roles,
+                                               pass_security_level=pass_security_level,
+                                               auth=auth,
+                                               auth_level=auth_level
+                                               )(func)
+
+        # Third layer decorator: Check parameters
         _check = None
         if check is not None:
             check['expect_body_type'] = expect_body_type
@@ -229,7 +265,9 @@ def openmotics_api_v1(_func=None, check=None, check_for_missing=False, auth=Fals
         else:
             _check = {'expect_body_type': expect_body_type, 'check_for_missing': False}  # default check_for_missing to false when there is nothing to check
         func = cherrypy.tools.params_v1(**(check or _check))(func)
+
         return func
+
     if _func is None:
         return decorator_openmotics_api_v1
     else:
@@ -333,41 +371,21 @@ class Users(RestAPIEndpoint):
         user_serial = UserSerializer.serialize(user)
         return json.dumps(user_serial)
 
-    @openmotics_api_v1(auth=False, pass_role=False, check={'role': str})
+    @openmotics_api_v1(auth=False, auth_level=AuthenticationLevel.HIGH, check={'role': str})
     def get_available_code(self, role):
         roles = [x for x in User.UserRoles.__dict__ if not x.startswith('_')]
         if role not in roles:
             raise WrongInputParametersException('Role needs to be one of {}'.format(roles))
-        api_secret = cherrypy.request.headers.get('X-API-Secret')
-        if api_secret is None:
-            raise UnAuthorizedException('Cannot create a new available code without the X-API-Secret')
-        elif not self.authentication_controller.check_api_secret(api_secret):
-            raise UnAuthorizedException('X-API-Secret is incorrect')
         return str(self.user_controller.generate_new_pin_code(UserController.PinCodeLength[role]))
 
-    @openmotics_api_v1(auth=True, pass_token=True, check={'user_id': int})
-    def get_pin_code(self, user_id, auth_token):
-        # type: (int, AuthenticationToken) -> str
+    @openmotics_api_v1(auth=True, auth_level=AuthenticationLevel.HIGH, check={'user_id': int},
+                       allowed_user_roles=[User.UserRoles.SUPER, User.UserRoles.ADMIN])
+    def get_pin_code(self, user_id):
+        # type: (int) -> str
         # Authentication: When SUPER, ADMIN or TECHNICIAN, you can request all the pin codes
-        # When User or COURIER, you can only request your own pin code
-        #   - one of the following needs to be provided:
-        #     - X-API-Secret
-        #     - Impersonated by a SUPER user
-
-        api_secret = cherrypy.request.headers.get('X-API-Secret')
         user_dto = self.user_controller.load_user(user_id)
-
         if user_dto is None:
             raise ItemDoesNotExistException('Cannot request the pin code for user_id: {}: User does not exists'.format(user_id))
-
-        # check if requester is some kind of elevated role
-        if auth_token.user.role not in [User.UserRoles.SUPER, User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN]:
-            # If not, one of both api secret or impersonated need to be fulfilled.
-            if auth_token.impersonator is None and (api_secret is None or not self.authentication_controller.check_api_secret(api_secret)):
-                raise UnAuthorizedException('Cannot request the pin code for user_id: {}: Not authenticated as Admin or Technician, not impersonated, and no valid api_secret'.format(user_id))
-            if user_dto.id != user_id:
-                raise UnAuthorizedException('Cannot request pin code for user_id: {}: You cannot request a code for another user when not ADMIN or TECHNICIAN'.format(user_id))
-
         return json.dumps({'pin_code': user_dto.pin_code})
 
     @openmotics_api_v1(auth=False, pass_role=True, expect_body_type='JSON')

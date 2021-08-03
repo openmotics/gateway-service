@@ -43,7 +43,6 @@ class ApiUsersTests(unittest.TestCase):
     def setUp(self):
         self.authentication_controller = mock.Mock(AuthenticationController)
         self.users_controller = mock.Mock(UserController)
-        # self.apartment_controller = mock.Mock(ApartmentController)
         SetUpTestInjections(authentication_controller=self.authentication_controller)
         SetUpTestInjections(user_controller=self.users_controller)
         self.web = Users()
@@ -250,29 +249,6 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = None
             response = self.web.get_user('0', auth_role=None)
             self.assertTrue(UnAuthorizedException.bytes_message() in response)
-
-    def test_get_user_pin_code(self):
-        with mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_1), \
-                mock.patch.object(self.authentication_controller, 'check_api_secret') as check_secret_func:
-            # As a admin user
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
-            response = self.web.get_pin_code(self.normal_user_1.id, auth_token=auth_token)
-            self.assertEqual(json.loads(response), {'pin_code': self.normal_user_1.pin_code})
-
-            # As a super user
-            auth_token = AuthenticationToken(user=self.super_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
-            response = self.web.get_pin_code(self.normal_user_1.id, auth_token=auth_token)
-            self.assertEqual(json.loads(response), {'pin_code': self.normal_user_1.pin_code})
-
-            # As a super user, impersonating normal user 1
-            auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD, impersonator=self.super_user)
-            response = self.web.get_pin_code(self.normal_user_1.id, auth_token=auth_token)
-            self.assertEqual(json.loads(response), {'pin_code': self.normal_user_1.pin_code})
-
-            # As a normal user without api secret
-            auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
-            response = self.web.get_pin_code(self.normal_user_1.id, auth_token=auth_token)
-            self.assertIn(UnAuthorizedException.bytes_message(), response)
 
     # ----------------------------------------------------------------
     # --- POST
@@ -649,33 +625,47 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
 
         with mock.patch.object(self.users_controller, 'generate_new_pin_code', wraps=mock_generate_new_pin):
             # Test all the 4 roles in a normal way
-            for ROLE in ['USER', 'ADMIN', 'COURIER', 'TECHNICIAN']:
-                status, headers, body = self.GET('/api/v1/users/available_code?role={}'.format(ROLE), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+            for user_role in ['USER', 'ADMIN', 'COURIER', 'TECHNICIAN']:
+                status, headers, body = self.GET('/api/v1/users/available_code?role={}'.format(user_role), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+                self.print_request_result()
                 self.assertStatus('200 OK')
-                number_of_digits = UserController.PinCodeLength[ROLE]
+                number_of_digits = UserController.PinCodeLength[user_role]
                 self.assertEqual(number_of_digits, len(body))
                 body_int = int(body)
                 self.assertLess(body_int, int('1' + '0' * number_of_digits))
                 self.assertNotIn(body, current_pins)
 
             # Don't pass the role in
-            status, headers, body = self.GET('/api/v1/users/available_code'.format(ROLE), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+            status, headers, body = self.GET('/api/v1/users/available_code', login_user=None, headers={'X-API-Secret': 'Test-Secret'})
             self.assertStatus('404 Not Found')
             body_json = json.loads(body)
             self.assertEqual({"msg": "Missing parameters: role", "success": False}, body_json)
 
             # pass in the wrong role
-            status, headers, body = self.GET('/api/v1/users/available_code?role=WRONG'.format(ROLE), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+            status, headers, body = self.GET('/api/v1/users/available_code?role=WRONG', login_user=None, headers={'X-API-Secret': 'Test-Secret'})
             self.assertStatus('400 Bad Request')
             self.assertTrue(body.startswith(b"Wrong input parameter: Role needs to be one of"))
 
     def test_get_user_pin_code(self):
         with mock.patch.object(self.users_controller, 'load_user', return_value=self.test_user):
-            # Do not pass the api-secret
+            # Do not pass the api-secret as a normal user
             status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_user)
             self.assertStatus('401 Unauthorized')
 
-            # pass the api secret
-            status, headers, body = self.GET('/api/v1/users/{}/pin'.format(self.test_user.id), login_user=self.test_user, headers={'X-API-Secret': 'Test-Secret'})
+            # Do not pass the api-secret as a normal user
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_admin, login_method=LoginMethod.PIN_CODE)
+            self.assertStatus('401 Unauthorized')
+
+            # As a normal user
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_user, headers={'X-API-Secret': 'Test-Secret'})
+            self.assertStatus('401 Unauthorized')
+
+            # pass the api secret, login with pin
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_admin, login_method=LoginMethod.PIN_CODE, headers={'X-API-Secret': 'Test-Secret'})
+            self.assertStatus('200 OK')
+            self.assertEqual(json.loads(body), {'pin_code': self.test_user.pin_code})
+
+            # login with password
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_admin, login_method=LoginMethod.PASSWORD)
             self.assertStatus('200 OK')
             self.assertEqual(json.loads(body), {'pin_code': self.test_user.pin_code})
