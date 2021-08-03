@@ -111,6 +111,7 @@ class Rfid(RestAPIEndpoint):
     def put_cancel_add(self, auth_token):
         # Authentication - only ADMIN & TECHNICIAN can always cancel 'add new rfid mode'.
         # USER can only cancel mode if adding rfid to his account
+
         current_rfid_user_id = self.rfid_controller.get_current_add_rfid_session_info()
         # When there is no session running, simply return
         if current_rfid_user_id is None:

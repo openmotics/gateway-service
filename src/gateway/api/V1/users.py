@@ -213,5 +213,3 @@ class Users(RestAPIEndpoint):
 
         self.user_controller.remove_user(user_to_delete_dto)
         return 'OK'
-
-

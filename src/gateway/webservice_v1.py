@@ -229,6 +229,7 @@ cherrypy.tools.authenticated_v1 = cherrypy.Tool('before_handler', authentication
 cherrypy.tools.params_v1 = cherrypy.Tool('before_handler', params_handler_v1)
 
 
+# Decorator to be used in the RestAPIEndpoint subclasses for defining how the api is exposed
 def openmotics_api_v1(_func=None, check=None, check_for_missing=False, auth=False, auth_level=AuthenticationLevel.NONE, pass_token=False, pass_role=False,
                       allowed_user_roles=None, expect_body_type=None, pass_security_level=False):
     # type: (Callable[..., Any], Dict[Any, Any], bool, bool, AuthenticationLevel, bool, bool, List[Any], Optional[str], bool) -> Callable[..., Any]
