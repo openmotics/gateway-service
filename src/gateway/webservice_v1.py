@@ -109,14 +109,23 @@ def _openmotics_api_v1(f, *args, **kwargs):
     return contents
 
 
-def _check_authentication_security_level(auth_controller, checked_token):
-    # type: (AuthenticationController, AuthenticationToken) -> AuthenticationLevel
+class AuthenticationLevel(enum.Enum):
+    NONE = 'none'  # Not authenticated at all on any level
+    HIGH = 'high'  # Authenticated with username/password or having X-API-Secret or both
+
+
+@Inject
+def check_authentication_security_level(checked_token, required_level=None, authentication_controller=INJECTED):
+    # type: (AuthenticationToken, Optional[AuthenticationLevel], AuthenticationController) -> AuthenticationLevel
     api_secret = cherrypy.request.headers.get('X-API-Secret')
-    if auth_controller.check_api_secret(api_secret):
-        return AuthenticationLevel.HIGH
+    level = AuthenticationLevel.NONE
+    if authentication_controller.check_api_secret(api_secret):
+        level = AuthenticationLevel.HIGH
     if checked_token is not None and checked_token.login_method == LoginMethod.PASSWORD:
-        return AuthenticationLevel.HIGH
-    return AuthenticationLevel.NONE
+        level = AuthenticationLevel.HIGH
+    if required_level is not None and level != required_level and required_level == AuthenticationLevel.HIGH:
+        raise UnAuthorizedException('Authentication level "HIGH" required')
+    return level
 
 
 def _get_authentication_token_from_request():
@@ -143,11 +152,6 @@ def _get_authentication_token_from_request():
     return token
 
 
-class AuthenticationLevel(enum.Enum):
-    NONE = 'none'  # Not authenticated at all on any level
-    HIGH = 'high'  # Authenticated with username/password or having X-API-Secret or both
-
-
 def authentication_handler_v1(pass_token=False, pass_role=False, auth=False, auth_level=AuthenticationLevel.NONE, allowed_user_roles=None, pass_security_level=False):
     request = cherrypy.request
     if request.method == 'OPTIONS':
@@ -165,9 +169,7 @@ def authentication_handler_v1(pass_token=False, pass_role=False, auth=False, aut
                 raise UnAuthorizedException('Unauthorized API call: No login information')
             if allowed_user_roles is not None and checked_token.user.role not in allowed_user_roles:
                 raise UnAuthorizedException('User role is not allowed for this API call: Allowed: {}, Got: {}'.format(allowed_user_roles, checked_token.user.role))
-        checked_auth_level = _check_authentication_security_level(auth_controller, checked_token)
-        if auth_level == AuthenticationLevel.HIGH and checked_auth_level != AuthenticationLevel.HIGH:
-            raise UnAuthorizedException('Unauthorized API call: You need to be logged in with password or make the call with X-API-Secret')
+        checked_auth_level = check_authentication_security_level(checked_token, auth_level)
 
         # Pass the appropriate data to the api call
         if pass_token is True:
@@ -382,7 +384,7 @@ class Users(RestAPIEndpoint):
                        allowed_user_roles=[User.UserRoles.SUPER, User.UserRoles.ADMIN])
     def get_pin_code(self, user_id):
         # type: (int) -> str
-        # Authentication: When SUPER, ADMIN or TECHNICIAN, you can request all the pin codes
+        # Authentication: When SUPER or ADMIN, you can request all the pin codes
         user_dto = self.user_controller.load_user(user_id)
         if user_dto is None:
             raise ItemDoesNotExistException('Cannot request the pin code for user_id: {}: User does not exists'.format(user_id))
@@ -461,8 +463,7 @@ class Users(RestAPIEndpoint):
 
         # check if the pin code or rfid tag is changed
         if 'pin_code' in user_json or 'rfid' in user_json:
-            if auth_security_level is not AuthenticationLevel.HIGH:
-                raise UnAuthorizedException('Cannot change the pin code or rfid data: You need to log in with password or pass X-API-Secret')
+            check_authentication_security_level(auth_token, AuthenticationLevel.HIGH)
 
         user_dto_orig = self.user_controller.load_user(user_id, clear_password=False)
         user_dto = UserSerializer.deserialize(user_json)
