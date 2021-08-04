@@ -70,9 +70,9 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
         SetUpTestInjections(user_controller=self.users_controller,
                             config=self.config)
 
-    def general_request(self, url, method, login_user, headers, body=None):
+    def general_request(self, url, method, login_user, login_method, headers, body=None):
         if login_user is not None:
-            token = AuthenticationToken(login_user, token='test-token', expire_timestamp=(int(time.time()) + 3600), login_method=LoginMethod.PASSWORD)
+            token = AuthenticationToken(login_user, token='test-token', expire_timestamp=(int(time.time()) + 3600), login_method=login_method)
         else:
             token = None
         with mock.patch.object(self.users_controller, 'check_token', return_value=token), \
@@ -87,21 +87,21 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
                 headers.append(('Content-Type', 'application/json'))
             return self.getPage(url, headers=headers, method=method, body=body)
 
-    def GET(self, url, login_user=None, headers=None):
-        # type: (str, Optional[UserDTO], Optional[Dict]) -> str
-        return self.general_request(url, method='GET', login_user=login_user, headers=headers, body=None)
+    def GET(self, url, login_user=None, login_method=LoginMethod.PIN_CODE, headers=None):
+        # type: (str, Optional[UserDTO], LoginMethod, Optional[Dict]) -> str
+        return self.general_request(url, method='GET', login_user=login_user, headers=headers, body=None, login_method=login_method)
 
-    def POST(self, url, login_user=None, headers=None, body=None):
-        # type: (str, Optional[UserDTO], Optional[Dict], Optional[str]) -> str
-        return self.general_request(url, method='POST', login_user=login_user, headers=headers, body=body)
+    def POST(self, url, login_user=None, login_method=LoginMethod.PIN_CODE, headers=None, body=None):
+        # type: (str, Optional[UserDTO], LoginMethod, Optional[Dict], Optional[str]) -> str
+        return self.general_request(url, method='POST', login_user=login_user, headers=headers, body=body, login_method=login_method)
 
-    def PUT(self, url, login_user=None, headers=None, body=None):
-        # type: (str, Optional[UserDTO], Optional[Dict], Optional[str]) -> str
-        return self.general_request(url, method='PUT', login_user=login_user, headers=headers, body=body)
+    def PUT(self, url, login_user=None, login_method=LoginMethod.PIN_CODE, headers=None, body=None):
+        # type: (str, Optional[UserDTO], LoginMethod, Optional[Dict], Optional[str]) -> str
+        return self.general_request(url, method='PUT', login_user=login_user, headers=headers, body=body, login_method=login_method)
 
-    def DELETE(self, url, login_user=None, headers=None):
-        # type: (str, Optional[UserDTO], Optional[Dict]) -> str
-        return self.general_request(url, method='DELETE', login_user=login_user, headers=headers, body=None)
+    def DELETE(self, url, login_user=None, login_method=LoginMethod.PIN_CODE, headers=None):
+        # type: (str, Optional[UserDTO], LoginMethod, Optional[Dict]) -> str
+        return self.general_request(url, method='DELETE', login_user=login_user, headers=headers, body=None, login_method=login_method)
 
     # explicitly do nothing in the setup_server function, but keep it here since it triggers it to setup the cherrypy tree
     @classmethod
@@ -112,7 +112,7 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
     def test_gc(self):
         pass
 
-    # Function that is usefull for debugging
+    # Function that is useful for debugging
     def print_request_result(self):
         print('-----------------------')
         print('Status:  {}'.format(self.status))

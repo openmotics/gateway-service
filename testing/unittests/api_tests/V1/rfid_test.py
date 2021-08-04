@@ -39,7 +39,7 @@ from ioc import SetTestMode, SetUpTestInjections
 from .base import BaseCherryPyUnitTester
 
 
-class ApiSystemConfigTests(unittest.TestCase):
+class RfidTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()

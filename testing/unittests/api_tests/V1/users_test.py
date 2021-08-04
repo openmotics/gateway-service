@@ -28,7 +28,7 @@ from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.dto import UserDTO, ApartmentDTO
 from gateway.exceptions import *
 from gateway.user_controller import UserController
-from gateway.webservice_v1 import Users
+from gateway.webservice_v1 import Users, AuthenticationLevel
 
 from .base import BaseCherryPyUnitTester
 
@@ -43,10 +43,20 @@ class ApiUsersTests(unittest.TestCase):
     def setUp(self):
         self.authentication_controller = mock.Mock(AuthenticationController)
         self.users_controller = mock.Mock(UserController)
-        # self.apartment_controller = mock.Mock(ApartmentController)
         SetUpTestInjections(authentication_controller=self.authentication_controller)
         SetUpTestInjections(user_controller=self.users_controller)
         self.web = Users()
+
+        self.super_user = UserDTO(
+            id=0,
+            username='SUPER',
+            first_name='',
+            last_name='',
+            role='SUPER',
+            pin_code='1234568',
+            apartment=None,
+            accepted_terms=1
+        )
 
         # setup some users that will be used throughout the tests
         self.admin_user = UserDTO(
@@ -490,6 +500,7 @@ class ApiUsersTests(unittest.TestCase):
             response = self.web.put_update_user('2',
                                                 auth_token=auth_token,
                                                 auth_role=auth_token.user.role,
+                                                auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
             resp_dict = json.loads(response)
@@ -527,6 +538,7 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_update_user(user_id=5,
                                                 auth_token=auth_token,
+                                                auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
             # manually fill in the apartment field since it will be converted back to full output
@@ -548,6 +560,7 @@ class ApiUsersTests(unittest.TestCase):
             response = self.web.put_update_user('2',
                                                 auth_token=auth_token,
                                                 auth_role=auth_token.user.role,
+                                                auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
             self.assertTrue(UnAuthorizedException.bytes_message() in response)
@@ -576,21 +589,25 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
 
     def setUp(self):
         self.test_admin = UserDTO(
+            id=1,
             username='ADMIN',
             role='ADMIN',
             pin_code='0000'
         )
         self.test_user = UserDTO(
+            id=2,
             username='USER',
             role='USER',
             pin_code='1111'
         )
         self.test_technician = UserDTO(
+            id=3,
             username='TECHNICIAN',
             role='TECHNICIAN',
             pin_code='2222'
         )
         self.test_courier = UserDTO(
+            id=4,
             username='COURIER',
             role='COURIER',
             pin_code='3333'
@@ -611,23 +628,47 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
 
         with mock.patch.object(self.users_controller, 'generate_new_pin_code', wraps=mock_generate_new_pin):
             # Test all the 4 roles in a normal way
-            for ROLE in ['USER', 'ADMIN', 'COURIER', 'TECHNICIAN']:
-                status, headers, body = self.GET('/api/v1/users/available_code?role={}'.format(ROLE), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+            for user_role in ['USER', 'ADMIN', 'COURIER', 'TECHNICIAN']:
+                status, headers, body = self.GET('/api/v1/users/available_code?role={}'.format(user_role), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+                self.print_request_result()
                 self.assertStatus('200 OK')
-                number_of_digits = UserController.PinCodeLength[ROLE]
+                number_of_digits = UserController.PinCodeLength[user_role]
                 self.assertEqual(number_of_digits, len(body))
                 body_int = int(body)
                 self.assertLess(body_int, int('1' + '0' * number_of_digits))
                 self.assertNotIn(body, current_pins)
 
             # Don't pass the role in
-            status, headers, body = self.GET('/api/v1/users/available_code'.format(ROLE), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+            status, headers, body = self.GET('/api/v1/users/available_code', login_user=None, headers={'X-API-Secret': 'Test-Secret'})
             self.assertStatus('404 Not Found')
             body_json = json.loads(body)
             self.assertEqual({"msg": "Missing parameters: role", "success": False}, body_json)
 
             # pass in the wrong role
-            status, headers, body = self.GET('/api/v1/users/available_code?role=WRONG'.format(ROLE), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+            status, headers, body = self.GET('/api/v1/users/available_code?role=WRONG', login_user=None, headers={'X-API-Secret': 'Test-Secret'})
             self.assertStatus('400 Bad Request')
             self.assertTrue(body.startswith(b"Wrong input parameter: Role needs to be one of"))
 
+    def test_get_user_pin_code(self):
+        with mock.patch.object(self.users_controller, 'load_user', return_value=self.test_user):
+            # Do not pass the api-secret as a normal user
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_user)
+            self.assertStatus('401 Unauthorized')
+
+            # Do not pass the api-secret as a normal user
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_admin, login_method=LoginMethod.PIN_CODE)
+            self.assertStatus('401 Unauthorized')
+
+            # As a normal user
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_user, headers={'X-API-Secret': 'Test-Secret'})
+            self.assertStatus('401 Unauthorized')
+
+            # pass the api secret, login with pin
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_admin, login_method=LoginMethod.PIN_CODE, headers={'X-API-Secret': 'Test-Secret'})
+            self.assertStatus('200 OK')
+            self.assertEqual(json.loads(body), {'pin_code': self.test_user.pin_code})
+
+            # login with password
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_admin, login_method=LoginMethod.PASSWORD)
+            self.assertStatus('200 OK')
+            self.assertEqual(json.loads(body), {'pin_code': self.test_user.pin_code})

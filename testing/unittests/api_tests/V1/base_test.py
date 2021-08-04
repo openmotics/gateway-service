@@ -18,7 +18,7 @@ import ujson as json
 import cherrypy
 
 from gateway.dto import UserDTO
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1
+from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, AuthenticationLevel, LoginMethod
 
 from .base import BaseCherryPyUnitTester
 
@@ -70,6 +70,9 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
                 self.route_dispatcher.connect('get_rest', '/auth/courier',
                                               controller=self, action='get_rest_auth_courier',
                                               conditions={'method': ['GET']})
+                self.route_dispatcher.connect('get_rest', '/auth/level/high',
+                                              controller=self, action='get_rest_auth_level_high',
+                                              conditions={'method': ['GET']})
 
                 # --- POST ---
                 self.route_dispatcher.connect('post_rest', '',
@@ -107,6 +110,13 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
                                allowed_user_roles=['COURIER'])
             def get_rest_auth_courier(self):
                 return 'get_method_auth_courier'
+
+            @openmotics_api_v1(auth=False,
+                               auth_level=AuthenticationLevel.HIGH,
+                               pass_role=False,
+                               pass_token=False)
+            def get_rest_auth_level_high(self):
+                return 'get_method_auth_level_high'
 
             @openmotics_api_v1(auth=False, pass_role=True, pass_token=False)
             def post_rest_no_auth_no_body(self, auth_role):
@@ -155,6 +165,19 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
         resp = self.GET('/rest/auth/courier', login_user=self.test_user)
         self.assertStatus('401 Unauthorized')
         self.assertBody("Unauthorized operation: User role is not allowed for this API call: Allowed: ['COURIER'], Got: USER")
+
+    def test_get_auth_level_high(self):
+        resp = self.GET('/rest/auth/level/high', login_user=self.test_user, login_method=LoginMethod.PIN_CODE)
+        self.assertStatus('401 Unauthorized')
+
+        resp = self.GET('/rest/auth/level/high', login_user=self.test_admin, login_method=LoginMethod.PIN_CODE)
+        self.assertStatus('401 Unauthorized')
+
+        resp = self.GET('/rest/auth/level/high', login_user=self.test_admin, login_method=LoginMethod.PASSWORD)
+        self.assertStatus('200 OK')
+
+        resp = self.GET('/rest/auth/level/high', login_user=None, login_method=LoginMethod.PASSWORD, headers={'X-API-Secret': 'Test-Secret'})
+        self.assertStatus('200 OK')
 
     def test_post(self):
         resp = self.POST('/rest', login_user=None)
