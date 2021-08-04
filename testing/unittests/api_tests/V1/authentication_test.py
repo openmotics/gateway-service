@@ -173,7 +173,7 @@ class ApiAuthenticationTests(unittest.TestCase):
     def test_deauthenticate_basic(self):
         auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
         with mock.patch.object(self.users_controller, 'logout') as logout_func:
-            response = self.web.deauthenticate(token=auth_token)
+            response = self.web.deauthenticate(auth_token=auth_token)
             logout_func.assert_called_once_with(auth_token)
             self.assertIsNone(response)
 

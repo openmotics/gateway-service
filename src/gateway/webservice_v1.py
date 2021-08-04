@@ -140,11 +140,6 @@ def _get_authentication_token_from_request():
     return token
 
 
-class AuthenticationLevel(Enum):
-    NONE = 'none'  # Not authenticated at all on any level
-    HIGH = 'high'  # Authenticated with username/password or having X-API-Secret or both
-
-
 def authentication_handler_v1(pass_token=False, pass_role=False, auth=False, auth_level=AuthenticationLevel.NONE, allowed_user_roles=None, pass_security_level=False):
     request = cherrypy.request
     if request.method == 'OPTIONS':
