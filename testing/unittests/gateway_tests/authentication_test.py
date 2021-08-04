@@ -125,7 +125,6 @@ class AuthenticationControllerTest(unittest.TestCase):
             result = self.token_store.check_token(token.token)
             self.assertIsNone(result)
 
-
     def test_all_token_store(self):
         user_dto_1 = UserDTO(
             id=5,
@@ -365,3 +364,12 @@ class TokenStoreTest(unittest.TestCase):
         with self.assertRaises(ItemDoesNotExistException):
             self.store.remove_token('un-existing_token')
             self.store.remove_token(AuthenticationToken(self.test_user_1, token='un-existing', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD, impersonator=None))
+
+    def test_login_method(self):
+        token_1 = self.store.create_token(self.test_user_1, login_method=LoginMethod.PASSWORD)
+        token_2 = self.store.create_token(self.test_user_2, login_method=LoginMethod.PIN_CODE)
+        token_3 = self.store.create_token(self.test_admin_1, login_method=LoginMethod.RFID)
+
+        self.assertEqual(LoginMethod.PASSWORD, token_1.login_method)
+        self.assertEqual(LoginMethod.PIN_CODE, token_2.login_method)
+        self.assertEqual(LoginMethod.RFID, token_3.login_method)

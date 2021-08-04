@@ -70,5 +70,5 @@ class Authentication(RestAPIEndpoint):
             raise UnAuthorizedException('could not authenticate user: {}'.format(data))
 
     @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None)
-    def deauthenticate(self, token):
-        self.user_controller.logout(token)
+    def deauthenticate(self, auth_token):
+        self.user_controller.logout(auth_token)

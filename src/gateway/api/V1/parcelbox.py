@@ -118,4 +118,4 @@ class ParcelBox(RestAPIEndpoint):
 
     def _check_controller(self):
         if self.esafe_controller is None:
-            raise InvalidOperationException('Cannot check mailboxes, eSafe controller is None')
+            raise InvalidOperationException('Cannot check parcelboxes, eSafe controller is None')
