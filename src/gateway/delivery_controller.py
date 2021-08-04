@@ -29,7 +29,7 @@ from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MyPy
-    from typing import List, Optional
+    from typing import List, Optional, Dict, Any
     from gateway.user_controller import UserController
     from gateway.esafe_controller import EsafeController
 
@@ -64,15 +64,6 @@ class DeliveryController(object):
         return delivery_dto
 
     @staticmethod
-    def load_delivery_by_pickup_user(pickup_user_id):
-        # type: (int) -> Optional[DeliveryDTO]
-        delivery_orm = Delivery.select().where(Delivery.user_pickup_id == pickup_user_id).first()
-        if delivery_orm is None:
-            return None
-        delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
-        return delivery_dto
-
-    @staticmethod
     def load_deliveries(user_id=None, include_picked_up=False):
         # type: (Optional[int], bool) -> List[DeliveryDTO]
         deliveries = []
@@ -91,6 +82,27 @@ class DeliveryController(object):
             delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
             deliveries.append(delivery_dto)
         return deliveries
+
+    @staticmethod
+    def load_deliveries_filter(include_picked_up=False, **kwargs):
+        # type: (bool, Dict[str, Any]) -> List[DeliveryDTO]
+        query = Delivery.select()
+        for arg, value in kwargs.items():
+            if not arg.startswith('delivery_'):
+                raise ValueError('Cannot filter on value that does not start with "delivery_"')
+            field = arg.replace('delivery_', '')
+            field_orm = getattr(Delivery, field, None)
+            if field_orm is None:
+                raise ValueError('Cannot filter deliveries on {}: Delivery does not contain that key'.format(field))
+            query = query.where(field_orm == value)
+        if not include_picked_up:
+            query = query.where(Delivery.timestamp_pickup.is_null())
+        deliveries = []
+        for delivery_orm in query:
+            delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
+            deliveries.append(delivery_dto)
+        return deliveries
+
 
     @staticmethod
     def get_delivery_count():
