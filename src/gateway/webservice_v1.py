@@ -97,14 +97,23 @@ def _openmotics_api_v1(f, *args, **kwargs):
     return contents
 
 
-def _check_authentication_security_level(auth_controller, checked_token):
-    # type: (AuthenticationController, AuthenticationToken) -> AuthenticationLevel
+class AuthenticationLevel(Enum):
+    NONE = 'none'  # Not authenticated at all on any level
+    HIGH = 'high'  # Authenticated with username/password or having X-API-Secret or both
+
+
+@Inject
+def check_authentication_security_level(checked_token, required_level=None, authentication_controller=INJECTED):
+    # type: (AuthenticationToken, Optional[AuthenticationLevel], AuthenticationController) -> AuthenticationLevel
     api_secret = cherrypy.request.headers.get('X-API-Secret')
-    if auth_controller.check_api_secret(api_secret):
-        return AuthenticationLevel.HIGH
+    level = AuthenticationLevel.NONE
+    if authentication_controller.check_api_secret(api_secret):
+        level = AuthenticationLevel.HIGH
     if checked_token is not None and checked_token.login_method == LoginMethod.PASSWORD:
-        return AuthenticationLevel.HIGH
-    return AuthenticationLevel.NONE
+        level = AuthenticationLevel.HIGH
+    if required_level is not None and level != required_level and required_level == AuthenticationLevel.HIGH:
+        raise UnAuthorizedException('Authentication level "HIGH" required')
+    return level
 
 
 def _get_authentication_token_from_request():
@@ -153,9 +162,7 @@ def authentication_handler_v1(pass_token=False, pass_role=False, auth=False, aut
                 raise UnAuthorizedException('Unauthorized API call: No login information')
             if allowed_user_roles is not None and checked_token.user.role not in allowed_user_roles:
                 raise UnAuthorizedException('User role is not allowed for this API call: Allowed: {}, Got: {}'.format(allowed_user_roles, checked_token.user.role))
-        checked_auth_level = _check_authentication_security_level(auth_controller, checked_token)
-        if auth_level == AuthenticationLevel.HIGH and checked_auth_level != AuthenticationLevel.HIGH:
-            raise UnAuthorizedException('Unauthorized API call: You need to be logged in with password or make the call with X-API-Secret')
+        checked_auth_level = check_authentication_security_level(checked_token, auth_level)
 
         # Pass the appropriate data to the api call
         if pass_token is True:
@@ -211,9 +218,10 @@ def params_handler_v1(expect_body_type=None, check_for_missing=True, **kwargs):
         return
     try:
         params_parser(request.params, kwargs)
-    except ValueError:
+    except ValueError as ex:
         response.status = 400  # No Acceptable
         contents = WrongInputParametersException.DESC
+        contents += ': {}'.format(ex)
         response.body = contents.encode()
         request.handler = None
     if check_for_missing and not set(kwargs).issubset(set(request.params)):
