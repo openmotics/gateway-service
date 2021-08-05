@@ -42,6 +42,7 @@ if False:  # MYPY
     from gateway.dto import LegacyScheduleDTO, LegacyStartupActionDTO
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.master_controller import MasterController
+    from gateway.system_controller import SystemController
     from gateway.webservice import WebInterface
 
 logging.getLogger('apscheduler').setLevel(logging.WARNING)
@@ -73,14 +74,15 @@ class SchedulingController(object):
     NO_NTP_LOWER_LIMIT = 1546300800.0  # 2019-01-01
 
     @Inject
-    def __init__(self, group_action_controller=INJECTED, master_controller=INJECTED):
-        # type: (GroupActionController, MasterController) -> None
+    def __init__(self, group_action_controller=INJECTED, master_controller=INJECTED, system_controller=INJECTED):
+        # type: (GroupActionController, MasterController, SystemController) -> None
         self._group_action_controller = group_action_controller
         self._master_controller = master_controller
         self._web_interface = None  # type: Optional[WebInterface]
         self._schedules = {}  # type: Dict[int, ScheduleDTO]
         self._jobs = {}  # type: Dict[str, Job]
-        self._scheduler = BackgroundScheduler(job_defaults={
+        timezone = system_controller.get_timezone()
+        self._scheduler = BackgroundScheduler(timezone=timezone, job_defaults={
             'coalesce': True,
             'misfire_grace_time': 3600  # 1h
         })
