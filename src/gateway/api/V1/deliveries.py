@@ -102,11 +102,9 @@ class Deliveries(RestAPIEndpoint):
     def get_delivery_history(self, user_id, auth_token, after=0, pagesize=100):
         # type: (int, AuthenticationToken, int, int) -> str
         deliveries = self.delivery_controller.load_deliveries(user_id=user_id, history=True, from_id=after, limit=pagesize)
-        user_id = auth_token.user.id
-        user_role = auth_token.user.role
         # filter the deliveries for only the user id when they are not technician or admin
-        if user_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
-            deliveries = [delivery for delivery in deliveries if user_id in [delivery.user_id_delivery, delivery.user_id_pickup]]
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
+            deliveries = [delivery for delivery in deliveries if auth_token.user.id in [delivery.user_id_delivery, delivery.user_id_pickup]]
         deliveries_serial = [DeliverySerializer.serialize(delivery) for delivery in deliveries]
         return json.dumps(deliveries_serial)
 

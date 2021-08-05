@@ -65,7 +65,7 @@ class DeliveryController(object):
 
     @staticmethod
     def load_deliveries(user_id=None, history=False, from_id=0, limit=100):
-        # type: (Optional[int], bool) -> List[DeliveryDTO]
+        # type: (Optional[int], bool, int, int) -> List[DeliveryDTO]
         deliveries = []
         query = Delivery.select()
         # filter on user id when needed
