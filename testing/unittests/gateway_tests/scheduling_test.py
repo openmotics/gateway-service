@@ -40,7 +40,6 @@ from ioc import SetTestMode, SetUpTestInjections
 
 MODELS = [Schedule]
 
-MasterController
 class SchedulingControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

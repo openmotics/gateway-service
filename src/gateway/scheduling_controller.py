@@ -103,9 +103,13 @@ class SchedulingController(object):
 
     def _handle_schedule_event(self, event):
         job = self._jobs.get(event.job_id)
-        if job:
-            schedule_id = int(event.job_id)
-            self._schedules[schedule_id].next_execution = datetime_to_timestamp(job.next_run_time)
+        schedule_dto = self._schedules[int(event.job_id)]
+        if job and hasattr(job, 'next_run_time') and job.next_run_time:
+            schedule_dto.next_execution = datetime_to_timestamp(job.next_run_time)
+        else:
+            schedule_dto.status = 'COMPLETED'
+            schedule = ScheduleMapper.dto_to_orm(schedule_dto)
+            schedule.save()
 
     def _schedule_job(self, schedule_dto):
         # type: (ScheduleDTO) -> None
@@ -150,9 +154,9 @@ class SchedulingController(object):
         # type: () -> None
         for schedule_dto in self._schedules.values():
             job = self._jobs.get(str(schedule_dto.id))
-            if job and job.next_run_time:
+            if job and hasattr(job, 'next_run_time') and job.next_run_time:
                 schedule_dto.next_execution = datetime_to_timestamp(job.next_run_time)
-            else:
+            if schedule_dto.end and schedule_dto.end < time.time() - 3600:
                 schedule_dto.status = 'COMPLETED'
                 schedule = ScheduleMapper.dto_to_orm(schedule_dto)
                 schedule.save()
