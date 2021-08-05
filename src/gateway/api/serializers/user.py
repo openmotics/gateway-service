@@ -19,7 +19,9 @@ user (de)serializer
 from __future__ import absolute_import
 
 import logging
+import re
 
+import constants
 from gateway.apartment_controller import ApartmentController
 from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.api.serializers.base import SerializerToolbox
@@ -55,10 +57,9 @@ class UserSerializer(object):
     def deserialize(api_data):
         # type: (Dict[str,Any]) -> UserDTO
         user_dto = UserDTO()
-        for field in ['id', 'username', 'first_name', 'last_name', 'role', 'pin_code', 'language', 'accepted_terms', 'is_active', 'email']:
+        for field in ['id', 'username', 'first_name', 'last_name', 'role', 'pin_code', 'language', 'accepted_terms', 'is_active']:
             if field in api_data:
                 setattr(user_dto, field, api_data[field])
-        apartment_dto = None
         if 'apartment' in api_data:
             if api_data['apartment'] is not None and isinstance(api_data['apartment'], list):
                 apartment_element = api_data['apartment'][0]
@@ -72,5 +73,10 @@ class UserSerializer(object):
                     raise ValueError('user json deserialize: apartment does require an array with one id inside')
         if 'password' in api_data:
             user_dto.set_password(api_data['password'])
+        if 'email' in api_data:
+            email_string = api_data['email']
+            if not re.match(constants.get_email_verification_regex(), email_string):
+                raise ValueError('Provided email address is not a valid email')
+            user_dto.email = email_string
         return user_dto
 
