@@ -72,7 +72,6 @@ class OutputControllerTest(unittest.TestCase):
 
         output_dto = OutputDTO(id=42)
         with mock.patch.object(self.master_controller, 'load_outputs', return_value=[output_dto]):
-            self.controller._sync_dirty = True  # Is usually set by e.g. a MasterEvent indicating sync is needed
             self.controller.run_sync_orm()
             self.pubsub._publish_all_events(blocking=False)
             assert Output.select().where(Output.number == output_dto.id).count() == 1

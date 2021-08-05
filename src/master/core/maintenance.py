@@ -96,7 +96,13 @@ class MaintenanceCoreCommunicator(MaintenanceCommunicator):
 
             if self._receiver_callback is not None:
                 try:
-                    self._receiver_callback(message.decode().rstrip())
+                    try:
+                        decoded_data = message.decode()
+                    except UnicodeDecodeError:
+                        # This can be ignored, since binary data might be received when the master
+                        # reboots (as the bootloader is also connected to this port)
+                        continue
+                    self._receiver_callback(decoded_data.rstrip())
                 except Exception:
                     logger.exception('Unexpected exception during maintenance callback')
 
