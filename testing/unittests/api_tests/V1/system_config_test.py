@@ -26,6 +26,7 @@ import unittest
 
 import mock
 
+from gateway.authentication_controller import AuthenticationController
 from gateway.api.serializers import SystemDoorbellConfigSerializer, SystemRFIDConfigSerializer, \
     SystemRFIDSectorBlockConfigSerializer, SystemGlobalConfigSerializer, SystemActivateUserConfigSerializer
 from gateway.dto import SystemDoorbellConfigDTO, SystemRFIDConfigDTO, SystemRFIDSectorBlockConfigDTO, \
@@ -46,6 +47,8 @@ class ApiSystemConfigTests(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
+        self.authentication_controller = mock.Mock(AuthenticationController)
+        SetUpTestInjections(authentication_controller=self.authentication_controller)
         self.user_controller = mock.Mock(UserController)
         self.system_config_controller = mock.Mock(SystemConfigController)
         SetUpTestInjections(system_config_controller=self.system_config_controller, user_controller=self.user_controller)

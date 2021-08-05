@@ -36,6 +36,7 @@ class UserSerializer(object):
     def serialize(dto_object, fields=None):
         # type: (UserDTO, Optional[List[str]]) -> Dict[str,Any]
         data = {'id': dto_object.id,
+                'username': dto_object.username,
                 'first_name': dto_object.first_name,
                 'last_name': dto_object.last_name,
                 'role': dto_object.role,
@@ -53,7 +54,7 @@ class UserSerializer(object):
     def deserialize(api_data):
         # type: (Dict[str,Any]) -> UserDTO
         user_dto = UserDTO()
-        for field in ['id', 'first_name', 'last_name', 'role', 'pin_code', 'language', 'accepted_terms', 'is_active']:
+        for field in ['id', 'username', 'first_name', 'last_name', 'role', 'pin_code', 'language', 'accepted_terms', 'is_active']:
             if field in api_data:
                 setattr(user_dto, field, api_data[field])
         apartment_dto = None

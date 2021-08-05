@@ -188,7 +188,7 @@ class SensorController(BaseController):
             sensor_dtos.append(sensor_dto)
         return sensor_dtos
 
-    def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> None
+    def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> List[SensorDTO]
         publish = False
         master_sensors = []
         for sensor_dto in sensors:
@@ -208,6 +208,7 @@ class SensorController(BaseController):
             self._master_controller.save_sensors(master_sensors)
         if publish:
             self._publish_config()
+        return sensors
 
     def _create_or_update_sensor(self, sensor_dto):  # type: (SensorDTO) -> Tuple[Sensor, bool]
         changed = False

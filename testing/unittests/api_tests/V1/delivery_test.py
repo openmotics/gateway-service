@@ -23,7 +23,7 @@ import unittest
 import mock
 
 from gateway.api.serializers import DeliverySerializer
-from gateway.authentication_controller import AuthenticationToken
+from gateway.authentication_controller import AuthenticationToken, LoginMethod, AuthenticationController
 from gateway.dto import DeliveryDTO, UserDTO
 from gateway.esafe_controller import EsafeController
 from gateway.exceptions import *
@@ -43,9 +43,11 @@ class ApiDeliveriesTests(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
+        self.auth_controller = mock.Mock(AuthenticationController)
         self.user_controller = mock.Mock(UserController)
         self.delivery_controller = mock.Mock(DeliveryController)
         self.esafe_controller = mock.Mock(EsafeController)
+        SetUpTestInjections(authentication_controller=self.auth_controller)
         SetUpTestInjections(user_controller=self.user_controller, delivery_controller=self.delivery_controller, esafe_controller=self.esafe_controller)
         self.web = Deliveries()
 
@@ -204,14 +206,14 @@ class ApiDeliveriesTests(unittest.TestCase):
 
     def test_get_delivery_list(self):
         with mock.patch.object(self.delivery_controller, 'load_deliveries', return_value=self.all_deliveries):
-            auth_token = AuthenticationToken(self.login_admin, 'test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(self.login_admin, 'test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.get_deliveries(auth_token=auth_token)
             for delivery in self.all_deliveries:
                 self.verify_delivery_in_output(delivery, response)
 
     def test_get_delivery_list_normal_user(self):
         with mock.patch.object(self.delivery_controller, 'load_deliveries', return_value=self.all_deliveries):
-            auth_token = AuthenticationToken(self.test_user_1, 'test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(self.test_user_1, 'test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.get_deliveries(auth_token=auth_token)
             for delivery in [self.test_delivery_1]:
                 self.verify_delivery_in_output(delivery, response)
@@ -220,7 +222,7 @@ class ApiDeliveriesTests(unittest.TestCase):
 
     def test_get_delivery_list_courier(self):
         with mock.patch.object(self.delivery_controller, 'load_deliveries', return_value=self.all_deliveries):
-            auth_token = AuthenticationToken(self.test_courier_1, 'test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(self.test_courier_1, 'test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.get_deliveries(auth_token=auth_token)
             for delivery in [self.test_delivery_1, self.test_delivery_2]:
                 self.verify_delivery_not_in_output(delivery, response)
@@ -229,14 +231,14 @@ class ApiDeliveriesTests(unittest.TestCase):
 
     def test_get_delivery(self):
         with mock.patch.object(self.delivery_controller, 'load_deliveries', return_value=self.all_deliveries):
-            auth_token = AuthenticationToken(self.login_admin, 'test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(self.login_admin, 'test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.get_deliveries(auth_token=auth_token)
             for delivery in self.all_deliveries:
                 self.verify_delivery_in_output(delivery, response)
 
     def test_get_delivery_specific_user(self):
         with mock.patch.object(self.delivery_controller, 'load_deliveries', return_value=self.all_deliveries):
-            auth_token = AuthenticationToken(self.test_user_1, 'test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(self.test_user_1, 'test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.get_deliveries(auth_token=auth_token)
             for delivery in [self.test_delivery_1]:
                 self.verify_delivery_in_output(delivery, response)
@@ -266,7 +268,7 @@ class ApiDeliveriesTests(unittest.TestCase):
                 mock.patch.object(self.user_controller, 'load_user', return_value=self.test_user_1):
             delivery_dto_to_save = self.get_dto_from_serial(delivery_to_create)
             save_delivery_func.return_value = delivery_dto_to_save
-            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_delivery(auth_token=auth_token,
                                               request_body=delivery_to_create)
             save_delivery_func.assert_called_once_with(delivery_dto_to_save)
@@ -283,7 +285,7 @@ class ApiDeliveriesTests(unittest.TestCase):
                 mock.patch.object(self.user_controller, 'load_user', return_value=self.test_user_1):
             delivery_dto_to_save = self.get_dto_from_serial(delivery_to_create)
             save_delivery_func.return_value = delivery_dto_to_save
-            auth_token = AuthenticationToken(user=self.test_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.test_user_1, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_delivery(auth_token=auth_token,
                                               request_body=delivery_to_create)
             save_delivery_func.assert_called_once_with(delivery_dto_to_save)
@@ -301,7 +303,7 @@ class ApiDeliveriesTests(unittest.TestCase):
             delivery_dto_to_save = self.get_dto_from_serial(delivery_to_create)
             save_delivery_func.return_value = delivery_dto_to_save
             # save an user with other credentials. this is allowed
-            auth_token = AuthenticationToken(user=self.test_user_2, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.test_user_2, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_delivery(auth_token=auth_token,
                                               request_body=delivery_to_create)
             save_delivery_func.assert_called_once_with(delivery_dto_to_save)
@@ -335,7 +337,7 @@ class ApiDeliveriesTests(unittest.TestCase):
                 mock.patch.object(self.user_controller, 'load_user', return_value=self.test_user_1):
             delivery_dto_to_save = self.get_dto_from_serial(delivery_to_create)
             save_delivery_func.return_value = delivery_dto_to_save
-            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_delivery(auth_token=auth_token,
                                               request_body=json.dumps(delivery_to_create))
             # assert that there is an response with parse exception
@@ -353,7 +355,7 @@ class ApiDeliveriesTests(unittest.TestCase):
                 mock.patch.object(self.user_controller, 'load_user', return_value=self.test_user_1):
             delivery_dto_to_save = self.get_dto_from_serial(delivery_to_create)
             save_delivery_func.return_value = delivery_dto_to_save
-            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_delivery(auth_token=auth_token,
                                               request_body=json.dumps(delivery_to_create))
             # assert that there is an response with parse exception
@@ -370,7 +372,7 @@ class ApiDeliveriesTests(unittest.TestCase):
                 mock.patch.object(self.user_controller, 'load_user', return_value=self.test_user_1):
             delivery_dto_to_save = self.get_dto_from_serial(delivery_to_create)
             save_delivery_func.return_value = delivery_dto_to_save
-            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_delivery(auth_token=auth_token,
                                               request_body=json.dumps(delivery_to_create))
             # assert that there is an response with parse exception
@@ -388,7 +390,7 @@ class ApiDeliveriesTests(unittest.TestCase):
                 mock.patch.object(self.user_controller, 'user_id_exists', return_value=False):
             delivery_dto_to_save = self.get_dto_from_serial(delivery_to_create)
             save_delivery_func.return_value = delivery_dto_to_save
-            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_delivery(auth_token=auth_token,
                                               request_body=json.dumps(delivery_to_create))
             # assert that there is an response with parse exception
@@ -401,7 +403,7 @@ class ApiDeliveriesTests(unittest.TestCase):
                 mock.patch.object(self.user_controller, 'load_user', return_value=self.test_user_1):
             delivery_dto_to_save = self.get_dto_from_serial(delivery_to_create)
             save_delivery_func.return_value = delivery_dto_to_save
-            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_delivery(auth_token=auth_token,
                                               request_body=json.dumps(delivery_to_create))
             # assert that there is an response with parse exception
@@ -424,7 +426,7 @@ class ApiDeliveriesTests(unittest.TestCase):
             delivery_dto_to_save = self.test_delivery_1
             delivery_dto_to_save.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
             save_delivery_func.return_value = delivery_dto_to_save
-            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.login_admin, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_delivery_pickup(delivery_id=self.test_delivery_1.id, auth_token=auth_token)
             self.assert_delivery_picked_up(response)
 
@@ -434,7 +436,7 @@ class ApiDeliveriesTests(unittest.TestCase):
             delivery_dto_to_save = self.test_delivery_1
             delivery_dto_to_save.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
             save_delivery_func.return_value = delivery_dto_to_save
-            auth_token = AuthenticationToken(user=self.test_delivery_1.user_pickup, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.test_delivery_1.user_pickup, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_delivery_pickup(delivery_id=self.test_delivery_1.id, auth_token=auth_token)
             self.assert_delivery_picked_up(response)
 
@@ -444,7 +446,7 @@ class ApiDeliveriesTests(unittest.TestCase):
             delivery_dto_to_save = self.test_delivery_1
             delivery_dto_to_save.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
             save_delivery_func.return_value = delivery_dto_to_save
-            auth_token = AuthenticationToken(user=self.test_user_2, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.test_user_2, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_delivery_pickup(delivery_id=self.test_delivery_1.id, auth_token=auth_token)
             self.assertIn(UnAuthorizedException.bytes_message(), response)
 
@@ -454,7 +456,7 @@ class ApiDeliveriesTests(unittest.TestCase):
             delivery_dto_to_save = self.test_delivery_1
             delivery_dto_to_save.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
             save_delivery_func.return_value = delivery_dto_to_save
-            auth_token = AuthenticationToken(user=self.test_user_2, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.test_user_2, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_delivery_pickup(delivery_id=37, auth_token=auth_token)
             self.assertIn(ItemDoesNotExistException.bytes_message(), response)
 
@@ -464,7 +466,7 @@ class ApiDeliveriesTests(unittest.TestCase):
             delivery_dto_to_save = self.test_return_1
             delivery_dto_to_save.timestamp_pickup = DeliveryController.current_timestamp_to_string_format()
             pickup_delivery_func.return_value = delivery_dto_to_save
-            auth_token = AuthenticationToken(user=self.test_user_2, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.test_user_2, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_delivery_pickup(delivery_id=self.test_return_1.id, auth_token=auth_token)
             self.assert_delivery_picked_up(response)
 

@@ -239,8 +239,8 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
         if request.remote.ip != '127.0.0.1':
             if checked_token is None:
                 raise RuntimeError()
-            if checked_token.user.role != 'ADMIN':
-                raise RuntimeError('User is non ADMIN, need ADMIN to access V0 api')
+            if checked_token.user.role != 'SUPER':
+                raise RuntimeError('User is non SUPER, need SUPER to access V0 api')
         if pass_token is True:
             if version == 0:
                 request.params['token'] = token
@@ -468,7 +468,7 @@ class WebInterface(object):
         return serve_file(os.path.join(static_dir, 'index.html'), content_type='text/html')
 
     @openmotics_api(check=types(accept_terms=bool, timeout=int), plugin_exposed=False)
-    def login(self, username, password, accept_terms=None, timeout=None):
+    def login(self, username, password, accept_terms=None, timeout=None, impersonate=None):
         """
         Login to the web service, returns a token if successful, returns HTTP status code 401 otherwise.
 
@@ -480,12 +480,14 @@ class WebInterface(object):
         :type accept_terms: bool | None
         :param timeout: Optional session timeout. 30d >= x >= 1h
         :type timeout: int
+        :param impersonate: Optional user to impersonate
+        :type impersonate: str
         :returns: Authentication token
         :rtype: str
         """
         user_dto = UserDTO(username=username)
         user_dto.set_password(password)
-        success, token_or_error = self._user_controller.login(user_dto, accept_terms, timeout)
+        success, token_or_error = self._user_controller.login(user_dto, accept_terms, timeout, impersonate)
         if success is True and isinstance(token_or_error, AuthenticationToken):  # token_or_error is an actual token
             return {'token': token_or_error.token}
         if token_or_error == UserEnums.AuthenticationErrors.TERMS_NOT_ACCEPTED:  # Check which error token_or_error contains
@@ -1413,16 +1415,20 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(config='json'))
     def set_sensor_configuration(self, config):  # type: (Dict[Any, Any]) -> Dict
         """ Set one sensor_configuration. """
-        data = SensorSerializer.deserialize(config)
-        self._sensor_controller.save_sensors([data])
-        return {}
+        sensor_dto = SensorSerializer.deserialize(config)
+        saved_sensors_dtos = self._sensor_controller.save_sensors([sensor_dto])
+        data = [SensorSerializer.serialize(sensor_dto=saved_sensors_dto, fields=None)
+                           for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
+        return {'config': data}
 
     @openmotics_api(auth=True, check=types(config='json'))
     def set_sensor_configurations(self, config):  # type: (List[Dict[Any, Any]]) -> Dict
         """ Set multiple sensor_configurations. """
-        data = [SensorSerializer.deserialize(entry) for entry in config]
-        self._sensor_controller.save_sensors(data)
-        return {}
+        sensor_dtos = [SensorSerializer.deserialize(entry) for entry in config]
+        saved_sensors_dtos = self._sensor_controller.save_sensors(sensor_dtos)
+        data = [SensorSerializer.serialize(sensor_dto=saved_sensors_dto, fields=None)
+                           for saved_sensors_dto in saved_sensors_dtos] if saved_sensors_dtos else None
+        return {'config': data}
 
     # Heating Pump Group
 

@@ -23,13 +23,14 @@ import mock.mock
 from peewee import SqliteDatabase
 
 from gateway.authentication_controller import AuthenticationController, TokenStore
-from gateway.dto import DeliveryDTO, UserDTO
+from gateway.dto import DeliveryDTO, UserDTO, SystemRFIDConfigDTO
 from gateway.esafe_controller import EsafeController
 from gateway.mappers import UserMapper, DeliveryMapper
 from gateway.models import Delivery, User, Apartment
 from gateway.delivery_controller import DeliveryController
 from gateway.pubsub import PubSub
 from gateway.rfid_controller import RfidController
+from gateway.system_config_controller import SystemConfigController
 from gateway.user_controller import UserController
 from ioc import SetTestMode, SetUpTestInjections
 
@@ -53,6 +54,9 @@ class DeliveryControllerTest(unittest.TestCase):
         self.test_db.bind(MODELS, bind_refs=False, bind_backrefs=False)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
+        self.sys_config_controller = SystemConfigController()
+        self.sys_config_controller.get_rfid_config = lambda: SystemRFIDConfigDTO(enabled=True, security_enabled=False, max_tags=2)
+        SetUpTestInjections(system_config_controller=self.sys_config_controller)
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub)
         SetUpTestInjections(token_timeout=3)

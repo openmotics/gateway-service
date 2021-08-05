@@ -218,13 +218,15 @@ class SensorControllerTest(unittest.TestCase):
             events.append(gateway_event)
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
 
+        sensor_id = 42
         room = Room.create(number=2, name='Livingroom')
-        Sensor.create(id=42, source='master', external_id='0', name='')
-        sensor_dto = SensorDTO(id=42, physical_quantity='temperature', unit='celcius', name='foo', room=2)
+        Sensor.create(id=sensor_id, source='master', external_id='0', name='')
+        sensor_dto = SensorDTO(id=sensor_id, physical_quantity='temperature', unit='celcius', name='foo', room=2)
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
-            self.controller.save_sensors([sensor_dto])
+            saved_sensors = self.controller.save_sensors([sensor_dto])
             self.pubsub._publish_all_events(blocking=False)
             save.assert_called_with([MasterSensorDTO(id=0, name='foo')])
+            assert sensor_id in [saved_sensor.id for saved_sensor in saved_sensors]
 
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
         assert len(events) == 1
@@ -252,9 +254,10 @@ class SensorControllerTest(unittest.TestCase):
                                unit='celcius',
                                name='foo')
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
-            self.controller.save_sensors([sensor_dto])
+            saved_sensors = self.controller.save_sensors([sensor_dto])
             self.pubsub._publish_all_events(blocking=False)
             save.assert_not_called()
+            assert all([saved_sensor.id for saved_sensor in saved_sensors])
 
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
         assert len(events) == 1
@@ -283,9 +286,10 @@ class SensorControllerTest(unittest.TestCase):
                                unit='celcius',
                                name='foo')
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
-            self.controller.save_sensors([sensor_dto])
+            saved_sensors = self.controller.save_sensors([sensor_dto])
             self.pubsub._publish_all_events(blocking=False)
             save.assert_not_called()
+            assert all([saved_sensor.id for saved_sensor in saved_sensors])
 
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
         assert len(events) == 1
@@ -313,9 +317,10 @@ class SensorControllerTest(unittest.TestCase):
                                name='foo',
                                virtual=True)
         with mock.patch.object(self.master_controller, 'save_sensors') as save:
-            self.controller.save_sensors([sensor_dto])
+            saved_sensors = self.controller.save_sensors([sensor_dto])
             self.pubsub._publish_all_events(blocking=False)
             save.assert_called_with([MasterSensorDTO(id=31, name='foo', virtual=True)])
+            assert all([saved_sensor.id is not None for saved_sensor in saved_sensors])
 
         assert GatewayEvent('CONFIG_CHANGE', {'type': 'sensor'}) in events
         assert len(events) == 1

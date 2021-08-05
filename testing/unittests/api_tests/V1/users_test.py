@@ -22,13 +22,13 @@ import unittest
 import mock
 
 from gateway.apartment_controller import ApartmentController
-from gateway.authentication_controller import AuthenticationController, AuthenticationToken
+from gateway.authentication_controller import AuthenticationController, AuthenticationToken, LoginMethod
 from gateway.api.serializers.user import UserSerializer
 from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.dto import UserDTO, ApartmentDTO
 from gateway.exceptions import *
 from gateway.user_controller import UserController
-from gateway.webservice_v1 import Users
+from gateway.webservice_v1 import Users, AuthenticationLevel
 
 from .base import BaseCherryPyUnitTester
 
@@ -41,10 +41,22 @@ class ApiUsersTests(unittest.TestCase):
         SetTestMode()
 
     def setUp(self):
+        self.authentication_controller = mock.Mock(AuthenticationController)
         self.users_controller = mock.Mock(UserController)
-        # self.apartment_controller = mock.Mock(ApartmentController)
+        SetUpTestInjections(authentication_controller=self.authentication_controller)
         SetUpTestInjections(user_controller=self.users_controller)
         self.web = Users()
+
+        self.super_user = UserDTO(
+            id=0,
+            username='SUPER',
+            first_name='',
+            last_name='',
+            role='SUPER',
+            pin_code='1234568',
+            apartment=None,
+            accepted_terms=1
+        )
 
         # setup some users that will be used throughout the tests
         self.admin_user = UserDTO(
@@ -160,7 +172,7 @@ class ApiUsersTests(unittest.TestCase):
 
     def test_get_users_list(self):
         with mock.patch.object(self.users_controller, 'load_users', return_value=self.all_users) as load_users_func:
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.get_users(auth_role=auth_token.user.role)
             for user in self.all_users:
                 self.verify_user_in_output(user, response)
@@ -197,7 +209,7 @@ class ApiUsersTests(unittest.TestCase):
                     self.verify_user_not_in_output(user, response)
 
     def test_get_users_list_unauthenticated(self):
-        with mock.patch.object(self.users_controller, 'load_users', return_value=self.all_users):
+        with mock.patch.object(self.users_controller, 'load_users', return_value=self.normal_users):
             auth_token = None
             response = self.web.get_users(auth_role=None)
             self.verify_user_not_in_output(self.admin_user, response)
@@ -205,8 +217,8 @@ class ApiUsersTests(unittest.TestCase):
                 self.verify_user_in_output(user, response)
 
     def test_get_users_list_normal_user(self):
-        with mock.patch.object(self.users_controller, 'load_users', return_value=self.all_users):
-            auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
+        with mock.patch.object(self.users_controller, 'load_users', return_value=self.normal_users):
+            auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PIN_CODE)
             response = self.web.get_users(auth_role=auth_token.user.role)
             self.verify_user_not_in_output(self.admin_user, response)
             for user in self.normal_users:
@@ -214,21 +226,21 @@ class ApiUsersTests(unittest.TestCase):
 
     def test_get_user_normal_user(self):
         with mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
-            auth_token = AuthenticationToken(user=self.normal_user_2, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.normal_user_2, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.get_user('2', auth_role=auth_token.user.role)
             self.verify_user_in_output(self.normal_user_2, response)
             self.verify_user_not_in_output(self.normal_user_3, response)
 
     def test_get_user_normal_user_other_login(self):
         with mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_3):
-            auth_token = AuthenticationToken(user=self.normal_user_2, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.normal_user_2, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.get_user('3', auth_role=auth_token.user.role)
             self.verify_user_in_output(self.normal_user_3, response)
             self.verify_user_not_in_output(self.normal_user_2, response)
 
     def test_get_admin_user_as_normal_user(self):
         with mock.patch.object(self.users_controller, 'load_user', return_value=self.admin_user):
-            auth_token = AuthenticationToken(user=self.normal_user_2, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.normal_user_2, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.get_user('0', auth_role=auth_token.user.role)
             self.assertTrue(UnAuthorizedException.bytes_message() in response)
 
@@ -266,7 +278,7 @@ class ApiUsersTests(unittest.TestCase):
             user_dto_to_return.set_password('Test')
             save_user_func.return_value = user_dto_to_return
 
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_user(auth_role=auth_token.user.role,
                                           request_body=user_to_create)
             self.verify_user_created(user_to_create, response, check_for_pin=True)
@@ -285,7 +297,7 @@ class ApiUsersTests(unittest.TestCase):
             user_dto_to_return.set_password('Test')
             save_user_func.return_value = user_dto_to_return
 
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_user(auth_role=auth_token.user.role,
                                           request_body=user_to_create)
             resp_json = json.loads(response)
@@ -306,7 +318,7 @@ class ApiUsersTests(unittest.TestCase):
             user_dto_to_return.set_password('Test')
             save_user_func.return_value = user_dto_to_return
 
-            auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_user(auth_role=auth_token.user.role,
                                           request_body=user_to_create)
             self.assertIn(UnAuthorizedException.bytes_message(), response)
@@ -316,7 +328,7 @@ class ApiUsersTests(unittest.TestCase):
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
             exception_message = 'TEST_EXCEPTION'
             save_user_func.side_effect = RuntimeError(exception_message)
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_user(auth_role=auth_token.user.role,
                                           request_body=json.dumps(user_to_create))
             self.assertTrue(WrongInputParametersException.bytes_message() in response)
@@ -328,7 +340,7 @@ class ApiUsersTests(unittest.TestCase):
         with mock.patch.object(self.users_controller, 'save_user') as save_user_func:
             exception_message = 'TEST_EXCEPTION'
             save_user_func.side_effect = RuntimeError(exception_message)
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_user(auth_role=auth_token.user.role,
                                           request_body=json.dumps(user_to_create))
             self.assertTrue(WrongInputParametersException.bytes_message() in response)
@@ -351,7 +363,7 @@ class ApiUsersTests(unittest.TestCase):
             user_dto_to_return.set_password('Test')
             save_user_func.return_value = user_dto_to_return
 
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_user(auth_role=auth_token.user.role,
                                           request_body=user_to_create.copy())
             # remove the password and the pin code to check they are not saved
@@ -370,7 +382,7 @@ class ApiUsersTests(unittest.TestCase):
             # mock the behaviour of the usercontroller sending back an exception that the language is not known
             exception_message = 'TEST_EXCEPTION'
             save_user_func.side_effect = RuntimeError(exception_message)
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_user(auth_role=auth_token.user.role,
                                           request_body=user_to_create)
             self.assertTrue(WrongInputParametersException.bytes_message() in response)
@@ -390,7 +402,7 @@ class ApiUsersTests(unittest.TestCase):
             user_dto_to_return.set_password('Test')
             save_user_func.return_value = user_dto_to_return
 
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_user(auth_role=auth_token.user.role,
                                           request_body=user_to_create)
             self.verify_user_created(user_to_create, response, check_for_pin=True)
@@ -416,7 +428,7 @@ class ApiUsersTests(unittest.TestCase):
             user_dto_to_return.apartment = apartment_dto
             save_user_func.return_value = user_dto_to_return
 
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_user(auth_role=auth_token.user.role,
                                           request_body=user_to_create.copy())
 
@@ -447,7 +459,7 @@ class ApiUsersTests(unittest.TestCase):
             user_dto_to_return.set_password('Test')
             save_user_func.return_value = user_dto_to_return
 
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.post_user(auth_role=auth_token.user.role,
                                           request_body=user_to_create.copy())
             del user_to_create['pin_code']
@@ -484,10 +496,11 @@ class ApiUsersTests(unittest.TestCase):
         self.normal_user_2.first_name = user_to_update['first_name']
         with mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2) as load_user_func, \
                 mock.patch.object(self.users_controller, 'save_user', return_value=self.normal_user_2) as save_user_func:
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_update_user('2',
                                                 auth_token=auth_token,
                                                 auth_role=auth_token.user.role,
+                                                auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
             resp_dict = json.loads(response)
@@ -522,9 +535,10 @@ class ApiUsersTests(unittest.TestCase):
             save_user_func.return_value = user_dto_to_return
             load_user_func.return_value = self.normal_user_2
 
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_update_user(user_id=5,
                                                 auth_token=auth_token,
+                                                auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
             # manually fill in the apartment field since it will be converted back to full output
@@ -542,10 +556,11 @@ class ApiUsersTests(unittest.TestCase):
         self.normal_user_2.first_name = user_to_update['first_name']
         with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
                 mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2) as load_user_func:
-            auth_token = AuthenticationToken(user=self.normal_user_3, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.normal_user_3, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_update_user('2',
                                                 auth_token=auth_token,
                                                 auth_role=auth_token.user.role,
+                                                auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
             self.assertTrue(UnAuthorizedException.bytes_message() in response)
@@ -557,7 +572,7 @@ class ApiUsersTests(unittest.TestCase):
     def test_delete_user(self):
         with mock.patch.object(self.users_controller, 'remove_user') as save_user_func, \
                 mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2) as load_user_func:
-            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600))
+            auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.delete_user('2',
                                             auth_token=auth_token)
             self.assertEqual(b'OK', response)
@@ -574,21 +589,25 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
 
     def setUp(self):
         self.test_admin = UserDTO(
+            id=1,
             username='ADMIN',
             role='ADMIN',
             pin_code='0000'
         )
         self.test_user = UserDTO(
+            id=2,
             username='USER',
             role='USER',
             pin_code='1111'
         )
         self.test_technician = UserDTO(
+            id=3,
             username='TECHNICIAN',
             role='TECHNICIAN',
             pin_code='2222'
         )
         self.test_courier = UserDTO(
+            id=4,
             username='COURIER',
             role='COURIER',
             pin_code='3333'
@@ -609,23 +628,47 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
 
         with mock.patch.object(self.users_controller, 'generate_new_pin_code', wraps=mock_generate_new_pin):
             # Test all the 4 roles in a normal way
-            for ROLE in ['USER', 'ADMIN', 'COURIER', 'TECHNICIAN']:
-                status, headers, body = self.GET('/api/v1/users/available_code?role={}'.format(ROLE), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+            for user_role in ['USER', 'ADMIN', 'COURIER', 'TECHNICIAN']:
+                status, headers, body = self.GET('/api/v1/users/available_code?role={}'.format(user_role), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+                self.print_request_result()
                 self.assertStatus('200 OK')
-                number_of_digits = UserController.PinCodeLength[ROLE]
+                number_of_digits = UserController.PinCodeLength[user_role]
                 self.assertEqual(number_of_digits, len(body))
                 body_int = int(body)
                 self.assertLess(body_int, int('1' + '0' * number_of_digits))
                 self.assertNotIn(body, current_pins)
 
             # Don't pass the role in
-            status, headers, body = self.GET('/api/v1/users/available_code'.format(ROLE), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+            status, headers, body = self.GET('/api/v1/users/available_code', login_user=None, headers={'X-API-Secret': 'Test-Secret'})
             self.assertStatus('404 Not Found')
             body_json = json.loads(body)
             self.assertEqual({"msg": "Missing parameters: role", "success": False}, body_json)
 
             # pass in the wrong role
-            status, headers, body = self.GET('/api/v1/users/available_code?role=WRONG'.format(ROLE), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
+            status, headers, body = self.GET('/api/v1/users/available_code?role=WRONG', login_user=None, headers={'X-API-Secret': 'Test-Secret'})
             self.assertStatus('400 Bad Request')
             self.assertTrue(body.startswith(b"Wrong input parameter: Role needs to be one of"))
 
+    def test_get_user_pin_code(self):
+        with mock.patch.object(self.users_controller, 'load_user', return_value=self.test_user):
+            # Do not pass the api-secret as a normal user
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_user)
+            self.assertStatus('401 Unauthorized')
+
+            # Do not pass the api-secret as a normal user
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_admin, login_method=LoginMethod.PIN_CODE)
+            self.assertStatus('401 Unauthorized')
+
+            # As a normal user
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_user, headers={'X-API-Secret': 'Test-Secret'})
+            self.assertStatus('401 Unauthorized')
+
+            # pass the api secret, login with pin
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_admin, login_method=LoginMethod.PIN_CODE, headers={'X-API-Secret': 'Test-Secret'})
+            self.assertStatus('200 OK')
+            self.assertEqual(json.loads(body), {'pin_code': self.test_user.pin_code})
+
+            # login with password
+            status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_admin, login_method=LoginMethod.PASSWORD)
+            self.assertStatus('200 OK')
+            self.assertEqual(json.loads(body), {'pin_code': self.test_user.pin_code})

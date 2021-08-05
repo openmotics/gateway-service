@@ -1,4 +1,4 @@
-# Copyright (C) 2020 OpenMotics BV
+# Copyright (C) 2021 OpenMotics BV
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -12,6 +12,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+This migration will convert the admin user to a super user (for the cloud user)
+"""
 
 from peewee import (
     Model, Database, SqliteDatabase,
@@ -40,20 +43,9 @@ def migrate(migrator, database, fake=False, **kwargs):
         mailbox_rebus_id = IntegerField(unique=True)
         doorbell_rebus_id = IntegerField(unique=True)
 
-    # User old table
-    # -----------------------
-    class UserOld(BaseModel):
-        class Meta:
-            table_name = '_user_old'
-        id = AutoField()
-        username = CharField(unique=True)
-        password = CharField()
-        accepted_terms = IntegerField(default=0)
-
-    # User definitive model
-    # ------------------------
     class User(BaseModel):
         class UserRoles(object):
+            SUPER = 'SUPER'
             USER = 'USER'
             ADMIN = 'ADMIN'
             TECHNICIAN = 'TECHNICIAN'
@@ -64,35 +56,31 @@ def migrate(migrator, database, fake=False, **kwargs):
             DE = 'Deutsch'
             NL = 'Nederlands'
             FR = 'Francais'
+            ALL = [
+                EN,
+                DE,
+                NL,
+                FR,
+            ]
 
-        # id = AutoField()
         id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
         username = CharField(null=False, unique=True)
         first_name = CharField(null=True)
         last_name = CharField(null=True)
-        role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER
+        role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER, SUPER
         pin_code = CharField(null=True, unique=True)
         language = CharField(null=False, default='English')  # options: See Userlanguages
         password = CharField()
-        apartment_id = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
+        apartment = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
         is_active = BooleanField(default=True)
         accepted_terms = IntegerField(default=0)
 
-    # copy over the data from the old table to the new one
-    for user in UserOld.select():
-        print('Migrating user: {}'.format(user))
-        user_orm = User()
-        user_orm.username = user.username
-        user_orm.role = User.UserRoles.ADMIN
-        user_orm.pin_code = None
-        user_orm.id = user.id
-        user_orm.is_active = True
-        user_orm.apartment_id = None
-        user_orm.language = User.UserLanguages.EN
-        user_orm.save()
-
-    # remove the old user table since it is not needed anymore
-    migrator.drop_table(UserOld)
+    # Set the role of the cloud users to be a super user.
+    for user in User.select():
+        print('Checking user {}'.format(user))
+        if user.role == User.UserRoles.ADMIN and user.pin_code == "":  # this will be all the cloud users if multiple
+            user.role = User.UserRoles.SUPER
+            user.save()
 
 
 def rollback(migrator, database, fake=False, **kwargs):

@@ -29,6 +29,7 @@ class UserSerializerTest(unittest.TestCase):
         self.assertEqual(set(), set(dto.loaded_fields))
         self.assertEqual(data,
                          {'apartment': None,
+                          'username': None,
                           'first_name': '',
                           'last_name': '',
                           'id': None,
@@ -43,6 +44,7 @@ class UserSerializerTest(unittest.TestCase):
         self.assertEqual({'username'}, set(dto.loaded_fields))
         self.assertEqual(data,
                          {'apartment': None,
+                          'username': 'test',
                           'first_name': '',
                           'last_name': '',
                           'id': None,
@@ -58,6 +60,7 @@ class UserSerializerTest(unittest.TestCase):
         self.assertEqual('first.last', dto.username)
         self.assertEqual(data,
                          {'apartment': None,
+                          'username': 'first.last',
                           'first_name': 'first',
                           'last_name': 'last',
                           'id': None,
@@ -72,6 +75,7 @@ class UserSerializerTest(unittest.TestCase):
         self.assertEqual({'role'}, set(dto.loaded_fields))
         self.assertEqual(data,
                          {'apartment': None,
+                          'username': None,
                           'first_name': '',
                           'last_name': '',
                           'id': None,
@@ -89,6 +93,7 @@ class UserSerializerTest(unittest.TestCase):
         self.assertEqual(fields, set(dto.loaded_fields))
         self.assertEqual(data,
                          {'apartment': None,
+                          'username': 'first.last',
                           'first_name': 'first',
                           'last_name': 'last',
                           'id': 37,
@@ -112,6 +117,7 @@ class UserSerializerTest(unittest.TestCase):
                              'mailbox_rebus_id': 37,
                              'doorbell_rebus_id': 37
                            },
+                          'username': 'first.last',
                           'first_name': 'first',
                           'last_name': 'last',
                           'id': 37,
@@ -129,15 +135,6 @@ class UserSerializerTest(unittest.TestCase):
         # set first name afterwards to not set the username
         expected = UserDTO()
         expected.first_name = 'first'
-        self.assertEqual(expected, dto)
-
-        # username
-        serial = {
-            'username': 'username'
-        }
-        dto = UserSerializer.deserialize(serial)
-        # username is not accepted
-        expected = UserDTO()
         self.assertEqual(expected, dto)
 
         # full

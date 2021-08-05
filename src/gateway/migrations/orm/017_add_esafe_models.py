@@ -68,7 +68,7 @@ def migrate(migrator, database, fake=False, **kwargs):
 
         class UserLanguages(object):
             EN = 'English'
-            DE = 'Deutsh'
+            DE = 'Deutsch'
             NL = 'Nederlands'
             FR = 'Francais'
 
