@@ -64,7 +64,7 @@ class DeliveryController(object):
         return delivery_dto
 
     @staticmethod
-    def load_deliveries(user_id=None, include_picked_up=False):
+    def load_deliveries(user_id=None, history=False, from_id=0, limit=100):
         # type: (Optional[int], bool) -> List[DeliveryDTO]
         deliveries = []
         query = Delivery.select()
@@ -75,8 +75,16 @@ class DeliveryController(object):
                  (Delivery.user_pickup_id == user_id))
             )
         # filter on picked up when needed
-        if not include_picked_up:
-            query = query.where(Delivery.timestamp_pickup.is_null())
+        query = query.where(Delivery.timestamp_pickup.is_null(not history))
+
+        # add the from_id
+        query = query.where(Delivery.id > from_id)
+
+        # Add the limit
+        query = query.limit(limit)
+
+        # Sort on id
+        query = query.order_by(-Delivery.id)  # sort by id descending
 
         for delivery_orm in query:
             delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
@@ -102,7 +110,6 @@ class DeliveryController(object):
             delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
             deliveries.append(delivery_dto)
         return deliveries
-
 
     @staticmethod
     def get_delivery_count():

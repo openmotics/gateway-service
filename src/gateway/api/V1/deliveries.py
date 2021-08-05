@@ -55,6 +55,9 @@ class Deliveries(RestAPIEndpoint):
         self.route_dispatcher.connect('get_delivery', '/:delivery_id',
                                       controller=self, action='get_delivery',
                                       conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_delivery_history', '/history',
+                                      controller=self, action='get_delivery_history',
+                                      conditions={'method': ['GET']})
         # --- POST ---
         self.route_dispatcher.connect('post_delivery', '',
                                       controller=self, action='post_delivery',
@@ -92,6 +95,19 @@ class Deliveries(RestAPIEndpoint):
             if user_id not in [delivery.user_id_delivery, delivery.user_id_pickup]:
                 raise UnAuthorizedException('You are not allowed to request this delivery')
         deliveries_serial = DeliverySerializer.serialize(delivery)
+        return json.dumps(deliveries_serial)
+
+    @openmotics_api_v1(auth=True, pass_token=True,
+                       check={'user_id': int, 'after': int, 'pagesize': int}, check_for_missing=False)
+    def get_delivery_history(self, user_id, auth_token, after=0, pagesize=100):
+        # type: (int, AuthenticationToken, int, int) -> str
+        deliveries = self.delivery_controller.load_deliveries(user_id=user_id, history=True, from_id=after, limit=pagesize)
+        user_id = auth_token.user.id
+        user_role = auth_token.user.role
+        # filter the deliveries for only the user id when they are not technician or admin
+        if user_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
+            deliveries = [delivery for delivery in deliveries if user_id in [delivery.user_id_delivery, delivery.user_id_pickup]]
+        deliveries_serial = [DeliverySerializer.serialize(delivery) for delivery in deliveries]
         return json.dumps(deliveries_serial)
 
     @openmotics_api_v1(auth=False, pass_token=True, expect_body_type='JSON')
