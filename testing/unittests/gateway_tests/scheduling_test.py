@@ -72,8 +72,7 @@ class SchedulingControllerTest(unittest.TestCase):
                             module_controller=Mock(),
                             energy_module_controller=Mock(),
                             uart_controller=Mock(),
-                            master_controller=Mock(),
-                            energy_module_controller=Mock())
+                            master_controller=Mock())
         self.controller = SchedulingController()
         SetUpTestInjections(scheduling_controller=self.controller)
         self.controller.set_webinterface(WebInterface())
