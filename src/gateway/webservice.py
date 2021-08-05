@@ -238,7 +238,7 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
         # check if the call is done from localhost, and then verify the token
         if request.remote.ip != '127.0.0.1':
             if checked_token is None:
-                raise RuntimeError()
+                raise RuntimeError('Call is not performed from localhost and no token is provided')
             if checked_token.user.role != 'SUPER':
                 raise RuntimeError('User is non SUPER, need SUPER to access V0 api')
         if pass_token is True:
@@ -251,10 +251,10 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
                 request.params['role'] = 'ADMIN'
             else:
                 request.params['role'] = checked_token.user.role
-    except Exception:
+    except Exception as ex:
         cherrypy.response.headers['Content-Type'] = 'application/json'
         cherrypy.response.status = 401  # Unauthorized
-        contents = json.dumps({'success': False, 'msg': 'invalid_token'})
+        contents = json.dumps({'success': False, 'msg': 'invalid_token', 'detail': str(ex)})
         cherrypy.response.body = contents.encode()
         request.handler = None
 
@@ -521,7 +521,7 @@ class WebInterface(object):
         if not self.in_authorized_mode():
             raise cherrypy.HTTPError(401, "unauthorized")
         user_dto = UserDTO(username=username,
-                           role=User.UserRoles.ADMIN,
+                           role=User.UserRoles.SUPER,
                            accepted_terms=0)
         user_dto.set_password(password)
         self._user_controller.save_user(user_dto)

@@ -109,7 +109,7 @@ class WebInterfaceTest(unittest.TestCase):
     def test_create_user(self):
         to_save_user = UserDTO(
             username='test',
-            role='ADMIN',
+            role='SUPER',
             pin_code=None
         )
         to_save_user.set_password('test')
