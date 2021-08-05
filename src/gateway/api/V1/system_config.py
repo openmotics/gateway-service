@@ -27,6 +27,7 @@ from gateway.api.serializers import SystemRFIDConfigSerializer,\
     SystemTouchscreenConfigSerializer,\
     SystemGlobalConfigSerializer,\
     SystemActivateUserConfigSerializer
+from gateway.exceptions import StateException
 from gateway.models import User
 from gateway.system_config_controller import SystemConfigController
 from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
@@ -65,6 +66,9 @@ class SystemConfiguration(RestAPIEndpoint):
                                       conditions={'method': ['GET']})
         self.route_dispatcher.connect('get_activate_user_config', '/configuration/activate_user',
                                       controller=self, action='get_activate_user_config',
+                                      conditions={'method': ['GET']})
+        self.route_dispatcher.connect('get_esafe_serial', '/serial',
+                                      controller=self, action='get_esafe_serial',
                                       conditions={'method': ['GET']})
         # --- PUT ---
         self.route_dispatcher.connect('put_doorbell_delivery', '/configuration/doorbell',
@@ -171,3 +175,11 @@ class SystemConfiguration(RestAPIEndpoint):
         config_dto = SystemActivateUserConfigSerializer.deserialize(request_body)
         self.system_config_controller.save_activate_user_config(config_dto)
         return
+
+    @openmotics_api_v1(auth=False)
+    def get_esafe_serial(self):
+        # type: () -> str
+        serial = self.system_config_controller.get_esafe_serial()
+        if serial is None:
+            raise StateException('Cannot fetch the eSafe serial')
+        return json.dumps({'serial': serial})
