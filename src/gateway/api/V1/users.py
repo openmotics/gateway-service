@@ -100,7 +100,8 @@ class Users(RestAPIEndpoint):
         roles = [x for x in User.UserRoles.__dict__ if not x.startswith('_')]
         if role not in roles:
             raise WrongInputParametersException('Role needs to be one of {}'.format(roles))
-        return str(self.user_controller.generate_new_pin_code(UserController.PinCodeLength[role]))
+        new_code = self.user_controller.generate_new_pin_code(UserController.PinCodeLength[role])
+        return json.dumps({'code': new_code})
 
     @openmotics_api_v1(auth=True, auth_level=AuthenticationLevel.HIGH, check={'user_id': int},
                        allowed_user_roles=[User.UserRoles.SUPER, User.UserRoles.ADMIN])
