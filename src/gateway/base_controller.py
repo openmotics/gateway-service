@@ -56,7 +56,7 @@ class BaseController(object):
         self._pubsub = pubsub
         self._sync_orm_thread = None  # type: Optional[DaemonThread]
         self._sync_orm_interval = sync_interval
-        self._sync_dirty = True
+        self._sync_dirty = True  # Always sync after restart.
         self._sync_running = False
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.CONFIGURATION, self._handle_master_event)

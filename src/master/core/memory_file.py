@@ -80,8 +80,6 @@ class MemoryFile(object):
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
         )
 
-        self.invalidate_cache(reason='startup')  # Clear caches & send events
-
     def _handle_event(self, data):  # type: (Dict[str, Any]) -> None
         core_event = Event(data)
         if core_event.type == Event.Types.SYSTEM:

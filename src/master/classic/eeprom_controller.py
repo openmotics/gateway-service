@@ -55,8 +55,6 @@ class EepromController(object):
         self._pubsub = pubsub
         self.dirty = True
 
-        self.invalidate_cache()
-
     def invalidate_cache(self):
         # type: () -> None
         """ Invalidate the cache, this should happen when maintenance mode was used. """
@@ -160,7 +158,6 @@ class EepromFile(object):
         """
         logger.info('EEPROM - Activate')
         self._master_communicator.do_command(activate_eeprom(), {'eep': 0}, timeout=5)
-        # TODO: Is the below event needed if the GW executes the activate?
         master_event = MasterEvent(MasterEvent.Types.CONFIGURATION_CHANGE, {})
         self._pubsub.publish_master_event(PubSub.MasterTopics.CONFIGURATION, master_event)
 

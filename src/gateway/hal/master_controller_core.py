@@ -160,7 +160,6 @@ class MasterCoreController(MasterController):
                                    MasterCoreEvent.Types.LED_ON,
                                    MasterCoreEvent.Types.BUTTON_PRESS]:
             # Interesting for debug purposes, but not for everything
-            print('Got master event: {0}'.format(core_event))
             logger.info('Got master event: {0}'.format(core_event))
         if core_event.type == MasterCoreEvent.Types.OUTPUT:
             output_id = core_event.data['output']

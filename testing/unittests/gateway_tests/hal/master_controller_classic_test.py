@@ -266,6 +266,12 @@ class MasterClassicControllerTest(unittest.TestCase):
             time.sleep(0.2)
             stop.assert_called_with()
 
+    def test_master_maintenance_event(self):
+        controller = get_classic_controller_dummy()
+        with mock.patch.object(controller._eeprom_controller, 'invalidate_cache') as invalidate:
+            controller._broadcast_module_discovery()
+            invalidate.assert_called()
+
     def test_master_eeprom_event(self):
         controller = get_classic_controller_dummy()
         controller._shutters_last_updated = 1603178386.0

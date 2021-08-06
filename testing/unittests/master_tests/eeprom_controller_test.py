@@ -441,7 +441,6 @@ class EepromControllerTest(unittest.TestCase):
         """ Test read. """
         controller = get_eeprom_controller_dummy({0: bytearray([0] * 256),
                                                   1: bytearray([0] * 2) + bytearray(b'hello') + bytearray([0] * 249)})
-        get_pubsub()._publish_all_events(blocking=False)  # Process startup events
         model = controller.read(Model1, 0)
         self.assertEqual(0, model.id)
         self.assertEqual('hello' + '\x00' * 95, model.name)
