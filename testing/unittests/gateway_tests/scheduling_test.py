@@ -27,14 +27,18 @@ from peewee import SqliteDatabase
 
 from gateway.dto import ScheduleDTO
 from gateway.group_action_controller import GroupActionController
+from gateway.hal.master_controller import MasterController
+from gateway.maintenance_controller import MaintenanceController
 from gateway.models import Schedule
+from gateway.module_controller import ModuleController
+from gateway.pubsub import PubSub
 from gateway.scheduling_controller import SchedulingController
+from gateway.system_controller import SystemController
 from gateway.ventilation_controller import VentilationController
 from gateway.webservice import WebInterface
 from ioc import SetTestMode, SetUpTestInjections
 
 MODELS = [Schedule]
-
 
 class SchedulingControllerTest(unittest.TestCase):
     @classmethod
@@ -47,16 +51,16 @@ class SchedulingControllerTest(unittest.TestCase):
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
 
-        system_controller = Mock()
-        system_controller.get_timezone.return_value = 'UTC'
-
         self.group_action_controller = Mock(GroupActionController)
         self.group_action_controller.do_group_action.return_value = {}
         self.group_action_controller.do_basic_action.return_value = {}
 
-        SetUpTestInjections(system_controller=system_controller,
-                            user_controller=None,
-                            maintenance_controller=None,
+        SetUpTestInjections(pubsub=Mock(PubSub),
+                            maintenance_controller=Mock(MaintenanceController),
+                            master_controller=Mock(MasterController),
+                            module_controller=Mock(ModuleController))
+        SetUpTestInjections(system_controller=SystemController())
+        SetUpTestInjections(user_controller=None,
                             message_client=None,
                             configuration_controller=None,
                             thermostat_controller=None,
@@ -69,10 +73,8 @@ class SchedulingControllerTest(unittest.TestCase):
                             pulse_counter_controller=Mock(),
                             frontpanel_controller=Mock(),
                             group_action_controller=self.group_action_controller,
-                            module_controller=Mock(),
                             energy_module_controller=Mock(),
-                            uart_controller=Mock(),
-                            master_controller=Mock())
+                            uart_controller=Mock())
         self.controller = SchedulingController()
         SetUpTestInjections(scheduling_controller=self.controller)
         self.controller.set_webinterface(WebInterface())

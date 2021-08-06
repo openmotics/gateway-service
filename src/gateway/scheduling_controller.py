@@ -42,6 +42,7 @@ if False:  # MYPY
     from gateway.dto import LegacyScheduleDTO, LegacyStartupActionDTO
     from gateway.group_action_controller import GroupActionController
     from gateway.hal.master_controller import MasterController
+    from gateway.system_controller import SystemController
     from gateway.webservice import WebInterface
 
 logging.getLogger('apscheduler').setLevel(logging.WARNING)
@@ -73,14 +74,15 @@ class SchedulingController(object):
     NO_NTP_LOWER_LIMIT = 1546300800.0  # 2019-01-01
 
     @Inject
-    def __init__(self, group_action_controller=INJECTED, master_controller=INJECTED):
-        # type: (GroupActionController, MasterController) -> None
+    def __init__(self, group_action_controller=INJECTED, master_controller=INJECTED, system_controller=INJECTED):
+        # type: (GroupActionController, MasterController, SystemController) -> None
         self._group_action_controller = group_action_controller
         self._master_controller = master_controller
         self._web_interface = None  # type: Optional[WebInterface]
         self._schedules = {}  # type: Dict[int, ScheduleDTO]
         self._jobs = {}  # type: Dict[str, Job]
-        self._scheduler = BackgroundScheduler(job_defaults={
+        timezone = system_controller.get_timezone()
+        self._scheduler = BackgroundScheduler(timezone=timezone, job_defaults={
             'coalesce': True,
             'misfire_grace_time': 3600  # 1h
         })
@@ -101,9 +103,13 @@ class SchedulingController(object):
 
     def _handle_schedule_event(self, event):
         job = self._jobs.get(event.job_id)
-        if job:
-            schedule_id = int(event.job_id)
-            self._schedules[schedule_id].next_execution = datetime_to_timestamp(job.next_run_time)
+        schedule_dto = self._schedules[int(event.job_id)]
+        if job and hasattr(job, 'next_run_time') and job.next_run_time:
+            schedule_dto.next_execution = datetime_to_timestamp(job.next_run_time)
+        else:
+            schedule_dto.status = 'COMPLETED'
+            schedule = ScheduleMapper.dto_to_orm(schedule_dto)
+            schedule.save()
 
     def _schedule_job(self, schedule_dto):
         # type: (ScheduleDTO) -> None
@@ -148,9 +154,9 @@ class SchedulingController(object):
         # type: () -> None
         for schedule_dto in self._schedules.values():
             job = self._jobs.get(str(schedule_dto.id))
-            if job and job.next_run_time:
+            if job and hasattr(job, 'next_run_time') and job.next_run_time:
                 schedule_dto.next_execution = datetime_to_timestamp(job.next_run_time)
-            else:
+            if schedule_dto.end and schedule_dto.end < time.time() - 3600:
                 schedule_dto.status = 'COMPLETED'
                 schedule = ScheduleMapper.dto_to_orm(schedule_dto)
                 schedule.save()
