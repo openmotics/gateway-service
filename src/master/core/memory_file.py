@@ -228,5 +228,5 @@ class MemoryFile(object):
         self._notify_eeprom_changed()
 
     def _notify_eeprom_changed(self):
-        master_event = MasterEvent(MasterEvent.Types.CONFIGURATION_CHANGE, {})
-        self._pubsub.publish_master_event(PubSub.MasterTopics.CONFIGURATION, master_event)
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)

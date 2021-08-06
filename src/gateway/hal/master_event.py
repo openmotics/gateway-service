@@ -28,7 +28,7 @@ class MasterEvent(object):
     MasterEvent object
 
     Data formats:
-    * CONFIGURATION_CHANGE            # No payload
+    * EEPROM_CHANGE                   # No payload
     * OUTPUT_STATUS
       {'id': int,                     # Output ID
        'status': bool,                # On/off
@@ -49,7 +49,7 @@ class MasterEvent(object):
     """
 
     class Types(object):
-        CONFIGURATION_CHANGE = 'CONFIGURATION_CHANGE'
+        EEPROM_CHANGE = 'EEPROM_CHANGE'
         INPUT_CHANGE = 'INPUT_CHANGE'
         OUTPUT_CHANGE = 'OUTPUT_CHANGE'
         OUTPUT_STATUS = 'OUTPUT_STATUS'

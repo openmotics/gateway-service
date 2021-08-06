@@ -104,7 +104,7 @@ class MasterCoreController(MasterController):
         self._master_updating.set()
         self._master_updating_timer = None  # type: Optional[Timer]
 
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.CONFIGURATION, self._handle_master_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
@@ -131,7 +131,7 @@ class MasterCoreController(MasterController):
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
-        if master_event.type == MasterEvent.Types.CONFIGURATION_CHANGE:
+        if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
             self._output_shutter_map = {}
             self._shutters_last_updated = 0.0
             self._sensor_last_updated = 0.0
@@ -199,7 +199,11 @@ class MasterCoreController(MasterController):
         elif core_event.type == MasterCoreEvent.Types.SLAVE_SEARCH:
             if core_event.data.get('type') in [MasterCoreEvent.SearchType.DISABLED,
                                                MasterCoreEvent.SearchType.STOPPED]:
-                # If search is not active or it just stopped, the master was finished starting up
+                # When the master is completely started up one or more SLAVE_SEARCH events will be received.
+                # These will be either:
+                # * DISABLED when auto discovery is inactive;
+                # * ACTIVE when auto discovery is started and STOPPED when it's finished.
+                # This means that DISABLED or STOPPED indicate that the master startup is finished.
                 self._master_restarting_change(restarting=False)
         elif core_event.type == MasterCoreEvent.Types.MODULE_DISCOVERY:
             # TODO: Add partial EEPROM invalidation to speed things up

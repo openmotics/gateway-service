@@ -450,17 +450,17 @@ class EepromControllerTest(unittest.TestCase):
         def handle_events(master_event):
             events.append(master_event)
 
-        get_pubsub().subscribe_master_events(PubSub.MasterTopics.CONFIGURATION, handle_events)
+        get_pubsub().subscribe_master_events(PubSub.MasterTopics.EEPROM, handle_events)
         controller.invalidate_cache()
         get_pubsub()._publish_all_events(blocking=False)
         self.assertEqual([
-            MasterEvent(MasterEvent.Types.CONFIGURATION_CHANGE, {})
+            MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
         ], events)
         controller.activate()
         get_pubsub()._publish_all_events(blocking=False)
         self.assertEqual([
-            MasterEvent(MasterEvent.Types.CONFIGURATION_CHANGE, {}),
-            MasterEvent(MasterEvent.Types.CONFIGURATION_CHANGE, {})
+            MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {}),
+            MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
         ], events)
 
 

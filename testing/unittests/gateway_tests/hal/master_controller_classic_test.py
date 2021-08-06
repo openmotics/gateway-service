@@ -247,7 +247,7 @@ class MasterClassicControllerTest(unittest.TestCase):
                 assert len(synchronize.call_args_list) == 1
                 assert len(invalidate_cache.call_args_list) == 0
 
-                pubsub.subscribe_master_events(PubSub.MasterTopics.CONFIGURATION, subscriber.callback)
+                pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, subscriber.callback)
                 controller.module_discover_stop()
                 pubsub._publish_all_events(blocking=False)
                 time.sleep(0.2)
@@ -255,7 +255,7 @@ class MasterClassicControllerTest(unittest.TestCase):
                 assert len(invalidate_cache.call_args_list) == 1
 
                 event = subscriber.callback.call_args_list[0][0][0]
-                assert event.type == MasterEvent.Types.CONFIGURATION_CHANGE
+                assert event.type == MasterEvent.Types.EEPROM_CHANGE
             finally:
                 controller.stop()
 
@@ -276,8 +276,8 @@ class MasterClassicControllerTest(unittest.TestCase):
         controller = get_classic_controller_dummy()
         controller._shutters_last_updated = 1603178386.0
         pubsub = get_pubsub()
-        master_event = MasterEvent(MasterEvent.Types.CONFIGURATION_CHANGE, {})
-        pubsub.publish_master_event(PubSub.MasterTopics.CONFIGURATION, master_event)
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
         pubsub._publish_all_events(blocking=False)
         assert controller._shutters_last_updated == 0.0
 
