@@ -115,7 +115,7 @@ class SystemConfigControllerTest(unittest.TestCase):
         self.assertEqual('', config_dto.city)
         self.assertEqual('', config_dto.street)
         self.assertEqual('', config_dto.house_number)
-        self.assertEqual('English', config_dto.language)
+        self.assertEqual('en', config_dto.language)
 
         self.assert_db_value('global_config', {'device_name': 'ESAFE',
                                                'country': 'BE',
@@ -123,7 +123,7 @@ class SystemConfigControllerTest(unittest.TestCase):
                                                'city': '',
                                                'street': '',
                                                'house_number': '',
-                                               'language': 'English'})
+                                               'language': 'en'})
 
         config_dto = SystemGlobalConfigDTO(device_name='Testerken',
                                            country='testland',

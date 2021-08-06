@@ -77,7 +77,7 @@ class UserControllerTest(unittest.TestCase):
         self.test_super = UserDTO(
             username='om',
             role='SUPER',
-            language='English'
+            language='en'
         )
         self.test_super.set_password('pass')
 
@@ -106,6 +106,7 @@ class UserControllerTest(unittest.TestCase):
         user_orm = User.select().where(User.username == 'fred').first()
         self.assertIsNotNone(user_orm)
         self.assertEqual('fred@test.com', user_orm.email)
+        self.assertEqual('en', user_orm.language)
 
         num_users = self.controller.get_number_of_users()
         self.assertEqual(2, num_users)

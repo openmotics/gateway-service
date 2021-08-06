@@ -77,7 +77,7 @@ class ApiUsersTests(unittest.TestCase):
             role='USER',
             pin_code='1111',
             apartment=None,
-            language='English',
+            language='en',
             accepted_terms=1,
             email='user_1@test.com'
         )
@@ -112,7 +112,7 @@ class ApiUsersTests(unittest.TestCase):
             role='USER',
             pin_code='some_random_string',
             apartment=None,
-            language='English',
+            language='en',
             accepted_terms=1,
             is_active=False
         )

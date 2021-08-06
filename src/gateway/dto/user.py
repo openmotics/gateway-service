@@ -28,7 +28,7 @@ if False:  # MYPY
 
 class UserDTO(BaseDTO):
     def __init__(self, id=None, username=None, first_name='', last_name='', role=None,
-                 pin_code=None, apartment=None, language='English', accepted_terms=0,
+                 pin_code=None, apartment=None, language='en', accepted_terms=0,
                  is_active=None, email=None):
         self.id = id  # type: Optional[int]
         self.username = username  # type: str

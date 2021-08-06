@@ -592,25 +592,13 @@ class User(BaseModel):
         TECHNICIAN = 'TECHNICIAN'
         COURIER = 'COURIER'
 
-    class UserLanguages(object):
-        EN = 'English'
-        DE = 'Deutsch'
-        NL = 'Nederlands'
-        FR = 'Francais'
-        ALL = [
-            EN,
-            DE,
-            NL,
-            FR,
-        ]
-
     id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
     username = CharField(null=False, unique=True)
     first_name = CharField(null=True)
     last_name = CharField(null=True)
-    role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER, SUPER
+    role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHNICIAN, COURIER, SUPER
     pin_code = CharField(null=True, unique=True)
-    language = CharField(null=False, default='English')  # options: See Userlanguages
+    language = CharField(null=False, default='en')  # options: See languages
     password = CharField()
     apartment = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
     is_active = BooleanField(default=True)
