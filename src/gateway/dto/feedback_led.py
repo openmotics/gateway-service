@@ -16,7 +16,7 @@
 """
 Feedback LED DTO
 """
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Optional
@@ -187,13 +187,6 @@ class FeedbackLedDTO(BaseDTO):
         SW_B16_NORMAL = 'Swinging B16'
         SW_B16_INVERTED = 'Swinging B16 Inverted'
 
-    @capture_fields
     def __init__(self, id, function):  # type: (Optional[int], str) -> None
         self.id = id  # type: Optional[int]
         self.function = function  # type: str
-
-    def __eq__(self, other):
-        if not isinstance(other, FeedbackLedDTO):
-            return False
-        return (self.id == other.id and
-                self.function == other.function)

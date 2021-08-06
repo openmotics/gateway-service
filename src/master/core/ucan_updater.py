@@ -30,7 +30,7 @@ from serial_utils import CommunicationTimedOutException
 if False:  # MYPY
     from typing import Optional
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class UCANUpdater(object):
@@ -48,7 +48,7 @@ class UCANUpdater(object):
     MAX_FLASH_BYTES = 41
 
     # Bootloader timeouts
-    BOOTLOADER_TIMEOUT_UPDATE = 255
+    BOOTLOADER_TIMEOUT_UPDATE = 60
     BOOTLOADER_TIMEOUT_RUNTIME = 0  # Currently needed to switch to application mode
 
     @staticmethod
@@ -107,6 +107,22 @@ class UCANUpdater(object):
                 if not in_bootloader:
                     raise RuntimeError('Could not enter bootloader')
                 logger.info('Bootloader active')
+
+            logger.info('Loading bootloader version...')
+            try:
+                response = ucan_communicator.do_command(cc_address=cc_address,
+                                                        command=UCANAPI.get_bootloader_version(),
+                                                        identity=ucan_address,
+                                                        fields={})
+                if response is None:
+                    raise RuntimeError()
+                if response['major'] == ord('v'):
+                    bootloader_version = '<= v1.3'  # Legacy version
+                else:
+                    bootloader_version = 'v{0}.{1}'.format(response['major'], response['minor'])
+                logger.info('Bootloader version: {0}'.format(bootloader_version))
+            except Exception:
+                logger.warning('Could not load bootloader version')
 
             logger.info('Erasing flash...')
             ucan_communicator.do_command(cc_address=cc_address,
@@ -178,11 +194,11 @@ class UCANUpdater(object):
                                          command=UCANAPI.set_bootloader_timeout(SID.BOOTLOADER_COMMAND),
                                          identity=ucan_address,
                                          fields={'timeout': UCANUpdater.BOOTLOADER_TIMEOUT_RUNTIME})
-            logger.info('Set safety bit allowing the application to immediately start on reset')
+            logger.info('Set safety counter allowing the application to immediately start on reset')
             ucan_communicator.do_command(cc_address=cc_address,
-                                         command=UCANAPI.set_bootloader_safety_flag(),
+                                         command=UCANAPI.set_bootloader_safety_counter(),
                                          identity=ucan_address,
-                                         fields={'safety_flag': 1})
+                                         fields={'safety_counter': 5})
 
             # Switch to application mode
             logger.info('Reset to application mode')

@@ -204,3 +204,11 @@ def get_runit_service_folder():
         return os.path.join(PYINSTALLER_PREFIX, 'om-services')
     else:
         raise ValueError('"PYINSTALLER_PREFIX" environment variable is not set, cannot retrieve the runit service folder')
+
+def get_renson_main_config_file():
+    # type: () -> str
+    return '/data/app_data/main.config'
+
+def get_esafe_touchscreen_calibration_file():
+    # type: () -> str
+    return '/etc/pointercal'

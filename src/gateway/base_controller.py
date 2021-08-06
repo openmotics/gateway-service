@@ -25,22 +25,23 @@ from gateway.events import GatewayEvent
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.models import BaseModel
+from gateway.dto.base import BaseDTO
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
-    from typing import Optional, Callable, Type, List
+    from typing import Any, Callable, List, Optional, Type, TypeVar
     from gateway.maintenance_controller import MaintenanceController
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class SyncStructure(object):
-    def __init__(self, orm_model, name, skip=None):  # type: (Type[BaseModel], str, Optional[Callable[[BaseModel], bool]]) -> None
+    def __init__(self, orm_model, name, skip=None):  # type: (Type[BaseModel], str, Optional[Callable[[Any], bool]]) -> None
         self.orm_model = orm_model  # type: Type[BaseModel]
         self.name = name  # type: str
-        self.skip = skip  # type: Optional[Callable[[BaseModel], bool]]
+        self.skip = skip  # type: Optional[Callable[[Any], bool]]
 
 
 class BaseController(object):
@@ -79,6 +80,10 @@ class BaseController(object):
         if self._sync_orm_thread is not None:
             self._sync_orm_thread.stop()
 
+    def request_sync_state(self):
+        # type: () -> None
+        pass  # TODO generalize status syncing
+
     def request_sync_orm(self):
         if self._sync_orm_thread is not None:
             self._sync_orm_thread.request_single_run()
@@ -102,22 +107,9 @@ class BaseController(object):
             for structure in self.SYNC_STRUCTURES:
                 orm_model = structure.orm_model
                 try:
-                    name = structure.name
-                    skip = structure.skip
-
                     start = time.time()
                     logger.info('ORM sync ({0})'.format(orm_model.__name__))
-
-                    ids = []
-                    for dto in getattr(self._master_controller, 'load_{0}s'.format(name))():
-                        if skip is not None and skip(dto):
-                            continue
-                        id_ = dto.id
-                        ids.append(id_)
-                        if not orm_model.select().where(orm_model.number == id_).exists():
-                            orm_model.create(number=id_)
-                    orm_model.delete().where(orm_model.number.not_in(ids)).execute()
-
+                    self._sync_orm_structure(structure)
                     duration = time.time() - start
                     logger.info('ORM sync ({0}): completed after {1:.1f}s'.format(orm_model.__name__, duration))
                 except CommunicationTimedOutException as ex:
@@ -129,7 +121,24 @@ class BaseController(object):
                     type_name = orm_model.__name__.lower()
                     gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': type_name})
                     self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
+                    self.request_sync_state()
             self._sync_dirty = False
         finally:
             self._sync_running = False
         return True
+
+    def _sync_orm_structure(self, structure):
+        # type: (SyncStructure) -> None
+        orm_model = structure.orm_model
+        name = structure.name
+        skip = structure.skip
+
+        ids = []
+        for dto in getattr(self._master_controller, 'load_{0}s'.format(name))():
+            if skip is not None and skip(dto):
+                continue
+            id_ = dto.id
+            ids.append(id_)
+            if not orm_model.select().where(orm_model.number == id_).exists():
+                orm_model.create(number=id_)
+        orm_model.delete().where(orm_model.number.not_in(ids)).execute()

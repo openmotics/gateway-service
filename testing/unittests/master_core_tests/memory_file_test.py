@@ -36,7 +36,7 @@ class MemoryFileTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        Logs.setup_logger(log_level=logging.DEBUG)
+        Logs.setup_logger(log_level_override=logging.DEBUG)
 
     def test_data_consistency(self):
         mocked_core = MockedCore()
@@ -50,8 +50,13 @@ class MemoryFileTest(unittest.TestCase):
 
         data = mocked_core.memory_file.read([address])[address]
         self.assertEqual(bytearray([1, 2, 3]), data)
+        memory[5][12] = 4
+        data = mocked_core.memory_file.read([address])[address]
+        self.assertEqual(bytearray([1, 2, 3]), data)
+        data = mocked_core.memory_file.read([address], read_through=True)[address]
+        self.assertEqual(bytearray([1, 2, 4]), data)
         mocked_core.memory_file.write({address: bytearray([6, 7, 8])})
-        self.assertEqual(bytearray([1, 2, 3]), memory[5][10:13])
+        self.assertEqual(bytearray([1, 2, 4]), memory[5][10:13])
         mocked_core.memory_file.activate()  # Only save on activate
         self.assertEqual(bytearray([6, 7, 8]), memory[5][10:13])
 

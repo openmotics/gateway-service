@@ -17,12 +17,13 @@ import logging
 import time
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO, ThermostatStatusDTO, \
-    ThermostatGroupDTO, ThermostatAircoStatusDTO, PumpGroupDTO, \
-    GlobalRTD10DTO, RTD10DTO
+from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, \
+    ThermostatAircoStatusDTO, ThermostatDTO, ThermostatGroupDTO, \
+    ThermostatGroupStatusDTO, ThermostatStatusDTO, ThermostatScheduleDTO
 from gateway.events import GatewayEvent
+from gateway.exceptions import CommunicationFailure
 from gateway.hal.master_event import MasterEvent
-from gateway.hal.master_controller import CommunicationFailure
+from gateway.models import Sensor
 from gateway.pubsub import PubSub
 from gateway.thermostat.master.thermostat_status_master import \
     ThermostatStatusMaster
@@ -37,12 +38,17 @@ if False:  # MYPY
     from gateway.hal.master_controller_classic import MasterClassicController
     from gateway.output_controller import OutputController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 THERMOSTATS = 'THERMOSTATS'
 
 
 class ThermostatControllerMaster(ThermostatController):
+    DEFAULT_TIMINGS = ['07:00', '09:00', '17:00', '22:00']
+    DEFAULT_TEMPS_HEATING = [20.0, 21.0, 16.0]
+    DEFAULT_TEMPS_COOLING = [24.0, 23.0, 25.0]
+
+
     @Inject
     def __init__(self, output_controller=INJECTED, master_controller=INJECTED, pubsub=INJECTED):
         # type: (OutputController, MasterClassicController, PubSub) -> None
@@ -52,11 +58,11 @@ class ThermostatControllerMaster(ThermostatController):
 
         self._monitor_thread = DaemonThread(name='thermostatctl',
                                             target=self._monitor,
-                                            interval=30, delay=10)
+                                            interval=1, delay=10)
 
         self._thermostat_status = ThermostatStatusMaster(on_thermostat_change=self._thermostat_changed,
                                                          on_thermostat_group_change=self._thermostat_group_changed)
-        self._thermostats_original_interval = 30
+        self._thermostats_original_interval = 60
         self._thermostats_interval = self._thermostats_original_interval
         self._thermostats_last_updated = 0.0
         self._thermostats_restore = 0
@@ -138,25 +144,120 @@ class ThermostatControllerMaster(ThermostatController):
     # Legacy API
     ################################
 
+    @staticmethod
+    def _patch_thermostat(ref_thermostat, mode):  # type: (ThermostatDTO, str) -> bool
+        # The parameter `ref_thermostat` is passed by reference and might be updated
+        was_incorrect = False
+        for day in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']:
+            schedule_dto = getattr(ref_thermostat, 'auto_{0}'.format(day))  # type: Optional[ThermostatScheduleDTO]
+            if schedule_dto is None:
+                schedule_dto = ThermostatScheduleDTO(None, None, None, '', '', '', '')  # Invalid
+                setattr(ref_thermostat, 'auto_{0}'.format(day), schedule_dto)
+            incorrect_timing = '42:30' in [schedule_dto.start_day_1, schedule_dto.end_day_1,
+                                           schedule_dto.start_day_2, schedule_dto.end_day_2]
+            incorrect_temps = None in [schedule_dto.temp_day_1, schedule_dto.temp_day_2, schedule_dto.temp_night]
+            if incorrect_temps or incorrect_timing:
+                schedule_dto.start_day_1 = ThermostatControllerMaster.DEFAULT_TIMINGS[0]
+                schedule_dto.end_day_1 = ThermostatControllerMaster.DEFAULT_TIMINGS[1]
+                schedule_dto.start_day_2 = ThermostatControllerMaster.DEFAULT_TIMINGS[2]
+                schedule_dto.end_day_2 = ThermostatControllerMaster.DEFAULT_TIMINGS[3]
+                if mode == 'heating':
+                    schedule_dto.temp_day_1 = ThermostatControllerMaster.DEFAULT_TEMPS_HEATING[0]
+                    schedule_dto.temp_day_2 = ThermostatControllerMaster.DEFAULT_TEMPS_HEATING[1]
+                    schedule_dto.temp_night = ThermostatControllerMaster.DEFAULT_TEMPS_HEATING[2]
+                else:
+                    schedule_dto.temp_day_1 = ThermostatControllerMaster.DEFAULT_TEMPS_COOLING[0]
+                    schedule_dto.temp_day_2 = ThermostatControllerMaster.DEFAULT_TEMPS_COOLING[1]
+                    schedule_dto.temp_night = ThermostatControllerMaster.DEFAULT_TEMPS_COOLING[2]
+                was_incorrect = True
+        return was_incorrect
+
     def load_heating_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
-        return self._master_controller.load_heating_thermostat(thermostat_id)
+        thermostat_dto = self._master_controller.load_heating_thermostat(thermostat_id)
+        thermostat_dto.sensor = self._sensor_to_orm(thermostat_dto.sensor)
+        if ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
+                                                        mode='heating'):
+            # Make sure that times/temperature are always set to a valid value
+            self.save_heating_thermostats([thermostat_dto])
+        return thermostat_dto
 
     def load_heating_thermostats(self):  # type: () -> List[ThermostatDTO]
-        return self._master_controller.load_heating_thermostats()
+        thermostats = self._master_controller.load_heating_thermostats()
+        changed_thermostat_dtos = []
+        for thermostat_dto in thermostats:
+            thermostat_dto.sensor = self._sensor_to_orm(thermostat_dto.sensor)
+            if ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
+                                                            mode='heating'):
+                # Make sure that times/temperature are always set to a valid value
+                changed_thermostat_dtos.append(thermostat_dto)
+        if changed_thermostat_dtos:
+            self.save_heating_thermostats(changed_thermostat_dtos)
+        return thermostats
 
     def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
+        for thermostat_dto in thermostats:
+            thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
+            # Make sure that times/temperature are always set to a valid value
+            ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
+                                                         mode='heating')
         self._master_controller.save_heating_thermostats(thermostats)
         self.invalidate_cache(THERMOSTATS)
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
-        return self._master_controller.load_cooling_thermostat(thermostat_id)
+        thermostat_dto = self._master_controller.load_cooling_thermostat(thermostat_id)
+        thermostat_dto.sensor = self._sensor_to_orm(thermostat_dto.sensor)
+        if ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
+                                                        mode='cooling'):
+            # Make sure that times/temperature are always set to a valid value
+            self.save_cooling_thermostats([thermostat_dto])
+        return thermostat_dto
 
     def load_cooling_thermostats(self):  # type: () -> List[ThermostatDTO]
-        return self._master_controller.load_cooling_thermostats()
+        thermostats = self._master_controller.load_cooling_thermostats()
+        changed_thermostat_dtos = []
+        for thermostat_dto in thermostats:
+            thermostat_dto.sensor = self._sensor_to_orm(thermostat_dto.sensor)
+            if ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
+                                                            mode='cooling'):
+                # Make sure that times/temperature are always set to a valid value
+                changed_thermostat_dtos.append(thermostat_dto)
+        self.save_cooling_thermostats(changed_thermostat_dtos)
+        return thermostats
 
     def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
+        for thermostat_dto in thermostats:
+            thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
+            # Make sure that times/temperature are always set to a valid value
+            ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
+                                                         mode='cooling')
         self._master_controller.save_cooling_thermostats(thermostats)
         self.invalidate_cache(THERMOSTATS)
+
+    def _sensor_to_orm(self, sensor_id):  # type: (Optional[int]) -> Optional[int]
+        if sensor_id in (None, 240, 255):
+            return sensor_id
+        else:
+            sensor = Sensor.select() \
+                .where(Sensor.source == Sensor.Sources.MASTER) \
+                .where(Sensor.physical_quantity == Sensor.PhysicalQuantities.TEMPERATURE) \
+                .where(Sensor.external_id == str(sensor_id)) \
+                .first()
+            if sensor is None:
+                logger.warning('Invalid <Sensor external_id={}> configured on thermostat'.format(sensor_id))
+                return None
+            else:
+                return sensor.id
+
+    def _sensor_to_master(self, sensor_id):  # type: (Optional[int]) -> Optional[int]
+        if sensor_id in (None, 240, 255):
+            return sensor_id
+        else:
+            sensor = Sensor.get(Sensor.id == sensor_id)
+            if sensor.source != Sensor.Sources.MASTER:
+                raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor_id, sensor.source))
+            if sensor.physical_quantity != Sensor.PhysicalQuantities.TEMPERATURE:
+                raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor_id, sensor.physical_quantity))
+            return int(sensor.external_id)
 
     def load_cooling_pump_group(self, pump_group_id):  # type: (int) -> PumpGroupDTO
         return self._master_controller.load_cooling_pump_group(pump_group_id)

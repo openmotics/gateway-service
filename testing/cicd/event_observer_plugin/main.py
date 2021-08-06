@@ -24,7 +24,7 @@ import json
 import time
 from threading import Lock
 
-from plugins.base import OMPluginBase, om_expose, receive_events
+from plugins.base import OMPluginBase, om_expose, input_status
 
 if False:  # MYPY
     from typing import Any, Dict, List
@@ -39,21 +39,19 @@ class EventObserver(OMPluginBase):
         # type: (Any, Any) -> None
         super(EventObserver, self).__init__(webinterface, logger)
         self._lock = Lock()
-        unknown_event = {'received_at': 0.0, 'outputs': [None,None,None,None,None,None,None,None]}
+        unknown_event = {'received_at': 0.0}
         self._events = [unknown_event]  # type: List[Dict[str,Any]]
 
-    @receive_events
-    def handle_master_events(self, event):
-        # type: (int) -> None
+    @input_status(version=2)
+    def handle_input_status(self, input_event):
+        # type: (Dict[str,Any]) -> None
         received_at = time.time()
-        output_id, output_status = (event / 2, event % 2)
-        self.logger('Received event: %s for output=%s -> status=%s' % (event, output_id, output_status))
+        input_id = input_event['input_id']
+        input_status = input_event['status']
+        self.logger('Received event: %s for input=%s -> status=%s' % (input_event, input_id, input_status))
         with self._lock:
-            outputs = copy.copy(self._events[-1]['outputs'])
-            outputs[output_id] = output_status
-            output_event = {'received_at': received_at, 'outputs': outputs,
-                            'output_id': output_id, 'output_status': output_status}
-            self._events.append(output_event)
+            input_event = {'received_at': received_at, 'input_id': input_id, 'input_status': input_status}
+            self._events.append(input_event)
             self._events = self._events[-8:]
 
     @om_expose

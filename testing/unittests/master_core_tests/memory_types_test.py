@@ -27,7 +27,7 @@ from master.core.memory_file import MemoryTypes, MemoryFile
 from logs import Logs
 from mocked_core_helper import MockedCore
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class MemoryTypesTest(unittest.TestCase):
@@ -36,7 +36,7 @@ class MemoryTypesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        Logs.setup_logger(log_level=logging.DEBUG)
+        Logs.setup_logger(log_level_override=logging.DEBUG)
 
     def setUp(self):
         self.mocked_core = MockedCore(memory_is_cache=True)
@@ -161,10 +161,11 @@ class MemoryTypesTest(unittest.TestCase):
         container = MemoryFieldContainer(name='field',
                                          memory_field=MemoryByteField(MemoryTypes.EEPROM, address_spec=(0, 1)),
                                          memory_address=address,
-                                         memory_file=memory_file_mock)
+                                         memory_file=memory_file_mock,
+                                         read_through=False)
         data = container.decode()
         self.assertEqual(1, data)
-        memory_file_mock.read.assert_called_with([address])
+        memory_file_mock.read.assert_called_with([address], False)
         container.encode(2)
         data = container.decode()
         self.assertEqual(2, data)

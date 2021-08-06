@@ -13,18 +13,21 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import absolute_import
+
 import logging
+import time
+
 import hypothesis
 import pytest
-import time
-from tests.hardware_layout import TestPlatform, CT
+
 from tests.hardware import cts, skip_on_platforms
+from tests.hardware_layout import CT, TESTER, TestPlatform
 
 if False:  # MYPY
     from typing import Any
     from tests.toolbox import Toolbox
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture
@@ -46,13 +49,13 @@ def test_module_power_cycle(toolbox, energy_module, ct):  # type: (Toolbox, Any,
     _ = energy_module
     cycles = 10
     post_boot_wait = 5  # Wait `post_boot_wait` seconds after powering up the module to start using it
-    toolbox.tester.get('/set_output', {'id': toolbox.POWER_ENERGY_MODULE, 'is_on': True})
+    toolbox.tester.get('/set_output', {'id': TESTER.Power.bus2, 'is_on': True})
     time.sleep(post_boot_wait)
     _assert_realtime(toolbox, ct)
     with toolbox.disabled_self_recovery():
         for cycle in range(cycles):
             logger.info('power cycle energy module e#{} ({}/{})'.format(ct.module_id, cycle + 1, cycles))
-            toolbox.tester.toggle_output(toolbox.POWER_ENERGY_MODULE, delay=2, inverted=True)
+            toolbox.tester.toggle_output(TESTER.Power.bus2, delay=2, inverted=True)
             time.sleep(post_boot_wait)
             _assert_realtime(toolbox, ct)
 
@@ -64,5 +67,5 @@ def _assert_realtime(toolbox, ct):  # type: (Toolbox, CT) -> None
     voltage, frequency, current, power = data[str(ct.module_id)][ct.ct_id]
     assert 220 <= voltage <= 240
     assert 49 <= frequency <= 51
-    assert 20 <= power <= 40
+    assert 5 <= power <= 80
     assert 0.1 <= current <= 0.5

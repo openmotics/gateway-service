@@ -18,7 +18,7 @@ import logging
 import os
 import time
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import hypothesis
 import requests
@@ -26,13 +26,13 @@ import ujson as json
 from requests.exceptions import ConnectionError, RequestException, Timeout
 
 from tests.hardware_layout import INPUT_MODULE_LAYOUT, OUTPUT_MODULE_LAYOUT, \
-    TEMPERATURE_MODULE_LAYOUT, TEST_PLATFORM, Input, Module, Output, \
-    TestPlatform
+    TEMPERATURE_MODULE_LAYOUT, TEST_PLATFORM, TESTER, Input, Module, Output, \
+    TestPlatform, Shutter, SHUTTER_MODULE_LAYOUT
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 if False:  # MYPY
-    from typing import Any, Dict, List, Optional, Tuple
+    from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 class Client(object):
@@ -55,12 +55,12 @@ class Client(object):
         # type: (bool, float) -> Optional[str]
         if self._auth:
             self._token = None
-            params = {'username': self._auth[0], 'password': self._auth[1], 'accept_terms': True}
+            params = {'username': self._auth[0], 'password': self._auth[1], 'accept_terms': True, 'timeout': timedelta(hours=3).seconds}
             data = self.get('/login', params=params, use_token=False, success=success, timeout=timeout)
             if 'token' in data:
                 return data['token']
             else:
-                raise Exception('unexpected response {}'.format(data))
+                raise Exception('Unexpected response: {}'.format(data))
         else:
             return None
 
@@ -81,7 +81,7 @@ class Client(object):
         uri = 'https://{}{}'.format(self._host, path)
         if use_token:
             headers['Authorization'] = 'Bearer {}'.format(self.token)
-            logger.debug('GET {} {} {}'.format(self._id, path, params))
+            # logger.debug('GET {} {} {}'.format(self._id, path, params))
 
         job_name = os.getenv('JOB_NAME')
         build_number = os.getenv('BUILD_NUMBER')
@@ -96,7 +96,7 @@ class Client(object):
             try:
                 response = f(uri, params=params, data=data, files=files,
                              headers=headers, **self._default_kwargs)
-                assert response.status_code != 404, 'not found {}'.format(path)
+                assert response.status_code != 404, 'Call `{0}` not found: {1}'.format(path, response.content)
                 data = response.json()
                 if success and 'success' in data:
                     assert data['success'], 'content={}'.format(response.content.decode())
@@ -114,7 +114,7 @@ class TesterGateway(object):
         self._client = client
         self._last_received_at = 0.0
         self._last_data = {}  # type: Dict[str,Any]
-        self._outputs = {}  # type: Dict[int,bool]
+        self._inputs = {}  # type: Dict[int,bool]
         self.update_events()
 
     def get_last_outputs(self):
@@ -148,69 +148,74 @@ class TesterGateway(object):
 
     def log_events(self):
         # type: () -> None
-        for event in (x for x in self._last_data['events'] if 'output_id' in x):
-            received_at, output_id, output_status, outputs = (event['received_at'], event['output_id'], event['output_status'], event['outputs'])
+        for event in (x for x in self._last_data['events'] if 'input_id' in x):
+            received_at, input_id, input_status = (event['received_at'], event['input_id'], event['input_status'])
             timestamp = datetime.fromtimestamp(received_at).strftime('%y-%m-%d %H:%M:%S,%f')
-            state = ' '.join('?' if x is None else str(x) for x in outputs)
-            logger.error('{} received event {} -> {}    outputs={}'.format(timestamp, output_id, output_status, state))
+            logger.error('{} received event {} -> {}'.format(timestamp, input_id, input_status))
 
     def update_events(self):
         # type: () -> bool
         data = self.get('/plugins/event_observer/events')
         self._last_data = data
         changed = False
-        for event in (x for x in self._last_data['events'] if 'output_id' in x):
-            received_at, output_id, output_status = (event['received_at'], event['output_id'], event['output_status'])
+        for event in (x for x in self._last_data['events'] if 'input_id' in x):
+            received_at, input_id, input_status = (event['received_at'], event['input_id'], event['input_status'])
             if received_at >= self._last_received_at:
                 changed = True
                 self._last_received_at = received_at
-                self._outputs[output_id] = bool(output_status)
+                self._inputs[input_id] = bool(input_status)
         return changed
 
     def reset(self):
         # type: () -> None
-        self._outputs = {}
+        self._inputs = {}
 
-    def receive_output_event(self, output, output_status, between):
-        # type: (Output, bool, Tuple[float, float]) -> bool
+    def receive_input_event(self, entity, input_id, input_status, between):
+        # type: (Union[Output, Shutter], int, bool, Tuple[float, float]) -> bool
         cooldown, deadline = between
         timeout = deadline - cooldown
+        if input_id is None:
+            raise ValueError('Invalid {} for events, is not connected to a tester input'.format(entity))
         if cooldown > 0:
             logger.debug('Waiting {:.2f}s before event'.format(cooldown))
             self.reset()
             time.sleep(cooldown)
         since = time.time()
         while since > time.time() - timeout:
-            if output.output_id in self._outputs and output_status == self._outputs[output.output_id]:
-                logger.debug('Received event {} status={} after {:.2f}s'.format(output, self._outputs[output.output_id], time.time() - since))
+            if input_id in self._inputs and input_status == self._inputs[input_id]:
+                logger.debug('Received event {} status={} after {:.2f}s'.format(entity, self._inputs[input_id], time.time() - since))
                 return True
             if self.update_events():
                 continue
             time.sleep(0.2)
-        logger.error('Did not receive event {} status={} after {:.2f}s'.format(output, output_status, time.time() - since))
+        logger.error('Did not receive event {} status={} after {:.2f}s'.format(entity, input_status, time.time() - since))
         self.log_events()
+        return False
+
+    def wait_for_input_status(self, entity, input_id, input_status, timeout):
+        # type: (Union[Output, Shutter], int, bool, Optional[float]) -> bool
+        since = time.time()
+        current_status = None
+        while timeout is None or since > time.time() - timeout:
+            data = self.get('/get_input_status')
+            current_status = {s['id']: s['status'] == 1 for s in data['status']}.get(input_id, None)
+            if input_status == current_status:
+                logger.debug('Get status {} status={}, after {:.2f}s'.format(entity, input_status, time.time() - since))
+                return True
+            if timeout is None:
+                break  # Immediate check
+            time.sleep(max(0.2, timeout / 10.0))
+        logger.error('Get status {} status={} != expected {}, timeout after {:.2f}s'.format(entity, current_status, input_status, time.time() - since))
         return False
 
 
 class Toolbox(object):
-    DEBIAN_AUTHORIZED_MODE = 13  # tester_output_1.output_5
-    DEBIAN_DISCOVER_INPUT = 14  # tester_output_1.output_6
-    DEBIAN_DISCOVER_OUTPUT = 15  # tester_output_1.output_7
-    DEBIAN_DISCOVER_CAN_CONTROL = 22  # tester_output2.output_6
-    DEBIAN_DISCOVER_DIMMER = 20  # tester_output2.output_4
-    DEBIAN_DISCOVER_TEMP = 21  # tester_output2.output_5
-    DEBIAN_DISCOVER_ENERGY = 23  # tester_output2.output_7
-    DEBIAN_POWER_OUTPUT = 8  # tester_output_1.output_0
-    POWER_ENERGY_MODULE = 11  # tester_output_1.output_3
-    CORE_PLUS_SETUP_BUTTON = 19  # tester_output_2.output_3
-    CORE_PLUS_ACTION_BUTTON = 16  # tester_output_2.output_0
-    CORE_PLUS_POWER_OUTPUT = 10  # tester_output_1.output_2
-
     def __init__(self):
         # type: () -> None
         self._tester = None  # type: Optional[TesterGateway]
         self._dut = None  # type: Optional[Client]
         self._dut_energy_cts = None  # type: Optional[List[Tuple[int, int]]]
+        self.dirty_shutters = []  # type: List[Shutter]
 
     @property
     def tester(self):
@@ -257,9 +262,12 @@ class Toolbox(object):
         # TODO: Change this in the future, as it needs a new API call on the GW.
 
         expected_modules = {Module.HardwareType.VIRTUAL: {},
-                            Module.HardwareType.PHYSICAL: {}}  # Limit it to physical and virtual for now
-        for module in OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT + TEMPERATURE_MODULE_LAYOUT:
-            hardware_type = Module.HardwareType.VIRTUAL if module.hardware_type == Module.HardwareType.VIRTUAL else Module.HardwareType.PHYSICAL
+                            Module.HardwareType.PHYSICAL: {},
+                            Module.HardwareType.INTERNAL: {}}
+        for module in OUTPUT_MODULE_LAYOUT + INPUT_MODULE_LAYOUT + TEMPERATURE_MODULE_LAYOUT + SHUTTER_MODULE_LAYOUT:
+            hardware_type = module.hardware_type
+            if hardware_type == Module.HardwareType.EMULATED:
+                hardware_type = Module.HardwareType.PHYSICAL  # Emulated moduled are (for testing purposes) considered physical
             if module.mtype not in expected_modules[hardware_type]:
                 expected_modules[hardware_type][module.mtype] = 0
             expected_modules[hardware_type][module.mtype] += 1
@@ -271,28 +279,23 @@ class Toolbox(object):
         for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
             if modules.get(mtype, 0) == 0:
                 missing_modules.add(mtype)
-        modules_info = self.list_modules()['master'].values()
-        if not any(v['type'] == 'C' for v in modules_info):
-            missing_modules.add('C')
-        if not any(v['type'] == 'I' and v['is_can'] for v in modules_info):
-            missing_modules.add('C')
         if missing_modules:
             logger.info('Discovering modules...')
             self.discover_modules(output_modules='O' in missing_modules,
                                   input_modules='I' in missing_modules,
-                                  can_controls='C' in missing_modules,
+                                  shutter_modules='R' in missing_modules,
                                   dimmer_modules='D' in missing_modules,
                                   temp_modules='T' in missing_modules,
+                                  can_controls='C' in missing_modules,
                                   ucans='C' in missing_modules)
 
         modules = self.count_modules('master')
         logger.info('Discovered modules: {0}'.format(modules))
-        for mtype, expected_amount in expected_modules[Module.HardwareType.PHYSICAL].items():
-            assert modules.get(mtype, 0) == expected_amount
-
-        # TODO ensure discovery synchonization finished.
-        for module in INPUT_MODULE_LAYOUT:
-            self.ensure_input_exists(module.inputs[-1], timeout=300)
+        for mtype in set(list(expected_modules[Module.HardwareType.PHYSICAL].keys()) +
+                         list(expected_modules[Module.HardwareType.INTERNAL].keys())):
+            expected_amount = (expected_modules[Module.HardwareType.PHYSICAL].get(mtype, 0) +
+                               expected_modules[Module.HardwareType.INTERNAL].get(mtype, 0))
+            assert modules.get(mtype, 0) >= expected_amount, 'Expected {0} modules {1}'.format(expected_amount, mtype)
 
         try:
             for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
@@ -309,6 +312,17 @@ class Toolbox(object):
         for mtype, expected_amount in expected_modules[Module.HardwareType.VIRTUAL].items():
             assert modules.get(mtype, 0) >= expected_amount
 
+        # TODO ensure discovery synchonization finished.
+        for module in OUTPUT_MODULE_LAYOUT:
+            if module.outputs:
+                self.ensure_output_exists(module.outputs[-1], timeout=300)
+        for module in INPUT_MODULE_LAYOUT:
+            if module.inputs:
+                self.ensure_input_exists(module.inputs[-1], timeout=300)
+        for module in SHUTTER_MODULE_LAYOUT:
+            if module.shutters:
+                self.ensure_shutter_exists(module.shutters[-1], timeout=300)
+
     def print_logs(self):
         # type: () -> None
         try:
@@ -322,7 +336,7 @@ class Toolbox(object):
         # type: (bool) -> Dict[str,Any]
         assert self.dut._auth
         logger.debug('factory reset')
-        params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm}
+        params = {'username': self.dut._auth[0], 'password': self.dut._auth[1], 'confirm': confirm, 'can': False}
         return self.dut.get('/factory_reset', params=params, success=confirm)
 
     def list_modules(self):
@@ -362,19 +376,11 @@ class Toolbox(object):
     def authorized_mode_start(self):
         # type: () -> None
         logger.debug('start authorized mode')
-        if TEST_PLATFORM == TestPlatform.CORE_PLUS:
-            self.tester.toggle_outputs([self.CORE_PLUS_ACTION_BUTTON,
-                                        self.CORE_PLUS_SETUP_BUTTON], delay=15)
-        else:
-            self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE, delay=15)
+        self.tester.toggle_outputs(TESTER.Buttons.dut, delay=15)
 
     def authorized_mode_stop(self):
         # type: () -> None
-        if TEST_PLATFORM == TestPlatform.CORE_PLUS:
-            self.tester.toggle_outputs([self.CORE_PLUS_ACTION_BUTTON,
-                                        self.CORE_PLUS_SETUP_BUTTON])
-        else:
-            self.tester.toggle_output(self.DEBIAN_AUTHORIZED_MODE)
+        self.tester.toggle_outputs(TESTER.Buttons.dut)
 
     def create_or_update_user(self, success=True):
         # type: (bool) -> None
@@ -389,7 +395,7 @@ class Toolbox(object):
 
     def get_firmware_versions(self):
         # type: () -> Dict[str,str]
-        modules = self.dut.get('/get_modules_information')['modules']['master']
+        modules = self.dut.get('/get_modules_information?refresh=True')['modules']['master']
         versions = {'M': self.dut.get('/get_status')['version']}
         for data in (x for x in modules.values() if 'firmware' in x):
             module = 'C' if data.get('is_can', False) else data['type']
@@ -411,18 +417,20 @@ class Toolbox(object):
         logger.debug('stop module discover')
         self.dut.get('/module_discover_stop')
 
-    def discover_modules(self, output_modules=False, input_modules=False, can_controls=False, ucans=False, dimmer_modules=False, temp_modules=False, timeout=120):
-        # TODO: Does not work yet for the Core(+) as they don't have this call implemented.
+    def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, temp_modules=False, can_controls=False, ucans=False, timeout=120):
         logger.debug('Discovering modules')
         since = time.time()
-
+        # [WIP] tried to disable ucan logic for the factory reset test (CAN FX call)
+        # but it did not enable us to check the behaviour
         if ucans:
             ucan_inputs = []
             for module in INPUT_MODULE_LAYOUT:
-                if module.mtype == 'C':
+                if module.is_can:
                     ucan_inputs += module.inputs
+            logger.debug('Toggle uCAN inputs %s', ucan_inputs)
             for ucan_input in ucan_inputs:
                 self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
+                time.sleep(0.5)
             time.sleep(0.5)  # Give a brief moment for the CC to settle
 
         new_modules = []
@@ -431,23 +439,26 @@ class Toolbox(object):
         try:
             addresses = []
             if output_modules:
-                self.tester.toggle_output(self.DEBIAN_DISCOVER_OUTPUT, delay=0.5)
+                self.tester.toggle_output(TESTER.Button.output, delay=0.5)
                 new_modules += self.watch_module_discovery_log(module_amounts={'O': 1}, addresses=addresses)
+            if shutter_modules:
+                self.tester.toggle_output(TESTER.Button.shutter, delay=0.5)
+                new_modules += self.watch_module_discovery_log(module_amounts={'R': 1}, addresses=addresses)
             if input_modules:
-                self.tester.toggle_output(self.DEBIAN_DISCOVER_INPUT, delay=0.5)
+                self.tester.toggle_output(TESTER.Button.input, delay=0.5)
                 new_modules += self.watch_module_discovery_log(module_amounts={'I': 1}, addresses=addresses)
-            if can_controls:
-                self.tester.toggle_output(self.DEBIAN_DISCOVER_CAN_CONTROL, delay=0.5)
+            if dimmer_modules:
+                self.tester.toggle_output(TESTER.Button.dimmer, delay=0.5)
+                new_modules += self.watch_module_discovery_log(module_amounts={'D': 1}, addresses=addresses)
+            if temp_modules:
+                self.tester.toggle_output(TESTER.Button.temp, delay=0.5)
+                new_modules += self.watch_module_discovery_log(module_amounts={'T': 1}, addresses=addresses)
+            if can_controls or ucans:
+                self.tester.toggle_output(TESTER.Button.can, delay=0.5)
                 module_amounts = {'C': 1}
                 if ucans:
                     module_amounts.update({'I': 1, 'T': 1})
                 new_modules += self.watch_module_discovery_log(module_amounts=module_amounts, addresses=addresses)
-            if dimmer_modules:
-                self.tester.toggle_output(self.DEBIAN_DISCOVER_DIMMER, delay=0.5)
-                new_modules += self.watch_module_discovery_log(module_amounts={'D': 1}, addresses=addresses)
-            if temp_modules:
-                self.tester.toggle_output(self.DEBIAN_DISCOVER_TEMP, delay=0.5)
-                new_modules += self.watch_module_discovery_log(module_amounts={'T': 1}, addresses=addresses)
             new_module_addresses = set(module['address'] for module in new_modules)
         finally:
             self.module_discover_stop()
@@ -540,12 +551,12 @@ class Toolbox(object):
 
     def discover_energy_module(self):
         # type: () -> None
-        self.tester.get('/set_output', {'id': self.POWER_ENERGY_MODULE, 'is_on': True})
+        self.tester.get('/set_output', {'id': TESTER.Power.bus2, 'is_on': True})
         time.sleep(5)
         try:
             logger.debug('discover Energy module')
             self.dut.get('/start_power_address_mode')
-            self.tester.toggle_output(self.DEBIAN_DISCOVER_ENERGY, 1.0)
+            self.tester.toggle_output(TESTER.Button.energy, 1.0)
             self.assert_energy_modules(1, timeout=60)
         finally:
             self.dut.get('/stop_power_address_mode')
@@ -555,7 +566,7 @@ class Toolbox(object):
         since = time.time()
         modules = []
         while since > time.time() - timeout:
-            modules += self.dut.get('/get_power_modules')['modules']
+            modules += self.dut.get('/get_modules_information')['modules']
             if len(modules) >= count:
                 logger.debug('discovered {} modules, done'.format(count))
                 return modules
@@ -565,11 +576,7 @@ class Toolbox(object):
     def power_off(self):
         # type: () -> None
         logger.debug('power off')
-        if TEST_PLATFORM == TestPlatform.CORE_PLUS:
-            output_id = self.CORE_PLUS_POWER_OUTPUT
-        else:
-            output_id = self.DEBIAN_POWER_OUTPUT
-        self.tester.get('/set_output', {'id': output_id, 'is_on': False})
+        self.tester.get('/set_output', {'id': TESTER.Power.dut, 'is_on': False})
         time.sleep(2)
 
     def ensure_power_on(self):
@@ -578,12 +585,10 @@ class Toolbox(object):
             return
         logger.info('power on')
         if TEST_PLATFORM == TestPlatform.CORE_PLUS:
-            output_id = self.CORE_PLUS_POWER_OUTPUT
             timeout = 600  # After a potential factory reset, the Core+ has to wipe a lot more EEPROM and is therefore slower
         else:
-            output_id = self.DEBIAN_POWER_OUTPUT
             timeout = 300
-        self.tester.get('/set_output', {'id': output_id, 'is_on': True})
+        self.tester.get('/set_output', {'id': TESTER.Power.dut, 'is_on': True})
         logger.info('waiting for gateway api to respond...')
         self.health_check(timeout=timeout)
         logger.info('health check done')
@@ -597,7 +602,7 @@ class Toolbox(object):
             self.dut.get('/set_self_recovery', {'active': True})
 
     def health_check(self, timeout=30, skip_assert=False):
-        # type: (float) -> List[str]
+        # type: (float, bool) -> List[str]
         since = time.time()
         pending = ['unknown']
         while since > time.time() - timeout:
@@ -610,9 +615,9 @@ class Toolbox(object):
             except Exception:
                 pass
             time.sleep(10)
-        if skip_assert:
-            return pending
-        assert pending == []
+        if not skip_assert:
+            assert pending == []
+        return pending
 
     def module_error_check(self):
         # type: () -> None
@@ -633,9 +638,8 @@ class Toolbox(object):
         # type: (Output, int, Optional[Dict[str,Any]]) -> None
         if config:
             self.configure_output(output, config)
-        state = ' '.join(self.tester.get_last_outputs())
         hypothesis.note('ensure output {} is {}'.format(output, status))
-        logger.debug('ensure output {} is {}    outputs={}'.format(output, status, state))
+        logger.debug('ensure output {} is {}'.format(output, status))
         time.sleep(0.2)
         self.set_output(output, status)
         time.sleep(0.2)
@@ -646,6 +650,21 @@ class Toolbox(object):
         logger.debug('set output {} -> {}'.format(output, status))
         self.dut.get('/set_output', {'id': output.output_id, 'is_on': status})
 
+    def configure_shutter(self, shutter, config):
+        # type: (Shutter, Dict[str, Any]) -> None
+        config_data = {'id': shutter.shutter_id}
+        config_data.update(**config)
+        logger.debug('configure shutter {} with {}'.format(shutter, config))
+        self.dut.get('/set_shutter_configuration', {'config': json.dumps(config_data)})
+
+    def set_shutter(self, shutter, direction):
+        # type: (Shutter, str) -> None
+        self.dut.get('/do_shutter_{}'.format(direction), {'id': shutter.shutter_id})
+
+    def lock_shutter(self, shutter, locked):
+        # type: (Shutter, bool) -> None
+        self.dut.get('/do_basic_action', {'action_type': 113, 'action_number': 1 if locked else 0})
+
     def press_input(self, _input):
         # type: (Input) -> None
         self.tester.get('/set_output', {'id': _input.tester_output_id, 'is_on': False})  # ensure start status
@@ -655,29 +674,92 @@ class Toolbox(object):
         self.tester.toggle_output(_input.tester_output_id, is_dimmer=_input.is_dimmer)
         logger.debug('Toggled {} -> True -> False'.format(_input))
 
+    def assert_shutter_changed(self, shutter, from_status, to_status, timeout=5, inverted=False):
+        # type: (Shutter, str, str, float) -> None
+        hypothesis.note('assert {} status changed {} -> {}'.format(shutter, from_status, to_status))
+        input_id_up = shutter.tester_input_id_down if inverted else shutter.tester_input_id_up
+        input_id_down = shutter.tester_input_id_up if inverted else shutter.tester_input_id_down
+        start = time.time()
+        self.assert_shutter_status(shutter=shutter,
+                                   status=to_status,
+                                   timeout=timeout,
+                                   inverted=inverted)
+        if from_status != to_status:
+            up_ok = True
+            if (from_status == 'going_up') != (to_status == 'going_up'):
+                up_ok = self.tester.receive_input_event(entity=shutter,
+                                                        input_id=input_id_up,
+                                                        input_status=to_status == 'going_up',
+                                                        between=(0, Toolbox._remaining_timeout(timeout, start)))
+            down_ok = True
+            if (from_status == 'going_down') != (to_status == 'going_down'):
+                down_ok = self.tester.receive_input_event(entity=shutter,
+                                                          input_id=input_id_down,
+                                                          input_status=to_status == 'going_down',
+                                                          between=(0, Toolbox._remaining_timeout(timeout, start)))
+            if not up_ok or not down_ok:
+                raise AssertionError('expected events {} status={}, up_ok={}, down_ok={}'.format(shutter, to_status, up_ok, down_ok))
+
     def assert_output_changed(self, output, status, between=(0, 5)):
         # type: (Output, bool, Tuple[float,float]) -> None
-        hypothesis.note('assert output {} status changed {} -> {}'.format(output, not status, status))
-        if self.tester.receive_output_event(output, status, between=between):
+        hypothesis.note('assert {} status changed {} -> {}'.format(output, not status, status))
+        if self.tester.receive_input_event(entity=output,
+                                           input_id=output.tester_input_id,
+                                           input_status=status,
+                                           between=between):
             return
         raise AssertionError('expected event {} status={}'.format(output, status))
 
     def assert_output_status(self, output, status, timeout=5):
         # type: (Output, bool, float) -> None
         hypothesis.note('assert output {} status is {}'.format(output, status))
+        if self.tester.wait_for_input_status(entity=output,
+                                             input_id=output.tester_input_id,
+                                             input_status=status,
+                                             timeout=timeout):
+            return
+        raise AssertionError('Expected {} status={}'.format(output, status))
+
+    def assert_shutter_status(self, shutter, status, timeout=5, inverted=False):
+        # type: (Shutter, str, float) -> None
+        input_id_up = shutter.tester_input_id_down if inverted else shutter.tester_input_id_up
+        input_id_down = shutter.tester_input_id_up if inverted else shutter.tester_input_id_down
+        start = time.time()
+        up_ok = self.tester.wait_for_input_status(entity=shutter,
+                                                  input_id=input_id_up,
+                                                  input_status=status == 'going_up',
+                                                  timeout=Toolbox._remaining_timeout(timeout, start))
+        down_ok = self.tester.wait_for_input_status(entity=shutter,
+                                                    input_id=input_id_down,
+                                                    input_status=status == 'going_down',
+                                                    timeout=Toolbox._remaining_timeout(timeout, start))
+        if not up_ok or not down_ok:
+            raise AssertionError('Expected {} status={}, up_ok={}, down_ok={}'.format(shutter, status, up_ok, down_ok))
+
+    def ensure_output_exists(self, output, timeout=30):
+        # type: (Output, float) -> None
         since = time.time()
-        current_status = None
         while since > time.time() - timeout:
             data = self.dut.get('/get_output_status')
-            current_status = data['status'][output.output_id]['status']
-            if status == bool(current_status):
-                logger.debug('get output {} status={}, after {:.2f}s'.format(output, status, time.time() - since))
+            try:
+                next(x for x in data['status'] if x['id'] == output.output_id)
+                logger.debug('output {} with status discovered, after {:.2f}s'.format(output, time.time() - since))
+                return
+            except StopIteration:
+                pass
+            time.sleep(2)
+        raise AssertionError('output {} status missing, timeout after {:.2f}s'.format(output, time.time() - since))
+
+    def ensure_shutter_exists(self, _shutter, timeout=30):
+        # type: (Shutter, float) -> None
+        since = time.time()
+        while since > time.time() - timeout:
+            data = self.dut.get('/get_shutter_status')
+            if str(_shutter.shutter_id) in data['detail']:
+                logger.debug('shutter {} with status discovered, after {:.2f}s'.format(_shutter, time.time() - since))
                 return
             time.sleep(2)
-        state = ' '.join(self.tester.get_last_outputs())
-        logger.error('get status {} status={} != expected {}, timeout after {:.2f}s    outputs={}'.format(output, bool(current_status), status, time.time() - since, state))
-        self.tester.log_events()
-        raise AssertionError('get status {} status={} != expected {}, timeout after {:.2f}s'.format(output, bool(current_status), status, time.time() - since))
+        raise AssertionError('shutter {} status missing, timeout after {:.2f}s'.format(_shutter, time.time() - since))
 
     def ensure_input_exists(self, _input, timeout=30):
         # type: (Input, float) -> None
@@ -692,3 +774,7 @@ class Toolbox(object):
                 pass
             time.sleep(2)
         raise AssertionError('input {} status missing, timeout after {:.2f}s'.format(_input, time.time() - since))
+
+    @staticmethod
+    def _remaining_timeout(timeout, start):
+        return timeout - time.time() + start

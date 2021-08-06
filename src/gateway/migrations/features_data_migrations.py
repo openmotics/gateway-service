@@ -17,7 +17,7 @@ import logging
 from gateway.migrations.base_migrator import BaseMigrator
 from gateway.models import Feature, DataMigration
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class FeatureMigrator(BaseMigrator):

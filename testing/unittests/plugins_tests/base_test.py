@@ -59,7 +59,7 @@ class PluginControllerTest(unittest.TestCase):
         SetTestMode()
         cls.PLUGINS_PATH = tempfile.mkdtemp()
         cls.PLUGIN_CONFIG_PATH = tempfile.mkdtemp()
-        Logs.setup_logger(log_level=logging.DEBUG)
+        Logs.setup_logger(log_level_override=logging.DEBUG)
 
     def setUp(self):
         self.test_db = SqliteDatabase(':memory:')
@@ -307,17 +307,17 @@ class P1(OMPluginBase):
             rising_input_event = {'id': 1,
                                   'status': True,
                                   'location': {'room_id': 1}}
-            controller.process_observer_event(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE, data=rising_input_event))
+            controller.process_gateway_event(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE, data=rising_input_event))
             falling_input_event = {'id': 2,
                                    'status': False,
                                    'location': {'room_id': 5}}
-            controller.process_observer_event(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE, data=falling_input_event))
+            controller.process_gateway_event(GatewayEvent(event_type=GatewayEvent.Types.INPUT_CHANGE, data=falling_input_event))
             output_event = {'id': 1,
                             'status': {'on': True,
                                        'value': 5,
                                        'locked': True},
                             'location': {'room_id': 5}}
-            controller.process_observer_event(GatewayEvent(event_type=GatewayEvent.Types.OUTPUT_CHANGE, data=output_event))
+            controller.process_gateway_event(GatewayEvent(event_type=GatewayEvent.Types.OUTPUT_CHANGE, data=output_event))
             controller.process_event(1)
 
             keys = ['input_data', 'input_data_version_2', 'output_data', 'output_data_version_2', 'event_data']
@@ -441,7 +441,7 @@ class ShutterPlugin(OMPluginBase):
             controller.start()
 
             shutter_event = GatewayEvent(event_type=GatewayEvent.Types.SHUTTER_CHANGE, data={'some_random_key': 'some_random_value'})
-            controller.process_observer_event(shutter_event)
+            controller.process_gateway_event(shutter_event)
 
             keys = ['shutter_data_v1', 'shutter_data_v1_detail', 'shutter_data_v2', 'shutter_data_v3']
             start = time.time()

@@ -24,7 +24,7 @@ from hypothesis.strategies import booleans, integers, just
 
 from tests.hardware import inputs, multiple_outputs, outputs
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 DEFAULT_OUTPUT_CONFIG = {'timer': 2**16 - 1}
 DEFAULT_INPUT_CONFIG = {'invert': 255}

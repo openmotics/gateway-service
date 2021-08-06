@@ -23,13 +23,14 @@ import time
 from intelhex import IntelHex
 from ioc import Inject, INJECTED
 from master.core.core_communicator import CoreCommunicator
-from master.core.maintenance import MaintenanceCommunicator
+from master.core.core_api import CoreAPI
+from master.maintenance_communicator import MaintenanceCommunicator
 
 if False:  # MYPY
     from typing import Optional
     from serial import Serial
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class CoreUpdater(object):
@@ -38,12 +39,13 @@ class CoreUpdater(object):
     """
 
     BOOTLOADER_SERIAL_READ_TIMEOUT = 3
-    RESET_DELAY = 2
+    ENTER_BOOTLOADER_DELAY = 1.5
+    ENTER_APPLICATION_DELAY = 5.0
 
     @staticmethod
     @Inject
-    def update(hex_filename, master_communicator=INJECTED, maintenance_communicator=INJECTED, cli_serial=INJECTED):
-        # type: (str, CoreCommunicator, MaintenanceCommunicator, Serial) -> bool
+    def update(hex_filename, version, raise_exception=False, master_communicator=INJECTED, maintenance_communicator=INJECTED, cli_serial=INJECTED):
+        # type: (str, str, bool, CoreCommunicator, MaintenanceCommunicator, Serial) -> bool
         """ Flashes the content from an Intel HEX file to the Core """
         try:
             # TODO: Check version and skip update if the version is already active
@@ -53,9 +55,26 @@ class CoreUpdater(object):
             master_communicator = master_communicator
             maintenance_communicator = maintenance_communicator
 
+            if master_communicator is not None and not master_communicator.is_running():
+                master_communicator.start()
+
+            current_version = None  # type: Optional[str]
+            try:
+                current_version = master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
+                logger.info('Current firmware version: {0}'.format(current_version))
+            except Exception as ex:
+                logger.warning('Could not load current firmware version: {0}'.format(ex))
+
+            if current_version is not None and version == current_version:
+                logger.info('Firmware up-to-date, skipping')
+                return True
+
+            logger.info('Updating firmware from {0} to {1}'.format(current_version if current_version is not None else 'unknown',
+                                                                   version if version is not None else 'unknown'))
+
             if master_communicator is not None and maintenance_communicator is not None:
                 maintenance_communicator.stop()
-                # master_communicator.stop()  # TODO: Hold the communicator
+                master_communicator.stop()
 
             if not os.path.exists(hex_filename):
                 raise RuntimeError('The given path does not point to an existing file')
@@ -70,7 +89,7 @@ class CoreUpdater(object):
             else:
                 logger.info('Bootloader not active, switching to bootloader')
                 cli_serial.write(b'reset\r\n')
-                time.sleep(CoreUpdater.RESET_DELAY)
+                time.sleep(CoreUpdater.ENTER_BOOTLOADER_DELAY)
                 bootloader_version = CoreUpdater._in_bootloader(cli_serial)
                 if bootloader_version is None:
                     raise RuntimeError('Could not enter bootloader')
@@ -86,29 +105,37 @@ class CoreUpdater(object):
                     raise RuntimeError('Unexpected NOK while flashing: {0}'.format(response))
                 if not response.startswith('ok'):
                     raise RuntimeError('Unexpected answer while flashing: {0}'.format(response))
-                if index % int(amount_lines / 10) == 0 and index != 0:
-                    logger.info('Flashing... {0}%'.format(int(index * 100 / amount_lines)))
+                if index % (amount_lines // 10) == 0 and index != 0:
+                    logger.info('Flashing... {0}%'.format(index * 10 // (amount_lines // 10)))
             logger.info('Flashing... Done')
 
             logger.info('Verify Core communication')
-            time.sleep(CoreUpdater.RESET_DELAY)
+            time.sleep(CoreUpdater.ENTER_APPLICATION_DELAY)
             if CoreUpdater._in_bootloader(cli_serial):
                 raise RuntimeError('Still in bootloader')
-            cli_serial.write(b'firmware version\r\n')
-            firmware_version = CoreUpdater._read_line(cli_serial, discard_lines=2)
-            logger.info('Application version {0} active'.format(firmware_version))
-            cli_serial.flushInput()
 
             if master_communicator is not None and maintenance_communicator is not None:
                 maintenance_communicator.start()
-                # master_communicator.start()  # TODO: Make sure it can start again
+                master_communicator.start()
 
-            # TODO: Also verify CoreCommunicator / API
+            current_version = None
+            try:
+                current_version = master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
+                logger.info('Post-update firmware version: {0}'.format(current_version))
+            except Exception as ex:
+                logger.warning('Could not load post-update firmware version: {0}'.format(ex))
+            if version is not None and current_version != version:
+                raise RuntimeError('Post-update firmware version {0} does not match expected {1}'.format(
+                    current_version if current_version is not None else 'unknown',
+                    version
+                ))
 
             logger.info('Update completed')
             return True
         except Exception as ex:
             logger.error('Error flashing: {0}'.format(ex))
+            if raise_exception:
+                raise
             return False
 
     @staticmethod

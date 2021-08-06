@@ -24,16 +24,16 @@ from threading import Lock
 
 from peewee import JOIN
 
-from gateway.base_controller import BaseController, SyncStructure
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import InputDTO
 from gateway.dto.input import InputStatusDTO
+from ioc import Injectable, Inject, INJECTED, Singleton
+from gateway.dto import InputDTO
 from gateway.events import GatewayEvent
-from gateway.hal.master_controller import CommunicationFailure
-from gateway.hal.master_event import MasterEvent
 from gateway.models import Input, Room
+from gateway.hal.master_event import MasterEvent
+from gateway.exceptions import CommunicationFailure
+from gateway.base_controller import BaseController, SyncStructure
 from gateway.pubsub import PubSub
-from ioc import INJECTED, Inject, Injectable, Singleton
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
@@ -41,13 +41,12 @@ if False:  # MYPY
     from typing import Dict, List, Optional, Tuple, Any
     from gateway.hal.master_controller import MasterController
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('input_controller')
 @Singleton
 class InputController(BaseController):
-
     SYNC_STRUCTURES = [SyncStructure(Input, 'input', skip=lambda i: i.module_type not in ['i', 'I'])]
 
     @Inject
@@ -72,6 +71,10 @@ class InputController(BaseController):
         if self._sync_state_thread:
             self._sync_state_thread.stop()
             self._sync_state_thread = None
+
+    def request_sync_state(self):
+        if self._sync_state_thread:
+            self._sync_state_thread.request_single_run()
 
     def _sync_state(self):
         try:
@@ -121,7 +124,11 @@ class InputController(BaseController):
         inputs_dtos = []
         for input_ in list(Input.select(Input, Room)
                                 .join_from(Input, Room, join_type=JOIN.LEFT_OUTER)):  # TODO: Load dicts
-            input_dto = self._master_controller.load_input(input_id=input_.number)
+            try:
+                input_dto = self._master_controller.load_input(input_id=input_.number)
+            except TypeError as ex:
+                logger.error('Could not load input {0}: {1}'.format(input_.number, ex))
+                continue
             input_dto.room = input_.room.number if input_.room is not None else None
             input_dto.event_enabled = input_.event_enabled
             inputs_dtos.append(input_dto)
@@ -186,7 +193,6 @@ class InputStateCache(object):
     def __init__(self):
         self._cache = {}  # type: Dict[int,InputDTO]
         self._lock = Lock()
-        self._loaded = False
 
     def get_input_status(self):
         # type: () -> Dict[int,Optional[InputStatusDTO]]
@@ -209,7 +215,6 @@ class InputStateCache(object):
                     input_dto.state = InputStatusDTO(input_dto.id)
                 new_state[input_dto.id] = input_dto
             self._cache = new_state
-            self._loaded = True
 
     def get_recent_inputs(self, threshold=10):
         # type: (int) -> List[int]
@@ -225,11 +230,10 @@ class InputStateCache(object):
         this deduplicates actual changes based on the cached state.
         """
         with self._lock:
-            if not self._loaded:
-                return False, None
             input_id = state_dto.id
             if input_id not in self._cache:
                 logger.warning('Received change for unknown input {0}: {1}'.format(input_id, state_dto))
+                self._cache[input_id] = InputDTO(input_id, state=state_dto)
                 return False, None
             changed = False
             if 'status' in state_dto.loaded_fields and self._cache[input_id].state != state_dto:

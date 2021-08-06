@@ -34,6 +34,9 @@ from six.moves.configparser import ConfigParser, NoOptionError
 from six.moves.urllib.parse import urlparse, urlunparse
 import constants
 
+class HealthCheckFailed(Exception):
+    pass
+
 if False:  #MyPy
     from typing import List, Any, Union, Tuple
 
@@ -122,7 +125,6 @@ def run_tarball_extract(file, output_dir=None):
         cmd(['tar', '-xf', gunzipped_file])
     else:
         cmd(['tar', '-vxf', gunzipped_file, '-C', output_dir])
-
 
 
 def extract_legacy_update(update_file, expected_md5):
@@ -235,7 +237,7 @@ def check_gateway_health(timeout=60):
         time.sleep(10)
     message = 'health check failed {}'.format(pending)
     logger.error(message)
-    raise SystemExit(EXIT_CODES['failed_health_check'])
+    raise HealthCheckFailed(message)
 
 
 def is_up_to_date(name, new_version):
@@ -288,14 +290,21 @@ def update_master_firmware(master_type, hexfile, version):
     elif master_type == 'master_coreplus':
         arguments += ['--master-firmware-core', hexfile]
     try:
+        # If the master is stuck in BL, the version call fails, but we should still be able to flash the master
         output = subprocess.check_output(['python', master_tool, '--version'])
         current_version, _, _ = output.decode('utf-8').rstrip().partition(' ')
+    except Exception as exc:
+        current_version = 'unknown'
+        logger.warning('Checking master firmware version failed - proceeding with flashing')
+    # Retry logic for flashing should be placed in the master_controller if deemed necessary
+    try:
         if current_version == version:
             logger.info('Master is already v{}, skipped'.format(version))
         else:
             logger.info('Master {} -> {}'.format(current_version, version if version else 'unknown'))
             cmd(['python', master_tool, '--update'] + arguments)
             cmd(['cp', hexfile, os.path.join(PREFIX, 'firmware.hex')])
+            logger.info("Success Flashing master")
     except Exception as exc:
         logger.exception('Updating Master firmware failed')
         return exc
@@ -530,6 +539,7 @@ def update(version, expected_md5):
         services_running = True
 
         logger.info(' -> Waiting for health check')
+
         check_gateway_health()
 
     except Exception as exc:
@@ -588,6 +598,11 @@ def main():
         except SystemExit as sex:
             logger.error('FAILED')
             logger.error('exit ({}) : {}'.format(sex.code, sex))
+            logger.error(traceback.format_exc())
+        except HealthCheckFailed as ex:
+            logger.error('FAILED')
+            logger.error('HealthCheck Failed: {}'.format(ex))
+            logger.error('exit {}'.format(EXIT_CODES['failed_health_check']))
             logger.error(traceback.format_exc())
         except Exception as ex:
             logger.error('FAILED')

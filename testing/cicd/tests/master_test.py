@@ -19,7 +19,7 @@ import time
 
 import pytest
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture

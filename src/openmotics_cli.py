@@ -33,7 +33,9 @@ def cmd_factory_reset(args):
         print('already_in_progress')
         exit(1)
     with open(lock_file, 'w') as fd:
-        fd.write('factory_reset')
+        if args.can:
+            fd.write('factory_reset_full')
+        else: fd.write('factory_reset')
 
 
 def cmd_shell(args):
@@ -44,7 +46,6 @@ def cmd_shell(args):
     @Inject
     def f(cloud_api_client=INJECTED,
           event_sender=INJECTED,
-          gateway_api=INJECTED,
           group_action_controller=INJECTED,
           input_controller=INJECTED,
           maintenance_controller=INJECTED,
@@ -53,10 +54,9 @@ def cmd_shell(args):
           metrics_cache_controller=INJECTED,
           metrics_controller=INJECTED,
           module_controller=INJECTED,
-          observer=INJECTED,
           output_controller=INJECTED,
           plugin_controller=INJECTED,
-          power_controller=INJECTED,
+          energy_module_controller=INJECTED,
           pubsub=INJECTED,
           pulse_counter_controller=INJECTED,
           room_controller=INJECTED,
@@ -120,6 +120,7 @@ operator_subparsers = operator_parser.add_subparsers()
 factory_reset_parser = operator_subparsers.add_parser('factory-reset')
 factory_reset_parser.set_defaults(func=cmd_factory_reset)
 factory_reset_parser.add_argument('--force', action='store_true')
+factory_reset_parser.add_argument('--can', action='store_true')
 shell_parser = operator_subparsers.add_parser('shell')
 shell_parser.set_defaults(func=cmd_shell)
 top_parser = operator_subparsers.add_parser('top')

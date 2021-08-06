@@ -26,12 +26,12 @@ from gateway.events import GatewayEvent
 from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.maintenance_controller import MaintenanceController
-from gateway.models import Output, Room, Floor
+from gateway.models import Output, Room
 from gateway.output_controller import OutputController, OutputStateCache
 from gateway.pubsub import PubSub
 from ioc import SetTestMode, SetUpTestInjections
 
-MODELS = [Output, Room, Floor]
+MODELS = [Output, Room]
 
 
 class OutputControllerTest(unittest.TestCase):
@@ -73,7 +73,7 @@ class OutputControllerTest(unittest.TestCase):
         output_dto = OutputDTO(id=42)
         with mock.patch.object(self.master_controller, 'load_outputs', return_value=[output_dto]):
             self.controller.run_sync_orm()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert Output.select().where(Output.number == output_dto.id).count() == 1
             assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'output'}) in events
             assert len(events) == 1
@@ -98,7 +98,7 @@ class OutputControllerTest(unittest.TestCase):
                                return_value=[OutputStatusDTO(id=2, status=True),
                                              OutputStatusDTO(id=40, status=True)]):
             self.controller._sync_state()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert [GatewayEvent('OUTPUT_CHANGE', {'id': 2, 'status': {'on': True, 'locked': False}, 'location': {'room_id': 255}}),
                     GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 0, 'locked': False}, 'location': {'room_id': 3}})] == events
 
@@ -113,7 +113,7 @@ class OutputControllerTest(unittest.TestCase):
                                              OutputStatusDTO(id=40, status=True, dimmer=50)]):
             events = []
             self.controller._sync_state()
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             assert [GatewayEvent('OUTPUT_CHANGE', {'id': 2, 'status': {'on': True, 'locked': False}, 'location': {'room_id': 255}}),
                     GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 50, 'locked': False}, 'location': {'room_id': 3}})] == events
 
@@ -129,18 +129,18 @@ class OutputControllerTest(unittest.TestCase):
                                                OutputDTO(id=40, module_type='D', room=3)])
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'state': OutputStatusDTO(id=2, status=False)}))
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'state': OutputStatusDTO(id=40, status=True, dimmer=100)}))
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
 
         events = []
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'state': OutputStatusDTO(id=2, status=True)}))
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'state': OutputStatusDTO(id=40, status=True)}))
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
 
         assert [GatewayEvent('OUTPUT_CHANGE', {'id': 2, 'status': {'on': True, 'locked': False}, 'location': {'room_id': 255}})] == events
 
         events = []
         self.controller._handle_master_event(MasterEvent('OUTPUT_STATUS', {'state': OutputStatusDTO(id=40, dimmer=50)}))
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         assert [GatewayEvent('OUTPUT_CHANGE', {'id': 40, 'status': {'on': True, 'value': 50, 'locked': False}, 'location': {'room_id': 3}})] == events
 
     def test_get_last_outputs(self):
@@ -238,8 +238,7 @@ class OutputControllerTest(unittest.TestCase):
             load.assert_called_with(output_id=42)
 
     def test_output_actions(self):
-        floor = Floor.create(number=5)
-        room = Room.create(number=10, floor=floor)
+        room = Room.create(number=10)
         Output.create(number=2, room=room)
         Output.create(number=3)
 
@@ -249,15 +248,6 @@ class OutputControllerTest(unittest.TestCase):
         with mock.patch.object(self.master_controller, 'set_all_lights') as call:
             self.controller.set_all_lights(action='ON')
             call.assert_called_once_with(action='ON')
-        with mock.patch.object(self.master_controller, 'set_all_lights') as call:
-            self.controller.set_all_lights(action='OFF', floor_id=1)
-            call.assert_called_once_with(action='OFF', floor_id=1, output_ids=[])
-        with mock.patch.object(self.master_controller, 'set_all_lights') as call:
-            self.controller.set_all_lights(action='OFF', floor_id=5)
-            call.assert_called_once_with(action='OFF', floor_id=5, output_ids=[2])
-        with mock.patch.object(self.master_controller, 'set_all_lights') as call:
-            self.controller.set_all_lights(action='ON', floor_id=5)
-            call.assert_called_once_with(action='ON', floor_id=5, output_ids=[2])
 
 
 class OutputStateCacheTest(unittest.TestCase):

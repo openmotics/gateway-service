@@ -17,14 +17,13 @@
 Output DTO
 """
 import time
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Any, Optional
 
 
 class VentilationDTO(BaseDTO):
-    @capture_fields
     def __init__(self, id, source, external_id='', name='', amount_of_levels=0,
                  device_vendor='', device_type='', device_serial=''):
         self.id = id  # type: int
@@ -36,25 +35,11 @@ class VentilationDTO(BaseDTO):
         self.device_type = device_type  # type: str
         self.device_serial = device_serial  # type: str
 
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        if not isinstance(other, VentilationDTO):
-            return False
-        return (self.id == other.id and
-                self.source == other.source and
-                self.external_id == other.external_id and
-                self.name == other.name and
-                self.device_vendor == other.device_vendor and
-                self.device_type == other.device_type and
-                self.device_serial == other.device_serial and
-                self.amount_of_levels == other.amount_of_levels)
-
 
 class VentilationSourceDTO(BaseDTO):
     class Type(object):
         PLUGIN = 'plugin'
 
-    @capture_fields
     def __init__(self, id, type='', name=''):
         self.id = id  # type: int
         self.type = type  # type: str
@@ -64,14 +49,6 @@ class VentilationSourceDTO(BaseDTO):
     def is_plugin(self):
         return self.type == VentilationSourceDTO.Type.PLUGIN
 
-    def __eq__(self, other):
-        # type: (Any) -> bool
-        if not isinstance(other, VentilationSourceDTO):
-            return False
-        return (self.id == other.id and
-                self.name == other.name and
-                self.type == other.type)
-
 
 class VentilationStatusDTO(BaseDTO):
     STATUS_TIMEOUT = 300  # Seconds until the last status is invalid
@@ -79,7 +56,6 @@ class VentilationStatusDTO(BaseDTO):
         AUTO = 'auto'
         MANUAL = 'manual'
 
-    @capture_fields
     def __init__(self, id, mode, level=None, timer=None, remaining_time=None, last_seen=None):
         # type: (int, str, Optional[int], Optional[float], Optional[float], Optional[float]) -> None
         self.id = id

@@ -17,10 +17,10 @@ The main module for the OpenMotics
 """
 from __future__ import absolute_import
 
+import constants
 from platform_utils import System
 System.import_libs()
 
-import logging
 import logging.handlers
 import time
 import sys
@@ -29,43 +29,46 @@ from signal import SIGTERM, signal
 from bus.om_bus_client import MessageClient
 from bus.om_bus_service import MessageService
 from gateway.initialize import initialize
-from gateway.migrations.rooms import RoomsMigrator
-from gateway.migrations.features_data_migrations import FeatureMigrator
-from gateway.migrations.inputs import InputMigrator
-from gateway.migrations.schedules import ScheduleMigrator
-from gateway.migrations.users import UserMigrator
-from gateway.migrations.config import ConfigMigrator
+from gateway.migrations import RoomsMigrator, FeatureMigrator, InputMigrator, \
+    ScheduleMigrator, UserMigrator, ConfigMigrator, EnergyModulesMigrator
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from logs import Logs
 
 if False:  # MYPY
+    from gateway.authentication_controller import AuthenticationController
+    from gateway.delivery_controller import DeliveryController
+    from gateway.energy_module_controller import EnergyModuleController
+    from gateway.esafe_controller import EsafeController
     from gateway.output_controller import OutputController
-    from gateway.gateway_api import GatewayApi
     from gateway.group_action_controller import GroupActionController
     from gateway.input_controller import InputController
     from gateway.maintenance_controller import MaintenanceController
+    from gateway.hal.master_controller import MasterController
     from gateway.metrics_collector import MetricsCollector
     from gateway.metrics_controller import MetricsController
     from gateway.pulse_counter_controller import PulseCounterController
-    from gateway.scheduling import SchedulingController
+    from gateway.scheduling_controller import SchedulingController
     from gateway.sensor_controller import SensorController
     from gateway.shutter_controller import ShutterController
+    from gateway.system_controller import SystemController
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.ventilation_controller import VentilationController
     from gateway.webservice import WebInterface, WebService
+    from gateway.webservice_v1 import WebServiceV1
     from gateway.watchdog import Watchdog
     from gateway.module_controller import ModuleController
     from gateway.user_controller import UserController
     from gateway.hal.master_controller import MasterController
     from gateway.hal.frontpanel_controller import FrontpanelController
+    from gateway.uart_controller import UARTController
+    from gateway.rfid_controller import RfidController
     from plugins.base import PluginController
-    from power.power_communicator import PowerCommunicator
     from master.classic.passthrough import PassthroughService
     from cloud.events import EventSender
     from serial_utils import RS485
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('openmotics')
 
 
 class OpenmoticsService(object):
@@ -77,35 +80,39 @@ class OpenmoticsService(object):
                 web_interface=INJECTED,  # type: WebInterface
                 scheduling_controller=INJECTED,  # type: SchedulingController
                 pubsub=INJECTED,  # type: PubSub
-                gateway_api=INJECTED,  # type: GatewayApi
                 metrics_collector=INJECTED,  # type: MetricsCollector
                 plugin_controller=INJECTED,  # type: PluginController
                 web_service=INJECTED,  # type: WebService
                 event_sender=INJECTED,  # type: EventSender
-                maintenance_controller=INJECTED,  # type: MaintenanceController
-                output_controller=INJECTED,  # type: OutputController
-                thermostat_controller=INJECTED,  # type: ThermostatController
-                ventilation_controller=INJECTED,  # type: VentilationController
-                shutter_controller=INJECTED,  # type: ShutterController
-                frontpanel_controller=INJECTED  # type: FrontpanelController
+                master_controller=INJECTED,  # type: MasterController
+                frontpanel_controller=INJECTED,  # type: FrontpanelController
+                esafe_controller=INJECTED,  # type: EsafeController
+                delivery_controller=INJECTED,  # type: DeliveryController
+                authentication_controller=INJECTED,  # type: AuthenticationController
+                user_controller=INJECTED  # type: UserController
             ):
 
         # TODO: Fix circular dependencies
+
+        # Forward esafe events to consumers.
+        pubsub.subscribe_esafe_events(PubSub.EsafeTopics.CONFIG, event_sender.enqueue_event)
+        pubsub.subscribe_esafe_events(PubSub.EsafeTopics.LOCK, event_sender.enqueue_event)
+        pubsub.subscribe_esafe_events(PubSub.EsafeTopics.DELIVERY, event_sender.enqueue_event)
+        pubsub.subscribe_esafe_events(PubSub.EsafeTopics.RFID, event_sender.enqueue_event)
 
         # Forward config change events to consumers.
         pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, event_sender.enqueue_event)
 
         # Forward state change events to consumers.
         pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, event_sender.enqueue_event)
-        pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, metrics_collector.process_observer_event)
-        pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, plugin_controller.process_observer_event)
+        pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, metrics_collector.process_gateway_event)
+        pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, plugin_controller.process_gateway_event)
         pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, web_interface.send_event_websocket)
 
         message_client.add_event_handler(metrics_controller.event_receiver)
         web_interface.set_plugin_controller(plugin_controller)
         web_interface.set_metrics_collector(metrics_collector)
         web_interface.set_metrics_controller(metrics_controller)
-        gateway_api.set_plugin_controller(plugin_controller)
         metrics_controller.add_receiver(metrics_controller.receiver)
         metrics_controller.add_receiver(web_interface.distribute_metric)
         scheduling_controller.set_webinterface(web_interface)
@@ -113,39 +120,46 @@ class OpenmoticsService(object):
         plugin_controller.set_webservice(web_service)
         plugin_controller.set_metrics_controller(metrics_controller)
         plugin_controller.set_metrics_collector(metrics_collector)
+        master_controller.set_plugin_controller(plugin_controller)
+        delivery_controller.set_esafe_controller(esafe_controller)
+        authentication_controller.set_user_controller(user_controller)
 
         if frontpanel_controller:
             message_client.add_event_handler(frontpanel_controller.event_receiver)
 
     @staticmethod
     @Inject
-    def start(
-                master_controller=INJECTED,  # type: MasterController
-                maintenance_controller=INJECTED,  # type: MaintenanceController
-                power_communicator=INJECTED,  # type: PowerCommunicator
-                power_serial=INJECTED,  # type: RS485
-                metrics_controller=INJECTED,  # type: MetricsController
-                passthrough_service=INJECTED,  # type: PassthroughService
-                scheduling_controller=INJECTED,  # type: SchedulingController
-                metrics_collector=INJECTED,  # type: MetricsCollector
-                web_service=INJECTED,  # type: WebService
-                web_interface=INJECTED,  # type: WebInterface
-                watchdog=INJECTED,  # type: Watchdog
-                plugin_controller=INJECTED,  # type: PluginController
-                event_sender=INJECTED,  # type: EventSender
-                thermostat_controller=INJECTED,  # type: ThermostatController
-                output_controller=INJECTED,  # type: OutputController
-                input_controller=INJECTED,  # type: InputController
-                pulse_counter_controller=INJECTED,  # type: PulseCounterController
-                sensor_controller=INJECTED,  # type: SensorController
-                shutter_controller=INJECTED,  # type: ShutterController
-                group_action_controller=INJECTED,  # type: GroupActionController
-                frontpanel_controller=INJECTED,  # type: FrontpanelController
-                module_controller=INJECTED,  # type: ModuleController
-                user_controller=INJECTED,  # type: UserController
-                ventilation_controller=INJECTED,  # type: VentilationController
-                pubsub=INJECTED  # type: PubSub
-    ):
+    def start(master_controller=INJECTED,  # type: MasterController
+              maintenance_controller=INJECTED,  # type: MaintenanceController
+              energy_serial=INJECTED,  # type: RS485
+              metrics_controller=INJECTED,  # type: MetricsController
+              passthrough_service=INJECTED,  # type: PassthroughService
+              scheduling_controller=INJECTED,  # type: SchedulingController
+              metrics_collector=INJECTED,  # type: MetricsCollector
+              web_service=INJECTED,  # type: WebService
+              web_interface=INJECTED,  # type: WebInterface
+              watchdog=INJECTED,  # type: Watchdog
+              plugin_controller=INJECTED,  # type: PluginController
+              event_sender=INJECTED,  # type: EventSender
+              thermostat_controller=INJECTED,  # type: ThermostatController
+              output_controller=INJECTED,  # type: OutputController
+              input_controller=INJECTED,  # type: InputController
+              pulse_counter_controller=INJECTED,  # type: PulseCounterController
+              sensor_controller=INJECTED,  # type: SensorController
+              shutter_controller=INJECTED,  # type: ShutterController
+              system_controller=INJECTED,  # type: SystemController
+              group_action_controller=INJECTED,  # type: GroupActionController
+              frontpanel_controller=INJECTED,  # type: FrontpanelController
+              module_controller=INJECTED,  # type: ModuleController
+              user_controller=INJECTED,  # type: UserController
+              ventilation_controller=INJECTED,  # type: VentilationController
+              pubsub=INJECTED,  # type: PubSub
+              web_service_v1=INJECTED,  # type: WebServiceV1
+              uart_controller=INJECTED,  # type: UARTController
+              energy_module_controller=INJECTED,  # type: EnergyModuleController
+              rfid_controller=INJECTED,  # type: RfidController
+              esafe_controller=INJECTED  # type: EsafeController
+              ):
         """ Main function. """
         logger.info('Starting OM core service...')
 
@@ -167,12 +181,12 @@ class OpenmoticsService(object):
         ScheduleMigrator.migrate()
         UserMigrator.migrate()
         ConfigMigrator.migrate()
+        EnergyModulesMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()
-        if power_communicator:
-            power_serial.start()
-            power_communicator.start()
+        if energy_serial:
+            energy_serial.start()
         metrics_controller.start()
         if passthrough_service:
             passthrough_service.start()
@@ -183,18 +197,26 @@ class OpenmoticsService(object):
         ventilation_controller.start()
         metrics_collector.start()
         web_service.start()
+        web_service_v1.start()
         if frontpanel_controller:
             frontpanel_controller.start()
         event_sender.start()
         watchdog.start()
         plugin_controller.start()
+        energy_module_controller.start()
         output_controller.start()
         input_controller.start()
         pulse_counter_controller.start()
         sensor_controller.start()
         shutter_controller.start()
+        system_controller.start()
         group_action_controller.start()
+        if uart_controller:
+            uart_controller.start()
         pubsub.start()
+        rfid_controller.start()
+        if esafe_controller is not None:
+            esafe_controller.start()
 
         web_interface.set_service_state(True)
         signal_request = {'stop': False}
@@ -204,27 +226,32 @@ class OpenmoticsService(object):
             _ = signum, frame
             logger.info('Stopping OM core service...')
             watchdog.stop()
+            if uart_controller:
+                uart_controller.stop()
+            energy_module_controller.stop()
             output_controller.stop()
             input_controller.stop()
             pulse_counter_controller.stop()
+            system_controller.stop()
             sensor_controller.stop()
             shutter_controller.stop()
             group_action_controller.stop()
             web_service.stop()
-            if power_communicator:
-                power_communicator.stop()
             master_controller.stop()
             maintenance_controller.stop()
             metrics_collector.stop()
             metrics_controller.stop()
             user_controller.stop()
-            ventilation_controller.start()
+            ventilation_controller.stop()
             thermostat_controller.stop()
             plugin_controller.stop()
             if frontpanel_controller:
                 frontpanel_controller.stop()
             event_sender.stop()
             pubsub.stop()
+            rfid_controller.start()
+            if esafe_controller is not None:
+                esafe_controller.stop()
             logger.info('Stopping OM core service... Done')
             signal_request['stop'] = True
 

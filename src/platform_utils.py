@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """"
-The hardware_utils module contains various classes helping with Hardware and System abstraction
+The platform_utils module contains various classes helping with Hardware, System and Platform abstraction
 """
 from __future__ import absolute_import
 import logging
@@ -39,6 +39,20 @@ class Hardware(object):
         ESAFE = 'ESAFE'
 
     BoardTypes = [BoardType.BB, BoardType.BBB, BoardType.BBGW]
+
+    class GPIO_DIRECTION(object):
+        IN = 'in'
+        OUT = 'out'
+
+    GPIO_BASE_PATH = '/sys/class/gpio'
+    GPIO_EXPORT_PATH = '{0}/export'.format(GPIO_BASE_PATH)
+    GPIO_DIRECTION_PATH = '{0}/gpio{{0}}/direction'.format(GPIO_BASE_PATH)
+    GPIO_VALUE_PATH = '{0}/gpio{{0}}/value'.format(GPIO_BASE_PATH)
+
+    class GPIO(object):
+        RS232_MODE = 77
+        P1_DATA_ENABLE = 113
+        P1_CABLE_CONNECTED = 115
 
     # eMMC registers
     EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B = 269
@@ -108,11 +122,37 @@ class Hardware(object):
         except Exception:
             return None
 
+    @staticmethod
+    def set_gpio_direction(gpio_pin, direction):  # type: (int, str) -> None
+        try:
+            with open(Hardware.GPIO_EXPORT_PATH, 'w') as gpio:
+                gpio.write(str(gpio_pin))
+        except Exception:
+            pass  # This raises every now and then if the pin was already exported
+        with open(Hardware.GPIO_DIRECTION_PATH.format(gpio_pin), 'w') as gpio:
+            gpio.write(direction)
+
+    @staticmethod
+    def set_gpio(gpio_pin, value):  # type: (int, bool) -> None
+        Hardware.set_gpio_direction(gpio_pin=gpio_pin,
+                                    direction=Hardware.GPIO_DIRECTION.OUT)
+        with open(Hardware.GPIO_VALUE_PATH.format(gpio_pin), 'w') as gpio:
+            gpio.write('1' if value else '0')
+
+    @staticmethod
+    def enable_extension_rs485_port():
+        current_platform = Platform.get_platform()
+        if current_platform not in Platform.CoreTypes:
+            raise RuntimeError('Platform {0} does not support the extension RS485 port')
+        Hardware.set_gpio(Hardware.GPIO.RS232_MODE, False)
+
 
 class System(object):
     """
     Abstracts the system related functions
     """
+
+    SERVICES = ('vpn_service', 'openmotics')
 
     SYSTEMD_UNIT_MAP = {'openmotics': 'openmotics-api.service',
                         'vpn_service': 'openmotics-vpn.service'}
@@ -285,10 +325,12 @@ class System(object):
         operating_system = System.get_operating_system().get('ID')
         # check if running in python 2 mode, otherwise packages should be included in the build (PyInstaller)
         if sys.version_info.major == 2:
-            if os.path.exists('/opt/openmotics/python-deps/lib/python2.7/site-packages'):
-                sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/site-packages')
-            if os.path.exists('/opt/openmotics/python-deps/lib/python2.7/dist-packages'):
-                sys.path.insert(0, '/opt/openmotics/python-deps/lib/python2.7/dist-packages')
+            import site
+            path = '/opt/openmotics/python-deps/lib/python2.7/site-packages'
+            if os.path.exists(path):
+                site.addsitedir(path)
+                sys.path.remove(path)
+                sys.path.insert(0, path)
 
         # Patching where/if required
         if operating_system == System.OS.ANGSTROM:

@@ -30,7 +30,7 @@ from gateway.daemon_thread import BaseThread
 if False:  # MYPY
     from typing import Any, Callable, Dict, List, Optional
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class MessageService(object):

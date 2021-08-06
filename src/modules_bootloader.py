@@ -30,7 +30,7 @@ from ioc import INJECTED, Inject
 from logs import Logs
 from gateway.initialize import setup_minimal_master_platform
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('openmotics')
 
 
 @Inject

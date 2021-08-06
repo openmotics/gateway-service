@@ -29,7 +29,7 @@ from gateway.mappers import PulseCounterMapper
 if False:  # MYPY
     from typing import List, Tuple, Dict, Optional
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('pulse_counter_controller')

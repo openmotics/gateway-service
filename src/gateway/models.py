@@ -23,16 +23,16 @@ import time
 
 from peewee import AutoField, BooleanField, CharField, \
     DoesNotExist, FloatField, ForeignKeyField, IntegerField, SqliteDatabase, \
-    TextField
+    TextField, SQL
 from playhouse.signals import Model, post_save
 
 import constants
 
 if False:  # MYPY
-    from typing import Dict, List, Any
+    from typing import Dict, List, Any, TypeVar
     T = TypeVar('T')
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class Database(object):
@@ -88,17 +88,10 @@ class BaseModel(Model):
         database = Database.get_db()
 
 
-class Floor(BaseModel):
-    id = AutoField()
-    number = IntegerField(unique=True)
-    name = CharField(null=True)
-
-
 class Room(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
     name = CharField(null=True)
-    floor = ForeignKeyField(Floor, null=True, on_delete='SET NULL', backref='rooms')
 
 
 class Feature(BaseModel):
@@ -132,12 +125,6 @@ class ShutterGroup(BaseModel):
     room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='shutter_groups')
 
 
-class Sensor(BaseModel):
-    id = AutoField()
-    number = IntegerField(unique=True)
-    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='sensors')
-
-
 class PulseCounter(BaseModel):
     id = AutoField()
     number = IntegerField(unique=True)
@@ -164,6 +151,29 @@ class Module(BaseModel):
     last_online_update = IntegerField(null=True)
 
 
+class EnergyModule(BaseModel):
+    id = AutoField()
+    number = IntegerField(unique=True)
+    version = IntegerField()
+    name = CharField(default='')
+    module = ForeignKeyField(Module, on_delete='CASCADE', backref='energy_modules', unique=True)
+
+
+class EnergyCT(BaseModel):
+    id = AutoField()
+    number = IntegerField()
+    name = CharField(default='')
+    sensor_type = IntegerField()
+    times = CharField()
+    inverted = BooleanField(default=False)
+    energy_module = ForeignKeyField(EnergyModule, on_delete='CASCADE', backref='cts')
+
+    class Meta:
+        indexes = (
+            (('number', 'energy_module_id'), True),
+        )
+
+
 class DataMigration(BaseModel):
     id = AutoField()
     name = CharField()
@@ -180,13 +190,6 @@ class Schedule(BaseModel):
     action = CharField()
     arguments = CharField(null=True)
     status = CharField()
-
-
-class User(BaseModel):
-    id = AutoField()
-    username = CharField(unique=True)
-    password = CharField()
-    accepted_terms = IntegerField(default=0)
 
 
 class Config(BaseModel):
@@ -245,6 +248,46 @@ class Plugin(BaseModel):
     id = AutoField()
     name = CharField(unique=True)
     version = CharField()
+
+
+class Sensor(BaseModel):
+    id = AutoField()
+    source = CharField()  # Options: 'master' or 'plugin'
+    plugin = ForeignKeyField(Plugin, null=True, on_delete='CASCADE')
+    external_id = CharField()
+    physical_quantity = CharField(null=True)
+    unit = CharField(null=True)
+    name = CharField()
+    room = ForeignKeyField(Room, null=True, on_delete='SET NULL', backref='sensors')
+
+    class Sources(object):
+        MASTER = 'master'
+        PLUGIN = 'plugin'
+
+    class PhysicalQuantities:
+        TEMPERATURE = 'temperature'
+        HUMIDITY = 'humidity'
+        BRIGHTNESS = 'brightness'
+        SOUND = 'sound'
+        DUST = 'dust'
+        COMFORT_INDEX = 'comfort_index'
+        AQI = 'aqi'
+        CO2 = 'co2'
+        VOC = 'voc'
+
+    class Units:
+        NONE = 'none'
+        CELCIUS = 'celcius'
+        PERCENT = 'percent'
+        DECIBEL = 'decibel'
+        LUX = 'lux'
+        MICRO_GRAM_PER_CUBIC_METER = 'micro_gram_per_cubic_meter'
+        PARTS_PER_MILLION = 'parts_per_million'
+
+    class Meta:
+        indexes = (
+            (('source', 'plugin_id', 'external_id', 'physical_quantity'), True),
+        )
 
 
 class Ventilation(BaseModel):
@@ -532,3 +575,74 @@ def on_thermostat_save_handler(model_class, instance, created):
                 day_schedule = DaySchedule(thermostat=instance, index=day_index, mode=mode)
                 day_schedule.schedule_data = DaySchedule.DEFAULT_SCHEDULE[mode]
                 day_schedule.save()
+
+
+class Apartment(BaseModel):
+    id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
+    name = CharField(null=False)
+    mailbox_rebus_id = IntegerField(unique=True)
+    doorbell_rebus_id = IntegerField(unique=True)
+
+
+class User(BaseModel):
+    class UserRoles(object):
+        SUPER = 'SUPER'
+        USER = 'USER'
+        ADMIN = 'ADMIN'
+        TECHNICIAN = 'TECHNICIAN'
+        COURIER = 'COURIER'
+
+    class UserLanguages(object):
+        EN = 'English'
+        DE = 'Deutsch'
+        NL = 'Nederlands'
+        FR = 'Francais'
+        ALL = [
+            EN,
+            DE,
+            NL,
+            FR,
+        ]
+
+    id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
+    username = CharField(null=False, unique=True)
+    first_name = CharField(null=True)
+    last_name = CharField(null=True)
+    role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER, SUPER
+    pin_code = CharField(null=True, unique=True)
+    language = CharField(null=False, default='English')  # options: See Userlanguages
+    password = CharField()
+    apartment = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
+    is_active = BooleanField(default=True)
+    accepted_terms = IntegerField(default=0)
+
+
+class RFID(BaseModel):
+    id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
+    tag_string = CharField(null=False, unique=True)
+    uid_manufacturer = CharField(null=False, unique=True)
+    uid_extension = CharField(null=True)
+    enter_count = IntegerField(null=False)
+    blacklisted = BooleanField(null=False, default=False)
+    label = CharField()
+    timestamp_created = CharField(null=False)
+    timestamp_last_used = CharField(null=True)
+    user = ForeignKeyField(User, null=False, backref='rfids', on_delete='CASCADE')
+
+
+class Delivery(BaseModel):
+    class DeliveryType(object):
+        DELIVERY = 'DELIVERY'
+        RETURN = 'RETURN'
+
+    id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
+    type = CharField(null=False)  # options: DeliveryType
+    timestamp_delivery = CharField(null=False)
+    timestamp_pickup = CharField(null=True)
+    courier_firm = CharField(null=True)
+    signature_delivery = CharField(null=True)
+    signature_pickup = CharField(null=True)
+    parcelbox_rebus_id = IntegerField(null=False)
+    user_delivery = ForeignKeyField(User, backref='deliveries', on_delete='NO ACTION', null=True)
+    user_pickup = ForeignKeyField(User, backref='pickups', on_delete='NO ACTION', null=False)
+

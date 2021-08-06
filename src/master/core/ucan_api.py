@@ -95,14 +95,14 @@ class UCANAPI(object):
                                response_fields=[ByteField('application_mode')])
 
     @staticmethod
-    def set_bootloader_safety_flag():  # type: () -> UCANCommandSpec
+    def set_bootloader_safety_counter():  # type: () -> UCANCommandSpec
         """ Sets the bootloader's safety flag """
         return UCANCommandSpec(sid=SID.BOOTLOADER_COMMAND,
                                identifier=AddressField('ucan_address', 3),
                                instructions=[Instruction(instruction=[0, 125])],
-                               request_fields=[[ByteField('safety_flag')]],
+                               request_fields=[[ByteField('safety_counter')]],
                                response_instructions=[Instruction(instruction=[125, 125], checksum_byte=6)],
-                               response_fields=[ByteField('safety_flag')])
+                               response_fields=[ByteField('safety_counter')])
 
     @staticmethod
     def get_mcu_id():  # type: () -> UCANCommandSpec
@@ -115,14 +115,14 @@ class UCANAPI(object):
                                      response_fields=[StringField('mcu_id')])
 
     @staticmethod
-    def get_bootloader_id():  # type: () -> UCANCommandSpec
+    def get_bootloader_version():  # type: () -> UCANCommandSpec
         """
-        Gets the uCAN bootloader ID
+        Gets the uCAN bootloader version
         Note: uCAN needs to be in bootloader
         """
         return UCANPalletCommandSpec(identifier=AddressField('ucan_address', 3),
                                      pallet_type=PalletType.BOOTLOADER_ID_REQUEST,
-                                     response_fields=[StringField('bootloader_id')])
+                                     response_fields=[ByteField('major'), ByteField('minor')])
 
     @staticmethod
     def write_flash(data_length):  # type: (int) -> UCANCommandSpec

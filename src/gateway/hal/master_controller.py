@@ -17,19 +17,20 @@ Module for communicating with the Master
 """
 from __future__ import absolute_import
 
-from gateway.dto import GlobalFeedbackDTO, GroupActionDTO, InputDTO, \
-    InputStatusDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
+from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
+    GroupActionDTO, InputDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
+    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
     SensorDTO, ShutterDTO, ShutterGroupDTO, ThermostatAircoStatusDTO, \
-    ThermostatDTO, ThermostatGroupDTO
+    ThermostatDTO, ThermostatGroupDTO, ModuleDTO, GlobalFeedbackDTO, \
+    OutputStatusDTO, LegacyStartupActionDTO, LegacyScheduleDTO, \
+    DimmerConfigurationDTO, InputStatusDTO
+
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
+    from master.core.basic_action import BasicAction
 
     HEALTH = Literal['success', 'unstable', 'failure']
-
-
-class CommunicationFailure(Exception):
-    pass
 
 
 class MasterController(object):
@@ -330,13 +331,13 @@ class MasterController(object):
     def set_virtual_sensor(self, sensor_id, temperature, humidity, brightness):
         raise NotImplementedError()
 
-    def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
+    def load_sensor(self, sensor_id):  # type: (int) -> MasterSensorDTO
         raise NotImplementedError()
 
-    def load_sensors(self):  # type: () -> List[SensorDTO]
+    def load_sensors(self):  # type: () -> List[MasterSensorDTO]
         raise NotImplementedError()
 
-    def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> None
+    def save_sensors(self, sensors):  # type: (List[MasterSensorDTO]) -> None
         raise NotImplementedError()
 
     # PulseCounters
@@ -390,12 +391,12 @@ class MasterController(object):
         # type: (str, int, Optional[bytearray]) -> Dict[str,Any]
         raise NotImplementedError()
 
-    def update_master(self, hex_filename):
-        # type: (str) -> None
+    def update_master(self, hex_filename, version):
+        # type: (str, str) -> None
         raise NotImplementedError()
 
-    def update_slave_modules(self, module_type, hex_filename):
-        # type: (str, str) -> None
+    def update_slave_modules(self, module_type, hex_filename, version):
+        # type: (str, str, str) -> None
         raise NotImplementedError()
 
     def get_modules(self):
@@ -416,7 +417,8 @@ class MasterController(object):
     def restore(self, data):
         raise NotImplementedError()
 
-    def factory_reset(self):
+    def factory_reset(self, can):
+        # type: (bool) -> None
         raise NotImplementedError()
 
     def sync_time(self):
@@ -428,6 +430,9 @@ class MasterController(object):
         raise NotImplementedError()
 
     # Module functions
+
+    def drive_led(self, led, on, mode):  # type: (str, bool, str) -> None
+        raise NotImplementedError()
 
     def module_discover_start(self, timeout):  # type: (int) -> None
         raise NotImplementedError()
@@ -475,38 +480,29 @@ class MasterController(object):
 
     # Schedule
 
-    def load_scheduled_action_configuration(self, scheduled_action_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
+    def load_scheduled_action(self, scheduled_action_id):  # type: (int) -> LegacyScheduleDTO
         raise NotImplementedError()
 
-    def load_scheduled_action_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
+    def load_scheduled_actions(self):  # type: () -> List[LegacyScheduleDTO]
         raise NotImplementedError()
 
-    def save_scheduled_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
+    def save_scheduled_actions(self, scheduled_actions):  # type: (List[LegacyScheduleDTO]) -> None
         raise NotImplementedError()
 
-    def save_scheduled_action_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
+    def load_startup_action(self):  # type: () -> LegacyStartupActionDTO
         raise NotImplementedError()
 
-    def load_startup_action_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        raise NotImplementedError()
-
-    def save_startup_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
+    def save_startup_action(self, startup_action):  # type: (LegacyStartupActionDTO) -> None
         raise NotImplementedError()
 
     # Dimmer functions
 
-    def load_dimmer_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
+    def load_dimmer_configuration(self):
+        # type: () -> DimmerConfigurationDTO
         raise NotImplementedError()
 
-    def save_dimmer_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
+    def save_dimmer_configuration(self, dimmer_configuration_dto):
+        # type: (DimmerConfigurationDTO) -> None
         raise NotImplementedError()
 
     # Can Led functions
@@ -525,8 +521,8 @@ class MasterController(object):
 
     # All lights
 
-    def set_all_lights(self, action, floor_id=None, output_ids=None):
-        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int], Optional[List[int]]) -> None
+    def set_all_lights(self, action, output_ids=None):
+        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[List[int]]) -> None
         raise NotImplementedError()
 
     # Validation bits

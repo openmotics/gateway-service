@@ -18,7 +18,7 @@ import logging
 import threading
 import time
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 if False:  # MYPY
     from typing import Any, Callable, Optional

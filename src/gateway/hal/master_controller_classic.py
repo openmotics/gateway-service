@@ -28,20 +28,22 @@ from threading import Lock, Timer
 import six
 
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
-from gateway.dto import RTD10DTO, GlobalFeedbackDTO, GlobalRTD10DTO, \
-    GroupActionDTO, InputDTO, InputStatusDTO, ModuleDTO, OutputDTO, \
-    OutputStatusDTO, PulseCounterDTO, PumpGroupDTO, SensorDTO, ShutterDTO, \
+from gateway.dto import RTD10DTO, DimmerConfigurationDTO, GlobalFeedbackDTO, \
+    GlobalRTD10DTO, GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, \
+    LegacyStartupActionDTO, MasterSensorDTO, ModuleDTO, OutputDTO, \
+    OutputStatusDTO, PulseCounterDTO, PumpGroupDTO, ShutterDTO, \
     ShutterGroupDTO, ThermostatAircoStatusDTO, ThermostatDTO, \
     ThermostatGroupDTO
 from gateway.enums import ShutterEnums
 from gateway.exceptions import UnsupportedException
-from gateway.hal.mappers_classic import GlobalFeedbackMapper, \
-    GlobalRTD10Mapper, GroupActionMapper, InputMapper, OutputMapper, \
+from gateway.hal.mappers_classic import DimmerConfigurationMapper, \
+    GlobalFeedbackMapper, GlobalRTD10Mapper, GroupActionMapper, InputMapper, \
+    LegacyScheduleMapper, LegacyStartupActionMapper, OutputMapper, \
     PulseCounterMapper, PumpGroupMapper, RTD10Mapper, SensorMapper, \
     ShutterGroupMapper, ShutterMapper, ThermostatGroupMapper, \
     ThermostatMapper
-from gateway.hal.master_controller import CommunicationFailure, \
-    MasterController
+from gateway.exceptions import CommunicationFailure, MasterUnavailable
+from gateway.hal.master_controller import MasterController
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
@@ -54,12 +56,11 @@ from master.classic.eeprom_models import CoolingConfiguration, \
     RTD10HeatingConfiguration, ScheduledActionConfiguration, \
     StartupActionConfiguration, ThermostatConfiguration
 from master.classic.master_communicator import BackgroundConsumer, \
-    MasterCommunicator, MasterUnavailable
+    MasterCommunicator
 from master.classic.master_heartbeat import MasterHeartbeat
 from master.classic.slave_updater import bootload_modules
 from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
-from toolbox import Toolbox
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -92,17 +93,20 @@ class MasterClassicController(MasterController):
         self._plugin_controller = None  # type: Optional[Any]
 
         self._validation_bits = ValidationBitStatus(on_validation_bit_change=self._validation_bit_changed)
+        self._master_version_last_updated = 0.0
         self._settings_last_updated = 0.0
         self._time_last_updated = 0.0
         self._synchronization_thread = DaemonThread(name='mastersync',
                                                     target=self._synchronize,
-                                                    interval=30, delay=10)
+                                                    interval=5, delay=10)
         self._master_version = None  # type: Optional[Tuple[int, int, int]]
         self._communication_enabled = True
         self._output_config = {}  # type: Dict[int, OutputDTO]
         self._shutters_interval = 600
         self._shutters_last_updated = 0.0
         self._shutter_config = {}  # type: Dict[int, ShutterDTO]
+        self._sensor_last_updated = 0.0
+        self._sensors_interval = 10
         self._validation_bits_interval = 1800
         self._validation_bits_last_updated = 0.0
 
@@ -129,12 +133,14 @@ class MasterClassicController(MasterController):
         # type: () -> None
         try:
             if not self._communication_enabled:
-                logger.info('synchronization, skipped')
-                return
+                logger.debug('Unable to synchronize since communication is disabled, waiting 10 seconds.')
+                raise DaemonThreadWait
 
             now = time.time()
-            self._get_master_version()
-            self._register_version_depending_background_consumers()
+            if self._master_version is None or self._master_version_last_updated < now - 300:
+                self._get_master_version()
+                self._master_version_last_updated = now
+                self._register_version_depending_background_consumers()
             # Validate communicator checks
             if self._time_last_updated < now - 300:
                 self._check_master_time()
@@ -147,6 +153,8 @@ class MasterClassicController(MasterController):
                 self._refresh_validation_bits()
             if self._shutters_last_updated + self._shutters_interval < now:
                 self._refresh_shutter_states()
+            if self._sensor_last_updated + self._sensors_interval < now:
+                self._refresh_sensor_values()
         except CommunicationTimedOutException:
             logger.error('Got communication timeout during synchronization, waiting 10 seconds.')
             raise DaemonThreadWait
@@ -208,6 +216,7 @@ class MasterClassicController(MasterController):
         # type: () -> None
         """
         Checks master settings such as:
+        * Enable large installation
         * Enable async messages
         * Enable multi-tenancy
         * Enable 32 thermostats
@@ -433,6 +442,17 @@ class MasterClassicController(MasterController):
         state_dto = InputStatusDTO(id=data['input'], status=new_status)
         master_event = MasterEvent(event_type=MasterEvent.Types.INPUT_CHANGE, data={'state': state_dto})
         self._pubsub.publish_master_event(PubSub.MasterTopics.INPUT, master_event)
+
+    @communication_enabled
+    def set_input(self, input_id, state):
+        # type: (int, bool) -> None
+        # https://wiki.openmotics.com/index.php/Virtual_Inputs
+        if input_id is None or input_id < 0 or input_id > 240:
+            raise ValueError('Input ID {0} not in range 0 <= id <= 240'.format(input_id))
+        if state:
+            self.do_basic_action(master_api.BA_INPUT_PRESS, input_id)
+        else:
+            self.do_basic_action(master_api.BA_INPUT_RELEASE, input_id)
 
     # Outputs
 
@@ -1129,11 +1149,34 @@ class MasterClassicController(MasterController):
                 time.sleep(2)  # Doing heavy reads on eeprom can exhaust the master. Give it a bit room to breathe.
         return ''.join(chr(c) for c in output)
 
-    def factory_reset(self):
-        # type: () -> None
+    def factory_reset(self, can=False):
+        # type: (bool) -> None
+        # Wipe CC EEPROM
+        # https://wiki.openmotics.com/index.php/API_Reference_Guide#FX_-.3E_Erase_external_Eeprom_slave_modules_and_perform_factory_reset
+        # Erasing CAN EEPROM first because the master needs to have the module information
+        if can:
+            self.can_control_factory_reset()
         # Wipe master EEPROM
         data = chr(255) * (256 * 256)
         self.restore(data)
+
+    def can_control_factory_reset(self):
+        mods = self._master_communicator.do_command(master_api.number_of_io_modules())
+        for i in range(mods['in']):
+            is_can = self._eeprom_controller.read_address(EepromAddress(2 + i, 252, 1)).bytes == bytearray(b'C')
+            if is_can:
+                module_address = self._eeprom_controller.read_address(EepromAddress(2 + i, 0, 4))
+                module_type_letter = chr(module_address.bytes[0]).lower()
+                is_virtual = chr(module_address.bytes[0]).islower()
+                formatted_address = MasterClassicController._format_address(module_address.bytes)
+                if not is_virtual and module_type_letter == 'c':
+                    try:
+                        logging.info("Resetting CAN EEPROM, adress: {0} ".format(formatted_address))
+                        self._master_communicator.do_command(master_api.erase_can_eeprom(),
+                                                             {'addr': module_address.bytes, 'instr': 0},
+                                                             extended_crc=True, timeout=5)
+                    except CommunicationTimedOutException:
+                        logger.error('Got communication timeout during FX call')
 
     def cold_reset(self, power_on=True):
         # type: (bool) -> None
@@ -1155,52 +1198,63 @@ class MasterClassicController(MasterController):
         return self._master_communicator.do_raw_action(action, size, data=data)
 
     @Inject
-    def update_master(self, hex_filename, controller_serial=INJECTED):
-        # type: (str, Serial) -> None
+    def update_master(self, hex_filename, version, controller_serial=INJECTED):
+        # type: (str, str, Serial) -> None
         try:
             self._communication_enabled = False
             self._heartbeat.stop()
             self._master_communicator.update_mode_start()
 
+            _ = version  # TODO: Skip if version is identical
+
             port = controller_serial.port  # type: ignore
             baudrate = str(controller_serial.baudrate)  # type: ignore
             base_command = ['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate]
+            timings = [[2, 2, 2, 2], [2, 2, 2, 1],
+                       [2, 2, 3, 2], [2, 2, 3, 1],
+                       [2, 2, 4, 2], [2, 2, 4, 1]]
 
             logger.info('Updating master...')
             logger.info('* Enter bootloader...')
-            # Setting this condition will assert a break condition on TX to which the bootloader will react.
-            controller_serial.break_condition = True
-            time.sleep(2)
-            MasterClassicController._set_master_power(False)
-            time.sleep(2)
-            MasterClassicController._set_master_power(True)
-            time.sleep(2)
-            # After the bootloader is active, release the break condition to free up TX for subsequent communications
-            controller_serial.break_condition = False
-            time.sleep(2)
+            bootloader_active = False
+            for timing in timings:
+                # Setting this condition will assert a break condition on TX to which the bootloader will react.
+                controller_serial.break_condition = True
+                time.sleep(timing[0])
+                MasterClassicController._set_master_power(False)
+                time.sleep(timing[1])
+                MasterClassicController._set_master_power(True)
+                time.sleep(timing[2])
+                # After the bootloader is active, release the break condition to free up TX for subsequent communications
+                controller_serial.break_condition = False
+                time.sleep(timing[3])
 
-            logger.info('* Verify bootloader...')
-            try:
-                response = str(subprocess.check_output(base_command + ['-s']))
-                # Expected response:
-                # > Serial Bootloader AN1310 v1.05r
-                # > Copyright (c) 2010-2011, Microchip Technology Inc.
-                # >
-                # > Using /dev/ttyO5 at 115200 bps
-                # > Connecting...
-                # > Bootloader Firmware v1.05
-                # > PIC18F67J11 Revision 10
-                match = re.findall(pattern=r'Bootloader Firmware (v[0-9]+\.[0-9]+).*(PIC.*) Revision',
-                                   string=response,
-                                   flags=re.DOTALL)
-                if not match:
-                    raise RuntimeError('Bootloader response did not match: {0}'.format(response))
-                logger.debug(response)
-                logger.info('  * Bootloader information: {1} bootloader {0}'.format(*match[0]))
-            except subprocess.CalledProcessError as ex:
-                logger.info(ex.output)
-                raise
-
+                logger.info('* Verify bootloader...')
+                try:
+                    response = str(subprocess.check_output(base_command + ['-s']))
+                    # Expected response:
+                    # > Serial Bootloader AN1310 v1.05r
+                    # > Copyright (c) 2010-2011, Microchip Technology Inc.
+                    # >
+                    # > Using /dev/ttyO5 at 115200 bps
+                    # > Connecting...
+                    # > Bootloader Firmware v1.05
+                    # > PIC18F67J11 Revision 10
+                    match = re.findall(pattern=r'Bootloader Firmware (v[0-9]+\.[0-9]+).*(PIC.*) Revision',
+                                       string=response,
+                                       flags=re.DOTALL)
+                    if not match:
+                        logger.info('Bootloader response did not match: {0}'.format(response))
+                        continue
+                    logger.debug(response)
+                    logger.info('  * Bootloader information: {1} bootloader {0}'.format(*match[0]))
+                    bootloader_active = True
+                    break
+                except subprocess.CalledProcessError as ex:
+                    logger.info(ex.output)
+                    raise
+            if bootloader_active is False:
+                raise RuntimeError('Failed to go into Bootloader - try other timings')
             logger.info('* Flashing...')
             try:
                 response = str(subprocess.check_output(base_command + ['-p ', '-c', hex_filename]))
@@ -1233,12 +1287,18 @@ class MasterClassicController(MasterController):
             self._communication_enabled = True
 
     @Inject
-    def update_slave_modules(self, module_type, hex_filename):
-        # type: (str, str) -> None
+    def update_slave_modules(self, module_type, hex_filename, version):
+        # type: (str, str, str) -> None
         try:
             self._communication_enabled = False
             self._heartbeat.stop()
-            bootload_modules(module_type, hex_filename, False, None)
+            parsed_version = tuple(int(part) for part in version.split('.'))
+            gen3_firmware = parsed_version >= (6, 0, 0)
+            bootload_modules(module_type=module_type,
+                             filename=hex_filename,
+                             gen3_firmware=gen3_firmware,
+                             version=version,
+                             raise_exception=True)
         finally:
             self._heartbeat.start()
             self._communication_enabled = True
@@ -1265,11 +1325,11 @@ class MasterClassicController(MasterController):
 
     @communication_enabled
     @Inject
-    def power_cycle_bus(self, power_communicator=INJECTED):
+    def power_cycle_bus(self, energy_communicator=INJECTED):
         """ Turns the power of both bussed off for 5 seconds """
         self.do_basic_action(master_api.BA_POWER_CYCLE_BUS, 0)
-        if power_communicator:
-            power_communicator.reset_communication_statistics()  # TODO cleanup, use an event instead?
+        if energy_communicator:
+            energy_communicator.reset_communication_statistics()  # TODO cleanup, use an event instead?
 
     @communication_enabled
     def restore(self, data):
@@ -1300,6 +1360,8 @@ class MasterClassicController(MasterController):
 
         self._master_communicator.do_command(master_api.activate_eeprom(), {'eep': 0},
                                              timeout=5)
+        self.cold_reset()
+
         ret.append('Activated eeprom')
         self._eeprom_controller.invalidate_cache()
 
@@ -1357,9 +1419,13 @@ class MasterClassicController(MasterController):
         except Exception:
             logger.exception('Could not process initialization message')
 
+    def drive_led(self, led, on, mode):  # type: (str, bool, str) -> None
+        raise UnsupportedException()
+
     @communication_enabled
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
+        logger.debug('triggering module discovery start')
         self._master_communicator.do_command(master_api.module_discover_start())
 
         if self._discover_mode_timer is not None:
@@ -1372,6 +1438,8 @@ class MasterClassicController(MasterController):
 
     @communication_enabled
     def module_discover_stop(self):  # type: () -> None
+        logger.debug('triggering module discovery stop')
+
         if self._discover_mode_timer is not None:
             self._discover_mode_timer.cancel()
             self._discover_mode_timer = None
@@ -1450,8 +1518,8 @@ class MasterClassicController(MasterController):
         if action_type < 0 or action_type > 254:
             raise ValueError('action_type not in [0, 254]: %d' % action_type)
 
-        if action_number < 0 or action_number > 254:
-            raise ValueError('action_number not in [0, 254]: %d' % action_number)
+        if action_number < 0 or action_number > 255:
+            raise ValueError('action_number not in [0, 255]: %d' % action_number)
 
         fields = {'action_type': action_type,
                   'action_number': action_number}
@@ -1493,46 +1561,44 @@ class MasterClassicController(MasterController):
     # Schedules
 
     @communication_enabled
-    def load_scheduled_action_configuration(self, scheduled_action_id, fields=None):
-        # type: (int, Any) -> Dict[str,Any]
-        return self._eeprom_controller.read(ScheduledActionConfiguration, scheduled_action_id, fields).serialize()
+    def load_scheduled_action(self, scheduled_action_id):  # type: (int) -> LegacyScheduleDTO
+        classic_object = self._eeprom_controller.read(ScheduledActionConfiguration, scheduled_action_id)
+        return LegacyScheduleMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def load_scheduled_action_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
-        return [o.serialize() for o in self._eeprom_controller.read_all(ScheduledActionConfiguration, fields)]
+    def load_scheduled_actions(self):  # type: () -> List[LegacyScheduleDTO]
+        return [LegacyScheduleMapper.orm_to_dto(o)
+                for o in self._eeprom_controller.read_all(ScheduledActionConfiguration)]
 
     @communication_enabled
-    def save_scheduled_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(ScheduledActionConfiguration.deserialize(config))
+    def save_scheduled_actions(self, scheduled_actions):  # type: (List[LegacyScheduleDTO]) -> None
+        batch = []
+        for schedule in scheduled_actions:
+            batch.append(LegacyScheduleMapper.dto_to_orm(schedule))
+        self._eeprom_controller.write_batch(batch)
 
     @communication_enabled
-    def save_scheduled_action_configurations(self, config):
-        # type: (List[Dict[str,Any]]) -> None
-        self._eeprom_controller.write_batch([ScheduledActionConfiguration.deserialize(o) for o in config])
+    def load_startup_action(self):  # type: () -> LegacyStartupActionDTO
+        classic_object = self._eeprom_controller.read(StartupActionConfiguration)
+        return LegacyStartupActionMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def load_startup_action_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        return self._eeprom_controller.read(StartupActionConfiguration, fields).serialize()
-
-    @communication_enabled
-    def save_startup_action_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(StartupActionConfiguration.deserialize(config))
+    def save_startup_action(self, startup_action):
+        # type: (LegacyStartupActionDTO) -> None
+        self._eeprom_controller.write(LegacyStartupActionMapper.dto_to_orm(startup_action))
 
     # Dimmer functions
 
     @communication_enabled
-    def load_dimmer_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        return self._eeprom_controller.read(DimmerConfiguration, fields).serialize()
+    def load_dimmer_configuration(self):
+        # type: () -> DimmerConfigurationDTO
+        classic_object = self._eeprom_controller.read(DimmerConfiguration)
+        return DimmerConfigurationMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def save_dimmer_configuration(self, config):
-        # type: (Dict[str,Any]) -> None
-        self._eeprom_controller.write(DimmerConfiguration.deserialize(config))
+    def save_dimmer_configuration(self, dimmer_configuration_dto):
+        # type: (DimmerConfigurationDTO) -> None
+        self._eeprom_controller.write(DimmerConfigurationMapper.dto_to_orm(dimmer_configuration_dto))
 
     # Can Led functions
 
@@ -1556,21 +1622,43 @@ class MasterClassicController(MasterController):
     # All lights functions
 
     @communication_enabled
-    def set_all_lights(self, action, floor_id=None, output_ids=None):
-        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[int], Optional[List[int]]) -> None
-        _ = output_ids  # Ignored, as the Classic Master knows about the floor
-        floor_id = Toolbox.denonify(floor_id, 255)
+    def set_all_lights(self, action, output_ids=None):
+        # type: (Literal['ON', 'OFF', 'TOGGLE'], Optional[List[int]]) -> None
+        # TODO: Use output_ids if needed
         if action == 'OFF':
-            if floor_id == 255:
-                self.do_basic_action(master_api.BA_ALL_LIGHTS_OFF, 0)
-            else:
-                self.do_basic_action(master_api.BA_LIGHTS_OFF_FLOOR, floor_id)
+            self.do_basic_action(master_api.BA_ALL_LIGHTS_OFF, 0)
         elif action == 'ON':
-            self.do_basic_action(master_api.BA_LIGHTS_ON_FLOOR, floor_id)
+            self.do_basic_action(master_api.BA_LIGHTS_ON_FLOOR, 255)
         elif action == 'TOGGLE':
-            self.do_basic_action(master_api.BA_LIGHTS_TOGGLE_FLOOR, floor_id)
+            self.do_basic_action(master_api.BA_LIGHTS_TOGGLE_FLOOR, 255)
 
     # Sensors
+
+    @communication_enabled
+    def _refresh_sensor_values(self):  # type: () -> None
+        try:
+            # poll for latest sensor values
+            for i, value in enumerate(self.get_sensors_temperature()):
+                if value is None:
+                    continue
+                master_event = MasterEvent(event_type=MasterEvent.Types.SENSOR_VALUE,
+                                           data={'sensor': i, 'type': MasterEvent.SensorType.TEMPERATURE, 'value': value})
+                self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+            for i, value in enumerate(self.get_sensors_humidity()):
+                if value is None:
+                    continue
+                master_event = MasterEvent(event_type=MasterEvent.Types.SENSOR_VALUE,
+                                           data={'sensor': i, 'type': MasterEvent.SensorType.HUMIDITY, 'value': value})
+                self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+            for i, value in enumerate(self.get_sensors_brightness()):
+                if value is None:
+                    continue
+                master_event = MasterEvent(event_type=MasterEvent.Types.SENSOR_VALUE,
+                                           data={'sensor': i, 'type': MasterEvent.SensorType.BRIGHTNESS, 'value': value})
+                self._pubsub.publish_master_event(PubSub.MasterTopics.SENSOR, master_event)
+        except NotImplementedError as e:
+            logger.error('Cannot refresh sensors: {}'.format(e))
+        self._sensor_last_updated = time.time()
 
     def get_sensor_temperature(self, sensor_id):
         if sensor_id is None or sensor_id < 0 or sensor_id > 31:
@@ -1626,17 +1714,17 @@ class MasterClassicController(MasterController):
         )
 
     @communication_enabled
-    def load_sensor(self, sensor_id):  # type: (int) -> SensorDTO
+    def load_sensor(self, sensor_id):  # type: (int) -> MasterSensorDTO
         classic_object = self._eeprom_controller.read(eeprom_models.SensorConfiguration, sensor_id)
         return SensorMapper.orm_to_dto(classic_object)
 
     @communication_enabled
-    def load_sensors(self):  # type: () -> List[SensorDTO]
+    def load_sensors(self):  # type: () -> List[MasterSensorDTO]
         return [SensorMapper.orm_to_dto(o)
                 for o in self._eeprom_controller.read_all(eeprom_models.SensorConfiguration)]
 
     @communication_enabled
-    def save_sensors(self, sensors):  # type: (List[SensorDTO]) -> None
+    def save_sensors(self, sensors):  # type: (List[MasterSensorDTO]) -> None
         batch = []
         for sensor in sensors:
             batch.append(SensorMapper.dto_to_orm(sensor))

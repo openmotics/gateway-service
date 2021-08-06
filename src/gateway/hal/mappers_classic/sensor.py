@@ -17,7 +17,7 @@
 Sensor Mapper
 """
 from __future__ import absolute_import
-from gateway.dto.sensor import SensorDTO
+from gateway.dto.sensor import MasterSensorDTO
 from master.classic.eeprom_controller import EepromModel
 from master.classic.eeprom_models import SensorConfiguration
 
@@ -29,19 +29,19 @@ class SensorMapper(object):
     BYTE_MAX = 255
 
     @staticmethod
-    def orm_to_dto(orm_object):  # type: (EepromModel) -> SensorDTO
+    def orm_to_dto(orm_object):  # type: (EepromModel) -> MasterSensorDTO
         data = orm_object.serialize()
-        return SensorDTO(id=data['id'],
-                         name=data['name'],
-                         offset=data['offset'],
-                         virtual=data['virtual'])
+        return MasterSensorDTO(id=data['id'],
+                               name=data['name'],
+                               offset=data['offset'],
+                               virtual=data['virtual'])
 
     @staticmethod
-    def dto_to_orm(sensor_dto):  # type: (SensorDTO) -> EepromModel
-        data = {'id': sensor_dto.id}  # type: Dict[str, Any]
+    def dto_to_orm(master_sensor_dto):  # type: (MasterSensorDTO) -> EepromModel
+        data = {'id': master_sensor_dto.id}  # type: Dict[str, Any]
         for dto_field, data_field in {'name': 'name',
                                       'offset': 'offset',
                                       'virtual': 'virtual'}.items():
-            if dto_field in sensor_dto.loaded_fields:
-                data[data_field] = getattr(sensor_dto, dto_field)
+            if dto_field in master_sensor_dto.loaded_fields:
+                data[data_field] = getattr(master_sensor_dto, dto_field)
         return SensorConfiguration.deserialize(data)
