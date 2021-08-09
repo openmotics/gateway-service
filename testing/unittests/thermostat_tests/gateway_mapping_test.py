@@ -13,21 +13,23 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import unittest
-import xmlrunner
 import logging
+import unittest
 
-from peewee import SqliteDatabase
+import xmlrunner
 from mock import Mock
+from peewee import SqliteDatabase
 
+from gateway.dto import ThermostatDTO, ThermostatScheduleDTO, SensorStatusDTO
+from gateway.models import DaySchedule, Feature, Output, \
+    OutputToThermostatGroup, Preset, Pump, PumpToValve, Room, Sensor, \
+    Thermostat, ThermostatGroup, Valve, ValveToThermostat
+from gateway.output_controller import OutputController
+from gateway.pubsub import PubSub
+from gateway.sensor_controller import SensorController
+from gateway.thermostat.gateway.thermostat_controller_gateway import \
+    ThermostatControllerGateway
 from ioc import SetTestMode, SetUpTestInjections
-from gateway.models import (
-    Sensor, Feature, Output, Room,
-    ThermostatGroup, OutputToThermostatGroup, Pump,
-    Valve, PumpToValve, Thermostat, ValveToThermostat, Preset, DaySchedule
-)
-from gateway.dto import ThermostatDTO, ThermostatScheduleDTO
-from gateway.thermostat.gateway.thermostat_controller_gateway import ThermostatControllerGateway
 from logs import Logs
 
 MODELS = [Feature, Output, ThermostatGroup, OutputToThermostatGroup, Pump, Sensor,
@@ -39,7 +41,7 @@ class GatewayThermostatMappingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         SetTestMode()
-        Logs.setup_logger(log_level=logging.DEBUG)
+        Logs.setup_logger(log_level_override=logging.DEBUG)
         cls.test_db = SqliteDatabase(':memory:')
 
     def setUp(self):
@@ -53,14 +55,13 @@ class GatewayThermostatMappingTests(unittest.TestCase):
 
     @staticmethod
     def _create_controller(get_sensor_temperature_status=None):
-        gateway_api = Mock()
-        gateway_api.get_timezone = lambda: 'Europe/Brussels'
-        gateway_api.get_sensor_temperature_status = get_sensor_temperature_status
+        sensor_controller = Mock(SensorController)
+        sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(x, value=10.0)
 
-        SetUpTestInjections(gateway_api=gateway_api,
-                            message_client=Mock(),
-                            output_controller=Mock(),
-                            pubsub=Mock())
+        SetUpTestInjections(message_client=Mock(),
+                            output_controller=Mock(OutputController),
+                            sensor_controller=sensor_controller,
+                            pubsub=Mock(PubSub))
         thermostat_controller = ThermostatControllerGateway()
         SetUpTestInjections(thermostat_controller=thermostat_controller)
         return thermostat_controller
@@ -188,10 +189,10 @@ class GatewayThermostatMappingTests(unittest.TestCase):
                                                      end_day_2='22:00',
                                                      temp_night=16.0)
 
-        Sensor.create(number=15)
+        sensor = Sensor.create(id=15, source='master', external_id='0', physical_quantity='temperature', name='')
 
         dto.room = 5
-        dto.sensor = 15
+        dto.sensor = sensor.id
         dto.output0 = 5
         dto.name = 'changed'
         dto.auto_thu = ThermostatScheduleDTO(temp_night=10,

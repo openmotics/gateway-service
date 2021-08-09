@@ -13,26 +13,30 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
 import logging
+import os
+
 import constants
-from ioc import INJECTED, Inject
 from gateway.migrations.base_migrator import BaseMigrator
-from gateway.models import (
-    Feature, Output, Room, Floor, Input, Sensor,
-    ShutterGroup, Shutter, PulseCounter
-)
+from gateway.models import Feature, Input, Output, PulseCounter, Room, \
+    Sensor, Shutter, ShutterGroup
+from ioc import INJECTED, Inject
 from platform_utils import Platform
 
 if False:  # MYPY
-    from typing import Dict, Optional, List, Any
+    from typing import Any, Callable, Dict, List, Optional, Tuple, Type
     from gateway.hal.master_controller_classic import MasterClassicController
+    from master.classic.eeprom_controller import EepromModel
     from master.classic.eeprom_extension import EepromExtension
+    from master.models import BaseModel
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class RoomsMigrator(BaseMigrator):
+
+    # Changed on 24/06, removing `floor`. This means that if this migration would not yet be executed
+    # the floors would never be migrated.
 
     MIGRATION_KEY = 'rooms'
 
@@ -56,22 +60,24 @@ class RoomsMigrator(BaseMigrator):
         )
 
         rooms = {}  # type: Dict[int, Room]
-        floors = {}  # type: Dict[int, Floor]
 
-        # Rooms and floors
-        logger.info('* Rooms & floors')
+        # Rooms
+        logger.info('* Rooms')
         for room_id in range(100):
             try:
-                RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, floors, skip_empty=True)
+                RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, skip_empty=True)
             except Exception:
                 logger.exception('Could not migrate single RoomConfiguration')
 
         # Main objects
-        for eeprom_model, orm_model, filter_ in [(OutputConfiguration, Output, lambda o: True),
-                                                 (InputConfiguration, Input, lambda i: i.module_type in ['i', 'I']),
-                                                 (SensorConfiguration, Sensor, lambda s: True),
-                                                 (ShutterConfiguration, Shutter, lambda s: True),
-                                                 (ShutterGroupConfiguration, ShutterGroup, lambda s: True)]:
+        items = [
+            (OutputConfiguration, Output, lambda o: True),
+            (InputConfiguration, Input, lambda i: i.module_type in ['i', 'I']),
+            (SensorConfiguration, Sensor, lambda s: True),
+            (ShutterConfiguration, Shutter, lambda s: True),
+            (ShutterGroupConfiguration, ShutterGroup, lambda s: True)
+        ]  # type: List[Tuple[Type[EepromModel], Type[BaseModel], Callable[[Any],bool]]]
+        for eeprom_model, orm_model, filter_ in items:
             logger.info('* {0}s'.format(eeprom_model.__name__))
             try:
                 for classic_orm in master_controller._eeprom_controller.read_all(eeprom_model):
@@ -86,11 +92,16 @@ class RoomsMigrator(BaseMigrator):
                             room_id = int(RoomsMigrator._read_eext_fields(eext_controller, eeprom_model.__name__, object_id, ['room']).get('room', 255))
                         except ValueError:
                             room_id = 255
-                        object_orm, _ = orm_model.get_or_create(number=object_id)  # type: ignore
+                        if orm_model in (Sensor,):
+                            object_orm, _ = orm_model.get_or_create(source='master',
+                                                                    external_id=str(object_id),
+                                                                    defaults={'name': ''})
+                        else:
+                            object_orm, _ = orm_model.get_or_create(number=object_id)
                         if room_id == 255:
                             object_orm.room = None
                         else:
-                            object_orm.room = RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, floors)
+                            object_orm.room = RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms)
                         object_orm.save()
                         RoomsMigrator._delete_eext_fields(eext_controller, eeprom_model.__name__, object_id, ['room'])
                     except Exception:
@@ -123,7 +134,7 @@ class RoomsMigrator(BaseMigrator):
                     if room_id == 255:
                         pulse_counter.room = None
                     else:
-                        pulse_counter.room = RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, floors)
+                        pulse_counter.room = RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms)
                     pulse_counter.save()
                     RoomsMigrator._delete_eext_fields(eext_controller, 'PulseCounterConfiguration', pulse_counter_id, ['room'])
                 except Exception:
@@ -158,7 +169,7 @@ class RoomsMigrator(BaseMigrator):
                         if room_id == 255:
                             pulse_counter.room = None
                         else:
-                            pulse_counter.room = RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms, floors)
+                            pulse_counter.room = RoomsMigrator._get_or_create_room(eext_controller, room_id, rooms)
                         pulse_counter.save()
                     except Exception:
                         logger.exception('Could not migratie gateway PulseCounter')
@@ -167,41 +178,21 @@ class RoomsMigrator(BaseMigrator):
                 logger.exception('Could not migrate gateway PulseCounters')
 
     @staticmethod
-    def _get_or_create_room(eext_controller, room_id, rooms, floors, skip_empty=False):
-        # type: (EepromExtension, int, Dict[int, Room], Dict[int, Floor], bool) -> Optional[Room]
+    def _get_or_create_room(eext_controller, room_id, rooms, skip_empty=False):
+        # type: (EepromExtension, int, Dict[int, Room], bool) -> Optional[Room]
         if room_id not in rooms:
             room = Room.get_or_none(number=room_id)
             if room is None:
-                room_data = RoomsMigrator._read_eext_fields(eext_controller, 'RoomConfiguration', room_id, ['floor', 'name'])
+                room_data = RoomsMigrator._read_eext_fields(eext_controller, 'RoomConfiguration', room_id, ['name'])
                 name = room_data.get('name', '')
-                try:
-                    floor_id = int(room_data.get('floor', 255))
-                except ValueError:
-                    floor_id = 255
-                if skip_empty and name == '' and floor_id == 255:
+                if skip_empty and name == '':
                     return None
                 room = Room(number=room_id,
                             name=name)
-                if floor_id != 255:
-                    room.floor = RoomsMigrator._get_or_create_floor(eext_controller, floor_id, floors)
                 room.save()
-                RoomsMigrator._delete_eext_fields(eext_controller, 'RoomConfiguration', room_id, ['floor', 'name'])
+                RoomsMigrator._delete_eext_fields(eext_controller, 'RoomConfiguration', room_id, ['name'])
             rooms[room_id] = room
         return rooms[room_id]
-
-    @staticmethod
-    def _get_or_create_floor(eext_controller, floor_id, floors):
-        # type: (EepromExtension, int, Dict[int, Floor]) -> Floor
-        if floor_id not in floors:
-            floor = Floor.get_or_none(number=floor_id)
-            if floor is None:
-                name = RoomsMigrator._read_eext_fields(eext_controller, 'FloorConfiguration', floor_id, ['name']).get('name', '')
-                floor = Floor(number=floor_id,
-                              name=name)
-                floor.save()
-                RoomsMigrator._delete_eext_fields(eext_controller, 'FloorConfiguration', floor_id, ['name'])
-            floors[floor_id] = floor
-        return floors[floor_id]
 
     @staticmethod
     def _read_eext_fields(eext_controller, model_name, model_id, fields):

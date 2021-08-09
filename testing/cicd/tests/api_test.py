@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 import pytest
 from pytz import timezone
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @pytest.mark.smoke

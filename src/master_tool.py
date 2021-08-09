@@ -85,15 +85,16 @@ def master_cold_reset(master_controller=INJECTED):
 def master_factory_reset(master_controller=INJECTED):
     # type: (MasterController) -> None
     logger.info('Wiping the master...')
-    master_controller.factory_reset()
+    master_controller.factory_reset(can=True)
     logger.info('Done wiping the master')
 
 
 @Inject
-def master_update(firmware, master_controller=INJECTED):
-    # type: (str, MasterController) -> None
+def master_update(firmware, version, master_controller=INJECTED):
+    # type: (str, str, MasterController) -> None
     try:
-        master_controller.update_master(hex_filename=firmware)
+        master_controller.update_master(hex_filename=firmware,
+                                        version=version)
         shutil.copy(firmware, '/opt/openmotics/firmware.hex')
     except Exception as ex:
         logger.error('Failed to update master: {0}'.format(ex))
@@ -128,6 +129,8 @@ def main():
                         help='path to the hexfile with the classic firmware')
     parser.add_argument('--master-firmware-core',
                         help='path to the hexfile with the core+ firmware')
+    parser.add_argument('--firmware-version',
+                        help='firmware version of the provided hexfile')
 
     args = parser.parse_args()
 
@@ -161,7 +164,8 @@ def main():
             if not firmware:
                 print('error: --master-firmware-classic is required to update')
                 sys.exit(1)
-        master_update(firmware)
+        master_update(firmware=firmware,
+                      version=args.firmware_version)
         return
 
     communicator = get_communicator()

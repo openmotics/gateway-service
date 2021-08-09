@@ -23,7 +23,7 @@ from gateway.thermostat.gateway.pump_driver import PumpDriver
 if False:  # MYPY
     from typing import List, Dict, Set
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @Inject

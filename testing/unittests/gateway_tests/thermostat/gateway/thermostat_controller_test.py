@@ -17,17 +17,19 @@ from __future__ import absolute_import
 import logging
 import unittest
 
-import mock
+from mock import Mock
 from peewee import SqliteDatabase
 
 import fakesleep
-from gateway.dto import OutputStatusDTO, PumpGroupDTO, ThermostatGroupDTO, \
-    ThermostatGroupStatusDTO, ThermostatStatusDTO
-from gateway.gateway_api import GatewayApi
+from gateway.dto import OutputStatusDTO, PumpGroupDTO, SensorStatusDTO, \
+    ThermostatGroupDTO, ThermostatGroupStatusDTO, ThermostatStatusDTO
 from gateway.models import DaySchedule, Output, OutputToThermostatGroup, \
     Preset, Pump, PumpToValve, Sensor, Thermostat, ThermostatGroup, Valve, \
     ValveToThermostat
 from gateway.output_controller import OutputController
+from gateway.pubsub import PubSub
+from gateway.sensor_controller import SensorController
+from gateway.system_controller import SystemController
 from gateway.thermostat.gateway.thermostat_controller_gateway import \
     ThermostatControllerGateway
 from ioc import SetTestMode, SetUpTestInjections
@@ -39,11 +41,13 @@ MODELS = [Pump, Output, Valve, PumpToValve, Thermostat,
 
 
 class ThermostatControllerTest(unittest.TestCase):
+    maxDiff = None
+
     @classmethod
     def setUpClass(cls):
         fakesleep.monkey_patch()
         SetTestMode()
-        Logs.setup_logger(log_level=logging.DEBUG)
+        Logs.setup_logger(log_level_override=logging.DEBUG)
 
     @classmethod
     def tearDownClass(cls):
@@ -54,21 +58,22 @@ class ThermostatControllerTest(unittest.TestCase):
         self.test_db.bind(MODELS)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
-        self._gateway_api = mock.Mock(GatewayApi)
-        self._gateway_api.get_timezone.return_value = 'Europe/Brussels'
-        self._gateway_api.get_sensor_temperature_status.return_value = 10.0
-        output_controller = mock.Mock(OutputController)
+        output_controller = Mock(OutputController)
         output_controller.get_output_status.return_value = OutputStatusDTO(id=0, status=False)
-        SetUpTestInjections(gateway_api=self._gateway_api,
+        sensor_controller = Mock(SensorController)
+        sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(id=x, value=10.0)
+        SetUpTestInjections(pubsub=Mock(PubSub),
                             output_controller=output_controller,
-                            pubsub=mock.Mock())
+                            sensor_controller=sensor_controller,
+                            system_controller=SystemController())
         self._thermostat_controller = ThermostatControllerGateway()
         SetUpTestInjections(thermostat_controller=self._thermostat_controller)
+        sensor = Sensor.create(source='master', external_id='1', physical_quantity='temperature', name='')
         self._thermostat_group = ThermostatGroup.create(number=0,
                                                         name='thermostat group',
                                                         on=True,
                                                         threshold_temperature=10.0,
-                                                        sensor=Sensor.create(number=1),
+                                                        sensor=sensor,
                                                         mode='heating')
 
     def tearDown(self):
@@ -76,9 +81,10 @@ class ThermostatControllerTest(unittest.TestCase):
         self.test_db.close()
 
     def test_save_pumpgroups(self):
+        sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
         thermostat = Thermostat.create(number=1,
                                        name='thermostat 1',
-                                       sensor=Sensor.create(number=10),
+                                       sensor=sensor,
                                        pid_heating_p=200,
                                        pid_heating_i=100,
                                        pid_heating_d=50,
@@ -159,9 +165,10 @@ class ThermostatControllerTest(unittest.TestCase):
                                        room_id=None)], pump_groups)
 
     def test_thermostat_group_crud(self):
+        sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
         thermostat = Thermostat.create(number=1,
                                        name='thermostat 1',
-                                       sensor=Sensor.create(number=10),
+                                       sensor=sensor,
                                        pid_heating_p=200,
                                        pid_heating_i=100,
                                        pid_heating_d=50,
@@ -227,9 +234,10 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertEqual(new_thermostat_group_dto, self._thermostat_controller.load_thermostat_group())
 
     def test_thermostat_control(self):
+        sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
         thermostat = Thermostat.create(number=1,
                                        name='thermostat 1',
-                                       sensor=Sensor.create(number=10),
+                                       sensor=sensor,
                                        pid_heating_p=200,
                                        pid_heating_i=100,
                                        pid_heating_d=50,
@@ -263,7 +271,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                                                            name='thermostat 1',
                                                                            automatic=True,
                                                                            setpoint=0,
-                                                                           sensor_id=10,
+                                                                           sensor_id=sensor.id,
                                                                            actual_temperature=10.0,
                                                                            setpoint_temperature=14.0,
                                                                            outside_temperature=10.0,

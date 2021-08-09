@@ -16,26 +16,16 @@
 """
 PulseCounter DTO
 """
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Optional
 
 
 class PulseCounterDTO(BaseDTO):
-    @capture_fields
     def __init__(self, id, name='', room=None, input_id=None, persistent=False):
         self.id = id  # type: int
         self.name = name  # type: str
         self.input_id = input_id  # type: Optional[int]
         self.room = room  # type: Optional[int]
         self.persistent = persistent  # type: bool
-
-    def __eq__(self, other):
-        if not isinstance(other, PulseCounterDTO):
-            return False
-        return (self.id == other.id and
-                self.name == other.name and
-                self.input_id == other.input_id and
-                self.room == other.room and
-                self.persistent == other.persistent)

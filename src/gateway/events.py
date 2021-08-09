@@ -23,39 +23,11 @@ if False:  # MYPY
     from typing import Any, Dict
 
 
-class GatewayEvent(object):
-    """
-    GatewayEvent object
-
-    Data formats:
-    * CONFIG_CHANGE
-      {'type': str}  # Resource type, output, input, ...
-
-    * OUTPUT_CHANGE
-      {'id': int,                     # Output ID
-       'status': {'on': bool,         # On/off
-                  'value': int},      # Optional, dimmer value
-       'location': {'room_id': int}}  # Room ID
-
-    * VENTILATION_CHANGE
-      {'id': str,      # Device ID
-       'plugin': str,  # Target Plugin
-       'mode': str,    # Auto/Manual
-       'level': int,
-       'connected': bool}
-    """
-
-    class Types(object):
-        CONFIG_CHANGE = 'CONFIG_CHANGE'
-        INPUT_CHANGE = 'INPUT_CHANGE'
-        OUTPUT_CHANGE = 'OUTPUT_CHANGE'
-        SHUTTER_CHANGE = 'SHUTTER_CHANGE'
-        THERMOSTAT_CHANGE = 'THERMOSTAT_CHANGE'
-        THERMOSTAT_GROUP_CHANGE = 'THERMOSTAT_GROUP_CHANGE'
-        VENTILATION_CHANGE = 'VENTILATION_CHANGE'
-        ACTION = 'ACTION'
-        PING = 'PING'
-        PONG = 'PONG'
+"""
+This class represents the base template for any type of events
+"""
+class BaseEvent(object):
+    VERSION = None
 
     def __init__(self, event_type, data):
         # type: (str, Dict[str,Any]) -> None
@@ -70,20 +42,93 @@ class GatewayEvent(object):
 
     def __eq__(self, other):
         # type: (Any) -> bool
-        return isinstance(other, GatewayEvent) \
-            and self.type == other.type \
-            and self.data == other.data
+        return isinstance(other, self.__class__) \
+               and self.type == other.type \
+               and self.data == other.data
 
     def __repr__(self):
         # type: () -> str
-        return '<GatewayEvent {} {}>'.format(self.type, self.data)
+        return '<{} {} {}>'.format(self.__class__.__name__, self.type, self.data)
 
     def __str__(self):
         # type: () -> str
         return json.dumps(self.serialize())
 
-    @staticmethod
-    def deserialize(data):
-        # type: (Dict[str,Any]) -> GatewayEvent
-        return GatewayEvent(event_type=data['type'],
-                            data=data['data'])
+    @classmethod
+    def deserialize(cls, data):
+        # type: (Dict[str,Any]) -> BaseEvent
+        return cls(event_type=data['type'],
+                   data=data['data'])
+
+
+class GatewayEvent(BaseEvent):
+    """
+    GatewayEvent object
+
+    Data formats:
+    * CONFIG_CHANGE
+      {'type': str}  # Resource type, output, input, ...
+
+    * OUTPUT_CHANGE
+      {'id': int,                     # Output ID
+       'status': {'on': bool,         # On/off
+                  'value': int},      # Optional, dimmer value
+       'location': {'room_id': int}}  # Room ID
+
+    * SENSOR_CHANGE
+      {'id': int,       # Sensor ID
+       'plugin': str,   # Target Plugin
+       'value': float}  # Value
+
+    * VENTILATION_CHANGE
+      {'id': str,      # Device ID
+       'plugin': str,  # Target Plugin
+       'mode': str,    # Auto/Manual
+       'level': int,
+       'connected': bool}
+    """
+
+    class Types(object):
+        CONFIG_CHANGE = 'CONFIG_CHANGE'
+        INPUT_CHANGE = 'INPUT_CHANGE'
+        OUTPUT_CHANGE = 'OUTPUT_CHANGE'
+        SENSOR_CHANGE = 'SENSOR_CHANGE'
+        SHUTTER_CHANGE = 'SHUTTER_CHANGE'
+        THERMOSTAT_CHANGE = 'THERMOSTAT_CHANGE'
+        THERMOSTAT_GROUP_CHANGE = 'THERMOSTAT_GROUP_CHANGE'
+        VENTILATION_CHANGE = 'VENTILATION_CHANGE'
+        ACTION = 'ACTION'
+        PING = 'PING'
+        PONG = 'PONG'
+
+
+class EsafeEvent(BaseEvent):
+    """
+    eSafeEvent object
+
+    Data formats:
+
+    * CONFIG_CHANGE
+      {'type': str}  # config type: Global, Doorbell, RFID
+
+    * DELIVERY_CHANGE
+      {'type': str,              # Delivery type: DELIVERY or RETURN
+       'action': str,            # action type: DELIVERY or PICKUP
+       'user_delivery_id': int,  # ID of the delivery user (can be None)
+       'user_pickup_id': int,    # ID of the pickup user (Always has a value, but can be a courier)
+       'parcel_rebus_id': int}   # Rebus id of the used parcelbox
+
+    * LOCK_CHANGE
+      {'id': int,      # Rebus lock id
+       'status': str}  # action type: 'open' or 'close'
+
+    * RFID_CHANGE
+      {'uuid': str,      # RFID uuid
+       'action': str}    # action of the rfid change: "SCAN" or "REGISTER"
+    """
+
+    class Types(object):
+        CONFIG_CHANGE = 'CONFIG_CHANGE'
+        DELIVERY_CHANGE = 'DELIVERY_DELIVERY'
+        LOCK_CHANGE = 'LOCK_CHANGE'
+        RFID_CHANGE = 'RFID_CHANGE'

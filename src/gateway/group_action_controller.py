@@ -25,7 +25,7 @@ from gateway.models import GroupAction
 if False:  # MYPY
     from typing import List, Tuple
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('group_action_controller')
@@ -37,6 +37,9 @@ class GroupActionController(BaseController):
     @Inject
     def __init__(self, master_controller=INJECTED):
         super(GroupActionController, self).__init__(master_controller)
+
+    def do_basic_action(self, action_type, action_number):  # type: (int, int) -> None
+        self._master_controller.do_basic_action(action_type, action_number)
 
     def do_group_action(self, group_action_id):  # type: (int) -> None
         self._master_controller.do_group_action(group_action_id)

@@ -27,6 +27,8 @@ BA_GROUP_ACTION = 2
 
 BA_TRIGGER_EVENT = 60
 BA_STATUS_LEDS = 64
+BA_INPUT_PRESS = 68
+BA_INPUT_RELEASE = 69
 BA_POWER_CYCLE_BUS = 72
 
 BA_THERMOSTAT_COOLING_HEATING = 80
@@ -538,6 +540,14 @@ def get_module_version():
                              [Field.bytes('addr', 4), Field.byte('error_code'), Field.byte('hw_version'),
                               Field.byte('f1'), Field.byte('f2'), Field.byte('f3'), Field.byte('status'),
                               Field.crc(), Field.lit('\r\n')])
+
+
+def erase_can_eeprom():
+    """ This instruction will erase the internal and external (if installed) Eeprom of the slave module
+    and bring it back to factory reset."""
+    return MasterCommandSpec('FX',
+                             [Field.bytes('addr', 4), Field.byte('instr'), Field.crc(), Field.padding(5)],
+                             [Field.bytes('addr', 4), Field.byte('error_code'), Field.crc(), Field.padding(5), Field.lit('\r\n')])
 
 
 # Below are the asynchronous messages, sent by the master to the gateway

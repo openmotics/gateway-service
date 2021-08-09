@@ -18,10 +18,10 @@ Output Mapper
 """
 from __future__ import absolute_import
 from toolbox import Toolbox
-from gateway.dto.output import OutputDTO
+from gateway.dto.output import OutputDTO, DimmerConfigurationDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
 from master.classic.eeprom_controller import EepromModel
-from master.classic.eeprom_models import OutputConfiguration
+from master.classic.eeprom_models import OutputConfiguration, DimmerConfiguration
 
 if False:  # MYPY
     from typing import List
@@ -38,7 +38,6 @@ class OutputMapper(object):
                          module_type=data['module_type'],
                          name=data['name'],
                          timer=Toolbox.nonify(data['timer'], OutputMapper.WORD_MAX),
-                         floor=Toolbox.nonify(data['floor'], OutputMapper.BYTE_MAX),
                          output_type=data['type'],
                          lock_bit_id=Toolbox.nonify(data['lock_bit_id'], OutputMapper.BYTE_MAX),
                          can_led_1=FeedbackLedDTO(id=Toolbox.nonify(data['can_led_1_id'], OutputMapper.BYTE_MAX),
@@ -59,7 +58,6 @@ class OutputMapper(object):
             if dto_field in output_dto.loaded_fields:
                 data[data_field] = getattr(output_dto, dto_field)
         for dto_field, (data_field, default) in {'timer': ('timer', OutputMapper.WORD_MAX),
-                                                 'floor': ('floor', OutputMapper.BYTE_MAX),
                                                  'lock_bit_id': ('lock_bit_id', OutputMapper.BYTE_MAX)}.items():
             if dto_field in output_dto.loaded_fields:
                 data[data_field] = Toolbox.denonify(getattr(output_dto, dto_field), default)
@@ -71,3 +69,26 @@ class OutputMapper(object):
                 data[id_field] = getattr(output_dto, base_field).id
                 data[function_field] = getattr(output_dto, base_field).function
         return OutputConfiguration.deserialize(data)
+
+
+class DimmerConfigurationMapper(object):
+    BYTE_MAX = 255
+
+    @staticmethod
+    def orm_to_dto(orm_object):  # type: (EepromModel) -> DimmerConfigurationDTO
+        data = orm_object.serialize()
+        return DimmerConfigurationDTO(min_dim_level=Toolbox.nonify(data['min_dim_level'], DimmerConfigurationMapper.BYTE_MAX),
+                                      dim_step=Toolbox.nonify(data['dim_step'], DimmerConfigurationMapper.BYTE_MAX),
+                                      dim_wait_cycle=Toolbox.nonify(data['dim_wait_cycle'], DimmerConfigurationMapper.BYTE_MAX),
+                                      dim_memory=Toolbox.nonify(data['dim_memory'], DimmerConfigurationMapper.BYTE_MAX))
+
+    @staticmethod
+    def dto_to_orm(output_dto):  # type: (DimmerConfigurationDTO) -> EepromModel
+        data = {}
+        for dto_field, (data_field, default) in {'min_dim_level': ('min_dim_level', DimmerConfigurationMapper.BYTE_MAX),
+                                                 'dim_step': ('dim_step', DimmerConfigurationMapper.BYTE_MAX),
+                                                 'dim_wait_cycle': ('dim_wait_cycle', DimmerConfigurationMapper.BYTE_MAX),
+                                                 'dim_memory': ('dim_memory', DimmerConfigurationMapper.BYTE_MAX)}.items():
+            if dto_field in output_dto.loaded_fields:
+                data[data_field] = Toolbox.denonify(getattr(output_dto, dto_field), default)
+        return DimmerConfiguration.deserialize(data)

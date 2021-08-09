@@ -16,7 +16,7 @@
 """
 GlobalFeedback DTO
 """
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
 
 if False:  # MYPY
@@ -24,7 +24,6 @@ if False:  # MYPY
 
 
 class GlobalFeedbackDTO(BaseDTO):
-    @capture_fields
     def __init__(self, id, can_led_1=None, can_led_2=None, can_led_3=None, can_led_4=None):
         # type: (int, Optional[FeedbackLedDTO], Optional[FeedbackLedDTO], Optional[FeedbackLedDTO], Optional[FeedbackLedDTO]) -> None
         self.id = id  # type: int
@@ -32,12 +31,3 @@ class GlobalFeedbackDTO(BaseDTO):
         self.can_led_2 = can_led_2 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
         self.can_led_3 = can_led_3 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
         self.can_led_4 = can_led_4 or FeedbackLedDTO(id=None, function=FeedbackLedDTO.Functions.UNKNOWN)
-
-    def __eq__(self, other):
-        if not isinstance(other, GlobalFeedbackDTO):
-            return False
-        return (self.id == other.id and
-                self.can_led_1 == other.can_led_1 and
-                self.can_led_2 == other.can_led_2 and
-                self.can_led_3 == other.can_led_3 and
-                self.can_led_4 == other.can_led_4)

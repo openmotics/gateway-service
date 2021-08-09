@@ -34,7 +34,7 @@ from master.core.memory_types import MemoryAddress
 if False:  # MYPY
     from typing import List, Dict, Callable, Any, Optional, Tuple, Set
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class MemoryTypes(object):
@@ -122,26 +122,26 @@ class MemoryFile(object):
             read_map[address.memory_type].add(address.page)
         return read_map
 
-    def read(self, addresses):  # type: (List[MemoryAddress]) -> Dict[MemoryAddress, bytearray]
+    def read(self, addresses, read_through=False):  # type: (List[MemoryAddress], bool) -> Dict[MemoryAddress, bytearray]
         read_map = MemoryFile._create_read_map(addresses)
-        raw_data = self._load_data(read_map)
+        raw_data = self._load_data(read_map, read_through)
         data = {}
         for address in addresses:
             # No need to copy, as bytearray.slice doesn't return references
             data[address] = raw_data[address.memory_type][address.page][address.offset:address.offset + address.length]
         return data
 
-    def _load_data(self, read_map):
-        # type: (Dict[str, Set[int]]) -> Dict[str, Dict[int, bytearray]]
+    def _load_data(self, read_map, read_through):
+        # type: (Dict[str, Set[int]], bool) -> Dict[str, Dict[int, bytearray]]
         raw_data = {MemoryTypes.EEPROM: {},
                     MemoryTypes.FRAM: {}}  # type: Dict[str, Dict[int, bytearray]]
         for page in read_map.get(MemoryTypes.EEPROM, set()):
-            if page not in self._eeprom_cache:
+            if page not in self._eeprom_cache or read_through:
                 self._eeprom_cache[page] = self._read_data(MemoryTypes.EEPROM, page)
             raw_data[MemoryTypes.EEPROM][page] = self._eeprom_cache[page]
         time_limit = time.time() - MemoryFile.FRAM_TIMEOUT
         for page in read_map.get(MemoryTypes.FRAM, set()):
-            if page not in self._fram_cache or self._fram_cache[page][0] < time_limit:
+            if page not in self._fram_cache or self._fram_cache[page][0] < time_limit or read_through:
                 self._fram_cache[page] = (time.time(), self._read_data(MemoryTypes.FRAM, page))
             raw_data[MemoryTypes.FRAM][page] = self._fram_cache[page][1]
         return raw_data
@@ -218,7 +218,11 @@ class MemoryFile(object):
                 logger.info('MEMORY: Activating')
                 self._self_activated = True
                 self._activation_event.clear()
-                self._core_communicator.do_basic_action(BasicAction(action_type=200, action=1), timeout=MemoryFile.ACTIVATE_TIMEOUT)
+                self._core_communicator.do_command(
+                    command=CoreAPI.basic_action(),
+                    fields={'type': 200, 'action': 1, 'device_nr': 0, 'extra_parameter': 0},
+                    timeout=MemoryFile.ACTIVATE_TIMEOUT
+                )
                 self._activation_event.wait(timeout=60.0)
             else:
                 logger.info('MEMORY: No activation requred')

@@ -19,7 +19,7 @@ from gateway.models import DataMigration
 if False:  # MYPY
     from typing import Optional
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class BaseMigrator(object):
@@ -35,7 +35,7 @@ class BaseMigrator(object):
             # Check if migration already done
             migration = DataMigration.get_or_none(name=cls.MIGRATION_KEY)
             if migration is None:
-                migration = DataMigration(name=cls.MIGRATION_KEY, migrated=False)
+                migration = DataMigration.create(name=cls.MIGRATION_KEY, migrated=False)
             if migration.migrated:
                 return
 

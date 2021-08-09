@@ -18,7 +18,7 @@ Output DTO
 """
 import time
 
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 from gateway.dto.feedback_led import FeedbackLedDTO
 
 if False:  # MYPY
@@ -26,8 +26,7 @@ if False:  # MYPY
 
 
 class OutputDTO(BaseDTO):
-    @capture_fields
-    def __init__(self, id, name='', module_type='O', timer=None, floor=None, output_type=None,
+    def __init__(self, id, name='', module_type='O', timer=None, output_type=None,
                  can_led_1=None,  # type: Optional[FeedbackLedDTO]
                  can_led_2=None,  # type: Optional[FeedbackLedDTO]
                  can_led_3=None,  # type: Optional[FeedbackLedDTO]
@@ -39,7 +38,6 @@ class OutputDTO(BaseDTO):
         self.name = name  # type: str
         self.module_type = module_type  # type: str
         self.timer = timer  # type: Optional[int]
-        self.floor = floor  # type: Optional[int]
         self.output_type = output_type  # type: int
         self.room = room  # type: Optional[int]
         self.lock_bit_id = lock_bit_id  # type: Optional[int]
@@ -58,7 +56,6 @@ class OutputDTO(BaseDTO):
                 self.name == other.name and
                 self.module_type == other.module_type and
                 self.timer == other.timer and
-                self.floor == other.floor and
                 self.output_type == other.output_type and
                 self.room == other.room and
                 self.lock_bit_id == other.lock_bit_id and
@@ -69,7 +66,6 @@ class OutputDTO(BaseDTO):
 
 
 class OutputStatusDTO(BaseDTO):
-    @capture_fields
     def __init__(self, id, status=False, ctimer=0, dimmer=0, locked=False, updated_at=None):
         # type: (int, bool, int, int, bool, Optional[float]) -> None
         self.id = id  # type: int
@@ -88,3 +84,21 @@ class OutputStatusDTO(BaseDTO):
                 self.ctimer == other.ctimer and
                 self.dimmer == other.dimmer and
                 self.locked == other.locked)
+
+
+class DimmerConfigurationDTO(BaseDTO):
+    def __init__(self, min_dim_level=None, dim_step=None, dim_wait_cycle=None, dim_memory=None):
+        # type: (Optional[int], Optional[int], Optional[int], Optional[int]) -> None
+        self.min_dim_level = min_dim_level
+        self.dim_step = dim_step
+        self.dim_wait_cycle = dim_wait_cycle
+        self.dim_memory = dim_memory
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        if not isinstance(other, DimmerConfigurationDTO):
+            return False
+        return (self.min_dim_level == other.min_dim_level and
+                self.dim_step == other.dim_step and
+                self.dim_wait_cycle == other.dim_wait_cycle and
+                self.dim_memory == other.dim_memory)

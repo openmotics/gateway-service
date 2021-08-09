@@ -26,7 +26,7 @@ from gateway.models import Plugin, Ventilation
 if False:  # MYPY
     from typing import Any, Dict, List
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class VentilationMapper(object):

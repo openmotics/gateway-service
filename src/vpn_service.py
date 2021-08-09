@@ -35,6 +35,8 @@ from threading import Lock
 
 import requests
 import six
+from requests import ConnectionError
+from requests.adapters import HTTPAdapter
 import ujson as json
 from six.moves.configparser import ConfigParser, NoOptionError
 
@@ -59,7 +61,10 @@ logger = logging.getLogger('openmotics')
 
 class VpnController(object):
     """ Contains methods to check the vpn status, start and stop the vpn. """
-    if System.get_operating_system().get('ID') == System.OS.BUILDROOT:
+    config = ConfigParser()
+    config.read(constants.get_config_file())
+    vpn_supervisor = config.get('OpenMotics', 'vpn_supervisor') == 'True' if config.has_option('OpenMotics', 'vpn_supervisor') else True
+    if System.get_operating_system().get('ID') == System.OS.BUILDROOT or not vpn_supervisor:
         vpn_binary = 'openvpn'
         config_location = '/etc/openvpn/client/'
         start_cmd = 'cd {} ; {} --suppress-timestamps --nobind --config vpn.conf > /dev/null'.format(config_location, vpn_binary)
@@ -124,6 +129,7 @@ class Cloud(object):
     """ Connects to the cloud """
 
     def __init__(self, url=None):
+        self._session = requests.Session()
         self._url = url
         if self._url is None:
             config = ConfigParser()
@@ -138,9 +144,9 @@ class Cloud(object):
         if self._url is None:
             logger.debug('Cloud not configured, skipping call home')
         try:
-            request = requests.post(self._url,
-                                    data={'extra_data': json.dumps(extra_data, sort_keys=True)},
-                                    timeout=10.0)
+            request = self._session.post(self._url,
+                                         data={'extra_data': json.dumps(extra_data, sort_keys=True)},
+                                         timeout=10.0)
             response = json.loads(request.text)
             data = {'success': True}
             for entry in ['sleep_time', 'open_vpn', 'configuration', 'intervals']:

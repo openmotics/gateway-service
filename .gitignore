@@ -1,18 +1,44 @@
+# Testing artifacts
 .coverage
+.coverage**
 coverage.xml
-.idea/
-.DS_Store/
-**/.DS_Store
-*.pyc
-.vscode/
 testing/gw-unit-reports
 testing/gw-unit-reports-3
+pytest.ini
+run-tests.sh
+
+# IDE artifacts
+.idea/
+
+# OSX artifacts
+.DS_Store/
+**/.DS_Store
+
+# Python bytecode files
+*.pyc
+
+# VS code artifacts
+.vscode/
+
+# Artifacts for running gateway locally
 etc/
-src/terms/
+etc**
 static/
+
+# Terms
+src/terms/
+
+# Venv folders
 venv/
+venv2.7/
+
+# Mypy files
 .mypy_cache/
 .dmypy.json
-pytest.ini
+
+# Package artifacts
 *.egg-info
-venv2.7/
+
+# Local scripts (makes it possible to add local bash scripts for easier development)
+**ignore.sh
+**ignore.py

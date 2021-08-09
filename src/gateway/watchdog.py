@@ -33,11 +33,11 @@ from serial_utils import CommunicationStatus
 if False:  # MYPY
     from typing import Callable, Literal, Optional, Union, Dict, Any
     from gateway.hal.master_controller import MasterController
-    from power.power_communicator import PowerCommunicator
+    from gateway.energy.energy_communicator import EnergyCommunicator
 
     HEALTH = Literal['success', 'unstable', 'failure']
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('watchdog')
@@ -48,10 +48,10 @@ class Watchdog(object):
     """
 
     @Inject
-    def __init__(self, power_communicator=INJECTED, master_controller=INJECTED):
-        # type: (Optional[PowerCommunicator], MasterController) -> None
+    def __init__(self, energy_communicator=INJECTED, master_controller=INJECTED):
+        # type: (Optional[EnergyCommunicator], MasterController) -> None
         self._master_controller = master_controller
-        self._power_communicator = power_communicator
+        self._energy_communicator = energy_communicator
         self._watchdog_thread = None  # type: Optional[DaemonThread]
         self.start_time = 0.0
 
@@ -73,11 +73,11 @@ class Watchdog(object):
     def _watch(self):
         # type: () -> None
         self._controller_health('master', self._master_controller, self._master_controller.cold_reset)
-        if self._power_communicator:
-            self._controller_health('energy', self._power_communicator, self._master_controller.power_cycle_bus)
+        if self._energy_communicator:
+            self._controller_health('energy', self._energy_communicator, self._master_controller.power_cycle_bus)
 
     def _controller_health(self, name, controller, device_reset):
-        # type: (str, Union[PowerCommunicator,MasterController], Callable[[],None]) -> None
+        # type: (str, Union[EnergyCommunicator,MasterController], Callable[[],None]) -> None
         status = controller.get_communicator_health()
         if status == CommunicationStatus.SUCCESS:
             Config.remove_entry('communication_recovery_{0}'.format(name))
@@ -94,7 +94,7 @@ class Watchdog(object):
                     os._exit(1)
 
     def _get_reset_action(self, name, controller):
-        # type: (str, Union[MasterController,PowerCommunicator]) -> Optional[str]
+        # type: (str, Union[MasterController,EnergyCommunicator]) -> Optional[str]
         recovery_data_key = 'communication_recovery_{0}'.format(name)
         recovery_data = Config.get_entry(recovery_data_key, None)  # type: Optional[Dict[str, Any]]
         if recovery_data is None:  # Make mypy happy

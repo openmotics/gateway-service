@@ -35,7 +35,6 @@ class MockedCore(object):
 
         self.communicator = mock.Mock(CoreCommunicator)
         self.communicator.do_command = self._do_command
-        self.communicator.do_basic_action = self._do_basic_action
         self.pubsub = PubSub()
         SetUpTestInjections(master_communicator=self.communicator,
                             pubsub=self.pubsub)
@@ -66,13 +65,11 @@ class MockedCore(object):
             self.write_log.append(fields)
             for index, data_byte in enumerate(fields['data']):
                 page_data[start + index] = data_byte
+        elif instruction == 'BA':
+            if fields['type'] == 200 and fields['action'] == 1:
+                # Send EEPROM_ACTIVATE event
+                self.memory_file._handle_event({'type': 248, 'action': 0, 'device_nr': 0, 'data': 0})
         elif instruction in self.return_data:
             return self.return_data[instruction]
         else:
             raise AssertionError('unexpected instruction: {0}'.format(instruction))
-
-    def _do_basic_action(self, basic_action, timeout=2, log=True):
-        _ = timeout, log
-        if basic_action.action_type == 200 and basic_action.action == 1:
-            # Send EEPROM_ACTIVATE event
-            self.memory_file._handle_event({'type': 254, 'action': 0, 'device_nr': 0, 'data': 0})

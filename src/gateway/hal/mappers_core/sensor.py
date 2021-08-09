@@ -17,7 +17,8 @@
 Sensor Mapper
 """
 from __future__ import absolute_import
-from gateway.dto.sensor import SensorDTO
+
+from gateway.dto.sensor import MasterSensorDTO
 from master.core.memory_models import SensorConfiguration
 
 if False:  # MYPY
@@ -26,13 +27,13 @@ if False:  # MYPY
 
 class SensorMapper(object):
     @staticmethod
-    def orm_to_dto(orm_object):  # type: (SensorConfiguration) -> SensorDTO
-        return SensorDTO(id=orm_object.id,
-                         name=orm_object.name,
-                         offset=orm_object.temperature_offset)
+    def orm_to_dto(orm_object):  # type: (SensorConfiguration) -> MasterSensorDTO
+        return MasterSensorDTO(id=orm_object.id,
+                               name=orm_object.name,
+                               offset=orm_object.temperature_offset)
 
     @staticmethod
-    def dto_to_orm(sensor_dto):  # type: (SensorDTO) -> SensorConfiguration
+    def dto_to_orm(sensor_dto):  # type: (MasterSensorDTO) -> SensorConfiguration
         new_data = {'id': sensor_dto.id}  # type: Dict[str, Any]
         if 'name' in sensor_dto.loaded_fields:
             new_data['name'] = sensor_dto.name

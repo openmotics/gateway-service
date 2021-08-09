@@ -22,10 +22,10 @@ from gateway.models import ThermostatGroup, Thermostat
 
 if False:  # MYPY
     from typing import Optional, List, Callable
-    from gateway.gateway_api import GatewayApi
     from gateway.thermostat.gateway.pump_valve_controller import PumpValveController
+    from gateway.sensor_controller import SensorController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 @Inject
@@ -35,9 +35,9 @@ class ThermostatPid(object):
     DEFAULT_KI = 0.0
     DEFAULT_KD = 2.0
 
-    def __init__(self, thermostat, pump_valve_controller, gateway_api=INJECTED):
-        # type: (Thermostat, PumpValveController, GatewayApi) -> None
-        self._gateway_api = gateway_api
+    def __init__(self, thermostat, pump_valve_controller, sensor_controller=INJECTED):
+        # type: (Thermostat, PumpValveController, SensorController) -> None
+        self._sensor_controller = sensor_controller
         self._pump_valve_controller = pump_valve_controller
         self._thermostat_change_lock = Lock()
         self._heating_valve_ids = []  # type: List[int]
@@ -135,7 +135,8 @@ class ThermostatPid(object):
         try:
             current_temperature = None  # type: Optional[float]
             if self._thermostat.sensor is not None:
-                current_temperature = self._gateway_api.get_sensor_temperature_status(self._thermostat.sensor.number)
+                status = self._sensor_controller.get_sensor_status(self._thermostat.sensor.id)
+                current_temperature = None if status is None else status.value
             if current_temperature is not None:
                 self._current_temperature = current_temperature
             else:

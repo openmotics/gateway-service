@@ -23,7 +23,7 @@ from ioc import Injectable, Inject, INJECTED
 from requests import ConnectionError
 from requests.adapters import HTTPAdapter
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class APIException(Exception):

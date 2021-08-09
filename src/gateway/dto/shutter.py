@@ -16,14 +16,13 @@
 """
 Shutter DTO
 """
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Optional
 
 
 class ShutterDTO(BaseDTO):
-    @capture_fields
     def __init__(self, id, name='', timer_up=None, timer_down=None, up_down_config=None,
                  group_1=None, group_2=None, room=None, steps=None):
         self.id = id  # type: int
@@ -35,16 +34,3 @@ class ShutterDTO(BaseDTO):
         self.group_2 = group_2  # type: Optional[int]
         self.room = room  # type: Optional[int]
         self.steps = steps  # type: Optional[int]
-
-    def __eq__(self, other):
-        if not isinstance(other, ShutterDTO):
-            return False
-        return (self.id == other.id and
-                self.name == other.name and
-                self.timer_up == other.timer_up and
-                self.timer_down == other.timer_down and
-                self.up_down_config == other.up_down_config and
-                self.group_1 == other.group_1 and
-                self.group_2 == other.group_2 and
-                self.room == other.room and
-                self.steps == other.steps)

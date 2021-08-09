@@ -27,23 +27,24 @@ import six
 
 from gateway.daemon_thread import BaseThread
 from gateway.events import GatewayEvent
-from gateway.hal.master_controller import CommunicationFailure
+from gateway.enums import EnergyEnums
+from gateway.exceptions import CommunicationFailure
 from gateway.models import Database
 from ioc import INJECTED, Inject, Injectable, Singleton
 from platform_utils import Hardware
-from power import power_api
 
 if False:  # MYPY
     from typing import Dict, Any, List, Optional, Tuple
+    from gateway.energy_module_controller import EnergyModuleController
     from gateway.input_controller import InputController
     from gateway.output_controller import OutputController
     from gateway.sensor_controller import SensorController
+    from gateway.module_controller import ModuleController
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.pulse_counter_controller import PulseCounterController
-    from gateway.gateway_api import GatewayApi
     from gateway.dto import InputDTO, SensorDTO, OutputDTO, PulseCounterDTO
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 @Injectable.named('metrics_collector')
@@ -70,8 +71,9 @@ class MetricsCollector(object):
                            255: 'light'}
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, pulse_counter_controller=INJECTED, thermostat_controller=INJECTED,
-                 output_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED):
+    def __init__(self, pulse_counter_controller=INJECTED, thermostat_controller=INJECTED,
+                 output_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
+                 module_controller=INJECTED, energy_module_controller=INJECTED):
         self._start = time.time()
         self._last_service_uptime = 0
         self._stopped = True
@@ -97,12 +99,13 @@ class MetricsCollector(object):
                                         'start': 0,
                                         'end': 0} for metric_type in self._min_intervals}  # type: Dict[str,Dict[str,Any]]
 
-        self._gateway_api = gateway_api  # type: GatewayApi
         self._thermostat_controller = thermostat_controller  # type: ThermostatController
         self._pulse_counter_controller = pulse_counter_controller  # type: PulseCounterController
         self._output_controller = output_controller  # type: OutputController
         self._input_controller = input_controller  # type: InputController
         self._sensor_controller = sensor_controller  # type: SensorController
+        self._module_controller = module_controller  # type: ModuleController
+        self._energy_module_controller = energy_module_controller  # type: EnergyModuleController
         self._metrics_queue = deque()  # type: deque
 
     def start(self):
@@ -115,8 +118,8 @@ class MetricsCollector(object):
         MetricsCollector._start_thread(self._run_thermostats, 'thermostat')
         MetricsCollector._start_thread(self._run_errors, 'error')
         MetricsCollector._start_thread(self._run_pulsecounters, 'counter')
-        MetricsCollector._start_thread(self._run_power_openmotics, 'energy')
-        MetricsCollector._start_thread(self._run_power_openmotics_analytics, 'energy_analytics')
+        MetricsCollector._start_thread(self._run_energy_openmotics, 'energy')
+        MetricsCollector._start_thread(self._run_energy_openmotics_analytics, 'energy_analytics')
         thread = BaseThread(target=self._sleep_manager, name='metricsleep')
         thread.daemon = True
         thread.start()
@@ -230,7 +233,7 @@ class MetricsCollector(object):
             sleep = max(0.1, interval - elapsed)
             time.sleep(sleep)
 
-    def process_observer_event(self, event):
+    def process_gateway_event(self, event):
         # type: (GatewayEvent) -> None
         if event.type == GatewayEvent.Types.OUTPUT_CHANGE:
             output_id = event.data['id']
@@ -267,8 +270,7 @@ class MetricsCollector(object):
                     tags = {'id': output_id,
                             'name': output_name,
                             'module_type': MetricsCollector.OUTPUT_MODULE_TYPES[output_dto.module_type],
-                            'type': MetricsCollector.OUTPUT_OUTPUT_TYPES[output_dto.output_type],
-                            'floor': output_dto.floor}
+                            'type': MetricsCollector.OUTPUT_OUTPUT_TYPES[output_dto.output_type]}
                     self._enqueue_metrics(metric_type=metric_type,
                                           values={'value': int(level)},
                                           tags=tags,
@@ -515,30 +517,7 @@ class MetricsCollector(object):
         while not self._stopped:
             start = time.time()
             try:
-                now = time.time()
-                temperatures = self._gateway_api.get_sensors_temperature_status()
-                humidities = self._gateway_api.get_sensors_humidity_status()
-                brightnesses = self._gateway_api.get_sensors_brightness_status()
-                for sensor_id, sensor_dto in self._environment_sensors.items():
-                    name = sensor_dto.name
-                    # TODO: Add a flag to the ORM to store this "in use" metadata
-                    if name == '' or name == 'NOT_IN_USE':
-                        continue
-                    tags = {'id': sensor_id,
-                            'name': name}
-                    values = {}
-                    if temperatures[sensor_id] is not None:
-                        values['temp'] = temperatures[sensor_id]
-                    if humidities[sensor_id] is not None:
-                        values['hum'] = humidities[sensor_id]
-                    if brightnesses[sensor_id] is not None:
-                        values['bright'] = brightnesses[sensor_id]
-                    if len(values) == 0:
-                        continue
-                    self._enqueue_metrics(metric_type=metric_type,
-                                          values=values,
-                                          tags=tags,
-                                          timestamp=now)
+                self._process_sensors(metric_type)
             except CommunicationFailure as ex:
                 logger.info('Error getting sensor status: {}'.format(ex))
             except Exception as ex:
@@ -546,6 +525,28 @@ class MetricsCollector(object):
             if self._stopped:
                 return
             self._pause(start, metric_type)
+
+    def _process_sensors(self, metric_type):
+        # type: (str) -> None
+        now = time.time()
+        status_map = {s.id: s for s in self._sensor_controller.get_sensors_status()}
+        for sensor_id, sensor_dto in self._environment_sensors.items():
+            # TODO: Add a flag to the ORM to store this "in use" metadata
+            if sensor_dto.name in ('', 'NOT_IN_USE'):
+                continue
+            tags = {'id': sensor_id,
+                    'name': sensor_dto.name,
+                    'unit': sensor_dto.unit}
+            values = {}
+            status = status_map.get(sensor_dto.id)
+            if status:
+                values[sensor_dto.physical_quantity] = status.value
+            if len(values) == 0:
+                continue
+            self._enqueue_metrics(metric_type=metric_type,
+                                  values=values,
+                                  tags=tags,
+                                  timestamp=now)
 
     def _run_thermostats(self, metric_type):
         while not self._stopped:
@@ -590,7 +591,7 @@ class MetricsCollector(object):
             start = time.time()
             try:
                 now = time.time()
-                errors = self._gateway_api.master_error_list()
+                errors = self._module_controller.master_error_list()
                 for error in errors:
                     om_module = error[0]
                     count = error[1]
@@ -605,11 +606,12 @@ class MetricsCollector(object):
                              'R': 'Shutter',
                              'C': 'CAN',
                              'L': 'OLED'}
+                    module_type = types.get(om_module[0], 'Unknown {0}'.format(om_module[0]))
                     self._enqueue_metrics(metric_type=metric_type,
                                           values={'value': int(count)},
-                                          tags={'type': types[om_module[0]],
+                                          tags={'type': module_type,
                                                 'id': om_module,
-                                                'name': '{0} {1}'.format(types[om_module[0]], om_module)},
+                                                'name': '{0} {1}'.format(module_type, om_module)},
                                           timestamp=now)
             except CommunicationFailure as ex:
                 logger.error('Error getting module errors: {}'.format(ex))
@@ -649,16 +651,16 @@ class MetricsCollector(object):
                 return
             self._pause(start, metric_type)
 
-    def _run_power_openmotics(self, metric_type):
+    def _run_energy_openmotics(self, metric_type):
         # type: (str) -> None
         while not self._stopped:
             start = time.time()
-            self._run_power_metrics(metric_type)
+            self._process_energy_metrics(metric_type)
             if self._stopped:
                 return
             self._pause(start, metric_type)
 
-    def _run_power_metrics(self, metric_type):
+    def _process_energy_metrics(self, metric_type):
         # type: (str) -> None
         def _add_if_not_none(dictionary, field, value):
             if value is not None:
@@ -666,24 +668,24 @@ class MetricsCollector(object):
 
         now = time.time()
         mapping = {}
-        power_data = {}
+        energy_data = {}
         try:
-            for power_module in self._gateway_api.get_power_modules():
-                device_id = '{0}.{{0}}'.format(power_module['address'])
-                mapping[str(power_module['id'])] = device_id
-                for i in range(power_api.NUM_PORTS[power_module['version']]):
-                    power_data[device_id.format(i)] = {'name': power_module['input{0}'.format(i)]}
+            for energy_module in self._energy_module_controller.load_modules():
+                device_id = '{0}.{{0}}'.format(energy_module.address)
+                mapping[str(energy_module.id)] = device_id
+                for i in range(EnergyEnums.NUMBER_OF_PORTS[energy_module.version]):
+                    energy_data[device_id.format(i)] = {'name': getattr(energy_module, 'input{0}'.format(i))}
         except CommunicationFailure as ex:
             logger.error('Error getting power modules: {}'.format(ex))
         except Exception as ex:
             logger.exception('Error getting power modules: {0}'.format(ex))
         try:
-            realtime_power_data = self._gateway_api.get_realtime_power()
+            realtime_energy_data = self._energy_module_controller.get_realtime_energy()
             for module_id, device_id in mapping.items():
-                if module_id in realtime_power_data:
-                    for index, realtime_power in enumerate(realtime_power_data[module_id]):
-                        if device_id.format(index) in power_data:
-                            usage = power_data[device_id.format(index)]
+                if module_id in realtime_energy_data:
+                    for index, realtime_power in enumerate(realtime_energy_data[module_id]):
+                        if device_id.format(index) in energy_data:
+                            usage = energy_data[device_id.format(index)]
                             _add_if_not_none(usage, 'voltage', realtime_power.voltage)
                             _add_if_not_none(usage, 'frequency', realtime_power.frequency)
                             _add_if_not_none(usage, 'current', realtime_power.current)
@@ -693,7 +695,7 @@ class MetricsCollector(object):
         except Exception as ex:
             logger.exception('Error getting realtime power: {0}'.format(ex))
         try:
-            for realtime_p1 in self._gateway_api.get_realtime_p1():
+            for realtime_p1 in self._energy_module_controller.get_realtime_p1():
                 electricity_p1 = realtime_p1.get('electricity', {})
                 if electricity_p1.get('ean'):
                     values = {'electricity_consumption_tariff1': convert_kwh(electricity_p1['consumption_tariff1']),
@@ -731,16 +733,16 @@ class MetricsCollector(object):
         except Exception as ex:
             logger.exception('Error getting realtime power: {0}'.format(ex))
         try:
-            total_energy = self._gateway_api.get_total_energy()
+            total_energy = self._energy_module_controller.get_total_energy()
             for module_id, device_id in mapping.items():
                 if module_id in total_energy:
                     for index, entry in enumerate(total_energy[module_id]):
-                        day, night = entry
+                        day, night = entry.day, entry.night
                         total = None
                         if day is not None and night is not None:
                             total = day + night
-                        if device_id.format(index) in power_data:
-                            usage = power_data[device_id.format(index)]
+                        if device_id.format(index) in energy_data:
+                            usage = energy_data[device_id.format(index)]
                             _add_if_not_none(usage, 'counter', total)
                             _add_if_not_none(usage, 'counter_day', day)
                             _add_if_not_none(usage, 'counter_night', night)
@@ -748,8 +750,8 @@ class MetricsCollector(object):
             logger.error('Error getting total energy: {}'.format(ex))
         except Exception as ex:
             logger.exception('Error getting total energy: {0}'.format(ex))
-        for device_id in power_data:
-            device = power_data[device_id]
+        for device_id in energy_data:
+            device = energy_data[device_id]
             try:
                 if device['name'] != '' and len(device) > 1:
                     name = device.pop('name')
@@ -762,22 +764,22 @@ class MetricsCollector(object):
             except Exception as ex:
                 logger.exception('Error processing OpenMotics power device {0}: {1}'.format(device_id, ex))
 
-    def _run_power_openmotics_analytics(self, metric_type):
+    def _run_energy_openmotics_analytics(self, metric_type):
         while not self._stopped:
             start = time.time()
             try:
                 now = time.time()
-                result = self._gateway_api.get_power_modules()
-                for power_module in result:
-                    device_id = '{0}.{{0}}'.format(power_module['address'])
-                    if power_module['version'] != power_api.ENERGY_MODULE:
+                result = self._energy_module_controller.load_modules()
+                for energy_module in result:
+                    device_id = '{0}.{{0}}'.format(energy_module.formatted_address)
+                    if energy_module.version != EnergyEnums.Version.ENERGY_MODULE:
                         continue
-                    result = self._gateway_api.get_energy_time(power_module['id'])
+                    result = self._energy_module_controller.get_energy_time(energy_module.id)
                     abort = False
                     for i in range(12):
                         if abort is True:
                             break
-                        name = power_module['input{0}'.format(i)]
+                        name = getattr(energy_module, 'input{0}'.format(i))
                         if name == '':
                             continue
                         timestamp = now
@@ -791,12 +793,12 @@ class MetricsCollector(object):
                                                         'type': 'time'},
                                                   timestamp=timestamp)
                             timestamp += 0.250  # Stretch actual data by 1000 for visualtisation purposes
-                    result = self._gateway_api.get_energy_frequency(power_module['id'])
+                    result = self._energy_module_controller.get_energy_frequency(energy_module.id)
                     abort = False
                     for i in range(12):
                         if abort is True:
                             break
-                        name = power_module['input{0}'.format(i)]
+                        name = getattr(energy_module, 'input{0}'.format(i))
                         if name == '':
                             continue
                         timestamp = now
@@ -1097,7 +1099,7 @@ class MetricsCollector(object):
                           'unit': 'event'}]},
             # output
             {'type': 'output',
-             'tags': ['id', 'name', 'module_type', 'type', 'floor'],
+             'tags': ['id', 'name', 'module_type', 'type'],
              'metrics': [{'name': 'value',
                           'description': 'Output state',
                           'type': 'gauge',

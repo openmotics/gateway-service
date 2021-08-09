@@ -29,7 +29,8 @@ from ioc import Injectable
 from logs import Logs
 from master.core.core_updater import CoreUpdater
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger('openmotics')
+
 
 
 if __name__ == '__main__':

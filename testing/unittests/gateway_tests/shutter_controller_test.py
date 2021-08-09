@@ -29,12 +29,12 @@ import fakesleep
 from gateway.dto import ShutterDTO
 from gateway.enums import ShutterEnums
 from gateway.hal.master_controller_classic import MasterClassicController
-from gateway.models import Floor, Room, Shutter
+from gateway.models import Room, Shutter
 from gateway.pubsub import PubSub
 from gateway.shutter_controller import ShutterController
 from ioc import SetTestMode, SetUpTestInjections
 
-MODELS = [Shutter, Room, Floor]
+MODELS = [Shutter, Room]
 
 
 class ShutterControllerTest(unittest.TestCase):
@@ -375,10 +375,10 @@ class ShutterControllerTest(unittest.TestCase):
             calls.setdefault(event.data['id'], []).append(event.data['status']['state'])
 
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.STATE, shutter_callback)
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
 
         def validate(_shutter_id, _entry):
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
             self.assertEqual(controller._actual_positions.get(_shutter_id), _entry[0])
             self.assertEqual(controller._desired_positions.get(_shutter_id), _entry[1])
             self.assertEqual(controller._directions.get(_shutter_id), _entry[2])
@@ -389,7 +389,7 @@ class ShutterControllerTest(unittest.TestCase):
                 self.assertEqual(calls[_shutter_id].pop(), _entry[3][1].upper())
 
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00000000})
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         for shutter_id in range(3):
             #                     +- actual position
             #                     |     +- desired position
@@ -406,12 +406,12 @@ class ShutterControllerTest(unittest.TestCase):
 
         for shutter_id in range(3):
             controller.shutter_down(shutter_id, None)
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
         time.sleep(20)
 
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00011001})
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         #                             +- actual position
         #                             |     +- desired position
         #                             |     |     +- direction                      +- state
@@ -420,13 +420,13 @@ class ShutterControllerTest(unittest.TestCase):
                                   1: [0, 99, ShutterEnums.Direction.DOWN,   (20, ShutterEnums.State.GOING_DOWN)],  # this shutter is inverted
                                   2: [0, 79,   ShutterEnums.Direction.DOWN, (20, ShutterEnums.State.GOING_DOWN)]}.items():
             validate(shutter_id, entry)
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
         time.sleep(50)  # Standard shutters will still be going down
 
         controller._actual_positions[2] = 20  # Simulate position reporting
         master_controller._update_from_master_state({'module_nr': 0, 'status': 0b00011000})  # First shutter motor stop
-        self.pubsub._publish_all_events()
+        self.pubsub._publish_all_events(blocking=False)
         #                             +- actual position
         #                             |     +- desired position
         #                             |     |     +- direction                      +- state                        +- optional skip call check
@@ -435,7 +435,7 @@ class ShutterControllerTest(unittest.TestCase):
                                   1: [0, 99, ShutterEnums.Direction.DOWN,   (20, ShutterEnums.State.GOING_DOWN),   False],
                                   2: [20,   79,   ShutterEnums.Direction.DOWN, (20, ShutterEnums.State.GOING_DOWN), False]}.items():
             validate(shutter_id, entry)
-            self.pubsub._publish_all_events()
+            self.pubsub._publish_all_events(blocking=False)
 
         time.sleep(50)  # Standard shutters will be down now
 
@@ -560,6 +560,59 @@ class ShutterControllerTest(unittest.TestCase):
         controller._sync_orm()
         controller.load_shutters = _raise
         controller._sync_orm()  # Should not raise an exception
+
+    def test_sync_orm(self):
+        events = []
+
+        def handle_event(gateway_event):
+            events.append(gateway_event)
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
+
+        master_controller = Mock()
+        SetUpTestInjections(master_controller=master_controller,
+                            maintenance_controller=Mock())
+        controller = ShutterController()
+
+        Shutter.create(id=42, number=1)  # unused
+        Shutter.create(id=43, number=2)  # removed
+
+        master_shutters = [ShutterDTO(id=0, name='foo'),
+                           ShutterDTO(id=1, name='bar'),
+                           ShutterDTO(id=2, name='baz')]
+        with mock.patch.object(master_controller, 'load_shutters', return_value=master_shutters):
+            controller._sync_orm()
+            self.pubsub._publish_all_events(blocking=False)
+
+        assert GatewayEvent('CONFIG_CHANGE', {'type': 'shutter'}) in events
+        assert len(events) == 2
+
+    def test_save_shutters(self):
+        events = []
+
+        def handle_event(gateway_event):
+            events.append(gateway_event)
+
+        self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_event)
+
+        master_controller = Mock()
+        SetUpTestInjections(master_controller=master_controller,
+                            maintenance_controller=Mock())
+        controller = ShutterController()
+
+        Shutter.create(id=42, number=1)  # unused
+        Shutter.create(id=43, number=2)  # removed
+
+        shutters = [ShutterDTO(id=0, name='foo'),
+                    ShutterDTO(id=1, name='bar'),
+                    ShutterDTO(id=2, name='baz')]
+        with mock.patch.object(master_controller, 'save_shutters', return_value=None):
+            controller.save_shutters(shutters)
+            self.pubsub._publish_all_events(blocking=False)
+
+        print(events)
+        assert GatewayEvent('CONFIG_CHANGE', {'type': 'shutter'}) in events
+        assert GatewayEvent('CONFIG_CHANGE', {'type': 'shuttergroup'}) in events
+        assert len(events) == 2
 
 
 if __name__ == '__main__':

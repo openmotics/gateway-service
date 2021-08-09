@@ -32,7 +32,7 @@ from bus.om_bus_events import OMBusEvents
 if False:  # MYPY
     from typing import Any, Callable, Dict, List, Optional
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class MessageClient(object):

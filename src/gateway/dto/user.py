@@ -19,19 +19,32 @@ User DTO
 
 import hashlib
 
-from gateway.dto.base import BaseDTO, capture_fields
+from gateway.dto.base import BaseDTO
 
 if False:  # MYPY
     from typing import Optional, Any
+    from gateway.dto.apartment import ApartmentDTO
 
 
 class UserDTO(BaseDTO):
-    @capture_fields
-    def __init__(self, username, accepted_terms=0):
-        # type: (str, int) -> None
-        self.username = username
-        self.hashed_password = ''
-        self.accepted_terms = accepted_terms
+    def __init__(self, id=None, username=None, first_name='', last_name='', role=None,
+                 pin_code=None, apartment=None, language='English', accepted_terms=0,
+                 is_active=None):
+        self.id = id  # type: Optional[int]
+        self.username = username  # type: str
+        # if there is no username, but one can be created from the first and last name, create it as well
+        if username is None and (first_name != '' or last_name != ''):
+            self.username = '{}.{}'.format(first_name.replace(' ', '.').lower(), last_name.replace(' ', '.').lower())
+            self.loaded_fields.append('username')  # Append username to the loaded fields
+        self.first_name = first_name  # type: str
+        self.last_name = last_name  # type: str
+        self.role = role  # type: str
+        self.pin_code = pin_code  # type: str
+        self.apartment = apartment  # type: Optional[ApartmentDTO]
+        self.hashed_password = ''  # type: str
+        self.language = language  # type: str
+        self.is_active = is_active  # type: bool
+        self.accepted_terms = accepted_terms  # type: int
 
     @staticmethod
     def _hash_password(password):
@@ -50,22 +63,31 @@ class UserDTO(BaseDTO):
         Clears the hashed password field so that it is hidden for future reference.
         """
         self.hashed_password = ''
+        if '_hashed_password' in self._loaded_fields:
+            self._loaded_fields.remove('_hashed_password')
+        if 'password' in self._loaded_fields:
+            self._loaded_fields.remove('password')
 
     def set_password(self, password):
         # type: (str) -> None
         """
-        Sets the hashed password field of the UserDTO object, this way no cleartext passwords are used.
+        Sets the hashed password field of the UserDTO object, this way no clear-text passwords are used.
         """
         if password == '':
             raise ValueError("Password cannot be empty")
-
-        self._loaded_fields.add('password')
         self.hashed_password = UserDTO._hash_password(password)
 
-    def __str__(self):
-        return "UserDTO: {}".format(vars(self))
-
     def __eq__(self, other):
+        # type: (Any) -> bool
         if not isinstance(other, UserDTO):
             return False
-        return self.username.lower() == other.username.lower()
+        return (self.id == other.id and
+                self.username == other.username and
+                self.first_name == other.first_name and
+                self.last_name == other.last_name and
+                self.role == other.role and
+                self.pin_code == other.pin_code and
+                self.apartment == other.apartment and
+                self.is_active == other.is_active and
+                self.accepted_terms == other.accepted_terms)
+

@@ -25,7 +25,7 @@ from hypothesis.strategies import booleans, integers, just
 from tests.hardware import multiple_outputs, outputs, skip_on_platforms
 from tests.hardware_layout import TestPlatform
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 DEFAULT_OUTPUT_CONFIG = {'type': 0, 'timer': 2**16 - 1}
 DEFAULT_LIGHT_CONFIG = {'type': 255, 'timer': 2**16 - 1}
@@ -33,7 +33,7 @@ DEFAULT_LIGHT_CONFIG = {'type': 255, 'timer': 2**16 - 1}
 
 @pytest.mark.smoke
 @hypothesis.given(outputs(), booleans())
-def test_events(toolbox, output, to_status):
+def test_output_events(toolbox, output, to_status):
     from_status = not to_status
     logger.debug('output status {}, expect event {} -> {}'.format(output, from_status, to_status))
     toolbox.ensure_output(output, from_status, DEFAULT_OUTPUT_CONFIG)
@@ -68,40 +68,6 @@ def test_timers(toolbox, output, to_status):
     toolbox.set_output(output, to_status)
     toolbox.assert_output_changed(output, to_status)
     toolbox.assert_output_changed(output, from_status, between=(2, 7))
-
-
-@pytest.mark.smoke
-@hypothesis.given(multiple_outputs(3), integers(min_value=0, max_value=254), just(True))
-@pytest.mark.skipif(skip_on_platforms([TestPlatform.CORE_PLUS]), reason='Floors not yet supported on the Core(+)')
-def test_floor_lights(toolbox, outputs, floor_id, output_status):
-    light, other_light, other_output = outputs
-    logger.debug('light {} on floor {}, expect event {} -> {}'.format(light, floor_id, not output_status, output_status))
-
-    output_config = {'floor': floor_id}
-    output_config.update(DEFAULT_LIGHT_CONFIG)
-    hypothesis.note('with light {} on floor {}'.format(light, floor_id))
-    toolbox.ensure_output(light, not output_status, output_config)
-    output_config = {'floor': 255}  # no floor
-    output_config.update(DEFAULT_LIGHT_CONFIG)
-    hypothesis.note('with light {} not on floor'.format(other_light))
-    toolbox.ensure_output(other_light, not output_status, output_config)
-    output_config = {'floor': floor_id}
-    output_config.update(DEFAULT_OUTPUT_CONFIG)  # not a light
-    hypothesis.note('with output {} on floor {}'.format(other_output, floor_id))
-    toolbox.ensure_output(other_output, not output_status, output_config)
-    time.sleep(2)
-
-    hypothesis.note('after "all lights on" for floor#{}'.format(floor_id))
-    toolbox.dut.get('/set_all_lights_floor_on', params={'floor': floor_id})
-    toolbox.assert_output_changed(light, output_status)
-    toolbox.assert_output_status(other_light, not output_status)
-    toolbox.assert_output_status(other_output, not output_status)
-
-    hypothesis.note('after "all lights off" for floor#{}'.format(floor_id))
-    toolbox.dut.get('/set_all_lights_floor_off', params={'floor': floor_id})
-    toolbox.assert_output_changed(light, not output_status)
-    toolbox.assert_output_status(other_light, not output_status)
-    toolbox.assert_output_status(other_output, not output_status)
 
 
 def group_action_ids():

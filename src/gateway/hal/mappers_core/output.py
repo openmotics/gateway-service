@@ -26,7 +26,6 @@ if False:  # MYPY
 
 class OutputMapper(object):
     # TODO: Implement missing parts
-    #  * Floors
     #  * Locking
     #  * Absolute (e.g. 15:45) and float (e.g. 15.3 seconds) timers
 

@@ -25,7 +25,7 @@ import unittest
 import xmlrunner
 from pytest import mark
 
-from gateway.maintenance_communicator import InMaintenanceModeException
+from gateway.exceptions import InMaintenanceModeException
 from ioc import SetTestMode, SetUpTestInjections
 from master.classic import master_api
 from master.classic.master_communicator import BackgroundConsumer, \

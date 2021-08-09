@@ -21,6 +21,7 @@ import fcntl
 import logging
 import time
 
+from gateway.enums import Buttons, Leds, LedStates, SerialPorts
 from gateway.daemon_thread import DaemonThread
 from gateway.hal.frontpanel_controller import FrontpanelController
 from ioc import INJECTED, Inject
@@ -29,7 +30,7 @@ from platform_utils import Hardware
 if False:  # MYPY
     from typing import Dict, Optional
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class FrontpanelClassicController(FrontpanelController):
@@ -37,41 +38,41 @@ class FrontpanelClassicController(FrontpanelController):
     IOCTL_I2C_SLAVE = 0x0703
     BOARD_TYPE = Hardware.get_board_type()
     ACTION_BUTTON_GPIO = 38 if BOARD_TYPE == Hardware.BoardType.BB else 26
-    BUTTON = FrontpanelController.Buttons.ACTION
-    AUTH_MODE_LEDS = [FrontpanelController.Leds.ALIVE,
-                      FrontpanelController.Leds.CLOUD,
-                      FrontpanelController.Leds.VPN,
-                      FrontpanelController.Leds.COMMUNICATION_1,
-                      FrontpanelController.Leds.COMMUNICATION_2]
+    BUTTON = Buttons.ACTION
+    AUTH_MODE_LEDS = [Leds.ALIVE,
+                      Leds.CLOUD,
+                      Leds.VPN,
+                      Leds.COMMUNICATION_1,
+                      Leds.COMMUNICATION_2]
     if not BOARD_TYPE == Hardware.BoardType.BB:
-        GPIO_LED_CONFIG = {FrontpanelController.Leds.POWER: 60,
-                           FrontpanelController.Leds.STATUS_RED: 48}
-        I2C_LED_CONFIG = {FrontpanelController.Leds.COMMUNICATION_1: 64,
-                          FrontpanelController.Leds.COMMUNICATION_2: 128,
-                          FrontpanelController.Leds.VPN: 16,
-                          FrontpanelController.Leds.ALIVE: 1,
-                          FrontpanelController.Leds.CLOUD: 4}
+        GPIO_LED_CONFIG = {Leds.POWER: 60,
+                           Leds.STATUS_RED: 48}
+        I2C_LED_CONFIG = {Leds.COMMUNICATION_1: 64,
+                          Leds.COMMUNICATION_2: 128,
+                          Leds.VPN: 16,
+                          Leds.ALIVE: 1,
+                          Leds.CLOUD: 4}
     else:
-        GPIO_LED_CONFIG = {FrontpanelController.Leds.POWER: 75,
-                           FrontpanelController.Leds.STATUS_RED: 60,
-                           FrontpanelController.Leds.ALIVE: 49}
-        I2C_LED_CONFIG = {FrontpanelController.Leds.COMMUNICATION_1: 64,
-                          FrontpanelController.Leds.COMMUNICATION_2: 128,
-                          FrontpanelController.Leds.VPN: 16,
-                          FrontpanelController.Leds.CLOUD: 4}
+        GPIO_LED_CONFIG = {Leds.POWER: 75,
+                           Leds.STATUS_RED: 60,
+                           Leds.ALIVE: 49}
+        I2C_LED_CONFIG = {Leds.COMMUNICATION_1: 64,
+                          Leds.COMMUNICATION_2: 128,
+                          Leds.VPN: 16,
+                          Leds.CLOUD: 4}
     I2C_DEVICE = '/dev/i2c-2' if BOARD_TYPE == Hardware.BoardType.BB else '/dev/i2c-1'
-    ALL_LEDS = [FrontpanelController.Leds.POWER,
-                FrontpanelController.Leds.STATUS_RED,
-                FrontpanelController.Leds.COMMUNICATION_1,
-                FrontpanelController.Leds.COMMUNICATION_2,
-                FrontpanelController.Leds.VPN,
-                FrontpanelController.Leds.ALIVE,
-                FrontpanelController.Leds.CLOUD]
-    BLINK_SEQUENCE = {FrontpanelController.LedStates.OFF: [],
-                      FrontpanelController.LedStates.BLINKING_25: [0],
-                      FrontpanelController.LedStates.BLINKING_50: [0, 1],
-                      FrontpanelController.LedStates.BLINKING_75: [0, 1, 2],
-                      FrontpanelController.LedStates.SOLID: [0, 1, 2, 3]}
+    ALL_LEDS = [Leds.POWER,
+                Leds.STATUS_RED,
+                Leds.COMMUNICATION_1,
+                Leds.COMMUNICATION_2,
+                Leds.VPN,
+                Leds.ALIVE,
+                Leds.CLOUD]
+    BLINK_SEQUENCE = {LedStates.OFF: [],
+                      LedStates.BLINKING_25: [0],
+                      LedStates.BLINKING_50: [0, 1],
+                      LedStates.BLINKING_75: [0, 1, 2],
+                      LedStates.SOLID: [0, 1, 2, 3]}
 
     @Inject
     def __init__(self, leds_i2c_address=INJECTED):  # type: (int) -> None
@@ -115,7 +116,7 @@ class FrontpanelClassicController(FrontpanelController):
     def start(self):
         super(FrontpanelClassicController, self).start()
         # Enable power led
-        self._enabled_leds[FrontpanelController.Leds.POWER] = FrontpanelController.LedStates.SOLID
+        self._enabled_leds[Leds.POWER] = LedStates.SOLID
         # Start polling/writing threads
         self._poll_button_thread = DaemonThread(name='buttonpoller',
                                                 target=self._poll_button,
@@ -135,8 +136,8 @@ class FrontpanelClassicController(FrontpanelController):
 
     def _report_carrier(self, carrier):
         # type: (bool) -> None
-        state = FrontpanelController.LedStates.OFF if carrier else FrontpanelController.LedStates.SOLID
-        self._enabled_leds[FrontpanelController.Leds.STATUS_RED] = state
+        state = LedStates.OFF if carrier else LedStates.SOLID
+        self._enabled_leds[Leds.STATUS_RED] = state
 
     def _report_connectivity(self, connectivity):
         # type: (bool) -> None
@@ -144,32 +145,32 @@ class FrontpanelClassicController(FrontpanelController):
 
     def _report_network_activity(self, activity):
         # type: (bool) -> None
-        state = FrontpanelController.LedStates.BLINKING_50 if activity else FrontpanelController.LedStates.OFF
-        self._enabled_leds[FrontpanelController.Leds.ALIVE] = state
+        state = LedStates.BLINKING_50 if activity else LedStates.OFF
+        self._enabled_leds[Leds.ALIVE] = state
 
     def _report_serial_activity(self, serial_port, activity):
         # type: (str, Optional[bool]) -> None
-        led = {FrontpanelController.SerialPorts.ENERGY: FrontpanelController.Leds.COMMUNICATION_1,
-               FrontpanelController.SerialPorts.MASTER_API: FrontpanelController.Leds.COMMUNICATION_2}.get(serial_port)
+        led = {SerialPorts.ENERGY: Leds.COMMUNICATION_1,
+               SerialPorts.MASTER_API: Leds.COMMUNICATION_2}.get(serial_port)
         if led is None:
             return
-        state = FrontpanelController.LedStates.BLINKING_50 if activity else FrontpanelController.LedStates.OFF
+        state = LedStates.BLINKING_50 if activity else LedStates.OFF
         self._enabled_leds[led] = state
 
     def _report_cloud_reachable(self, reachable):
         # type: (bool) -> None
-        state = FrontpanelController.LedStates.SOLID if reachable else FrontpanelController.LedStates.OFF
-        self._enabled_leds[FrontpanelController.Leds.CLOUD] = state
+        state = LedStates.SOLID if reachable else LedStates.OFF
+        self._enabled_leds[Leds.CLOUD] = state
 
     def _report_vpn_open(self, vpn_open):
         # type: (bool) -> None
-        state = FrontpanelController.LedStates.SOLID if vpn_open else FrontpanelController.LedStates.OFF
-        self._enabled_leds[FrontpanelController.Leds.VPN] = state
+        state = LedStates.SOLID if vpn_open else LedStates.OFF
+        self._enabled_leds[Leds.VPN] = state
 
     def _write_leds(self):
         # Override for indicate
         if self._indicate:
-            self._enabled_leds[FrontpanelController.Leds.STATUS_RED] = FrontpanelController.LedStates.BLINKING_25
+            self._enabled_leds[Leds.STATUS_RED] = LedStates.BLINKING_25
 
         # Map blinking states
         current_leds = self._map_states()
@@ -213,8 +214,8 @@ class FrontpanelClassicController(FrontpanelController):
     def _map_states(self):  # type: () -> Dict[str, bool]
         current_leds = {}  # type: Dict[str, bool]
         for led in FrontpanelClassicController.ALL_LEDS:
-            requested_state = self._enabled_leds.get(led, FrontpanelController.LedStates.OFF)
-            if requested_state == FrontpanelController.LedStates.OFF:
+            requested_state = self._enabled_leds.get(led, LedStates.OFF)
+            if requested_state == LedStates.OFF:
                 current_leds[led] = False
             else:
                 current_leds[led] = self._blink_counter in FrontpanelClassicController.BLINK_SEQUENCE[requested_state]

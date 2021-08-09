@@ -27,24 +27,19 @@ import six
 from six.moves.queue import Empty, Queue
 from collections import Counter
 from gateway.daemon_thread import BaseThread
-from gateway.hal.master_controller import CommunicationFailure
-from gateway.maintenance_controller import InMaintenanceModeException
+from gateway.exceptions import MasterUnavailable, InMaintenanceModeException
 from ioc import INJECTED, Inject
 from master.classic import master_api
-from master.classic.master_command import Field, MasterCommandSpec, printable
+from master.classic.master_command import Field, MasterCommandSpec, Printable
 from serial_utils import CommunicationTimedOutException
 
-logger = logging.getLogger('gateway.master.classic')
+logger = logging.getLogger(__name__)
 
 if False:  # MYPY
     from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, Tuple
     from serial import Serial
     from master.classic.master_command import Result
     T_co = TypeVar('T_co', covariant=True)
-
-
-class MasterUnavailable(CommunicationFailure):
-    pass
 
 
 class MasterCommunicator(object):
@@ -178,7 +173,7 @@ class MasterCommunicator(object):
     def get_debug_buffer(self):
         # type: () -> Dict[str,Dict[float,str]]
         def process(buffer):
-            return {k: printable(v) for k, v in six.iteritems(buffer)}
+            return {k: str(Printable(v)) for k, v in six.iteritems(buffer)}
 
         return {'read': process(self.__debug_buffer['read']),
                 'write': process(self.__debug_buffer['write'])}
@@ -206,9 +201,7 @@ class MasterCommunicator(object):
             raise MasterUnavailable()
 
         with self.__serial_write_lock:
-            if self.__verbose:
-                logger.debug('Writing to Master serial:   {0}'.format(printable(data)))
-
+            logger.debug('Writing to Master serial:   %s', Printable(data))
             threshold = time.time() - self.__debug_buffer_duration
             self.__debug_buffer['write'][time.time()] = data
             for t in self.__debug_buffer['write'].keys():
@@ -228,8 +221,8 @@ class MasterCommunicator(object):
         """
         self.__consumers.append(consumer)
 
-    def do_raw_action(self, action, size, output_size=None, data=None, timeout=2):
-        # type: (str, int, Optional[int], Optional[bytearray], Union[T_co, int]) -> Union[T_co, Dict[str, Any]]
+    def do_raw_action(self, action, size, data=None, timeout=2):
+        # type: (str, int, Optional[bytearray], Union[T_co, int]) -> Union[T_co, Dict[str, Any]]
         input_field = Field.padding(13) if data is None else Field.bytes('data', len(data))
         command = MasterCommandSpec(action,
                                     [input_field],
@@ -494,8 +487,7 @@ class MasterCommunicator(object):
                     if t < threshold:
                         del self.__debug_buffer['read'][t]
 
-                if self.__verbose:
-                    logger.debug('Reading from Master serial: {0}'.format(printable(data)))
+                logger.debug('Reading from Master serial: %s', Printable(data))
 
                 if read_state.should_resume():
                     data = read_state.consume(data)

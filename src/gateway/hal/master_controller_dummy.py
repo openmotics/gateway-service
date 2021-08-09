@@ -18,10 +18,10 @@ Module for communicating with the Master
 from __future__ import absolute_import
 
 import logging
-
-from gateway.dto import GlobalFeedbackDTO, GroupActionDTO, InputDTO, \
-    InputStatusDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
-    PumpGroupDTO, SensorDTO, ShutterDTO, ShutterGroupDTO, \
+from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
+    GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
+    MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
+    PumpGroupDTO, ShutterDTO, ShutterGroupDTO, \
     ThermostatAircoStatusDTO, ThermostatDTO
 from gateway.exceptions import UnsupportedException
 from gateway.hal.master_controller import MasterController
@@ -30,7 +30,7 @@ if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
     from plugins.base import PluginController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class MasterCommunicator(object):
@@ -182,7 +182,7 @@ class MasterDummyController(MasterController):
         return []
 
     def load_sensors(self):
-        # type: () -> List[SensorDTO]
+        # type: () -> List[MasterSensorDTO]
         return []
 
     def get_sensors_temperature(self):
@@ -230,31 +230,27 @@ class MasterDummyController(MasterController):
     def cold_reset(self, power_on=True):  # type: (bool) -> None
         return None
 
-    def update_master(self, hex_filename):  # type: (str) -> None
+    def update_master(self, hex_filename, version):  # type: (str, str) -> None
         return None
 
-    def update_slave_modules(self, module_type, hex_filename):  # type: (str, str) -> None
+    def update_slave_modules(self, module_type, hex_filename, version):
+        # type: (str, str, str) -> None
         return None
 
     def load_airco_status(self):
         # type: () -> ThermostatAircoStatusDTO
         return ThermostatAircoStatusDTO({})
 
-    def load_dimmer_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        return {
-                "min_dim_level": 255,
-                "dim_wait_cycle": 255,
-                "dim_step": 255,
-                "dim_memory": 255
-        }
-
+    def load_dimmer_configuration(self):
+        # type: () -> DimmerConfigurationDTO
+        return DimmerConfigurationDTO()  # All default values
 
     # Schedules
-    def load_scheduled_action_configurations(self, fields=None):
-        # type: (Any) -> List[Dict[str,Any]]
+
+    def load_scheduled_actions(self):
+        # type: (Any) -> List[LegacyScheduleDTO]
         return []
 
-    def load_startup_action_configuration(self, fields=None):
-        # type: (Any) -> Dict[str,Any]
-        return {}
+    def load_startup_action(self):
+        # type: (Any) -> LegacyStartupActionDTO
+        return LegacyStartupActionDTO(actions=[])

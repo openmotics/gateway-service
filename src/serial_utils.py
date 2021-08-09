@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-Serial tools contains the RS485 wrapper, printable and CommunicationTimedOutException.
+Serial tools contains the RS485 wrapper, Printable` and CommunicationTimedOutException.
 """
 
 from __future__ import absolute_import
@@ -24,10 +24,10 @@ import struct
 from six.moves.queue import Queue
 
 from gateway.daemon_thread import BaseThread
-from gateway.hal.master_controller import CommunicationFailure
+from gateway.exceptions import CommunicationFailure
 
 if False:  # MYPY
-    from typing import Literal
+    from typing import Literal, Any
     from serial import Serial
 
 
@@ -39,22 +39,27 @@ class CommunicationTimedOutException(CommunicationFailure):
         super(CommunicationTimedOutException, self).__init__(message)
 
 
-class CommunicationStatus:
+class CommunicationStatus(object):
     SUCCESS = 'success'  # type: Literal['success', 'unstable', 'failure']
     UNSTABLE = 'unstable'  # type: Literal['success', 'unstable', 'failure']
     FAILURE = 'failure'  # type: Literal['success', 'unstable', 'failure']
 
 
-def printable(data):
-    """ prints data in a human-redable way """
+class Printable(object):
 
-    if isinstance(data, list) or isinstance(data, bytearray):
-        byte_notation = ' '.join(['{0: >3}'.format(i) for i in data])
-        string_notation = ''.join([str(chr(i)) if 32 < i <= 126 else '.' for i in data])
-    else:
-        byte_notation = ' '.join(['{0: >3}'.format(ord(c)) for c in data])
-        string_notation = ''.join([c if 32 < ord(c) <= 126 else '.' for c in data])
-    return '{0}    {1}'.format(byte_notation, string_notation)
+    def __init__(self, data):  # type: (Any) -> None
+        self.data = data
+
+    def __str__(self):
+        """ prints data in a human-redable way """
+
+        if isinstance(self.data, list) or isinstance(self.data, bytearray):
+            byte_notation = ' '.join(['{0: >3}'.format(i) for i in self.data])
+            string_notation = ''.join([str(chr(i)) if 32 < i <= 126 else '.' for i in self.data])
+        else:
+            byte_notation = ' '.join(['{0: >3}'.format(ord(c)) for c in self.data])
+            string_notation = ''.join([c if 32 < ord(c) <= 126 else '.' for c in self.data])
+        return '{0}    {1}'.format(byte_notation, string_notation)
 
 
 TIOCSRS485 = 0x542F

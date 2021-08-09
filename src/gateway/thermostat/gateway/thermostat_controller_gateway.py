@@ -22,15 +22,16 @@ from playhouse.signals import post_save
 
 import constants
 from gateway.daemon_thread import DaemonThread
-from gateway.dto import ThermostatDTO, ThermostatGroupStatusDTO, \
-    ThermostatStatusDTO, ThermostatGroupDTO, PumpGroupDTO, \
-    GlobalRTD10DTO, RTD10DTO
+from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, \
+    ThermostatDTO, ThermostatGroupDTO, ThermostatGroupStatusDTO, \
+    ThermostatStatusDTO
 from gateway.enums import ThermostatMode
 from gateway.events import GatewayEvent
 from gateway.exceptions import UnsupportedException
 from gateway.mappers import ThermostatMapper
 from gateway.models import Output, OutputToThermostatGroup, Preset, Pump, \
-    Thermostat, ThermostatGroup, Valve, PumpToValve, Sensor, ValveToThermostat
+    PumpToValve, Sensor, Thermostat, ThermostatGroup, Valve, \
+    ValveToThermostat
 from gateway.pubsub import PubSub
 from gateway.thermostat.gateway.pump_valve_controller import \
     PumpValveController
@@ -40,10 +41,11 @@ from ioc import INJECTED, Inject
 
 if False:  # MYPY
     from typing import Dict, List, Literal, Tuple, Optional
-    from gateway.gateway_api import GatewayApi
     from gateway.output_controller import OutputController
+    from gateway.system_controller import SystemController
+    from gateway.sensor_controller import SensorController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 class ThermostatControllerGateway(ThermostatController):
@@ -57,10 +59,10 @@ class ThermostatControllerGateway(ThermostatController):
     SYNC_CONFIG_INTERVAL = 900
 
     @Inject
-    def __init__(self, gateway_api=INJECTED, output_controller=INJECTED, pubsub=INJECTED):
-        # type: (GatewayApi, OutputController, PubSub) -> None
+    def __init__(self, output_controller=INJECTED, sensor_controller=INJECTED, pubsub=INJECTED, system_controller=INJECTED):
+        # type: (OutputController, SensorController, PubSub, SystemController) -> None
         super(ThermostatControllerGateway, self).__init__(output_controller)
-        self._gateway_api = gateway_api
+        self._sensor_controller = sensor_controller
         self._pubsub = pubsub
         self._running = False
         self._pid_loop_thread = None  # type: Optional[DaemonThread]
@@ -69,7 +71,7 @@ class ThermostatControllerGateway(ThermostatController):
         self.thermostat_pids = {}  # type: Dict[int, ThermostatPid]
         self._pump_valve_controller = PumpValveController()
 
-        timezone = gateway_api.get_timezone()
+        timezone = system_controller.get_timezone()
 
         # we could also use an in-memory store, but this allows us to detect 'missed' transitions
         # e.g. in case when gateway was rebooting during a scheduled transition
@@ -160,9 +162,9 @@ class ThermostatControllerGateway(ThermostatController):
                     m, s = divmod(int(seconds_of_day), 60)
                     h, m = divmod(m, 60)
                     if schedule.mode == 'heating':
-                        args = [thermostat_number, None, new_setpoint, None]
+                        args = [thermostat_number, new_setpoint, None]
                     else:
-                        args = [thermostat_number, None, None, new_setpoint]
+                        args = [thermostat_number, None, new_setpoint]
                     if schedule_length % 7 == 0:
                         self._scheduler.add_job(ThermostatControllerGateway.set_setpoint_from_scheduler, 'cron',
                                                 start_date=start_date,
@@ -255,8 +257,12 @@ class ThermostatControllerGateway(ThermostatController):
                 output_level = output.dimmer
             return output_level
 
-        def get_temperature_from_sensor(_sensor):
-            return None if _sensor is None else self._gateway_api.get_sensor_temperature_status(_sensor.number)
+        def get_temperature_from_sensor(sensor):  # type: (Optional[Sensor]) -> Optional[float]
+            if sensor:
+                status = self._sensor_controller.get_sensor_status(sensor.id)
+                if status:
+                    return status.value
+            return None
 
         global_thermostat = ThermostatGroup.get(number=0)
         if global_thermostat is None:
@@ -292,7 +298,7 @@ class ThermostatControllerGateway(ThermostatController):
                                                               automatic=active_preset.type == Preset.Types.SCHEDULE,
                                                               setpoint=Preset.TYPE_TO_SETPOINT.get(active_preset.type, 0),
                                                               name=thermostat.name,
-                                                              sensor_id=255 if thermostat.sensor is None else thermostat.sensor.number,
+                                                              sensor_id=255 if thermostat.sensor is None else thermostat.sensor.id,
                                                               airco=0,  # TODO: Check if still used
                                                               output_0_level=get_output_level(output0),
                                                               output_1_level=get_output_level(output1)))
@@ -380,9 +386,9 @@ class ThermostatControllerGateway(ThermostatController):
             for valve in thermostat.valves:
                 pump_delay = valve.delay
                 break
-        sensor_number = None if thermostat_group.sensor is None else thermostat_group.sensor.number
+        sensor_id = None if thermostat_group.sensor is None else thermostat_group.sensor.id
         thermostat_group_dto = ThermostatGroupDTO(id=0,
-                                                  outside_sensor_id=sensor_number,
+                                                  outside_sensor_id=sensor_id,
                                                   threshold_temperature=thermostat_group.threshold_temperature,
                                                   pump_delay=pump_delay)
         for link in OutputToThermostatGroup.select(OutputToThermostatGroup, Output) \
@@ -398,7 +404,7 @@ class ThermostatControllerGateway(ThermostatController):
         # Update thermostat group configuration
         orm_object = ThermostatGroup.get(number=0)  # type: ThermostatGroup
         if 'outside_sensor_id' in thermostat_group.loaded_fields:
-            orm_object.sensor = Sensor.get(number=thermostat_group.outside_sensor_id)
+            orm_object.sensor = Sensor.get(id=thermostat_group.outside_sensor_id)
         if 'threshold_temperature' in thermostat_group.loaded_fields:
             orm_object.threshold_temperature = thermostat_group.threshold_temperature  # type: ignore
         orm_object.save()

@@ -15,19 +15,21 @@
 
 from __future__ import absolute_import
 
+from logs import Logs
 from platform_utils import Platform, System
 System.import_libs()
 
 import fcntl
 import logging
 import os
+import six
 import time
 from contextlib import contextmanager
 from threading import Lock
 
 from peewee_migrate import Router
 from serial import Serial
-from six.moves.configparser import ConfigParser, NoOptionError
+from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
 from six.moves.urllib.parse import urlparse, urlunparse
 
 import constants
@@ -42,15 +44,14 @@ from gateway.thermostat.gateway.thermostat_controller_gateway import \
     ThermostatControllerGateway
 from gateway.thermostat.master.thermostat_controller_master import \
     ThermostatControllerMaster
+from gateway.uart_controller import UARTController
 from ioc import INJECTED, Inject, Injectable
 from master.classic.maintenance import MaintenanceClassicCommunicator
 from master.classic.master_communicator import MasterCommunicator
 from master.core.core_communicator import CoreCommunicator
 from master.core.maintenance import MaintenanceCoreCommunicator
-from master.core.memory_file import MemoryFile, MemoryTypes
-from power.power_communicator import PowerCommunicator
-from power.power_controller import P1Controller, PowerController
-from power.power_store import PowerStore
+from master.core.memory_file import MemoryFile
+from gateway.energy.energy_communicator import EnergyCommunicator
 from serial_utils import RS485
 
 
@@ -58,7 +59,7 @@ if False:  # MYPY
     from typing import Any, Optional
     from gateway.hal.master_controller import MasterController
 
-logger = logging.getLogger('openmotics')
+logger = logging.getLogger(__name__)
 
 
 def initialize(message_client_name):
@@ -76,6 +77,10 @@ def initialize(message_client_name):
             logger.info('Running factory reset...')
             factory_reset()
             logger.info('Running factory reset, done')
+        elif content == 'factory_reset_full':
+            logger.info('Running full factory reset [also wiping CC EEPROM]...')
+            factory_reset(can=True)
+            logger.info('Running full factory reset, done')
         else:
             logger.warning('unknown initialization {}'.format(content))
 
@@ -104,8 +109,8 @@ def apply_migrations():
 
 
 @Inject
-def factory_reset(master_controller=INJECTED):
-    # type: (MasterController) -> None
+def factory_reset(master_controller=INJECTED, can=False):
+    # type: (MasterController, bool) -> None
     import glob
     import shutil
 
@@ -115,7 +120,7 @@ def factory_reset(master_controller=INJECTED):
 
     logger.info('Wiping master eeprom...')
     master_controller.start()
-    master_controller.factory_reset()
+    master_controller.factory_reset(can=can)
     master_controller.stop()
 
     logger.info('Removing databases...')
@@ -154,10 +159,12 @@ def setup_target_platform(target_platform, message_client_name):
 
     # Debugging options
     try:
-        debug_logger = config.get('OpenMotics', 'debug_logger')
-        if debug_logger:
-            logging.getLogger(debug_logger).setLevel(logging.DEBUG)
+        for (namespace, log_level) in config.items('logging_overrides'):
+            logger.info('Setting %s log level to %s', namespace, log_level)
+            Logs.set_service_loglevel(log_level.upper(), namespace=namespace)
     except NoOptionError:
+        pass
+    except NoSectionError:
         pass
 
     # Webserver / Presentation layer
@@ -182,15 +189,19 @@ def setup_target_platform(target_platform, message_client_name):
     # abstract implementations depending on e.g. the platform (classic vs core) or certain settings (classic
     # thermostats vs gateway thermostats)
     from plugins import base
-    from gateway import (metrics_controller, webservice, scheduling, gateway_api, metrics_collector,
+    from gateway import (metrics_controller, webservice, scheduling_controller, metrics_collector,
                          maintenance_controller, user_controller, pulse_counter_controller,
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
-                         shutter_controller, group_action_controller, module_controller, ventilation_controller)
+                         shutter_controller, system_controller, group_action_controller, module_controller,
+                         ventilation_controller, webservice_v1, apartment_controller, delivery_controller,
+                         system_config_controller, rfid_controller, energy_module_controller)
     from cloud import events
-    _ = (metrics_controller, webservice, scheduling, gateway_api, metrics_collector,
+    _ = (metrics_controller, webservice, scheduling_controller, metrics_collector,
          maintenance_controller, base, events, user_controller,
          pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
-         sensor_controller, shutter_controller, group_action_controller, module_controller, ventilation_controller)
+         sensor_controller, shutter_controller, system_controller, group_action_controller, module_controller,
+         ventilation_controller, webservice_v1, apartment_controller, delivery_controller, system_config_controller,
+         rfid_controller, energy_module_controller)
 
     # IPC
     message_client = None
@@ -233,23 +244,23 @@ def setup_target_platform(target_platform, message_client_name):
 
     # Energy Controller
     try:
-        power_serial_port = config.get('OpenMotics', 'power_serial')
+        energy_serial_port = config.get('OpenMotics', 'power_serial')
     except NoOptionError:
-        power_serial_port = ''
-    if power_serial_port:
-        Injectable.value(power_db=constants.get_power_database_file())
-        Injectable.value(power_store=PowerStore())
+        energy_serial_port = ''
+    if energy_serial_port:
         # TODO: make non blocking?
-        Injectable.value(power_serial=RS485(Serial(power_serial_port, 115200, timeout=None)))
-        Injectable.value(power_communicator=PowerCommunicator())
-        Injectable.value(power_controller=PowerController())
-        Injectable.value(p1_controller=P1Controller())
+        Injectable.value(energy_serial=RS485(Serial(energy_serial_port, 115200, timeout=None)))
+        Injectable.value(energy_communicator=EnergyCommunicator())
     else:
-        Injectable.value(power_serial=None)
-        Injectable.value(power_store=None)
-        Injectable.value(power_communicator=None)  # TODO: remove from gateway_api
-        Injectable.value(power_controller=None)
-        Injectable.value(p1_controller=None)
+        Injectable.value(energy_serial=None)
+        Injectable.value(energy_communicator=None)
+
+    # UART Controller
+    try:
+        uart_serial_port = config.get('OpenMotics', 'uart_serial')
+        Injectable.value(uart_controller=UARTController(uart_port=uart_serial_port))
+    except NoOptionError:
+        Injectable.value(uart_controller=None)
 
     # Pulse Controller
     Injectable.value(pulse_db=constants.get_pulse_counter_database_file())
@@ -262,6 +273,7 @@ def setup_target_platform(target_platform, message_client_name):
 
     if controller_serial_port:
         Injectable.value(controller_serial=Serial(controller_serial_port, 115200, exclusive=True))
+
     if target_platform in [Platform.Type.DUMMY, Platform.Type.ESAFE]:
         Injectable.value(maintenance_communicator=None)
         Injectable.value(passthrough_service=None)
@@ -269,6 +281,12 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(eeprom_db=None)
         from gateway.hal.master_controller_dummy import DummyEepromObject
         Injectable.value(eeprom_extension=DummyEepromObject())
+        try:
+            esafe_rebus_device = config.get('OpenMotics', 'rebus_device')
+            Injectable.value(rebus_device=esafe_rebus_device)
+        except NoOptionError:
+            Injectable.value(rebus_device=None)
+
     elif target_platform in Platform.CoreTypes:
         # FIXME don't create singleton for optional controller?
         from master.core import ucan_communicator, slave_communicator
@@ -311,6 +329,13 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(frontpanel_controller=FrontpanelClassicController())
     else:
         logger.warning('Unhandled frontpanel implementation for %s', target_platform)
+
+    # eSafe controller
+    if target_platform == Platform.Type.ESAFE and six.PY3:
+        from gateway.esafe_controller import EsafeController
+        Injectable.value(esafe_controller=EsafeController())
+    else:
+        Injectable.value(esafe_controller=None)
 
     # Thermostats
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')
@@ -361,21 +386,21 @@ def setup_minimal_master_platform(port):
         logger.warning('Unhandled master implementation for %s', platform)
 
 
-def setup_minimal_power_platform():
+def setup_minimal_energy_platform():
     # type: () -> None
     config = ConfigParser()
     config.read(constants.get_config_file())
-    power_serial_port = config.get('OpenMotics', 'power_serial')
-    if power_serial_port:
-        Injectable.value(power_db=constants.get_power_database_file())
-        Injectable.value(power_store=PowerStore())
-        Injectable.value(power_serial=RS485(Serial(power_serial_port, 115200, timeout=None)))
-        Injectable.value(power_communicator=PowerCommunicator())
-        Injectable.value(power_controller=PowerController())
-        Injectable.value(p1_controller=P1Controller())
+    energy_serial_port = config.get('OpenMotics', 'power_serial')
+    if energy_serial_port:
+        Injectable.value(energy_serial=RS485(Serial(energy_serial_port, 115200, timeout=None)))
+        Injectable.value(energy_communicator=EnergyCommunicator())
     else:
-        Injectable.value(power_store=None)
-        Injectable.value(power_communicator=None)
-        Injectable.value(power_controller=None)
-        Injectable.value(p1_controller=None)
-        Injectable.value(power_serial=None)
+        Injectable.value(energy_communicator=None)
+        Injectable.value(energy_serial=None)
+    Injectable.value(master_controller=None)
+    Injectable.value(maintenance_communicator=None)
+    Injectable.value(maintenance_controller=None)
+    Injectable.value(ssl_private_key=constants.get_ssl_private_key_file())
+    Injectable.value(ssl_certificate=constants.get_ssl_certificate_file())
+    from gateway import energy_module_controller
+    _ = energy_module_controller

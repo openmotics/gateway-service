@@ -13,20 +13,35 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from gateway.api.serializers.apartment import ApartmentSerializer
+from gateway.api.serializers.box import MailboxSerializer, ParcelBoxSerializer
+from gateway.api.serializers.delivery import DeliverySerializer
+from gateway.api.serializers.doorbell import DoorbellSerializer
+from gateway.api.serializers.energy import EnergyModuleSerializer
 from gateway.api.serializers.global_feedback import GlobalFeedbackSerializer
 from gateway.api.serializers.group_action import GroupActionSerializer
 from gateway.api.serializers.input import InputSerializer, InputStateSerializer
 from gateway.api.serializers.module import ModuleSerializer
-from gateway.api.serializers.output import OutputSerializer, \
-    OutputStateSerializer
+from gateway.api.serializers.output import DimmerConfigurationSerializer, \
+    OutputSerializer, OutputStateSerializer
 from gateway.api.serializers.pulse_counter import PulseCounterSerializer
-from gateway.api.serializers.rtd10 import GlobalRTD10Serializer, RTD10Serializer
 from gateway.api.serializers.room import RoomSerializer
-from gateway.api.serializers.schedule import ScheduleSerializer
-from gateway.api.serializers.sensor import SensorSerializer
+from gateway.api.serializers.rtd10 import GlobalRTD10Serializer, \
+    RTD10Serializer
+from gateway.api.serializers.schedule import LegacyScheduleSerializer, \
+    LegacyStartupActionSerializer, ScheduleSerializer
+from gateway.api.serializers.sensor import SensorSerializer, \
+    SensorStatusSerializer
 from gateway.api.serializers.shutter import ShutterSerializer
 from gateway.api.serializers.shutter_group import ShutterGroupSerializer
-from gateway.api.serializers.thermostat import ThermostatSerializer, ThermostatGroupSerializer, \
-    ThermostatGroupStatusSerializer, ThermostatAircoStatusSerializer, PumpGroupSerializer
+from gateway.api.serializers.system_config import SystemDoorbellConfigSerializer, \
+    SystemRFIDConfigSerializer, SystemRFIDSectorBlockConfigSerializer, \
+    SystemTouchscreenConfigSerializer, SystemGlobalConfigSerializer, \
+    SystemActivateUserConfigSerializer
+from gateway.api.serializers.thermostat import PumpGroupSerializer, \
+    ThermostatAircoStatusSerializer, ThermostatGroupSerializer, \
+    ThermostatGroupStatusSerializer, ThermostatSerializer
+from gateway.api.serializers.rfid import RfidSerializer
+from gateway.api.serializers.user import UserSerializer
 from gateway.api.serializers.ventilation import VentilationSerializer, \
     VentilationStatusSerializer

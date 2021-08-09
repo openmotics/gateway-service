@@ -15,12 +15,85 @@
 
 
 class GatewayException(Exception):
-    pass
+    DESC = 'General Gateway Exception'
+
+    def __init__(self, msg=None, *args):
+        _ = args  # Discard any other argument
+        self.extra_message = msg
+
+    @property
+    def message(self):
+        result = self.__class__.DESC
+        if self.extra_message is not None:
+            result += ': {}'.format(self.extra_message)
+        return result
+
+    @classmethod
+    def bytes_message(cls):
+        result = cls.DESC
+        result_bytes = bytes(result.encode('utf-8'))
+        return result_bytes
 
 
 class UnsupportedException(GatewayException):
+    DESC = 'action is not supported'
+
+
+class FeatureUnavailableException(GatewayException):
     pass
 
 
 class ServiceUnavailableException(GatewayException):
+    DESC = 'Service is unavailable'
+
+
+class TermsNotAcceptedException(GatewayException):
+    DESC = 'Terms are not accepted'
+
+
+class ItemDoesNotExistException(GatewayException):
+    DESC = 'Item does not exist'
+
+
+class StateException(GatewayException):
+    DESC = 'State Exception'
+
+
+class WrongInputParametersException(GatewayException):
+    DESC = 'Wrong input parameter'
+
+
+class ParseException(GatewayException):
+    DESC = 'Could not parse input'
+
+
+class TimeOutException(GatewayException):
+    DESC = 'Timeout Exception'
+
+
+class InvalidOperationException(GatewayException):
+    DESC = 'Invalid Operation'
+
+
+class UnAuthorizedException(GatewayException):
+    DESC = 'Unauthorized operation'
+
+
+class NotImplementedException(GatewayException):
+    DESC = 'Not implemented'
+
+
+class ForbiddenException(GatewayException):
+    DESC = 'Action forbidden'
+
+
+class CommunicationFailure(Exception):
+    pass
+
+
+class InMaintenanceModeException(CommunicationFailure):
+    pass
+
+
+class MasterUnavailable(CommunicationFailure):
     pass

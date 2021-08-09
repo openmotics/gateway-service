@@ -19,7 +19,7 @@ except ImportError:
 if False:  # MyPy
     from typing import Dict, Optional, Any, Union, AnyStr
 
-logger = logging.getLogger("openmotics")
+logger = logging.getLogger(__name__)
 
 
 class PluginException(Exception):
