@@ -93,6 +93,11 @@ class ApartmentControllerTest(unittest.TestCase):
         self.test_apartment_1.id = result.id
         self.assertEqual(self.test_apartment_1, result)
 
+        apartment_dto = ApartmentDTO(name='test')
+        self.controller.save_apartment(apartment_dto)
+        apartment_orm = Apartment.select().where(Apartment.name == 'test').first()
+        self.assertEqual('test', apartment_orm.name)
+
     def test_load_apartment(self):
         """ Test the create apartment functionality """
         result = self.controller.save_apartment(self.test_apartment_1)

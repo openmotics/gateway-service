@@ -580,8 +580,8 @@ def on_thermostat_save_handler(model_class, instance, created):
 class Apartment(BaseModel):
     id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
     name = CharField(null=False)
-    mailbox_rebus_id = IntegerField(unique=True)
-    doorbell_rebus_id = IntegerField(unique=True)
+    mailbox_rebus_id = IntegerField(unique=True, null=True)
+    doorbell_rebus_id = IntegerField(unique=True, null=True)
 
 
 class User(BaseModel):
