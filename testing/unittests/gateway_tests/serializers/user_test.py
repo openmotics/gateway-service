@@ -36,7 +36,8 @@ class UserSerializerTest(unittest.TestCase):
                           'is_active': None,
                           'language': 'English',
                           'role': None,
-                          'accepted_terms': 0})
+                          'accepted_terms': 0,
+                          'email': None})
 
         # only username
         dto = UserDTO(username='test')
@@ -51,7 +52,8 @@ class UserSerializerTest(unittest.TestCase):
                           'is_active': None,
                           'language': 'English',
                           'role': None,
-                          'accepted_terms': 0})
+                          'accepted_terms': 0,
+                          'email': None})
 
         # only first and last name
         dto = UserDTO(first_name='first', last_name='last')
@@ -67,7 +69,8 @@ class UserSerializerTest(unittest.TestCase):
                           'is_active': None,
                           'language': 'English',
                           'role': None,
-                          'accepted_terms': 0})
+                          'accepted_terms': 0,
+                          'email':None})
 
         # only role
         dto = UserDTO(role='USER')
@@ -82,14 +85,15 @@ class UserSerializerTest(unittest.TestCase):
                           'is_active': None,
                           'language': 'English',
                           'role': 'USER',
-                          'accepted_terms': 0})
+                          'accepted_terms': 0,
+                          'email': None})
 
         # full
         dto = UserDTO(id=37, first_name='first', last_name='last', role='USER',
                       pin_code='1234', apartment=None, is_active=False, language='Nederlands',
-                      accepted_terms=1)
+                      accepted_terms=1, email='test@test.com')
         data = UserSerializer.serialize(dto)
-        fields = {'username', 'first_name', 'apartment', 'accepted_terms', 'language', 'is_active', 'last_name', 'role', 'id', 'pin_code'}
+        fields = {'username', 'first_name', 'apartment', 'accepted_terms', 'language', 'is_active', 'last_name', 'role', 'id', 'pin_code', 'email'}
         self.assertEqual(fields, set(dto.loaded_fields))
         self.assertEqual(data,
                          {'apartment': None,
@@ -100,7 +104,8 @@ class UserSerializerTest(unittest.TestCase):
                           'is_active': False,
                           'language': 'Nederlands',
                           'role': 'USER',
-                          'accepted_terms': 1})
+                          'accepted_terms': 1,
+                          'email': 'test@test.com'})
 
         # apartment
         apartment_dto = ApartmentDTO(id=37, name='test_app', mailbox_rebus_id=37, doorbell_rebus_id=37)
@@ -124,7 +129,8 @@ class UserSerializerTest(unittest.TestCase):
                           'is_active': False,
                           'language': 'Nederlands',
                           'role': 'USER',
-                          'accepted_terms': 1})
+                          'accepted_terms': 1,
+                          'email': None})
 
     def test_deserialize(self):
         # only first name
@@ -136,6 +142,22 @@ class UserSerializerTest(unittest.TestCase):
         expected = UserDTO()
         expected.first_name = 'first'
         self.assertEqual(expected, dto)
+
+        # email
+        serial = {
+            'email': 'test@test.com'
+        }
+        dto = UserSerializer.deserialize(serial)
+        # set first name afterwards to not set the username
+        expected = UserDTO()
+        expected.email = 'test@test.com'
+        self.assertEqual(expected, dto)
+
+        serial = {
+            'email': 'wrong_@testcom'
+        }
+        with self.assertRaises(ValueError):
+            UserSerializer.deserialize(serial)
 
         # full
         serial = {

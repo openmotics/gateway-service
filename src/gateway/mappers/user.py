@@ -37,7 +37,8 @@ class UserMapper(object):
                            language=orm_object.language,
                            apartment=None,
                            is_active=orm_object.is_active,
-                           accepted_terms=orm_object.accepted_terms)
+                           accepted_terms=orm_object.accepted_terms,
+                           email=orm_object.email)
         try:
             apartment_orm = orm_object.apartment
             if apartment_orm is not None:
