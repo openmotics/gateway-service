@@ -19,6 +19,7 @@ import unittest
 import mock
 from peewee import SqliteDatabase
 
+from gateway.enums import HardwareType, ModuleType
 from gateway.api.serializers import ModuleSerializer
 from gateway.dto import ModuleDTO
 from gateway.hal.master_controller import MasterController
@@ -51,8 +52,8 @@ class ModuleControllerTest(unittest.TestCase):
         self.controller = ModuleController()
         module = Module.create(address=2,
                                source=ModuleDTO.Source.GATEWAY,
-                               hardware_type=ModuleDTO.HardwareType.PHYSICAL,
-                               module_type=ModuleDTO.ModuleType.ENERGY)
+                               hardware_type=HardwareType.PHYSICAL,
+                               module_type=ModuleType.ENERGY)
         module.save()
 
     def tearDown(self):
@@ -61,17 +62,17 @@ class ModuleControllerTest(unittest.TestCase):
 
     def test_module_sync(self):
         master_modules = [ModuleDTO(source=ModuleDTO.Source.MASTER,
-                                    module_type=ModuleDTO.ModuleType.OUTPUT,
+                                    module_type=ModuleType.OUTPUT,
                                     address='079.000.000.001',
-                                    hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                                    hardware_type=HardwareType.PHYSICAL,
                                     firmware_version='3.1.0',
                                     hardware_version='4',
                                     order=0,
                                     online=True)]
         energy_modules = [ModuleDTO(source=ModuleDTO.Source.GATEWAY,
-                                    module_type=ModuleDTO.ModuleType.ENERGY,
+                                    module_type=ModuleType.ENERGY,
                                     address='2',
-                                    hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                                    hardware_type=HardwareType.PHYSICAL,
                                     firmware_version=None,
                                     hardware_version=None,
                                     order=None)]
@@ -84,9 +85,9 @@ class ModuleControllerTest(unittest.TestCase):
 
     def test_module_offline(self):
         dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
-                        module_type=ModuleDTO.ModuleType.OUTPUT,
+                        module_type=ModuleType.OUTPUT,
                         address='079.000.000.001',
-                        hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                        hardware_type=HardwareType.PHYSICAL,
                         firmware_version='3.1.0',
                         hardware_version='4',
                         order=0)
@@ -108,23 +109,23 @@ class ModuleControllerTest(unittest.TestCase):
 
     def test_serialization(self):
         master_module = ModuleDTO(source=ModuleDTO.Source.MASTER,
-                                  module_type=ModuleDTO.ModuleType.OUTPUT,
+                                  module_type=ModuleType.OUTPUT,
                                   address='079.000.000.001',
-                                  hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                                  hardware_type=HardwareType.PHYSICAL,
                                   firmware_version='3.1.0',
                                   hardware_version='4',
                                   order=0)
         master_module_internal = ModuleDTO(source=ModuleDTO.Source.MASTER,
-                                           module_type=ModuleDTO.ModuleType.OUTPUT,
+                                           module_type=ModuleType.OUTPUT,
                                            address='079.000.000.001',
-                                           hardware_type=ModuleDTO.HardwareType.INTERNAL,
+                                           hardware_type=HardwareType.INTERNAL,
                                            firmware_version='3.1.0',
                                            hardware_version='4',
                                            order=0)
         energy_module = ModuleDTO(source=ModuleDTO.Source.GATEWAY,
-                                  module_type=ModuleDTO.ModuleType.ENERGY,
+                                  module_type=ModuleType.ENERGY,
                                   address='2',
-                                  hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                                  hardware_type=HardwareType.PHYSICAL,
                                   firmware_version='1.2.3',
                                   order=0)
         self.assertEqual({'type': 'O',
