@@ -17,19 +17,22 @@ System BLL
 """
 from __future__ import absolute_import
 
-import os
-import logging
-import constants
 import glob
-import sqlite3
+import logging
+import os
 import shutil
-import tempfile
+import sqlite3
 import subprocess
+import tempfile
+import time
 from threading import Timer
+
 from six.moves.configparser import ConfigParser
-from ioc import Injectable, Singleton, Inject, INJECTED
-from platform_utils import System
+
+import constants
 from gateway.base_controller import BaseController
+from ioc import INJECTED, Inject, Injectable, Singleton
+from platform_utils import System
 
 if False:  # MYPY
     from typing import Dict, Any, List, Optional, Iterable
@@ -60,18 +63,7 @@ class SystemController(BaseController):
         os.symlink(timezone_file_path, constants.get_timezone_file())
 
     def get_timezone(self):
-        try:
-            path = os.path.realpath(constants.get_timezone_file())
-            if not path.startswith('/usr/share/zoneinfo/'):
-                # Reset timezone to default setting
-                self.set_timezone('UTC')
-                return 'UTC'
-            if path.startswith('/usr/share/zoneinfo/posix'):
-                # As seen on the buildroot os, the timezone info is all located in the posix folder within zoneinfo.
-                return path[26:]
-            return path[20:]
-        except Exception:
-            return 'UTC'
+        return time.tzname[0]
 
     def get_main_version(self):
         _ = self
