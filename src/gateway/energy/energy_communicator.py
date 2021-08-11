@@ -24,9 +24,8 @@ from threading import RLock, Thread
 from six.moves.queue import Empty
 
 from gateway.daemon_thread import BaseThread
+from gateway.enums import HardwareType
 from gateway.exceptions import CommunicationFailure
-from gateway.hal.master_event import MasterEvent
-from gateway.pubsub import PubSub
 from gateway.models import EnergyModule, EnergyCT, Module
 from gateway.dto import ModuleDTO
 from gateway.enums import EnergyEnums
@@ -37,7 +36,7 @@ from serial_utils import CommunicationStatus, CommunicationTimedOutException, \
     Printable
 
 if False:  # MYPY:
-    from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+    from typing import Any, Dict, List, Literal, Optional, Tuple, Union, Callable
     from serial_utils import RS485
     DataType = Union[float, int, str]
 
@@ -50,8 +49,8 @@ class EnergyCommunicator(object):
     """ Uses a serial port to communicate with the power modules. """
 
     @Inject
-    def __init__(self, energy_serial=INJECTED, pubsub=INJECTED, address_mode_timeout=300):
-        # type: (RS485, PubSub, int) -> None
+    def __init__(self, energy_serial=INJECTED, address_mode_timeout=300):
+        # type: (RS485, int) -> None
         self.__verbose = logger.level >= logging.DEBUG
         self.__serial = energy_serial
         self.__serial_lock = RLock()
@@ -61,7 +60,6 @@ class EnergyCommunicator(object):
         self.__address_mode_stop = False
         self.__address_thread = None  # type: Optional[Thread]
         self.__address_mode_timeout = address_mode_timeout
-        self.__pubsub = pubsub
 
         self.__last_success = 0  # type: float
 
@@ -74,6 +72,8 @@ class EnergyCommunicator(object):
         self.__debug_buffer = {'read': {},
                                'write': {}}  # type: Dict[str,Dict[float,str]]
         self.__debug_buffer_duration = 300
+
+        self.__address_mode_stopped_callbacks = []  # type: List[Callable[[], None]]
 
     def get_communication_statistics(self):
         # type: () -> Dict[str, Any]
@@ -138,6 +138,10 @@ class EnergyCommunicator(object):
             return 0  # No communication - return 0 sec since last success
         else:
             return time.time() - self.__last_success
+
+    def subscribe_discovery_stopped(self, callback):
+        # type: (Callable[[], None]) -> None
+        self.__address_mode_stopped_callbacks.append(callback)
 
     def __get_cid(self):
         # type: () -> int
@@ -303,7 +307,7 @@ class EnergyCommunicator(object):
                         logger.info('Registering new Energy Module with address {0}'.format(new_address))
                         module = Module(source=ModuleDTO.Source.GATEWAY,
                                         address=str(new_address),
-                                        hardware_type=ModuleDTO.HardwareType.PHYSICAL)
+                                        hardware_type=HardwareType.PHYSICAL)
                         module.save()
                         energy_module = EnergyModule(number=new_address,
                                                      version=version,
@@ -337,12 +341,16 @@ class EnergyCommunicator(object):
         data = address_mode_p1c.create_input(BROADCAST_ADDRESS, self.__get_cid(), NORMAL_MODE)
         self.__write_to_serial(data)
 
+        # Notify subscribers
+        for callback in self.__address_mode_stopped_callbacks:
+            callback()
+
         self.__address_mode = False
 
     @staticmethod
     def _get_address_and_module(old_address):
         modules = Module.select().where(Module.source == ModuleDTO.Source.GATEWAY,
-                                        Module.hardware_type == ModuleDTO.HardwareType.PHYSICAL)
+                                        Module.hardware_type == HardwareType.PHYSICAL)
         new_address = 2
         old_module = None  # type: Optional[Module]
         if len(modules) > 0:
@@ -369,8 +377,6 @@ class EnergyCommunicator(object):
         if self.__address_thread:
             self.__address_thread.join()
         self.__address_thread = None
-        master_event = MasterEvent(MasterEvent.Types.POWER_ADDRESS_EXIT, {})
-        self.__pubsub.publish_master_event(PubSub.MasterTopics.POWER, master_event)
 
     def in_address_mode(self):
         # type: () -> bool

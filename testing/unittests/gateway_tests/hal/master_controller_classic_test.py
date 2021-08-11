@@ -31,7 +31,7 @@ from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Scope, SetTestMode, SetUpTestInjections
 from master.classic import master_api
-from master.classic.eeprom_controller import EepromController
+from master.classic.eeprom_controller import EepromController, EepromFile
 from master.classic.eeprom_models import InputConfiguration
 from master.classic.master_communicator import BackgroundConsumer
 from master.classic.validationbits import ValidationBitStatus
@@ -235,24 +235,27 @@ class MasterClassicControllerTest(unittest.TestCase):
             controller = get_classic_controller_dummy([])
             pubsub = get_pubsub()
 
-            invalidate = controller._eeprom_controller.invalidate_cache.call_args_list
+            invalidate_cache = controller._eeprom_controller._eeprom_file.invalidate_cache
+            invalidate_cache.reset_mock()
+            subscriber.callback.reset_mock()
+            pubsub._publish_all_events(blocking=False)
 
             try:
                 controller.start()
                 controller.module_discover_start(30)
                 time.sleep(0.2)
                 assert len(synchronize.call_args_list) == 1
-                assert len(invalidate) == 0
+                assert len(invalidate_cache.call_args_list) == 0
 
-                pubsub.subscribe_master_events(PubSub.MasterTopics.MODULE, subscriber.callback)
+                pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, subscriber.callback)
                 controller.module_discover_stop()
                 pubsub._publish_all_events(blocking=False)
                 time.sleep(0.2)
-                assert len(invalidate) == 1
-
                 assert len(subscriber.callback.call_args_list) == 1
+                assert len(invalidate_cache.call_args_list) == 1
+
                 event = subscriber.callback.call_args_list[0][0][0]
-                assert event.type == MasterEvent.Types.MODULE_DISCOVERY
+                assert event.type == MasterEvent.Types.EEPROM_CHANGE
             finally:
                 controller.stop()
 
@@ -265,11 +268,8 @@ class MasterClassicControllerTest(unittest.TestCase):
 
     def test_master_maintenance_event(self):
         controller = get_classic_controller_dummy()
-        pubsub = get_pubsub()
         with mock.patch.object(controller._eeprom_controller, 'invalidate_cache') as invalidate:
-            master_event = MasterEvent(MasterEvent.Types.MAINTENANCE_EXIT, {})
-            pubsub.publish_master_event(PubSub.MasterTopics.MAINTENANCE, master_event)
-            pubsub._publish_all_events(blocking=False)
+            controller._broadcast_module_discovery()
             invalidate.assert_called()
 
     def test_master_eeprom_event(self):
@@ -313,14 +313,19 @@ class MasterClassicControllerTest(unittest.TestCase):
 @Scope
 def get_classic_controller_dummy(inputs=None):
     communicator_mock = mock.Mock(spec=MasterCommunicator)
-    eeprom_mock = mock.Mock(EepromController)
-    eeprom_mock.invalidate_cache.return_value = None
-    eeprom_mock.read.return_value = inputs[0] if inputs else []
-    eeprom_mock.read_all.return_value = inputs
+    eeprom_file = mock.Mock(EepromFile)
+    eeprom_file.invalidate_cache.return_value = None
     SetUpTestInjections(configuration_controller=mock.Mock(),
                         master_communicator=communicator_mock,
-                        eeprom_controller=eeprom_mock,
+                        eeprom_extension=mock.Mock(),
+                        eeprom_file=eeprom_file,
                         pubsub=PubSub())
+    eeprom_mock = EepromController()
+    eeprom_mock.read = mock.Mock()
+    eeprom_mock.read.return_value = inputs[0] if inputs else []
+    eeprom_mock.read_all = mock.Mock()
+    eeprom_mock.read_all.return_value = inputs
+    SetUpTestInjections(eeprom_controller=eeprom_mock)
 
     controller = MasterClassicController()
     controller._master_version = (3, 143, 102)

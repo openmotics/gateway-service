@@ -298,8 +298,8 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
 
         Injectable.value(master_communicator=CoreCommunicator())
-        Injectable.value(maintenance_communicator=MaintenanceCoreCommunicator())
         Injectable.value(memory_file=MemoryFile())
+        Injectable.value(maintenance_communicator=MaintenanceCoreCommunicator())
         Injectable.value(master_controller=MasterCoreController())
     elif target_platform in Platform.ClassicTypes:
         # FIXME don't create singleton for optional controller?

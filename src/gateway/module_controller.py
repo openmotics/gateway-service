@@ -27,6 +27,7 @@ from constants import OPENMOTICS_PREFIX
 from ioc import Injectable, Inject, INJECTED, Singleton
 from serial_utils import CommunicationTimedOutException
 from gateway.dto import ModuleDTO
+from gateway.enums import HardwareType, ModuleType
 from gateway.base_controller import BaseController
 from gateway.models import Module
 from gateway.mappers.module import ModuleMapper
@@ -146,11 +147,11 @@ class ModuleController(BaseController):
             raise RuntimeError('Only `master` modules can be replaced')
         if old_module.module_type != new_module.module_type:
             raise RuntimeError('The modules should be of the same type')
-        if old_module.hardware_type != new_module.hardware_type or old_module.hardware_type != ModuleDTO.HardwareType.PHYSICAL:
+        if old_module.hardware_type != new_module.hardware_type or old_module.hardware_type != HardwareType.PHYSICAL:
             raise RuntimeError('Both modules should be physical modules')
-        module_types = [[ModuleDTO.ModuleType.INPUT, ModuleDTO.ModuleType.SENSOR, ModuleDTO.ModuleType.CAN_CONTROL],
-                        [ModuleDTO.ModuleType.OUTPUT, ModuleDTO.ModuleType.DIM_CONTROL],
-                        [ModuleDTO.ModuleType.SHUTTER]]
+        module_types = [[ModuleType.INPUT, ModuleType.SENSOR, ModuleType.CAN_CONTROL],
+                        [ModuleType.OUTPUT, ModuleType.DIM_CONTROL],
+                        [ModuleType.SHUTTER]]
         module_types_map = {mtype: mtypes
                             for mtypes in module_types
                             for mtype in mtypes}
@@ -167,13 +168,13 @@ class ModuleController(BaseController):
                 ModuleMapper.orm_to_dto(new_module))
 
     def add_virtual_module(self, module_type):  # type: (str) -> None
-        if module_type == ModuleDTO.ModuleType.OUTPUT:
+        if module_type == ModuleType.OUTPUT:
             self._master_controller.add_virtual_output_module()
-        elif module_type == ModuleDTO.ModuleType.DIM_CONTROL:
+        elif module_type == ModuleType.DIM_CONTROL:
             self._master_controller.add_virtual_dim_control_module()
-        elif module_type == ModuleDTO.ModuleType.INPUT:
+        elif module_type == ModuleType.INPUT:
             self._master_controller.add_virtual_input_module()
-        elif module_type == ModuleDTO.ModuleType.SENSOR:
+        elif module_type == ModuleType.SENSOR:
             self._master_controller.add_virtual_sensor_module()
         else:
             raise RuntimeError('Adding a virtual module of type `{0}` is not supported'.format(module_type))

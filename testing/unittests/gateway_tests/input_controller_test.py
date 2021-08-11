@@ -41,7 +41,6 @@ class InputControllerTest(unittest.TestCase):
         cls.test_db = SqliteDatabase(':memory:')
         fakesleep.monkey_patch()
 
-
     @classmethod
     def tearDownClass(cls):
         super(InputControllerTest, cls).tearDownClass()
