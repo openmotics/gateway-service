@@ -131,16 +131,18 @@ class EsafeController(object):
             logger.debug('Requesting specific parcelbox: {}'.format(parcelbox))
             parcelboxes = [parcelbox] if parcelbox is not None and parcelbox.type is EsafeBoxType.PARCELBOX else []
 
-        # filter out the available packages
-        if available is True:
-            parcelboxes = [box for box in parcelboxes if self.delivery_controller.parcel_id_available(box.get_rebus_id())]
-
         # filter out the sizes
         if size is not None:
             size = size.lower()
             parcelboxes = [parcelbox for parcelbox in parcelboxes if parcelbox.size.name.lower() == size]
 
-        return [self._rebus_parcelbox_to_dto(parcelbox) for parcelbox in parcelboxes]
+        parcelboxes_dto = [self._rebus_parcelbox_to_dto(parcelbox) for parcelbox in parcelboxes]
+
+        # filter out the available packages
+        if available is True:
+            parcelboxes_dto = [box for box in parcelboxes_dto if box.available]
+
+        return parcelboxes_dto
 
     # Generic Functions (parcelbox and mailbox)
 

@@ -306,52 +306,97 @@ class DeliveryControllerTest(unittest.TestCase):
             self.controller.pickup_delivery(delivery_1_id)
 
     def test_load_delivery(self):
-        user_orm = User(
+        user_orm_1 = User(
             username='test',
             password='test',
             is_active=True,
             accepted_terms=0,
             role='USER'
         )
-        user_orm.save()
-        user_id = user_orm.id
+        user_orm_1.save()
 
-        delivery_orm = Delivery(
+        user_orm_2 = User(
+            username='test2',
+            password='test2',
+            is_active=True,
+            accepted_terms=0,
+            role='USER'
+        )
+        user_orm_2.save()
+
+        delivery_orm_1 = Delivery(
             type='DELIVERY',
             timestamp_delivery='2021-05-07T10:10:04+02:00',
             timestamp_pickup='2021-05-08T10:10:04+02:00',
             courier_firm='TNT',
             parcelbox_rebus_id=37,
-            user_pickup=user_id
+            user_pickup=user_orm_1.id
         )
-        delivery_orm.save()
+        delivery_orm_1.save()
 
-        delivery_orm = Delivery(
+        delivery_orm_2 = Delivery(
             type='DELIVERY',
             timestamp_delivery='2021-05-07T10:10:04+02:00',
             courier_firm='TNT',
-            parcelbox_rebus_id=37,
-            user_pickup=user_id
+            parcelbox_rebus_id=38,
+            user_pickup=user_orm_2.id
         )
-        delivery_orm.save()
-        delivery_id = delivery_orm.id
+        delivery_orm_2.save()
+
+        delivery_orm_3 = Delivery(
+            type='RETURN',
+            timestamp_delivery='2021-05-07T10:10:04+02:00',
+            courier_firm='BPOST',
+            parcelbox_rebus_id=39,
+            user_pickup=user_orm_2.id
+        )
+        delivery_orm_3.save()
 
         # check that there are 2 deliveries in the database
         count = Delivery.select().count()
-        self.assertEqual(2, count)
+        self.assertEqual(3, count)
 
         # verify that the user is saved
-        user_queried = User.get_by_id(user_id)
+        user_queried = User.get_by_id(user_orm_1.id)
         self.assertIsNotNone(user_queried)
 
-        delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
-        result = self.controller.load_delivery(delivery_id)
+        delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm_2)
+        result = self.controller.load_delivery(delivery_orm_2.id)
         self.assertEqual(delivery_dto, result)
 
         result = self.controller.load_deliveries()
         # only one delivery should be returned since the first one is already picked up
+        self.assertEqual(2, len(result))
+
+        result = self.controller.load_deliveries(user_id=user_orm_2.id)
+        # only two deliveries should be returned since the first one is already picked up
+        self.assertEqual(2, len(result))
+
+        result = self.controller.load_deliveries(history=True)
+        # only two deliveries should be returned since the first one is already picked up
         self.assertEqual(1, len(result))
 
-        result = self.controller.load_deliveries(user_id=user_id)
-        # only one delivery should be returned since the first one is already picked up
-        self.assertEqual(1, len(result))
+        result = self.controller.load_deliveries_filter(include_picked_up=True)
+        self.assertEqual(3, len(result))
+
+        result = self.controller.load_deliveries_filter(include_picked_up=True, delivery_id=delivery_orm_3.id)
+        delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm_3)
+        self.assertEqual([delivery_dto], result)
+
+        result = self.controller.load_deliveries_filter(include_picked_up=True, delivery_courier_firm='BPOST')
+        delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm_3)
+        self.assertEqual([delivery_dto], result)
+
+        result = self.controller.load_deliveries_filter(include_picked_up=True, delivery_courier_firm='TNT')
+        expected = [
+            DeliveryMapper.orm_to_dto(delivery_orm_1),
+            DeliveryMapper.orm_to_dto(delivery_orm_2)
+        ]
+        self.assertEqual(expected, result)
+
+        result = self.controller.load_deliveries_filter(include_picked_up=False, delivery_courier_firm='TNT')
+        expected = [
+            DeliveryMapper.orm_to_dto(delivery_orm_2)
+        ]
+        self.assertEqual(expected, result)
+

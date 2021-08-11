@@ -245,6 +245,16 @@ class ApiDeliveriesTests(unittest.TestCase):
             for delivery in [self.test_return_1, self.test_delivery_2]:
                 self.verify_delivery_not_in_output(delivery, response)
 
+    def test_get_delivery_history(self):
+        with mock.patch.object(self.delivery_controller, 'load_deliveries', return_value=[self.test_delivery_1]) as load_deliveries_func:
+            auth_token = AuthenticationToken(self.test_user_1, 'test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
+            response = self.web.get_delivery_history(auth_token=auth_token, user_id=self.test_user_1.id, after=0, pagesize=2)
+            load_deliveries_func.assert_called_once_with(user_id=self.test_user_1.id, history=True, from_id=0, limit=2)
+            for delivery in [self.test_delivery_1]:
+                self.verify_delivery_in_output(delivery, response)
+            for delivery in [self.test_return_1, self.test_delivery_2]:
+                self.verify_delivery_not_in_output(delivery, response)
+
     # ----------------------------------------------------------------
     # --- POST
     # ----------------------------------------------------------------
