@@ -59,9 +59,9 @@ class Rfid(RestAPIEndpoint):
                                       controller=self, action='delete_rfid',
                                       conditions={'method': ['DELETE']})
 
-    @openmotics_api_v1(auth=True, pass_token=True)
-    def get_rfids(self, auth_token=None):
-        rfids = self.rfid_controller.load_rfids()
+    @openmotics_api_v1(auth=True, pass_token=True, check={'user_id': int})
+    def get_rfids(self, auth_token=None, user_id=None):
+        rfids = self.rfid_controller.load_rfids(user_id=user_id)
 
         # filter the rfids if the role is not a super user
         if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:

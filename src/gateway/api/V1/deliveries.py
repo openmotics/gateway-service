@@ -64,18 +64,15 @@ class Deliveries(RestAPIEndpoint):
                                       controller=self, action='put_delivery_pickup',
                                       conditions={'method': ['PUT']})
 
-    @openmotics_api_v1(auth=True, pass_token=True)
-    def get_deliveries(self, auth_token):
-        # type: (AuthenticationToken) -> str
-        role = auth_token.user.role
-        user_id = auth_token.user.id
-
+    @openmotics_api_v1(auth=True, pass_token=True, check={'user_id': int, 'delivery_type': str})
+    def get_deliveries(self, auth_token, user_id=None, delivery_type=None):
+        # type: (AuthenticationToken, int, str) -> str
         # get all the deliveries
-        deliveries = self.delivery_controller.load_deliveries()  # type: List[DeliveryDTO]
+        deliveries = self.delivery_controller.load_deliveries(user_id=user_id, delivery_type=delivery_type)  # type: List[DeliveryDTO]
 
         # filter the deliveries for only the user id when they are not technician or admin
-        if role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
-            deliveries = [delivery for delivery in deliveries if user_id in [delivery.user_id_delivery, delivery.user_id_pickup]]
+        if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
+            deliveries = [delivery for delivery in deliveries if auth_token.user.id in [delivery.user_id_delivery, delivery.user_id_pickup]]
 
         deliveries_serial = [DeliverySerializer.serialize(delivery) for delivery in deliveries]
         return json.dumps(deliveries_serial)

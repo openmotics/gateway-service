@@ -162,7 +162,7 @@ class Users(RestAPIEndpoint):
     @openmotics_api_v1(auth=False, pass_role=False, expect_body_type='JSON')
     def post_activate_user(self, user_id, request_body):
         # request to activate a certain user
-        request_code = request_body.get('code') or request_body.get('rfid_tag')
+        request_code = request_body.get('pin_code') or request_body.get('rfid_tag')
         if request_code is None:
             raise WrongInputParametersException('when activating, a pin code or rfid tag is expected.')
 

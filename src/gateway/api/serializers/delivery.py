@@ -45,6 +45,8 @@ class DeliverySerializer(object):
                 'parcelbox_rebus_id': dto_object.parcelbox_rebus_id,
                 'user_id_delivery': dto_object.user_delivery.id if dto_object.user_delivery is not None else None,
                 'user_id_pickup': dto_object.user_pickup.id if dto_object.user_pickup is not None else None}
+        if dto_object.type == 'RETURN':
+            data['return_pickup_code'] = dto_object.user_pickup.pin_code
         return SerializerToolbox.filter_fields(data, fields)
 
     @staticmethod

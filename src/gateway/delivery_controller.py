@@ -73,8 +73,8 @@ class DeliveryController(object):
         return delivery_dto
 
     @staticmethod
-    def load_deliveries(user_id=None, include_picked_up=False):
-        # type: (Optional[int], bool) -> List[DeliveryDTO]
+    def load_deliveries(user_id=None, delivery_type=None, include_picked_up=False):
+        # type: (Optional[int], Optional[str], bool) -> List[DeliveryDTO]
         deliveries = []
         query = Delivery.select()
         # filter on user id when needed
@@ -83,6 +83,9 @@ class DeliveryController(object):
                 ((Delivery.user_delivery_id == user_id) |
                  (Delivery.user_pickup_id == user_id))
             )
+        # Filter on delivery type
+        if delivery_type is not None:
+            query = query.where(Delivery.type == delivery_type)
         # filter on picked up when needed
         if not include_picked_up:
             query = query.where(Delivery.timestamp_pickup.is_null())
