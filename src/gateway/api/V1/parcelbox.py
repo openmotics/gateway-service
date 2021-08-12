@@ -111,9 +111,8 @@ class ParcelBox(RestAPIEndpoint):
 
         # auth check
         if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
-            deliveries = self.delivery_controller.load_deliveries_filter(delivery_pickup_user=auth_token.user.id)
-            delivery = deliveries[0] if len(deliveries) == 1 else None
-            if delivery is None or delivery.parcelbox_rebus_id is not rebus_id:
+            deliveries = self.delivery_controller.load_deliveries(user_id=auth_token.user.id)
+            if True not in [delivery.parcelbox_rebus_id == rebus_id for delivery in deliveries]:
                 raise UnAuthorizedException('Cannot open parcelbox with id: {}: You are not admin, technician and the box does not belong to you'.format(rebus_id))
 
         if request_body['open'] is True:

@@ -177,17 +177,17 @@ class Users(RestAPIEndpoint):
         self.user_controller.activate_user(user_id)
         return 'OK'
 
-    @openmotics_api_v1(auth=True, pass_role=False, pass_token=True, pass_security_level=True, expect_body_type='JSON')
-    def put_update_user(self, user_id, auth_token, auth_security_level, request_body=None, **kwargs):
+    @openmotics_api_v1(auth=True, pass_role=False, pass_token=True, pass_security_level=True, expect_body_type='JSON', check={'user_id': int})
+    def put_update_user(self, user_id, auth_token, auth_security_level, request_body=None):
         user_json = request_body
         if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             if auth_token.user.id != user_id:
-                raise UnAuthorizedException('As a non admin or technician user, you cannot change another user')
+                raise UnAuthorizedException('As a non admin or technician user, you cannot change another user. Requested user_id: {}, authenticated as: {}'.format(user_id, auth_token.user.id))
 
         # check if the pin code or rfid tag is changed
         if 'pin_code' in user_json or 'rfid' in user_json:
             if auth_security_level is not AuthenticationLevel.HIGH:
-                raise UnAuthorizedException('Cannot change the pin code or rfid data: You need to log in with password or pass X-API-Secret')
+                raise UnAuthorizedException('Cannot change the pin code or rfid data: You need a HIGH security level')
 
         user_dto_orig = self.user_controller.load_user(user_id, clear_password=False)
         user_dto = UserSerializer.deserialize(user_json)
