@@ -14,19 +14,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 V1 api init file
-This will parse all the files in this directory (V1) to make sure that all the api's are
-automatically exposed when required
 """
 
-# Add al the API files to the __all__ variable.
-# This will make sure that all the files are parsed when the import * statement is ran
-from os.path import dirname, basename, isfile, join
-import glob
-modules = glob.glob(join(dirname(__file__), "*.py"))
-__all__ = [basename(f)[:-3] for f in modules if isfile(f) and not f.endswith('__init__.py')]
-
-# Now import all the files defined in __all__
-try:
-    from gateway.api.V1 import *
-except Exception:
-    pass
+from gateway.api.V1.apartments import Apartments
+from gateway.api.V1.authentication import Authentication
+from gateway.api.V1.deliveries import Deliveries
+from gateway.api.V1.doorbell import Doorbell
+from gateway.api.V1.mailbox import MailBox
+from gateway.api.V1.parcelbox import ParcelBox
+from gateway.api.V1.rfid import Rfid
+from gateway.api.V1.system_config import SystemConfiguration
+from gateway.api.V1.users import Users
