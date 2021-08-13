@@ -65,7 +65,8 @@ class EnergyModuleController(BaseController):
 
         self._time_cache = {}  # type: Dict[int, List[int]]
 
-        self._energy_communicator.subscribe_discovery_stopped(self._discovery_stopped)
+        if self._enabled:
+            self._energy_communicator.subscribe_discovery_stopped(self._discovery_stopped)
 
     def _discovery_stopped(self):
         # type: () -> None
