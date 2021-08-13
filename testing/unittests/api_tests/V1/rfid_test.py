@@ -32,8 +32,7 @@ from gateway.exceptions import *
 from gateway.pubsub import PubSub
 from gateway.user_controller import UserController
 from gateway.rfid_controller import RfidController
-from gateway.webservice_v1 import Rfid
-
+from gateway.api.V1.rfid import Rfid
 from ioc import SetTestMode, SetUpTestInjections
 
 from .base import BaseCherryPyUnitTester

@@ -28,9 +28,8 @@ from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import UserDTO, MailBoxDTO, ApartmentDTO
 from gateway.delivery_controller import DeliveryController
 from gateway.esafe_controller import EsafeController
-from gateway.exceptions import *
 from gateway.api.serializers import MailboxSerializer
-from gateway.webservice_v1 import MailBox
+from gateway.api.V1.mailbox import MailBox
 
 from ioc import SetTestMode, SetUpTestInjections
 

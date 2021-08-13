@@ -64,8 +64,12 @@ class EsafeController(object):
     ######################
 
     def start(self):
+        logger.debug('Starting eSafe controller')
+        logger.debug(' -> Creating eSafe device: {}'.format(self.rebus_dev_file))
         self.rebus_device = Rebus(self.rebus_dev_file, power_off_on_del=False)
+        logger.debug(' -> Toggle power')
         self.toggle_rebus_power()
+        logger.debug(' -> Discover devices')
         self.discover_devices()
 
     def stop(self):

@@ -30,7 +30,7 @@ from gateway.exceptions import *
 from gateway.delivery_controller import DeliveryController
 from gateway.mappers import DeliveryMapper
 from gateway.user_controller import UserController
-from gateway.webservice_v1 import Deliveries
+from gateway.api.V1.deliveries import Deliveries
 
 from ioc import SetTestMode, SetUpTestInjections
 

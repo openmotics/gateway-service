@@ -203,6 +203,13 @@ def setup_target_platform(target_platform, message_client_name):
          ventilation_controller, webservice_v1, apartment_controller, delivery_controller, system_config_controller,
          rfid_controller, energy_module_controller)
 
+    # V1 api
+    # This will parse all the V1 api files that are included in the __init__.py file in the
+    # gateway.api.V1 folder. Keep this here so all the V1 api files are parsed.
+    # This cannot be in the webservice_v1 file since it creates circular imports due to
+    # all the V1 api's including elements from the webservice_v1 file
+    from gateway.api import V1
+
     # IPC
     message_client = None
     if message_client_name is not None:

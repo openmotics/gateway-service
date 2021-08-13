@@ -216,6 +216,7 @@ class TokenStore(object):
         token_id = AuthenticationTokenId(user_dto, impersonator)
         # if there is already a token, just return the existing token
         if token_id in self.tokens.keys():
+            self.tokens[token_id].login_method = login_method
             return self.tokens[token_id]
         self.tokens[token_id] = AuthenticationToken.generate(user_dto=full_user, token_timeout=timeout, impersonator=impersonator, login_method=login_method)
         return self.tokens[token_id]
