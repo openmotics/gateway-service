@@ -194,7 +194,8 @@ class ThermostatControllerMaster(ThermostatController):
 
     def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         for thermostat_dto in thermostats:
-            thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
+            if 'sensor' in thermostat_dto.loaded_fields:
+                thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
             # Make sure that times/temperature are always set to a valid value
             ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
                                                          mode='heating')
@@ -224,7 +225,8 @@ class ThermostatControllerMaster(ThermostatController):
 
     def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         for thermostat_dto in thermostats:
-            thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
+            if 'sensor' in thermostat_dto.loaded_fields:
+                thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
             # Make sure that times/temperature are always set to a valid value
             ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
                                                          mode='cooling')
