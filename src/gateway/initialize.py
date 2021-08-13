@@ -203,6 +203,13 @@ def setup_target_platform(target_platform, message_client_name):
          ventilation_controller, webservice_v1, apartment_controller, delivery_controller, system_config_controller,
          rfid_controller, energy_module_controller)
 
+    # V1 api
+    # This will parse all the V1 api files that are included in the __init__.py file in the
+    # gateway.api.V1 folder. Keep this here so all the V1 api files are parsed.
+    # This cannot be in the webservice_v1 file since it creates circular imports due to
+    # all the V1 api's including elements from the webservice_v1 file
+    from gateway.api import V1
+
     # IPC
     message_client = None
     if message_client_name is not None:
@@ -298,8 +305,8 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(eeprom_db=constants.get_eeprom_extension_database_file())
 
         Injectable.value(master_communicator=CoreCommunicator())
-        Injectable.value(maintenance_communicator=MaintenanceCoreCommunicator())
         Injectable.value(memory_file=MemoryFile())
+        Injectable.value(maintenance_communicator=MaintenanceCoreCommunicator())
         Injectable.value(master_controller=MasterCoreController())
     elif target_platform in Platform.ClassicTypes:
         # FIXME don't create singleton for optional controller?
@@ -344,9 +351,6 @@ def setup_target_platform(target_platform, message_client_name):
         Injectable.value(thermostat_controller=ThermostatControllerGateway())
     else:
         Injectable.value(thermostat_controller=ThermostatControllerMaster())
-
-    # V1 api
-    from gateway.api import V1
 
 
 def setup_minimal_vpn_platform(message_client_name):

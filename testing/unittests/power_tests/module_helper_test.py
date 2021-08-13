@@ -22,7 +22,7 @@ import unittest
 
 import mock
 
-from gateway.enums import EnergyEnums
+from gateway.enums import EnergyEnums, HardwareType
 from gateway.pubsub import PubSub
 from gateway.models import Module, EnergyModule, EnergyCT
 from gateway.dto import ModuleDTO
@@ -58,7 +58,7 @@ class EnergyModuleHelperTest(unittest.TestCase):
     def _setup_module(self, version, address):
         module = Module(address=address,
                         source=ModuleDTO.Source.GATEWAY,
-                        hardware_type=ModuleDTO.HardwareType.PHYSICAL)
+                        hardware_type=HardwareType.PHYSICAL)
         module.save()
         energy_module = EnergyModule(version=version,
                                      number=address,
@@ -170,7 +170,7 @@ class P1ControllerTest(unittest.TestCase):
     def _setup_module(self, version, address):
         module = Module(address=address,
                         source=ModuleDTO.Source.GATEWAY,
-                        hardware_type=ModuleDTO.HardwareType.PHYSICAL)
+                        hardware_type=HardwareType.PHYSICAL)
         module.save()
         energy_module = EnergyModule(version=version,
                                      number=1,

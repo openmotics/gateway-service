@@ -25,7 +25,6 @@ from threading import Lock, Event as ThreadingEvent
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
-from master.core.basic_action import BasicAction
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator
 from master.core.events import Event
@@ -75,7 +74,6 @@ class MemoryFile(object):
         self._activate_lock = Lock()
 
         self._eeprom_change_callback = None  # type: Optional[Callable[[], None]]
-        self._self_activated = False
         self._activation_event = ThreadingEvent()
 
         self._core_communicator.register_consumer(
@@ -84,18 +82,12 @@ class MemoryFile(object):
 
     def _handle_event(self, data):  # type: (Dict[str, Any]) -> None
         core_event = Event(data)
-        if core_event.type == Event.Types.SYSTEM and core_event.data['type'] == Event.SystemEventTypes.EEPROM_ACTIVATE:
-            if self._self_activated:
-                # Ignore self-activations, since those changes are already in the EEPROM cache
-                self._self_activated = False
-                logger.info('MEMORY: Ignore EEPROM_ACTIVATE due to self-activation')
-            else:
-                # EEPROM might have been changed, so clear caches
-                self.invalidate_cache()
-                logger.info('MEMORY: Cache cleared: EEPROM_ACTIVATE')
-                master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
-                self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
-            self._activation_event.set()
+        if core_event.type == Event.Types.SYSTEM:
+            if core_event.data['type'] == Event.SystemEventTypes.EEPROM_ACTIVATE:
+                self._activation_event.set()
+        elif core_event.type == Event.Types.SLAVE_SEARCH:
+            if core_event.data['type'] in [Event.SearchType.DISABLED, Event.SearchType.STOPPED]:
+                self.invalidate_cache(reason='automatic discovery')
 
     def _get_write_cache(self):  # type: () -> Tuple[Dict[str, Dict[int, Dict[int, int]]], Lock]
         thread_id = threading.current_thread().ident or 0
@@ -216,7 +208,6 @@ class MemoryFile(object):
                 self._clear_write_cache()
             if data_written:
                 logger.info('MEMORY: Activating')
-                self._self_activated = True
                 self._activation_event.clear()
                 self._core_communicator.do_command(
                     command=CoreAPI.basic_action(),
@@ -224,11 +215,18 @@ class MemoryFile(object):
                     timeout=MemoryFile.ACTIVATE_TIMEOUT
                 )
                 self._activation_event.wait(timeout=60.0)
+                self._notify_eeprom_changed()
             else:
                 logger.info('MEMORY: No activation requred')
 
-    def invalidate_cache(self):  # type: () -> None
+    def invalidate_cache(self, reason):  # type: (str) -> None
         for page in range(MemoryFile.SIZES[MemoryTypes.EEPROM][0]):
             self._eeprom_cache.pop(page, None)
         for page in range(MemoryFile.SIZES[MemoryTypes.FRAM][0]):
             self._fram_cache.pop(page, None)
+        logger.info('MEMORY: Cache cleared ({0})'.format(reason))
+        self._notify_eeprom_changed()
+
+    def _notify_eeprom_changed(self):
+        master_event = MasterEvent(MasterEvent.Types.EEPROM_CHANGE, {})
+        self._pubsub.publish_master_event(PubSub.MasterTopics.EEPROM, master_event)
