@@ -400,3 +400,29 @@ class DeliveryControllerTest(unittest.TestCase):
         ]
         self.assertEqual(expected, result)
 
+        # add some more deliveries:
+        ids = []
+        for i in range(20):
+            delivery_orm = Delivery(
+                type='DELIVERY',
+                timestamp_delivery='2021-05-07T10:10:04+02:00',
+                timestamp_pickup='2021-05-08T10:10:04+02:00',
+                courier_firm='TNT',
+                parcelbox_rebus_id=40 + i,
+                user_pickup=user_orm_1.id
+            )
+            delivery_orm.save()
+            ids.append(delivery_orm.id)
+
+        # this should return 2 results with the most recent id's
+        result = self.controller.load_deliveries(history=True, before_id=None, limit=2)
+        self.assertEqual(2, len(result))
+        self.assertEqual(ids[-1], result[0].id)
+        self.assertEqual(ids[-2], result[1].id)
+
+        # This will match the delivery-id's since all the last ones are picked up deliveries
+        result = self.controller.load_deliveries(history=True, before_id=10, limit=2)
+        self.assertEqual(2, len(result))
+        self.assertEqual(9, result[0].id)
+        self.assertEqual(8, result[1].id)
+

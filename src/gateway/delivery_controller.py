@@ -64,8 +64,8 @@ class DeliveryController(object):
         return delivery_dto
 
     @staticmethod
-    def load_deliveries(user_id=None, history=False, from_id=0, limit=100):
-        # type: (Optional[int], bool, int, int) -> List[DeliveryDTO]
+    def load_deliveries(user_id=None, history=False, before_id=None, limit=100):
+        # type: (Optional[int], bool, Optional[int], int) -> List[DeliveryDTO]
         deliveries = []
         query = Delivery.select()
         # filter on user id when needed
@@ -78,7 +78,8 @@ class DeliveryController(object):
         query = query.where(Delivery.timestamp_pickup.is_null(not history))
 
         # add the from_id
-        query = query.where(Delivery.id > from_id)
+        if before_id is not None:
+            query = query.where(Delivery.id < before_id)
 
         # Add the limit
         query = query.limit(limit)
