@@ -342,7 +342,7 @@ class APIEndpointRegister(object):
 @Singleton
 class WebServiceV1(object):
     def __init__(self, web_service=INJECTED, api_endpoint_register=INJECTED):
-        # type: (Optional[WebService], APIEndpointRegister) -> None
+        # type: (WebService, APIEndpointRegister) -> None
         logger.debug('Creating V1 webservice')
         self.web_service = web_service
         self.endpoints = api_endpoint_register
@@ -388,3 +388,4 @@ class WebServiceV1(object):
 
     def __repr__(self):
         return self.__str__()
+

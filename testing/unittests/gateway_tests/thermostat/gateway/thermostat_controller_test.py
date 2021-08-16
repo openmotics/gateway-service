@@ -17,7 +17,7 @@ from __future__ import absolute_import
 import logging
 import unittest
 
-import mock
+from mock import Mock
 from peewee import SqliteDatabase
 
 import fakesleep
@@ -27,6 +27,7 @@ from gateway.models import DaySchedule, Output, OutputToThermostatGroup, \
     Preset, Pump, PumpToValve, Sensor, Thermostat, ThermostatGroup, Valve, \
     ValveToThermostat
 from gateway.output_controller import OutputController
+from gateway.pubsub import PubSub
 from gateway.sensor_controller import SensorController
 from gateway.system_controller import SystemController
 from gateway.thermostat.gateway.thermostat_controller_gateway import \
@@ -57,16 +58,14 @@ class ThermostatControllerTest(unittest.TestCase):
         self.test_db.bind(MODELS)
         self.test_db.connect()
         self.test_db.create_tables(MODELS)
-        system_controller = mock.Mock(SystemController)
-        system_controller.get_timezone.return_value = 'Europe/Brussels'
-        output_controller = mock.Mock(OutputController)
+        output_controller = Mock(OutputController)
         output_controller.get_output_status.return_value = OutputStatusDTO(id=0, status=False)
-        sensor_controller = mock.Mock(SensorController)
+        sensor_controller = Mock(SensorController)
         sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(id=x, value=10.0)
-        SetUpTestInjections(output_controller=output_controller,
-                            system_controller=system_controller,
+        SetUpTestInjections(pubsub=Mock(PubSub),
+                            output_controller=output_controller,
                             sensor_controller=sensor_controller,
-                            pubsub=mock.Mock())
+                            system_controller=SystemController())
         self._thermostat_controller = ThermostatControllerGateway()
         SetUpTestInjections(thermostat_controller=self._thermostat_controller)
         sensor = Sensor.create(source='master', external_id='1', physical_quantity='temperature', name='')

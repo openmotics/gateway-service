@@ -69,7 +69,6 @@ class ThermostatControllerMaster(ThermostatController):
         self._thermostats_config = {}  # type: Dict[int, ThermostatDTO]
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MODULE, self._handle_master_event)
 
     def start(self):
         # type: () -> None
@@ -81,8 +80,7 @@ class ThermostatControllerMaster(ThermostatController):
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
-        if master_event.type in [MasterEvent.Types.EEPROM_CHANGE,
-                                 MasterEvent.Types.MODULE_DISCOVERY]:
+        if master_event.type in [MasterEvent.Types.EEPROM_CHANGE]:
             self.invalidate_cache(THERMOSTATS)
             gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'thermostats'})
             self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
@@ -196,7 +194,8 @@ class ThermostatControllerMaster(ThermostatController):
 
     def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         for thermostat_dto in thermostats:
-            thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
+            if 'sensor' in thermostat_dto.loaded_fields:
+                thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
             # Make sure that times/temperature are always set to a valid value
             ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
                                                          mode='heating')
@@ -226,7 +225,8 @@ class ThermostatControllerMaster(ThermostatController):
 
     def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         for thermostat_dto in thermostats:
-            thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
+            if 'sensor' in thermostat_dto.loaded_fields:
+                thermostat_dto.sensor = self._sensor_to_master(thermostat_dto.sensor)
             # Make sure that times/temperature are always set to a valid value
             ThermostatControllerMaster._patch_thermostat(ref_thermostat=thermostat_dto,
                                                          mode='cooling')

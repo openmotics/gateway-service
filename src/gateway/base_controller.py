@@ -60,12 +60,10 @@ class BaseController(object):
         self._sync_running = False
 
         self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.MODULE, self._handle_master_event)
 
     def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
-        if master_event.type in [MasterEvent.Types.EEPROM_CHANGE,
-                                 MasterEvent.Types.MODULE_DISCOVERY]:
+        if master_event.type in [MasterEvent.Types.EEPROM_CHANGE]:
             self._sync_dirty = True
             self.request_sync_orm()
 

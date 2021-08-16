@@ -19,6 +19,7 @@ Module serializer
 from __future__ import absolute_import
 from gateway.api.serializers.base import SerializerToolbox
 from gateway.dto import ModuleDTO
+from gateway.enums import ModuleType, HardwareType
 
 if False:  # MYPY
     from typing import Dict, Optional, List, Tuple, Any
@@ -31,29 +32,29 @@ class ModuleSerializer(object):
     def serialize(module_dto, fields):  # type: (ModuleDTO, Optional[List[str]]) -> Dict
         data = {'address': module_dto.address}  # type: Dict[str, Any]
         if module_dto.source == ModuleDTO.Source.MASTER:
-            category_map = {ModuleDTO.ModuleType.CAN_CONTROL: 'INPUT',
-                            ModuleDTO.ModuleType.SENSOR: 'INPUT',
-                            ModuleDTO.ModuleType.INPUT: 'INPUT',
-                            ModuleDTO.ModuleType.SHUTTER: 'SHUTTER',
-                            ModuleDTO.ModuleType.OUTPUT: 'OUTPUT',
-                            ModuleDTO.ModuleType.DIM_CONTROL: 'OUTPUT',
-                            ModuleDTO.ModuleType.OPEN_COLLECTOR: 'OUTPUT',
+            category_map = {ModuleType.CAN_CONTROL: 'INPUT',
+                            ModuleType.SENSOR: 'INPUT',
+                            ModuleType.INPUT: 'INPUT',
+                            ModuleType.SHUTTER: 'SHUTTER',
+                            ModuleType.OUTPUT: 'OUTPUT',
+                            ModuleType.DIM_CONTROL: 'OUTPUT',
+                            ModuleType.OPEN_COLLECTOR: 'OUTPUT',
                             None: 'UNKNOWN'}
             type_int = int(module_dto.address.split('.')[0])
             data.update({'type': chr(type_int) if 32 <= type_int <= 126 else None,
                          'hardware_type': module_dto.hardware_type,
                          'module_nr': module_dto.order,
-                         'is_can': (module_dto.hardware_type == ModuleDTO.HardwareType.EMULATED or
-                                    module_dto.module_type == ModuleDTO.ModuleType.CAN_CONTROL),
-                         'is_virtual': module_dto.hardware_type == ModuleDTO.HardwareType.VIRTUAL,
+                         'is_can': (module_dto.hardware_type == HardwareType.EMULATED or
+                                    module_dto.module_type == ModuleType.CAN_CONTROL),
+                         'is_virtual': module_dto.hardware_type == HardwareType.VIRTUAL,
                          'category': category_map.get(module_dto.module_type, 'UNKNOWN')})
-            if module_dto.hardware_type == ModuleDTO.HardwareType.PHYSICAL:
+            if module_dto.hardware_type == HardwareType.PHYSICAL:
                 data.update({'firmware': module_dto.firmware_version,
                              'hardware': module_dto.hardware_version})
         else:
-            module_type_map = {ModuleDTO.ModuleType.ENERGY: 'E',
-                               ModuleDTO.ModuleType.POWER: 'P',
-                               ModuleDTO.ModuleType.P1_CONCENTRATOR: 'C',
+            module_type_map = {ModuleType.ENERGY: 'E',
+                               ModuleType.POWER: 'P',
+                               ModuleType.P1_CONCENTRATOR: 'C',
                                None: 'U'}
             data.update({'type': module_type_map.get(module_dto.module_type, 'U'),
                          'firmware': module_dto.firmware_version,

@@ -22,13 +22,12 @@ import time
 from threading import Thread, Timer
 
 from gateway.daemon_thread import BaseThread
-from gateway.hal.master_event import MasterEvent
 from master.maintenance_communicator import MaintenanceCommunicator
-from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 
 if False:  # MYPY
     from typing import Callable, Optional
+    from master.classic.eeprom_controller import EepromController
     from master.classic.master_communicator import MasterCommunicator
 
 logger = logging.getLogger(__name__)
@@ -42,16 +41,10 @@ class MaintenanceClassicCommunicator(MaintenanceCommunicator):
     MAINTENANCE_TIMEOUT = 600
 
     @Inject
-    def __init__(self, master_communicator=INJECTED, pubsub=INJECTED):
-        # type: (MasterCommunicator, PubSub) -> None
-        """
-        Construct a MaintenanceCommunicator.
-
-        :param master_communicator: the communication with the master.
-        :type master_communicator: master.master_communicator.MasterCommunicator
-        """
+    def __init__(self, master_communicator=INJECTED, eeprom_controller=INJECTED):
+        # type: (MasterCommunicator, EepromController) -> None
         self._master_communicator = master_communicator
-        self._pubsub = pubsub
+        self._eeprom_controller = eeprom_controller
         self._deactivated_sent = False
         self._last_maintenance_send_time = 0.0
         self._stopped = False
@@ -105,8 +98,7 @@ class MaintenanceClassicCommunicator(MaintenanceCommunicator):
             self._maintenance_timeout_timer = None
 
         if self._deactivated_sent is False:
-            master_event = MasterEvent(MasterEvent.Types.MAINTENANCE_EXIT, {})
-            self._pubsub.publish_master_event(PubSub.MasterTopics.MAINTENANCE, master_event)
+            self._eeprom_controller.invalidate_cache()
             self._deactivated_sent = True
 
     def _check_maintenance_timeout(self):

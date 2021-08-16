@@ -26,6 +26,7 @@ from gateway.dto import DimmerConfigurationDTO, LegacyScheduleDTO, \
     SensorDTO, SensorSourceDTO, SensorStatusDTO, UserDTO, VentilationDTO, \
     VentilationSourceDTO, VentilationStatusDTO, EnergyModuleDTO
 from gateway.energy_module_controller import EnergyModuleController
+from gateway.enums import HardwareType, ModuleType
 from gateway.group_action_controller import GroupActionController
 from gateway.hal.frontpanel_controller import FrontpanelController
 from gateway.input_controller import InputController
@@ -108,7 +109,7 @@ class WebInterfaceTest(unittest.TestCase):
     def test_create_user(self):
         to_save_user = UserDTO(
             username='test',
-            role='ADMIN',
+            role='SUPER',
             pin_code=None
         )
         to_save_user.set_password('test')
@@ -324,17 +325,17 @@ class WebInterfaceTest(unittest.TestCase):
 
     def test_get_modules_information(self):
         master_modules = [ModuleDTO(source=ModuleDTO.Source.MASTER,
-                                    module_type=ModuleDTO.ModuleType.OUTPUT,
+                                    module_type=ModuleType.OUTPUT,
                                     address='079.000.000.001',
-                                    hardware_type=ModuleDTO.HardwareType.INTERNAL,
+                                    hardware_type=HardwareType.INTERNAL,
                                     firmware_version='3.1.0',
                                     hardware_version='4',
                                     order=0,
                                     online=True)]
         energy_modules = [ModuleDTO(source=ModuleDTO.Source.GATEWAY,
-                                    module_type=ModuleDTO.ModuleType.ENERGY,
+                                    module_type=ModuleType.ENERGY,
                                     address='2',
-                                    hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                                    hardware_type=HardwareType.PHYSICAL,
                                     firmware_version='1.2.3',
                                     order=0)]
         with mock.patch.object(self.module_controller, 'load_master_modules', return_value=master_modules) as load_master_modules, \

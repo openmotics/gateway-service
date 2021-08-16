@@ -21,7 +21,7 @@ import logging
 import struct
 import time
 from datetime import datetime
-from threading import Timer, Event as ThreadingEvent
+from threading import Timer, Event as ThreadingEvent, Lock
 
 from peewee import DoesNotExist
 from gateway.daemon_thread import DaemonThread, DaemonThreadWait
@@ -29,7 +29,7 @@ from gateway.dto import DimmerConfigurationDTO, GlobalFeedbackDTO, \
     GroupActionDTO, InputDTO, InputStatusDTO, LegacyScheduleDTO, LegacyStartupActionDTO, \
     MasterSensorDTO, ModuleDTO, OutputDTO, OutputStatusDTO, PulseCounterDTO, \
     ShutterDTO, ShutterGroupDTO
-from gateway.enums import IndicateType, ShutterEnums, Leds, LedStates
+from gateway.enums import IndicateType, ShutterEnums, Leds, LedStates, HardwareType, ModuleType
 from gateway.exceptions import UnsupportedException
 from gateway.hal.mappers_core import GroupActionMapper, InputMapper, \
     OutputMapper, SensorMapper, ShutterMapper
@@ -94,6 +94,8 @@ class MasterCoreController(MasterController):
         self._output_shutter_map = {}  # type: Dict[int, int]
         self._firmware_versions = {}  # type: Dict[str, Optional[str]]
         self._led_drive_states = {}  # type: Dict[str, Tuple[bool, str]]
+        self._discovery_log = []  # type: List[Dict[str, Any]]
+        self._discovery_log_lock = Lock()
 
         self._master_restarting = ThreadingEvent()
         self._master_restarting.set()
@@ -102,7 +104,7 @@ class MasterCoreController(MasterController):
         self._master_updating.set()
         self._master_updating_timer = None  # type: Optional[Timer]
 
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_eeprom_event)
+        self._pubsub.subscribe_master_events(PubSub.MasterTopics.EEPROM, self._handle_master_event)
 
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.event_information(), 0, self._handle_event)
@@ -120,14 +122,14 @@ class MasterCoreController(MasterController):
             BackgroundConsumer(CoreAPI.ucan_module_information(), 0, lambda i: logger.info('Got ucan module information: {0}'.format(i)))
         )
         self._master_communicator.register_consumer(
-            BackgroundConsumer(CoreAPI.module_added(), 0, lambda i: logger.info('New module added: {0}'.format(i)))
+            BackgroundConsumer(CoreAPI.module_added(), 0, self._handle_new_module)
         )
 
     #################
     # Private stuff #
     #################
 
-    def _handle_eeprom_event(self, master_event):
+    def _handle_master_event(self, master_event):
         # type: (MasterEvent) -> None
         if master_event.type == MasterEvent.Types.EEPROM_CHANGE:
             self._output_shutter_map = {}
@@ -136,9 +138,24 @@ class MasterCoreController(MasterController):
             self._input_last_updated = 0.0
             self._output_last_updated = 0.0
 
+    def _handle_new_module(self, data):
+        # type: (Dict[str, Any]) -> None
+        # This repackages an API `event` to a more uniform handled `MasterCoreEvent`
+        core_event = MasterCoreEvent.build(event_type=MasterCoreEvent.Types.MODULE_DISCOVERY,
+                                           event_data={'discovery_type': MasterCoreEvent.DiscoveryTypes.NEW,
+                                                       'module_type': {0: ModuleType.OUTPUT,
+                                                                       1: ModuleType.INPUT,
+                                                                       2: ModuleType.SENSOR,
+                                                                       3: ModuleType.CAN_CONTROL}.get(data['module_type'], ModuleType.UNKNOWN),
+                                                       'address': data['address'],
+                                                       'module_number': data['line_number']})
+        self._process_event(core_event)
+
     def _handle_event(self, data):
         # type: (Dict[str, Any]) -> None
-        core_event = MasterCoreEvent(data)
+        self._process_event(MasterCoreEvent(data))
+
+    def _process_event(self, core_event):
         if core_event.type not in [MasterCoreEvent.Types.LED_BLINK,
                                    MasterCoreEvent.Types.LED_ON,
                                    MasterCoreEvent.Types.BUTTON_PRESS]:
@@ -179,9 +196,24 @@ class MasterCoreController(MasterController):
             if core_event.data.get('type') == MasterCoreEvent.ResetTypes.HEALTH_CHECK:
                 self._master_restarting_change(restarting=True)
 
-        elif core_event.type == MasterCoreEvent.Types.SYSTEM:
-            if core_event.data.get('type') == MasterCoreEvent.SystemEventTypes.EEPROM_ACTIVATE:
+        elif core_event.type == MasterCoreEvent.Types.SLAVE_SEARCH:
+            if core_event.data.get('type') in [MasterCoreEvent.SearchType.DISABLED,
+                                               MasterCoreEvent.SearchType.STOPPED]:
+                # When the master is completely started up one or more SLAVE_SEARCH events will be received.
+                # These will be either:
+                # * DISABLED when auto discovery is inactive;
+                # * ACTIVE when auto discovery is started and STOPPED when it's finished.
+                # This means that DISABLED or STOPPED indicate that the master startup is finished.
                 self._master_restarting_change(restarting=False)
+        elif core_event.type == MasterCoreEvent.Types.MODULE_DISCOVERY:
+            # TODO: Add partial EEPROM invalidation to speed things up
+            address_letter = chr(int(core_event.data['address'].split('.')[0]))
+            entry = {'code': core_event.data['discovery_type'],
+                     'module_nr': 0, 'category': '',  # Legacy, not used anymore
+                     'module_type': address_letter,
+                     'address': core_event.data['address']}
+            with self._discovery_log_lock:
+                self._discovery_log.append(entry)
 
     def _handle_execute_event(self, action, device_nr, extra_parameter):  # type: (int, int, int) -> None
         if action == 0:
@@ -907,6 +939,9 @@ class MasterCoreController(MasterController):
     def module_discover_start(self, timeout):  # type: (int) -> None
         def _stop(): self.module_discover_stop()
 
+        with self._discovery_log_lock:
+            self._discovery_log = []
+
         self._do_basic_action(BasicAction(action_type=200,
                                           action=0,
                                           extra_parameter=0))
@@ -931,59 +966,13 @@ class MasterCoreController(MasterController):
 
     def _broadcast_module_discovery(self):
         # type: () -> None
-        master_event = MasterEvent(event_type=MasterEvent.Types.MODULE_DISCOVERY, data={})
-        self._pubsub.publish_master_event(PubSub.MasterTopics.MODULE, master_event)
+        self._memory_file.invalidate_cache(reason='manual discovery')
 
     def get_module_log(self):  # type: () -> List[Dict[str, Any]]
-        # TODO: This is incorrect and uses passthrough EEPROM reads to emulate a more-or-less compatible
-        #  response which should work for the integration tests. It must be replaced by decent events.
-
-        # Log format: {'code': '<NEW|EXISTING|DUPLCATE|UNKNOWN>',
-        #              'module_nr': <module number in its category>,
-        #              'category': '<SHUTTER|INPUT|OUTPUT>',
-        #              'module_type': '<I|O|T|D|i|o|t|d|C>,
-        #              'address': '<module address>'}
-
-        def _default_if_255(value, default):
-            return value if value != 255 else default
-
-        log = []
-        device_type_normalize = {'b': 'I', 'r': 'o', 'R': 'O'}
-
-        global_configuration = GlobalConfiguration(read_through=True)
-        nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
-        for module_id in range(nr_of_input_modules):
-            input_module_info = InputModuleConfiguration(module_id, read_through=True)
-            device_type = input_module_info.device_type
-            module = {'code': 'EXISTING',
-                      'module_nr': module_id,
-                      'category': 'INPUT',
-                      'module_type': device_type_normalize.get(device_type, device_type),
-                      'address': input_module_info.address}
-            log.append(module)
-
-        nr_of_output_modules = _default_if_255(global_configuration.number_of_output_modules, 0)
-        for module_id in range(nr_of_output_modules):
-            output_module_info = OutputModuleConfiguration(module_id, read_through=True)
-            device_type = output_module_info.device_type
-            module = {'code': 'EXISTING',
-                      'module_nr': module_id,
-                      'category': 'OUTPUT',
-                      'module_type': device_type_normalize.get(device_type, device_type),
-                      'address': output_module_info.address}
-            log.append(module)
-
-        nr_of_can_controls = _default_if_255(global_configuration.number_of_can_control_modules, 0)
-        for module_id in range(nr_of_can_controls):
-            can_control_module_info = CanControlModuleConfiguration(module_id, read_through=True)
-            module = {'code': 'EXISTING',
-                      'module_nr': nr_of_input_modules + module_id,
-                      'category': 'INPUT',
-                      'module_type': 'C',
-                      'address': can_control_module_info.address}
-            log.append(module)
-
-        return log
+        with self._discovery_log_lock:
+            log = self._discovery_log
+            self._discovery_log = []
+            return log
 
     def get_modules(self):
         def _default_if_255(value, default):
@@ -1060,35 +1049,35 @@ class MasterCoreController(MasterController):
             return True, None, version_info
 
         information = []
-        module_type_lookup = {'c': ModuleDTO.ModuleType.CAN_CONTROL,
-                              't': ModuleDTO.ModuleType.SENSOR,
-                              's': ModuleDTO.ModuleType.SENSOR,  # uCAN sensor
-                              'i': ModuleDTO.ModuleType.INPUT,
-                              'b': ModuleDTO.ModuleType.INPUT,  # uCAN input
-                              'o': ModuleDTO.ModuleType.OUTPUT,
-                              'l': ModuleDTO.ModuleType.OPEN_COLLECTOR,
-                              'r': ModuleDTO.ModuleType.SHUTTER,
-                              'd': ModuleDTO.ModuleType.DIM_CONTROL}
+        module_type_lookup = {'c': ModuleType.CAN_CONTROL,
+                              't': ModuleType.SENSOR,
+                              's': ModuleType.SENSOR,  # uCAN sensor
+                              'i': ModuleType.INPUT,
+                              'b': ModuleType.INPUT,  # uCAN input
+                              'o': ModuleType.OUTPUT,
+                              'l': ModuleType.OPEN_COLLECTOR,
+                              'r': ModuleType.SHUTTER,
+                              'd': ModuleType.DIM_CONTROL}
 
         global_configuration = GlobalConfiguration()
         nr_of_input_modules = _default_if_255(global_configuration.number_of_input_modules, 0)
         for module_id in range(nr_of_input_modules):
             input_module_info = InputModuleConfiguration(module_id)
             device_type = input_module_info.device_type
-            hardware_type = ModuleDTO.HardwareType.PHYSICAL
+            hardware_type = HardwareType.PHYSICAL
             if device_type == 'i':
                 if '.000.000.' in input_module_info.address:
-                    hardware_type = ModuleDTO.HardwareType.INTERNAL
+                    hardware_type = HardwareType.INTERNAL
                 else:
-                    hardware_type = ModuleDTO.HardwareType.VIRTUAL
+                    hardware_type = HardwareType.VIRTUAL
             elif device_type == 'b':
-                hardware_type = ModuleDTO.HardwareType.EMULATED
+                hardware_type = HardwareType.EMULATED
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=input_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
-            if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
+            if hardware_type == HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(input_module_info.address)
             information.append(dto)
 
@@ -1096,12 +1085,12 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_output_modules):
             output_module_info = OutputModuleConfiguration(module_id)
             device_type = output_module_info.device_type
-            hardware_type = ModuleDTO.HardwareType.PHYSICAL
+            hardware_type = HardwareType.PHYSICAL
             if device_type in ['l', 'o', 'd']:
                 if '.000.000.' in output_module_info.address:
-                    hardware_type = ModuleDTO.HardwareType.INTERNAL
+                    hardware_type = HardwareType.INTERNAL
                 else:
-                    hardware_type = ModuleDTO.HardwareType.VIRTUAL
+                    hardware_type = HardwareType.VIRTUAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=output_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
@@ -1109,10 +1098,10 @@ class MasterCoreController(MasterController):
                             order=module_id)
             shutter_dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                                     address='114.{0}'.format(output_module_info.address[4:]),
-                                    module_type=ModuleDTO.ModuleType.SHUTTER,
+                                    module_type=ModuleType.SHUTTER,
                                     hardware_type=hardware_type,
                                     order=module_id)
-            if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
+            if hardware_type == HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(output_module_info.address)
                 shutter_dto.online = dto.online
                 shutter_dto.hardware_version = dto.hardware_version
@@ -1124,18 +1113,18 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_sensor_modules):
             sensor_module_info = SensorModuleConfiguration(module_id)
             device_type = sensor_module_info.device_type
-            hardware_type = ModuleDTO.HardwareType.PHYSICAL
+            hardware_type = HardwareType.PHYSICAL
             if device_type == 't':
                 if '.000.000.' in sensor_module_info.address:
-                    hardware_type = ModuleDTO.HardwareType.INTERNAL
+                    hardware_type = HardwareType.INTERNAL
                 else:
-                    hardware_type = ModuleDTO.HardwareType.VIRTUAL
+                    hardware_type = HardwareType.VIRTUAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=sensor_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
-            if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
+            if hardware_type == HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(sensor_module_info.address)
             information.append(dto)
 
@@ -1143,15 +1132,15 @@ class MasterCoreController(MasterController):
         for module_id in range(nr_of_can_controls):
             can_control_module_info = CanControlModuleConfiguration(module_id)
             device_type = can_control_module_info.device_type
-            hardware_type = ModuleDTO.HardwareType.PHYSICAL
+            hardware_type = HardwareType.PHYSICAL
             if module_id == 0:
-                hardware_type = ModuleDTO.HardwareType.INTERNAL
+                hardware_type = HardwareType.INTERNAL
             dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
                             address=can_control_module_info.address,
                             module_type=module_type_lookup.get(device_type.lower()),
                             hardware_type=hardware_type,
                             order=module_id)
-            if hardware_type == ModuleDTO.HardwareType.PHYSICAL:
+            if hardware_type == HardwareType.PHYSICAL:
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(can_control_module_info.address)
             information.append(dto)
 
