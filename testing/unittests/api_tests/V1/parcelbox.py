@@ -139,6 +139,14 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
                 get_deliveries_func.assert_has_calls(delivery_calls, any_order=False)
                 get_deliveries_func.reset_mock()
 
+                # Fail when requested with non super credentials and requesting delivery data
+                status, headers, response = self.GET('/api/v1/parcelboxes?size=m&available=true&show_deliveries=true', login_user=self.test_user_1, headers=None)
+                self.assertStatus('401 Unauthorized')
+                get_parcelbox_func.assert_called_once_with(size='m', available=True)
+                get_parcelbox_func.reset_mock()
+                get_deliveries_func.assert_not_called()
+                get_deliveries_func.reset_mock()
+
 
         with mock.patch.object(self.esafe_controller, 'get_parcelboxes', return_value=[self.test_parcelbox_1]) as get_parcelbox_func:
             # Request one specific parcelbox

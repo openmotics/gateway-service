@@ -113,7 +113,7 @@ class EsafeController(object):
     # ParcelBox Functions
 
     def get_parcelboxes(self, rebus_id=None, size=None, available=False):
-        # type: (Optional[int], Optional[str], bool) -> List[ParcelBoxDTO]
+        # type: (Optional[int], Optional[str], Optional[bool]) -> List[ParcelBoxDTO]
         logger.debug('Getting parcelboxes, size: {}, rebus_id: {}'.format(size, rebus_id))
         if not self.done_discovering:
             return []
