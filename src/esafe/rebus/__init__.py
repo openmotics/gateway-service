@@ -13,9 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-RFID init file
+eSafe rebus init file
 """
 
-from esafe.rfid.idtronic_M890.idtronic_M890 import IdTronicM890
-from esafe.rfid.rfid_exception import RfidException
-from esafe.rfid.rfid_device import RfidDevice
+from esafe.rebus.rebus_controller import EsafeController

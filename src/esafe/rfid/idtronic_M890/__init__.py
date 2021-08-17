@@ -15,3 +15,5 @@
 """
 idtronic M890 init file
 """
+from esafe.rfid.idtronic_M890 import para
+from esafe.rfid.idtronic_M890.idtronic_M890 import IdTronicM890
