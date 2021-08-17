@@ -18,6 +18,7 @@ eSafe controller will communicate over rebus with the esafe hardware
 import json
 from collections import defaultdict
 
+from esafe.rebus.abstract_rebus_controller import RebusControllerInterface
 from gateway.apartment_controller import ApartmentController
 from gateway.daemon_thread import DaemonThread
 from gateway.delivery_controller import DeliveryController
@@ -40,7 +41,7 @@ class RebusException(Exception):
     pass
 
 
-class DummyRebusController(object):
+class DummyRebusController(RebusControllerInterface):
     @Inject
     def __init__(self, pubsub=INJECTED, apartment_controller=INJECTED, delivery_controller=INJECTED):
         # type: (PubSub, ApartmentController, DeliveryController) -> None

@@ -18,6 +18,7 @@ eSafe controller will communicate over rebus with the esafe hardware
 
 from collections import defaultdict
 
+from esafe.rebus.abstract_rebus_controller import RebusControllerInterface
 from gateway.apartment_controller import ApartmentController
 from gateway.daemon_thread import DaemonThread
 from gateway.delivery_controller import DeliveryController
@@ -44,7 +45,7 @@ if False:  # MYPY
     from typing import Dict, List, Optional
 
 
-class RebusController(object):
+class RebusController(RebusControllerInterface):
     @Inject
     def __init__(self, rebus_device=INJECTED, pubsub=INJECTED, apartment_controller=INJECTED, delivery_controller=INJECTED):
         # type: (str, PubSub, ApartmentController, DeliveryController) -> None
