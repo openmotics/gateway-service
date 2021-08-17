@@ -25,7 +25,7 @@ from mock import call
 
 from gateway.dto import UserDTO, ParcelBoxDTO, ApartmentDTO, DeliveryDTO
 from gateway.delivery_controller import DeliveryController
-from esafe.rebus.rebus_controller import EsafeController
+from esafe.rebus.rebus_controller import RebusController
 from gateway.exceptions import WrongInputParametersException
 from gateway.api.serializers import ParcelBoxSerializer
 from gateway.api.V1.parcelbox import ParcelBox
@@ -39,8 +39,8 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
     def setUp(self):
         self.delivery_controller = mock.Mock(DeliveryController)
         SetUpTestInjections(delivery_controller=self.delivery_controller)
-        self.esafe_controller = mock.Mock(EsafeController)
-        SetUpTestInjections(esafe_controller=self.esafe_controller)
+        self.rebus_controller = mock.Mock(RebusController)
+        SetUpTestInjections(rebus_controller=self.rebus_controller)
         super(ParcelboxApiCherryPyTest, self).setUp()
         self.web = ParcelBox()
         cherrypy.tree.mount(root=self.web,
@@ -93,7 +93,7 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
         )
 
     def test_get_parcelboxes(self):
-        with mock.patch.object(self.esafe_controller, 'get_parcelboxes', return_value=self.all_parcelboxes) as get_parcelbox_func:
+        with mock.patch.object(self.rebus_controller, 'get_parcelboxes', return_value=self.all_parcelboxes) as get_parcelbox_func:
             # Auth: normal user
             status, headers, response = self.GET('/api/v1/parcelboxes', login_user=self.test_user_1, headers=None)
             self.assertStatus('200 OK')
@@ -148,7 +148,7 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
                 get_deliveries_func.reset_mock()
 
 
-        with mock.patch.object(self.esafe_controller, 'get_parcelboxes', return_value=[self.test_parcelbox_1]) as get_parcelbox_func:
+        with mock.patch.object(self.rebus_controller, 'get_parcelboxes', return_value=[self.test_parcelbox_1]) as get_parcelbox_func:
             # Request one specific parcelbox
             status, headers, response = self.GET('/api/v1/parcelboxes/32', login_user=None, headers=None)
             self.assertStatus('200 OK')
@@ -156,7 +156,7 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
             get_parcelbox_func.assert_called_once_with(rebus_id=32)
             get_parcelbox_func.reset_mock()
 
-        with mock.patch.object(self.esafe_controller, 'get_parcelboxes', return_value=[]) as get_parcelbox_func:
+        with mock.patch.object(self.rebus_controller, 'get_parcelboxes', return_value=[]) as get_parcelbox_func:
             # non existing parcelbox
             status, headers, response = self.GET('/api/v1/parcelboxes/33', login_user=None, headers=None)
             self.assertStatus('404 Not Found')
@@ -170,8 +170,8 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
             get_parcelbox_func.reset_mock()
 
     def test_put_parcelboxes(self):
-        with mock.patch.object(self.esafe_controller, 'get_parcelboxes', return_value=[self.test_parcelbox_1]) as get_parcelbox_func, \
-                mock.patch.object(self.esafe_controller, 'open_box', return_value=self.test_parcelbox_1) as open_box_func, \
+        with mock.patch.object(self.rebus_controller, 'get_parcelboxes', return_value=[self.test_parcelbox_1]) as get_parcelbox_func, \
+                mock.patch.object(self.rebus_controller, 'open_box', return_value=self.test_parcelbox_1) as open_box_func, \
                 mock.patch.object(self.delivery_controller, 'load_deliveries_filter', return_value=[self.test_delivery]) as load_delivery_func:
             # Auth: normal user
             json_body = {'open': True}

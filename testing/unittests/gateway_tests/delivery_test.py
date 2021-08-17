@@ -24,7 +24,7 @@ from peewee import SqliteDatabase
 
 from gateway.authentication_controller import AuthenticationController, TokenStore
 from gateway.dto import DeliveryDTO, UserDTO, SystemRFIDConfigDTO
-from esafe.rebus.rebus_controller import EsafeController
+from esafe.rebus.rebus_controller import RebusController
 from gateway.mappers import UserMapper, DeliveryMapper
 from gateway.models import Delivery, User, Apartment
 from gateway.delivery_controller import DeliveryController
@@ -68,9 +68,9 @@ class DeliveryControllerTest(unittest.TestCase):
         SetUpTestInjections(config={'username': 'test', 'password': 'test'})
         self.user_controller = UserController()
         SetUpTestInjections(user_controller=self.user_controller)
-        self.esafe_controller = mock.Mock(EsafeController)
+        self.rebus_controller = mock.Mock(RebusController)
         self.controller = DeliveryController()
-        self.controller.set_esafe_controller(self.esafe_controller)
+        self.controller.set_rebus_controller(self.rebus_controller)
         SetUpTestInjections(delivery_controller=self.controller)
 
         self.test_user_1 = UserDTO(
@@ -180,7 +180,7 @@ class DeliveryControllerTest(unittest.TestCase):
         self.assert_deliveries_equal(self.test_delivery_1, result)
         self.assert_delivery_in_db(result.id, self.test_delivery_1)
 
-        with mock.patch.object(self.esafe_controller, 'verify_device_exists', return_value=False):
+        with mock.patch.object(self.rebus_controller, 'verify_device_exists', return_value=False):
             with self.assertRaises(ValueError):
                 result = self.controller.save_delivery(self.test_delivery_1)
 

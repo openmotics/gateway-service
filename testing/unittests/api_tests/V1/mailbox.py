@@ -24,7 +24,7 @@ import mock
 
 from gateway.dto import UserDTO, MailBoxDTO, ApartmentDTO
 from gateway.delivery_controller import DeliveryController
-from esafe.rebus.rebus_controller import EsafeController
+from esafe.rebus.rebus_controller import RebusController
 from gateway.api.serializers import MailboxSerializer
 from gateway.api.V1.mailbox import MailBox
 
@@ -37,8 +37,8 @@ class MailboxApiCherryPyTest(BaseCherryPyUnitTester):
     def setUp(self):
         self.delivery_controller = mock.Mock(DeliveryController)
         SetUpTestInjections(delivery_controller=self.delivery_controller)
-        self.esafe_controller = mock.Mock(EsafeController)
-        SetUpTestInjections(esafe_controller=self.esafe_controller)
+        self.rebus_controller = mock.Mock(RebusController)
+        SetUpTestInjections(rebus_controller=self.rebus_controller)
         super(MailboxApiCherryPyTest, self).setUp()
         self.web = MailBox()
         cherrypy.tree.mount(root=self.web,
@@ -80,7 +80,7 @@ class MailboxApiCherryPyTest(BaseCherryPyUnitTester):
         self.all_mailboxes = [self.test_mailbox_1, self.test_mailbox_2, self.test_mailbox_3]
 
     def test_get_mailboxes(self):
-        with mock.patch.object(self.esafe_controller, 'get_mailboxes', return_value=self.all_mailboxes) as get_mailbox_func:
+        with mock.patch.object(self.rebus_controller, 'get_mailboxes', return_value=self.all_mailboxes) as get_mailbox_func:
             # Auth: normal user
             status, headers, response = self.GET('/api/v1/mailboxes', login_user=self.test_user_1, headers=None)
             self.assertStatus('200 OK')
@@ -95,7 +95,7 @@ class MailboxApiCherryPyTest(BaseCherryPyUnitTester):
             get_mailbox_func.assert_called_once_with()
             get_mailbox_func.reset_mock()
 
-        with mock.patch.object(self.esafe_controller, 'get_mailboxes', return_value=[self.test_mailbox_1]) as get_mailbox_func:
+        with mock.patch.object(self.rebus_controller, 'get_mailboxes', return_value=[self.test_mailbox_1]) as get_mailbox_func:
             # Request one specific mailbox
             status, headers, response = self.GET('/api/v1/mailboxes/32', login_user=None, headers=None)
             self.assertStatus('200 OK')
@@ -103,7 +103,7 @@ class MailboxApiCherryPyTest(BaseCherryPyUnitTester):
             get_mailbox_func.assert_called_once_with(rebus_id=32)
             get_mailbox_func.reset_mock()
 
-        with mock.patch.object(self.esafe_controller, 'get_mailboxes', return_value=[]) as get_mailbox_func:
+        with mock.patch.object(self.rebus_controller, 'get_mailboxes', return_value=[]) as get_mailbox_func:
             # non existing mailbox
             status, headers, response = self.GET('/api/v1/mailboxes/33', login_user=None, headers=None)
             self.assertStatus('404 Not Found')
@@ -117,8 +117,8 @@ class MailboxApiCherryPyTest(BaseCherryPyUnitTester):
             get_mailbox_func.reset_mock()
 
     def test_put_mailboxes(self):
-        with mock.patch.object(self.esafe_controller, 'get_mailboxes', return_value=[self.test_mailbox_1]) as get_mailbox_func, \
-                mock.patch.object(self.esafe_controller, 'open_box', return_value=self.test_mailbox_1) as open_box_func, \
+        with mock.patch.object(self.rebus_controller, 'get_mailboxes', return_value=[self.test_mailbox_1]) as get_mailbox_func, \
+                mock.patch.object(self.rebus_controller, 'open_box', return_value=self.test_mailbox_1) as open_box_func, \
                 mock.patch.object(self.users_controller, 'load_user_by_apartment_id', return_value=self.test_user_1) as get_user_func:
             # Auth: normal user
             json_body = {'open': True}

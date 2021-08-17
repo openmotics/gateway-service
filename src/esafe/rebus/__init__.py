@@ -16,4 +16,4 @@
 eSafe rebus init file
 """
 
-from esafe.rebus.rebus_controller import EsafeController
+from esafe.rebus.rebus_controller import RebusController

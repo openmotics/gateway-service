@@ -44,7 +44,7 @@ if False:  # MYPY
     from typing import Dict, List, Optional
 
 
-class EsafeController(object):
+class RebusController(object):
     @Inject
     def __init__(self, rebus_device=INJECTED, pubsub=INJECTED, apartment_controller=INJECTED, delivery_controller=INJECTED):
         # type: (str, PubSub, ApartmentController, DeliveryController) -> None

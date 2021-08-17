@@ -23,7 +23,7 @@ import ujson as json
 from ioc import INJECTED, Inject
 
 from gateway.api.serializers import DoorbellSerializer
-from esafe.rebus.rebus_controller import EsafeController
+from esafe.rebus.rebus_controller import RebusController
 from gateway.exceptions import ItemDoesNotExistException, InvalidOperationException
 from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
 
@@ -35,10 +35,10 @@ class Doorbell(RestAPIEndpoint):
     API_ENDPOINT = '/api/v1/doorbells'
 
     @Inject
-    def __init__(self, esafe_controller=INJECTED):
-        # type: (EsafeController) -> None
+    def __init__(self, rebus_controller=INJECTED):
+        # type: (RebusController) -> None
         super(Doorbell, self).__init__()
-        self.esafe_controller = esafe_controller
+        self.rebus_controller = rebus_controller
         # Set a custom route dispatcher in the class so that you have full
         # control over how the routes are defined.
         self.route_dispatcher = cherrypy.dispatch.RoutesDispatcher()
@@ -55,18 +55,18 @@ class Doorbell(RestAPIEndpoint):
     def get_doorbells(self):
         # type: () -> str
         self._check_controller()
-        doorbells = self.esafe_controller.get_doorbells()
+        doorbells = self.rebus_controller.get_doorbells()
         doorbells_serial = [DoorbellSerializer.serialize(box) for box in doorbells]
         return json.dumps(doorbells_serial)
 
     @openmotics_api_v1(auth=False, expect_body_type=None, check={'rebus_id': int})
     def put_ring_doorbell(self, rebus_id):
         self._check_controller()
-        doorbells = self.esafe_controller.get_doorbells()
+        doorbells = self.rebus_controller.get_doorbells()
         if rebus_id not in [doorbell.id for doorbell in doorbells]:
             raise ItemDoesNotExistException('Cannot ring doorbell with id: {}. Doorbell does not exists'.format(rebus_id))
-        self.esafe_controller.ring_doorbell(rebus_id)
+        self.rebus_controller.ring_doorbell(rebus_id)
 
     def _check_controller(self):
-        if self.esafe_controller is None:
+        if self.rebus_controller is None:
             raise InvalidOperationException('Cannot check doorbells, eSafe controller is None')

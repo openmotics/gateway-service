@@ -23,7 +23,7 @@ import ujson as json
 from ioc import INJECTED, Inject
 
 from gateway.api.serializers import MailboxSerializer
-from esafe.rebus.rebus_controller import EsafeController
+from esafe.rebus.rebus_controller import RebusController
 from gateway.exceptions import UnAuthorizedException, ItemDoesNotExistException, InvalidOperationException
 from gateway.models import User
 from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
@@ -41,10 +41,10 @@ class MailBox(RestAPIEndpoint):
     API_ENDPOINT = '/api/v1/mailboxes'
 
     @Inject
-    def __init__(self, esafe_controller=INJECTED, delivery_controller=INJECTED):
-        # type: (EsafeController, DeliveryController) -> None
+    def __init__(self, rebus_controller=INJECTED, delivery_controller=INJECTED):
+        # type: (RebusController, DeliveryController) -> None
         super(MailBox, self).__init__()
-        self.esafe_controller = esafe_controller
+        self.rebus_controller = rebus_controller
         self.delivery_controller = delivery_controller
         # Set a custom route dispatcher in the class so that you have full
         # control over how the routes are defined.
@@ -65,7 +65,7 @@ class MailBox(RestAPIEndpoint):
     def get_mailboxes(self):
         # type: () -> str
         self._check_controller()
-        boxes = self.esafe_controller.get_mailboxes()
+        boxes = self.rebus_controller.get_mailboxes()
         boxes_serial = [MailboxSerializer.serialize(box) for box in boxes]
         return json.dumps(boxes_serial)
 
@@ -73,7 +73,7 @@ class MailBox(RestAPIEndpoint):
     def get_mailbox(self, rebus_id):
         # type: (int) -> str
         self._check_controller()
-        boxes = self.esafe_controller.get_mailboxes(rebus_id=rebus_id)
+        boxes = self.rebus_controller.get_mailboxes(rebus_id=rebus_id)
         if len(boxes) != 1:
             raise ItemDoesNotExistException('Cannot find mailbox with rebus id: {}'.format(rebus_id))
         box = boxes[0]
@@ -86,7 +86,7 @@ class MailBox(RestAPIEndpoint):
         self._check_controller()
         if 'open' not in request_body:
             raise ValueError('Expected json body with the open parameter')
-        boxes = self.esafe_controller.get_mailboxes(rebus_id=rebus_id)
+        boxes = self.rebus_controller.get_mailboxes(rebus_id=rebus_id)
         box = boxes[0] if len(boxes) == 1 else None
 
         if box is None:
@@ -102,10 +102,10 @@ class MailBox(RestAPIEndpoint):
                 raise UnAuthorizedException('UnAuthorized to open mailbox with id: {}: you are not admin, technician or the owner of the mailbox'.format(rebus_id))
 
         if request_body['open'] is True:
-            box = self.esafe_controller.open_box(box.id)
+            box = self.rebus_controller.open_box(box.id)
         box_serial = MailboxSerializer.serialize(box) if box is not None else {}
         return json.dumps(box_serial)
 
     def _check_controller(self):
-        if self.esafe_controller is None:
+        if self.rebus_controller is None:
             raise InvalidOperationException('Cannot check mailboxes, eSafe controller is None')

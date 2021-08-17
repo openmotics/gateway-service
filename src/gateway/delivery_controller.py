@@ -31,7 +31,7 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 if False:  # MyPy
     from typing import List, Optional, Dict, Any
     from gateway.user_controller import UserController
-    from esafe.rebus.rebus_controller import EsafeController
+    from esafe.rebus.rebus_controller import RebusController
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +45,11 @@ class DeliveryController(object):
         # type: (UserController, PubSub) -> None
         self.user_controller = user_controller
         self.pubsub = pubsub
-        self.esafe_controller = None  # type: Optional[EsafeController]
+        self.rebus_controller = None  # type: Optional[RebusController]
 
-    def set_esafe_controller(self, esafe_controller):
-        # type: (Optional[EsafeController]) -> None
-        self.esafe_controller = esafe_controller
+    def set_rebus_controller(self, rebus_controller):
+        # type: (Optional[RebusController]) -> None
+        self.rebus_controller = rebus_controller
 
     @staticmethod
     def load_delivery(delivery_id, include_picked_up=False):
@@ -126,8 +126,8 @@ class DeliveryController(object):
 
     def save_delivery(self, delivery_dto):
         # type: (DeliveryDTO) -> Optional[DeliveryDTO]
-        if self.esafe_controller is not None:
-            exists = self.esafe_controller.verify_device_exists(delivery_dto.parcelbox_rebus_id)
+        if self.rebus_controller is not None:
+            exists = self.rebus_controller.verify_device_exists(delivery_dto.parcelbox_rebus_id)
             if not exists:
                 raise ValueError('Could not save the delivery, the parcelbox_id "{}" does not exists'.format(delivery_dto.parcelbox_rebus_id))
         else:

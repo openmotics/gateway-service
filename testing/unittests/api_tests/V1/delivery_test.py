@@ -24,7 +24,7 @@ import mock
 
 from gateway.authentication_controller import AuthenticationToken, LoginMethod, AuthenticationController
 from gateway.dto import DeliveryDTO, UserDTO
-from esafe.rebus.rebus_controller import EsafeController
+from esafe.rebus.rebus_controller import RebusController
 from gateway.exceptions import *
 from gateway.delivery_controller import DeliveryController
 from gateway.user_controller import UserController
@@ -44,9 +44,9 @@ class ApiDeliveriesTests(unittest.TestCase):
         self.auth_controller = mock.Mock(AuthenticationController)
         self.user_controller = mock.Mock(UserController)
         self.delivery_controller = mock.Mock(DeliveryController)
-        self.esafe_controller = mock.Mock(EsafeController)
+        self.rebus_controller = mock.Mock(RebusController)
         SetUpTestInjections(authentication_controller=self.auth_controller)
-        SetUpTestInjections(user_controller=self.user_controller, delivery_controller=self.delivery_controller, esafe_controller=self.esafe_controller)
+        SetUpTestInjections(user_controller=self.user_controller, delivery_controller=self.delivery_controller, rebus_controller=self.rebus_controller)
         self.web = Deliveries()
 
         self.test_admin_1 = UserDTO(
