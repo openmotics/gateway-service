@@ -80,8 +80,9 @@ class RebusController(object):
             logger.debug("Getting lock status for rebus id: {}".format(lock_id))
             try:
                 is_lock_open = self.devices[lock_id].get_lock_status()
-            except RebusException:
-                pass
+            except RebusException as rebus_ex:
+                logger.error("could not get lock status of lock: {}: Exception: {}".format(lock_id, rebus_ex))
+                continue
             logger.debug("Status: {}".format(is_lock_open))
             if is_lock_open != self.lock_status[lock_id]:
                 event = EsafeEvent(PubSub.EsafeTopics.LOCK, {'lock_id': lock_id, 'status': 'open' if is_lock_open else 'closed'})
