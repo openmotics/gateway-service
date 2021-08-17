@@ -24,7 +24,7 @@ import mock
 
 from gateway.api.serializers.doorbell import DoorbellSerializer
 from gateway.dto import UserDTO, ApartmentDTO, DoorbellDTO
-from gateway.esafe_controller import EsafeController
+from esafe.rebus.rebus_controller import EsafeController
 from gateway.api.V1.doorbell import Doorbell
 
 from ioc import SetUpTestInjections

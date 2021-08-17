@@ -22,13 +22,11 @@ import unittest
 
 import mock
 
-from gateway.api.serializers import DeliverySerializer
 from gateway.authentication_controller import AuthenticationToken, LoginMethod, AuthenticationController
 from gateway.dto import DeliveryDTO, UserDTO
-from gateway.esafe_controller import EsafeController
+from esafe.rebus.rebus_controller import EsafeController
 from gateway.exceptions import *
 from gateway.delivery_controller import DeliveryController
-from gateway.mappers import DeliveryMapper
 from gateway.user_controller import UserController
 from gateway.api.V1.deliveries import Deliveries
 

@@ -21,17 +21,17 @@ import datetime
 from dateutil.tz import tzlocal
 import logging
 
-from gateway.dto import DeliveryDTO, UserDTO
+from gateway.dto import DeliveryDTO
 from gateway.events import EsafeEvent
-from gateway.models import Delivery, User, Database
-from gateway.mappers import DeliveryMapper, UserMapper
+from gateway.models import Delivery, User
+from gateway.mappers import DeliveryMapper
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MyPy
     from typing import List, Optional, Dict, Any
     from gateway.user_controller import UserController
-    from gateway.esafe_controller import EsafeController
+    from esafe.rebus.rebus_controller import EsafeController
 
 logger = logging.getLogger(__name__)
 

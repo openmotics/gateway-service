@@ -25,7 +25,7 @@ from mock import call
 
 from gateway.dto import UserDTO, ParcelBoxDTO, ApartmentDTO, DeliveryDTO
 from gateway.delivery_controller import DeliveryController
-from gateway.esafe_controller import EsafeController
+from esafe.rebus.rebus_controller import EsafeController
 from gateway.exceptions import WrongInputParametersException
 from gateway.api.serializers import ParcelBoxSerializer
 from gateway.api.V1.parcelbox import ParcelBox

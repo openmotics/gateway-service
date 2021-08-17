@@ -18,20 +18,17 @@ Mailbox API tests
 from __future__ import absolute_import
 
 import cherrypy
-import time
 import ujson as json
-import unittest
 
 import mock
 
-from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import UserDTO, MailBoxDTO, ApartmentDTO
 from gateway.delivery_controller import DeliveryController
-from gateway.esafe_controller import EsafeController
+from esafe.rebus.rebus_controller import EsafeController
 from gateway.api.serializers import MailboxSerializer
 from gateway.api.V1.mailbox import MailBox
 
-from ioc import SetTestMode, SetUpTestInjections
+from ioc import SetUpTestInjections
 
 from .base import BaseCherryPyUnitTester
 

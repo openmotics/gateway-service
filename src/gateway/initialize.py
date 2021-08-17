@@ -208,7 +208,6 @@ def setup_target_platform(target_platform, message_client_name):
     # gateway.api.V1 folder. Keep this here so all the V1 api files are parsed.
     # This cannot be in the webservice_v1 file since it creates circular imports due to
     # all the V1 api's including elements from the webservice_v1 file
-    from gateway.api import V1
 
     # IPC
     message_client = None
@@ -339,7 +338,7 @@ def setup_target_platform(target_platform, message_client_name):
 
     # eSafe controller
     if target_platform == Platform.Type.ESAFE and six.PY3:
-        from gateway.esafe_controller import EsafeController
+        from esafe.rebus.rebus_controller import EsafeController
         Injectable.value(esafe_controller=EsafeController())
     else:
         Injectable.value(esafe_controller=None)

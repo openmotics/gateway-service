@@ -17,7 +17,6 @@ The main module for the OpenMotics
 """
 from __future__ import absolute_import
 
-import constants
 from platform_utils import System
 System.import_libs()
 
@@ -39,7 +38,7 @@ if False:  # MYPY
     from gateway.authentication_controller import AuthenticationController
     from gateway.delivery_controller import DeliveryController
     from gateway.energy_module_controller import EnergyModuleController
-    from gateway.esafe_controller import EsafeController
+    from esafe.rebus.rebus_controller import EsafeController
     from gateway.output_controller import OutputController
     from gateway.group_action_controller import GroupActionController
     from gateway.input_controller import InputController

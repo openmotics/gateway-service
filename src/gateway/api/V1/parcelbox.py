@@ -24,7 +24,7 @@ import ujson as json
 from ioc import INJECTED, Inject
 
 from gateway.api.serializers import ParcelBoxSerializer, DeliverySerializer
-from gateway.esafe_controller import EsafeController
+from esafe.rebus.rebus_controller import EsafeController
 from gateway.exceptions import UnAuthorizedException, ItemDoesNotExistException, InvalidOperationException, WrongInputParametersException
 from gateway.models import User
 from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose

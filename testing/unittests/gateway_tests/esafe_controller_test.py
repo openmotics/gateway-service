@@ -26,12 +26,12 @@ import six
 
 from gateway.apartment_controller import ApartmentController
 from gateway.authentication_controller import AuthenticationController, TokenStore
-from gateway.dto import MailBoxDTO, ParcelBoxDTO, DoorbellDTO
-from gateway.esafe_controller import EsafeController
+from gateway.dto import DoorbellDTO
+from esafe.rebus.rebus_controller import EsafeController
 from gateway.delivery_controller import DeliveryController
 from gateway.pubsub import PubSub
 from gateway.rfid_controller import RfidController
-from gateway.user_controller import UserController, AuthenticationToken
+from gateway.user_controller import UserController
 from ioc import SetTestMode, SetUpTestInjections
 
 

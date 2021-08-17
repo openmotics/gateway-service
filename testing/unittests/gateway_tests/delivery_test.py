@@ -24,7 +24,7 @@ from peewee import SqliteDatabase
 
 from gateway.authentication_controller import AuthenticationController, TokenStore
 from gateway.dto import DeliveryDTO, UserDTO, SystemRFIDConfigDTO
-from gateway.esafe_controller import EsafeController
+from esafe.rebus.rebus_controller import EsafeController
 from gateway.mappers import UserMapper, DeliveryMapper
 from gateway.models import Delivery, User, Apartment
 from gateway.delivery_controller import DeliveryController
