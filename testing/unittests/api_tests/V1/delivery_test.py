@@ -22,13 +22,11 @@ import unittest
 
 import mock
 
-from gateway.api.serializers import DeliverySerializer
 from gateway.authentication_controller import AuthenticationToken, LoginMethod, AuthenticationController
 from gateway.dto import DeliveryDTO, UserDTO
-from gateway.esafe_controller import EsafeController
+from esafe.rebus.rebus_controller import RebusController
 from gateway.exceptions import *
 from gateway.delivery_controller import DeliveryController
-from gateway.mappers import DeliveryMapper
 from gateway.user_controller import UserController
 from gateway.api.V1.deliveries import Deliveries
 
@@ -46,9 +44,9 @@ class ApiDeliveriesTests(unittest.TestCase):
         self.auth_controller = mock.Mock(AuthenticationController)
         self.user_controller = mock.Mock(UserController)
         self.delivery_controller = mock.Mock(DeliveryController)
-        self.esafe_controller = mock.Mock(EsafeController)
+        self.rebus_controller = mock.Mock(RebusController)
         SetUpTestInjections(authentication_controller=self.auth_controller)
-        SetUpTestInjections(user_controller=self.user_controller, delivery_controller=self.delivery_controller, esafe_controller=self.esafe_controller)
+        SetUpTestInjections(user_controller=self.user_controller, delivery_controller=self.delivery_controller, rebus_controller=self.rebus_controller)
         self.web = Deliveries()
 
         self.test_admin_1 = UserDTO(
@@ -248,8 +246,8 @@ class ApiDeliveriesTests(unittest.TestCase):
     def test_get_delivery_history(self):
         with mock.patch.object(self.delivery_controller, 'load_deliveries', return_value=[self.test_delivery_1]) as load_deliveries_func:
             auth_token = AuthenticationToken(self.test_user_1, 'test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
-            response = self.web.get_delivery_history(auth_token=auth_token, user_id=self.test_user_1.id, after=0, pagesize=2)
-            load_deliveries_func.assert_called_once_with(user_id=self.test_user_1.id, history=True, from_id=0, limit=2)
+            response = self.web.get_delivery_history(auth_token=auth_token, user_id=self.test_user_1.id, before_id=0, pagesize=2)
+            load_deliveries_func.assert_called_once_with(user_id=self.test_user_1.id, history=True, before_id=0, limit=2)
             for delivery in [self.test_delivery_1]:
                 self.verify_delivery_in_output(delivery, response)
             for delivery in [self.test_return_1, self.test_delivery_2]:

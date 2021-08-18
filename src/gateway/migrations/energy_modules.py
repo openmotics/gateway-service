@@ -17,6 +17,7 @@ import os
 import logging
 import constants
 from ioc import INJECTED, Inject
+from gateway.enums import HardwareType
 from gateway.migrations.base_migrator import BaseMigrator
 from gateway.models import EnergyModule, EnergyCT, Module
 from gateway.dto import ModuleDTO
@@ -56,9 +57,9 @@ class EnergyModulesMigrator(BaseMigrator):
                         if module is None:
                             module = Module.create(source=ModuleDTO.Source.GATEWAY,
                                                    address=address,
-                                                   hardware_type=ModuleDTO.HardwareType.PHYSICAL)
+                                                   hardware_type=HardwareType.PHYSICAL)
                         else:
-                            module.hardware_type = ModuleDTO.HardwareType.PHYSICAL
+                            module.hardware_type = HardwareType.PHYSICAL
                         module.save()
 
                         module_id = int(row_data['id'])

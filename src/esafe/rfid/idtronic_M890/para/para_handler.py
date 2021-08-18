@@ -16,8 +16,8 @@
 Para packet handler
 """
 
-from rfid.idtronic_M890.para.para_packet import ParaPacketType, ParaPacket, CardType
-from rfid.idtronic_M890.para.para_exception import ParaException
+from esafe.rfid.idtronic_M890.para.para_packet import ParaPacketType, ParaPacket, CardType
+from esafe.rfid.idtronic_M890.para.para_exception import ParaException
 
 import logging
 logger = logging.getLogger(__name__)

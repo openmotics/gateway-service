@@ -24,7 +24,7 @@ from peewee import SqliteDatabase
 
 from gateway.authentication_controller import AuthenticationController, TokenStore
 from gateway.dto import DeliveryDTO, UserDTO, SystemRFIDConfigDTO
-from gateway.esafe_controller import EsafeController
+from esafe.rebus.rebus_controller import RebusController
 from gateway.mappers import UserMapper, DeliveryMapper
 from gateway.models import Delivery, User, Apartment
 from gateway.delivery_controller import DeliveryController
@@ -68,9 +68,9 @@ class DeliveryControllerTest(unittest.TestCase):
         SetUpTestInjections(config={'username': 'test', 'password': 'test'})
         self.user_controller = UserController()
         SetUpTestInjections(user_controller=self.user_controller)
-        self.esafe_controller = mock.Mock(EsafeController)
+        self.rebus_controller = mock.Mock(RebusController)
         self.controller = DeliveryController()
-        self.controller.set_esafe_controller(self.esafe_controller)
+        self.controller.set_rebus_controller(self.rebus_controller)
         SetUpTestInjections(delivery_controller=self.controller)
 
         self.test_user_1 = UserDTO(
@@ -180,7 +180,7 @@ class DeliveryControllerTest(unittest.TestCase):
         self.assert_deliveries_equal(self.test_delivery_1, result)
         self.assert_delivery_in_db(result.id, self.test_delivery_1)
 
-        with mock.patch.object(self.esafe_controller, 'verify_device_exists', return_value=False):
+        with mock.patch.object(self.rebus_controller, 'verify_device_exists', return_value=False):
             with self.assertRaises(ValueError):
                 result = self.controller.save_delivery(self.test_delivery_1)
 
@@ -399,4 +399,30 @@ class DeliveryControllerTest(unittest.TestCase):
             DeliveryMapper.orm_to_dto(delivery_orm_2)
         ]
         self.assertEqual(expected, result)
+
+        # add some more deliveries:
+        ids = []
+        for i in range(20):
+            delivery_orm = Delivery(
+                type='DELIVERY',
+                timestamp_delivery='2021-05-07T10:10:04+02:00',
+                timestamp_pickup='2021-05-08T10:10:04+02:00',
+                courier_firm='TNT',
+                parcelbox_rebus_id=40 + i,
+                user_pickup=user_orm_1.id
+            )
+            delivery_orm.save()
+            ids.append(delivery_orm.id)
+
+        # this should return 2 results with the most recent id's
+        result = self.controller.load_deliveries(history=True, before_id=None, limit=2)
+        self.assertEqual(2, len(result))
+        self.assertEqual(ids[-1], result[0].id)
+        self.assertEqual(ids[-2], result[1].id)
+
+        # This will match the delivery-id's since all the last ones are picked up deliveries
+        result = self.controller.load_deliveries(history=True, before_id=10, limit=2)
+        self.assertEqual(2, len(result))
+        self.assertEqual(9, result[0].id)
+        self.assertEqual(8, result[1].id)
 

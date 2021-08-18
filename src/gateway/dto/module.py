@@ -28,24 +28,6 @@ class ModuleDTO(BaseDTO):
         MASTER = 'master'
         GATEWAY = 'gateway'
 
-    class HardwareType(object):
-        VIRTUAL = 'virtual'
-        PHYSICAL = 'physical'
-        EMULATED = 'emulated'
-        INTERNAL = 'internal'
-
-    class ModuleType(object):
-        SENSOR = 'sensor'
-        INPUT = 'input'
-        OUTPUT = 'output'
-        SHUTTER = 'shutter'
-        DIM_CONTROL = 'dim_control'
-        CAN_CONTROL = 'can_control'
-        OPEN_COLLECTOR = 'open_collector'
-        ENERGY = 'energy'
-        POWER = 'power'
-        P1_CONCENTRATOR = 'p1_concentrator'
-
     def __init__(self, source, address, module_type, hardware_type, firmware_version=None, hardware_version=None, order=None, online=None):
         self.source = source  # type: str
         self.address = address  # type: str

@@ -18,6 +18,7 @@ eSafe controller will communicate over rebus with the esafe hardware
 
 from collections import defaultdict
 
+from esafe.rebus.abstract_rebus_controller import RebusControllerInterface
 from gateway.apartment_controller import ApartmentController
 from gateway.daemon_thread import DaemonThread
 from gateway.delivery_controller import DeliveryController
@@ -44,7 +45,7 @@ if False:  # MYPY
     from typing import Dict, List, Optional
 
 
-class EsafeController(object):
+class RebusController(RebusControllerInterface):
     @Inject
     def __init__(self, rebus_device=INJECTED, pubsub=INJECTED, apartment_controller=INJECTED, delivery_controller=INJECTED):
         # type: (str, PubSub, ApartmentController, DeliveryController) -> None
@@ -80,8 +81,9 @@ class EsafeController(object):
             logger.debug("Getting lock status for rebus id: {}".format(lock_id))
             try:
                 is_lock_open = self.devices[lock_id].get_lock_status()
-            except RebusException:
-                pass
+            except RebusException as rebus_ex:
+                logger.error("could not get lock status of lock: {}: Exception: {}".format(lock_id, rebus_ex))
+                continue
             logger.debug("Status: {}".format(is_lock_open))
             if is_lock_open != self.lock_status[lock_id]:
                 event = EsafeEvent(PubSub.EsafeTopics.LOCK, {'lock_id': lock_id, 'status': 'open' if is_lock_open else 'closed'})
@@ -113,7 +115,7 @@ class EsafeController(object):
     # ParcelBox Functions
 
     def get_parcelboxes(self, rebus_id=None, size=None, available=False):
-        # type: (Optional[int], Optional[str], bool) -> List[ParcelBoxDTO]
+        # type: (Optional[int], Optional[str], Optional[bool]) -> List[ParcelBoxDTO]
         logger.debug('Getting parcelboxes, size: {}, rebus_id: {}'.format(size, rebus_id))
         if not self.done_discovering:
             return []

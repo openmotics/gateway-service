@@ -22,8 +22,8 @@ import logging
 from datetime import datetime
 from gateway.base_controller import BaseController
 from gateway.daemon_thread import DaemonThread
+from gateway.enums import HardwareType, ModuleType
 from gateway.events import GatewayEvent
-from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from gateway.dto import RealtimeEnergyDTO, ModuleDTO, TotalEnergyDTO, EnergyModuleDTO
 from gateway.enums import EnergyEnums
@@ -65,13 +65,13 @@ class EnergyModuleController(BaseController):
 
         self._time_cache = {}  # type: Dict[int, List[int]]
 
-        self._pubsub.subscribe_master_events(PubSub.MasterTopics.POWER, self._handle_energy_event)
+        if self._enabled:
+            self._energy_communicator.subscribe_discovery_stopped(self._discovery_stopped)
 
-    def _handle_energy_event(self, master_event):
-        # type: (MasterEvent) -> None
-        if master_event.type == MasterEvent.Types.POWER_ADDRESS_EXIT:
-            gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'powermodule'})  # TODO: Should be called energymodule
-            self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
+    def _discovery_stopped(self):
+        # type: () -> None
+        gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'powermodule'})  # TODO: Should be called energymodule
+        self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
 
     def start(self):
         # type: () -> None
@@ -213,9 +213,9 @@ class EnergyModuleController(BaseController):
             return []
 
         information = []
-        module_type_map = {EnergyEnums.Version.ENERGY_MODULE: ModuleDTO.ModuleType.ENERGY,
-                           EnergyEnums.Version.POWER_MODULE: ModuleDTO.ModuleType.POWER,
-                           EnergyEnums.Version.P1_CONCENTRATOR: ModuleDTO.ModuleType.P1_CONCENTRATOR}
+        module_type_map = {EnergyEnums.Version.ENERGY_MODULE: ModuleType.ENERGY,
+                           EnergyEnums.Version.POWER_MODULE: ModuleType.POWER,
+                           EnergyEnums.Version.P1_CONCENTRATOR: ModuleType.P1_CONCENTRATOR}
         energy_modules = EnergyModule.select(EnergyModule, Module) \
                                      .join_from(EnergyModule, Module)  # type: List[EnergyModule]
         for energy_module in energy_modules:
@@ -229,7 +229,7 @@ class EnergyModuleController(BaseController):
                 information.append(ModuleDTO(source=ModuleDTO.Source.GATEWAY,
                                              address=energy_module.module.address,
                                              module_type=module_type_map.get(energy_module.version),
-                                             hardware_type=ModuleDTO.HardwareType.PHYSICAL,
+                                             hardware_type=HardwareType.PHYSICAL,
                                              firmware_version=firmware_version,
                                              order=energy_module.number,
                                              online=online))

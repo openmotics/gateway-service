@@ -18,7 +18,7 @@ Para packets transceiver
 import logging
 import serial
 from threading import Thread
-from rfid.idtronic_M890.para.para_packet import ParaPacket
+from esafe.rfid.idtronic_M890.para.para_packet import ParaPacket
 
 logger = logging.getLogger(__name__)
 
