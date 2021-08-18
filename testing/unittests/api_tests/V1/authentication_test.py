@@ -129,7 +129,7 @@ class ApiAuthenticationTests(unittest.TestCase):
 
     def test_authenticate_basic(self):
         auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PIN_CODE)
-        body = {'code': 'some-test-code'}
+        body = {'pin_code': 'some-test-code'}
         with mock.patch.object(self.auth_controller, 'login_with_user_code', return_value=(True, auth_token)):
             response = self.web.authenticate_pin_code(request_body=body).decode('utf-8')
             expected = json.dumps(auth_token.to_dict())
@@ -137,7 +137,7 @@ class ApiAuthenticationTests(unittest.TestCase):
 
     def test_authenticate_wrong_credentials(self):
         data = UserEnums.AuthenticationErrors.INVALID_CREDENTIALS
-        body = {'code': 'some-test-code'}
+        body = {'pin_code': 'some-test-code'}
         with mock.patch.object(self.auth_controller, 'login_with_user_code', return_value=(False, data)):
             response = self.web.authenticate_pin_code(request_body=body)
             self.assertIn(UnAuthorizedException.bytes_message(), response)
@@ -161,7 +161,7 @@ class ApiAuthenticationTests(unittest.TestCase):
 
     def test_authenticate_impersonate(self):
         auth_token = AuthenticationToken(user=self.normal_user_1, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PIN_CODE, impersonator=self.super_user)
-        body = {'code': 'some-test-code', 'impersonate': self.normal_user_1.username}
+        body = {'pin_code': 'some-test-code', 'impersonate': self.normal_user_1.username}
         with mock.patch.object(self.auth_controller, 'login_with_user_code', return_value=(True, auth_token)):
             response = self.web.authenticate_pin_code(request_body=body).decode('utf-8')
             self.assertEqual(response, json.dumps(auth_token.to_dict()))

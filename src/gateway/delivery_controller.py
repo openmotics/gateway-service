@@ -64,7 +64,7 @@ class DeliveryController(object):
         return delivery_dto
 
     @staticmethod
-    def load_deliveries(user_id=None, delivery_type=None, history=False, before_id=0, limit=100):
+    def load_deliveries(user_id=None, delivery_type=None, history=False, before_id=None, limit=100):
         # type: (Optional[int], Optional[str], bool, int, int) -> List[DeliveryDTO]
         deliveries = []
         query = Delivery.select()
