@@ -598,7 +598,7 @@ class User(BaseModel):
     last_name = CharField(null=True)
     role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHNICIAN, COURIER, SUPER
     pin_code = CharField(null=True, unique=True)
-    language = CharField(null=False, default='en')  # options: See languages
+    language = CharField(null=False)  # options: See languages
     password = CharField()
     apartment = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
     is_active = BooleanField(default=True)

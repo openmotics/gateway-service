@@ -75,25 +75,29 @@ class DeliveryControllerTest(unittest.TestCase):
 
         self.test_user_1 = UserDTO(
             username='test_user_1',
-            role='ADMIN'
+            role='ADMIN',
+            language='en'
         )
         self.test_user_1.set_password('test')
 
         self.test_user_2 = UserDTO(
             username='test_user_2',
-            role='USER'
+            role='USER',
+            language='en'
         )
         self.test_user_2.set_password('test')
 
         self.test_user_3 = UserDTO(
             username='test_user_3',
-            role='COURIER'
+            role='COURIER',
+            language='en'
         )
         self.test_user_3.set_password('test')
 
         self.test_user_4 = UserDTO(
             username='test_user_4',
-            role='COURIER'
+            role='COURIER',
+            language='en'
         )
         self.test_user_4.set_password('test')
 
@@ -311,7 +315,8 @@ class DeliveryControllerTest(unittest.TestCase):
             password='test',
             is_active=True,
             accepted_terms=0,
-            role='USER'
+            role='USER',
+            language='en'
         )
         user_orm_1.save()
 
@@ -320,7 +325,8 @@ class DeliveryControllerTest(unittest.TestCase):
             password='test2',
             is_active=True,
             accepted_terms=0,
-            role='USER'
+            role='USER',
+            language='en'
         )
         user_orm_2.save()
 

@@ -52,25 +52,29 @@ class RFIDControllerTest(unittest.TestCase):
 
         self.test_admin_1 = UserDTO(
             username='test_admin_1',
-            role='ADMIN'
+            role='ADMIN',
+            language='en'
         )
         self.test_admin_1.set_password('test')
 
         self.test_technician_1 = UserDTO(
             username='test_technician_1',
-            role='TECHNICIAN'
+            role='TECHNICIAN',
+            language='en'
         )
         self.test_technician_1.set_password('test')
 
         self.test_user_1 = UserDTO(
             username='test_user_1',
-            role='USER'
+            role='USER',
+            language='en'
         )
         self.test_user_1.set_password('test')
 
         self.test_courier_1 = UserDTO(
             username='test_courier_1',
-            role='COURIER'
+            role='COURIER',
+            language='en'
         )
         self.test_courier_1.set_password('test')
 

@@ -68,7 +68,8 @@ class UserController(object):
             username=username,
             pin_code=None,
             role=User.UserRoles.SUPER,
-            accepted_terms=AuthenticationController.TERMS_VERSION
+            accepted_terms=AuthenticationController.TERMS_VERSION,
+            language='en'
         )
         cloud_user_dto.set_password(self._config['password'])
         # Save the user to the DB

@@ -122,6 +122,19 @@ class UserControllerTest(unittest.TestCase):
         num_users = self.controller.get_number_of_users()
         self.assertEqual(2, num_users)
 
+        user_dto = UserDTO(username='NikolaTesla',
+                           role=User.UserRoles.USER,
+                           pin_code='1111',
+                           email='nikola@test.com',
+                           language='fr')
+        user_dto.set_password("test")
+        self.controller.save_user(user_dto)
+
+        user_orm = User.select().where(User.username == 'nikolatesla').first()  # username gets saved as lowercase
+        self.assertIsNotNone(user_orm)
+        self.assertEqual('nikola@test.com', user_orm.email)
+        self.assertEqual('fr', user_orm.language)
+
     def test_empty(self):
         """ Test an empty database. """
         # setup test credentials
@@ -155,7 +168,8 @@ class UserControllerTest(unittest.TestCase):
             username='test',
             password=UserDTO._hash_password('test'),
             pin_code='1234',
-            role=User.UserRoles.ADMIN
+            role=User.UserRoles.ADMIN,
+            language='en'
         )
         user_to_add.save()
 
@@ -314,7 +328,8 @@ class UserControllerTest(unittest.TestCase):
             password=UserDTO._hash_password('test'),
             pin_code='1111',
             role=User.UserRoles.ADMIN,
-            accepted_terms=True
+            accepted_terms=True,
+            language='en'
         )
         user_to_add.save()
 
@@ -334,7 +349,8 @@ class UserControllerTest(unittest.TestCase):
             password=UserDTO._hash_password('test'),
             pin_code='2222',
             role=User.UserRoles.USER,
-            accepted_terms=True
+            accepted_terms=True,
+            language='en'
         )
         user_to_add.save()
 
@@ -344,7 +360,8 @@ class UserControllerTest(unittest.TestCase):
             pin_code='3333',
             role=User.UserRoles.USER,
             accepted_terms=True,
-            is_active=False
+            is_active=False,
+            language='en'
         )
         user_to_add.save()
 
@@ -353,7 +370,8 @@ class UserControllerTest(unittest.TestCase):
             password=UserDTO._hash_password('test'),
             pin_code='4444',
             role=User.UserRoles.COURIER,
-            accepted_terms=True
+            accepted_terms=True,
+            language='en'
         )
         user_to_add.save()
 
@@ -397,7 +415,8 @@ class UserControllerTest(unittest.TestCase):
             password=UserDTO._hash_password('test'),
             pin_code='1234',
             role=User.UserRoles.ADMIN,
-            accepted_terms=True
+            accepted_terms=True,
+            language='en'
         )
         user_to_add.save()
 
@@ -406,7 +425,8 @@ class UserControllerTest(unittest.TestCase):
             password=UserDTO._hash_password('test'),
             pin_code=None,
             role=User.UserRoles.USER,
-            accepted_terms=True
+            accepted_terms=True,
+            language='en'
         )
         user_to_add.save()
 
