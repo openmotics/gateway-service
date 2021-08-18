@@ -43,7 +43,9 @@ def migrate(migrator, database, fake=False, **kwargs):
         mailbox_rebus_id = IntegerField(unique=True, null=True)
         doorbell_rebus_id = IntegerField(unique=True, null=True)
 
-    # # Set both rebus id fields to be nullable
+    # Set both rebus id fields to be nullable
+    # This does not work for some reason, instead deleting the table and creating the table again
+    # to include the null=True change
     # migrator.change_columns(Apartment, mailbox_rebus_id=IntegerField(null=True, unique=True, default=None))
     # migrator.change_columns(Apartment, doorbell_rebus_id=IntegerField(null=True, unique=True, default=None))
 
