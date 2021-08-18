@@ -85,10 +85,14 @@ def migrate(migrator, database, fake=False, **kwargs):
     for user in User.select():
         try:
             old_lang = user.language
-            user.language = language_translation[old_lang]
+            user.language = language_translation.get(old_lang, "en")
             user.save()
         except KeyError:
             pass
+
+    # The change of the default argument in the language field of the User model is not required since
+    # this is a peewee maintained value. This default parameter is not propagated back to the sqlite DB
+    # The default language field is
 
 
 def rollback(migrator, database, fake=False, **kwargs):
