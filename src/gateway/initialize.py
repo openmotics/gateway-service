@@ -339,10 +339,13 @@ def setup_target_platform(target_platform, message_client_name):
 
     # eSafe controller
     if target_platform == Platform.Type.ESAFE and six.PY3:
-        from gateway.esafe_controller import EsafeController
-        Injectable.value(esafe_controller=EsafeController())
+        from esafe.rebus.rebus_controller import RebusController
+        Injectable.value(rebus_controller=RebusController())
+    elif target_platform == Platform.Type.DUMMY:
+        from esafe.rebus.dummy_rebus_controller import DummyRebusController
+        Injectable.value(rebus_controller=DummyRebusController())
     else:
-        Injectable.value(esafe_controller=None)
+        Injectable.value(rebus_controller=None)
 
     # Thermostats
     thermostats_gateway_feature = Feature.get_or_none(name='thermostats_gateway')

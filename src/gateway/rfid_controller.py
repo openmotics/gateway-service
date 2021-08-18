@@ -18,13 +18,13 @@ RFID BLL
 
 import constants
 from gateway.events import EsafeEvent
-from gateway.models import RFID, User
+from gateway.models import RFID
 from gateway.mappers import RfidMapper
 from gateway.dto import RfidDTO, UserDTO
 from gateway.pubsub import PubSub
 from gateway.system_config_controller import SystemConfigController
-from rfid.idtronic_M890.idtronic_M890 import IdTronicM890
-from rfid.rfid_exception import RfidException
+from esafe.rfid import IdTronicM890
+from esafe.rfid import RfidException
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 import abc

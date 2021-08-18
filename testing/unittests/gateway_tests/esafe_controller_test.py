@@ -26,12 +26,12 @@ import six
 
 from gateway.apartment_controller import ApartmentController
 from gateway.authentication_controller import AuthenticationController, TokenStore
-from gateway.dto import MailBoxDTO, ParcelBoxDTO, DoorbellDTO
-from gateway.esafe_controller import EsafeController
+from gateway.dto import DoorbellDTO
+from esafe.rebus.rebus_controller import RebusController
 from gateway.delivery_controller import DeliveryController
 from gateway.pubsub import PubSub
 from gateway.rfid_controller import RfidController
-from gateway.user_controller import UserController, AuthenticationToken
+from gateway.user_controller import UserController
 from ioc import SetTestMode, SetUpTestInjections
 
 
@@ -45,7 +45,7 @@ except ImportError:
 
 @unittest.skipIf(six.PY2, "Not running when in py2")
 class EsafeControllerTest(unittest.TestCase):
-    """ Tests for EsafeController. """
+    """ Tests for RebusController. """
 
     @classmethod
     def setUpClass(cls):
@@ -71,13 +71,13 @@ class EsafeControllerTest(unittest.TestCase):
         self.delivery_controller = mock.Mock(DeliveryController)
         SetUpTestInjections(delivery_controller=self.delivery_controller)
         SetUpTestInjections(rebus_device='TEST_DEVICE')
-        self.esafe_controller = EsafeController()
-        self.delivery_controller.set_esafe_controller(self.esafe_controller)
+        self.rebus_controller = RebusController()
+        self.delivery_controller.set_rebus_controller(self.rebus_controller)
         self.rebus = mock.Mock()
 
         # Set the esafe controller in a ready to use state:
-        self.esafe_controller.done_discovering = True
-        self.esafe_controller.devices = {
+        self.rebus_controller.done_discovering = True
+        self.rebus_controller.devices = {
             0: RebusComponentEsafeCollector(None, [0], None, None, None, None),
             16: RebusComponentEsafeEightChannelOutput(None, [1, 0], None, None, None, None),
             32: RebusComponentEsafeLock(None, [2, 0], EsafeBoxType.MAILBOX, EsafeBoxSize.S, None, None, None, None),
@@ -87,7 +87,7 @@ class EsafeControllerTest(unittest.TestCase):
             128: RebusComponentEsafeLock(None, [8, 0], EsafeBoxType.PARCELBOX, EsafeBoxSize.XL, None, None, None, None)
         }
         # mock all existing functions of the components
-        for device in self.esafe_controller.devices.values():
+        for device in self.rebus_controller.devices.values():
             if isinstance(device, RebusComponentEsafeLock):
                 # Get lock status
                 get_lock_status_mock = mock.Mock()
@@ -95,67 +95,67 @@ class EsafeControllerTest(unittest.TestCase):
                 device.get_lock_status = get_lock_status_mock
                 # open lock
                 device.open_lock = lambda: True
-        self.esafe_controller.rebus_device = self.rebus
+        self.rebus_controller.rebus_device = self.rebus
 
     def tearDown(self):
         pass
 
     def test_get_mailboxes(self):
         """ Test the get mailboxes functionality """
-        result = self.esafe_controller.get_mailboxes()
+        result = self.rebus_controller.get_mailboxes()
         self.assertEqual(len(result), 2)
 
-        result = self.esafe_controller.get_mailboxes(32)
+        result = self.rebus_controller.get_mailboxes(32)
         self.assertEqual(len(result), 1)
-        self.assertEqual([self.esafe_controller._rebus_mailbox_to_dto(self.esafe_controller.devices[32])], result)
+        self.assertEqual([self.rebus_controller._rebus_mailbox_to_dto(self.rebus_controller.devices[32])], result)
 
-        result = self.esafe_controller.get_mailboxes(64)
+        result = self.rebus_controller.get_mailboxes(64)
         self.assertEqual(len(result), 0)  # Should be zero, id 64 is not a mailbox
 
     def test_get_parcelboxes(self):
         """ Test the get mailboxes functionality """
-        result = self.esafe_controller.get_parcelboxes()
+        result = self.rebus_controller.get_parcelboxes()
         self.assertEqual(len(result), 3)
 
-        result = self.esafe_controller.get_parcelboxes(64)
+        result = self.rebus_controller.get_parcelboxes(64)
         self.assertEqual(len(result), 1)
-        self.assertEqual([self.esafe_controller._rebus_parcelbox_to_dto(self.esafe_controller.devices[64])], result)
+        self.assertEqual([self.rebus_controller._rebus_parcelbox_to_dto(self.rebus_controller.devices[64])], result)
 
-        result = self.esafe_controller.get_parcelboxes(32)
+        result = self.rebus_controller.get_parcelboxes(32)
         self.assertEqual(len(result), 0)  # Should be zero, id 32 is not a parcelbox
 
-        result = self.esafe_controller.get_parcelboxes(size='m')
+        result = self.rebus_controller.get_parcelboxes(size='m')
         self.assertEqual(len(result), 1)
-        self.assertEqual([self.esafe_controller._rebus_parcelbox_to_dto(self.esafe_controller.devices[80])], result)
+        self.assertEqual([self.rebus_controller._rebus_parcelbox_to_dto(self.rebus_controller.devices[80])], result)
 
         # Test case insensitive
-        result = self.esafe_controller.get_parcelboxes(size='M')
+        result = self.rebus_controller.get_parcelboxes(size='M')
         self.assertEqual(len(result), 1)
-        self.assertEqual([self.esafe_controller._rebus_parcelbox_to_dto(self.esafe_controller.devices[80])], result)
+        self.assertEqual([self.rebus_controller._rebus_parcelbox_to_dto(self.rebus_controller.devices[80])], result)
 
         with mock.patch.object(self.delivery_controller, 'parcel_id_available') as parcel_available_func:
             # Setting the return values for the parcel available function. This will filter out only the second parcelbox since a dictionary is ordered.
             parcel_available_func.side_effect = [False, True, False, True, True]  # Fist 3 for looping over all the parcelboxes, then 1 for serializing the object, and one for serializing it again for testing the result
-            result = self.esafe_controller.get_parcelboxes(available=True)
+            result = self.rebus_controller.get_parcelboxes(available=True)
             self.assertEqual(len(result), 1)
-            self.assertEqual([self.esafe_controller._rebus_parcelbox_to_dto(self.esafe_controller.devices[80])], result)
+            self.assertEqual([self.rebus_controller._rebus_parcelbox_to_dto(self.rebus_controller.devices[80])], result)
 
     def test_open_box(self):
         id_to_open = 64
-        device = self.esafe_controller.devices[id_to_open]
+        device = self.rebus_controller.devices[id_to_open]
         open_lock_mock = mock.Mock()
         open_lock_mock.return_value = True
         device.open_lock = open_lock_mock
 
-        result = self.esafe_controller.open_box(id_to_open)
+        result = self.rebus_controller.open_box(id_to_open)
         open_lock_mock.assert_called_once()  # Assert that this one specific mock is called, not any of the other devices open functions
-        self.assertEqual(self.esafe_controller._rebus_parcelbox_to_dto(self.esafe_controller.devices[id_to_open]), result)
+        self.assertEqual(self.rebus_controller._rebus_parcelbox_to_dto(self.rebus_controller.devices[id_to_open]), result)
 
         with self.assertRaises(ValueError):
-            result = self.esafe_controller.open_box(37)
+            result = self.rebus_controller.open_box(37)
 
     def test_get_doorbells(self):
-        result = self.esafe_controller.get_doorbells()
+        result = self.rebus_controller.get_doorbells()
         self.assertEqual(len(result), 8)  # one output module should produce 8 doorbells
         doorbells = [DoorbellDTO(doorbell_id, label=str(doorbell_id), apartment=None) for doorbell_id in range(17, 25)]
         self.assertEqual(result, doorbells)
@@ -163,18 +163,18 @@ class EsafeControllerTest(unittest.TestCase):
     def test_ring_doorbell(self):
         set_output_mock = mock.Mock()
         set_output_mock.return_value = True  # Always send true as success feedback
-        device = self.esafe_controller.devices[16]  # Get the doorbell device
+        device = self.rebus_controller.devices[16]  # Get the doorbell device
         device.set_output = set_output_mock
 
-        self.esafe_controller.ring_doorbell(17)
+        self.rebus_controller.ring_doorbell(17)
         set_output_mock.assert_has_calls([call(1, True), call(1, False)], any_order=False)
         self.assertEqual(set_output_mock.call_count, 2)
 
         set_output_mock.reset_mock()
 
-        self.esafe_controller.ring_doorbell(24)
+        self.rebus_controller.ring_doorbell(24)
         set_output_mock.assert_has_calls([call(8, True), call(8, False)], any_order=False)
         self.assertEqual(set_output_mock.call_count, 2)
 
         with self.assertRaises(ValueError):
-            self.esafe_controller.ring_doorbell(37)
+            self.rebus_controller.ring_doorbell(37)

@@ -19,7 +19,7 @@ from __future__ import absolute_import
 
 import unittest
 
-from rfid.idtronic_M890.para.para_packet import ParaPacket, ParaPacketType
+from esafe.rfid.idtronic_M890.para.para_packet import ParaPacket, ParaPacketType
 
 
 class ParaPacketTest(unittest.TestCase):
