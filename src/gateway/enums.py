@@ -155,6 +155,6 @@ class Languages(BaseEnum):
     """ languages, ISO 639-1 format"""
     # only the current supported languages are included
     EN = 'en'
-    DE = 'DE'
+    DE = 'de'
     NL = 'nl'
     FR = 'fr'
