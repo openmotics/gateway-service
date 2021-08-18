@@ -139,7 +139,7 @@ class ApiDeliveriesTests(unittest.TestCase):
             role='USER',
             pin_code='1111',
             apartment=None,
-            language='English',
+            language='en',
             accepted_terms=1
         )
 

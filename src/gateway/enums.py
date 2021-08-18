@@ -15,9 +15,21 @@
 """
 Generic module that houses various enums
 """
+from functools import reduce
 
 if False:  # MYPY
     from typing import Literal
+
+
+class BaseEnum(object):
+    _flat_elements = None
+
+    @classmethod
+    def contains(cls, item):
+        if cls._flat_elements is None:
+            cls._flat_elements = [(elem, value) for elem, value in cls.__dict__.items() if not elem.startswith('__') and not callable(getattr(cls, elem))]
+            cls._flat_elements = reduce(lambda x, y: x+y, cls._flat_elements)
+        return item in cls._flat_elements
 
 
 class ShutterEnums(object):
@@ -137,3 +149,12 @@ class SerialPorts(object):
     ENERGY = 'ENERGY'
     P1 = 'P1'
     EXPANSION = 'EXPANSION'
+
+
+class Languages(BaseEnum):
+    """ languages, ISO 639-1 format"""
+    # only the current supported languages are included
+    EN = 'en'
+    DE = 'de'
+    NL = 'nl'
+    FR = 'fr'

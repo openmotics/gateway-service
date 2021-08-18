@@ -236,48 +236,55 @@ class TokenStoreTest(unittest.TestCase):
 
         self.test_super_1 = UserDTO(
             username='test_super_1',
-            role='SUPER'
+            role='SUPER',
+            language='en'
         )
         self.test_super_1.set_password('test')
         self.save_user(self.test_super_1)
 
         self.test_super_2 = UserDTO(
             username='test_super_2',
-            role='SUPER'
+            role='SUPER',
+            language='en'
         )
         self.test_super_2.set_password('test')
         self.save_user(self.test_super_2)
 
         self.test_admin_1 = UserDTO(
             username='test_admin_1',
-            role='ADMIN'
+            role='ADMIN',
+            language='en'
         )
         self.test_admin_1.set_password('test')
         self.save_user(self.test_admin_1)
 
         self.test_admin_2 = UserDTO(
             username='test_admin_2',
-            role='ADMIN'
+            role='ADMIN',
+            language='en'
         )
         self.test_admin_2.set_password('test')
         self.save_user(self.test_admin_2)
 
         self.test_technician_1 = UserDTO(
             username='test_technician_1',
-            role='TECHNICIAN'
+            role='TECHNICIAN',
+            language='en'
         )
         self.test_technician_1.set_password('test')
         self.save_user(self.test_technician_1)
 
         self.test_user_1 = UserDTO(
             username='test_user_1',
-            role='USER'
+            role='USER',
+            language='en'
         )
         self.test_user_1.set_password('test')
         self.save_user(self.test_user_1)
         self.test_user_2 = UserDTO(
             username='test_user_2',
-            role='USER'
+            role='USER',
+            language='en'
         )
         self.test_user_2.set_password('test')
         self.save_user(self.test_user_2)

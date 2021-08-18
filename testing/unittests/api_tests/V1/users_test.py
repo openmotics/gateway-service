@@ -77,7 +77,7 @@ class ApiUsersTests(unittest.TestCase):
             role='USER',
             pin_code='1111',
             apartment=None,
-            language='English',
+            language='en',
             accepted_terms=1,
             email='user_1@test.com'
         )
@@ -112,7 +112,7 @@ class ApiUsersTests(unittest.TestCase):
             role='USER',
             pin_code='some_random_string',
             apartment=None,
-            language='English',
+            language='en',
             accepted_terms=1,
             is_active=False
         )
@@ -634,15 +634,16 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
 
         with mock.patch.object(self.users_controller, 'generate_new_pin_code', wraps=mock_generate_new_pin):
             # Test all the 4 roles in a normal way
-            for user_role in ['USER', 'ADMIN', 'COURIER', 'TECHNICIAN']:
+            for user_role in ['USER', 'ADMIN', 'COURIER', 'TECHNICIAN', 'SUPER']:
                 status, headers, body = self.GET('/api/v1/users/available_code?role={}'.format(user_role), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
                 self.print_request_result()
                 self.assertStatus('200 OK')
                 number_of_digits = UserController.PinCodeLength[user_role]
-                self.assertEqual(number_of_digits, len(body))
-                body_int = int(body)
+                body_dict = json.loads(body)
+                self.assertEqual(number_of_digits, len(body_dict['code']))
+                body_int = int(body_dict['code'])
                 self.assertLess(body_int, int('1' + '0' * number_of_digits))
-                self.assertNotIn(body, current_pins)
+                self.assertNotIn(body_dict['code'], current_pins)
 
             # Don't pass the role in
             status, headers, body = self.GET('/api/v1/users/available_code', login_user=None, headers={'X-API-Secret': 'Test-Secret'})

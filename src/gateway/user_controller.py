@@ -19,15 +19,13 @@ and authenticating users.
 
 from __future__ import absolute_import
 
-from functools import reduce
 import logging
-import operator
 import random
 import six
 
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken
 from gateway.dto.user import UserDTO
-from gateway.enums import UserEnums
+from gateway.enums import UserEnums, Languages
 from gateway.exceptions import GatewayException
 from gateway.mappers.user import UserMapper
 from gateway.models import User
@@ -70,7 +68,8 @@ class UserController(object):
             username=username,
             pin_code=None,
             role=User.UserRoles.SUPER,
-            accepted_terms=AuthenticationController.TERMS_VERSION
+            accepted_terms=AuthenticationController.TERMS_VERSION,
+            language='en'
         )
         cloud_user_dto.set_password(self._config['password'])
         # Save the user to the DB
@@ -90,7 +89,7 @@ class UserController(object):
         """ Saves one instance of a user with the defined fields in param fields """
         _ = self
         if 'language' in user_dto.loaded_fields:
-            if user_dto.language not in User.UserLanguages.ALL:
+            if not Languages.contains(user_dto.language):
                 raise RuntimeError('Could not save the user with an unknown language: {}'.format(user_dto.language))
 
         user_orm = UserMapper.dto_to_orm(user_dto)

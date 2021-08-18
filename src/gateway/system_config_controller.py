@@ -49,7 +49,7 @@ class SystemConfigController(object):
         'doorbell_config': {'enabled': True},
         'rfid_config': {'enabled': True, 'security_enabled': False, 'max_tags': 4},
         'rfid_sector_block_config': {'rfid_sector_block': 1},
-        'global_config': {'device_name': 'ESAFE', 'country': 'BE', 'postal_code': '', 'city': '', 'street': '', 'house_number': '', 'language': 'English'},
+        'global_config': {'device_name': 'ESAFE', 'country': 'BE', 'postal_code': '', 'city': '', 'street': '', 'house_number': '', 'language': 'en'},
         'activate_user_config': {'change_first_name': True, 'change_last_name': True, 'change_language': True, 'change_pin_code': False},
         'rfid_auth_key_A': '',
         'rfid_auth_key_B': '',
