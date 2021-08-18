@@ -269,8 +269,8 @@ class MetricsCollector(object):
                         level = 0
                     tags = {'id': output_id,
                             'name': output_name,
-                            'module_type': MetricsCollector.OUTPUT_MODULE_TYPES[output_dto.module_type],
-                            'type': MetricsCollector.OUTPUT_OUTPUT_TYPES[output_dto.output_type]}
+                            'module_type': MetricsCollector.OUTPUT_MODULE_TYPES.get(output_dto.module_type, 'unknown'),
+                            'type': MetricsCollector.OUTPUT_OUTPUT_TYPES.get(output_dto.output_type, 'unknown')}
                     self._enqueue_metrics(metric_type=metric_type,
                                           values={'value': int(level)},
                                           tags=tags,
@@ -671,7 +671,7 @@ class MetricsCollector(object):
         energy_data = {}
         try:
             for energy_module in self._energy_module_controller.load_modules():
-                device_id = '{0}.{{0}}'.format(energy_module.address)
+                device_id = '{0}.{{0}}'.format(energy_module.formatted_address)
                 mapping[str(energy_module.id)] = device_id
                 for i in range(EnergyEnums.NUMBER_OF_PORTS[energy_module.version]):
                     energy_data[device_id.format(i)] = {'name': getattr(energy_module, 'input{0}'.format(i))}

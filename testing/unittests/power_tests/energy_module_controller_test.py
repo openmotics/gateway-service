@@ -22,7 +22,7 @@ import mock
 from datetime import datetime
 from peewee import SqliteDatabase
 from gateway.events import GatewayEvent
-from gateway.enums import EnergyEnums
+from gateway.enums import EnergyEnums, HardwareType
 from gateway.hal.master_event import MasterEvent
 from gateway.pubsub import PubSub
 from gateway.dto import ModuleDTO, EnergyModuleDTO, RealtimeEnergyDTO, TotalEnergyDTO
@@ -71,7 +71,7 @@ class EnergyModuleControllerTest(unittest.TestCase):
     def _setup_module(self, version=EnergyEnums.Version.ENERGY_MODULE, address=1, number=1):
         module = Module(address=address,
                         source=ModuleDTO.Source.GATEWAY,
-                        hardware_type=ModuleDTO.HardwareType.PHYSICAL)
+                        hardware_type=HardwareType.PHYSICAL)
         module.save()
         energy_module = EnergyModule(version=version,
                                      number=number,
@@ -155,8 +155,7 @@ class EnergyModuleControllerTest(unittest.TestCase):
 
         self.pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, handle_events)
 
-        master_event = MasterEvent(MasterEvent.Types.POWER_ADDRESS_EXIT, {})
-        self.pubsub.publish_master_event(PubSub.MasterTopics.POWER, master_event)
+        self.controller._discovery_stopped()
         self.pubsub._publish_all_events(blocking=False)
 
         assert GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'powermodule'}) in events

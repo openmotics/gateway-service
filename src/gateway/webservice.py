@@ -49,9 +49,9 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     DimmerConfigurationSerializer, SensorStatusSerializer, \
     EnergyModuleSerializer
 from gateway.authentication_controller import AuthenticationToken
-from gateway.dto import GlobalRTD10DTO, ModuleDTO, RoomDTO, ScheduleDTO, \
+from gateway.dto import GlobalRTD10DTO, RoomDTO, ScheduleDTO, \
     UserDTO, InputStatusDTO
-from gateway.enums import ShutterEnums, UserEnums
+from gateway.enums import ShutterEnums, UserEnums, ModuleType
 from gateway.exceptions import UnsupportedException, FeatureUnavailableException, \
     ItemDoesNotExistException, WrongInputParametersException, ParseException
 from gateway.exceptions import CommunicationFailure, InMaintenanceModeException
@@ -238,7 +238,7 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
         # check if the call is done from localhost, and then verify the token
         if request.remote.ip != '127.0.0.1':
             if checked_token is None:
-                raise RuntimeError()
+                raise RuntimeError('Call is not performed from localhost and no token is provided')
             if checked_token.user.role != 'SUPER':
                 raise RuntimeError('User is non SUPER, need SUPER to access V0 api')
         if pass_token is True:
@@ -251,10 +251,10 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
                 request.params['role'] = 'ADMIN'
             else:
                 request.params['role'] = checked_token.user.role
-    except Exception:
+    except Exception as ex:
         cherrypy.response.headers['Content-Type'] = 'application/json'
         cherrypy.response.status = 401  # Unauthorized
-        contents = json.dumps({'success': False, 'msg': 'invalid_token'})
+        contents = json.dumps({'success': False, 'msg': 'invalid_token', 'detail': str(ex)})
         cherrypy.response.body = contents.encode()
         request.handler = None
 
@@ -521,7 +521,7 @@ class WebInterface(object):
         if not self.in_authorized_mode():
             raise cherrypy.HTTPError(401, "unauthorized")
         user_dto = UserDTO(username=username,
-                           role=User.UserRoles.ADMIN,
+                           role=User.UserRoles.SUPER,
                            accepted_terms=0)
         user_dto.set_password(password)
         self._user_controller.save_user(user_dto)
@@ -1059,28 +1059,28 @@ class WebInterface(object):
     def add_virtual_output_module(self):
         # type: () -> Dict[str, Any]
         """ Adds a new virtual output module. """
-        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.OUTPUT)
+        self._module_controller.add_virtual_module(ModuleType.OUTPUT)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True)
     def add_virtual_input_module(self):
         # type: () -> Dict[str, Any]
         """ Adds a new virtual input module. """
-        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.INPUT)
+        self._module_controller.add_virtual_module(ModuleType.INPUT)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True)
     def add_virtual_dim_control_module(self):
         # type: () -> Dict[str, Any]
         """ Adds a new virtual dim control module """
-        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.DIM_CONTROL)
+        self._module_controller.add_virtual_module(ModuleType.DIM_CONTROL)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True)
     def add_virtual_sensor_module(self):
         # type: () -> Dict[str, Any]
         """ Adds a new virtual sensor module """
-        self._module_controller.add_virtual_module(ModuleDTO.ModuleType.SENSOR)
+        self._module_controller.add_virtual_module(ModuleType.SENSOR)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(action_type=int, action_number=int))

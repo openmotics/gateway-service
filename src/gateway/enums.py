@@ -78,6 +78,27 @@ class EnergyEnums(object):
     LARGEST_MODULE_TYPE = Version.ENERGY_MODULE  # Update if needed
 
 
+class HardwareType(object):
+    VIRTUAL = 'virtual'
+    PHYSICAL = 'physical'
+    EMULATED = 'emulated'
+    INTERNAL = 'internal'
+
+
+class ModuleType(object):
+    SENSOR = 'sensor'
+    INPUT = 'input'
+    OUTPUT = 'output'
+    SHUTTER = 'shutter'
+    DIM_CONTROL = 'dim_control'
+    CAN_CONTROL = 'can_control'
+    OPEN_COLLECTOR = 'open_collector'
+    ENERGY = 'energy'
+    POWER = 'power'
+    P1_CONCENTRATOR = 'p1_concentrator'
+    UNKNOWN = 'unknown'
+
+
 class Leds(object):
     EXPANSION = 'EXPANSION'
     STATUS_GREEN = 'STATUS_GREEN'

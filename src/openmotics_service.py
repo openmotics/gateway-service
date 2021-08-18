@@ -17,7 +17,6 @@ The main module for the OpenMotics
 """
 from __future__ import absolute_import
 
-import constants
 from platform_utils import System
 System.import_libs()
 
@@ -39,7 +38,7 @@ if False:  # MYPY
     from gateway.authentication_controller import AuthenticationController
     from gateway.delivery_controller import DeliveryController
     from gateway.energy_module_controller import EnergyModuleController
-    from gateway.esafe_controller import EsafeController
+    from esafe.rebus.rebus_controller import RebusController
     from gateway.output_controller import OutputController
     from gateway.group_action_controller import GroupActionController
     from gateway.input_controller import InputController
@@ -86,7 +85,7 @@ class OpenmoticsService(object):
                 event_sender=INJECTED,  # type: EventSender
                 master_controller=INJECTED,  # type: MasterController
                 frontpanel_controller=INJECTED,  # type: FrontpanelController
-                esafe_controller=INJECTED,  # type: EsafeController
+                rebus_controller=INJECTED,  # type: RebusController
                 delivery_controller=INJECTED,  # type: DeliveryController
                 authentication_controller=INJECTED,  # type: AuthenticationController
                 user_controller=INJECTED  # type: UserController
@@ -121,7 +120,7 @@ class OpenmoticsService(object):
         plugin_controller.set_metrics_controller(metrics_controller)
         plugin_controller.set_metrics_collector(metrics_collector)
         master_controller.set_plugin_controller(plugin_controller)
-        delivery_controller.set_esafe_controller(esafe_controller)
+        delivery_controller.set_rebus_controller(rebus_controller)
         authentication_controller.set_user_controller(user_controller)
 
         if frontpanel_controller:
@@ -158,7 +157,7 @@ class OpenmoticsService(object):
               uart_controller=INJECTED,  # type: UARTController
               energy_module_controller=INJECTED,  # type: EnergyModuleController
               rfid_controller=INJECTED,  # type: RfidController
-              esafe_controller=INJECTED  # type: EsafeController
+              rebus_controller=INJECTED  # type: RebusController
               ):
         """ Main function. """
         logger.info('Starting OM core service...')
@@ -215,8 +214,8 @@ class OpenmoticsService(object):
             uart_controller.start()
         pubsub.start()
         rfid_controller.start()
-        if esafe_controller is not None:
-            esafe_controller.start()
+        if rebus_controller is not None:
+            rebus_controller.start()
 
         web_interface.set_service_state(True)
         signal_request = {'stop': False}
@@ -250,8 +249,8 @@ class OpenmoticsService(object):
             event_sender.stop()
             pubsub.stop()
             rfid_controller.start()
-            if esafe_controller is not None:
-                esafe_controller.stop()
+            if rebus_controller is not None:
+                rebus_controller.stop()
             logger.info('Stopping OM core service... Done')
             signal_request['stop'] = True
 

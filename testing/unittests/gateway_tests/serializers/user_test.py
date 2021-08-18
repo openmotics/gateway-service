@@ -143,6 +143,22 @@ class UserSerializerTest(unittest.TestCase):
         expected.first_name = 'first'
         self.assertEqual(expected, dto)
 
+        # email
+        serial = {
+            'email': 'test@test.com'
+        }
+        dto = UserSerializer.deserialize(serial)
+        # set first name afterwards to not set the username
+        expected = UserDTO()
+        expected.email = 'test@test.com'
+        self.assertEqual(expected, dto)
+
+        serial = {
+            'email': 'wrong_@testcom'
+        }
+        with self.assertRaises(ValueError):
+            UserSerializer.deserialize(serial)
+
         # full
         serial = {
             'first_name': 'first',

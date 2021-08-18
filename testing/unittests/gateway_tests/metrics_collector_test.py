@@ -77,7 +77,7 @@ class MetricsCollectorTest(unittest.TestCase):
             self.controller._process_energy_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy',
-                                      tags={'type': 'openmotics', 'id': '11.0', 'name': 'foo'},
+                                      tags={'type': 'openmotics', 'id': 'C11.0', 'name': 'foo'},
                                       values={'current': 5.0, 'frequency': 2.1, 'power': 3.6, 'voltage': 10.0})
             self.assertEqual([expected_call], enqueue.call_args_list)
 
@@ -203,6 +203,6 @@ class MetricsCollectorTest(unittest.TestCase):
             self.controller._process_energy_metrics('energy')
             expected_call = mock.call(timestamp=mock.ANY,
                                       metric_type='energy',
-                                      tags={'type': 'openmotics', 'id': '11.0', 'name': 'foo'},
+                                      tags={'type': 'openmotics', 'id': 'C11.0', 'name': 'foo'},
                                       values={'counter_day': 10, 'counter_night': 2, 'counter': 12})
             self.assertEqual([expected_call], enqueue.call_args_list)

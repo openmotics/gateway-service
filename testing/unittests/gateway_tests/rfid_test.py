@@ -28,6 +28,7 @@ from ioc import SetTestMode
 
 MODELS = [RFID, User, Apartment]
 
+
 class RFIDControllerTest(unittest.TestCase):
     """ Tests for DeliveryController. """
 

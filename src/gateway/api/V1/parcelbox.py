@@ -23,13 +23,15 @@ import ujson as json
 
 from ioc import INJECTED, Inject
 
-from gateway.api.serializers import ParcelBoxSerializer
-from gateway.esafe_controller import EsafeController
+from gateway.api.serializers import ParcelBoxSerializer, DeliverySerializer
+from esafe.rebus.rebus_controller import RebusController
 from gateway.exceptions import UnAuthorizedException, ItemDoesNotExistException, InvalidOperationException, WrongInputParametersException
 from gateway.models import User
 from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
 
 if False:  # MyPy
+    from typing import Optional
+    from gateway.authentication_controller import AuthenticationToken
     from gateway.delivery_controller import DeliveryController
 
 logger = logging.getLogger(__name__)
@@ -40,10 +42,10 @@ class ParcelBox(RestAPIEndpoint):
     API_ENDPOINT = '/api/v1/parcelboxes'
 
     @Inject
-    def __init__(self, esafe_controller=INJECTED, delivery_controller=INJECTED):
-        # type: (EsafeController, DeliveryController) -> None
+    def __init__(self, rebus_controller=INJECTED, delivery_controller=INJECTED):
+        # type: (RebusController, DeliveryController) -> None
         super(ParcelBox, self).__init__()
-        self.esafe_controller = esafe_controller
+        self.rebus_controller = rebus_controller
         self.delivery_controller = delivery_controller
         # Set a custom route dispatcher in the class so that you have full
         # control over how the routes are defined.
@@ -63,19 +65,26 @@ class ParcelBox(RestAPIEndpoint):
                                       controller=self, action='put_parcelbox',
                                       conditions={'method': ['PUT']})
 
-    @openmotics_api_v1(auth=False, expect_body_type=None, check={'size': str, 'available': bool})
-    def get_parcelboxes(self, size=None, available=None):
+    @openmotics_api_v1(auth=False, pass_token=True, expect_body_type=None, check={'size': str, 'available': bool, 'show_deliveries': bool})
+    def get_parcelboxes(self, auth_token=None, size=None, available=None, show_deliveries=None):
+        # type: (Optional[AuthenticationToken], Optional[str], Optional[bool], Optional[bool]) -> str
         self._check_controller()
-        boxes = self.esafe_controller.get_parcelboxes(size=size)
-        if available is True:
-            boxes = [box for box in boxes if self.delivery_controller.parcel_id_available(box.id)]
+        boxes = self.rebus_controller.get_parcelboxes(size=size, available=available)
         boxes_serial = [ParcelBoxSerializer.serialize(box) for box in boxes]
+        if show_deliveries is True:
+            if auth_token is None or auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.SUPER, User.UserRoles.TECHNICIAN]:
+                raise UnAuthorizedException('Cannot include delivery information with the parcelboxes when not logged in as SUPER, ADMIN or TECHNICIAN.')
+            for box in boxes_serial:
+                deliveries = self.delivery_controller.load_deliveries_filter(delivery_parcelbox_rebus_id=box['id'])
+                delivery = deliveries[0] if len(deliveries) == 1 else None
+                if delivery is not None:
+                    box['delivery'] = DeliverySerializer.serialize(delivery)
         return json.dumps(boxes_serial)
 
     @openmotics_api_v1(auth=False, expect_body_type=None, check={'rebus_id': int})
     def get_parcelbox(self, rebus_id):
         self._check_controller()
-        boxes = self.esafe_controller.get_parcelboxes(rebus_id=rebus_id)
+        boxes = self.rebus_controller.get_parcelboxes(rebus_id=rebus_id)
         if len(boxes) != 1:
             raise ItemDoesNotExistException('Cannot find parcelbox with rebus id: {}'.format(rebus_id))
         box = boxes[0]
@@ -86,11 +95,11 @@ class ParcelBox(RestAPIEndpoint):
     def put_parcelboxes(self, size):
         logger.info('opening random parcelbox with size: {}'.format(size))
         self._check_controller()
-        boxes = self.esafe_controller.get_parcelboxes(size=size, available=True)
+        boxes = self.rebus_controller.get_parcelboxes(size=size, available=True)
         if len(boxes) == 0:
             raise InvalidOperationException('Cannot open box of size: {}, no boxes available'.format(size))
         random_index = random.randint(0, len(boxes)-1)
-        box = self.esafe_controller.open_box(boxes[random_index].id)
+        box = self.rebus_controller.open_box(boxes[random_index].id)
         box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
         return json.dumps(box_serial)
 
@@ -99,7 +108,7 @@ class ParcelBox(RestAPIEndpoint):
         self._check_controller()
         if 'open' not in request_body:
             WrongInputParametersException('Expected json body with the open parameter')
-        boxes = self.esafe_controller.get_parcelboxes(rebus_id=rebus_id)
+        boxes = self.rebus_controller.get_parcelboxes(rebus_id=rebus_id)
         box = boxes[0] if len(boxes) == 1 else None
 
         if box is None:
@@ -107,15 +116,16 @@ class ParcelBox(RestAPIEndpoint):
 
         # auth check
         if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
-            delivery = self.delivery_controller.load_delivery_by_pickup_user(auth_token.user.id)
+            deliveries = self.delivery_controller.load_deliveries_filter(delivery_pickup_user=auth_token.user.id)
+            delivery = deliveries[0] if len(deliveries) == 1 else None
             if delivery is None or delivery.parcelbox_rebus_id is not rebus_id:
                 raise UnAuthorizedException('Cannot open parcelbox with id: {}: You are not admin, technician and the box does not belong to you'.format(rebus_id))
 
         if request_body['open'] is True:
-            box = self.esafe_controller.open_box(box.id)
+            box = self.rebus_controller.open_box(box.id)
         box_serial = ParcelBoxSerializer.serialize(box) if box is not None else {}
         return json.dumps(box_serial)
 
     def _check_controller(self):
-        if self.esafe_controller is None:
+        if self.rebus_controller is None:
             raise InvalidOperationException('Cannot check parcelboxes, eSafe controller is None')

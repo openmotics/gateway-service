@@ -103,7 +103,7 @@ class SlaveCommunicator(object):
 
         master_timeout = False
         payload = command.create_request_payload(fields)
-        logger.info('Writing to slave transport:   Address: %s - Data: %s', address, Printable(payload))
+        logger.debug('Writing to slave transport:   Address: %s - Data: %s', address, Printable(payload))
         try:
             self._communicator.do_command(command=CoreAPI.slave_tx_transport_message(len(payload)),
                                           fields={'payload': payload},
