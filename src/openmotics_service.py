@@ -94,10 +94,9 @@ class OpenmoticsService(object):
         # TODO: Fix circular dependencies
 
         # Forward esafe events to consumers.
-        pubsub.subscribe_esafe_events(PubSub.EsafeTopics.CONFIG, event_sender.enqueue_event)
-        pubsub.subscribe_esafe_events(PubSub.EsafeTopics.LOCK, event_sender.enqueue_event)
-        pubsub.subscribe_esafe_events(PubSub.EsafeTopics.DELIVERY, event_sender.enqueue_event)
-        pubsub.subscribe_esafe_events(PubSub.EsafeTopics.RFID, event_sender.enqueue_event)
+        for topic in PubSub.EsafeTopics.get_values():
+            pubsub.subscribe_esafe_events(topic, event_sender.enqueue_event)
+            pubsub.subscribe_esafe_events(topic, web_interface.send_event_websocket)
 
         # Forward config change events to consumers.
         pubsub.subscribe_gateway_events(PubSub.GatewayTopics.CONFIG, event_sender.enqueue_event)

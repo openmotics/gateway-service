@@ -52,6 +52,7 @@ from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import GlobalRTD10DTO, RoomDTO, ScheduleDTO, \
     UserDTO, InputStatusDTO
 from gateway.enums import ShutterEnums, UserEnums, ModuleType
+from gateway.events import BaseEvent
 from gateway.exceptions import UnsupportedException, FeatureUnavailableException, \
     ItemDoesNotExistException, WrongInputParametersException, ParseException
 from gateway.exceptions import CommunicationFailure, InMaintenanceModeException
@@ -59,7 +60,7 @@ from gateway.mappers.thermostat import ThermostatMapper
 from gateway.models import Config, Database, Feature, User
 from gateway.uart_controller import UARTController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
-    MetricsSocket, OMPlugin, OMSocketTool
+    MetricsSocket, OMPlugin, OMSocketTool, WebSocketEncoding
 from ioc import INJECTED, Inject, Injectable, Singleton
 from logs import Logs
 from platform_utils import Hardware, Platform, System
@@ -408,7 +409,8 @@ class WebInterface(object):
                     sources = self._metrics_controller.get_filter('source', receiver_info['source'])
                     metric_types = self._metrics_controller.get_filter('metric_type', receiver_info['metric_type'])
                     if metric['source'] in sources and metric['type'] in metric_types:
-                        receiver_info['socket'].send(msgpack.dumps(metric), binary=True)
+                        receiver_info['socket'].send_encoded(metric)
+                        # receiver_info['socket'].send(msgpack.dumps(metric), binary=True)
                 except cherrypy.HTTPError as ex:  # As might be caught from the `check_token` function
                     receiver_info['socket'].close(ex.code, ex.message)
                 except Exception as ex:
@@ -418,11 +420,12 @@ class WebInterface(object):
             logger.error('Failed to distribute metrics to WebSockets: %s', ex)
 
     def send_event_websocket(self, event):
+        # type: (BaseEvent) -> None
         try:
             answers = cherrypy.engine.publish('get-events-receivers')
             if not answers:
                 return
-            receivers = answers.pop()
+            receivers = answers.pop()  # type: Dict[str, Dict[str, Any]]  # unpop since cherrypy bus returns reply of publish in a list
             for client_id in receivers.keys():
                 receiver_info = receivers.get(client_id)
                 if receiver_info is None:
@@ -430,9 +433,14 @@ class WebInterface(object):
                 try:
                     if event.type not in receiver_info['subscribed_types']:
                         continue
+                    # check if the namespace matches,
+                    # only do this when a namespace is defined in the websocket metadata
+                    if 'namespace' in receiver_info and \
+                            (event.namespace != receiver_info['namespace']):
+                        continue
                     if cherrypy.request.remote.ip != '127.0.0.1' and not self._user_controller.check_token(receiver_info['token']):
                         raise cherrypy.HTTPError(401, 'invalid_token')
-                    receiver_info['socket'].send(msgpack.dumps(event.serialize()), binary=True)
+                    receiver_info['socket'].send_encoded(event.serialize())
                 except cherrypy.HTTPError as ex:  # As might be caught from the `check_token` function
                     receiver_info['socket'].close(ex.code, ex.message)
                 except Exception as ex:
@@ -2413,10 +2421,16 @@ class WebInterface(object):
     @cherrypy.expose
     @cherrypy.tools.cors()
     @cherrypy.tools.authenticated(pass_token=True)
-    def ws_events(self, token):
-        cherrypy.request.ws_handler.metadata = {'token': token,
-                                                'client_id': uuid.uuid4().hex,
-                                                'interface': self}
+    def ws_events(self, token, serialization=WebSocketEncoding.MSGPACK):
+        if serialization not in WebSocketEncoding.get_values():
+            raise ValueError('Cannot create a websocket with serialization: {}'.format(serialization))
+        handler = cherrypy.request.ws_handler
+        handler.metadata = {
+            'token': token,
+            'client_id': uuid.uuid4().hex,
+            'interface': self,
+            'serialization': serialization
+        }
 
     @cherrypy.expose
     @cherrypy.tools.cors()

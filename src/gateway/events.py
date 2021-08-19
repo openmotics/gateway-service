@@ -19,26 +19,38 @@ from __future__ import absolute_import
 
 import ujson as json
 
+from gateway.enums import BaseEnum
+
 if False:  # MYPY
-    from typing import Any, Dict
+    from typing import Any, Dict, Optional
 
 
-"""
-This class represents the base template for any type of events
-"""
 class BaseEvent(object):
-    VERSION = None
+    """
+    This class represents the base template for any type of events
+    """
+    VERSION = 1
+    NAMESPACE = 'BASE_EVENT'
 
     def __init__(self, event_type, data):
-        # type: (str, Dict[str,Any]) -> None
+        # type: (str, Optional[Dict[str,Any]]) -> None
         self.type = event_type
         self.data = data
 
     def serialize(self):
         # type: () -> Dict[str,Any]
-        return {'type': self.type,
-                'data': self.data,
-                '_version': 1.0}  # Add version so that event processing code can handle multiple formats
+        version = self.__class__.VERSION
+        if version == 1:
+            return {'type': self.type,
+                    'data': self.data,
+                    '_version': 1.0}  # Add version so that event processing code can handle multiple formats
+        else:
+            if self.namespace == BaseEvent.NAMESPACE:
+                raise NotImplementedError('Cannot serialize a BaseEvent instance, needs to be a subclass')
+            return {'type': self.type,
+                    'data': self.data,
+                    'namespace': self.namespace,
+                    '_version': float(version)}
 
     def __eq__(self, other):
         # type: (Any) -> bool
@@ -59,6 +71,10 @@ class BaseEvent(object):
         # type: (Dict[str,Any]) -> BaseEvent
         return cls(event_type=data['type'],
                    data=data['data'])
+
+    @property
+    def namespace(self):
+        return self.__class__.NAMESPACE
 
 
 class GatewayEvent(BaseEvent):
@@ -87,8 +103,9 @@ class GatewayEvent(BaseEvent):
        'level': int,
        'connected': bool}
     """
+    NAMESPACE = 'OPENMOTICS'
 
-    class Types(object):
+    class Types(BaseEnum):
         CONFIG_CHANGE = 'CONFIG_CHANGE'
         INPUT_CHANGE = 'INPUT_CHANGE'
         OUTPUT_CHANGE = 'OUTPUT_CHANGE'
@@ -126,9 +143,11 @@ class EsafeEvent(BaseEvent):
       {'uuid': str,      # RFID uuid
        'action': str}    # action of the rfid change: "SCAN" or "REGISTER"
     """
+    VERSION = 2
+    NAMESPACE = 'ESAFE'
 
-    class Types(object):
+    class Types(BaseEnum):
         CONFIG_CHANGE = 'CONFIG_CHANGE'
-        DELIVERY_CHANGE = 'DELIVERY_DELIVERY'
+        DELIVERY_CHANGE = 'DELIVERY_CHANGE'
         LOCK_CHANGE = 'LOCK_CHANGE'
         RFID_CHANGE = 'RFID_CHANGE'
