@@ -39,6 +39,7 @@ if False:  # MyPy
 
 logger = logging.getLogger(__name__)
 
+
 # ------------------------
 #  api decorator
 # ------------------------
@@ -86,11 +87,28 @@ def _openmotics_api_v1(f, *args, **kwargs):
         import traceback
         print(traceback.print_exc())
 
+    # start the serialization timing
     timings['process'] = ('Processing', time.time() - start)
     serialization_start = time.time()
-    contents = str(data).encode() if data is not None else None
+
+    # check if custom response object is returned, If this is true, no error has occurred
+    if isinstance(data, V1ApiResponse):
+        status = data.status_code
+        for header_name, header_value in data.response_headers.items():
+            cherrypy.response.headers[header_name] = header_value
+        if 'Content-Type' not in data.response_headers:
+            cherrypy.response.headers['Content-Type'] = 'application/json'
+        response_body = data.body
+    else:
+        response_body = data
+        cherrypy.response.headers['Content-Type'] = 'application/json'
+
+    # encode response data
+    contents = str(response_body).encode() if response_body is not None else None
+    # end the serialization timing
     timings['serialization'] = 'Serialization', time.time() - serialization_start
-    cherrypy.response.headers['Content-Type'] = 'application/json'
+
+    # Set the server timing header
     cherrypy.response.headers['Server-Timing'] = ','.join(['{0}={1}; "{2}"'.format(key, value[1] * 1000, value[0])
                                                            for key, value in timings.items()])
     cherrypy.response.status = status
@@ -167,7 +185,6 @@ def authentication_handler_v1(pass_token=False, pass_role=False, auth=False, aut
         if pass_security_level is True:
             request.params['auth_security_level'] = checked_auth_level
     except UnAuthorizedException as ex:
-        cherrypy.response.headers['Content-Type'] = 'application/json'
         cherrypy.response.status = 401  # Unauthorized
         contents = ex.message
         cherrypy.response.body = contents.encode()
@@ -299,6 +316,25 @@ class RestAPIEndpoint(object):
         return 'Rest Endpoint class: "{}"'.format(self.__class__.__name__)
 
 
+class V1ApiResponse(object):
+
+    def __init__(self, status_code=200, response_headers=None, body=None):
+        # type: (int, Optional[Dict[str, str]], Optional[Any]) -> None
+        self.status_code = status_code
+        self.response_headers = response_headers if response_headers is not None else {}
+        self.body = body
+
+    def __str__(self):
+        return '<V1 API Response: {{Status Code: {}, Response Headers: {}, Body: {}}}>'.format(self.status_code, self.response_headers, self.body)
+
+    def __eq__(self, other):
+        if not isinstance(other, V1ApiResponse):
+            return False
+        return self.status_code == other.status_code and \
+               self.response_headers == other.response_headers and \
+               self.body == other.body
+
+
 @Inject
 def expose(cls, api_endpoint_register=INJECTED):
     """
@@ -315,6 +351,7 @@ def expose(cls, api_endpoint_register=INJECTED):
 @Singleton
 class APIEndpointRegister(object):
     """ A class that will hold all the endpoints. This is to not have to include the complete webservice when registering an api"""
+
     def __init__(self):
         self.endpoints = []
 
@@ -388,4 +425,3 @@ class WebServiceV1(object):
 
     def __repr__(self):
         return self.__str__()
-
