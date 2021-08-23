@@ -25,7 +25,7 @@ from gateway.api.serializers import UserSerializer
 from gateway.exceptions import WrongInputParametersException, UnAuthorizedException, ItemDoesNotExistException, NotImplementedException
 from gateway.models import User
 from gateway.user_controller import UserController
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose, AuthenticationLevel
+from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose, AuthenticationLevel, V1ApiResponse
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +136,7 @@ class Users(RestAPIEndpoint):
             user_dto.loaded_fields.remove('pin_code')
 
         if user_dto.username is None:
-            user_dto.username = uuid.uuid4().hex
+            user_dto.username = str(uuid.uuid4())
         # add a custom user code
         user_dto.pin_code = str(self.user_controller.generate_new_pin_code(UserController.PinCodeLength[user_dto.role]))
         user_dto.accepted_terms = True
@@ -213,4 +213,4 @@ class Users(RestAPIEndpoint):
                 raise UnAuthorizedException('As a non admin or technician user, you cannot delete another user')
 
         self.user_controller.remove_user(user_to_delete_dto)
-        return 'OK'
+        return V1ApiResponse(status_code=204, response_headers=None, body=None)
