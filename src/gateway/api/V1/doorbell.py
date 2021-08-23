@@ -25,7 +25,7 @@ from ioc import INJECTED, Inject
 from gateway.api.serializers import DoorbellSerializer
 from esafe.rebus.rebus_controller import RebusController
 from gateway.exceptions import ItemDoesNotExistException, InvalidOperationException
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
+from gateway.api.V1.webservice.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
 
 logger = logging.getLogger(__name__)
 
