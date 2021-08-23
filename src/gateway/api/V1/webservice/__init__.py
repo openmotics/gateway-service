@@ -16,4 +16,4 @@
 V1 Webservice Init file
 """
 
-from gateway.api.V1.webservice.webservice_v1 import WebServiceV1
+from gateway.api.V1.webservice.webservice import WebServiceV1
