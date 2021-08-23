@@ -16,17 +16,15 @@ from __future__ import absolute_import
 
 import cherrypy
 import json
-
 import mock
 
+from ioc import SetUpTestInjections
+from gateway.api.V1.apartments import Apartments
 from gateway.dto import ApartmentDTO, UserDTO
-from gateway.exceptions import *
+from gateway.exceptions import UnAuthorizedException, WrongInputParametersException
 from gateway.apartment_controller import ApartmentController
-from gateway.webservice_v1 import Apartments
 
 from .base_test import BaseCherryPyUnitTester
-
-from ioc import SetTestMode, SetUpTestInjections
 
 
 class ApiApartmentsTests(BaseCherryPyUnitTester):
@@ -74,7 +72,7 @@ class ApiApartmentsTests(BaseCherryPyUnitTester):
             role='USER',
             pin_code='1111',
             apartment=None,
-            language='English',
+            language='en',
             accepted_terms=1
         )
 

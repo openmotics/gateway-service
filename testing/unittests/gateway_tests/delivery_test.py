@@ -24,7 +24,7 @@ from peewee import SqliteDatabase
 
 from gateway.authentication_controller import AuthenticationController, TokenStore
 from gateway.dto import DeliveryDTO, UserDTO, SystemRFIDConfigDTO
-from gateway.esafe_controller import EsafeController
+from esafe.rebus.rebus_controller import RebusController
 from gateway.mappers import UserMapper, DeliveryMapper
 from gateway.models import Delivery, User, Apartment
 from gateway.delivery_controller import DeliveryController
@@ -68,32 +68,36 @@ class DeliveryControllerTest(unittest.TestCase):
         SetUpTestInjections(config={'username': 'test', 'password': 'test'})
         self.user_controller = UserController()
         SetUpTestInjections(user_controller=self.user_controller)
-        self.esafe_controller = mock.Mock(EsafeController)
+        self.rebus_controller = mock.Mock(RebusController)
         self.controller = DeliveryController()
-        self.controller.set_esafe_controller(self.esafe_controller)
+        self.controller.set_rebus_controller(self.rebus_controller)
         SetUpTestInjections(delivery_controller=self.controller)
 
         self.test_user_1 = UserDTO(
             username='test_user_1',
-            role='ADMIN'
+            role='ADMIN',
+            language='en'
         )
         self.test_user_1.set_password('test')
 
         self.test_user_2 = UserDTO(
             username='test_user_2',
-            role='USER'
+            role='USER',
+            language='en'
         )
         self.test_user_2.set_password('test')
 
         self.test_user_3 = UserDTO(
             username='test_user_3',
-            role='COURIER'
+            role='COURIER',
+            language='en'
         )
         self.test_user_3.set_password('test')
 
         self.test_user_4 = UserDTO(
             username='test_user_4',
-            role='COURIER'
+            role='COURIER',
+            language='en'
         )
         self.test_user_4.set_password('test')
 
@@ -180,7 +184,7 @@ class DeliveryControllerTest(unittest.TestCase):
         self.assert_deliveries_equal(self.test_delivery_1, result)
         self.assert_delivery_in_db(result.id, self.test_delivery_1)
 
-        with mock.patch.object(self.esafe_controller, 'verify_device_exists', return_value=False):
+        with mock.patch.object(self.rebus_controller, 'verify_device_exists', return_value=False):
             with self.assertRaises(ValueError):
                 result = self.controller.save_delivery(self.test_delivery_1)
 
@@ -306,52 +310,125 @@ class DeliveryControllerTest(unittest.TestCase):
             self.controller.pickup_delivery(delivery_1_id)
 
     def test_load_delivery(self):
-        user_orm = User(
+        user_orm_1 = User(
             username='test',
             password='test',
             is_active=True,
             accepted_terms=0,
-            role='USER'
+            role='USER',
+            language='en'
         )
-        user_orm.save()
-        user_id = user_orm.id
+        user_orm_1.save()
 
-        delivery_orm = Delivery(
+        user_orm_2 = User(
+            username='test2',
+            password='test2',
+            is_active=True,
+            accepted_terms=0,
+            role='USER',
+            language='en'
+        )
+        user_orm_2.save()
+
+        delivery_orm_1 = Delivery(
             type='DELIVERY',
             timestamp_delivery='2021-05-07T10:10:04+02:00',
             timestamp_pickup='2021-05-08T10:10:04+02:00',
             courier_firm='TNT',
             parcelbox_rebus_id=37,
-            user_pickup=user_id
+            user_pickup=user_orm_1.id
         )
-        delivery_orm.save()
+        delivery_orm_1.save()
 
-        delivery_orm = Delivery(
+        delivery_orm_2 = Delivery(
             type='DELIVERY',
             timestamp_delivery='2021-05-07T10:10:04+02:00',
             courier_firm='TNT',
-            parcelbox_rebus_id=37,
-            user_pickup=user_id
+            parcelbox_rebus_id=38,
+            user_pickup=user_orm_2.id
         )
-        delivery_orm.save()
-        delivery_id = delivery_orm.id
+        delivery_orm_2.save()
+
+        delivery_orm_3 = Delivery(
+            type='RETURN',
+            timestamp_delivery='2021-05-07T10:10:04+02:00',
+            courier_firm='BPOST',
+            parcelbox_rebus_id=39,
+            user_pickup=user_orm_2.id
+        )
+        delivery_orm_3.save()
 
         # check that there are 2 deliveries in the database
         count = Delivery.select().count()
-        self.assertEqual(2, count)
+        self.assertEqual(3, count)
 
         # verify that the user is saved
-        user_queried = User.get_by_id(user_id)
+        user_queried = User.get_by_id(user_orm_1.id)
         self.assertIsNotNone(user_queried)
 
-        delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
-        result = self.controller.load_delivery(delivery_id)
+        delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm_2)
+        result = self.controller.load_delivery(delivery_orm_2.id)
         self.assertEqual(delivery_dto, result)
 
         result = self.controller.load_deliveries()
-        # only one delivery should be returned since the first one is already picked up
+        # only two deliveries should be returned since the first one is already picked up
+        self.assertEqual(2, len(result))
+
+        result = self.controller.load_deliveries(user_id=user_orm_2.id)
+        # only two deliveries should be returned since the first one is already picked up
+        self.assertEqual(2, len(result))
+
+        result = self.controller.load_deliveries(history=True)
+        # only two deliveries should be returned since the first one is already picked up
         self.assertEqual(1, len(result))
 
-        result = self.controller.load_deliveries(user_id=user_id)
-        # only one delivery should be returned since the first one is already picked up
-        self.assertEqual(1, len(result))
+        result = self.controller.load_deliveries_filter(include_picked_up=True)
+        self.assertEqual(3, len(result))
+
+        result = self.controller.load_deliveries_filter(include_picked_up=True, delivery_id=delivery_orm_3.id)
+        delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm_3)
+        self.assertEqual([delivery_dto], result)
+
+        result = self.controller.load_deliveries_filter(include_picked_up=True, delivery_courier_firm='BPOST')
+        delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm_3)
+        self.assertEqual([delivery_dto], result)
+
+        result = self.controller.load_deliveries_filter(include_picked_up=True, delivery_courier_firm='TNT')
+        expected = [
+            DeliveryMapper.orm_to_dto(delivery_orm_1),
+            DeliveryMapper.orm_to_dto(delivery_orm_2)
+        ]
+        self.assertEqual(expected, result)
+
+        result = self.controller.load_deliveries_filter(include_picked_up=False, delivery_courier_firm='TNT')
+        expected = [
+            DeliveryMapper.orm_to_dto(delivery_orm_2)
+        ]
+        self.assertEqual(expected, result)
+
+        # add some more deliveries:
+        ids = []
+        for i in range(20):
+            delivery_orm = Delivery(
+                type='DELIVERY',
+                timestamp_delivery='2021-05-07T10:10:04+02:00',
+                timestamp_pickup='2021-05-08T10:10:04+02:00',
+                courier_firm='TNT',
+                parcelbox_rebus_id=40 + i,
+                user_pickup=user_orm_1.id
+            )
+            delivery_orm.save()
+            ids.append(delivery_orm.id)
+
+        # this should return 2 results with the most recent id's
+        result = self.controller.load_deliveries(history=True, before_id=None, limit=2)
+        self.assertEqual(2, len(result))
+        self.assertEqual(ids[-1], result[0].id)
+        self.assertEqual(ids[-2], result[1].id)
+
+        # This will match the delivery-id's since all the last ones are picked up deliveries
+        result = self.controller.load_deliveries(history=True, before_id=10, limit=2)
+        self.assertEqual(2, len(result))
+        self.assertEqual(9, result[0].id)
+        self.assertEqual(8, result[1].id)
+

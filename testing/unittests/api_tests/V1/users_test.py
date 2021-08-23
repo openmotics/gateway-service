@@ -23,12 +23,12 @@ import mock
 
 from gateway.apartment_controller import ApartmentController
 from gateway.authentication_controller import AuthenticationController, AuthenticationToken, LoginMethod
-from gateway.api.serializers.user import UserSerializer
 from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.dto import UserDTO, ApartmentDTO
-from gateway.exceptions import *
+from gateway.exceptions import UnAuthorizedException, WrongInputParametersException
 from gateway.user_controller import UserController
-from gateway.webservice_v1 import Users, AuthenticationLevel
+from gateway.webservice_v1 import AuthenticationLevel
+from gateway.api.V1.users import Users
 
 from .base import BaseCherryPyUnitTester
 
@@ -77,7 +77,7 @@ class ApiUsersTests(unittest.TestCase):
             role='USER',
             pin_code='1111',
             apartment=None,
-            language='English',
+            language='en',
             accepted_terms=1,
             email='user_1@test.com'
         )
@@ -112,7 +112,7 @@ class ApiUsersTests(unittest.TestCase):
             role='USER',
             pin_code='some_random_string',
             apartment=None,
-            language='English',
+            language='en',
             accepted_terms=1,
             is_active=False
         )
@@ -472,7 +472,7 @@ class ApiUsersTests(unittest.TestCase):
             self.verify_user_created(user_to_create, response)
 
     def test_activate_user(self):
-        user_code = {'code': self.normal_user_2.pin_code}
+        user_code = {'pin_code': self.normal_user_2.pin_code}
         with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
                 mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
             response = self.web.post_activate_user('2',
@@ -480,7 +480,7 @@ class ApiUsersTests(unittest.TestCase):
             self.assertEqual(b'OK', response)
 
     def test_activate_user_wrong_code(self):
-        user_code = {'code': 'WRONG_CODE'}
+        user_code = {'pin_code': 'WRONG_CODE'}
         with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
                 mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
             response = self.web.post_activate_user('2',
@@ -503,7 +503,6 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_update_user('2',
                                                 auth_token=auth_token,
-                                                auth_role=auth_token.user.role,
                                                 auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
@@ -565,7 +564,6 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.normal_user_3, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_update_user('2',
                                                 auth_token=auth_token,
-                                                auth_role=auth_token.user.role,
                                                 auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
@@ -634,15 +632,16 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
 
         with mock.patch.object(self.users_controller, 'generate_new_pin_code', wraps=mock_generate_new_pin):
             # Test all the 4 roles in a normal way
-            for user_role in ['USER', 'ADMIN', 'COURIER', 'TECHNICIAN']:
+            for user_role in ['USER', 'ADMIN', 'COURIER', 'TECHNICIAN', 'SUPER']:
                 status, headers, body = self.GET('/api/v1/users/available_code?role={}'.format(user_role), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
                 self.print_request_result()
                 self.assertStatus('200 OK')
                 number_of_digits = UserController.PinCodeLength[user_role]
-                self.assertEqual(number_of_digits, len(body))
-                body_int = int(body)
+                body_dict = json.loads(body)
+                self.assertEqual(number_of_digits, len(body_dict['code']))
+                body_int = int(body_dict['code'])
                 self.assertLess(body_int, int('1' + '0' * number_of_digits))
-                self.assertNotIn(body, current_pins)
+                self.assertNotIn(body_dict['code'], current_pins)
 
             # Don't pass the role in
             status, headers, body = self.GET('/api/v1/users/available_code', login_user=None, headers={'X-API-Secret': 'Test-Secret'})

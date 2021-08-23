@@ -34,7 +34,7 @@ class UserSerializerTest(unittest.TestCase):
                           'last_name': '',
                           'id': None,
                           'is_active': None,
-                          'language': 'English',
+                          'language': 'en',
                           'role': None,
                           'accepted_terms': 0,
                           'email': None})
@@ -50,7 +50,7 @@ class UserSerializerTest(unittest.TestCase):
                           'last_name': '',
                           'id': None,
                           'is_active': None,
-                          'language': 'English',
+                          'language': 'en',
                           'role': None,
                           'accepted_terms': 0,
                           'email': None})
@@ -67,7 +67,7 @@ class UserSerializerTest(unittest.TestCase):
                           'last_name': 'last',
                           'id': None,
                           'is_active': None,
-                          'language': 'English',
+                          'language': 'en',
                           'role': None,
                           'accepted_terms': 0,
                           'email':None})
@@ -83,7 +83,7 @@ class UserSerializerTest(unittest.TestCase):
                           'last_name': '',
                           'id': None,
                           'is_active': None,
-                          'language': 'English',
+                          'language': 'en',
                           'role': 'USER',
                           'accepted_terms': 0,
                           'email': None})

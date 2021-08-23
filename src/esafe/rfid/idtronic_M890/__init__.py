@@ -13,5 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-api init file
+idtronic M890 init file
 """
+from esafe.rfid.idtronic_M890 import para
+from esafe.rfid.idtronic_M890.idtronic_M890 import IdTronicM890

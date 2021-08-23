@@ -41,7 +41,7 @@ class ApartmentMapper(object):
         # type: (ApartmentDTO) -> Apartment
         apartment_orm = Apartment.get_or_none(id=dto_object.id)
         if apartment_orm is None:
-            mandatory_fields = {'name', 'mailbox_rebus_id', 'doorbell_rebus_id'}
+            mandatory_fields = {'name'}
             if not mandatory_fields.issubset(set(dto_object.loaded_fields)):
                 raise ValueError('Cannot create apartment without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
             apartment_orm = Apartment()

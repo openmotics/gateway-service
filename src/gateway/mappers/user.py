@@ -68,6 +68,10 @@ class UserMapper(object):
         if dto_object.role is None:
             dto_object.role = User.UserRoles.USER  # set default role to USER when one is created
 
+        # add the default value for the language to en
+        if 'language' not in dto_object.loaded_fields and user_orm.language is None:
+            user_orm.language = 'en'
+
         for field in dto_object.loaded_fields:
             if getattr(dto_object, field, None) is None:
                 continue

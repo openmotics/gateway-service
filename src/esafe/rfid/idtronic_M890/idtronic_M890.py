@@ -16,10 +16,10 @@
 IdTronic M890 wrapper
 """
 
-from rfid.idtronic_M890.para.para_packet import ParaPacketFactory, ParaPacketType, CardType
-from rfid.idtronic_M890.para.para_handler import ParaPacketHandler
-from rfid.idtronic_M890.para.para_transceiver import ParaSender
-from rfid.rfid_device import RfidDevice
+from esafe.rfid.idtronic_M890.para.para_packet import ParaPacketFactory, CardType
+from esafe.rfid.idtronic_M890.para.para_handler import ParaPacketHandler
+from esafe.rfid.idtronic_M890.para.para_transceiver import ParaSender
+from esafe.rfid.rfid_device import RfidDevice
 
 import logging
 

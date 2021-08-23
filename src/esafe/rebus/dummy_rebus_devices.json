@@ -1,0 +1,70 @@
+{
+  "devices": [
+    {
+      "id": 32,
+      "type": "mailbox",
+      "initial_state": "closed"
+    },
+    {
+      "id": 48,
+      "type": "mailbox",
+      "initial_state": "closed"
+    },
+    {
+      "id": 64,
+      "type": "parcelbox",
+      "initial_state": "closed",
+      "height": 700,
+      "width": 400,
+      "size": "S"
+    },
+    {
+      "id": 80,
+      "type": "parcelbox",
+      "initial_state": "closed",
+      "height": 300,
+      "width": 400,
+      "size": "M"
+    },
+    {
+      "id": 128,
+      "type": "parcelbox",
+      "initial_state": "closed",
+      "height": 300,
+      "width": 200,
+      "size": "XL"
+    },
+    {
+      "id": 17,
+      "type": "doorbell"
+    },
+    {
+      "id": 18,
+      "type": "doorbell"
+    },
+    {
+      "id": 19,
+      "type": "doorbell"
+    },
+    {
+      "id": 20,
+      "type": "doorbell"
+    },
+    {
+      "id": 21,
+      "type": "doorbell"
+    },
+    {
+      "id": 22,
+      "type": "doorbell"
+    },
+    {
+      "id": 23,
+      "type": "doorbell"
+    },
+    {
+      "id": 24,
+      "type": "doorbell"
+    }
+  ]
+}

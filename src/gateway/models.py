@@ -580,8 +580,8 @@ def on_thermostat_save_handler(model_class, instance, created):
 class Apartment(BaseModel):
     id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
     name = CharField(null=False)
-    mailbox_rebus_id = IntegerField(unique=True)
-    doorbell_rebus_id = IntegerField(unique=True)
+    mailbox_rebus_id = IntegerField(unique=True, null=True)
+    doorbell_rebus_id = IntegerField(unique=True, null=True)
 
 
 class User(BaseModel):
@@ -592,25 +592,13 @@ class User(BaseModel):
         TECHNICIAN = 'TECHNICIAN'
         COURIER = 'COURIER'
 
-    class UserLanguages(object):
-        EN = 'English'
-        DE = 'Deutsch'
-        NL = 'Nederlands'
-        FR = 'Francais'
-        ALL = [
-            EN,
-            DE,
-            NL,
-            FR,
-        ]
-
     id = AutoField(constraints=[SQL('AUTOINCREMENT')], unique=True)
     username = CharField(null=False, unique=True)
     first_name = CharField(null=True)
     last_name = CharField(null=True)
-    role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHINICAN, COURIER, SUPER
+    role = CharField(default=UserRoles.USER, null=False, )  # options USER, ADMIN, TECHNICIAN, COURIER, SUPER
     pin_code = CharField(null=True, unique=True)
-    language = CharField(null=False, default='English')  # options: See Userlanguages
+    language = CharField(null=False)  # options: See languages
     password = CharField()
     apartment = ForeignKeyField(Apartment, null=True, default=None, backref='users', on_delete='SET NULL')
     is_active = BooleanField(default=True)

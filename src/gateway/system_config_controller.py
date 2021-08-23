@@ -15,7 +15,7 @@
 """
 System config BLL
 """
-import os
+import json
 
 import constants
 from gateway.events import EsafeEvent
@@ -28,8 +28,7 @@ from gateway.dto import SystemDoorbellConfigDTO, SystemRFIDConfigDTO, \
 from ioc import Injectable, Singleton, INJECTED, Inject
 
 if False:  # MyPy
-    from typing import Dict, Any, List, Optional
-    from gateway.dto.base import BaseDTO
+    from typing import Any, Optional
     from gateway.system_controller import SystemController
 
 
@@ -38,13 +37,19 @@ if False:  # MyPy
 class SystemConfigController(object):
 
     def __init__(self):
-        pass
+        try:
+            app_main_file = constants.get_renson_main_config_file()
+            with open(app_main_file, 'rb') as main_file_stream:
+                main_file_content = json.load(main_file_stream)
+            self.esafe_serial = main_file_content['serial']
+        except Exception:
+            self.esafe_serial = None
 
     DEFAULT_CONFIG = {
         'doorbell_config': {'enabled': True},
         'rfid_config': {'enabled': True, 'security_enabled': False, 'max_tags': 4},
         'rfid_sector_block_config': {'rfid_sector_block': 1},
-        'global_config': {'device_name': 'ESAFE', 'country': 'BE', 'postal_code': '', 'city': '', 'street': '', 'house_number': '', 'language': 'English'},
+        'global_config': {'device_name': 'ESAFE', 'country': 'BE', 'postal_code': '', 'city': '', 'street': '', 'house_number': '', 'language': 'en'},
         'activate_user_config': {'change_first_name': True, 'change_last_name': True, 'change_language': True, 'change_pin_code': False},
         'rfid_auth_key_A': '',
         'rfid_auth_key_B': '',
@@ -57,6 +62,10 @@ class SystemConfigController(object):
         # type: (str, PubSub) -> None
         event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': event_type})
         pubsub.publish_esafe_event(PubSub.EsafeTopics.CONFIG, event)
+
+    def get_esafe_serial(self):
+        # type: () -> Optional[str]
+        return self.esafe_serial
 
     @classmethod
     def get_config_value(cls, config_name):

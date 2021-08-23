@@ -21,13 +21,14 @@ import cherrypy
 import ujson as json
 
 import mock
+from mock import call
 
 from gateway.dto import UserDTO, ParcelBoxDTO, ApartmentDTO, DeliveryDTO
 from gateway.delivery_controller import DeliveryController
-from gateway.esafe_controller import EsafeController
+from esafe.rebus.rebus_controller import RebusController
 from gateway.exceptions import WrongInputParametersException
 from gateway.api.serializers import ParcelBoxSerializer
-from gateway.webservice_v1 import ParcelBox
+from gateway.api.V1.parcelbox import ParcelBox
 
 from ioc import SetUpTestInjections
 
@@ -38,8 +39,8 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
     def setUp(self):
         self.delivery_controller = mock.Mock(DeliveryController)
         SetUpTestInjections(delivery_controller=self.delivery_controller)
-        self.esafe_controller = mock.Mock(EsafeController)
-        SetUpTestInjections(esafe_controller=self.esafe_controller)
+        self.rebus_controller = mock.Mock(RebusController)
+        SetUpTestInjections(rebus_controller=self.rebus_controller)
         super(ParcelboxApiCherryPyTest, self).setUp()
         self.web = ParcelBox()
         cherrypy.tree.mount(root=self.web,
@@ -92,44 +93,62 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
         )
 
     def test_get_parcelboxes(self):
-        with mock.patch.object(self.esafe_controller, 'get_parcelboxes', return_value=self.all_parcelboxes) as get_parcelbox_func:
+        with mock.patch.object(self.rebus_controller, 'get_parcelboxes', return_value=self.all_parcelboxes) as get_parcelbox_func:
             # Auth: normal user
             status, headers, response = self.GET('/api/v1/parcelboxes', login_user=self.test_user_1, headers=None)
             self.assertStatus('200 OK')
             self.assertBody(json.dumps([ParcelBoxSerializer.serialize(parcelbox) for parcelbox in self.all_parcelboxes]))
-            get_parcelbox_func.assert_called_once_with(size=None)
+            get_parcelbox_func.assert_called_once_with(size=None, available=None)
             get_parcelbox_func.reset_mock()
 
             # Auth: No auth
             status, headers, response = self.GET('/api/v1/parcelboxes', login_user=None, headers=None)
             self.assertStatus('200 OK')
             self.assertBody(json.dumps([ParcelBoxSerializer.serialize(parcelbox) for parcelbox in self.all_parcelboxes]))
-            get_parcelbox_func.assert_called_once_with(size=None)
+            get_parcelbox_func.assert_called_once_with(size=None, available=None)
             get_parcelbox_func.reset_mock()
 
             # Filter on size
             status, headers, response = self.GET('/api/v1/parcelboxes?size=M', login_user=self.test_admin, headers=None)
             self.assertStatus('200 OK')
             self.assertBody(json.dumps([ParcelBoxSerializer.serialize(parcelbox) for parcelbox in self.all_parcelboxes]))
-            get_parcelbox_func.assert_called_once_with(size='M')
+            get_parcelbox_func.assert_called_once_with(size='M', available=None)
             get_parcelbox_func.reset_mock()
 
             # filter on size (lower case)
             status, headers, response = self.GET('/api/v1/parcelboxes?size=m', login_user=self.test_admin, headers=None)
             self.assertStatus('200 OK')
             self.assertBody(json.dumps([ParcelBoxSerializer.serialize(parcelbox) for parcelbox in self.all_parcelboxes]))
-            get_parcelbox_func.assert_called_once_with(size='m')
+            get_parcelbox_func.assert_called_once_with(size='m', available=None)
             get_parcelbox_func.reset_mock()
 
             # filter on available
-            with mock.patch.object(self.delivery_controller, 'parcel_id_available', side_effect=[True, False, False]) as parcel_id_available_func:
-                status, headers, response = self.GET('/api/v1/parcelboxes?size=m&available=true', login_user=self.test_admin, headers=None)
-                self.assertStatus('200 OK')
-                self.assertBody(json.dumps([ParcelBoxSerializer.serialize(self.test_parcelbox_1)]))
-                get_parcelbox_func.assert_called_once_with(size='m')
-                get_parcelbox_func.reset_mock()
+            status, headers, response = self.GET('/api/v1/parcelboxes?size=m&available=true', login_user=self.test_admin, headers=None)
+            self.assertStatus('200 OK')
+            get_parcelbox_func.assert_called_once_with(size='m', available=True)
+            get_parcelbox_func.reset_mock()
 
-        with mock.patch.object(self.esafe_controller, 'get_parcelboxes', return_value=[self.test_parcelbox_1]) as get_parcelbox_func:
+            with mock.patch.object(self.delivery_controller, 'load_deliveries_filter', return_value=[self.test_delivery]) as get_deliveries_func:
+                status, headers, response = self.GET('/api/v1/parcelboxes?size=m&available=true&show_deliveries=true', login_user=self.test_admin, headers=None)
+                self.assertStatus('200 OK')
+                get_parcelbox_func.assert_called_once_with(size='m', available=True)
+                get_parcelbox_func.reset_mock()
+                delivery_calls = [call(delivery_parcelbox_rebus_id=self.test_parcelbox_1.id),
+                                  call(delivery_parcelbox_rebus_id=self.test_parcelbox_2.id),
+                                  call(delivery_parcelbox_rebus_id=self.test_parcelbox_3.id)]
+                get_deliveries_func.assert_has_calls(delivery_calls, any_order=False)
+                get_deliveries_func.reset_mock()
+
+                # Fail when requested with non super credentials and requesting delivery data
+                status, headers, response = self.GET('/api/v1/parcelboxes?size=m&available=true&show_deliveries=true', login_user=self.test_user_1, headers=None)
+                self.assertStatus('401 Unauthorized')
+                get_parcelbox_func.assert_called_once_with(size='m', available=True)
+                get_parcelbox_func.reset_mock()
+                get_deliveries_func.assert_not_called()
+                get_deliveries_func.reset_mock()
+
+
+        with mock.patch.object(self.rebus_controller, 'get_parcelboxes', return_value=[self.test_parcelbox_1]) as get_parcelbox_func:
             # Request one specific parcelbox
             status, headers, response = self.GET('/api/v1/parcelboxes/32', login_user=None, headers=None)
             self.assertStatus('200 OK')
@@ -137,7 +156,7 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
             get_parcelbox_func.assert_called_once_with(rebus_id=32)
             get_parcelbox_func.reset_mock()
 
-        with mock.patch.object(self.esafe_controller, 'get_parcelboxes', return_value=[]) as get_parcelbox_func:
+        with mock.patch.object(self.rebus_controller, 'get_parcelboxes', return_value=[]) as get_parcelbox_func:
             # non existing parcelbox
             status, headers, response = self.GET('/api/v1/parcelboxes/33', login_user=None, headers=None)
             self.assertStatus('404 Not Found')
@@ -151,9 +170,9 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
             get_parcelbox_func.reset_mock()
 
     def test_put_parcelboxes(self):
-        with mock.patch.object(self.esafe_controller, 'get_parcelboxes', return_value=[self.test_parcelbox_1]) as get_parcelbox_func, \
-                mock.patch.object(self.esafe_controller, 'open_box', return_value=self.test_parcelbox_1) as open_box_func, \
-                mock.patch.object(self.delivery_controller, 'load_delivery_by_pickup_user', return_value=self.test_delivery) as load_delivery_func:
+        with mock.patch.object(self.rebus_controller, 'get_parcelboxes', return_value=[self.test_parcelbox_1]) as get_parcelbox_func, \
+                mock.patch.object(self.rebus_controller, 'open_box', return_value=self.test_parcelbox_1) as open_box_func, \
+                mock.patch.object(self.delivery_controller, 'load_deliveries_filter', return_value=[self.test_delivery]) as load_delivery_func:
             # Auth: normal user
             json_body = {'open': True}
             status, headers, response = self.PUT('/api/v1/parcelboxes/32', login_user=self.test_user_1, headers=None, body=json.dumps(json_body))
@@ -163,7 +182,8 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
             get_parcelbox_func.reset_mock()
             open_box_func.assert_called_once_with(32)
             open_box_func.reset_mock()
-            load_delivery_func.assert_called_once_with(self.test_user_1.id)
+            # load_delivery_func.assert_called_once_with(self.test_user_1.id)
+            load_delivery_func.assert_called_once_with(delivery_pickup_user=self.test_user_1.id)
             load_delivery_func.reset_mock()
 
             # Auth: no Auth
@@ -179,14 +199,14 @@ class ParcelboxApiCherryPyTest(BaseCherryPyUnitTester):
 
             # Auth: wrong user
             json_body = {'open': True}
-            load_delivery_func.return_value = None
+            load_delivery_func.return_value = []
             status, headers, response = self.PUT('/api/v1/parcelboxes/32', login_user=self.test_user_2, headers=None, body=json.dumps(json_body))
             self.assertStatus('401 Unauthorized')
             get_parcelbox_func.assert_called_once_with(rebus_id=32)
             get_parcelbox_func.reset_mock()
             open_box_func.assert_not_called()
             open_box_func.reset_mock()
-            load_delivery_func.assert_called_once_with(self.test_user_2.id)
+            load_delivery_func.assert_called_once_with(delivery_pickup_user=self.test_user_2.id)
             load_delivery_func.reset_mock()
 
             # Auth: admin user

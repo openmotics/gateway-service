@@ -671,7 +671,7 @@ class MetricsCollector(object):
         energy_data = {}
         try:
             for energy_module in self._energy_module_controller.load_modules():
-                device_id = '{0}.{{0}}'.format(energy_module.address)
+                device_id = '{0}.{{0}}'.format(energy_module.formatted_address)
                 mapping[str(energy_module.id)] = device_id
                 for i in range(EnergyEnums.NUMBER_OF_PORTS[energy_module.version]):
                     energy_data[device_id.format(i)] = {'name': getattr(energy_module, 'input{0}'.format(i))}

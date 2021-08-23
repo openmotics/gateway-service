@@ -22,15 +22,13 @@ import unittest
 
 import mock
 
-from gateway.api.serializers import DeliverySerializer
 from gateway.authentication_controller import AuthenticationToken, LoginMethod, AuthenticationController
 from gateway.dto import DeliveryDTO, UserDTO
-from gateway.esafe_controller import EsafeController
+from esafe.rebus.rebus_controller import RebusController
 from gateway.exceptions import *
 from gateway.delivery_controller import DeliveryController
-from gateway.mappers import DeliveryMapper
 from gateway.user_controller import UserController
-from gateway.webservice_v1 import Deliveries
+from gateway.api.V1.deliveries import Deliveries
 
 from ioc import SetTestMode, SetUpTestInjections
 
@@ -46,9 +44,9 @@ class ApiDeliveriesTests(unittest.TestCase):
         self.auth_controller = mock.Mock(AuthenticationController)
         self.user_controller = mock.Mock(UserController)
         self.delivery_controller = mock.Mock(DeliveryController)
-        self.esafe_controller = mock.Mock(EsafeController)
+        self.rebus_controller = mock.Mock(RebusController)
         SetUpTestInjections(authentication_controller=self.auth_controller)
-        SetUpTestInjections(user_controller=self.user_controller, delivery_controller=self.delivery_controller, esafe_controller=self.esafe_controller)
+        SetUpTestInjections(user_controller=self.user_controller, delivery_controller=self.delivery_controller, rebus_controller=self.rebus_controller)
         self.web = Deliveries()
 
         self.test_admin_1 = UserDTO(
@@ -141,7 +139,7 @@ class ApiDeliveriesTests(unittest.TestCase):
             role='USER',
             pin_code='1111',
             apartment=None,
-            language='English',
+            language='en',
             accepted_terms=1
         )
 
@@ -156,6 +154,8 @@ class ApiDeliveriesTests(unittest.TestCase):
             resp_dict = [resp_dict]
 
         for delivery_dict in resp_dict:
+            if 'return_pickup_code' in delivery_dict:
+                del delivery_dict['return_pickup_code']
             if 'user_id_pickup' in delivery_dict:
                 delivery_dict['user_pickup'] = self.user_mapper[delivery_dict['user_id_pickup']]
                 del delivery_dict['user_id_pickup']
@@ -175,6 +175,8 @@ class ApiDeliveriesTests(unittest.TestCase):
             resp_dict = [resp_dict]
 
         for delivery_dict in resp_dict:
+            if 'return_pickup_code' in delivery_dict:
+                del delivery_dict['return_pickup_code']
             self.translate_dict_to_dto_input(delivery_dict)
             delivery_response_dto = DeliveryDTO(**delivery_dict)
             if delivery_dto == delivery_response_dto:
@@ -197,6 +199,8 @@ class ApiDeliveriesTests(unittest.TestCase):
         return delivery_dict_copy
 
     def get_dto_from_serial(self, delivery_dict):
+        if 'return_pickup_code' in delivery_dict:
+            del delivery_dict['return_pickup_code']
         delivery_dict_copy = self.translate_dict_to_dto_input(delivery_dict, take_copy=True)
         return DeliveryDTO(**delivery_dict_copy)
 
@@ -240,6 +244,16 @@ class ApiDeliveriesTests(unittest.TestCase):
         with mock.patch.object(self.delivery_controller, 'load_deliveries', return_value=self.all_deliveries):
             auth_token = AuthenticationToken(self.test_user_1, 'test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.get_deliveries(auth_token=auth_token)
+            for delivery in [self.test_delivery_1]:
+                self.verify_delivery_in_output(delivery, response)
+            for delivery in [self.test_return_1, self.test_delivery_2]:
+                self.verify_delivery_not_in_output(delivery, response)
+
+    def test_get_delivery_history(self):
+        with mock.patch.object(self.delivery_controller, 'load_deliveries', return_value=[self.test_delivery_1]) as load_deliveries_func:
+            auth_token = AuthenticationToken(self.test_user_1, 'test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
+            response = self.web.get_delivery_history(auth_token=auth_token, user_id=self.test_user_1.id, before_id=0, pagesize=2)
+            load_deliveries_func.assert_called_once_with(user_id=self.test_user_1.id, history=True, before_id=0, limit=2)
             for delivery in [self.test_delivery_1]:
                 self.verify_delivery_in_output(delivery, response)
             for delivery in [self.test_return_1, self.test_delivery_2]:

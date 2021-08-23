@@ -21,17 +21,17 @@ import datetime
 from dateutil.tz import tzlocal
 import logging
 
-from gateway.dto import DeliveryDTO, UserDTO
+from gateway.dto import DeliveryDTO
 from gateway.events import EsafeEvent
-from gateway.models import Delivery, User, Database
-from gateway.mappers import DeliveryMapper, UserMapper
+from gateway.models import Delivery, User
+from gateway.mappers import DeliveryMapper
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MyPy
-    from typing import List, Optional
+    from typing import List, Optional, Dict, Any
     from gateway.user_controller import UserController
-    from gateway.esafe_controller import EsafeController
+    from esafe.rebus.rebus_controller import RebusController
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +45,11 @@ class DeliveryController(object):
         # type: (UserController, PubSub) -> None
         self.user_controller = user_controller
         self.pubsub = pubsub
-        self.esafe_controller = None  # type: Optional[EsafeController]
+        self.rebus_controller = None  # type: Optional[RebusController]
 
-    def set_esafe_controller(self, esafe_controller):
-        # type: (Optional[EsafeController]) -> None
-        self.esafe_controller = esafe_controller
+    def set_rebus_controller(self, rebus_controller):
+        # type: (Optional[RebusController]) -> None
+        self.rebus_controller = rebus_controller
 
     @staticmethod
     def load_delivery(delivery_id, include_picked_up=False):
@@ -64,17 +64,8 @@ class DeliveryController(object):
         return delivery_dto
 
     @staticmethod
-    def load_delivery_by_pickup_user(pickup_user_id):
-        # type: (int) -> Optional[DeliveryDTO]
-        delivery_orm = Delivery.select().where(Delivery.user_pickup_id == pickup_user_id).first()
-        if delivery_orm is None:
-            return None
-        delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
-        return delivery_dto
-
-    @staticmethod
-    def load_deliveries(user_id=None, include_picked_up=False):
-        # type: (Optional[int], bool) -> List[DeliveryDTO]
+    def load_deliveries(user_id=None, delivery_type=None, history=False, before_id=None, limit=100):
+        # type: (Optional[int], Optional[str], bool, int, int) -> List[DeliveryDTO]
         deliveries = []
         query = Delivery.select()
         # filter on user id when needed
@@ -83,10 +74,42 @@ class DeliveryController(object):
                 ((Delivery.user_delivery_id == user_id) |
                  (Delivery.user_pickup_id == user_id))
             )
+        # Filter on delivery type
+        if delivery_type is not None:
+            query = query.where(Delivery.type == delivery_type)
         # filter on picked up when needed
+        query = query.where(Delivery.timestamp_pickup.is_null(not history))
+
+        # add the from_id
+        if before_id is not None:
+            query = query.where(Delivery.id < before_id)
+
+        # Add the limit
+        query = query.limit(limit)
+
+        # Sort on id
+        query = query.order_by(-Delivery.id)  # sort by id descending
+
+        for delivery_orm in query:
+            delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
+            deliveries.append(delivery_dto)
+        return deliveries
+
+    @staticmethod
+    def load_deliveries_filter(include_picked_up=False, **kwargs):
+        # type: (bool, Dict[str, Any]) -> List[DeliveryDTO]
+        query = Delivery.select()
+        for arg, value in kwargs.items():
+            if not arg.startswith('delivery_'):
+                raise ValueError('Cannot filter on value that does not start with "delivery_"')
+            field = arg.replace('delivery_', '')
+            field_orm = getattr(Delivery, field, None)
+            if field_orm is None:
+                raise ValueError('Cannot filter deliveries on {}: Delivery does not contain that key'.format(field))
+            query = query.where(field_orm == value)
         if not include_picked_up:
             query = query.where(Delivery.timestamp_pickup.is_null())
-
+        deliveries = []
         for delivery_orm in query:
             delivery_dto = DeliveryMapper.orm_to_dto(delivery_orm)
             deliveries.append(delivery_dto)
@@ -106,8 +129,8 @@ class DeliveryController(object):
 
     def save_delivery(self, delivery_dto):
         # type: (DeliveryDTO) -> Optional[DeliveryDTO]
-        if self.esafe_controller is not None:
-            exists = self.esafe_controller.verify_device_exists(delivery_dto.parcelbox_rebus_id)
+        if self.rebus_controller is not None:
+            exists = self.rebus_controller.verify_device_exists(delivery_dto.parcelbox_rebus_id)
             if not exists:
                 raise ValueError('Could not save the delivery, the parcelbox_id "{}" does not exists'.format(delivery_dto.parcelbox_rebus_id))
         else:
