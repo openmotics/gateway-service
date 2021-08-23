@@ -27,7 +27,7 @@ from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.dto import UserDTO, ApartmentDTO
 from gateway.exceptions import UnAuthorizedException, WrongInputParametersException
 from gateway.user_controller import UserController
-from gateway.api.V1.webservice.webservice_v1 import AuthenticationLevel
+from gateway.api.V1.webservice.webservice import AuthenticationLevel
 from gateway.api.V1.users import Users
 
 from .base import BaseCherryPyUnitTester

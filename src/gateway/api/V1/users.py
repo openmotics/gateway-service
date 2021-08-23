@@ -25,7 +25,7 @@ from gateway.api.serializers import UserSerializer
 from gateway.exceptions import WrongInputParametersException, UnAuthorizedException, ItemDoesNotExistException, NotImplementedException
 from gateway.models import User
 from gateway.user_controller import UserController
-from gateway.api.V1.webservice.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose, AuthenticationLevel, V1ApiResponse
+from gateway.api.V1.webservice.webservice import RestAPIEndpoint, openmotics_api_v1, expose, AuthenticationLevel, V1ApiResponse
 
 logger = logging.getLogger(__name__)
 

@@ -18,7 +18,7 @@ import ujson as json
 import cherrypy
 
 from gateway.dto import UserDTO
-from gateway.api.V1.webservice.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, AuthenticationLevel, LoginMethod
+from gateway.api.V1.webservice.webservice import RestAPIEndpoint, openmotics_api_v1, AuthenticationLevel, LoginMethod
 
 from .base import BaseCherryPyUnitTester
 
