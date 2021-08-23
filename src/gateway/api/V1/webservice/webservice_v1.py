@@ -318,7 +318,7 @@ class RestAPIEndpoint(object):
 
 class V1ApiResponse(object):
 
-    def __init__(self, status_code=200, response_headers=None, body=None):
+    def __init__(self, status_code=200, response_headers=None, body=None, ):
         # type: (int, Optional[Dict[str, str]], Optional[Any]) -> None
         self.status_code = status_code
         self.response_headers = response_headers if response_headers is not None else {}

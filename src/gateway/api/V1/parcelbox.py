@@ -27,7 +27,7 @@ from gateway.api.serializers import ParcelBoxSerializer, DeliverySerializer
 from esafe.rebus.rebus_controller import RebusController
 from gateway.exceptions import UnAuthorizedException, ItemDoesNotExistException, InvalidOperationException, WrongInputParametersException, StateException
 from gateway.models import User
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
+from gateway.api.V1.webservice.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
 
 if False:  # MyPy
     from typing import Optional

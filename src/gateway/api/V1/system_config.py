@@ -30,7 +30,7 @@ from gateway.api.serializers import SystemRFIDConfigSerializer,\
 from gateway.exceptions import StateException
 from gateway.models import User
 from gateway.system_config_controller import SystemConfigController
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
+from gateway.api.V1.webservice.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
 
 if False:  # MyPy
     from typing import Dict

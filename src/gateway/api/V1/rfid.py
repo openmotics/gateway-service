@@ -25,7 +25,7 @@ from gateway.api.serializers import RfidSerializer
 from gateway.exceptions import ItemDoesNotExistException, UnAuthorizedException, WrongInputParametersException
 from gateway.models import User
 from gateway.rfid_controller import RfidController
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose, AuthenticationLevel
+from gateway.api.V1.webservice.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose, AuthenticationLevel
 
 logger = logging.getLogger(__name__)
 

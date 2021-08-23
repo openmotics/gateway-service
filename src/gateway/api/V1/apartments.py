@@ -24,9 +24,9 @@ from ioc import INJECTED, Inject
 from gateway.api.serializers import ApartmentSerializer
 from gateway.apartment_controller import ApartmentController
 from gateway.dto import ApartmentDTO
-from gateway.exceptions import WrongInputParametersException, UnAuthorizedException, ItemDoesNotExistException
+from gateway.exceptions import WrongInputParametersException, ItemDoesNotExistException
 from gateway.models import User
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
+from gateway.api.V1.webservice.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
 
 logger = logging.getLogger(__name__)
 

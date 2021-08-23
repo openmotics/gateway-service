@@ -22,7 +22,7 @@ import ujson as json
 
 from gateway.authentication_controller import AuthenticationToken
 from gateway.exceptions import UnAuthorizedException, WrongInputParametersException
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
+from gateway.api.V1.webservice.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
 
 logger = logging.getLogger(__name__)
 

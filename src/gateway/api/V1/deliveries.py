@@ -27,7 +27,7 @@ from gateway.delivery_controller import DeliveryController
 from gateway.dto import DeliveryDTO
 from gateway.exceptions import UnAuthorizedException, ItemDoesNotExistException, ParseException
 from gateway.models import User, Delivery
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
+from gateway.api.V1.webservice.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
 
 if False:  # MyPy
     from gateway.authentication_controller import AuthenticationToken
