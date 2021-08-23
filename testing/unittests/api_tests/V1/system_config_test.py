@@ -190,7 +190,7 @@ class SystemConfigApiCherryPyTest(BaseCherryPyUnitTester):
             }
             status, headers, response = self.PUT('/api/v1/system/configuration/doorbell', login_user=self.test_admin, body=json.dumps(body))
             save_config_func.assert_called_once_with(SystemDoorbellConfigDTO(enabled=False))
-            self.assertStatus('200 OK')
+            self.assertStatus('204 No Content')
             self.assertBody('')
 
     def test_put_no_body(self):

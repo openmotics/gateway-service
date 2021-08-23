@@ -16,4 +16,7 @@
 V1 Webservice Init file
 """
 
-from gateway.api.V1.webservice.webservice import WebServiceV1
+from gateway.api.V1.webservice.api_response import ApiResponse
+from gateway.api.V1.webservice.base_api import RestAPIEndpoint, expose
+from gateway.api.V1.webservice.webservice import openmotics_api_v1, WebServiceV1, AuthenticationLevel, LoginMethod
+

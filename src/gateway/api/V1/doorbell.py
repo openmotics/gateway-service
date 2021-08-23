@@ -18,14 +18,13 @@ doorbell api description
 
 import cherrypy
 import logging
-import ujson as json
 
 from ioc import INJECTED, Inject
 
 from gateway.api.serializers import DoorbellSerializer
 from esafe.rebus.rebus_controller import RebusController
 from gateway.exceptions import ItemDoesNotExistException, InvalidOperationException
-from gateway.api.V1.webservice.webservice import RestAPIEndpoint, openmotics_api_v1, expose
+from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, expose, ApiResponse
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +52,11 @@ class Doorbell(RestAPIEndpoint):
 
     @openmotics_api_v1(auth=False, expect_body_type=None)
     def get_doorbells(self):
-        # type: () -> str
+        # type: () -> ApiResponse
         self._check_controller()
         doorbells = self.rebus_controller.get_doorbells()
         doorbells_serial = [DoorbellSerializer.serialize(box) for box in doorbells]
-        return json.dumps(doorbells_serial)
+        return ApiResponse(body=doorbells_serial)
 
     @openmotics_api_v1(auth=False, expect_body_type=None, check={'rebus_id': int})
     def put_ring_doorbell(self, rebus_id):
@@ -66,6 +65,7 @@ class Doorbell(RestAPIEndpoint):
         if rebus_id not in [doorbell.id for doorbell in doorbells]:
             raise ItemDoesNotExistException('Cannot ring doorbell with id: {}. Doorbell does not exists'.format(rebus_id))
         self.rebus_controller.ring_doorbell(rebus_id)
+        return ApiResponse(status_code=204)
 
     def _check_controller(self):
         if self.rebus_controller is None:

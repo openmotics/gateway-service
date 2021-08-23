@@ -265,7 +265,8 @@ class ApiApartmentsTests(BaseCherryPyUnitTester):
     def test_delete_apartment(self):
         with mock.patch.object(self.apartment_controller, 'delete_apartment') as delete_apartment_func:
             status, headers, body = self.DELETE('/api/v1/apartments/2', login_user=self.admin_user)
-            self.assertEqual(b'OK', body)
+            self.assertStatus('204 No Content')
+            self.assertEqual(b'', body)
 
     def test_delete_apartment_unauthorized(self):
         with mock.patch.object(self.apartment_controller, 'delete_apartment') as delete_apartment_func:
