@@ -154,6 +154,8 @@ class ApiDeliveriesTests(unittest.TestCase):
             resp_dict = [resp_dict]
 
         for delivery_dict in resp_dict:
+            if 'return_pickup_code' in delivery_dict:
+                del delivery_dict['return_pickup_code']
             if 'user_id_pickup' in delivery_dict:
                 delivery_dict['user_pickup'] = self.user_mapper[delivery_dict['user_id_pickup']]
                 del delivery_dict['user_id_pickup']
@@ -173,6 +175,8 @@ class ApiDeliveriesTests(unittest.TestCase):
             resp_dict = [resp_dict]
 
         for delivery_dict in resp_dict:
+            if 'return_pickup_code' in delivery_dict:
+                del delivery_dict['return_pickup_code']
             self.translate_dict_to_dto_input(delivery_dict)
             delivery_response_dto = DeliveryDTO(**delivery_dict)
             if delivery_dto == delivery_response_dto:
@@ -195,6 +199,8 @@ class ApiDeliveriesTests(unittest.TestCase):
         return delivery_dict_copy
 
     def get_dto_from_serial(self, delivery_dict):
+        if 'return_pickup_code' in delivery_dict:
+            del delivery_dict['return_pickup_code']
         delivery_dict_copy = self.translate_dict_to_dto_input(delivery_dict, take_copy=True)
         return DeliveryDTO(**delivery_dict_copy)
 

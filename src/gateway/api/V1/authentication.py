@@ -48,9 +48,9 @@ class Authentication(RestAPIEndpoint):
 
     @openmotics_api_v1(auth=False, expect_body_type='JSON')
     def authenticate_pin_code(self, request_body):
-        if 'code' not in request_body:
+        if 'pin_code' not in request_body:
             raise WrongInputParametersException('Expected a code in the request body json')
-        success, data = self.authentication_controller.login_with_user_code(pin_code=request_body['code'])
+        success, data = self.authentication_controller.login_with_user_code(pin_code=request_body['pin_code'])
         return self.handle_authentication_result(success, data)
 
     @openmotics_api_v1(auth=False, expect_body_type='JSON')

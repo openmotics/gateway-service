@@ -472,7 +472,7 @@ class ApiUsersTests(unittest.TestCase):
             self.verify_user_created(user_to_create, response)
 
     def test_activate_user(self):
-        user_code = {'code': self.normal_user_2.pin_code}
+        user_code = {'pin_code': self.normal_user_2.pin_code}
         with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
                 mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
             response = self.web.post_activate_user('2',
@@ -480,7 +480,7 @@ class ApiUsersTests(unittest.TestCase):
             self.assertEqual(b'OK', response)
 
     def test_activate_user_wrong_code(self):
-        user_code = {'code': 'WRONG_CODE'}
+        user_code = {'pin_code': 'WRONG_CODE'}
         with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
                 mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
             response = self.web.post_activate_user('2',
@@ -503,7 +503,6 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_update_user('2',
                                                 auth_token=auth_token,
-                                                auth_role=auth_token.user.role,
                                                 auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
@@ -565,7 +564,6 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.normal_user_3, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_update_user('2',
                                                 auth_token=auth_token,
-                                                auth_role=auth_token.user.role,
                                                 auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 

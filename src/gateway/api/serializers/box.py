@@ -36,7 +36,7 @@ class MailboxSerializer(object):
     def serialize(dto_object, fields=None):
         # type: (MailBoxDTO, Optional[List[str]]) -> Dict[str,Any]
         data = {'id': dto_object.id,
-                'label': dto_object.label,
+                'label': str(dto_object.label),
                 'open': dto_object.is_open,
                 'apartment': None}
         if dto_object.apartment is not None:
@@ -54,7 +54,7 @@ class ParcelBoxSerializer(object):
     def serialize(dto_object, fields=None):
         # type: (ParcelBoxDTO, Optional[List[str]]) -> Dict[str,Any]
         data = {'id': dto_object.id,
-                'label': dto_object.label,
+                'label': str(dto_object.label),
                 'height': dto_object.height,
                 'width': dto_object.width,
                 'size': dto_object.size.name,
