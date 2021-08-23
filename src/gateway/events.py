@@ -25,6 +25,39 @@ if False:  # MYPY
     from typing import Any, Dict, Optional
 
 
+class EventError(object):
+
+    class ErrorTypes(BaseEnum):
+        NO_ERROR = {'code': 0, 'description': 'no error'}
+        WRONG_INPUT_PARAM = {'code': 1, 'description': 'wrong input parameter(s)'}
+        MODULE_BUSY = {'code': 2, 'description': 'module is busy and cannot accept new requests'}
+        PARSE_ERROR = {'code': 3, 'description': 'couldn\'t parse input'}
+        TIMER_ERROR = {'code': 4, 'description': 'timer error'}
+        TIME_OUT = {'code': 5, 'description': 'timer expired'}
+        STATE_ERROR = {'code': 6, 'description': 'unexpected state'}
+        DOES_NOT_EXIST = {'code': 7, 'description': 'item does not exist'}
+        INVALID_OPERATION = {'code': 8, 'description': 'invalid operation'}
+        UN_AUTHORIZED = {'code': 9, 'description': 'unauthorized operation'}
+        NOT_IMPLEMENTED = {'code': 10, 'description': 'not implemented'}
+        BAD_CONFIGURATION = {'code': 11, 'description': 'bad configuration'}
+        Aborted = {'code': 12, 'description': 'aborted'}
+        Forbidden = {'code': 13, 'description': 'forbidden'}
+
+    def __init__(self, code, description):
+        self.code = code
+        self.description = description
+
+    @staticmethod
+    def from_error_type(error_type):
+        return EventError(**error_type)
+
+    def to_dict(self):
+        return {'code': self.code, 'description': self.description}
+
+    def __str__(self):
+        return '<Event Error: {} >'.format(self.to_dict())
+
+
 class BaseEvent(object):
     """
     This class represents the base template for any type of events
@@ -32,10 +65,15 @@ class BaseEvent(object):
     VERSION = 1
     NAMESPACE = 'BASE_EVENT'
 
-    def __init__(self, event_type, data):
-        # type: (str, Optional[Dict[str,Any]]) -> None
+    def __init__(self, event_type, data, error=None):
+        # type: (str, Optional[Dict[str,Any]], Optional[EventError.ErrorTypes]) -> None
+        if error is None:
+            error = EventError.ErrorTypes.NO_ERROR
+        elif not isinstance(error, dict) or 'code' not in error or 'description' not in error:
+            raise ValueError('Not a proper error format: need a dict with {"code": <ERROR_CODE>, "description": <ERROR_DESCRIPTION>}')
         self.type = event_type
         self.data = data
+        self.error = EventError.from_error_type(error)
 
     def serialize(self):
         # type: () -> Dict[str,Any]
@@ -43,12 +81,14 @@ class BaseEvent(object):
         if version == 1:
             return {'type': self.type,
                     'data': self.data,
+                    'error': self.error.to_dict(),
                     '_version': 1.0}  # Add version so that event processing code can handle multiple formats
         else:
             if self.namespace == BaseEvent.NAMESPACE:
                 raise NotImplementedError('Cannot serialize a BaseEvent instance, needs to be a subclass')
             return {'type': self.type,
                     'data': self.data,
+                    'error': self.error.to_dict(),
                     'namespace': self.namespace,
                     '_version': float(version)}
 
@@ -126,7 +166,7 @@ class EsafeEvent(BaseEvent):
     Data formats:
 
     * CONFIG_CHANGE
-      {'type': str}  # config type: Global, Doorbell, RFID
+      {'type': str}  # config type: Global, Doorbell, RFID, User, Apartment
 
     * DELIVERY_CHANGE
       {'type': str,              # Delivery type: DELIVERY or RETURN

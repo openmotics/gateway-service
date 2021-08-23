@@ -88,7 +88,8 @@ class OpenmoticsService(object):
                 rebus_controller=INJECTED,  # type: RebusController
                 delivery_controller=INJECTED,  # type: DeliveryController
                 authentication_controller=INJECTED,  # type: AuthenticationController
-                user_controller=INJECTED  # type: UserController
+                user_controller=INJECTED,  # type: UserController
+                apartment_controller=INJECTED  # type: apartment_controller
             ):
 
         # TODO: Fix circular dependencies
@@ -121,6 +122,7 @@ class OpenmoticsService(object):
         master_controller.set_plugin_controller(plugin_controller)
         delivery_controller.set_rebus_controller(rebus_controller)
         authentication_controller.set_user_controller(user_controller)
+        apartment_controller.set_rebus_controller(rebus_controller)
 
         if frontpanel_controller:
             message_client.add_event_handler(frontpanel_controller.event_receiver)

@@ -16,6 +16,9 @@
 """ Module contains all websocket related logic """
 
 from __future__ import absolute_import
+
+import debug_ignore
+
 import msgpack
 import cherrypy
 import logging
@@ -174,6 +177,7 @@ class OMSocket(WebSocket):
 
     def send_encoded(self, data):
         serialized = self.serialize_data(data)
+        debug_ignore.debug("Sending data over socket: {}".format(data))
         self.send(serialized, binary=True)
 
 
@@ -212,12 +216,14 @@ class EventsSocket(OMSocket):
     def opened(self):
         if not hasattr(self, 'metadata'):
             return
+        metadata = {'token': self.metadata['token'],
+                    'subscribed_types': [],
+                    'socket': self,
+                    'serialization': self.metadata['serialization']}
+        debug_ignore.debug("Opened event socket: {}".format(metadata))
         cherrypy.engine.publish('add-events-receiver',
                                 self.metadata['client_id'],
-                                {'token': self.metadata['token'],
-                                 'subscribed_types': [],
-                                 'socket': self,
-                                 'serialization': self.metadata['serialization']})
+                                metadata)
 
     def closed(self, *args, **kwargs):
         _ = args, kwargs
@@ -227,6 +233,7 @@ class EventsSocket(OMSocket):
         cherrypy.engine.publish('remove-events-receiver', client_id)
 
     def received_message(self, message):
+        debug_ignore.debug("Received data on socket: {}".format(message.data))
         if not hasattr(self, 'metadata'):
             return
         allowed_types = {}  # type: Dict[str, List[str]]

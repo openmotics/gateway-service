@@ -55,7 +55,7 @@ class RebusController(RebusControllerInterface):
         self.apartment_controller = apartment_controller
         self.delivery_controller = delivery_controller
         self.devices = {}  # type: Dict[int, RebusComponent]
-        self.polling_thread = DaemonThread(name='eSafe status polling', target=self._get_esafe_status, interval=5, delay=5)
+        self.polling_thread = DaemonThread(name='eSafe status polling', target=self._get_esafe_status, interval=1, delay=5)
         self.lock_ids = []  # type: List[int]
         self.lock_status = defaultdict(lambda: False)  # type: Dict[int, bool]
         self.done_discovering = False
@@ -86,7 +86,7 @@ class RebusController(RebusControllerInterface):
                 continue
             logger.debug("Status: {}".format(is_lock_open))
             if is_lock_open != self.lock_status[lock_id]:
-                event = EsafeEvent(PubSub.EsafeTopics.LOCK, {'lock_id': lock_id, 'status': 'open' if is_lock_open else 'closed'})
+                event = EsafeEvent(EsafeEvent.Types.LOCK_CHANGE, {'lock_id': lock_id, 'status': 'open' if is_lock_open else 'closed'})
                 logger.debug("Sending event: {}".format(event))
                 self.pub_sub.publish_esafe_event(PubSub.EsafeTopics.LOCK, event)
             self.lock_status[lock_id] = is_lock_open

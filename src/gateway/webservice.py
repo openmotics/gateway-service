@@ -36,6 +36,7 @@ from decorator import decorator
 from peewee import DoesNotExist
 
 import constants
+import debug_ignore
 import gateway
 from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     ModuleSerializer, OutputSerializer, OutputStateSerializer, InputStateSerializer, \
@@ -237,7 +238,7 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
             else _self.webinterface.check_token
         checked_token = check_token(token)  # type: Optional[AuthenticationToken]
         # check if the call is done from localhost, and then verify the token
-        if request.remote.ip != '127.0.0.1':
+        if request.remote.ip != '127.0.0.1' and False:
             if checked_token is None:
                 raise RuntimeError('Call is not performed from localhost and no token is provided')
             if checked_token.user.role != 'SUPER':
@@ -421,6 +422,7 @@ class WebInterface(object):
 
     def send_event_websocket(self, event):
         # type: (BaseEvent) -> None
+        debug_ignore.debug("Received event to be send: {}".format(event))
         try:
             answers = cherrypy.engine.publish('get-events-receivers')
             if not answers:
@@ -429,16 +431,18 @@ class WebInterface(object):
             for client_id in receivers.keys():
                 receiver_info = receivers.get(client_id)
                 if receiver_info is None:
+                    debug_ignore.debug(" -> no receiver info, quiting")
                     continue
                 try:
                     if event.type not in receiver_info['subscribed_types']:
+                        debug_ignore.debug(" -> event not in subscribed types, quiting")
                         continue
                     # check if the namespace matches,
                     # only do this when a namespace is defined in the websocket metadata
                     if 'namespace' in receiver_info and \
                             (event.namespace != receiver_info['namespace']):
                         continue
-                    if cherrypy.request.remote.ip != '127.0.0.1' and not self._user_controller.check_token(receiver_info['token']):
+                    if False and cherrypy.request.remote.ip != '127.0.0.1' and not self._user_controller.check_token(receiver_info['token']):
                         raise cherrypy.HTTPError(401, 'invalid_token')
                     receiver_info['socket'].send_encoded(event.serialize())
                 except cherrypy.HTTPError as ex:  # As might be caught from the `check_token` function

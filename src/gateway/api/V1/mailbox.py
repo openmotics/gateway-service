@@ -24,7 +24,7 @@ from ioc import INJECTED, Inject
 
 from gateway.api.serializers import MailboxSerializer
 from esafe.rebus.rebus_controller import RebusController
-from gateway.exceptions import UnAuthorizedException, ItemDoesNotExistException, InvalidOperationException
+from gateway.exceptions import UnAuthorizedException, ItemDoesNotExistException, InvalidOperationException, StateException
 from gateway.models import User
 from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
 
@@ -103,7 +103,9 @@ class MailBox(RestAPIEndpoint):
 
         if request_body['open'] is True:
             box = self.rebus_controller.open_box(box.id)
-        box_serial = MailboxSerializer.serialize(box) if box is not None else {}
+            if box is None:
+                raise StateException("Could not open the rebus lock, lock did not open upon request")
+        box_serial = MailboxSerializer.serialize(box)
         return json.dumps(box_serial)
 
     def _check_controller(self):
