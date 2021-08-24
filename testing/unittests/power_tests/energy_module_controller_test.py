@@ -53,7 +53,8 @@ class EnergyModuleControllerTest(unittest.TestCase):
         self.pubsub = PubSub()
         SetUpTestInjections(pubsub=self.pubsub,
                             master_controller=None,
-                            maintenance_controller=None)
+                            maintenance_controller=None,
+                            energy_module_updater=None)
         self.energy_data = []  # type: list
         self.serial = RS485(SerialMock(self.energy_data))
         SetUpTestInjections(energy_serial=self.serial)

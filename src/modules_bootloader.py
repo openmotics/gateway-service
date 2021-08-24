@@ -119,7 +119,7 @@ def main():
 
 
 if __name__ == '__main__':
-    Logs.setup_logger(enable_update_logging=True)
+    Logs.setup_logger()
     success = main()
     if not success:
         sys.exit(1)

@@ -167,7 +167,6 @@ class System(object):
         DEBIAN = 'debian'
         BUILDROOT = 'buildroot'
 
-
     @staticmethod
     def restart_service(service):
         # type: (str) -> None
@@ -326,7 +325,7 @@ class System(object):
         # check if running in python 2 mode, otherwise packages should be included in the build (PyInstaller)
         if sys.version_info.major == 2:
             import site
-            path = '/opt/openmotics/python-deps/lib/python2.7/site-packages'
+            path = '{0}/python-deps/lib/python2.7/site-packages'.format(constants.OPENMOTICS_PREFIX)
             if os.path.exists(path):
                 site.addsitedir(path)
                 sys.path.remove(path)

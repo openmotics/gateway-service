@@ -57,6 +57,7 @@ from master.core.slave_updater import SlaveUpdater
 from master.core.system_value import Humidity, Temperature
 from master.core.system_value import Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
+from logs import Logs
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar
@@ -296,12 +297,13 @@ class MasterCoreController(MasterController):
                 self._master_restarting_timer.cancel()
 
     def _master_updating_change(self, updating):
+        logger_ = Logs.get_update_logger('master_coreplus')
         def _timeout_release():
-            logger.warning('Update holding window expired, releasing')
+            logger_.warning('Update holding window expired, releasing')
             self._master_updating_change(updating=False)
 
         if updating:
-            logger.warning('Master update announced, blocking further communications')
+            logger_.warning('Master update announced, blocking further communications')
             self._master_updating.clear()
             if self._master_updating_timer is not None:
                 self._master_updating_timer.cancel()
@@ -310,7 +312,7 @@ class MasterCoreController(MasterController):
             self._master_updating_timer.start()
         else:
             if not self._master_updating.is_set():
-                logger.info('Master update finished, release communications block')
+                logger_.info('Master update finished, release communications block')
             self._master_updating.set()
             if self._master_updating_timer is not None:
                 self._master_updating_timer.cancel()

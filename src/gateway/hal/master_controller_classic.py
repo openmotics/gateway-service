@@ -61,6 +61,7 @@ from master.classic.master_heartbeat import MasterHeartbeat
 from master.classic.slave_updater import bootload_modules
 from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
+from logs import Logs
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -1194,6 +1195,7 @@ class MasterClassicController(MasterController):
     @Inject
     def update_master(self, hex_filename, version, controller_serial=INJECTED):
         # type: (str, str, Serial) -> None
+        logger_ = Logs.get_update_logger('master_classic')
         try:
             self._communication_enabled = False
             self._heartbeat.stop()
@@ -1208,8 +1210,8 @@ class MasterClassicController(MasterController):
                        [2, 2, 3, 2], [2, 2, 3, 1],
                        [2, 2, 4, 2], [2, 2, 4, 1]]
 
-            logger.info('Updating master...')
-            logger.info('* Enter bootloader...')
+            logger_.info('Updating master...')
+            logger_.info('* Enter bootloader...')
             bootloader_active = False
             for timing in timings:
                 # Setting this condition will assert a break condition on TX to which the bootloader will react.
@@ -1223,7 +1225,7 @@ class MasterClassicController(MasterController):
                 controller_serial.break_condition = False
                 time.sleep(timing[3])
 
-                logger.info('* Verify bootloader...')
+                logger_.info('* Verify bootloader...')
                 try:
                     response = str(subprocess.check_output(base_command + ['-s']))
                     # Expected response:
@@ -1238,42 +1240,42 @@ class MasterClassicController(MasterController):
                                        string=response,
                                        flags=re.DOTALL)
                     if not match:
-                        logger.info('Bootloader response did not match: {0}'.format(response))
+                        logger_.info('Bootloader response did not match: {0}'.format(response))
                         continue
-                    logger.debug(response)
-                    logger.info('  * Bootloader information: {1} bootloader {0}'.format(*match[0]))
+                    logger_.debug(response)
+                    logger_.info('  * Bootloader information: {1} bootloader {0}'.format(*match[0]))
                     bootloader_active = True
                     break
                 except subprocess.CalledProcessError as ex:
-                    logger.info(ex.output)
+                    logger_.info(ex.output)
                     raise
             if bootloader_active is False:
                 raise RuntimeError('Failed to go into Bootloader - try other timings')
-            logger.info('* Flashing...')
+            logger_.info('* Flashing...')
             try:
                 response = str(subprocess.check_output(base_command + ['-p ', '-c', hex_filename]))
-                logger.debug(response)
+                logger_.debug(response)
             except subprocess.CalledProcessError as ex:
-                logger.info(ex.output)
+                logger_.info(ex.output)
                 raise
 
-            logger.info('* Verifying...')
+            logger_.info('* Verifying...')
             try:
                 response = str(subprocess.check_output(base_command + ['-v', hex_filename]))
-                logger.debug(response)
+                logger_.debug(response)
             except subprocess.CalledProcessError as ex:
-                logger.info(ex.output)
+                logger_.info(ex.output)
                 raise
 
-            logger.info('* Entering application...')
+            logger_.info('* Entering application...')
             try:
                 response = str(subprocess.check_output(base_command + ['-r']))
-                logger.debug(response)
+                logger_.debug(response)
             except subprocess.CalledProcessError as ex:
-                logger.info(ex.output)
+                logger_.info(ex.output)
                 raise
 
-            logger.info('Update completed')
+            logger_.info('Update completed')
 
         finally:
             self._master_communicator.update_mode_stop()

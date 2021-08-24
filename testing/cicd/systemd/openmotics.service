@@ -3,7 +3,7 @@ Description=OpenMotics Gateway
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python2 openmotics_init.py
+ExecStart=echo noop
 WorkingDirectory=/opt/openmotics/python
 RemainAfterExit=true
 SyslogIdentifier=openmotics-init

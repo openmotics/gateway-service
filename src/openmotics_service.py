@@ -31,6 +31,7 @@ from gateway.initialize import initialize
 from gateway.migrations import RoomsMigrator, FeatureMigrator, InputMigrator, \
     ScheduleMigrator, UserMigrator, ConfigMigrator, EnergyModulesMigrator
 from gateway.pubsub import PubSub
+from constants import OPENMOTICS_PREFIX
 from ioc import INJECTED, Inject
 from logs import Logs
 
@@ -62,6 +63,7 @@ if False:  # MYPY
     from gateway.hal.frontpanel_controller import FrontpanelController
     from gateway.uart_controller import UARTController
     from gateway.rfid_controller import RfidController
+    from gateway.update_controller import UpdateController
     from plugins.base import PluginController
     from master.classic.passthrough import PassthroughService
     from cloud.events import EventSender
@@ -157,7 +159,8 @@ class OpenmoticsService(object):
               uart_controller=INJECTED,  # type: UARTController
               energy_module_controller=INJECTED,  # type: EnergyModuleController
               rfid_controller=INJECTED,  # type: RfidController
-              rebus_controller=INJECTED  # type: RebusController
+              rebus_controller=INJECTED,  # type: RebusController
+              update_controller=INJECTED  # type: UpdateController
               ):
         """ Main function. """
         logger.info('Starting OM core service...')
@@ -216,6 +219,7 @@ class OpenmoticsService(object):
         rfid_controller.start()
         if rebus_controller is not None:
             rebus_controller.start()
+        update_controller.start()
 
         web_interface.set_service_state(True)
         signal_request = {'stop': False}
@@ -225,6 +229,7 @@ class OpenmoticsService(object):
             _ = signum, frame
             logger.info('Stopping OM core service...')
             watchdog.stop()
+            update_controller.stop()
             if uart_controller:
                 uart_controller.stop()
             energy_module_controller.stop()

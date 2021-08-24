@@ -25,10 +25,12 @@ from ioc import Inject, INJECTED
 from master.core.core_communicator import CoreCommunicator
 from master.core.core_api import CoreAPI
 from master.maintenance_communicator import MaintenanceCommunicator
+from logs import Logs
 
 if False:  # MYPY
     from typing import Optional
     from serial import Serial
+    from logging import Logger
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +49,11 @@ class CoreUpdater(object):
     def update(hex_filename, version, raise_exception=False, master_communicator=INJECTED, maintenance_communicator=INJECTED, cli_serial=INJECTED):
         # type: (str, str, bool, CoreCommunicator, MaintenanceCommunicator, Serial) -> bool
         """ Flashes the content from an Intel HEX file to the Core """
+        logger_ = Logs.get_update_logger('master_coreplus')
         try:
             # TODO: Check version and skip update if the version is already active
 
-            logger.info('Updating Core')
+            logger_.info('Updating Core')
 
             master_communicator = master_communicator
             maintenance_communicator = maintenance_communicator
@@ -61,16 +64,16 @@ class CoreUpdater(object):
             current_version = None  # type: Optional[str]
             try:
                 current_version = master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
-                logger.info('Current firmware version: {0}'.format(current_version))
+                logger_.info('Current firmware version: {0}'.format(current_version))
             except Exception as ex:
-                logger.warning('Could not load current firmware version: {0}'.format(ex))
+                logger_.warning('Could not load current firmware version: {0}'.format(ex))
 
             if current_version is not None and version == current_version:
-                logger.info('Firmware up-to-date, skipping')
+                logger_.info('Firmware up-to-date, skipping')
                 return True
 
-            logger.info('Updating firmware from {0} to {1}'.format(current_version if current_version is not None else 'unknown',
-                                                                   version if version is not None else 'unknown'))
+            logger_.info('Updating firmware from {0} to {1}'.format(current_version if current_version is not None else 'unknown',
+                                                                    version if version is not None else 'unknown'))
 
             if master_communicator is not None and maintenance_communicator is not None:
                 maintenance_communicator.stop()
@@ -82,36 +85,36 @@ class CoreUpdater(object):
             with open(hex_filename, 'r') as hex_file:
                 hex_lines = hex_file.readlines()
 
-            logger.info('Verify bootloader communications')
-            bootloader_version = CoreUpdater._in_bootloader(cli_serial)
+            logger_.info('Verify bootloader communications')
+            bootloader_version = CoreUpdater._in_bootloader(cli_serial, logger_)
             if bootloader_version is not None:
-                logger.info('Bootloader {0} active'.format(bootloader_version))
+                logger_.info('Bootloader {0} active'.format(bootloader_version))
             else:
-                logger.info('Bootloader not active, switching to bootloader')
+                logger_.info('Bootloader not active, switching to bootloader')
                 cli_serial.write(b'reset\r\n')
                 time.sleep(CoreUpdater.ENTER_BOOTLOADER_DELAY)
-                bootloader_version = CoreUpdater._in_bootloader(cli_serial)
+                bootloader_version = CoreUpdater._in_bootloader(cli_serial, logger_)
                 if bootloader_version is None:
                     raise RuntimeError('Could not enter bootloader')
-                logger.info('Bootloader {0} active'.format(bootloader_version))
+                logger_.info('Bootloader {0} active'.format(bootloader_version))
 
-            logger.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
-            logger.info('Flashing...')
+            logger_.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
+            logger_.info('Flashing...')
             amount_lines = len(hex_lines)
             for index, line in enumerate(hex_lines):
                 cli_serial.write(bytearray(ord(c) for c in line))
-                response = CoreUpdater._read_line(cli_serial)
+                response = CoreUpdater._read_line(cli_serial, logger_)
                 if response.startswith('nok'):
                     raise RuntimeError('Unexpected NOK while flashing: {0}'.format(response))
                 if not response.startswith('ok'):
                     raise RuntimeError('Unexpected answer while flashing: {0}'.format(response))
                 if index % (amount_lines // 10) == 0 and index != 0:
-                    logger.info('Flashing... {0}%'.format(index * 10 // (amount_lines // 10)))
-            logger.info('Flashing... Done')
+                    logger_.info('Flashing... {0}%'.format(index * 10 // (amount_lines // 10)))
+            logger_.info('Flashing... Done')
 
-            logger.info('Verify Core communication')
+            logger_.info('Verify Core communication')
             time.sleep(CoreUpdater.ENTER_APPLICATION_DELAY)
-            if CoreUpdater._in_bootloader(cli_serial):
+            if CoreUpdater._in_bootloader(cli_serial, logger_):
                 raise RuntimeError('Still in bootloader')
 
             if master_communicator is not None and maintenance_communicator is not None:
@@ -121,35 +124,35 @@ class CoreUpdater(object):
             current_version = None
             try:
                 current_version = master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
-                logger.info('Post-update firmware version: {0}'.format(current_version))
+                logger_.info('Post-update firmware version: {0}'.format(current_version))
             except Exception as ex:
-                logger.warning('Could not load post-update firmware version: {0}'.format(ex))
+                logger_.warning('Could not load post-update firmware version: {0}'.format(ex))
             if version is not None and current_version != version:
                 raise RuntimeError('Post-update firmware version {0} does not match expected {1}'.format(
                     current_version if current_version is not None else 'unknown',
                     version
                 ))
 
-            logger.info('Update completed')
+            logger_.info('Update completed')
             return True
         except Exception as ex:
-            logger.error('Error flashing: {0}'.format(ex))
+            logger_.error('Error flashing: {0}'.format(ex))
             if raise_exception:
                 raise
             return False
 
     @staticmethod
-    def _in_bootloader(serial):  # type: (Serial) -> Optional[str]
+    def _in_bootloader(serial, logger_):  # type: (Serial, Logger) -> Optional[str]
         serial.flushInput()
         serial.write(b'hi\n')
-        response = CoreUpdater._read_line(serial)
+        response = CoreUpdater._read_line(serial, logger_)
         serial.flushInput()
         if not response.startswith('hi;ver='):
             return None
         return response.split('=')[-1]
 
     @staticmethod
-    def _read_line(serial, verbose=False, discard_lines=0):  # type: (Serial, bool, int) -> str
+    def _read_line(serial, logger_, discard_lines=0):  # type: (Serial, Logger, int) -> str
         timeout = time.time() + CoreUpdater.BOOTLOADER_SERIAL_READ_TIMEOUT
         line = ''
         while time.time() < timeout:
@@ -158,8 +161,7 @@ class CoreUpdater(object):
                 line += chr(data[0])
                 if data == bytearray(b'\n'):
                     if line[0] == '#':
-                        if verbose:
-                            logger.debug('* Debug: {0}'.format(line.strip()))
+                        logger_.debug('* Debug: {0}'.format(line.strip()))
                         line = ''
                     elif discard_lines == 0:
                         return line.strip()

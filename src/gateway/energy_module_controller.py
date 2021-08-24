@@ -36,12 +36,14 @@ from gateway.energy.energy_api import DAY, NIGHT, EnergyAPI
 from peewee import prefetch
 from serial_utils import CommunicationTimedOutException
 from ioc import INJECTED, Inject, Injectable, Singleton
+from logs import Logs
 
 if False:  # MYPY
-    from typing import Dict, List, Any, Optional
+    from typing import Dict, List, Any, Optional, Tuple, Generator
     from gateway.hal.master_controller import MasterController
     from gateway.energy.module_helper import ModuleHelper
     from gateway.energy.energy_communicator import EnergyCommunicator
+    from gateway.energy.energy_module_updater import EnergyModuleUpdater
 
 logger = logging.getLogger('openmotics')
 
@@ -51,11 +53,12 @@ logger = logging.getLogger('openmotics')
 class EnergyModuleController(BaseController):
 
     @Inject
-    def __init__(self, master_controller=INJECTED, energy_communicator=INJECTED, pubsub=INJECTED):
-        # type: (MasterController, EnergyCommunicator, PubSub) -> None
+    def __init__(self, master_controller=INJECTED, energy_communicator=INJECTED, energy_module_updater=INJECTED, pubsub=INJECTED):
+        # type: (MasterController, EnergyCommunicator, EnergyModuleUpdater, PubSub) -> None
         super(EnergyModuleController, self).__init__(master_controller)
         self._pubsub = pubsub
         self._energy_communicator = energy_communicator
+        self._energy_module_updater = energy_module_updater
         self._enabled = energy_communicator is not None
         self._sync_time_thread = None  # type: Optional[DaemonThread]
 
@@ -144,6 +147,47 @@ class EnergyModuleController(BaseController):
         if self._energy_communicator is None:
             return 0
         return self._energy_communicator.get_seconds_since_last_success()
+
+    def scan_bus(self):  # type: () -> Generator[Tuple[str, int, Tuple[str, Optional[str]]], None, None]
+        if not self._enabled:
+            return
+        for address in range(256):
+            for module_type, version in {'E/P': EnergyEnums.Version.ENERGY_MODULE,
+                                         'C': EnergyEnums.Version.P1_CONCENTRATOR}.items():
+                try:
+                    yield module_type, address, self._energy_module_updater.get_module_firmware_version(address, version)
+                except Exception:
+                    pass
+
+    def update_module(self, module_version, module_address, firmware_filename, firmware_version):
+        if not self._enabled:
+            return
+        self._energy_module_updater.bootload_module(module_version=module_version,
+                                                    module_address=module_address,
+                                                    hex_filename=firmware_filename,
+                                                    firmware_version=firmware_version)
+
+    def update_modules(self, module_version, firmware_filename, firmware_version):
+        if not self._enabled:
+            return {}
+        failures = {}
+        energy_modules = EnergyModule.select(EnergyModule, Module) \
+                                     .join_from(EnergyModule, Module) \
+                                     .where(EnergyModule.version == module_version)  # type: List[EnergyModule]
+        for energy_module in energy_modules:
+            module_address = energy_module.module.address
+            logger_ = Logs.get_update_logger('{0}_{1}'.format(EnergyEnums.VERSION_TO_STRING[module_version], module_address))
+            try:
+                self.update_module(module_version=module_version,
+                                   module_address=module_address,
+                                   firmware_filename=firmware_filename,
+                                   firmware_version=firmware_version)
+                failures[module_address] = None
+            except Exception as ex:
+                if ex is not CommunicationTimedOutException:
+                    logger_.exception('Unexpected error when bootloading {0}: {1}'.format(module_address, ex))
+                failures[module_address] = ex
+        return failures
 
     def get_day_counters(self, energy_module):  # type: (EnergyModule) -> List[int]
         if not self._enabled:

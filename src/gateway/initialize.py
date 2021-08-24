@@ -52,6 +52,7 @@ from master.core.core_communicator import CoreCommunicator
 from master.core.maintenance import MaintenanceCoreCommunicator
 from master.core.memory_file import MemoryFile
 from gateway.energy.energy_communicator import EnergyCommunicator
+from gateway.energy.energy_module_updater import EnergyModuleUpdater
 from serial_utils import RS485
 
 
@@ -159,9 +160,8 @@ def setup_target_platform(target_platform, message_client_name):
 
     # Debugging options
     try:
-        for (namespace, log_level) in config.items('logging_overrides'):
-            logger.info('Setting %s log level to %s', namespace, log_level)
-            Logs.set_service_loglevel(log_level.upper(), namespace=namespace)
+        for namespace, log_level in config.items('logging_overrides'):
+            Logs.set_loglevel(log_level.upper(), namespace)
     except NoOptionError:
         pass
     except NoSectionError:
@@ -194,14 +194,14 @@ def setup_target_platform(target_platform, message_client_name):
                          metrics_caching, watchdog, output_controller, room_controller, sensor_controller,
                          shutter_controller, system_controller, group_action_controller, module_controller,
                          ventilation_controller, webservice_v1, apartment_controller, delivery_controller,
-                         system_config_controller, rfid_controller, energy_module_controller)
+                         system_config_controller, rfid_controller, energy_module_controller, update_controller)
     from cloud import events
     _ = (metrics_controller, webservice, scheduling_controller, metrics_collector,
          maintenance_controller, base, events, user_controller,
          pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
          sensor_controller, shutter_controller, system_controller, group_action_controller, module_controller,
          ventilation_controller, webservice_v1, apartment_controller, delivery_controller, system_config_controller,
-         rfid_controller, energy_module_controller)
+         rfid_controller, energy_module_controller, update_controller)
 
     # V1 api
     # This will parse all the V1 api files that are included in the __init__.py file in the
@@ -258,9 +258,11 @@ def setup_target_platform(target_platform, message_client_name):
         # TODO: make non blocking?
         Injectable.value(energy_serial=RS485(Serial(energy_serial_port, 115200, timeout=None)))
         Injectable.value(energy_communicator=EnergyCommunicator())
+        Injectable.value(energy_module_updater=EnergyModuleUpdater())
     else:
         Injectable.value(energy_serial=None)
         Injectable.value(energy_communicator=None)
+        Injectable.value(energy_module_updater=None)
 
     # UART Controller
     try:

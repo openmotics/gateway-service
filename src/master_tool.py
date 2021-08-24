@@ -134,7 +134,7 @@ def main():
 
     args = parser.parse_args()
 
-    Logs.setup_logger(enable_update_logging=True)
+    Logs.setup_logger()
 
     config = ConfigParser()
     config.read(constants.get_config_file())

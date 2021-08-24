@@ -76,6 +76,9 @@ class EnergyEnums(object):
                        Version.ENERGY_MODULE: 12,
                        Version.P1_CONCENTRATOR: 8}
     LARGEST_MODULE_TYPE = Version.ENERGY_MODULE  # Update if needed
+    VERSION_TO_STRING = {Version.POWER_MODULE: 'power',
+                         Version.ENERGY_MODULE: 'energy',
+                         Version.P1_CONCENTRATOR: 'p1_concentrator'}
 
 
 class HardwareType(object):

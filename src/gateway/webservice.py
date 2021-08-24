@@ -88,6 +88,7 @@ if False:  # MYPY
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.user_controller import UserController
     from gateway.ventilation_controller import VentilationController
+    from gateway.update_controller import UpdateController
     from plugins.base import PluginController
 
 logger = logging.getLogger(__name__)
@@ -351,7 +352,8 @@ class WebInterface(object):
                  room_controller=INJECTED, input_controller=INJECTED, sensor_controller=INJECTED,
                  pulse_counter_controller=INJECTED, group_action_controller=INJECTED,
                  frontpanel_controller=INJECTED, module_controller=INJECTED, ventilation_controller=INJECTED,
-                 uart_controller=INJECTED, system_controller=INJECTED, energy_module_controller=INJECTED):
+                 uart_controller=INJECTED, system_controller=INJECTED, energy_module_controller=INJECTED,
+                 update_controller=INJECTED):
         """
         Constructor for the WebInterface.
         """
@@ -371,6 +373,7 @@ class WebInterface(object):
         self._uart_controller = uart_controller  # type: UARTController
         self._system_controller = system_controller  # type: SystemController
         self._energy_module_controller = energy_module_controller  # type: EnergyModuleController
+        self._update_controller = update_controller  # type: UpdateController
 
         self._maintenance_controller = maintenance_controller  # type: MaintenanceController
         self._message_client = message_client  # type: Optional[MessageClient]
@@ -1912,7 +1915,7 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(level=str, logger_name=str))
     def set_loglevel(self, level='INFO', logger_name=None):  # type: (str, Optional[str]) -> Dict
         level = level.upper()
-        Logs.set_service_loglevel(level, namespace=logger_name)
+        Logs.set_loglevel(level, logger_name)
         return {'loglevel': level}
 
     # UART
@@ -2085,9 +2088,11 @@ class WebInterface(object):
         master_version = self._module_controller.get_master_version()
         if master_version is not None:
             master_version = ".".join([str(n) for n in master_version] if len(master_version) else None)
-        return {'version': self._system_controller.get_main_version(),
+        return {'version': gateway.__version__,
                 'gateway': gateway.__version__,
                 'master': master_version}
+
+    # TODO: def get_versions(self):  # Something more generic that can return a general version overview (service, frontend, modules, os, ...)
 
     @openmotics_api(auth=True)
     def get_system_info(self):
@@ -2102,28 +2107,9 @@ class WebInterface(object):
                 'platform': str(Platform.get_platform())}
 
     @openmotics_api(auth=True, plugin_exposed=False)
-    def update(self, version, md5, update_data=None):
-        """
-        Perform an update.
-
-        :param version: the new version number.
-        :type version: str
-        :param md5: the md5 sum of update_data.
-        :type md5: str
-        :param update_data: a tgz file containing the update script (update.sh) and data.
-        :type update_data: multipart/form-data encoded byte string.
-        """
-        if not os.path.exists(constants.get_update_dir()):
-            os.mkdir(constants.get_update_dir())
-
-        if update_data:
-            logger.info('using old style update.tgz')
-            update_data = update_data.file.read()
-            with open(constants.get_update_file(), "wb") as update_file:
-                update_file.write(update_data)
-
-        subprocess.Popen(constants.get_update_cmd(version, md5), close_fds=True)
-
+    def update(self, version):
+        """ Request to update to a given version """
+        self._update_controller.request_update(version)
         return {}
 
     @openmotics_api(auth=True)
@@ -2134,17 +2120,13 @@ class WebInterface(object):
         :returns: 'output': String with the output from the update script.
         :rtype: dict
         """
-        with open(constants.get_update_output_file(), "r") as output_file:
-            output = output_file.read()
-        version = self._system_controller.get_main_version()
-
-        return {'output': output,
-                'version': version}
+        return {'output': '',
+                'version': gateway.__version__}
 
     @openmotics_api(auth=True, plugin_exposed=False)
     def update_firmware(self, module_type, firmware_version):
-        self._module_controller.update_firmware(module_type=module_type,
-                                                firmware_version=firmware_version)
+        self._update_controller.update_module_firmware(module_type=module_type,
+                                                       target_version=firmware_version)
         self._module_controller.request_sync_orm()
         return {}
 
