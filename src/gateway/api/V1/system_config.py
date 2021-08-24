@@ -18,7 +18,6 @@ system configuration api description
 
 import cherrypy
 import logging
-import ujson as json
 
 from ioc import INJECTED, Inject
 from gateway.api.serializers import SystemRFIDConfigSerializer,\
@@ -30,7 +29,7 @@ from gateway.api.serializers import SystemRFIDConfigSerializer,\
 from gateway.exceptions import StateException
 from gateway.models import User
 from gateway.system_config_controller import SystemConfigController
-from gateway.api.V1.webservice.webservice import RestAPIEndpoint, openmotics_api_v1, expose
+from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, expose, ApiResponse
 
 if False:  # MyPy
     from typing import Dict
@@ -92,94 +91,94 @@ class SystemConfiguration(RestAPIEndpoint):
 
     @openmotics_api_v1(auth=False)
     def get_doorbell_config(self):
-        # type: () -> str
+        # type: () -> ApiResponse
         config_dto = self.system_config_controller.get_doorbell_config()
         config_serial = SystemDoorbellConfigSerializer.serialize(config_dto)
-        return json.dumps(config_serial)
+        return ApiResponse(body=config_serial)
 
     @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER], expect_body_type='JSON')
     def put_doorbell_config(self, request_body):
-        # type: (Dict) -> None
+        # type: (Dict) -> ApiResponse
         config_dto = SystemDoorbellConfigSerializer.deserialize(request_body)
         self.system_config_controller.save_doorbell_config(config_dto)
-        return
+        return ApiResponse(status_code=204)
 
     @openmotics_api_v1(auth=False)
     def get_rfid_config(self):
-        # type: () -> str
+        # type: () -> ApiResponse
         config_dto = self.system_config_controller.get_rfid_config()
         config_serial = SystemRFIDConfigSerializer.serialize(config_dto)
-        return json.dumps(config_serial)
+        return ApiResponse(body=config_serial)
 
     @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER], expect_body_type='JSON')
     def put_rfid_config(self, request_body):
-        # type: (Dict) -> None
+        # type: (Dict) -> ApiResponse
         config_dto = SystemRFIDConfigSerializer.deserialize(request_body)
         self.system_config_controller.save_rfid_config(config_dto)
-        return
+        return ApiResponse(status_code=204)
 
     @openmotics_api_v1(auth=False)
     def get_rfid_sector_block_config(self):
-        # type: () -> str
+        # type: () -> ApiResponse
         config_dto = self.system_config_controller.get_rfid_sector_block_config()
         config_serial = SystemRFIDSectorBlockConfigSerializer.serialize(config_dto)
-        return json.dumps(config_serial)
+        return ApiResponse(body=config_serial)
 
     @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER], expect_body_type='JSON')
     def put_rfid_sector_block_config(self, request_body):
-        # type: (Dict) -> None
+        # type: (Dict) -> ApiResponse
         config_dto = SystemRFIDSectorBlockConfigSerializer.deserialize(request_body)
         self.system_config_controller.save_rfid_sector_block_config(config_dto)
-        return
+        return ApiResponse(status_code=204)
 
     @openmotics_api_v1(auth=False)
     def get_touchscreen_config(self):
-        # type: () -> str
+        # type: () -> ApiResponse
         config_dto = self.system_config_controller.get_touchscreen_config()
         config_serial = SystemTouchscreenConfigSerializer.serialize(config_dto)
-        return json.dumps(config_serial)
+        return ApiResponse(body=config_serial)
 
     @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER])
     def put_touchscreen_config(self):
-        # type: () -> None
+        # type: () -> ApiResponse
         try:
             self.system_config_controller.save_touchscreen_config()
         except Exception as ex:
             raise RuntimeError('Could not calibrate the touchscreen: {}'.format(ex))
-        return
+        return ApiResponse(status_code=204)
 
     @openmotics_api_v1(auth=False)
     def get_global_config(self):
-        # type: () -> str
+        # type: () -> ApiResponse
         config_dto = self.system_config_controller.get_global_config()
         config_serial = SystemGlobalConfigSerializer.serialize(config_dto)
-        return json.dumps(config_serial)
+        return ApiResponse(body=config_serial)
 
     @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER], expect_body_type='JSON')
     def put_global_config(self, request_body):
-        # type: (Dict) -> None
+        # type: (Dict) -> ApiResponse
         config_dto = SystemGlobalConfigSerializer.deserialize(request_body)
         self.system_config_controller.save_global_config(config_dto)
-        return
+        return ApiResponse(status_code=204)
 
     @openmotics_api_v1(auth=False)
     def get_activate_user_config(self):
-        # type: () -> str
+        # type: () -> ApiResponse
         config_dto = self.system_config_controller.get_activate_user_config()
         config_serial = SystemActivateUserConfigSerializer.serialize(config_dto)
-        return json.dumps(config_serial)
+        return ApiResponse(body=config_serial)
 
     @openmotics_api_v1(auth=True, allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER], expect_body_type='JSON')
     def put_activate_user_config(self, request_body):
-        # type: (Dict) -> None
+        # type: (Dict) -> ApiResponse
         config_dto = SystemActivateUserConfigSerializer.deserialize(request_body)
         self.system_config_controller.save_activate_user_config(config_dto)
-        return
+        return ApiResponse(status_code=204)
 
     @openmotics_api_v1(auth=False)
     def get_esafe_serial(self):
-        # type: () -> str
+        # type: () -> ApiResponse
         serial = self.system_config_controller.get_esafe_serial()
         if serial is None:
             raise StateException('Cannot fetch the eSafe serial')
-        return json.dumps({'serial': serial})
+        return ApiResponse(body={'serial': serial})

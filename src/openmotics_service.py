@@ -54,7 +54,7 @@ if False:  # MYPY
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.ventilation_controller import VentilationController
     from gateway.webservice import WebInterface, WebService
-    from gateway.api.V1.webservice.webservice import WebServiceV1
+    from gateway.api.V1.webservice import WebServiceV1
     from gateway.watchdog import Watchdog
     from gateway.module_controller import ModuleController
     from gateway.user_controller import UserController

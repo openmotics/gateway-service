@@ -195,13 +195,13 @@ def setup_target_platform(target_platform, message_client_name):
                          shutter_controller, system_controller, group_action_controller, module_controller,
                          ventilation_controller, apartment_controller, delivery_controller,
                          system_config_controller, rfid_controller, energy_module_controller)
-    from gateway.api.V1.webservice import webservice
+    from gateway.api.V1.webservice import webservice as webservice_v1
     from cloud import events
     _ = (metrics_controller, webservice, scheduling_controller, metrics_collector,
          maintenance_controller, base, events, user_controller,
          pulse_counter_controller, metrics_caching, watchdog, output_controller, room_controller,
          sensor_controller, shutter_controller, system_controller, group_action_controller, module_controller,
-         ventilation_controller, webservice, apartment_controller, delivery_controller, system_config_controller,
+         ventilation_controller, webservice_v1, apartment_controller, delivery_controller, system_config_controller,
          rfid_controller, energy_module_controller)
 
     # V1 api
@@ -209,6 +209,8 @@ def setup_target_platform(target_platform, message_client_name):
     # gateway.api.V1 folder. Keep this here so all the V1 api files are parsed.
     # This cannot be in the webservice_v1 file since it creates circular imports due to
     # all the V1 api's including elements from the webservice_v1 file
+    from gateway.api import V1
+    _ = V1
 
     # IPC
     message_client = None

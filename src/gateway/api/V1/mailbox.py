@@ -18,7 +18,6 @@ mailbox api description
 
 import cherrypy
 import logging
-import ujson as json
 
 from ioc import INJECTED, Inject
 
@@ -26,7 +25,7 @@ from gateway.api.serializers import MailboxSerializer
 from esafe.rebus.rebus_controller import RebusController
 from gateway.exceptions import UnAuthorizedException, ItemDoesNotExistException, InvalidOperationException, StateException
 from gateway.models import User
-from gateway.api.V1.webservice.webservice import RestAPIEndpoint, openmotics_api_v1, expose
+from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, expose, ApiResponse
 
 if False:  # MyPy
     from typing import Dict, Any
@@ -63,26 +62,26 @@ class MailBox(RestAPIEndpoint):
 
     @openmotics_api_v1(auth=False, expect_body_type=None)
     def get_mailboxes(self):
-        # type: () -> str
+        # type: () -> ApiResponse
         self._check_controller()
         boxes = self.rebus_controller.get_mailboxes()
         boxes_serial = [MailboxSerializer.serialize(box) for box in boxes]
-        return json.dumps(boxes_serial)
+        return ApiResponse(body=boxes_serial)
 
     @openmotics_api_v1(auth=False, expect_body_type=None, check={'rebus_id': int})
     def get_mailbox(self, rebus_id):
-        # type: (int) -> str
+        # type: (int) -> ApiResponse
         self._check_controller()
         boxes = self.rebus_controller.get_mailboxes(rebus_id=rebus_id)
         if len(boxes) != 1:
             raise ItemDoesNotExistException('Cannot find mailbox with rebus id: {}'.format(rebus_id))
         box = boxes[0]
         box_serial = MailboxSerializer.serialize(box)
-        return json.dumps(box_serial)
+        return ApiResponse(body=box_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON', check={'rebus_id': int})
     def put_open_mailbox(self, rebus_id, request_body, auth_token):
-        # type: (int, Dict[str, Any], AuthenticationToken) -> str
+        # type: (int, Dict[str, Any], AuthenticationToken) -> ApiResponse
         self._check_controller()
         if 'open' not in request_body:
             raise ValueError('Expected json body with the open parameter')
@@ -106,7 +105,7 @@ class MailBox(RestAPIEndpoint):
             if box is None:
                 raise StateException("Could not open the rebus lock, lock did not open upon request")
         box_serial = MailboxSerializer.serialize(box)
-        return json.dumps(box_serial)
+        return ApiResponse(body=box_serial)
 
     def _check_controller(self):
         if self.rebus_controller is None:

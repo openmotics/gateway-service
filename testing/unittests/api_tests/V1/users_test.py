@@ -27,7 +27,7 @@ from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.dto import UserDTO, ApartmentDTO
 from gateway.exceptions import UnAuthorizedException, WrongInputParametersException
 from gateway.user_controller import UserController
-from gateway.api.V1.webservice.webservice import AuthenticationLevel
+from gateway.api.V1.webservice import AuthenticationLevel
 from gateway.api.V1.users import Users
 
 from .base import BaseCherryPyUnitTester
@@ -477,7 +477,7 @@ class ApiUsersTests(unittest.TestCase):
                 mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
             response = self.web.post_activate_user('2',
                                                    request_body=user_code)
-            self.assertEqual(b'OK', response)
+            self.assertEqual(None, response)
 
     def test_activate_user_wrong_code(self):
         user_code = {'pin_code': 'WRONG_CODE'}
@@ -634,7 +634,6 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
             # Test all the 4 roles in a normal way
             for user_role in ['USER', 'ADMIN', 'COURIER', 'TECHNICIAN', 'SUPER']:
                 status, headers, body = self.GET('/api/v1/users/available_code?role={}'.format(user_role), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
-                self.print_request_result()
                 self.assertStatus('200 OK')
                 number_of_digits = UserController.PinCodeLength[user_role]
                 body_dict = json.loads(body)

@@ -18,7 +18,6 @@ Apartments api description
 
 import cherrypy
 import logging
-import ujson as json
 
 from ioc import INJECTED, Inject
 from gateway.api.serializers import ApartmentSerializer
@@ -26,7 +25,7 @@ from gateway.apartment_controller import ApartmentController
 from gateway.dto import ApartmentDTO
 from gateway.exceptions import WrongInputParametersException, ItemDoesNotExistException
 from gateway.models import User
-from gateway.api.V1.webservice.webservice import RestAPIEndpoint, openmotics_api_v1, expose
+from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, expose, ApiResponse
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +74,7 @@ class Apartments(RestAPIEndpoint):
         apartments_serial = []
         for apartment in apartments:
             apartments_serial.append(ApartmentSerializer.serialize(apartment))
-        return json.dumps(apartments_serial)
+        return ApiResponse(body=apartments_serial)
 
     @openmotics_api_v1(auth=False, pass_role=False, pass_token=False)
     def get_apartment(self, apartment_id):
@@ -83,7 +82,7 @@ class Apartments(RestAPIEndpoint):
         if apartment_dto is None:
             raise ItemDoesNotExistException('Apartment with id {} does not exists'.format(apartment_id))
         apartment_serial = ApartmentSerializer.serialize(apartment_dto)
-        return json.dumps(apartment_serial)
+        return ApiResponse(body=apartment_serial)
 
     @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
                        allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER],
@@ -102,7 +101,7 @@ class Apartments(RestAPIEndpoint):
         for apartment in to_create_apartments:
             apartment_dto = self.apartment_controller.save_apartment(apartment)
             apartments_serial.append(ApartmentSerializer.serialize(apartment_dto))
-        return json.dumps(apartments_serial)
+        return ApiResponse(body=apartments_serial)
 
     @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
                        allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER],
@@ -115,7 +114,7 @@ class Apartments(RestAPIEndpoint):
         if apartment_dto is None:
             raise ItemDoesNotExistException('Could not create the apartment: Could not load after creation')
         apartment_serial = ApartmentSerializer.serialize(apartment_dto)
-        return json.dumps(apartment_serial)
+        return ApiResponse(body=apartment_serial)
 
     @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
                        allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER],
@@ -127,7 +126,7 @@ class Apartments(RestAPIEndpoint):
         except Exception:
             raise WrongInputParametersException('Could not parse the json body into an apartment object')
         apartment_dto = self.apartment_controller.update_apartment(apartment_dto)
-        return json.dumps(ApartmentSerializer.serialize(apartment_dto))
+        return ApiResponse(body=ApartmentSerializer.serialize(apartment_dto))
 
     @openmotics_api_v1(auth=True, pass_role=False, pass_token=False,
                        allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER],
@@ -144,11 +143,11 @@ class Apartments(RestAPIEndpoint):
         for apartment in apartments_to_update:
             apartment_dto = self.apartment_controller.update_apartment(apartment)
             updated_apartments.append(apartment_dto)
-        return json.dumps([ApartmentSerializer.serialize(apartment_dto) for apartment_dto in updated_apartments])
+        return ApiResponse(body=[ApartmentSerializer.serialize(apartment_dto) for apartment_dto in updated_apartments])
 
     @openmotics_api_v1(auth=True, pass_role=False,
                        allowed_user_roles=[User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER])
     def delete_apartment(self, apartment_id):
         apartment_dto = ApartmentDTO(id=apartment_id)
         self.apartment_controller.delete_apartment(apartment_dto)
-        return 'OK'
+        return ApiResponse(status_code=204)

@@ -27,11 +27,11 @@ import time
 from ioc import INJECTED, Inject, Injectable, Singleton
 from gateway.authentication_controller import AuthenticationToken, AuthenticationController, LoginMethod
 from gateway.exceptions import ItemDoesNotExistException, UnAuthorizedException, \
-    GatewayException, ForbiddenException, ParseException, \
+    ForbiddenException, ParseException, WebServiceException, \
     InvalidOperationException, WrongInputParametersException, \
     TimeOutException, NotImplementedException
-from gateway.user_controller import UserController
 from gateway.webservice import params_parser
+from gateway.api.V1.webservice import ApiResponse, RestAPIEndpoint
 
 if False:  # MyPy
     from gateway.webservice import WebService
@@ -50,9 +50,14 @@ logger = logging.getLogger(__name__)
 def _openmotics_api_v1(f, *args, **kwargs):
     start = time.time()
     timings = {}
-    status = 200  # OK
     try:
-        data = f(*args, **kwargs)
+        response = f(*args, **kwargs)
+        if not isinstance(response, ApiResponse):
+            raise WebServiceException("API response needs to be instance of `{}`".format(ApiResponse.__name__))
+        status = response.status_code
+        for header_name, header_value in response.response_headers.items():
+            cherrypy.response.headers[header_name] = header_value
+        data = response.body
     except cherrypy.HTTPError as ex:
         status = ex.status
         data = ex._message
@@ -80,6 +85,9 @@ def _openmotics_api_v1(f, *args, **kwargs):
     except NotImplementedException as ex:
         status = 503
         data = ex.message
+    except WebServiceException as ex:
+        status = 500
+        data = ex.message
     except Exception as ex:
         status = 500
         data = 'General Error occurred during api call: {}: {}'.format(type(ex).__name__, ex)
@@ -87,25 +95,11 @@ def _openmotics_api_v1(f, *args, **kwargs):
         import traceback
         print(traceback.print_exc())
 
-    # start the serialization timing
     timings['process'] = ('Processing', time.time() - start)
     serialization_start = time.time()
 
-    # check if custom response object is returned, If this is true, no error has occurred
-    if isinstance(data, V1ApiResponse):
-        status = data.status_code
-        for header_name, header_value in data.response_headers.items():
-            cherrypy.response.headers[header_name] = header_value
-        if 'Content-Type' not in data.response_headers:
-            cherrypy.response.headers['Content-Type'] = 'application/json'
-        response_body = data.body
-    else:
-        response_body = data
-        cherrypy.response.headers['Content-Type'] = 'application/json'
-
     # encode response data
-    contents = str(response_body).encode() if response_body is not None else None
-    # end the serialization timing
+    contents = str(data).encode() if data is not None else None
     timings['serialization'] = 'Serialization', time.time() - serialization_start
 
     # Set the server timing header
@@ -286,66 +280,6 @@ def openmotics_api_v1(_func=None, check=None, check_for_missing=False, auth=Fals
 # ----------------------------
 # REST API
 # ----------------------------
-
-class RestAPIEndpoint(object):
-    exposed = True  # Cherrypy specific flag to set the class as exposed
-    API_ENDPOINT = None  # type: Optional[str]
-
-    @Inject
-    def __init__(self, user_controller=INJECTED, authentication_controller=INJECTED):
-        # type: (UserController, AuthenticationController) -> None
-        self.user_controller = user_controller
-        self.authentication_controller = authentication_controller
-
-    def GET(self):
-        raise NotImplementedException
-
-    def POST(self):
-        raise NotImplementedException
-
-    def PUT(self):
-        raise NotImplementedException
-
-    def DELETE(self):
-        raise NotImplementedException
-
-    def __repr__(self):
-        return self.__str__()
-
-    def __str__(self):
-        return 'Rest Endpoint class: "{}"'.format(self.__class__.__name__)
-
-
-class V1ApiResponse(object):
-
-    def __init__(self, status_code=200, response_headers=None, body=None, ):
-        # type: (int, Optional[Dict[str, str]], Optional[Any]) -> None
-        self.status_code = status_code
-        self.response_headers = response_headers if response_headers is not None else {}
-        self.body = body
-
-    def __str__(self):
-        return '<V1 API Response: {{Status Code: {}, Response Headers: {}, Body: {}}}>'.format(self.status_code, self.response_headers, self.body)
-
-    def __eq__(self, other):
-        if not isinstance(other, V1ApiResponse):
-            return False
-        return self.status_code == other.status_code and \
-               self.response_headers == other.response_headers and \
-               self.body == other.body
-
-
-@Inject
-def expose(cls, api_endpoint_register=INJECTED):
-    """
-    Decorator to expose a RestAPIEndpoint subclass
-    This will register the api class to the V1 webservice
-    """
-    if not issubclass(cls, RestAPIEndpoint):
-        raise GatewayException('Cannot expose a non "RestAPIEndpoint" subclass')
-    api_endpoint_register.register(cls)
-    return cls
-
 
 @Injectable.named('api_endpoint_register')
 @Singleton
