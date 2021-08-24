@@ -25,6 +25,7 @@ from gateway.delivery_controller import DeliveryController
 from gateway.dto.box import ParcelBoxDTO, MailBoxDTO
 from gateway.dto.doorbell import DoorbellDTO
 from gateway.events import EsafeEvent
+from gateway.exceptions import ServiceUnavailableException
 from gateway.pubsub import PubSub
 from ioc import Inject, INJECTED, Injectable, Singleton
 
@@ -51,6 +52,7 @@ class RebusController(RebusControllerInterface):
         # type: (str, PubSub, ApartmentController, DeliveryController) -> None
         logger.debug('Creating esafe controller')
         self.rebus_dev_file = rebus_device
+        self._rebus_device = None
         self.pub_sub = pubsub
         self.apartment_controller = apartment_controller
         self.delivery_controller = delivery_controller
@@ -60,6 +62,13 @@ class RebusController(RebusControllerInterface):
         self.lock_status = defaultdict(lambda: False)  # type: Dict[int, bool]
         self.done_discovering = False
 
+    @property
+    def rebus_device(self):
+        # type: () -> Rebus
+        if self._rebus_device is not None:
+            return self._rebus_device
+        raise ServiceUnavailableException('Rebus device does not exists, first start the rebus controller to create a device')
+
     ######################
     # Controller Functions
     ######################
@@ -67,7 +76,7 @@ class RebusController(RebusControllerInterface):
     def start(self):
         logger.debug('Starting eSafe controller')
         logger.debug(' -> Creating eSafe device: {}'.format(self.rebus_dev_file))
-        self.rebus_device = Rebus(self.rebus_dev_file, power_off_on_del=True)
+        self._rebus_device = Rebus(self.rebus_dev_file, power_off_on_del=True)
         logger.debug(' -> Toggle power')
         self.toggle_rebus_power()
         logger.debug(' -> Discover devices')
@@ -154,6 +163,10 @@ class RebusController(RebusControllerInterface):
             raise ValueError('Trying to open rebus device that is not a parcelbox of mailbox')
         success = device.open_lock(blocking=True)
         if success:
+            self.lock_status[rebus_id] = True
+            event = EsafeEvent(EsafeEvent.Types.LOCK_CHANGE, {'lock_id': rebus_id, 'status': 'open'})
+            logger.debug("Sending event: {}".format(event))
+            self.pub_sub.publish_esafe_event(PubSub.EsafeTopics.LOCK, event)
             if device.type == EsafeBoxType.PARCELBOX:
                 return self._rebus_parcelbox_to_dto(device, force_latest_status=True)
             elif device.type == EsafeBoxType.MAILBOX:
