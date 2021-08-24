@@ -35,6 +35,7 @@ from ioc import INJECTED, Inject
 from logs import Logs
 
 if False:  # MYPY
+    from gateway.apartment_controller import ApartmentController
     from gateway.authentication_controller import AuthenticationController
     from gateway.delivery_controller import DeliveryController
     from gateway.energy_module_controller import EnergyModuleController
@@ -89,7 +90,7 @@ class OpenmoticsService(object):
                 delivery_controller=INJECTED,  # type: DeliveryController
                 authentication_controller=INJECTED,  # type: AuthenticationController
                 user_controller=INJECTED,  # type: UserController
-                apartment_controller=INJECTED  # type: apartment_controller
+                apartment_controller=INJECTED  # type: ApartmentController
             ):
 
         # TODO: Fix circular dependencies

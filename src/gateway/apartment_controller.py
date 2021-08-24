@@ -26,7 +26,7 @@ from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject, Injectable, Singleton
 
 if False:  # MyPy
-    from typing import List, Optional
+    from typing import List, Optional, Dict, Any
     from esafe.rebus import RebusController
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class ApartmentController(object):
     @staticmethod
     @Inject
     def send_config_change_event(error=EventError.ErrorTypes.NO_ERROR, pubsub=INJECTED):
-        # type: (EventError.ErrorTypes, PubSub) -> None
+        # type: (Dict[str, Any], PubSub) -> None
         event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': 'Apartment'}, error=error)
         pubsub.publish_esafe_event(PubSub.EsafeTopics.CONFIG, event)
 

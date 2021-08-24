@@ -66,7 +66,6 @@ class BaseEvent(object):
     NAMESPACE = 'BASE_EVENT'
 
     def __init__(self, event_type, data, error=None):
-        # type: (str, Optional[Dict[str,Any]], Optional[EventError.ErrorTypes]) -> None
         if error is None:
             error = EventError.ErrorTypes.NO_ERROR
         elif not isinstance(error, dict) or 'code' not in error or 'description' not in error:

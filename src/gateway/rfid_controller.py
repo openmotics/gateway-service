@@ -36,7 +36,7 @@ import six
 from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
 
 if False:  # MyPy
-    from typing import List, Optional, Type
+    from typing import List, Optional, Type, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ class RfidController(object):
     @staticmethod
     @Inject
     def send_config_change_event(error=EventError.ErrorTypes.NO_ERROR, pubsub=INJECTED):
-        # type: (EventError.ErrorTypes, PubSub) -> None
+        # type: (Dict[str, Any], PubSub) -> None
         event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': 'RFID'}, error=error)
         pubsub.publish_esafe_event(PubSub.EsafeTopics.CONFIG, event)
 

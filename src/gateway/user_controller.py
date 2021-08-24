@@ -35,7 +35,7 @@ from gateway.pubsub import PubSub
 from ioc import Injectable, Inject, Singleton, INJECTED
 
 if False:  # MYPY
-    from typing import Tuple, List, Optional, Dict, Union
+    from typing import Tuple, List, Optional, Dict, Union, Any
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class UserController(object):
 
     @Inject
     def send_event(self, event_error=EventError.ErrorTypes.NO_ERROR, pubsub=INJECTED):
-        # type: (EventError.ErrorTypes, PubSub) -> None
+        # type: (Dict[str, Any], PubSub) -> None
         _ = self
         event_type = "user"
         event = EsafeEvent(EsafeEvent.Types.CONFIG_CHANGE, {'type': event_type}, error=event_error)
