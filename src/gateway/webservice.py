@@ -36,7 +36,6 @@ from decorator import decorator
 from peewee import DoesNotExist
 
 import constants
-import debug_ignore
 import gateway
 from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     ModuleSerializer, OutputSerializer, OutputStateSerializer, InputStateSerializer, \
@@ -422,7 +421,6 @@ class WebInterface(object):
 
     def send_event_websocket(self, event):
         # type: (BaseEvent) -> None
-        debug_ignore.debug("Received event to be send: {}".format(event))
         try:
             answers = cherrypy.engine.publish('get-events-receivers')
             if not answers:
@@ -431,11 +429,9 @@ class WebInterface(object):
             for client_id in receivers.keys():
                 receiver_info = receivers.get(client_id)
                 if receiver_info is None:
-                    debug_ignore.debug(" -> no receiver info, quiting")
                     continue
                 try:
                     if event.type not in receiver_info['subscribed_types']:
-                        debug_ignore.debug(" -> event not in subscribed types, quiting")
                         continue
                     # check if the namespace matches,
                     # only do this when a namespace is defined in the websocket metadata
