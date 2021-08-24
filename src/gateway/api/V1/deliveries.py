@@ -18,7 +18,6 @@ deliveries api description
 
 import cherrypy
 import logging
-import ujson as json
 
 from ioc import INJECTED, Inject
 
@@ -27,7 +26,7 @@ from gateway.delivery_controller import DeliveryController
 from gateway.dto import DeliveryDTO
 from gateway.exceptions import UnAuthorizedException, ItemDoesNotExistException, ParseException
 from gateway.models import User, Delivery
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
+from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, expose, ApiResponse
 
 if False:  # MyPy
     from gateway.authentication_controller import AuthenticationToken
@@ -69,7 +68,7 @@ class Deliveries(RestAPIEndpoint):
 
     @openmotics_api_v1(auth=True, pass_token=True, check={'user_id': int, 'delivery_type': str})
     def get_deliveries(self, auth_token, user_id=None, delivery_type=None):
-        # type: (AuthenticationToken, int, str) -> str
+        # type: (AuthenticationToken, int, str) -> ApiResponse
         # get all the deliveries
         deliveries = self.delivery_controller.load_deliveries(user_id=user_id, delivery_type=delivery_type)  # type: List[DeliveryDTO]
 
@@ -78,11 +77,11 @@ class Deliveries(RestAPIEndpoint):
             deliveries = [delivery for delivery in deliveries if auth_token.user.id in [delivery.user_id_delivery, delivery.user_id_pickup]]
 
         deliveries_serial = [DeliverySerializer.serialize(delivery) for delivery in deliveries]
-        return json.dumps(deliveries_serial)
+        return ApiResponse(body=deliveries_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True)
     def get_delivery(self, delivery_id, auth_token):
-        # type: (int, AuthenticationToken) -> str
+        # type: (int, AuthenticationToken) -> ApiResponse
         delivery = self.delivery_controller.load_delivery(delivery_id)
         if delivery is None:
             raise ItemDoesNotExistException('Could not find the delivery with id: {}'.format(delivery_id))
@@ -92,18 +91,18 @@ class Deliveries(RestAPIEndpoint):
             if user_id not in [delivery.user_id_delivery, delivery.user_id_pickup]:
                 raise UnAuthorizedException('You are not allowed to request this delivery')
         deliveries_serial = DeliverySerializer.serialize(delivery)
-        return json.dumps(deliveries_serial)
+        return ApiResponse(body=deliveries_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True,
                        check={'user_id': int, 'before_id': int, 'pagesize': int}, check_for_missing=False)
     def get_delivery_history(self, user_id, auth_token, before_id=0, pagesize=100):
-        # type: (int, AuthenticationToken, int, int) -> str
+        # type: (int, AuthenticationToken, int, int) -> ApiResponse
         deliveries = self.delivery_controller.load_deliveries(user_id=user_id, history=True, before_id=before_id, limit=pagesize)
         # filter the deliveries for only the user id when they are not technician or admin
         if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             deliveries = [delivery for delivery in deliveries if auth_token.user.id in [delivery.user_id_delivery, delivery.user_id_pickup]]
         deliveries_serial = [DeliverySerializer.serialize(delivery) for delivery in deliveries]
-        return json.dumps(deliveries_serial)
+        return ApiResponse(body=deliveries_serial)
 
     @openmotics_api_v1(auth=False, pass_token=True, expect_body_type='JSON')
     def post_delivery(self, auth_token=None, request_body=None):
@@ -119,11 +118,11 @@ class Deliveries(RestAPIEndpoint):
         if saved_delivery is None:
             raise RuntimeError('Unexpected error: Delivery is None when save_delivery is called')
         saved_delivery_serial = DeliverySerializer.serialize(saved_delivery)
-        return json.dumps(saved_delivery_serial)
+        return ApiResponse(body=saved_delivery_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True)
     def put_delivery_pickup(self, delivery_id, auth_token):
-        # type: (int, AuthenticationToken) -> str
+        # type: (int, AuthenticationToken) -> ApiResponse
         delivery_dto = self.delivery_controller.load_delivery(delivery_id)
         if delivery_dto is None:
             raise ItemDoesNotExistException('Cannot pickup a delivery that does not exists: id: {}'.format(delivery_id))
@@ -137,4 +136,4 @@ class Deliveries(RestAPIEndpoint):
         if delivery_dto_returned is None:
             raise RuntimeError('Unexpected error: Delivery is None when pickup_delivery is called')
         delivery_serial = DeliverySerializer.serialize(delivery_dto_returned)
-        return json.dumps(delivery_serial)
+        return ApiResponse(body=delivery_serial)

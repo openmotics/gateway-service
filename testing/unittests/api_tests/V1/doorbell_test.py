@@ -111,7 +111,7 @@ class DoorbellApiCherryPyTest(BaseCherryPyUnitTester):
                 mock.patch.object(self.rebus_controller, 'ring_doorbell') as ring_doorbell_func:
             # Auth: normal user
             status, headers, response = self.PUT('/api/v1/doorbells/ring/17', login_user=self.test_user_1, headers=None)
-            self.assertStatus('200 OK')
+            self.assertStatus('204 No Content')
             get_doorbell_func.assert_called_once_with()
             get_doorbell_func.reset_mock()
             ring_doorbell_func.assert_called_once_with(17)
@@ -119,7 +119,7 @@ class DoorbellApiCherryPyTest(BaseCherryPyUnitTester):
 
             # Auth: no user
             status, headers, response = self.PUT('/api/v1/doorbells/ring/17', login_user=None, headers=None)
-            self.assertStatus('200 OK')
+            self.assertStatus('204 No Content')
             get_doorbell_func.assert_called_once_with()
             get_doorbell_func.reset_mock()
             ring_doorbell_func.assert_called_once_with(17)
