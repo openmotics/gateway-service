@@ -36,8 +36,6 @@ class RFIDControllerTest(unittest.TestCase):
     def setUpClass(cls):
         super(RFIDControllerTest, cls).setUpClass()
         SetTestMode()
-        # cls.test_db = SqliteDatabase(':memory:')
-        # cls.test_db = SqliteDatabase('/tmp/test.db', pragmas={'foreign_keys': 1})
         cls.test_db = SqliteDatabase(':memory:', pragmas={'foreign_keys': 1})
 
     @classmethod
@@ -177,4 +175,15 @@ class RFIDControllerTest(unittest.TestCase):
 
         # check that the badge is deleted too
         self.assertEqual(0, RFID.select().count())
+
+
+    def test_get_rfid(self):
+        res_1 = self.controller.save_rfid(self.test_rfid_1)
+        res_2 = self.controller.save_rfid(self.test_rfid_2)
+
+        result = self.controller.load_rfids(res_1.user.id)
+        self.assertEqual([res_1], result)
+
+        result = self.controller.load_rfids(user_id=37)
+        self.assertEqual([], result)
 

@@ -27,7 +27,7 @@ from gateway.api.serializers.apartment import ApartmentSerializer
 from gateway.dto import UserDTO, ApartmentDTO
 from gateway.exceptions import UnAuthorizedException, WrongInputParametersException
 from gateway.user_controller import UserController
-from gateway.webservice_v1 import AuthenticationLevel
+from gateway.api.V1.webservice import AuthenticationLevel
 from gateway.api.V1.users import Users
 
 from .base import BaseCherryPyUnitTester
@@ -472,15 +472,15 @@ class ApiUsersTests(unittest.TestCase):
             self.verify_user_created(user_to_create, response)
 
     def test_activate_user(self):
-        user_code = {'code': self.normal_user_2.pin_code}
+        user_code = {'pin_code': self.normal_user_2.pin_code}
         with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
                 mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
             response = self.web.post_activate_user('2',
                                                    request_body=user_code)
-            self.assertEqual(b'OK', response)
+            self.assertEqual(None, response)
 
     def test_activate_user_wrong_code(self):
-        user_code = {'code': 'WRONG_CODE'}
+        user_code = {'pin_code': 'WRONG_CODE'}
         with mock.patch.object(self.users_controller, 'activate_user') as save_user_func, \
                 mock.patch.object(self.users_controller, 'load_user', return_value=self.normal_user_2):
             response = self.web.post_activate_user('2',
@@ -503,7 +503,6 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_update_user('2',
                                                 auth_token=auth_token,
-                                                auth_role=auth_token.user.role,
                                                 auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
@@ -565,7 +564,6 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.normal_user_3, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.put_update_user('2',
                                                 auth_token=auth_token,
-                                                auth_role=auth_token.user.role,
                                                 auth_security_level=AuthenticationLevel.HIGH,
                                                 request_body=user_to_update)
 
@@ -581,7 +579,7 @@ class ApiUsersTests(unittest.TestCase):
             auth_token = AuthenticationToken(user=self.admin_user, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.PASSWORD)
             response = self.web.delete_user('2',
                                             auth_token=auth_token)
-            self.assertEqual(b'OK', response)
+            self.assertEqual(None, response)
 
     def test_delete_user_unauthorized(self):
         with mock.patch.object(self.users_controller, 'remove_user') as save_user_func, \
@@ -636,7 +634,6 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
             # Test all the 4 roles in a normal way
             for user_role in ['USER', 'ADMIN', 'COURIER', 'TECHNICIAN', 'SUPER']:
                 status, headers, body = self.GET('/api/v1/users/available_code?role={}'.format(user_role), login_user=None, headers={'X-API-Secret': 'Test-Secret'})
-                self.print_request_result()
                 self.assertStatus('200 OK')
                 number_of_digits = UserController.PinCodeLength[user_role]
                 body_dict = json.loads(body)
@@ -679,3 +676,10 @@ class OpenMoticsApiTest(BaseCherryPyUnitTester):
             status, headers, body = self.GET('/api/v1/users/1/pin', login_user=self.test_admin, login_method=LoginMethod.PASSWORD)
             self.assertStatus('200 OK')
             self.assertEqual(json.loads(body), {'pin_code': self.test_user.pin_code})
+
+    def test_delete_user(self):
+        with mock.patch.object(self.users_controller, 'remove_user') as delete_user_func:
+            status, headers, body = self.DELETE('/api/v1/users/1', login_user=self.test_admin)
+            self.assertStatus('204 No Content')
+            self.assertBody('')
+

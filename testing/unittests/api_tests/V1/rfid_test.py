@@ -137,7 +137,7 @@ class RfidTests(unittest.TestCase):
                 mock.patch.object(self.rfid_controller, 'delete_rfid') as delete_rfid_func:
             auth_token = AuthenticationToken(self.test_admin_1, token='test-token', expire_timestamp=int(time.time() + 3600), login_method=LoginMethod.RFID)
             resp = self.web.delete_rfid(rfid_id=1, auth_token=auth_token)
-            self.assertEqual(b'OK', resp)
+            self.assertEqual(None, resp)
 
     def test_delete_rfid_wrong_auth(self):
         with mock.patch.object(self.rfid_controller, 'load_rfid', return_value=self.test_rfid_2), \
@@ -235,7 +235,7 @@ class RFIDApiCherryPyTest(BaseCherryPyUnitTester):
             body = json.dumps({'user_id': 1, 'label': 'Test_rfid'})
             headers = {'X-API-Secret': 'Test-Secret'}
             status, headers, response = self.PUT('/api/v1/rfid/add_new/start', login_user=self.test_admin_1, body=body, headers=headers)
-            self.assertStatus('200 OK')
+            self.assertStatus('204 No Content')
             start_rfid_func.assert_called_once()
 
     def test_start_rfid_session_api_secret(self):
@@ -290,7 +290,7 @@ class RFIDApiCherryPyTest(BaseCherryPyUnitTester):
                 mock.patch.object(self.rfid_controller, 'stop_add_rfid_session') as stop_rfid_func:
             headers = {'X-API-Secret': 'Test-Secret'}
             status, headers, response = self.PUT('/api/v1/rfid/add_new/cancel', login_user=self.test_admin_1, headers=headers)
-            self.assertStatus('200 OK')
+            self.assertStatus('204 No Content')
             stop_rfid_func.assert_called_once()
             stop_rfid_func.reset_mock()
 

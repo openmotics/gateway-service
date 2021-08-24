@@ -103,6 +103,15 @@ class BaseCherryPyUnitTester(helper.CPWebCase):
         # type: (str, Optional[UserDTO], LoginMethod, Optional[Dict]) -> str
         return self.general_request(url, method='DELETE', login_user=login_user, headers=headers, body=None, login_method=login_method)
 
+    ############################
+    # Custom assert statements #
+    ############################
+
+    def assertNoHeaderItemValue(self, key, value, msg=''):
+        for header_key, header_value in self.headers:
+            if (header_key, header_value) == (key, value):
+                self.fail(msg)
+
     # explicitly do nothing in the setup_server function, but keep it here since it triggers it to setup the cherrypy tree
     @classmethod
     def setup_server(cls):

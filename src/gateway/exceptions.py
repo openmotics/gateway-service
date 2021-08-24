@@ -87,6 +87,10 @@ class ForbiddenException(GatewayException):
     DESC = 'Action forbidden'
 
 
+class WebServiceException(GatewayException):
+    DESC = 'General Webservice Exception'
+
+
 class CommunicationFailure(Exception):
     pass
 

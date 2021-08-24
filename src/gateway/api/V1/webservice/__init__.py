@@ -1,4 +1,4 @@
-# Copyright (C) 2016 OpenMotics BV
+# Copyright (C) 2021 OpenMotics BV
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -12,6 +12,11 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-""" Module containing the functionality provided by the gateway. """
+"""
+V1 Webservice Init file
+"""
 
-__version__ = '2.18.2'
+from gateway.api.V1.webservice.api_response import ApiResponse
+from gateway.api.V1.webservice.base_api import RestAPIEndpoint, expose
+from gateway.api.V1.webservice.webservice import openmotics_api_v1, WebServiceV1, AuthenticationLevel, LoginMethod
+

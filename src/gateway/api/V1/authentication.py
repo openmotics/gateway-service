@@ -18,11 +18,10 @@ authenticate api description
 
 import cherrypy
 import logging
-import ujson as json
 
 from gateway.authentication_controller import AuthenticationToken
 from gateway.exceptions import UnAuthorizedException, WrongInputParametersException
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose
+from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, expose, ApiResponse
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +47,9 @@ class Authentication(RestAPIEndpoint):
 
     @openmotics_api_v1(auth=False, expect_body_type='JSON')
     def authenticate_pin_code(self, request_body):
-        if 'code' not in request_body:
+        if 'pin_code' not in request_body:
             raise WrongInputParametersException('Expected a code in the request body json')
-        success, data = self.authentication_controller.login_with_user_code(pin_code=request_body['code'])
+        success, data = self.authentication_controller.login_with_user_code(pin_code=request_body['pin_code'])
         return self.handle_authentication_result(success, data)
 
     @openmotics_api_v1(auth=False, expect_body_type='JSON')
@@ -65,10 +64,11 @@ class Authentication(RestAPIEndpoint):
         if success:
             if not isinstance(data, AuthenticationToken):
                 raise RuntimeError('Retrieved success as true, but no authentication token')
-            return json.dumps(data.to_dict())
+            return ApiResponse(body=data.to_dict())
         else:
             raise UnAuthorizedException('could not authenticate user: {}'.format(data))
 
     @openmotics_api_v1(auth=True, pass_token=True, expect_body_type=None)
     def deauthenticate(self, auth_token):
         self.user_controller.logout(auth_token)
+        return ApiResponse(status_code=204)

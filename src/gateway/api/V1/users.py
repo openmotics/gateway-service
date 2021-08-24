@@ -18,14 +18,13 @@ Users api description
 
 import cherrypy
 import logging
-import ujson as json
 import uuid
 
 from gateway.api.serializers import UserSerializer
 from gateway.exceptions import WrongInputParametersException, UnAuthorizedException, ItemDoesNotExistException, NotImplementedException
 from gateway.models import User
 from gateway.user_controller import UserController
-from gateway.webservice_v1 import RestAPIEndpoint, openmotics_api_v1, expose, AuthenticationLevel
+from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, expose, AuthenticationLevel, ApiResponse
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +77,7 @@ class Users(RestAPIEndpoint):
             users = self.user_controller.load_users(roles=roles, include_inactive=include_inactive)
 
         users_serial = [UserSerializer.serialize(user) for user in users]
-        return json.dumps(users_serial)
+        return ApiResponse(body=users_serial)
 
     @openmotics_api_v1(auth=False, pass_role=True)
     def get_user(self, user_id, auth_role=None):
@@ -93,7 +92,7 @@ class Users(RestAPIEndpoint):
             if user.role in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
                 raise UnAuthorizedException('Cannot request an admin or technician user when not authenticated as one')
         user_serial = UserSerializer.serialize(user)
-        return json.dumps(user_serial)
+        return ApiResponse(body=user_serial)
 
     @openmotics_api_v1(auth=False, auth_level=AuthenticationLevel.HIGH, check={'role': str})
     def get_available_code(self, role):
@@ -101,17 +100,17 @@ class Users(RestAPIEndpoint):
         if role not in roles:
             raise WrongInputParametersException('Role needs to be one of {}'.format(roles))
         new_code = self.user_controller.generate_new_pin_code(UserController.PinCodeLength[role])
-        return json.dumps({'code': new_code})
+        return ApiResponse(body={'code': new_code})
 
     @openmotics_api_v1(auth=True, auth_level=AuthenticationLevel.HIGH, check={'user_id': int},
                        allowed_user_roles=[User.UserRoles.SUPER, User.UserRoles.ADMIN])
     def get_pin_code(self, user_id):
-        # type: (int) -> str
+        # type: (int) -> ApiResponse
         # Authentication: When SUPER, ADMIN or TECHNICIAN, you can request all the pin codes
         user_dto = self.user_controller.load_user(user_id)
         if user_dto is None:
             raise ItemDoesNotExistException('Cannot request the pin code for user_id: {}: User does not exists'.format(user_id))
-        return json.dumps({'pin_code': user_dto.pin_code})
+        return ApiResponse(body={'pin_code': user_dto.pin_code})
 
     @openmotics_api_v1(auth=False, pass_role=True, expect_body_type='JSON')
     def post_user(self, auth_role, request_body):
@@ -136,7 +135,7 @@ class Users(RestAPIEndpoint):
             user_dto.loaded_fields.remove('pin_code')
 
         if user_dto.username is None:
-            user_dto.username = uuid.uuid4().hex
+            user_dto.username = str(uuid.uuid4())
         # add a custom user code
         user_dto.pin_code = str(self.user_controller.generate_new_pin_code(UserController.PinCodeLength[user_dto.role]))
         user_dto.accepted_terms = True
@@ -157,12 +156,12 @@ class Users(RestAPIEndpoint):
         user_dto_serial = UserSerializer.serialize(user_dto_saved)
         # explicitly add the pin code when a new user is created, this way, the generated pin code is known to the user when created.
         user_dto_serial['pin_code'] = user_dto.pin_code
-        return json.dumps(user_dto_serial)
+        return ApiResponse(body=user_dto_serial)
 
     @openmotics_api_v1(auth=False, pass_role=False, expect_body_type='JSON')
     def post_activate_user(self, user_id, request_body):
         # request to activate a certain user
-        request_code = request_body.get('code') or request_body.get('rfid_tag')
+        request_code = request_body.get('pin_code') or request_body.get('rfid_tag')
         if request_code is None:
             raise WrongInputParametersException('when activating, a pin code or rfid tag is expected.')
 
@@ -175,19 +174,19 @@ class Users(RestAPIEndpoint):
             raise NotImplementedException('Rfid token check not implemented yet')
         # if all checks are passed, activate the user
         self.user_controller.activate_user(user_id)
-        return 'OK'
+        return ApiResponse(status_code=204)
 
-    @openmotics_api_v1(auth=True, pass_role=False, pass_token=True, pass_security_level=True, expect_body_type='JSON')
-    def put_update_user(self, user_id, auth_token, auth_security_level, request_body=None, **kwargs):
+    @openmotics_api_v1(auth=True, pass_role=False, pass_token=True, pass_security_level=True, expect_body_type='JSON', check={'user_id': int})
+    def put_update_user(self, user_id, auth_token, auth_security_level, request_body=None):
         user_json = request_body
         if auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             if auth_token.user.id != user_id:
-                raise UnAuthorizedException('As a non admin or technician user, you cannot change another user')
+                raise UnAuthorizedException('As a non admin or technician user, you cannot change another user. Requested user_id: {}, authenticated as: {}'.format(user_id, auth_token.user.id))
 
         # check if the pin code or rfid tag is changed
         if 'pin_code' in user_json or 'rfid' in user_json:
             if auth_security_level is not AuthenticationLevel.HIGH:
-                raise UnAuthorizedException('Cannot change the pin code or rfid data: You need to log in with password or pass X-API-Secret')
+                raise UnAuthorizedException('Cannot change the pin code or rfid data: You need a HIGH security level')
 
         user_dto_orig = self.user_controller.load_user(user_id, clear_password=False)
         user_dto = UserSerializer.deserialize(user_json)
@@ -197,7 +196,7 @@ class Users(RestAPIEndpoint):
                 setattr(user_dto_orig, field, getattr(user_dto, field))
         saved_user = self.user_controller.save_user(user_dto_orig)
         saved_user.clear_password()
-        return json.dumps(UserSerializer.serialize(saved_user))
+        return ApiResponse(body=UserSerializer.serialize(saved_user))
 
     @openmotics_api_v1(auth=False, pass_role=False, pass_token=True)
     def delete_user(self, user_id, auth_token=None):
@@ -213,4 +212,4 @@ class Users(RestAPIEndpoint):
                 raise UnAuthorizedException('As a non admin or technician user, you cannot delete another user')
 
         self.user_controller.remove_user(user_to_delete_dto)
-        return 'OK'
+        return ApiResponse(status_code=204)

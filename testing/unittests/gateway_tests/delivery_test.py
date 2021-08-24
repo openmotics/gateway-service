@@ -371,7 +371,7 @@ class DeliveryControllerTest(unittest.TestCase):
         self.assertEqual(delivery_dto, result)
 
         result = self.controller.load_deliveries()
-        # only one delivery should be returned since the first one is already picked up
+        # only two deliveries should be returned since the first one is already picked up
         self.assertEqual(2, len(result))
 
         result = self.controller.load_deliveries(user_id=user_orm_2.id)
