@@ -20,6 +20,7 @@ import cherrypy
 import logging
 
 from gateway.authentication_controller import AuthenticationToken
+from gateway.enums import UserEnums
 from gateway.exceptions import UnAuthorizedException, WrongInputParametersException
 from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, expose, ApiResponse
 
@@ -64,6 +65,12 @@ class Authentication(RestAPIEndpoint):
         if success:
             if not isinstance(data, AuthenticationToken):
                 raise RuntimeError('Retrieved success as true, but no authentication token')
+            if not data.user.is_active:
+                return ApiResponse(status_code=206, body={
+                    'user_id': data.user.id,
+                    'user_role': data.user.role,
+                    'is_active': False
+                })
             return ApiResponse(body=data.to_dict())
         else:
             raise UnAuthorizedException('could not authenticate user: {}'.format(data))
