@@ -56,7 +56,7 @@ from gateway.exceptions import UnsupportedException, FeatureUnavailableException
     ItemDoesNotExistException, WrongInputParametersException, ParseException
 from gateway.exceptions import CommunicationFailure, InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
-from gateway.models import Config, Database, Feature, User
+from gateway.models import Config, Database, Feature, Schedule, User
 from gateway.uart_controller import UARTController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
@@ -2214,6 +2214,7 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(name=str, start=int, schedule_type=str, arguments='json', repeat='json', duration=int, end=int))
     def add_schedule(self, name, start, schedule_type, arguments=None, repeat=None, duration=None, end=None):
         schedule_dto = ScheduleDTO(id=None,
+                                   source=Schedule.Sources.GATEWAY,
                                    name=name,
                                    start=start,
                                    action=schedule_type,

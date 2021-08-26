@@ -29,6 +29,7 @@ from gateway.models import DaySchedule, Output, OutputToThermostatGroup, \
     Valve, ValveToThermostat
 from gateway.output_controller import OutputController
 from gateway.pubsub import PubSub
+from gateway.scheduling_controller import SchedulingController
 from gateway.sensor_controller import SensorController
 from gateway.system_controller import SystemController
 from gateway.thermostat.gateway.thermostat_controller_gateway import \
@@ -63,10 +64,13 @@ class ThermostatControllerTest(unittest.TestCase):
         output_controller.get_output_status.return_value = OutputStatusDTO(id=0, status=False)
         sensor_controller = Mock(SensorController)
         sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(id=x, value=10.0)
+        scheduling_controller = Mock(SchedulingController)
+        scheduling_controller.load_schedules.return_value = []
         SetUpTestInjections(pubsub=Mock(PubSub),
                             module_controller=Mock(),
                             master_controller=Mock(),
                             maintenance_controller=Mock(),
+                            scheduling_controller=scheduling_controller,
                             output_controller=output_controller,
                             sensor_controller=sensor_controller)
         SetUpTestInjections(system_controller=SystemController())
