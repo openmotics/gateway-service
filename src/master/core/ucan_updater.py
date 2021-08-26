@@ -29,8 +29,10 @@ from serial_utils import CommunicationTimedOutException
 
 if False:  # MYPY
     from typing import Optional
+    from logging import Logger
 
-logger = logging.getLogger(__name__)
+# Different name to reduce confusion between multiple used loggers
+global_logger = logging.getLogger(__name__)
 
 
 class UCANUpdater(object):
@@ -52,20 +54,22 @@ class UCANUpdater(object):
     BOOTLOADER_TIMEOUT_RUNTIME = 0  # Currently needed to switch to application mode
 
     @staticmethod
-    def update(cc_address, ucan_address, ucan_communicator, hex_filename, version):
-        # type: (str, str, UCANCommunicator, str, Optional[str]) -> bool
+    def update(cc_address, ucan_address, ucan_communicator, hex_filename, version, logger):
+        # type: (str, str, UCANCommunicator, str, Optional[str], Logger) -> bool
         """ Flashes the content from an Intel HEX file to the specified uCAN """
         try:
-            logger.info('Updating uCAN {0} at CC {1} to {2}'.format(ucan_address,
-                                                                    cc_address,
-                                                                    'v{0}'.format(version) if version is not None else 'unknown version'))
+            logger.info('Updating uCAN {0} at CC {1} to {2}'.format(
+                ucan_address, cc_address,
+                'v{0}'.format(version) if version is not None else 'unknown version')
+            )
 
             if not os.path.exists(hex_filename):
                 raise RuntimeError('The given path does not point to an existing file')
             intel_hex = IntelHex(hex_filename)
 
             try:
-                in_bootloader = ucan_communicator.is_ucan_in_bootloader(cc_address, ucan_address)
+                in_bootloader = ucan_communicator.is_ucan_in_bootloader(cc_address=cc_address,
+                                                                        ucan_address=ucan_address)
             except Exception:
                 raise RuntimeError('uCAN did not respond')
 
@@ -103,7 +107,8 @@ class UCANUpdater(object):
                     raise RuntimeError('Error resettings uCAN before flashing')
                 if response.get('application_mode', 1) != 0:
                     raise RuntimeError('uCAN didn\'t enter bootloader after reset')
-                in_bootloader = ucan_communicator.is_ucan_in_bootloader(cc_address, ucan_address)
+                in_bootloader = ucan_communicator.is_ucan_in_bootloader(cc_address=cc_address,
+                                                                        ucan_address=ucan_address)
                 if not in_bootloader:
                     raise RuntimeError('Could not enter bootloader')
                 logger.info('Bootloader active')
@@ -146,12 +151,15 @@ class UCANUpdater(object):
             for index, start_address in enumerate(address_blocks):
                 end_address = min(UCANUpdater.BOOTLOADER_START, start_address + UCANUpdater.MAX_FLASH_BYTES) - 1
 
-                payload = bytearray(intel_hex.tobinarray(start=start_address, end=end_address))
+                payload = bytearray(intel_hex.tobinarray(start=start_address,
+                                                         end=end_address))
                 if start_address < address_blocks[-1]:
-                    crc = UCANPalletCommandSpec.calculate_crc(payload, crc)
+                    crc = UCANPalletCommandSpec.calculate_crc(data=payload,
+                                                              remainder=crc)
                 else:
                     payload = payload[:-4]
-                    crc = UCANPalletCommandSpec.calculate_crc(payload, crc)
+                    crc = UCANPalletCommandSpec.calculate_crc(data=payload,
+                                                              remainder=crc)
                     payload += uint32_helper.encode(crc)
 
                 little_start_address = struct.unpack('<I', struct.pack('>I', start_address))[0]
@@ -184,7 +192,7 @@ class UCANUpdater(object):
                     logged_percentage = percentage
 
             logger.info('Flashing... Done')
-            crc = UCANPalletCommandSpec.calculate_crc(total_payload)
+            crc = UCANPalletCommandSpec.calculate_crc(data=total_payload)
             if crc != 0:
                 raise RuntimeError('Unexpected error in CRC calculation (0x{0:08X})'.format(crc))
 

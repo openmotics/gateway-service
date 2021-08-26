@@ -395,8 +395,8 @@ class MasterController(object):
         # type: (str, str) -> None
         raise NotImplementedError()
 
-    def update_slave_modules(self, module_type, hex_filename, version):
-        # type: (str, str, str) -> None
+    def update_slave_modules(self, firmware_type, module_type, hex_filename, version):
+        # type: (str, str, str, str) -> None
         raise NotImplementedError()
 
     def get_modules(self):

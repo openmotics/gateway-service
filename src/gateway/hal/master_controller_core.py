@@ -57,6 +57,7 @@ from master.core.slave_updater import SlaveUpdater
 from master.core.system_value import Humidity, Temperature
 from master.core.system_value import Timer as SVTTimer
 from serial_utils import CommunicationStatus, CommunicationTimedOutException
+from platform_utils import Hardware
 from logs import Logs
 
 if False:  # MYPY
@@ -456,7 +457,11 @@ class MasterCoreController(MasterController):
         logger.info('  * Sensor modules: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_sensor_modules, 50) * 100))
         logger.info('  * CAN Control modules: {0}ms'.format(_default_if_255(global_configuration.scan_time_rs485_can_control_modules, 50) * 100))
         logger.info('* Runtime stats:')
-        logger.info('  * Debug: {0}'.format(global_configuration.debug_mode))
+        logger.info('  * Debug:')
+        logger.info('    * BA events: {0}abled'.format('Dis' if global_configuration.debug.disable_ba_events else 'En'))
+        logger.info('    * FRAM BA logging: {0}abled'.format('Dis' if global_configuration.debug.disable_fram_ba_logging else 'En'))
+        logger.info('    * Health check: {0}abled'.format('En' if global_configuration.debug.enable_health_check else 'Dis'))
+        logger.info('    * FRAM error logging: {0}abled'.format('En' if global_configuration.debug.enable_fram_error_logging else 'Dis'))
         logger.info('  * Uptime: {0}d {1}h'.format(global_configuration.uptime_hours / 24,
                                                    global_configuration.uptime_hours % 24))
         # noinspection PyStringFormat
@@ -1272,19 +1277,11 @@ class MasterCoreController(MasterController):
     def cold_reset(self, power_on=True):
         # type: (bool) -> None
         _ = self  # Must be an instance method
-        with open('/sys/class/gpio/gpio49/direction', 'w') as gpio_direction:
-            gpio_direction.write('out')
 
-        def power(master_on):
-            """ Set the power on the master. """
-            with open('/sys/class/gpio/gpio49/value', 'w') as gpio_file:
-                gpio_file.write('0' if master_on else '1')
-
-        power(False)
+        cycle = [False]  # type: List[Union[bool, float]]
         if power_on:
-            time.sleep(5)
-            power(True)
-
+            cycle += [2.0, True]
+        Hardware.cycle_gpio(Hardware.GPIO.CORE_POWER, cycle)
         self._master_communicator.reset_communication_statistics()
 
     def update_master(self, hex_filename, version):
@@ -1297,11 +1294,12 @@ class MasterCoreController(MasterController):
         finally:
             self._master_updating_change(updating=False)
 
-    def update_slave_modules(self, module_type, hex_filename, version):
-        # type: (str, str, str) -> None
+    def update_slave_modules(self, firmware_type, module_type, hex_filename, version):
+        # type: (str, str, str, str) -> None
         parsed_version = tuple(int(part) for part in version.split('.'))
         gen3_firmware = parsed_version >= (6, 0, 0)
-        SlaveUpdater.update_all(module_type=module_type,
+        SlaveUpdater.update_all(firmware_type=firmware_type,
+                                module_type=module_type,
                                 hex_filename=hex_filename,
                                 gen3_firmware=gen3_firmware,
                                 version=version)

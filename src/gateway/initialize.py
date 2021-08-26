@@ -27,7 +27,6 @@ import time
 from contextlib import contextmanager
 from threading import Lock
 
-from peewee_migrate import Router
 from serial import Serial
 from six.moves.configparser import ConfigParser, NoOptionError, NoSectionError
 from six.moves.urllib.parse import urlparse, urlunparse
@@ -105,6 +104,7 @@ def apply_migrations():
     # Run all unapplied migrations
     db = Database.get_db()
     gateway_src = os.path.abspath(os.path.join(__file__, '..'))
+    from peewee_migrate import Router
     router = Router(db, migrate_dir=os.path.join(gateway_src, 'migrations/orm'))
     router.run()
 

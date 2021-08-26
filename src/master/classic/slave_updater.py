@@ -37,14 +37,8 @@ if False:  # MYPY
     from master.classic.master_api import MasterCommandSpec
     from logging import Logger
 
-logger = logging.getLogger(__name__)
-
-LETTER_TO_FIRMWARE_TYPE_MAP = {'O': {2: 'output', 3: 'output_gen3'},
-                               'R': {2: 'output'},
-                               'D': {2: 'dimmer', 3: 'dimmer_gen3'},
-                               'I': {2: 'input', 3: 'input_gen3'},
-                               'T': {2: 'temperature'},
-                               'C': {2: 'can', 3: 'can_gen3'}}
+# Different name to reduce confusion between multiple used loggers
+global_logger = logging.getLogger(__name__)
 
 
 def add_crc(command, command_input):
@@ -97,7 +91,7 @@ def check_bl_crc(command, command_output):
 
 
 def get_module_addresses(module_type):
-    # type: (str) -> List[str]
+    # type: (str) -> List[bytearray]
     """
     Get the addresses for the modules of the given type.
 
@@ -107,7 +101,7 @@ def get_module_addresses(module_type):
     eeprom_file = EepromFile()
     base_address = EepromAddress(0, 1, 2)
     no_modules = eeprom_file.read([base_address])
-    modules = []
+    modules = []  # type: List[bytearray]
 
     no_input_modules = no_modules[base_address].bytes[0]
     for i in range(no_input_modules):
@@ -124,12 +118,6 @@ def get_module_addresses(module_type):
         modules.append(eeprom_file.read([address])[address].bytes)
 
     return [module for module in modules if chr(module[0]) == module_type]
-
-
-def pretty_address(address):
-    # type: (str) -> str
-    """ Create a pretty printed version of an address. """
-    return '{0}.{1}.{2}.{3}'.format(address[0], address[1], address[2], address[3])
 
 
 def calc_crc(ihex, blocks):
@@ -169,7 +157,7 @@ def check_result(command, result, success_code=0):
 
 
 @Inject
-def do_command(cmd, fields, logger_, retry=True, success_code=0, master_communicator=INJECTED):
+def do_command(cmd, fields, logger, retry=True, success_code=0, master_communicator=INJECTED):
     # type: (MasterCommandSpec, Dict[str, Any], Logger, bool, Union[int, List[int]], MasterCommunicator) -> Dict[str, Any]
     """
     Execute a command using the master communicator. If the command times out, retry.
@@ -177,7 +165,7 @@ def do_command(cmd, fields, logger_, retry=True, success_code=0, master_communic
     :param master_communicator: Used to communicate with the master.
     :param cmd: The command to execute.
     :param fields: The fields to use
-    :param logger_: Logger
+    :param logger: Logger
     :param retry: If the master command should be retried
     :param success_code: Expected success code
     """
@@ -191,11 +179,11 @@ def do_command(cmd, fields, logger_, retry=True, success_code=0, master_communic
         if error_message == '':
             error_message = exception.__class__.__name__
         if isinstance(exception, CommunicationTimedOutException):
-            logger_.info('Got timeout while executing command')
+            logger.info('Got timeout while executing command')
         else:
-            logger_.info('Got exception while executing command: {0}'.format(error_message))
+            logger.info('Got exception while executing command: {0}'.format(error_message))
         if retry:
-            logger_.info('Retrying...')
+            logger.info('Retrying...')
             result = master_communicator.do_command(cmd, fields)
             check_result(cmd, result, success_code)
             return result
@@ -203,7 +191,7 @@ def do_command(cmd, fields, logger_, retry=True, success_code=0, master_communic
 
 
 @Inject
-def bootload(address, ihex, crc, blocks, version, gen3_firmware, logger_, master_communicator=INJECTED):
+def bootload(address, ihex, crc, blocks, version, gen3_firmware, logger, master_communicator=INJECTED):
     # type: (bytearray, intelhex.IntelHex, Tuple[int, int, int, int], int, Optional[str], bool, Logger, MasterCommunicator) -> None
     """
     Bootload 1 module.
@@ -215,55 +203,55 @@ def bootload(address, ihex, crc, blocks, version, gen3_firmware, logger_, master
     :param blocks: The number of blocks to write
     :param version: Optional version
     :param gen3_firmware: Specifies whether it's gen3 firmware
-    :param logger_: The logger to use
+    :param logger: The logger to use
     """
     gen3_module = None  # type: Optional[bool]
-    logger_.info('Checking the version')
+    logger.info('Checking the version')
     try:
         result = do_command(cmd=master_api.modules_get_version(),
                             fields={'addr': address},
-                            logger_=logger_,
+                            logger=logger,
                             retry=False,
                             success_code=255)
         current_version = '{0}.{1}.{2}'.format(result['f1'], result['f2'], result['f3'])
         gen3_module = result['f1'] >= 6
-        logger_.info('Current version: v{0}'.format(current_version))
+        logger.info('Current version: v{0}'.format(current_version))
         if current_version == version:
-            logger_.info('Firmware up-to-date. Skipping')
+            logger.info('Firmware up-to-date. Skipping')
             return
     except Exception:
-        logger_.info('Version call not (yet) implemented or module unavailable')
+        logger.info('Version call not (yet) implemented or module unavailable')
 
     if gen3_firmware and (gen3_module is None or gen3_module is False):
-        logger_.info('Skip flashing Gen3 firmware on {0} module'.format('unknown' if gen3_module is None else 'Gen2'))
+        logger.info('Skip flashing Gen3 firmware on {0} module'.format('unknown' if gen3_module is None else 'Gen2'))
         return
     if gen3_module and not gen3_firmware:
-        logger_.info('Skip flashing Gen2 firmware on Gen3 module')
+        logger.info('Skip flashing Gen2 firmware on Gen3 module')
         return
 
-    logger_.info('Going to bootloader')
+    logger.info('Going to bootloader')
     try:
         do_command(cmd=master_api.modules_goto_bootloader(),
                    fields={'addr': address, 'sec': 5},
-                   logger_=logger_,
+                   logger=logger,
                    retry=False,
                    success_code=[255, 1])
     except Exception:
-        logger_.info('Module has no bootloader or is unavailable. Skipping...')
+        logger.info('Module has no bootloader or is unavailable. Skipping...')
         return
 
     time.sleep(1)
 
-    logger_.info('Setting the firmware crc')
+    logger.info('Setting the firmware crc')
     do_command(cmd=master_api.modules_new_crc(),
                fields={'addr': address, 'ccrc0': crc[0], 'ccrc1': crc[1], 'ccrc2': crc[2], 'ccrc3': crc[3]},
-               logger_=logger_)
+               logger=logger)
 
     try:
-        logger_.info('Going to long mode')
+        logger.info('Going to long mode')
         master_communicator.do_command(cmd=master_api.change_communication_mode_to_long())
 
-        logger_.info('Writing firmware data')
+        logger.info('Writing firmware data')
         for i in range(blocks):
             bytes_to_send = bytearray()
             for j in range(64):
@@ -273,62 +261,59 @@ def bootload(address, ihex, crc, blocks, version, gen3_firmware, logger_, master
                 else:
                     bytes_to_send.append(ihex[i*64 + j])
 
-            logger_.debug('* Block {0}'.format(i))
+            logger.debug('* Block {0}'.format(i))
             do_command(cmd=master_api.modules_update_firmware_block(),
                        fields={'addr': address, 'block': i, 'bytes': bytes_to_send},
-                       logger_=logger_)
+                       logger=logger)
     finally:
-        logger_.info('Going to short mode')
+        logger.info('Going to short mode')
         master_communicator.do_command(cmd=master_api.change_communication_mode_to_short())
 
-    logger_.info("Integrity check")
+    logger.info("Integrity check")
     do_command(cmd=master_api.modules_integrity_check(),
                fields={'addr': address},
-               logger_=logger_)
+               logger=logger)
 
-    logger_.info("Going to application")
+    logger.info("Going to application")
     do_command(cmd=master_api.modules_goto_application(),
                fields={'addr': address},
-               logger_=logger_)
+               logger=logger)
 
     tries = 0
     while True:
         try:
             tries += 1
-            logger_.info('Waiting for application...')
+            logger.info('Waiting for application...')
             result = do_command(cmd=master_api.modules_get_version(),
                                 fields={'addr': address},
-                                logger_=logger_,
+                                logger=logger,
                                 success_code=255)
-            logger_.info('New version: v{0}.{1}.{2}'.format(result['f1'], result['f2'], result['f3']))
+            logger.info('New version: v{0}.{1}.{2}'.format(result['f1'], result['f2'], result['f3']))
             break
         except Exception:
             if tries >= 5:
                 raise
             time.sleep(1)
 
-    logger_.info('Resetting error list')
+    logger.info('Resetting error list')
     master_communicator.do_command(cmd=master_api.clear_error_list())
 
 
 @Inject
-def bootload_modules(module_type, filename, gen3_firmware, version, raise_exception=False):
-    # type: (str, str, bool, Optional[str], bool) -> bool
+def bootload_modules(firmware_type, module_type, filename, gen3_firmware, version, raise_exception=False):
+    # type: (str, str, str, bool, Optional[str], bool) -> bool
     """
     Bootload all modules of the given type with the firmware in the given filename.
 
+    :param firmware_type: Type of the firmware (e.g. temperature, output_gen3, ...)
     :param module_type: Type of the modules (O, R, D, I, T, C)
     :param filename: The filename for the hex file to load
     :param gen3_firmware: Indicates whether it's a gen3 firmware
     :param version: The version of the hexfile, if known
     :param raise_exception: Whether an exception should be logged or just raised
     """
-    generation = 3 if gen3_firmware else 2
-    firmware_type = LETTER_TO_FIRMWARE_TYPE_MAP[module_type].get(generation)
-    if firmware_type is None:
-        raise RuntimeError('Unexpected generation {0} for module type {1}'.format(module_type, generation))
-    logger_ = Logs.get_update_logger(firmware_type)
-    logger_.info('Loading module addresses...')
+    component_logger = Logs.get_update_logger(firmware_type)
+    component_logger.info('Loading module addresses...')
     addresses = get_module_addresses(module_type)
 
     blocks = 922 if module_type == 'C' else 410
@@ -337,14 +322,16 @@ def bootload_modules(module_type, filename, gen3_firmware, version, raise_except
 
     update_success = True
     for address in addresses:
-        logger_.info('Bootloading module {0}'.format(pretty_address(address)))
+        string_address = '.'.join('{0:03d}'.format(i) for i in address)
+        individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, string_address))
+        individual_logger.info('Bootloading module {0}'.format(string_address))
         try:
-            bootload(address, ihex, crc, blocks, version, gen3_firmware, logger_)
+            bootload(address, ihex, crc, blocks, version, gen3_firmware, individual_logger)
         except Exception:
             if raise_exception:
                 raise
             update_success = False
-            logger_.info('Bootloading failed:')
-            logger_.info(traceback.format_exc())
+            individual_logger.info('Bootloading failed:')
+            individual_logger.info(traceback.format_exc())
 
     return update_success

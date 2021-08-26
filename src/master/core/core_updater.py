@@ -26,13 +26,15 @@ from master.core.core_communicator import CoreCommunicator
 from master.core.core_api import CoreAPI
 from master.maintenance_communicator import MaintenanceCommunicator
 from logs import Logs
+from platform_utils import Hardware
 
 if False:  # MYPY
     from typing import Optional
     from serial import Serial
     from logging import Logger
 
-logger = logging.getLogger(__name__)
+# Different name to reduce confusion between multiple used loggers
+global_logger = logging.getLogger(__name__)
 
 
 class CoreUpdater(object):
@@ -41,19 +43,20 @@ class CoreUpdater(object):
     """
 
     BOOTLOADER_SERIAL_READ_TIMEOUT = 3
-    ENTER_BOOTLOADER_DELAY = 1.5
-    ENTER_APPLICATION_DELAY = 5.0
+    POST_BOOTLOAD_DELAY = 2.0
+    APPLICATION_STARTUP_DELAY = 5.0
+    POWER_CYCLE_DELAY = 2.0
 
     @staticmethod
     @Inject
     def update(hex_filename, version, raise_exception=False, master_communicator=INJECTED, maintenance_communicator=INJECTED, cli_serial=INJECTED):
         # type: (str, str, bool, CoreCommunicator, MaintenanceCommunicator, Serial) -> bool
         """ Flashes the content from an Intel HEX file to the Core """
-        logger_ = Logs.get_update_logger('master_coreplus')
+        component_logger = Logs.get_update_logger('master_coreplus')
         try:
             # TODO: Check version and skip update if the version is already active
 
-            logger_.info('Updating Core')
+            component_logger.info('Updating Core')
 
             master_communicator = master_communicator
             maintenance_communicator = maintenance_communicator
@@ -64,16 +67,16 @@ class CoreUpdater(object):
             current_version = None  # type: Optional[str]
             try:
                 current_version = master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
-                logger_.info('Current firmware version: {0}'.format(current_version))
+                component_logger.info('Current firmware version: {0}'.format(current_version))
             except Exception as ex:
-                logger_.warning('Could not load current firmware version: {0}'.format(ex))
+                component_logger.warning('Could not load current firmware version: {0}'.format(ex))
 
             if current_version is not None and version == current_version:
-                logger_.info('Firmware up-to-date, skipping')
+                component_logger.info('Firmware up-to-date, skipping')
                 return True
 
-            logger_.info('Updating firmware from {0} to {1}'.format(current_version if current_version is not None else 'unknown',
-                                                                    version if version is not None else 'unknown'))
+            component_logger.info('Updating firmware from {0} to {1}'.format(current_version if current_version is not None else 'unknown',
+                                                                             version if version is not None else 'unknown'))
 
             if master_communicator is not None and maintenance_communicator is not None:
                 maintenance_communicator.stop()
@@ -85,38 +88,44 @@ class CoreUpdater(object):
             with open(hex_filename, 'r') as hex_file:
                 hex_lines = hex_file.readlines()
 
-            logger_.info('Verify bootloader communications')
-            bootloader_version = CoreUpdater._in_bootloader(cli_serial, logger_)
+            component_logger.info('Verify bootloader communications')
+            bootloader_version = CoreUpdater._in_bootloader(serial=cli_serial,
+                                                            logger=component_logger)
             if bootloader_version is not None:
-                logger_.info('Bootloader {0} active'.format(bootloader_version))
+                component_logger.info('Bootloader {0} active'.format(bootloader_version))
             else:
-                logger_.info('Bootloader not active, switching to bootloader')
-                cli_serial.write(b'reset\r\n')
-                time.sleep(CoreUpdater.ENTER_BOOTLOADER_DELAY)
-                bootloader_version = CoreUpdater._in_bootloader(cli_serial, logger_)
+                component_logger.info('Bootloader not active, switching to bootloader')
+                Hardware.cycle_gpio(Hardware.GPIO.CORE_POWER, [False, CoreUpdater.POWER_CYCLE_DELAY, True])
+                CoreUpdater._wait_for(serial=cli_serial,
+                                      entry='DS30HexLoader',
+                                      logger=component_logger)
+                bootloader_version = CoreUpdater._in_bootloader(serial=cli_serial,
+                                                                logger=component_logger)
                 if bootloader_version is None:
                     raise RuntimeError('Could not enter bootloader')
-                logger_.info('Bootloader {0} active'.format(bootloader_version))
+                component_logger.info('Bootloader {0} active'.format(bootloader_version))
 
-            logger_.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
-            logger_.info('Flashing...')
+            component_logger.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
+            component_logger.info('Flashing...')
             amount_lines = len(hex_lines)
             for index, line in enumerate(hex_lines):
                 cli_serial.write(bytearray(ord(c) for c in line))
-                response = CoreUpdater._read_line(cli_serial, logger_)
+                response = CoreUpdater._read_line(serial=cli_serial,
+                                                  logger=component_logger)
                 if response.startswith('nok'):
                     raise RuntimeError('Unexpected NOK while flashing: {0}'.format(response))
                 if not response.startswith('ok'):
                     raise RuntimeError('Unexpected answer while flashing: {0}'.format(response))
                 if index % (amount_lines // 10) == 0 and index != 0:
-                    logger_.info('Flashing... {0}%'.format(index * 10 // (amount_lines // 10)))
-            logger_.info('Flashing... Done')
+                    component_logger.info('Flashing... {0}%'.format(index * 10 // (amount_lines // 10)))
+            component_logger.info('Flashing... Done')
 
-            logger_.info('Verify Core communication')
-            time.sleep(CoreUpdater.ENTER_APPLICATION_DELAY)
-            if CoreUpdater._in_bootloader(cli_serial, logger_):
-                raise RuntimeError('Still in bootloader')
+            component_logger.info('Post-flash power cycle')
+            time.sleep(CoreUpdater.POST_BOOTLOAD_DELAY)
+            Hardware.cycle_gpio(Hardware.GPIO.CORE_POWER, [False, CoreUpdater.POWER_CYCLE_DELAY, True])
+            time.sleep(CoreUpdater.APPLICATION_STARTUP_DELAY)
 
+            component_logger.info('Verify Core communication')
             if master_communicator is not None and maintenance_communicator is not None:
                 maintenance_communicator.start()
                 master_communicator.start()
@@ -124,35 +133,43 @@ class CoreUpdater(object):
             current_version = None
             try:
                 current_version = master_communicator.do_command(CoreAPI.get_firmware_version(), {})['version']
-                logger_.info('Post-update firmware version: {0}'.format(current_version))
+                component_logger.info('Post-update firmware version: {0}'.format(current_version))
             except Exception as ex:
-                logger_.warning('Could not load post-update firmware version: {0}'.format(ex))
+                component_logger.warning('Could not load post-update firmware version: {0}'.format(ex))
             if version is not None and current_version != version:
                 raise RuntimeError('Post-update firmware version {0} does not match expected {1}'.format(
                     current_version if current_version is not None else 'unknown',
                     version
                 ))
 
-            logger_.info('Update completed')
+            component_logger.info('Update completed')
             return True
         except Exception as ex:
-            logger_.error('Error flashing: {0}'.format(ex))
+            component_logger.error('Error flashing: {0}'.format(ex))
             if raise_exception:
                 raise
             return False
 
     @staticmethod
-    def _in_bootloader(serial, logger_):  # type: (Serial, Logger) -> Optional[str]
+    def _wait_for(serial, entry, logger):  # type: (Serial, str, Logger) -> None
+        output = ''
+        while entry not in output:
+            output = CoreUpdater._read_line(serial=serial,
+                                            logger=logger)
+
+    @staticmethod
+    def _in_bootloader(serial, logger):  # type: (Serial, Logger) -> Optional[str]
         serial.flushInput()
         serial.write(b'hi\n')
-        response = CoreUpdater._read_line(serial, logger_)
+        response = CoreUpdater._read_line(serial=serial,
+                                          logger=logger)
         serial.flushInput()
         if not response.startswith('hi;ver='):
             return None
         return response.split('=')[-1]
 
     @staticmethod
-    def _read_line(serial, logger_, discard_lines=0):  # type: (Serial, Logger, int) -> str
+    def _read_line(serial, logger, discard_lines=0):  # type: (Serial, Logger, int) -> str
         timeout = time.time() + CoreUpdater.BOOTLOADER_SERIAL_READ_TIMEOUT
         line = ''
         while time.time() < timeout:
@@ -161,7 +178,7 @@ class CoreUpdater(object):
                 line += chr(data[0])
                 if data == bytearray(b'\n'):
                     if line[0] == '#':
-                        logger_.debug('* Debug: {0}'.format(line.strip()))
+                        logger.debug('* Debug: {0}'.format(line.strip()))
                         line = ''
                     elif discard_lines == 0:
                         return line.strip()

@@ -31,11 +31,14 @@ from master.core.slave_communicator import SlaveCommunicator, CommunicationTimed
 from master.core.slave_api import SlaveAPI
 from master.core.ucan_communicator import UCANCommunicator
 from master.core.ucan_updater import UCANUpdater
+from logs import Logs
 
-logger = logging.getLogger(__name__)
+# Different name to reduce confusion between multiple used loggers
+global_logger = logging.getLogger(__name__)
 
 if False:  # MYPY
     from typing import Tuple, Optional, List, Dict, Any, Union
+    from logging import Logger
 
 
 class SlaveUpdater(object):
@@ -47,14 +50,15 @@ class SlaveUpdater(object):
     BLOCKS_LARGE_SLAVE = 922
     BOOTLOADER_TIMEOUT = 10
     WRITE_FLASH_BLOCK_TIMEOUT = 10
-    SWITCH_MODE_TIMEOUT = 10
+    SWITCH_MODE_TIMEOUT = 15
     BLOCK_SIZE = 64
 
     @staticmethod
-    def update_all(module_type, hex_filename, gen3_firmware, version):  # type: (str, str, bool, Optional[str]) -> bool
+    def update_all(firmware_type, module_type, hex_filename, gen3_firmware, version):  # type: (str, str, str, bool, Optional[str]) -> bool
         def _default_if_255(value, default):
             return value if value != 255 else default
 
+        component_logger = Logs.get_update_logger(firmware_type)
         global_configuration = GlobalConfiguration()
         executed_update = False
         success = True
@@ -71,14 +75,12 @@ class SlaveUpdater(object):
                 module_configuration = module_configuration_class(module_id)  # type: Union[InputModuleConfiguration, OutputModuleConfiguration, SensorModuleConfiguration, CanControlModuleConfiguration]
                 if module_configuration.device_type == module_type:
                     executed_update = True
+                    individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, module_configuration.address))
                     success &= SlaveUpdater.update(address=module_configuration.address,
                                                    hex_filename=hex_filename,
                                                    gen3_firmware=gen3_firmware,
-                                                   version=version)
-                else:
-                    logger.info('Skip updating unsupported module {0}: {1} != {2}'.format(
-                        module_configuration.address, module_configuration.device_type, module_type
-                    ))
+                                                   version=version,
+                                                   logger=individual_logger)
 
         # MicroCAN (uCAN)
         if module_type == 'UC':
@@ -89,14 +91,16 @@ class SlaveUpdater(object):
                     ucan_configuration = UCanModuleConfiguration(module_id)
                     executed_update = True
                     cc_address = ucan_configuration.module.address if ucan_configuration.module is not None else '000.000.000.000'
+                    individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, ucan_configuration.address))
                     success &= UCANUpdater.update(cc_address=cc_address,
                                                   ucan_address=ucan_configuration.address,
                                                   ucan_communicator=ucan_communicator,
                                                   hex_filename=hex_filename,
-                                                  version=version)
+                                                  version=version,
+                                                  logger=individual_logger)
 
         if not executed_update:
-            logger.info('No modules of type {0} were updated'.format(module_type))
+            component_logger.info('No modules of type {0} were updated'.format(module_type))
             return True
         return success
 
@@ -105,16 +109,18 @@ class SlaveUpdater(object):
         if '@' not in address:
             raise RuntimeError('Address must be in the form of <ucan address>@<cc address>')
         ucan_address, cc_address = address.split('@')
+        individual_logger = Logs.get_update_logger('ucan_{0}'.format(ucan_address))
         return UCANUpdater.update(cc_address=cc_address,
                                   ucan_address=ucan_address,
                                   ucan_communicator=UCANCommunicator(),
                                   hex_filename=hex_filename,
-                                  version=version)
+                                  version=version,
+                                  logger=individual_logger)
 
     @staticmethod
     @Inject
-    def update(address, hex_filename, gen3_firmware, version, slave_communicator=INJECTED):
-        # type: (str, str, bool, Optional[str], SlaveCommunicator) -> bool
+    def update(address, hex_filename, gen3_firmware, version, logger, slave_communicator=INJECTED):
+        # type: (str, str, bool, Optional[str], Logger, SlaveCommunicator) -> bool
         """ Flashes the content from an Intel HEX file to a slave module """
         try:
             with slave_communicator:
@@ -124,67 +130,70 @@ class SlaveUpdater(object):
                     raise RuntimeError('The given path does not point to an existing file')
                 firmware = IntelHex(hex_filename)  # Using the IntelHex library read and validate contents
 
-                logger.info('{0} - Loading current firmware version'.format(address))
-                current_version = SlaveUpdater._get_version(slave_communicator, address, tries=30)
+                logger.info('Loading current firmware version')
+                current_version = SlaveUpdater._get_version(slave_communicator=slave_communicator,
+                                                            address=address,
+                                                            logger=logger,
+                                                            tries=30)
                 if current_version is None:
-                    logger.info('{0} - Could not request current firmware version'.format(address))
-                    logger.info('{0} - Module does not support bootloading. Skipping'.format(address))
+                    logger.info('Could not request current firmware version')
+                    logger.info('Module does not support bootloading. Skipping')
                     return True  # This is considered "success" as it's nothing that can "fixed"
                 firmware_version, hardware_version = current_version
-                logger.info('{0} - Current version: {1} ({2})'.format(address, firmware_version, hardware_version))
+                logger.info('Current version: {0} ({1})'.format(firmware_version, hardware_version))
 
                 if version == firmware_version:
-                    logger.info('{0} - Already up-to-date. Skipping'.format(address))
+                    logger.info('Already up-to-date. Skipping')
                     return True
 
                 gen3_module = int(firmware_version.split('.')[0]) >= 6
                 if gen3_firmware and not gen3_module:
-                    logger.info('{0} - Skip flashing Gen3 firmware on Gen2 module'.format(address))
+                    logger.info('Skip flashing Gen3 firmware on Gen2 module')
                     return True
                 if gen3_module and not gen3_firmware:
-                    logger.info('{0} - Skip flashing Gen2 firmware on Gen3 module'.format(address))
+                    logger.info('Skip flashing Gen2 firmware on Gen3 module')
                     return True
 
-                logger.info('{0} - Entering bootloader'.format(address))
+                logger.info('Entering bootloader')
                 try:
                     response = slave_communicator.do_command(address=address,
                                                              command=SlaveAPI.goto_bootloader(),
                                                              fields={'timeout': SlaveUpdater.BOOTLOADER_TIMEOUT},
                                                              timeout=SlaveUpdater.SWITCH_MODE_TIMEOUT)
-                    SlaveUpdater._validate_response(response)
+                    SlaveUpdater._validate_response(response=response)
                     # The return code can't be used to verify whether the bootloader is actually active, since it is
                     # answered by the active code. E.g. if the application was active, it's the application that will
                     # answer this call with the return_code APPLICATION_ACTIVE
-                    logger.info('{0} - Bootloader active'.format(address))
+                    logger.info('Bootloader should be active')
                     time.sleep(2)  # Wait for the bootloader to settle
                 except CommunicationTimedOutException:
-                    logger.error('{0} - Could not enter bootloader. Aborting'.format(address))
+                    logger.error('Could not enter bootloader. Aborting')
                     return False
 
                 if version is not None:
                     response = slave_communicator.do_command(address=address,
                                                              command=SlaveAPI.set_firmware_version(),
                                                              fields={'version': version})
-                    SlaveUpdater._validate_response(response)
+                    SlaveUpdater._validate_response(response=response)
 
                 data_blocks = len(firmware) // SlaveUpdater.BLOCK_SIZE + 1
                 blocks = SlaveUpdater.BLOCKS_SMALL_SLAVE
                 if data_blocks > blocks or gen3_module:
                     blocks = SlaveUpdater.BLOCKS_LARGE_SLAVE
-                logger.info('{0} - {1} slave ({2}/{3} blocks)'.format(
-                    address,
+                logger.info('{0} slave ({1}/{2} blocks)'.format(
                     'Large' if blocks == SlaveUpdater.BLOCKS_LARGE_SLAVE else 'Small',
                     data_blocks, blocks
                 ))
 
-                crc = SlaveUpdater._get_crc(firmware, blocks)
+                crc = SlaveUpdater._get_crc(firmware=firmware,
+                                            blocks=blocks)
                 response = slave_communicator.do_command(address=address,
                                                          command=SlaveAPI.set_firmware_crc(),
                                                          fields={'crc': crc})
-                SlaveUpdater._validate_response(response)
+                SlaveUpdater._validate_response(response=response)
 
-                logger.info('{0} - Flashing contents of {1}'.format(address, os.path.basename(hex_filename)))
-                logger.info('{0} - Flashing...'.format(address))
+                logger.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
+                logger.info('Flashing...')
                 for block in range(blocks):
                     start = block * SlaveUpdater.BLOCK_SIZE
                     if block < (blocks - 1):
@@ -203,59 +212,60 @@ class SlaveUpdater(object):
                                                                      command=SlaveAPI.write_firmware_block(),
                                                                      fields={'address': block, 'payload': payload},
                                                                      timeout=SlaveUpdater.WRITE_FLASH_BLOCK_TIMEOUT)
-                            SlaveUpdater._validate_response(response)
+                            SlaveUpdater._validate_response(response=response)
                             if block % int(blocks / 10) == 0 and block != 0:
-                                logger.info('{0} - Flashing... {1}%'.format(address, int(block * 100 / blocks)))
+                                logger.info('Flashing... {0}%'.format(int(block * 100 / blocks)))
                             break
                         except CommunicationTimedOutException as ex:
-                            logger.warning('{0} - Flashing... Block {1} failed: {2}'.format(address, block, ex))
+                            logger.warning('Flashing... Block {0} failed: {1}'.format(block, ex))
                             if tries >= 3:
                                 raise
 
-                logger.info('{0} - Flashing... Done'.format(address))
+                logger.info('Flashing... Done')
 
-                logger.info('{0} - Running integrity check'.format(address))
+                logger.info('Running integrity check')
                 response = slave_communicator.do_command(address=address,
                                                          command=SlaveAPI.integrity_check(),
                                                          fields={})
-                SlaveUpdater._validate_response(response)
-                logger.info('{0} - Integrity OK'.format(address))
+                SlaveUpdater._validate_response(response=response)
+                logger.info('Integrity OK')
 
-                logger.info('{0} - Entering application'.format(address))
+                logger.info('Entering application')
                 try:
                     response = slave_communicator.do_command(address=address,
                                                              command=SlaveAPI.goto_application(),
                                                              fields={},
                                                              timeout=SlaveUpdater.SWITCH_MODE_TIMEOUT)
-                    return_code = SlaveUpdater._validate_response(response)
-                    if return_code != SlaveAPI.ReturnCode.APPLICATION_ACTIVE:
-                        logger.error('{0} - Could not enter application: {1}. Aborting'.format(address, return_code))
-                        return False
-                    logger.info('{0} - Application active'.format(address))
+                    SlaveUpdater._validate_response(response=response)
+                    logger.info('Application should be active')
+                    time.sleep(2)  # Wait for the application to settle
                 except CommunicationTimedOutException:
-                    pass  # TODO: This should respond
-                    # logger.error('{0} - Could not enter application. Aborting'.format(address))
-                    # return False
+                    logger.error('Could not enter application. Aborting')
+                    return False
 
                 if address != '255.255.255.255':
-                    logger.info('{0} - Loading new firmware version'.format(address))
-                    new_version = SlaveUpdater._get_version(slave_communicator, address, tries=60)
+                    logger.info('Loading new firmware version')
+                    new_version = SlaveUpdater._get_version(slave_communicator=slave_communicator,
+                                                            address=address,
+                                                            logger=logger,
+                                                            tries=60)
                     if new_version is None:
-                        logger.error('{0} - Could not request new firmware version'.format(address))
+                        logger.error('Could not request new firmware version')
                         return False
                     firmware_version, hardware_version = new_version
-                    logger.info('{0} - New version: {1} ({2})'.format(address, firmware_version, hardware_version))
+                    logger.info('New version: {0} ({1})'.format(firmware_version, hardware_version))
                 else:
-                    logger.info('{0} - Skip loading new version as address will have been changed by the application'.format(address))
+                    logger.info('Skip loading new version as address will have been changed by the application')
 
-                logger.info('{0} - Update completed'.format(address))
+                logger.info('Update completed')
                 return True
         except Exception as ex:
-            logger.exception('{0} - Error flashing: {1}'.format(address, ex))
+            logger.exception('Error flashing: {0}'.format(ex))
             return False
 
     @staticmethod
-    def _get_version(slave_communicator, address, tries=1):  # type: (SlaveCommunicator, str, int) -> Optional[Tuple[str, str]]
+    def _get_version(slave_communicator, address, logger, tries=1):
+        # type: (SlaveCommunicator, str, Logger, int) -> Optional[Tuple[str, str]]
         tries_counter = tries
         while True:
             try:
@@ -265,7 +275,7 @@ class SlaveUpdater(object):
                 if response is None:
                     raise CommunicationTimedOutException()
                 if tries_counter != tries:
-                    logger.warning('{0} - Needed {1} tries to load version'.format(address, tries - tries_counter + 1))
+                    logger.warning('Needed {0} tries to load version'.format(tries - tries_counter + 1))
                 return response['version'], response['hardware_version']
             except CommunicationTimedOutException:
                 tries_counter -= 1

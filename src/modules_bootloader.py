@@ -40,7 +40,7 @@ def get_communicator(master_communicator=INJECTED):
 
 def main():
     supported_modules = ['O', 'R', 'D', 'I', 'T', 'C']
-    supported_modules_gen3 = ['O3', 'R3', 'D3', 'I3', 'T3', 'C3']
+    supported_modules_gen3 = ['O3', 'R3', 'D3', 'I3', 'C3']
     supported_can_modules = ['UC']
     all_supported_modules = supported_modules + supported_modules_gen3 + supported_can_modules
 
@@ -61,6 +61,13 @@ def main():
     module_type = args.type.upper()
     filename = args.file
     version = args.version
+    firmware_type = {'O': 'output', 'O3': 'output_gen3',
+                     'R': 'output',
+                     'D': 'dimmer', 'D3': 'dimmer_gen3',
+                     'I': 'input', 'I3': 'input_gen3',
+                     'C': 'can', 'C3': 'can_gen3',
+                     'T': 'temperature',
+                     'UC': 'ucan'}[module_type]
     gen3_firmware = module_type.endswith('3')
     if gen3_firmware:
         module_type = module_type[0]
@@ -78,7 +85,8 @@ def main():
             from master.core.slave_updater import SlaveUpdater
 
             if not args.address:
-                update_success = SlaveUpdater.update_all(module_type=module_type,
+                update_success = SlaveUpdater.update_all(firmware_type=firmware_type,
+                                                         module_type=module_type,
                                                          hex_filename=filename,
                                                          gen3_firmware=gen3_firmware,
                                                          version=version)
@@ -88,7 +96,8 @@ def main():
                                                               hex_filename=filename,
                                                               version=version)
                 else:
-                    update_success = SlaveUpdater.update(address=args.address,
+                    update_success = SlaveUpdater.update(firmware_type=firmware_type,
+                                                         address=args.address,
                                                          hex_filename=filename,
                                                          gen3_firmware=gen3_firmware,
                                                          version=version)
@@ -107,7 +116,8 @@ def main():
                 print('Updating uCAN modules not supported on Classic platform')
                 return True  # Don't fail the update
 
-            update_success = bootload_modules(module_type=module_type,
+            update_success = bootload_modules(firmware_type=firmware_type,
+                                              module_type=module_type,
                                               filename=filename,
                                               gen3_firmware=gen3_firmware,
                                               version=version)

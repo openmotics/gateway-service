@@ -1283,8 +1283,8 @@ class MasterClassicController(MasterController):
             self._communication_enabled = True
 
     @Inject
-    def update_slave_modules(self, module_type, hex_filename, version):
-        # type: (str, str, str) -> None
+    def update_slave_modules(self, firmware_type, module_type, hex_filename, version):
+        # type: (str, str, str, str) -> None
         try:
             self._communication_enabled = False
             self._heartbeat.stop()

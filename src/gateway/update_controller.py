@@ -41,8 +41,10 @@ if False:  # MYPY
     from gateway.module_controller import ModuleController
     from gateway.hal.master_controller import MasterController
     from gateway.energy_module_controller import EnergyModuleController
+    from logging import Logger
 
-logger = logging.getLogger(__name__)
+# Different name to reduce confusion between multiple used loggers
+global_logger = logging.getLogger(__name__)
 
 # TODO: Migrate gateway-os update to gateway-service
 
@@ -91,6 +93,21 @@ class UpdateController(object):
                        'energy': {2: 'energy', 3: 'energy'},
                        'p1_concentrator': {3: 'p1_concentrator'}}
 
+    # Below order of services are important, this is the order in which the updates will be performed
+    SUPPORTED_FIRMWARES = {Platform.Type.CORE: ['gateway_service', 'gateway_frontend',
+                                                'master_coreplus',
+                                                'input_gen3', 'output_gen3', 'dimmer_gen3', 'can_gen3', 'ucan',
+                                                'energy', 'p1_concentrator'],
+                           Platform.Type.CORE_PLUS: ['gateway_service', 'gateway_frontend',
+                                                     'master_coreplus',
+                                                     'input_gen3', 'output_gen3', 'dimmer_gen3', 'can_gen3', 'ucan',
+                                                     'energy', 'p1_concentrator'],
+                           Platform.Type.CLASSIC: ['gateway_service', 'gateway_frontend',
+                                                   'master_classic',
+                                                   'input', 'output', 'dimmer', 'can',
+                                                   'energy', 'p1_concentrator'],
+                           Platform.Type.ESAFE: ['gateway_service']}
+
     @Inject
     def __init__(self, gateway_uuid=INJECTED, module_controller=INJECTED, master_controller=INJECTED, energy_module_controller=INJECTED, cloud_url=INJECTED):
         # type: (str, ModuleController, MasterController, EnergyModuleController, str) -> None
@@ -102,18 +119,21 @@ class UpdateController(object):
         self._cloud_url = cloud_url
 
         if not os.path.exists(UpdateController.VERSIONS_FOLDER):
-            logger.info('Creating {0}'.format(UpdateController.VERSIONS_FOLDER))
+            global_logger.info('Creating {0}'.format(UpdateController.VERSIONS_FOLDER))
             os.makedirs(UpdateController.VERSIONS_FOLDER)
         for kind in ['service', 'frontend', 'firmwares']:
             path = os.path.join(UpdateController.VERSIONS_FOLDER, kind)
             if not os.path.exists(path):
-                logger.info('Creating {0}'.format(path))
+                global_logger.info('Creating {0}'.format(path))
                 os.makedirs(path)
 
         self._update_threshold = time.time() + UpdateController.UPDATE_DELAY
 
     def start(self):
-        self._update_thread = DaemonThread(name='update_controller', target=self._execute_pending_updates, interval=60, delay=300)
+        self._update_thread = DaemonThread(name='update_controller',
+                                           target=self._execute_pending_updates,
+                                           interval=60,
+                                           delay=300)
         self._update_thread.start()
 
     def stop(self):
@@ -133,40 +153,46 @@ class UpdateController(object):
         >                 'url': 'https://foo.bar/master-coreplus_3.12.3.hex'}]}
         Where the order of download is based on `firmware.get('urls', [firmware['url']])`
         """
-        logger.info('Request for update to {0}'.format(new_version))
+        global_logger.info('Request for update to {0}'.format(new_version))
+        platform = Platform.get_platform()
         if metadata is None:
-            response = requests.get(self._get_update_metadata_url(new_version), timeout=2)
+            response = requests.get(url=self._get_update_metadata_url(version=new_version),
+                                    timeout=2)
             if response.status_code != 200:
                 raise ValueError('Failed to get update metadata for {0}'.format(new_version))
             metadata = response.json()
         for firmware in metadata.get('firmwares', []):
             version = firmware['version']
             firmware_type = firmware['type']
+            if firmware_type not in UpdateController.SUPPORTED_FIRMWARES.get(platform, []):
+                global_logger.info('Skip firmware {0} as it is unsupported on platform {1}'.format(firmware_type, platform))
+                continue
             Config.set_entry('firmware_{0}'.format(firmware_type), {'target_version': version, 'failure': False})
-            logger.info('Request for update firmware {0} to {1}'.format(firmware_type, version))
+            global_logger.info('Request for update firmware {0} to {1}'.format(firmware_type, version))
 
     def _execute_pending_updates(self):
         if self._update_threshold > time.time():
             return  # Wait a bit, making sure the service is completely up-and-running before starting updates
 
-        firmware_types = list(UpdateController.FIRMWARE_CODE_MAP.keys())
-        for firmware_type in ['gateway_service', 'gateway_frontend'] + firmware_types:  # List of all supported firmwares, sorted by priority
+        firmware_types = UpdateController.SUPPORTED_FIRMWARES.get(Platform.get_platform(), [])
+        for firmware_type in firmware_types:
             config_key = 'firmware_{0}'.format(firmware_type)
-            config_data = Config.get_entry(config_key, None)  # type: Optional[Dict[str, Any]]
+            config_data = Config.get_entry(key=config_key,
+                                           fallback=None)  # type: Optional[Dict[str, Any]]
             if config_data is None:
                 continue
             if config_data['failure']:
                 continue  # Update failed, no retry for now
             target_version = config_data['target_version']  # type: str
 
-            logger_ = Logs.get_update_logger(firmware_type)
+            component_logger = Logs.get_update_logger(name=firmware_type)
             try:
                 if firmware_type == 'gateway_service':
-                    logger_.info('Updating gateway_service to {0}'.format(target_version))
+                    component_logger.info('Updating gateway_service to {0}'.format(target_version))
                     # Validate whether an update is needed
                     if target_version == gateway.__version__:
-                        logger_.info('Firmware for gateway_service already up-to-date')
-                        Config.remove_entry(config_key)
+                        component_logger.info('Firmware for gateway_service already up-to-date')
+                        Config.remove_entry(key=config_key)
                         continue  # Already up-to-date
                     # Check whether `current` isn't already pointing to the target version (would indicate some version mismatch)
                     target_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(target_version)
@@ -180,26 +206,33 @@ class UpdateController(object):
                     # Download archive if needed
                     filename = UpdateController.SERVICE_BASE_TEMPLATE.format('gateway_{0}.tgz'.format(target_version))
                     if not os.path.exists(filename):
-                        self._download_firmware(firmware_type, target_version, filename)
+                        self._download_firmware(firmware_type=firmware_type,
+                                                version=target_version,
+                                                logger=component_logger,
+                                                target_filename=filename)
                     # Start actual update
-                    logger_.info('Detaching gateway_service update process')
-                    UpdateController._execute(['python',
-                                               os.path.join(UpdateController.PREFIX, 'python', 'openmotics_update.py'),
-                                               '--update-gateway-service',
-                                               target_version])
+                    component_logger.info('Detaching gateway_service update process')
+                    UpdateController._execute(command=['python',
+                                                       os.path.join(UpdateController.PREFIX, 'python', 'openmotics_update.py'),
+                                                       '--update-gateway-service',
+                                                       target_version],
+                                              logger=component_logger)
                     time.sleep(300)  # Wait 5 minutes, the service should be stopped by above detached process anyway
 
                 elif firmware_type == 'gateway_frontend':
-                    self.update_gateway_frontend(target_version)
-                    Config.remove_entry(config_key)
+                    self.update_gateway_frontend(new_version=target_version,
+                                                 logger=component_logger)
+                    Config.remove_entry(key=config_key)
 
                 else:  # Hex firmwares
-                    self._update_module_firmware(firmware_type, target_version)
-                    Config.remove_entry(config_key)
+                    self._update_module_firmware(firmware_type=firmware_type,
+                                                 target_version=target_version)
+                    Config.remove_entry(key=config_key)
             except Exception as ex:
-                logger_.error('Could not update {0} to {1}: {2}'.format(firmware_type, target_version, ex))
+                component_logger.error('Could not update {0} to {1}: {2}'.format(firmware_type, target_version, ex))
                 config_data['failure'] = True
-                Config.set_entry(config_key, config_data)
+                Config.set_entry(key=config_key,
+                                 value=config_data)
 
     def update_module_firmware(self, module_type, target_version):
         # type: (str, str) -> None
@@ -214,12 +247,16 @@ class UpdateController(object):
         if generation not in UpdateController.MODULE_TYPE_MAP[module_type]:
             raise RuntimeError('Calculated generation {0} is not suppored on {1}'.format(generation, module_type))
         firmware_type = UpdateController.MODULE_TYPE_MAP[module_type][generation]
+        platform = Platform.get_platform()
+        if firmware_type not in UpdateController.SUPPORTED_FIRMWARES.get(platform, []):
+            raise RuntimeError('Firmware {0} cannot be updated on platform {1}'.format(firmware_type, platform))
         # Execute update
-        self._update_module_firmware(firmware_type, target_version)
+        self._update_module_firmware(firmware_type=firmware_type,
+                                     target_version=target_version)
 
     def _update_module_firmware(self, firmware_type, target_version):
         # type: (str, str) -> None
-        logger_ = Logs.get_update_logger(firmware_type)
+        component_logger = Logs.get_update_logger(name=firmware_type)
 
         if firmware_type not in UpdateController.FIRMWARE_CODE_MAP:
             raise RuntimeError('Dynamic update for {0} not yet supported'.format(firmware_type))
@@ -228,27 +265,24 @@ class UpdateController(object):
         filename_code = UpdateController.FIRMWARE_CODE_MAP[firmware_type][0]
 
         if firmware_type in ['master_classic', 'master_coreplus']:
-            platform_match = (
-                    (platform in Platform.CoreTypes and firmware_type == 'master_coreplus') or
-                    (platform in Platform.ClassicTypes and firmware_type == 'master_classic')
-            )
-            if not platform_match:
-                logger_.info('Skipping update {0} on platform {1}'.format(firmware_type, platform))
-                return
-
             try:
                 current_version = '.'.join(str(e) for e in self._master_controller.get_firmware_version())  # type: Optional[str]
             except Exception:
                 current_version = None
             if current_version == target_version:
-                logger_.info('Master already up-to-date')
+                component_logger.info('Master already up-to-date')
                 return
 
             filename_base = UpdateController.FIRMWARE_NAME_TEMPLATE.format(filename_code)
             target_filename = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base.format(target_version))
-            self._download_firmware(firmware_type, target_version, target_filename)
-            self._master_controller.update_master(target_filename, target_version)
-            UpdateController._archive_firmwares(target_filename, filename_base, target_version)
+            self._download_firmware(firmware_type=firmware_type,
+                                    version=target_version,
+                                    logger=component_logger,
+                                    target_filename=target_filename)
+            self._master_controller.update_master(hex_filename=target_filename,
+                                                  version=target_version)
+            UpdateController._archive_firmwares(target_filename=target_filename,
+                                                filename_base=filename_base)
             return
 
         if platform in Platform.ClassicTypes and firmware_type == 'ucan':
@@ -256,7 +290,10 @@ class UpdateController(object):
 
         filename_base = UpdateController.FIRMWARE_NAME_TEMPLATE.format(filename_code)
         target_filename = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base.format(target_version))
-        self._download_firmware(firmware_type, target_version, target_filename)
+        self._download_firmware(firmware_type=firmware_type,
+                                version=target_version,
+                                logger=component_logger,
+                                target_filename=target_filename)
 
         if firmware_type in ['energy', 'p1_concentrator']:
             module_version = {'energy': EnergyEnums.Version.ENERGY_MODULE,
@@ -266,18 +303,22 @@ class UpdateController(object):
                                                                      firmware_version=target_version)
             for module_address, exception in failures.items():
                 if exception is not None:
-                    logger_.error('Updating energy module {0} failed: {1}'.format(module_address, exception))
-            UpdateController._archive_firmwares(target_filename, filename_base, target_version)
+                    component_logger.error('Updating energy module {0} failed: {1}'.format(module_address, exception))
+            UpdateController._archive_firmwares(target_filename=target_filename,
+                                                filename_base=filename_base)
             return
 
         module_codes = UpdateController.FIRMWARE_CODE_MAP[firmware_type][1]
         for module_code in module_codes:
-            self._master_controller.update_slave_modules(module_code, target_filename, target_version)
-        UpdateController._archive_firmwares(target_filename, filename_base, target_version)
+            self._master_controller.update_slave_modules(firmware_type=firmware_type,
+                                                         module_type=module_code,
+                                                         hex_filename=target_filename,
+                                                         version=target_version)
+        UpdateController._archive_firmwares(target_filename=target_filename,
+                                            filename_base=filename_base)
 
-    def update_gateway_frontend(self, new_version):
-        logger_ = Logs.get_update_logger('gateway_frontend')
-        logger_.info('Updating gateway_frontend to {0}'.format(new_version))
+    def update_gateway_frontend(self, new_version, logger):
+        logger.info('Updating gateway_frontend to {0}'.format(new_version))
 
         # Migrate legacy folder structure, if needed
         if not os.path.exists(UpdateController.FRONTEND_CURRENT):
@@ -288,7 +329,7 @@ class UpdateController(object):
                     if match is not None:
                         current_version = match.groups()[0]
             except Exception as ex:
-                logger_.warning('Could not parse current frontend version while migrating legacy structure: {0}'.format(ex))
+                logger.warning('Could not parse current frontend version while migrating legacy structure: {0}'.format(ex))
             old_version_folder = UpdateController.FRONTEND_BASE_TEMPLATE.format(current_version)
             os.makedirs(old_version_folder)
             os.symlink(old_version_folder, UpdateController.FRONTEND_CURRENT)
@@ -301,7 +342,7 @@ class UpdateController(object):
         old_version = os.readlink(UpdateController.FRONTEND_CURRENT).split(os.path.sep)[-1]
         if old_version == new_version:
             # Already up-to-date
-            logger_.info('Firmware for gateway_frontend already up-to-date')
+            logger.info('Firmware for gateway_frontend already up-to-date')
             return
 
         new_version_folder = UpdateController.FRONTEND_BASE_TEMPLATE.format(new_version)
@@ -310,26 +351,31 @@ class UpdateController(object):
 
             # Download firmware
             filename = UpdateController.FRONTEND_BASE_TEMPLATE.format('frontend_{0}.tgz'.format(new_version))
-            self._download_firmware('gateway_frontend', new_version, filename)
+            self._download_firmware(firmware_type='gateway_frontend',
+                                    version=new_version,
+                                    logger=logger,
+                                    target_filename=filename)
 
             # Extract new version
-            logger_.info('Extracting archive')
+            logger.info('Extracting archive')
             os.makedirs(os.path.join(new_version_folder, 'static'))
-            UpdateController._extract_tgz(filename, os.path.join(new_version_folder, 'static'))
+            UpdateController._extract_tgz(filename=filename,
+                                          output_dir=os.path.join(new_version_folder, 'static'),
+                                          logger=logger)
 
         # Symlink to new version
-        logger_.info('Symlink to new version')
+        logger.info('Symlink to new version')
         os.unlink(UpdateController.FRONTEND_CURRENT)
         os.symlink(new_version_folder, UpdateController.FRONTEND_CURRENT)
 
-        logger_.info('Update completed')
+        logger.info('Update completed')
 
     @staticmethod
     def update_gateway_service(new_version):
         """ Executed from within a separate process """
-        logger_ = Logs.get_update_logger('gateway_service')
+        component_logger = Logs.get_update_logger('gateway_service')
         try:
-            logger_.info('Stopping services')
+            component_logger.info('Stopping services')
             System.run_service_action('stop', 'openmotics')
             System.run_service_action('stop', 'vpn_service')
 
@@ -353,58 +399,62 @@ class UpdateController(object):
                 os.mkdir(new_version_folder)
 
                 # Extract new version
-                logger_.info('Extracting archive')
+                component_logger.info('Extracting archive')
                 os.makedirs(os.path.join(new_version_folder, 'python'))
-                UpdateController._extract_tgz(UpdateController.SERVICE_BASE_TEMPLATE.format('gateway_{0}.tgz'.format(new_version)),
-                                              os.path.join(new_version_folder, 'python'))
+                UpdateController._extract_tgz(filename=UpdateController.SERVICE_BASE_TEMPLATE.format('gateway_{0}.tgz'.format(new_version)),
+                                              output_dir=os.path.join(new_version_folder, 'python'),
+                                              logger=component_logger)
 
                 # Copy `etc`
-                logger_.info('Copy `etc` folder')
+                component_logger.info('Copy `etc` folder')
                 shutil.copytree(os.path.join(old_version_folder, 'etc'), os.path.join(new_version_folder, 'etc'))
 
                 # Restore plugins
-                logger_.info('Copy plugins')
+                component_logger.info('Copy plugins')
                 plugins = glob.glob('{0}{1}*{1}'.format(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), os.path.sep))
                 for plugin in plugins:
-                    UpdateController._execute(['cp', '-R',
-                                               os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), plugin),
-                                               os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(new_version), '')])
+                    UpdateController._execute(command=['cp', '-R',
+                                                       os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), plugin),
+                                                       os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(new_version), '')],
+                                              logger=component_logger)
 
                 # Install pip dependencies
-                logger_.info('Installing pip dependencies')
+                component_logger.info('Installing pip dependencies')
                 os.makedirs(os.path.join(new_version_folder, 'python-deps'))
                 operating_system = System.get_operating_system()['ID']
                 if operating_system != System.OS.BUILDROOT:
                     temp_dir = tempfile.mkdtemp(dir=UpdateController.PREFIX)
                     UpdateController._execute(
-                        'env TMPDIR={0} PYTHONUSERBASE={1}/python-deps python {1}/python/libs/pip.whl/pip install --no-index --user {1}/python/libs/{2}/*.whl'.format(
+                        command='env TMPDIR={0} PYTHONUSERBASE={1}/python-deps python {1}/python/libs/pip.whl/pip install --no-index --user {1}/python/libs/{2}/*.whl'.format(
                             temp_dir, new_version_folder, operating_system
-                        ), shell=True
+                        ),
+                        logger=component_logger,
+                        shell=True
                     )
                     os.rmdir(temp_dir)
 
             # Keep track of the old version, so it can be manually restored if something goes wrong
-            logger_.info('Tracking previous version')
+            component_logger.info('Tracking previous version')
             if os.path.exists(UpdateController.SERVICE_PREVIOUS):
                 os.unlink(UpdateController.SERVICE_PREVIOUS)
             os.symlink(old_version_folder, UpdateController.SERVICE_PREVIOUS)
 
             # Symlink to new version
-            logger_.info('Symlink to new version')
+            component_logger.info('Symlink to new version')
             os.unlink(UpdateController.SERVICE_CURRENT)
             os.symlink(new_version_folder, UpdateController.SERVICE_CURRENT)
 
             # Startup
-            logger_.info('Starting services')
+            component_logger.info('Starting services')
             System.run_service_action('start', 'openmotics')
             System.run_service_action('start', 'vpn_service')
 
             # Health-check
-            logger_.info('Checking health')
-            update_successful = UpdateController._check_gateway_service_health()
+            component_logger.info('Checking health')
+            update_successful = UpdateController._check_gateway_service_health(logger=component_logger)
 
             if not update_successful:
-                logger_.info('Update failed, restoring')
+                component_logger.info('Update failed, restoring')
                 # Stop services again
                 System.run_service_action('stop', 'openmotics')
                 System.run_service_action('stop', 'vpn_service')
@@ -418,15 +468,14 @@ class UpdateController(object):
                 raise RuntimeError('Failed to start {0}'.format(new_version))
 
             os.unlink(UpdateController.SERVICE_PREVIOUS)
-            logger_.info('Update completed')
+            component_logger.info('Update completed')
         except Exception as ex:
             with open(UpdateController.SERVICE_BASE_TEMPLATE.format('{0}.failure'.format(new_version)), 'w') as failure:
                 failure.write('Failed to update gateway_service to {0}: {1}'.format(new_version, ex))
             raise
 
     @staticmethod
-    def _check_gateway_service_health(timeout=60):
-        logger_ = Logs.get_update_logger('gateway_service')
+    def _check_gateway_service_health(logger, timeout=60):
         since = time.time()
         pending = ['unknown']
         http_port = Platform.http_port()
@@ -441,16 +490,17 @@ class UpdateController(object):
             except Exception:
                 pass
             time.sleep(10)
-        logger_.error('Health-check failed with pending {0}'.format(', '.join(pending)))
+        logger.error('Health-check failed with pending {0}'.format(', '.join(pending)))
         return False
 
     @staticmethod
-    def _extract_tgz(filename, output_dir):
-        UpdateController._execute(['tar', '--no-same-owner', '-xzf', filename, '-C', output_dir])
+    def _extract_tgz(filename, output_dir, logger):
+        UpdateController._execute(command=['tar', '--no-same-owner', '-xzf', filename, '-C', output_dir],
+                                  logger=logger)
 
     @staticmethod
-    def _execute(command, **kwargs):
-        # type: (Union[str, List[str]], Any) -> str
+    def _execute(command, logger, **kwargs):
+        # type: (Union[str, List[str]], Logger, Any) -> str
         proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                 close_fds=True, **kwargs)
         output = b''
@@ -464,7 +514,7 @@ class UpdateController(object):
             raise Exception('Command {} failed'.format(command))
         return str(output)
 
-    def _download_firmware(self, firmware_type, version, target_filename=None):
+    def _download_firmware(self, firmware_type, version, logger, target_filename=None):
         """
         Example metadata:
         > {'type': 'master_coreplus',
@@ -480,14 +530,13 @@ class UpdateController(object):
         if response.status_code != 200:
             raise ValueError('Failed to get update firmware metadata for {0} {1}'.format(firmware_type, version))
         metadata = response.json()
-        return UpdateController._download_urls(firmware_type,
-                                               metadata.get('urls', [metadata['url']]),
-                                               metadata['sha256'],
-                                               target_filename)
+        return UpdateController._download_urls(urls=metadata.get('urls', [metadata['url']]),
+                                               checksum=metadata['sha256'],
+                                               logger=logger,
+                                               target_filename=target_filename)
 
     @staticmethod
-    def _download_urls(firmware_type, urls, checksum, target_filename=None):  # type: (str, List[str], str, Optional[str]) -> Optional[str]
-        logger_ = Logs.get_update_logger(firmware_type)
+    def _download_urls(urls, checksum, logger, target_filename=None):  # type: (List[str], str, Logger, Optional[str]) -> Optional[str]
         handle = None  # type: Optional[TextIO]
         filename = None  # type: Optional[str]
         downloaded = False
@@ -506,7 +555,7 @@ class UpdateController(object):
                     shutil.copyfileobj(response.raw, handle)
                     downloaded = True
                 except Exception as ex:
-                    logger_.error('Could not download firmware from {0}: {1}'.format(url, ex))
+                    logger.error('Could not download firmware from {0}: {1}'.format(url, ex))
         finally:
             if handle is not None:
                 try:
@@ -546,8 +595,8 @@ class UpdateController(object):
         return urlunparse((parsed_url.scheme, parsed_url.netloc, path, '', query, ''))
 
     @staticmethod
-    def _archive_firmwares(target_filename, filename_base, firmware_version):
-        # type: (str, str, str) -> None
+    def _archive_firmwares(target_filename, filename_base):
+        # type: (str, str) -> None
         # For below examples; /y = /x/versions/firmwares
         current_filename = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base.format('current'))  # e.g. /y/OMFXY_current.hex
         current_target = None
