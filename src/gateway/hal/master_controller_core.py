@@ -201,6 +201,7 @@ class MasterCoreController(MasterController):
         elif core_event.type == MasterCoreEvent.Types.SLAVE_SEARCH:
             if core_event.data.get('type') in [MasterCoreEvent.SearchType.DISABLED,
                                                MasterCoreEvent.SearchType.STOPPED]:
+                # TODO: This will be replaced by a dedicated new "startup completed" event
                 # When the master is completely started up one or more SLAVE_SEARCH events will be received.
                 # These will be either:
                 # * DISABLED when auto discovery is inactive;

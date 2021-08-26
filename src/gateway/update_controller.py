@@ -52,7 +52,7 @@ global_logger = logging.getLogger(__name__)
 @Injectable.named('update_controller')
 class UpdateController(object):
 
-    UPDATE_DELAY = 60  # TODO: 300
+    UPDATE_DELAY = 120
 
     PREFIX = constants.OPENMOTICS_PREFIX  # e.g. /x
     VERSIONS_FOLDER = os.path.join(PREFIX, 'versions')  # e.g. /x/versions

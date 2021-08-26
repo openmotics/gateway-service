@@ -57,6 +57,9 @@ class UCANUpdater(object):
     def update(cc_address, ucan_address, ucan_communicator, hex_filename, version, logger):
         # type: (str, str, UCANCommunicator, str, Optional[str], Logger) -> bool
         """ Flashes the content from an Intel HEX file to the specified uCAN """
+
+        # TODO: Inform the master that an update will be started
+
         try:
             logger.info('Updating uCAN {0} at CC {1} to {2}'.format(
                 ucan_address, cc_address,

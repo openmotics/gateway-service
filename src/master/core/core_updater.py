@@ -123,7 +123,7 @@ class CoreUpdater(object):
             component_logger.info('Post-flash power cycle')
             time.sleep(CoreUpdater.POST_BOOTLOAD_DELAY)
             Hardware.cycle_gpio(Hardware.GPIO.CORE_POWER, [False, CoreUpdater.POWER_CYCLE_DELAY, True])
-            time.sleep(CoreUpdater.APPLICATION_STARTUP_DELAY)
+            time.sleep(CoreUpdater.APPLICATION_STARTUP_DELAY)  # TODO: Replace with monitoring the CLI for "startup completed" message
 
             component_logger.info('Verify Core communication')
             if master_communicator is not None and maintenance_communicator is not None:
