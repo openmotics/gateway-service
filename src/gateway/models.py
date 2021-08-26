@@ -182,6 +182,8 @@ class DataMigration(BaseModel):
 
 class Schedule(BaseModel):
     id = AutoField()
+    source = CharField()  # Options: 'gateway' or 'thermostats'
+    external_id = CharField(null=True)
     name = CharField()
     start = FloatField()
     repeat = CharField(null=True)
@@ -190,6 +192,15 @@ class Schedule(BaseModel):
     action = CharField()
     arguments = CharField(null=True)
     status = CharField()
+
+    class Sources:
+        GATEWAY = 'gateway'
+        THERMOSTATS = 'thermostats'
+
+    class Meta:
+        indexes = (
+            (('source', 'external_id'), True),
+        )
 
 
 class Config(BaseModel):
