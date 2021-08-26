@@ -22,10 +22,11 @@ from peewee import SqliteDatabase
 
 import fakesleep
 from gateway.dto import OutputStatusDTO, PumpGroupDTO, SensorStatusDTO, \
-    ThermostatGroupDTO, ThermostatGroupStatusDTO, ThermostatStatusDTO
+    ThermostatDTO, ThermostatGroupDTO, ThermostatGroupStatusDTO, \
+    ThermostatStatusDTO
 from gateway.models import DaySchedule, Output, OutputToThermostatGroup, \
-    Preset, Pump, PumpToValve, Sensor, Thermostat, ThermostatGroup, Valve, \
-    ValveToThermostat
+    Preset, Pump, PumpToValve, Room, Sensor, Thermostat, ThermostatGroup, \
+    Valve, ValveToThermostat
 from gateway.output_controller import OutputController
 from gateway.pubsub import PubSub
 from gateway.sensor_controller import SensorController
@@ -36,7 +37,7 @@ from ioc import SetTestMode, SetUpTestInjections
 from logs import Logs
 
 MODELS = [Pump, Output, Valve, PumpToValve, Thermostat,
-          ThermostatGroup, ValveToThermostat, Sensor, Preset,
+          ThermostatGroup, ValveToThermostat, Room, Sensor, Preset,
           OutputToThermostatGroup, DaySchedule]
 
 
@@ -63,9 +64,12 @@ class ThermostatControllerTest(unittest.TestCase):
         sensor_controller = Mock(SensorController)
         sensor_controller.get_sensor_status.side_effect = lambda x: SensorStatusDTO(id=x, value=10.0)
         SetUpTestInjections(pubsub=Mock(PubSub),
+                            module_controller=Mock(),
+                            master_controller=Mock(),
+                            maintenance_controller=Mock(),
                             output_controller=output_controller,
-                            sensor_controller=sensor_controller,
-                            system_controller=SystemController())
+                            sensor_controller=sensor_controller)
+        SetUpTestInjections(system_controller=SystemController())
         self._thermostat_controller = ThermostatControllerGateway()
         SetUpTestInjections(thermostat_controller=self._thermostat_controller)
         sensor = Sensor.create(source='master', external_id='1', physical_quantity='temperature', name='')
@@ -79,6 +83,32 @@ class ThermostatControllerTest(unittest.TestCase):
     def tearDown(self):
         self.test_db.drop_tables(MODELS)
         self.test_db.close()
+
+    def test_update_thermostat(self):
+        room = Room.create(number=2, name='Room 2')
+        sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
+        thermostat = Thermostat.create(number=1,
+                                       name='thermostat 1',
+                                       sensor=sensor,
+                                       pid_heating_p=200,
+                                       pid_heating_i=100,
+                                       pid_heating_d=50,
+                                       pid_cooling_p=200,
+                                       pid_cooling_i=100,
+                                       pid_cooling_d=50,
+                                       automatic=True,
+                                       room=None,
+                                       start=0,
+                                       valve_config='equal',
+                                       thermostat_group=self._thermostat_group)
+        self._thermostat_controller.save_heating_thermostats([
+            ThermostatDTO(id=thermostat.id, sensor=None, room=2)
+        ])
+        thermostats = self._thermostat_controller.load_heating_thermostats()
+        self.assertEqual(len(thermostats), 1)
+        self.assertEqual(thermostats[0].name, 'thermostat 1')
+        self.assertEqual(thermostats[0].sensor, None)
+        self.assertEqual(thermostats[0].room, 2)
 
     def test_save_pumpgroups(self):
         sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
