@@ -150,7 +150,7 @@ class ThermostatControllerTest(unittest.TestCase):
                                  valve=valve_3,
                                  mode=ThermostatGroup.Modes.HEATING,
                                  priority=0)
-        Preset.create(type=Preset.Types.SCHEDULE,
+        Preset.create(type=Preset.Types.AUTO,
                       heating_setpoint=20.0,
                       cooling_setpoint=25.0,
                       active=True,
@@ -342,7 +342,7 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertTrue(preset.active)
         self.assertEqual(30.0, preset.cooling_setpoint)
         self.assertEqual(16.0, preset.heating_setpoint)
-        self.assertEqual(Preset.Types.SCHEDULE, preset.type)
+        self.assertEqual(Preset.Types.AUTO, preset.type)
 
         self._thermostat_controller.set_current_preset(thermostat_number=1, preset_type=Preset.Types.PARTY)
         expected.statusses[0].setpoint_temperature = 22.0
