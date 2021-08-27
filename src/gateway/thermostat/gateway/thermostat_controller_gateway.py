@@ -41,7 +41,6 @@ from ioc import INJECTED, Inject
 if False:  # MYPY
     from typing import Dict, List, Literal, Tuple, Optional
     from gateway.output_controller import OutputController
-    from gateway.system_controller import SystemController
     from gateway.sensor_controller import SensorController
 
 logger = logging.getLogger(__name__)
@@ -58,8 +57,8 @@ class ThermostatControllerGateway(ThermostatController):
     SYNC_CONFIG_INTERVAL = 900
 
     @Inject
-    def __init__(self, output_controller=INJECTED, sensor_controller=INJECTED, scheduling_controller=INJECTED, pubsub=INJECTED, system_controller=INJECTED):
-        # type: (OutputController, SensorController, SchedulingController, PubSub, SystemController) -> None
+    def __init__(self, output_controller=INJECTED, sensor_controller=INJECTED, scheduling_controller=INJECTED, pubsub=INJECTED):
+        # type: (OutputController, SensorController, SchedulingController, PubSub) -> None
         super(ThermostatControllerGateway, self).__init__(output_controller)
         self._sensor_controller = sensor_controller
         self._scheduling_controller = scheduling_controller
@@ -70,8 +69,6 @@ class ThermostatControllerGateway(ThermostatController):
         self._periodic_sync_thread = None  # type: Optional[DaemonThread]
         self.thermostat_pids = {}  # type: Dict[int, ThermostatPid]
         self._pump_valve_controller = PumpValveController()
-
-        timezone = system_controller.get_timezone()
 
     def start(self):  # type: () -> None
         logger.info('Starting gateway thermostatcontroller...')

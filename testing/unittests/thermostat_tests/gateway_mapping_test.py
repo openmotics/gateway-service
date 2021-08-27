@@ -27,7 +27,6 @@ from gateway.models import DaySchedule, Feature, Output, \
 from gateway.output_controller import OutputController
 from gateway.pubsub import PubSub
 from gateway.sensor_controller import SensorController
-from gateway.system_controller import SystemController
 from gateway.scheduling_controller import SchedulingController
 from gateway.thermostat.gateway.thermostat_controller_gateway import \
     ThermostatControllerGateway
@@ -64,14 +63,10 @@ class GatewayThermostatMappingTests(unittest.TestCase):
         scheduling_controller.load_schedules.return_value = []
 
         SetUpTestInjections(message_client=Mock(),
-                            master_controller=Mock(),
-                            maintenance_controller=Mock(),
-                            module_controller=Mock(),
                             output_controller=Mock(OutputController),
                             scheduling_controller=scheduling_controller,
                             sensor_controller=sensor_controller,
                             pubsub=Mock(PubSub))
-        SetUpTestInjections(system_controller=SystemController())
         thermostat_controller = ThermostatControllerGateway()
         SetUpTestInjections(thermostat_controller=thermostat_controller)
         return thermostat_controller
