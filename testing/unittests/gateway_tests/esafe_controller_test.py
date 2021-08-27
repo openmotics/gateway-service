@@ -40,10 +40,10 @@ try:
     from rebus import RebusComponentEsafeLock, RebusComponentEsafeEightChannelOutput, RebusComponentEsafeCollector
     from rebus.general.enums import EsafeBoxType, EsafeBoxSize
 except ImportError:
-    pass
+    rebus = None
 
 
-@unittest.skipIf(six.PY2, "Not running when in py2")
+@unittest.skipIf(rebus == None, 'openmotics-rebus not installed')
 class EsafeControllerTest(unittest.TestCase):
     """ Tests for RebusController. """
 
