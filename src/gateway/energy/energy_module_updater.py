@@ -28,7 +28,8 @@ if False:  # MYPY
     from typing import Tuple, Optional
     from gateway.energy.energy_communicator import EnergyCommunicator
 
-logger = logging.getLogger('openmotics')
+# Different name to reduce confusion between multiple used loggers
+global_logger = logging.getLogger(__name__)
 
 
 class EnergyModuleUpdater(object):
@@ -61,49 +62,49 @@ class EnergyModuleUpdater(object):
         raise RuntimeError('Unknown or unsupported energy module version: {0}'.format(module_version))
 
     def _bootload_energy_module(self, module_address, hex_filename, version):
-        logger_ = Logs.get_update_logger('energy_{0}'.format(module_address))
+        individual_logger = Logs.get_update_logger('energy_{0}'.format(module_address))
         firmware_version, hardware_version = self.get_module_firmware_version(module_address, EnergyEnums.Version.ENERGY_MODULE)
-        logger_.info('Version: {0} ({1})'.format(firmware_version, hardware_version))
+        individual_logger.info('Version: {0} ({1})'.format(firmware_version, hardware_version))
         if firmware_version == version:
-            logger_.info('Already up-to-date. Skipping')
+            individual_logger.info('Already up-to-date. Skipping')
             return
-        logger_.info('Start bootloading')
+        individual_logger.info('Start bootloading')
 
         try:
-            logger_.info('Reading calibration data')
+            individual_logger.info('Reading calibration data')
             calibration_data = list(self._energy_communicator.do_command(module_address, EnergyAPI.read_eeprom(12, 100), *[256, 100]))
-            logger_.info('Calibration data: {0}'.format(','.join([str(d) for d in calibration_data])))
+            individual_logger.info('Calibration data: {0}'.format(','.join([str(d) for d in calibration_data])))
         except Exception as ex:
-            logger_.info('Could not read calibration data: {0}'.format(ex))
+            individual_logger.info('Could not read calibration data: {0}'.format(ex))
             calibration_data = None
 
         reader = HexReader(hex_filename)
 
-        logger_.info('Going to bootloader')
+        individual_logger.info('Going to bootloader')
         self._energy_communicator.do_command(module_address, EnergyAPI.bootloader_goto(EnergyEnums.Version.ENERGY_MODULE), 10)
         firmware_version, hardware_version = self.get_module_firmware_version(module_address, EnergyEnums.Version.ENERGY_MODULE)
-        logger_.info('Bootloader version: {0}'.format(firmware_version))
+        individual_logger.info('Bootloader version: {0}'.format(firmware_version))
 
         try:
-            logger_.info('Erasing code...')
+            individual_logger.info('Erasing code...')
             for page in range(6, 64):
                 self._energy_communicator.do_command(module_address, EnergyAPI.bootloader_erase_code(), page)
 
-            logger_.info('Writing code...')
+            individual_logger.info('Writing code...')
             for address in range(0x1D006000, 0x1D03FFFB, 128):
                 data = reader.get_bytes_version_12(address)
                 self._energy_communicator.do_command(module_address, EnergyAPI.bootloader_write_code(EnergyEnums.Version.ENERGY_MODULE), *data)
         finally:
-            logger_.info('Jumping to application')
+            individual_logger.info('Jumping to application')
             self._energy_communicator.do_command(module_address, EnergyAPI.bootloader_jump_application())
 
         tries = 0
         while True:
             try:
                 tries += 1
-                logger_.info('Waiting for application...')
+                individual_logger.info('Waiting for application...')
                 firmware_version, hardware_version = self.get_module_firmware_version(module_address, EnergyEnums.Version.ENERGY_MODULE)
-                logger_.info('Version: {0}'.format(firmware_version))
+                individual_logger.info('Version: {0}'.format(firmware_version))
                 break
             except Exception:
                 if tries >= 3:
@@ -112,27 +113,27 @@ class EnergyModuleUpdater(object):
 
         if calibration_data is not None:
             time.sleep(1)
-            logger_.info('Restoring calibration data')
+            individual_logger.info('Restoring calibration data')
             self._energy_communicator.do_command(module_address, EnergyAPI.write_eeprom(12, 100), *([256] + calibration_data))
 
-        logger_.info('Done')
+        individual_logger.info('Done')
 
     def _bootload_p1_concentrator(self, module_address, hex_filename, version):
         _ = hex_filename  # Not yet in use
-        logger_ = Logs.get_update_logger('p1_concentrator_{0}'.format(module_address))
+        individual_logger = Logs.get_update_logger('p1_concentrator_{0}'.format(module_address))
         firmware_version, hardware_version = self.get_module_firmware_version(module_address, EnergyEnums.Version.P1_CONCENTRATOR)
-        logger_.info('Version: {0} ({1})'.format(firmware_version, hardware_version))
+        individual_logger.info('Version: {0} ({1})'.format(firmware_version, hardware_version))
         if firmware_version == version:
-            logger.info('Already up-to-date. Skipping')
+            individual_logger.info('Already up-to-date. Skipping')
             return
-        logger_.info('Start bootloading')
+        individual_logger.info('Start bootloading')
 
-        logger_.info('Going to bootloader')
+        individual_logger.info('Going to bootloader')
         self._energy_communicator.do_command(module_address, EnergyAPI.bootloader_goto(EnergyEnums.Version.P1_CONCENTRATOR), 10)
 
         # No clue yet. Most likely this will use the same approach as regular master slave modules
 
-        logger_.info('Done')
+        individual_logger.info('Done')
 
 
 class HexReader(object):

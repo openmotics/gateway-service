@@ -46,7 +46,7 @@ if False:  # MYPY
 # Different name to reduce confusion between multiple used loggers
 global_logger = logging.getLogger(__name__)
 
-# TODO: Migrate gateway-os update to gateway-service
+# TODO: Only save the last X versions
 
 
 @Injectable.named('update_controller')
@@ -214,7 +214,7 @@ class UpdateController(object):
                     component_logger.info('Detaching gateway_service update process')
                     UpdateController._execute(command=['python',
                                                        os.path.join(UpdateController.PREFIX, 'python', 'openmotics_update.py'),
-                                                       '--update-gateway-service',
+                                                       '--execute-gateway-service-update',
                                                        target_version],
                                               logger=component_logger)
                     time.sleep(300)  # Wait 5 minutes, the service should be stopped by above detached process anyway
@@ -261,7 +261,6 @@ class UpdateController(object):
         if firmware_type not in UpdateController.FIRMWARE_CODE_MAP:
             raise RuntimeError('Dynamic update for {0} not yet supported'.format(firmware_type))
 
-        platform = Platform.get_platform()
         filename_code = UpdateController.FIRMWARE_CODE_MAP[firmware_type][0]
 
         if firmware_type in ['master_classic', 'master_coreplus']:
@@ -284,9 +283,6 @@ class UpdateController(object):
             UpdateController._archive_firmwares(target_filename=target_filename,
                                                 filename_base=filename_base)
             return
-
-        if platform in Platform.ClassicTypes and firmware_type == 'ucan':
-            return  # A uCAN cannot be updated on the Classic platform for now
 
         filename_base = UpdateController.FIRMWARE_NAME_TEMPLATE.format(filename_code)
         target_filename = UpdateController.FIRMWARE_FILENAME_TEMPLATE.format(filename_base.format(target_version))
@@ -371,108 +367,123 @@ class UpdateController(object):
         logger.info('Update completed')
 
     @staticmethod
-    def update_gateway_service(new_version):
+    def update_gateway_service(new_version, logger):
+        # type: (str, Logger) -> None
         """ Executed from within a separate process """
-        component_logger = Logs.get_update_logger('gateway_service')
-        try:
-            component_logger.info('Stopping services')
+        logger.info('Stopping services')
+        System.run_service_action('stop', 'openmotics')
+        System.run_service_action('stop', 'vpn_service')
+
+        # Migrate legacy folder structure, if needed
+        if not os.path.exists(UpdateController.SERVICE_CURRENT):
+            old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(gateway.__version__)
+            os.makedirs(old_version_folder)
+            os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
+
+            for folder in ['python', 'etc', 'python-deps']:
+                old_location = os.path.join(UpdateController.PREFIX, folder)
+                new_location = os.path.join(UpdateController.SERVICE_CURRENT, folder)
+                shutil.move(old_location, new_location)
+                os.symlink(new_location, old_location)
+
+        old_version = os.readlink(UpdateController.SERVICE_CURRENT).split(os.path.sep)[-1]
+        old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(old_version)
+        new_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(new_version)
+
+        if not os.path.exists(new_version_folder):
+            os.mkdir(new_version_folder)
+
+            # Extract new version
+            logger.info('Extracting archive')
+            os.makedirs(os.path.join(new_version_folder, 'python'))
+            UpdateController._extract_tgz(filename=UpdateController.SERVICE_BASE_TEMPLATE.format('gateway_{0}.tgz'.format(new_version)),
+                                          output_dir=os.path.join(new_version_folder, 'python'),
+                                          logger=logger)
+
+            # Copy `etc`
+            logger.info('Copy `etc` folder')
+            shutil.copytree(os.path.join(old_version_folder, 'etc'), os.path.join(new_version_folder, 'etc'))
+
+            # Restore plugins
+            logger.info('Copy plugins')
+            plugins = glob.glob('{0}{1}*{1}'.format(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), os.path.sep))
+            for plugin in plugins:
+                UpdateController._execute(command=['cp', '-R',
+                                                   os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), plugin),
+                                                   os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(new_version), '')],
+                                          logger=logger)
+
+            # Install pip dependencies
+            logger.info('Installing pip dependencies')
+            os.makedirs(os.path.join(new_version_folder, 'python-deps'))
+            operating_system = System.get_operating_system()['ID']
+            if operating_system != System.OS.BUILDROOT:
+                temp_dir = tempfile.mkdtemp(dir=UpdateController.PREFIX)
+                UpdateController._execute(
+                    command='env TMPDIR={0} PYTHONUSERBASE={1}/python-deps python {1}/python/libs/pip.whl/pip install --no-index --user {1}/python/libs/{2}/*.whl'.format(
+                        temp_dir, new_version_folder, operating_system
+                    ),
+                    logger=logger,
+                    shell=True
+                )
+                os.rmdir(temp_dir)
+
+        # Keep track of the old version, so it can be manually restored if something goes wrong
+        logger.info('Tracking previous version')
+        if os.path.exists(UpdateController.SERVICE_PREVIOUS):
+            os.unlink(UpdateController.SERVICE_PREVIOUS)
+        os.symlink(old_version_folder, UpdateController.SERVICE_PREVIOUS)
+
+        # Symlink to new version
+        logger.info('Symlink to new version')
+        os.unlink(UpdateController.SERVICE_CURRENT)
+        os.symlink(new_version_folder, UpdateController.SERVICE_CURRENT)
+
+        # Prepare new code for first startup
+        logger.info('Preparing for first startup')
+        UpdateController._execute(command=['python',
+                                           os.path.join(UpdateController.PREFIX, 'python', 'openmotics_update.py'),
+                                           '--prepare-gateway-service-for-first-startup',
+                                           new_version],
+                                  logger=logger)
+
+        # Startup
+        logger.info('Starting services')
+        System.run_service_action('start', 'openmotics')
+        System.run_service_action('start', 'vpn_service')
+
+        # Health-check
+        logger.info('Checking health')
+        update_successful = UpdateController._check_gateway_service_health(logger=logger)
+
+        if not update_successful:
+            logger.info('Update failed, restoring')
+            # Stop services again
             System.run_service_action('stop', 'openmotics')
             System.run_service_action('stop', 'vpn_service')
-
-            # Migrate legacy folder structure, if needed
-            if not os.path.exists(UpdateController.SERVICE_CURRENT):
-                old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(gateway.__version__)
-                os.makedirs(old_version_folder)
-                os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
-
-                for folder in ['python', 'etc', 'python-deps']:
-                    old_location = os.path.join(UpdateController.PREFIX, folder)
-                    new_location = os.path.join(UpdateController.SERVICE_CURRENT, folder)
-                    shutil.move(old_location, new_location)
-                    os.symlink(new_location, old_location)
-
-            old_version = os.readlink(UpdateController.SERVICE_CURRENT).split(os.path.sep)[-1]
-            old_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(old_version)
-            new_version_folder = UpdateController.SERVICE_BASE_TEMPLATE.format(new_version)
-
-            if not os.path.exists(new_version_folder):
-                os.mkdir(new_version_folder)
-
-                # Extract new version
-                component_logger.info('Extracting archive')
-                os.makedirs(os.path.join(new_version_folder, 'python'))
-                UpdateController._extract_tgz(filename=UpdateController.SERVICE_BASE_TEMPLATE.format('gateway_{0}.tgz'.format(new_version)),
-                                              output_dir=os.path.join(new_version_folder, 'python'),
-                                              logger=component_logger)
-
-                # Copy `etc`
-                component_logger.info('Copy `etc` folder')
-                shutil.copytree(os.path.join(old_version_folder, 'etc'), os.path.join(new_version_folder, 'etc'))
-
-                # Restore plugins
-                component_logger.info('Copy plugins')
-                plugins = glob.glob('{0}{1}*{1}'.format(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), os.path.sep))
-                for plugin in plugins:
-                    UpdateController._execute(command=['cp', '-R',
-                                                       os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(old_version), plugin),
-                                                       os.path.join(UpdateController.PLUGINS_DIRECTORY_TEMPLATE.format(new_version), '')],
-                                              logger=component_logger)
-
-                # Install pip dependencies
-                component_logger.info('Installing pip dependencies')
-                os.makedirs(os.path.join(new_version_folder, 'python-deps'))
-                operating_system = System.get_operating_system()['ID']
-                if operating_system != System.OS.BUILDROOT:
-                    temp_dir = tempfile.mkdtemp(dir=UpdateController.PREFIX)
-                    UpdateController._execute(
-                        command='env TMPDIR={0} PYTHONUSERBASE={1}/python-deps python {1}/python/libs/pip.whl/pip install --no-index --user {1}/python/libs/{2}/*.whl'.format(
-                            temp_dir, new_version_folder, operating_system
-                        ),
-                        logger=component_logger,
-                        shell=True
-                    )
-                    os.rmdir(temp_dir)
-
-            # Keep track of the old version, so it can be manually restored if something goes wrong
-            component_logger.info('Tracking previous version')
-            if os.path.exists(UpdateController.SERVICE_PREVIOUS):
-                os.unlink(UpdateController.SERVICE_PREVIOUS)
-            os.symlink(old_version_folder, UpdateController.SERVICE_PREVIOUS)
-
-            # Symlink to new version
-            component_logger.info('Symlink to new version')
+            # Symlink rollback to old version
             os.unlink(UpdateController.SERVICE_CURRENT)
-            os.symlink(new_version_folder, UpdateController.SERVICE_CURRENT)
-
-            # Startup
-            component_logger.info('Starting services')
+            os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
+            # Start services again
             System.run_service_action('start', 'openmotics')
             System.run_service_action('start', 'vpn_service')
+            # Raise with actual reason
+            raise RuntimeError('Failed to start {0}'.format(new_version))
 
-            # Health-check
-            component_logger.info('Checking health')
-            update_successful = UpdateController._check_gateway_service_health(logger=component_logger)
+        os.unlink(UpdateController.SERVICE_PREVIOUS)
+        logger.info('Update completed')
 
-            if not update_successful:
-                component_logger.info('Update failed, restoring')
-                # Stop services again
-                System.run_service_action('stop', 'openmotics')
-                System.run_service_action('stop', 'vpn_service')
-                # Symlink rollback to old version
-                os.unlink(UpdateController.SERVICE_CURRENT)
-                os.symlink(old_version_folder, UpdateController.SERVICE_CURRENT)
-                # Start services again
-                System.run_service_action('start', 'openmotics')
-                System.run_service_action('start', 'vpn_service')
-                # Raise with actual reason
-                raise RuntimeError('Failed to start {0}'.format(new_version))
-
-            os.unlink(UpdateController.SERVICE_PREVIOUS)
-            component_logger.info('Update completed')
-        except Exception as ex:
-            with open(UpdateController.SERVICE_BASE_TEMPLATE.format('{0}.failure'.format(new_version)), 'w') as failure:
-                failure.write('Failed to update gateway_service to {0}: {1}'.format(new_version, ex))
-            raise
+    @staticmethod
+    def update_gateway_service_prepare_for_first_startup(logger):
+        # type: (Logger) -> None
+        """ Executed from within a separate process """
+        # This is currently empty, but might in the future be used for:
+        #  * Updating the supervisor service files
+        #  * Changing system settings mandatory for the services to startup
+        # This code will execute after the new version is in place and before the
+        # services are started. It runs the new code, has the new imports
+        # available, ...
+        logger.info('Preparation for first startup completed')
 
     @staticmethod
     def _check_gateway_service_health(logger, timeout=60):

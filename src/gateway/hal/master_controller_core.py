@@ -299,13 +299,14 @@ class MasterCoreController(MasterController):
                 self._master_restarting_timer.cancel()
 
     def _master_updating_change(self, updating):
-        logger_ = Logs.get_update_logger('master_coreplus')
+        individual_logger = Logs.get_update_logger('master_coreplus')
+
         def _timeout_release():
-            logger_.warning('Update holding window expired, releasing')
+            individual_logger.warning('Update holding window expired, releasing')
             self._master_updating_change(updating=False)
 
         if updating:
-            logger_.warning('Master update announced, blocking further communications')
+            individual_logger.warning('Master update announced, blocking further communications')
             self._master_updating.clear()
             if self._master_updating_timer is not None:
                 self._master_updating_timer.cancel()
@@ -314,7 +315,7 @@ class MasterCoreController(MasterController):
             self._master_updating_timer.start()
         else:
             if not self._master_updating.is_set():
-                logger_.info('Master update finished, release communications block')
+                individual_logger.info('Master update finished, release communications block')
             self._master_updating.set()
             if self._master_updating_timer is not None:
                 self._master_updating_timer.cancel()

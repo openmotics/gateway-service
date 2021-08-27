@@ -134,7 +134,7 @@ class SlaveUpdater(object):
                 current_version = SlaveUpdater._get_version(slave_communicator=slave_communicator,
                                                             address=address,
                                                             logger=logger,
-                                                            tries=30)
+                                                            tries=5)
                 if current_version is None:
                     logger.info('Could not request current firmware version')
                     logger.info('Module does not support bootloading. Skipping')
@@ -240,15 +240,14 @@ class SlaveUpdater(object):
                     logger.info('Application should be active')
                     time.sleep(2)  # Wait for the application to settle
                 except CommunicationTimedOutException:
-                    logger.error('Could not enter application. Aborting')
-                    return False
+                    logger.error('Switching to application timed out')
 
                 if address != '255.255.255.255':
                     logger.info('Loading new firmware version')
                     new_version = SlaveUpdater._get_version(slave_communicator=slave_communicator,
                                                             address=address,
                                                             logger=logger,
-                                                            tries=60)
+                                                            tries=5)
                     if new_version is None:
                         logger.error('Could not request new firmware version')
                         return False

@@ -153,8 +153,8 @@ class EnergyCommunicator(object):
     def _log_data(action, data, error=False):
         # type: (str, Optional[bytearray], bool) -> None
         if data is not None:
-            logger_ = logger.debug if not error else logger.error
-            logger_("%.3f %s energy bus: %s", time.time(), action, Printable(data))
+            log = logger.debug if not error else logger.error
+            log("%.3f %s energy bus: %s", time.time(), action, Printable(data))
 
     def __write_to_serial(self, data):
         # type: (bytearray) -> None

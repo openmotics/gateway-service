@@ -176,7 +176,7 @@ class EnergyModuleController(BaseController):
                                      .where(EnergyModule.version == module_version)  # type: List[EnergyModule]
         for energy_module in energy_modules:
             module_address = energy_module.module.address
-            logger_ = Logs.get_update_logger('{0}_{1}'.format(EnergyEnums.VERSION_TO_STRING[module_version], module_address))
+            individual_logger = Logs.get_update_logger('{0}_{1}'.format(EnergyEnums.VERSION_TO_STRING[module_version], module_address))
             try:
                 self.update_module(module_version=module_version,
                                    module_address=module_address,
@@ -185,7 +185,7 @@ class EnergyModuleController(BaseController):
                 failures[module_address] = None
             except Exception as ex:
                 if ex is not CommunicationTimedOutException:
-                    logger_.exception('Unexpected error when bootloading {0}: {1}'.format(module_address, ex))
+                    individual_logger.exception('Unexpected error when bootloading {0}: {1}'.format(module_address, ex))
                 failures[module_address] = ex
         return failures
 

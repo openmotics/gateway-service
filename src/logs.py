@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
+import sys
 from logging import handlers
 import os
 import re
@@ -23,7 +24,8 @@ if False:  # MYPY
     from typing import Union, Optional, Generator
     from logging import Logger
 
-logger_ = logging.getLogger('openmotics')
+# Different name to reduce confusion between multiple used loggers
+global_logger = logging.getLogger(__name__)
 
 
 class Logs(object):
@@ -94,12 +96,30 @@ class Logs(object):
                 break
         if not handler_found:
             logger.addHandler(update_handler)
-        logger.propagate = True
+        logger.propagate = False
+        return logger
+
+    @staticmethod
+    def get_print_logger(namespace):
+        """
+        Sets up a logger that simply prints to stdout
+        """
+        print_handler = logging.StreamHandler(sys.stdout)
+        print_handler.openmotics_print_handler = True  # type: ignore
+        logger = logging.getLogger(namespace)
+        handler_found = False
+        for handler in logger.handlers:
+            if hasattr(handler, 'openmotics_print_handler'):
+                handler_found = True
+                break
+        if not handler_found:
+            logger.addHandler(print_handler)
+        logger.propagate = False
         return logger
 
     @staticmethod
     def set_loglevel(level, namespace):  # type: (Union[int, str], Optional[str]) -> Generator[Logger, None, None]
-        logger_.info('Switching %s loglevel to %s', namespace, level)
+        global_logger.info('Switching %s loglevel to %s', namespace, level)
         for logger_namespace in logging.root.manager.loggerDict:  # type: ignore
             if re.match("^{}.*".format(namespace), logger_namespace):
                 logger = logging.getLogger(logger_namespace)
