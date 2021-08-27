@@ -114,6 +114,55 @@ class ThermostatControllerTest(unittest.TestCase):
         self.assertEqual(thermostats[0].sensor, None)
         self.assertEqual(thermostats[0].room, 2)
 
+<<<<<<< HEAD
+=======
+    def test_update_schedules(self):
+        sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
+        thermostat = Thermostat.create(number=1,
+                                       name='thermostat 1',
+                                       sensor=sensor,
+                                       pid_heating_p=200,
+                                       pid_heating_i=100,
+                                       pid_heating_d=50,
+                                       pid_cooling_p=200,
+                                       pid_cooling_i=100,
+                                       pid_cooling_d=50,
+                                       auto_mon=None,
+                                       automatic=True,
+                                       start=0,
+                                       valve_config='equal',
+                                       thermostat_group=self._thermostat_group)
+        self.scheduling_controller.load_schedules.return_value = [
+            ScheduleDTO(id=10, external_id='1.0', start=0, action='LOCAL_API', name='T1 day 0 00:00'),
+            ScheduleDTO(id=11, external_id='X.X', start=0, action='LOCAL_API', name='')
+        ]
+        self._thermostat_controller.save_heating_thermostats([
+            ThermostatDTO(id=thermostat.id,
+                          auto_mon=ThermostatScheduleDTO(temp_day_1=22.0,
+                                                         start_day_1='06:00',
+                                                         end_day_1='10:00',
+                                                         temp_day_2=21.0,
+                                                         start_day_2='16:00',
+                                                         end_day_2='23:00',
+                                                         temp_night=16.5))
+        ])
+        schedules = self.scheduling_controller.save_schedules.call_args_list[0].args[0]
+        self.assertEqual(len(schedules), 2 * 5 * 7)
+        self.assertIn('1.0', [x.external_id for x in schedules])   # 1..7  heating
+        self.assertIn('14.4', [x.external_id for x in schedules])  # 8..14 cooling
+        self.assertEqual(schedules[0].arguments, {'name': 'set_setpoint_from_scheduler',
+                                                  'parameters': {'thermostat': 1,
+                                                                 'temperature': 16.5}})
+        self.assertEqual(schedules[0].repeat, '00 00 * * 0')
+        self.assertEqual(schedules[1].arguments, {'name': 'set_setpoint_from_scheduler',
+                                                  'parameters': {'thermostat': 1,
+                                                                 'temperature': 22.0}})
+        self.assertEqual(schedules[1].repeat, '00 06 * * 0')
+        self.scheduling_controller.remove_schedules.assert_called_with([
+            ScheduleDTO(id=11, external_id='X.X', start=0, action='LOCAL_API', name='')
+        ])
+
+>>>>>>> a2f508d8 (expose set_setpoint_from_scheduler and use in thermostat schedules)
     def test_save_pumpgroups(self):
         sensor = Sensor.create(source='master', external_id='10', physical_quantity='temperature', name='')
         thermostat = Thermostat.create(number=1,

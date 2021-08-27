@@ -164,7 +164,7 @@ class ThermostatControllerGateway(ThermostatController):
                                                           start=thermostat_pid.thermostat.start)
                     thermostat_schedule.name = '{}{} day {} {:02}:{:02}'.format(mode, thermostat_number, day_of_week, h, m)
                     thermostat_schedule.repeat = '{:02} {:02} {} {} {}'.format(m, h, '*', '*', day_of_week)
-                    thermostat_schedule.arguments = {'name': 'set_current_setpoint',
+                    thermostat_schedule.arguments = {'name': 'set_setpoint_from_scheduler',
                                                      'parameters': {'thermostat': thermostat_number,
                                                                     'temperature': new_setpoint}}
 
