@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 @Singleton
 class SensorController(BaseController):
     SYNC_STRUCTURES = [SyncStructure(Sensor, 'sensor')]
-    STATUS_EXIPRE = 60.0
+    STATUS_EXIPRE = 360.0
 
     MASTER_TYPES = {MasterEvent.SensorType.TEMPERATURE: Sensor.PhysicalQuantities.TEMPERATURE,
                     MasterEvent.SensorType.HUMIDITY: Sensor.PhysicalQuantities.HUMIDITY,
