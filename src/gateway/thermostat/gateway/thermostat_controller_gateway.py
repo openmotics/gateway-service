@@ -192,7 +192,7 @@ class ThermostatControllerGateway(ThermostatController):
         # When setting a setpoint manually, switch to manual preset except for when we are in scheduled mode
         # scheduled mode will override the setpoint when the next edge in the schedule is triggered
         active_preset = thermostat.active_preset
-        if active_preset.type not in [Preset.Types.SCHEDULE, Preset.Types.MANUAL]:
+        if active_preset.type not in [Preset.Types.AUTO, Preset.Types.MANUAL]:
             active_preset = thermostat.get_preset(Preset.Types.MANUAL)
             thermostat.active_preset = active_preset
 
@@ -234,7 +234,7 @@ class ThermostatControllerGateway(ThermostatController):
         active_preset = thermostat.active_preset
 
         # Only update when not in preset mode like away, party, ...
-        if active_preset.type == Preset.Types.SCHEDULE:
+        if active_preset.type == Preset.Types.AUTO:
             thermostat_controller.set_current_setpoint(thermostat_number=thermostat_number,
                                                        heating_temperature=heating_temperature,
                                                        cooling_temperature=cooling_temperature)
@@ -295,7 +295,7 @@ class ThermostatControllerGateway(ThermostatController):
                                                               setpoint_temperature=setpoint_temperature,
                                                               outside_temperature=get_temperature_from_sensor(global_thermostat.sensor),
                                                               mode=0,  # TODO: Need to be fixed
-                                                              automatic=active_preset.type == Preset.Types.SCHEDULE,
+                                                              automatic=active_preset.type == Preset.Types.AUTO,
                                                               setpoint=Preset.TYPE_TO_SETPOINT.get(active_preset.type, 0),
                                                               name=thermostat.name,
                                                               sensor_id=255 if thermostat.sensor is None else thermostat.sensor.id,
@@ -322,10 +322,10 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat = Thermostat.get(number=thermostat_number)
             if thermostat is not None:
                 if automatic is False and setpoint is not None and 3 <= setpoint <= 5:
-                    preset = thermostat.get_preset(preset_type=Preset.SETPOINT_TO_TYPE.get(setpoint, Preset.Types.SCHEDULE))
+                    preset = thermostat.get_preset(preset_type=Preset.SETPOINT_TO_TYPE.get(setpoint, Preset.Types.AUTO))
                     thermostat.active_preset = preset
                 else:
-                    thermostat.active_preset = thermostat.get_preset(preset_type=Preset.Types.SCHEDULE)
+                    thermostat.active_preset = thermostat.get_preset(preset_type=Preset.Types.AUTO)
                 thermostat_pid.update_thermostat(thermostat)
                 thermostat_pid.tick()
 
@@ -370,10 +370,10 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat = thermostat_pid.thermostat
             thermostat.automatic = automatic
             if automatic is False and setpoint is not None and 3 <= setpoint <= 5:
-                preset = thermostat.get_preset(preset_type=Preset.SETPOINT_TO_TYPE.get(setpoint, Preset.Types.SCHEDULE))
+                preset = thermostat.get_preset(preset_type=Preset.SETPOINT_TO_TYPE.get(setpoint, Preset.Types.AUTO))
                 thermostat.active_preset = preset
             else:
-                thermostat.active_preset = thermostat.get_preset(preset_type=Preset.Types.SCHEDULE)
+                thermostat.active_preset = thermostat.get_preset(preset_type=Preset.Types.AUTO)
             thermostat.save()
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
@@ -542,7 +542,7 @@ class ThermostatControllerGateway(ThermostatController):
         location = {'room_id': room}
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE,
                                      {'id': thermostat_number,
-                                      'status': {'preset': active_preset,
+                                      'status': {'preset': active_preset.upper(),
                                                  'current_setpoint': current_setpoint,
                                                  'actual_temperature': actual_temperature,
                                                  'output_0': percentages[0] if len(percentages) >= 1 else None,
