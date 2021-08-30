@@ -56,7 +56,7 @@ from gateway.exceptions import UnsupportedException, FeatureUnavailableException
     ItemDoesNotExistException, WrongInputParametersException, ParseException
 from gateway.exceptions import CommunicationFailure, InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
-from gateway.models import Config, Database, Feature, User
+from gateway.models import Config, Database, Feature, Schedule, User
 from gateway.uart_controller import UARTController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
@@ -905,6 +905,12 @@ class WebInterface(object):
     def set_current_setpoint(self, thermostat, temperature):  # type: (int, float) -> Dict[str, str]
         """ Set the current setpoint of a thermostat. """
         self._thermostat_controller.set_current_setpoint(thermostat, temperature)
+        return {'status': 'OK'}
+
+    @openmotics_api(auth=True, check=types(thermostat=int, temperature=float))
+    def set_setpoint_from_scheduler(self, thermostat, temperature):  # type: (int, float) -> Dict[str, str]
+        """ Set the scheduled setpoint of a thermostat. """
+        self._thermostat_controller.set_setpoint_from_scheduler(thermostat, temperature)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(thermostat_on=bool, automatic=bool, setpoint=int, cooling_mode=bool, cooling_on=bool))
@@ -2214,6 +2220,7 @@ class WebInterface(object):
     @openmotics_api(auth=True, check=types(name=str, start=int, schedule_type=str, arguments='json', repeat='json', duration=int, end=int))
     def add_schedule(self, name, start, schedule_type, arguments=None, repeat=None, duration=None, end=None):
         schedule_dto = ScheduleDTO(id=None,
+                                   source=Schedule.Sources.GATEWAY,
                                    name=name,
                                    start=start,
                                    action=schedule_type,
