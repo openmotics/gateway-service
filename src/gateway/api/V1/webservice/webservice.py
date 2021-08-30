@@ -29,7 +29,7 @@ from gateway.authentication_controller import AuthenticationToken, Authenticatio
 from gateway.exceptions import ItemDoesNotExistException, UnAuthorizedException, \
     ForbiddenException, ParseException, WebServiceException, \
     InvalidOperationException, WrongInputParametersException, \
-    TimeOutException, NotImplementedException
+    TimeOutException, NotImplementedException, StateException
 from gateway.webservice import params_parser
 from gateway.api.V1.webservice import ApiResponse, RestAPIEndpoint
 
@@ -74,6 +74,9 @@ def _openmotics_api_v1(f, *args, **kwargs):
         status = 400
         data = ex.message
     except ParseException as ex:
+        status = 400
+        data = ex.message
+    except StateException as ex:
         status = 400
         data = ex.message
     except TimeOutException as ex:
