@@ -66,7 +66,7 @@ class ThermostatControllerGateway(ThermostatController):
         self._running = False
         self._pid_loop_thread = None  # type: Optional[DaemonThread]
         self._update_pumps_thread = None  # type: Optional[DaemonThread]
-        self._periodic_sync_thread = None  # type: Optional[DaemonThread]
+        self._sync_thread = None  # type: Optional[DaemonThread]
         self.thermostat_pids = {}  # type: Dict[int, ThermostatPid]
         self._pump_valve_controller = PumpValveController()
 
@@ -86,10 +86,10 @@ class ThermostatControllerGateway(ThermostatController):
                                                      interval=self.PUMP_UPDATE_INTERVAL)
             self._update_pumps_thread.start()
 
-            self._periodic_sync_thread = DaemonThread(name='thermostatsync',
-                                                      target=self._periodic_sync,
-                                                      interval=self.SYNC_CONFIG_INTERVAL)
-            self._periodic_sync_thread.start()
+            self._sync_thread = DaemonThread(name='thermostatsync',
+                                             target=self._sync,
+                                             interval=self.SYNC_CONFIG_INTERVAL)
+            self._sync_thread.start()
             logger.info('Starting gateway thermostatcontroller... Done')
         else:
             raise RuntimeError('GatewayThermostatController already running. Please stop it first.')
@@ -102,8 +102,8 @@ class ThermostatControllerGateway(ThermostatController):
             self._pid_loop_thread.stop()
         if self._update_pumps_thread is not None:
             self._update_pumps_thread.stop()
-        if self._periodic_sync_thread is not None:
-            self._periodic_sync_thread.stop()
+        if self._sync_thread is not None:
+            self._sync_thread.stop()
 
     def _pid_tick(self):  # type: () -> None
         for thermostat_number, thermostat_pid in self.thermostat_pids.items():
@@ -126,6 +126,7 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
             # TODO: Delete stale/removed thermostats
+        self._sync_scheduler()
 
     def _update_pumps(self):  # type: () -> None
         try:
@@ -133,7 +134,7 @@ class ThermostatControllerGateway(ThermostatController):
         except Exception:
             logger.exception('Could not update pumps.')
 
-    def _periodic_sync(self):  # type: () -> None
+    def _sync(self):  # type: () -> None
         try:
             self.refresh_config_from_db()
         except Exception:
@@ -330,9 +331,12 @@ class ThermostatControllerGateway(ThermostatController):
     def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         mode = 'heating'  # type: Literal['heating']
         for thermostat_dto in thermostats:
+            # TODO: mappers should only transform data, not save models
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, mode)
-            self.refresh_set_configuration(thermostat)
+            # thermostat.save()
         self._thermostat_config_changed()
+        if self._sync_thread:
+            self._sync_thread.request_single_run()
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         mode = 'cooling'  # type: Literal['cooling']
@@ -347,9 +351,12 @@ class ThermostatControllerGateway(ThermostatController):
     def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         mode = 'cooling'  # type: Literal['cooling']
         for thermostat_dto in thermostats:
+            # TODO: mappers should only transform data, not save models
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, mode)
-            self.refresh_set_configuration(thermostat)
+            # thermostat.save()
         self._thermostat_config_changed()
+        if self._sync_thread:
+            self._sync_thread.request_single_run()
 
     def set_per_thermostat_mode(self, thermostat_number, automatic, setpoint):
         # type: (int, bool, int) -> None
@@ -510,16 +517,6 @@ class ThermostatControllerGateway(ThermostatController):
 
     def load_global_rtd10(self):  # type: () -> GlobalRTD10DTO
         raise UnsupportedException()
-
-    def refresh_set_configuration(self, thermostat):  # type: (Thermostat) -> None
-        thermostat_pid = self.thermostat_pids.get(thermostat.number)
-        if thermostat_pid is not None:
-            thermostat_pid.update_thermostat(thermostat)
-        else:
-            thermostat_pid = ThermostatPid(thermostat, self._pump_valve_controller)
-            self.thermostat_pids[thermostat.number] = thermostat_pid
-        self._sync_scheduler()
-        thermostat_pid.tick()
 
     def _thermostat_config_changed(self):
         gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'thermostats'})

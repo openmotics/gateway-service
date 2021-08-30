@@ -129,6 +129,7 @@ class ThermostatControllerTest(unittest.TestCase):
             ScheduleDTO(id=10, external_id='1.0', start=0, action='LOCAL_API', name='T1 day 0 00:00'),
             ScheduleDTO(id=11, external_id='X.X', start=0, action='LOCAL_API', name='')
         ]
+        self._thermostat_controller._sync_thread = Mock()
         self._thermostat_controller.save_heating_thermostats([
             ThermostatDTO(id=thermostat.id,
                           auto_mon=ThermostatScheduleDTO(temp_day_1=22.0,
@@ -139,6 +140,9 @@ class ThermostatControllerTest(unittest.TestCase):
                                                          end_day_2='23:00',
                                                          temp_night=16.5))
         ])
+        self._thermostat_controller._sync_thread.request_single_run.assert_called_with()
+        self._thermostat_controller.refresh_thermostats_from_db()
+
         schedules = self.scheduling_controller.save_schedules.call_args_list[0][0][0]
         self.assertEqual(len(schedules), 2 * 5 * 7)
         self.assertIn('1.0', [x.external_id for x in schedules])   # 1..7  heating
