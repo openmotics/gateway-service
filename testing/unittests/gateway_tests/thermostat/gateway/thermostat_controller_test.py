@@ -150,12 +150,12 @@ class ThermostatControllerTest(unittest.TestCase):
         schedule = next(x for x in schedules if x.name == 'H1 day 0 00:00')
         self.assertEqual(schedule.arguments, {'name': 'set_setpoint_from_scheduler',
                                               'parameters': {'thermostat': 1,
-                                                             'temperature': 16.5}})
+                                                             'heating_temperature': 16.5}})
         self.assertEqual(schedule.repeat, '00 00 * * 0')
         schedule = next(x for x in schedules if x.name == 'H1 day 0 06:30')
         self.assertEqual(schedule.arguments, {'name': 'set_setpoint_from_scheduler',
                                               'parameters': {'thermostat': 1,
-                                                             'temperature': 22.0}})
+                                                             'heating_temperature': 22.0}})
         self.assertEqual(schedule.repeat, '30 06 * * 0')
         self.scheduling_controller.remove_schedules.assert_called_with([
             ScheduleDTO(id=11, external_id='X.X', start=0, action='LOCAL_API', name='')
