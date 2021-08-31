@@ -94,7 +94,7 @@ class PumpValveControllerTest(unittest.TestCase):
                                                     output=Output.create(number=2)),
                                  mode=ThermostatGroup.Modes.COOLING,
                                  priority=0)
-        Preset.create(type=Preset.Types.SCHEDULE,
+        Preset.create(type=Preset.Types.AUTO,
                       heating_setpoint=20.0,
                       cooling_setpoint=25.0,
                       active=True,

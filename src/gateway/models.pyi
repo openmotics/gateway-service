@@ -379,7 +379,7 @@ class ValveToThermostat(BaseModel):
 class Preset(BaseModel):
     class Types(object):
         MANUAL: Literal['manual']
-        SCHEDULE: Literal['schedule']
+        AUTO: Literal['auto']
         AWAY: Literal['away']
         VACATION: Literal['vacation']
         PARTY: Literal['party']

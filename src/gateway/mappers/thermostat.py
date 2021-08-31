@@ -128,10 +128,13 @@ class ThermostatMapper(object):
         objects = {}  # type: Dict[str, Dict[int, Any]]
 
         def _load_sensor(pk):
-            sensor = Sensor.get_or_none(id=pk)
-            if sensor and sensor.physical_quantity != Sensor.PhysicalQuantities.TEMPERATURE:
-                raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor.id, sensor.physical_quantity))
-            return sensor
+            if pk is None:
+                return
+            else:
+                sensor = Sensor.get(id=pk)
+                if sensor and sensor.physical_quantity != Sensor.PhysicalQuantities.TEMPERATURE:
+                    raise ValueError('Invalid <Sensor {}> {} for thermostats'.format(sensor.id, sensor.physical_quantity))
+                return sensor
 
         def _load_object(orm_type, number):
             if number is None:
@@ -159,8 +162,6 @@ class ThermostatMapper(object):
             if dto_field not in thermostat_dto.loaded_fields:
                 continue
             value = getattr(thermostat_dto, dto_field)
-            if value is None:
-                continue
             if mapping is not None:
                 value = mapping(value)
             setattr(thermostat, orm_field, value)
