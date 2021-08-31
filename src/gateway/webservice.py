@@ -237,7 +237,9 @@ def authentication_handler(pass_token=False, pass_role=False, version=0):
             else _self.webinterface.check_token
         checked_token = check_token(token)  # type: Optional[AuthenticationToken]
         # check if the call is done from localhost, and then verify the token
-        if Config.get_entry('enable_http', 'false') == 'false' and request.remote.ip != '127.0.0.1':
+        # The toggle check added for development purposes.
+        # Do NOT enable unless you know what you're doing and understand the risks.
+        if not Config.get_entry('disable_api_authentication_very_insecure', False) and request.remote.ip != '127.0.0.1':
             if checked_token is None:
                 raise RuntimeError('Call is not performed from localhost and no token is provided')
             if checked_token.user.role != 'SUPER':
@@ -438,7 +440,9 @@ class WebInterface(object):
                     if 'namespace' in receiver_info and \
                             (event.namespace != receiver_info['namespace']):
                         continue
-                    if Config.get_entry('enable_http', 'false') == 'false' and cherrypy.request.remote.ip != '127.0.0.1' and not self._user_controller.check_token(receiver_info['token']):
+                    # The toggle check added for development purposes.
+                    # Do NOT enable unless you know what you're doing and understand the risks.
+                    if not Config.get_entry('disable_api_authentication_very_insecure', False) and cherrypy.request.remote.ip != '127.0.0.1' and not self._user_controller.check_token(receiver_info['token']):
                         raise cherrypy.HTTPError(401, 'invalid_token')
                     receiver_info['socket'].send_encoded(event.serialize())
                 except cherrypy.HTTPError as ex:  # As might be caught from the `check_token` function
