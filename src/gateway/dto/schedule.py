@@ -24,8 +24,10 @@ if False:  # MYPY
 
 
 class ScheduleDTO(BaseDTO):
-    def __init__(self, id, name, start, action, status=None, repeat=None, duration=None, end=None, arguments=None):
+    def __init__(self, id, name, start, action, source=None, external_id=None, status=None, repeat=None, duration=None, end=None, arguments=None):
         self.id = id  # type: int
+        self.source = source  # type: str
+        self.external_id = external_id  # type: Optional[str]
         self.name = name  # type: str
         self.start = start  # type: float
         self.action = action  # type: str

@@ -33,6 +33,8 @@ class ScheduleMapper(object):
         if orm_object.arguments is not None:
             arguments = json.loads(orm_object.arguments)
         return ScheduleDTO(id=orm_object.id,
+                           source=orm_object.source,
+                           external_id=orm_object.external_id,
                            name=orm_object.name,
                            start=orm_object.start,
                            action=orm_object.action,
@@ -51,7 +53,7 @@ class ScheduleMapper(object):
                 raise ValueError('Cannot create schedule without mandatory fields `{0}`'.format('`, `'.join(mandatory_fields)))
             schedule = Schedule(status='ACTIVE', **{field: getattr(schedule_dto, field)
                                                     for field in mandatory_fields})
-        for field in ['name', 'start', 'action', 'status', 'repeat', 'duration', 'end']:
+        for field in ['source', 'external_id', 'name', 'start', 'action', 'status', 'repeat', 'duration', 'end']:
             if field in schedule_dto.loaded_fields:
                 setattr(schedule, field, getattr(schedule_dto, field))
         if 'arguments' in schedule_dto.loaded_fields:

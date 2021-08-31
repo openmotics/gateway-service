@@ -50,7 +50,7 @@ class SensorMapper(object):
     @staticmethod
     def dto_to_orm(sensor_dto):  # type: (SensorDTO) -> Sensor
         plugin = None
-        if sensor_dto.id:
+        if sensor_dto.id is not None:
             query = Sensor.select().where(Sensor.id == sensor_dto.id)
         elif sensor_dto.source and sensor_dto.external_id and sensor_dto.physical_quantity:
             if sensor_dto.source and sensor_dto.source.is_plugin:

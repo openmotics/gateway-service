@@ -182,6 +182,8 @@ class DataMigration(BaseModel):
 
 class Schedule(BaseModel):
     id = AutoField()
+    source = CharField()  # Options: 'gateway' or 'thermostats'
+    external_id = CharField(null=True)
     name = CharField()
     start = FloatField()
     repeat = CharField(null=True)
@@ -190,6 +192,15 @@ class Schedule(BaseModel):
     action = CharField()
     arguments = CharField(null=True)
     status = CharField()
+
+    class Sources:
+        GATEWAY = 'gateway'
+        THERMOSTATS = 'thermostats'
+
+    class Meta:
+        indexes = (
+            (('source', 'external_id'), True),
+        )
 
 
 class Config(BaseModel):
@@ -428,7 +439,7 @@ class Thermostat(BaseModel):
     def active_preset(self):
         preset = Preset.get_or_none(thermostat=self.id, active=True)
         if preset is None:
-            preset = self.get_preset(Preset.Types.SCHEDULE)
+            preset = self.get_preset(Preset.Types.AUTO)
             preset.active = True
             preset.save()
         return preset
@@ -501,12 +512,12 @@ class ValveToThermostat(BaseModel):
 class Preset(BaseModel):
     class Types(object):
         MANUAL = 'manual'
-        SCHEDULE = 'schedule'
+        AUTO = 'auto'
         AWAY = 'away'
         VACATION = 'vacation'
         PARTY = 'party'
 
-    ALL_TYPES = [Types.MANUAL, Types.SCHEDULE, Types.AWAY, Types.VACATION, Types.PARTY]
+    ALL_TYPES = [Types.MANUAL, Types.AUTO, Types.AWAY, Types.VACATION, Types.PARTY]
     DEFAULT_PRESET_TYPES = [Types.AWAY, Types.VACATION, Types.PARTY]
     DEFAULT_PRESETS = {ThermostatGroup.Modes.HEATING: dict(zip(DEFAULT_PRESET_TYPES, [16.0, 15.0, 22.0])),
                        ThermostatGroup.Modes.COOLING: dict(zip(DEFAULT_PRESET_TYPES, [25.0, 38.0, 25.0]))}
@@ -567,7 +578,7 @@ def on_thermostat_save_handler(model_class, instance, created):
                     preset.heating_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.HEATING][preset_type]
                     preset.cooling_setpoint = Preset.DEFAULT_PRESETS[ThermostatGroup.Modes.COOLING][preset_type]
             preset.active = False
-            if preset_type == Preset.Types.SCHEDULE:
+            if preset_type == Preset.Types.AUTO:
                 preset.active = True
             preset.save()
         for mode in [ThermostatGroup.Modes.HEATING, ThermostatGroup.Modes.COOLING]:

@@ -16,13 +16,11 @@
 import datetime
 import logging
 
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from apscheduler.schedulers.background import BackgroundScheduler
 from playhouse.signals import post_save
 
 import constants
 from gateway.daemon_thread import DaemonThread
-from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, \
+from gateway.dto import RTD10DTO, GlobalRTD10DTO, PumpGroupDTO, ScheduleDTO, \
     ThermostatDTO, ThermostatGroupDTO, ThermostatGroupStatusDTO, \
     ThermostatStatusDTO
 from gateway.enums import ThermostatMode
@@ -30,9 +28,10 @@ from gateway.events import GatewayEvent
 from gateway.exceptions import UnsupportedException
 from gateway.mappers import ThermostatMapper
 from gateway.models import Output, OutputToThermostatGroup, Preset, Pump, \
-    PumpToValve, Sensor, Thermostat, ThermostatGroup, Valve, \
+    PumpToValve, Schedule, Sensor, Thermostat, ThermostatGroup, Valve, \
     ValveToThermostat
 from gateway.pubsub import PubSub
+from gateway.scheduling_controller import SchedulingController
 from gateway.thermostat.gateway.pump_valve_controller import \
     PumpValveController
 from gateway.thermostat.gateway.thermostat_pid import ThermostatPid
@@ -42,7 +41,6 @@ from ioc import INJECTED, Inject
 if False:  # MYPY
     from typing import Dict, List, Literal, Tuple, Optional
     from gateway.output_controller import OutputController
-    from gateway.system_controller import SystemController
     from gateway.sensor_controller import SensorController
 
 logger = logging.getLogger(__name__)
@@ -59,25 +57,18 @@ class ThermostatControllerGateway(ThermostatController):
     SYNC_CONFIG_INTERVAL = 900
 
     @Inject
-    def __init__(self, output_controller=INJECTED, sensor_controller=INJECTED, pubsub=INJECTED, system_controller=INJECTED):
-        # type: (OutputController, SensorController, PubSub, SystemController) -> None
+    def __init__(self, output_controller=INJECTED, sensor_controller=INJECTED, scheduling_controller=INJECTED, pubsub=INJECTED):
+        # type: (OutputController, SensorController, SchedulingController, PubSub) -> None
         super(ThermostatControllerGateway, self).__init__(output_controller)
         self._sensor_controller = sensor_controller
+        self._scheduling_controller = scheduling_controller
         self._pubsub = pubsub
         self._running = False
         self._pid_loop_thread = None  # type: Optional[DaemonThread]
         self._update_pumps_thread = None  # type: Optional[DaemonThread]
-        self._periodic_sync_thread = None  # type: Optional[DaemonThread]
+        self._sync_thread = None  # type: Optional[DaemonThread]
         self.thermostat_pids = {}  # type: Dict[int, ThermostatPid]
         self._pump_valve_controller = PumpValveController()
-
-        timezone = system_controller.get_timezone()
-
-        # we could also use an in-memory store, but this allows us to detect 'missed' transitions
-        # e.g. in case when gateway was rebooting during a scheduled transition
-        db_filename = constants.get_thermostats_scheduler_database_file()
-        jobstores = {'default': SQLAlchemyJobStore(url='sqlite:///{}'.format(db_filename))}
-        self._scheduler = BackgroundScheduler(jobstores=jobstores, timezone=timezone)
 
     def start(self):  # type: () -> None
         logger.info('Starting gateway thermostatcontroller...')
@@ -95,12 +86,10 @@ class ThermostatControllerGateway(ThermostatController):
                                                      interval=self.PUMP_UPDATE_INTERVAL)
             self._update_pumps_thread.start()
 
-            self._periodic_sync_thread = DaemonThread(name='thermostatsync',
-                                                      target=self._periodic_sync,
-                                                      interval=self.SYNC_CONFIG_INTERVAL)
-            self._periodic_sync_thread.start()
-
-            self._scheduler.start()
+            self._sync_thread = DaemonThread(name='thermostatsync',
+                                             target=self._sync,
+                                             interval=self.SYNC_CONFIG_INTERVAL)
+            self._sync_thread.start()
             logger.info('Starting gateway thermostatcontroller... Done')
         else:
             raise RuntimeError('GatewayThermostatController already running. Please stop it first.')
@@ -109,13 +98,12 @@ class ThermostatControllerGateway(ThermostatController):
         if not self._running:
             logger.warning('Stopping an already stopped GatewayThermostatController.')
         self._running = False
-        self._scheduler.shutdown(wait=False)
         if self._pid_loop_thread is not None:
             self._pid_loop_thread.stop()
         if self._update_pumps_thread is not None:
             self._update_pumps_thread.stop()
-        if self._periodic_sync_thread is not None:
-            self._periodic_sync_thread.stop()
+        if self._sync_thread is not None:
+            self._sync_thread.stop()
 
     def _pid_tick(self):  # type: () -> None
         for thermostat_number, thermostat_pid in self.thermostat_pids.items():
@@ -138,6 +126,7 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
             # TODO: Delete stale/removed thermostats
+        self._sync_scheduler()
 
     def _update_pumps(self):  # type: () -> None
         try:
@@ -145,43 +134,43 @@ class ThermostatControllerGateway(ThermostatController):
         except Exception:
             logger.exception('Could not update pumps.')
 
-    def _periodic_sync(self):  # type: () -> None
+    def _sync(self):  # type: () -> None
         try:
             self.refresh_config_from_db()
         except Exception:
             logger.exception('Could not get thermostat config.')
 
     def _sync_scheduler(self):  # type: () -> None
-        self._scheduler.remove_all_jobs()  # TODO: This might have to be more efficient, as this generates I/O
+        schedule_mapping = {x.external_id: x for x in self._scheduling_controller.load_schedules(source=Schedule.Sources.THERMOSTATS)}
+        thermostat_schedules = []
         for thermostat_number, thermostat_pid in self.thermostat_pids.items():
-            start_date = datetime.datetime.utcfromtimestamp(float(thermostat_pid.thermostat.start))
             day_schedules = thermostat_pid.thermostat.day_schedules
-            schedule_length = len(day_schedules)
             for schedule in day_schedules:
-                for seconds_of_day, new_setpoint in schedule.schedule_data.items():
-                    m, s = divmod(int(seconds_of_day), 60)
+                for i, (seconds_of_day, new_setpoint) in enumerate(schedule.schedule_data.items()):
+                    day_of_week = schedule.index
+                    m, _ = divmod(int(seconds_of_day), 60)
                     h, m = divmod(m, 60)
-                    if schedule.mode == 'heating':
-                        args = [thermostat_number, new_setpoint, None]
+                    mode = 'H' if schedule.mode == 'heating' else 'C'
+                    external_id = '{}.{}'.format(schedule.id, i)
+                    if external_id in schedule_mapping:
+                        thermostat_schedule = schedule_mapping.pop(external_id)
                     else:
-                        args = [thermostat_number, None, new_setpoint]
-                    if schedule_length % 7 == 0:
-                        self._scheduler.add_job(ThermostatControllerGateway.set_setpoint_from_scheduler, 'cron',
-                                                start_date=start_date,
-                                                day_of_week=schedule.index,
-                                                hour=h, minute=m, second=s,
-                                                args=args,
-                                                name='T{}: {} ({}) {}'.format(thermostat_number, new_setpoint, schedule.mode, seconds_of_day))
-                    else:
-                        # calendarinterval trigger is only supported in a future release of apscheduler
-                        # https://apscheduler.readthedocs.io/en/latest/modules/triggers/calendarinterval.html#module-apscheduler.triggers.calendarinterval
-                        day_start_date = start_date + datetime.timedelta(days=schedule.index)
-                        self._scheduler.add_job(ThermostatControllerGateway.set_setpoint_from_scheduler, 'calendarinterval',
-                                                start_date=day_start_date,
-                                                days=schedule_length,
-                                                hour=h, minute=m, second=s,
-                                                args=args,
-                                                name='T{}: {} ({}) {}'.format(thermostat_number, new_setpoint, schedule.mode, seconds_of_day))
+                        thermostat_schedule = ScheduleDTO(None, name='',
+                                                          source=Schedule.Sources.THERMOSTATS,
+                                                          external_id=external_id,
+                                                          action='LOCAL_API',
+                                                          start=thermostat_pid.thermostat.start)
+                    thermostat_schedule.name = '{}{} day {} {:02}:{:02}'.format(mode, thermostat_number, day_of_week, h, m)
+                    thermostat_schedule.repeat = '{:02} {:02} {} {} {}'.format(m, h, '*', '*', day_of_week)
+                    thermostat_schedule.arguments = {'name': 'set_setpoint_from_scheduler',
+                                                     'parameters': {'thermostat': thermostat_number,
+                                                                    'temperature': new_setpoint}}
+
+                    thermostat_schedules.append(thermostat_schedule)
+        if thermostat_schedules:
+            self._scheduling_controller.save_schedules(thermostat_schedules)
+        if schedule_mapping:
+            self._scheduling_controller.remove_schedules(list(schedule_mapping.values()))
 
     def set_current_setpoint(self, thermostat_number, temperature=None, heating_temperature=None, cooling_temperature=None):
         # type: (int, Optional[float], Optional[float], Optional[float]) -> None
@@ -192,7 +181,7 @@ class ThermostatControllerGateway(ThermostatController):
         # When setting a setpoint manually, switch to manual preset except for when we are in scheduled mode
         # scheduled mode will override the setpoint when the next edge in the schedule is triggered
         active_preset = thermostat.active_preset
-        if active_preset.type not in [Preset.Types.SCHEDULE, Preset.Types.MANUAL]:
+        if active_preset.type not in [Preset.Types.AUTO, Preset.Types.MANUAL]:
             active_preset = thermostat.get_preset(Preset.Types.MANUAL)
             thermostat.active_preset = active_preset
 
@@ -234,7 +223,7 @@ class ThermostatControllerGateway(ThermostatController):
         active_preset = thermostat.active_preset
 
         # Only update when not in preset mode like away, party, ...
-        if active_preset.type == Preset.Types.SCHEDULE:
+        if active_preset.type == Preset.Types.AUTO:
             thermostat_controller.set_current_setpoint(thermostat_number=thermostat_number,
                                                        heating_temperature=heating_temperature,
                                                        cooling_temperature=cooling_temperature)
@@ -295,7 +284,7 @@ class ThermostatControllerGateway(ThermostatController):
                                                               setpoint_temperature=setpoint_temperature,
                                                               outside_temperature=get_temperature_from_sensor(global_thermostat.sensor),
                                                               mode=0,  # TODO: Need to be fixed
-                                                              automatic=active_preset.type == Preset.Types.SCHEDULE,
+                                                              automatic=active_preset.type == Preset.Types.AUTO,
                                                               setpoint=Preset.TYPE_TO_SETPOINT.get(active_preset.type, 0),
                                                               name=thermostat.name,
                                                               sensor_id=255 if thermostat.sensor is None else thermostat.sensor.id,
@@ -322,10 +311,10 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat = Thermostat.get(number=thermostat_number)
             if thermostat is not None:
                 if automatic is False and setpoint is not None and 3 <= setpoint <= 5:
-                    preset = thermostat.get_preset(preset_type=Preset.SETPOINT_TO_TYPE.get(setpoint, Preset.Types.SCHEDULE))
+                    preset = thermostat.get_preset(preset_type=Preset.SETPOINT_TO_TYPE.get(setpoint, Preset.Types.AUTO))
                     thermostat.active_preset = preset
                 else:
-                    thermostat.active_preset = thermostat.get_preset(preset_type=Preset.Types.SCHEDULE)
+                    thermostat.active_preset = thermostat.get_preset(preset_type=Preset.Types.AUTO)
                 thermostat_pid.update_thermostat(thermostat)
                 thermostat_pid.tick()
 
@@ -342,9 +331,12 @@ class ThermostatControllerGateway(ThermostatController):
     def save_heating_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         mode = 'heating'  # type: Literal['heating']
         for thermostat_dto in thermostats:
+            # TODO: mappers should only transform data, not save models
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, mode)
-            self.refresh_set_configuration(thermostat)
+            # thermostat.save()
         self._thermostat_config_changed()
+        if self._sync_thread:
+            self._sync_thread.request_single_run()
 
     def load_cooling_thermostat(self, thermostat_id):  # type: (int) -> ThermostatDTO
         mode = 'cooling'  # type: Literal['cooling']
@@ -359,9 +351,12 @@ class ThermostatControllerGateway(ThermostatController):
     def save_cooling_thermostats(self, thermostats):  # type: (List[ThermostatDTO]) -> None
         mode = 'cooling'  # type: Literal['cooling']
         for thermostat_dto in thermostats:
+            # TODO: mappers should only transform data, not save models
             thermostat = ThermostatMapper.dto_to_orm(thermostat_dto, mode)
-            self.refresh_set_configuration(thermostat)
+            # thermostat.save()
         self._thermostat_config_changed()
+        if self._sync_thread:
+            self._sync_thread.request_single_run()
 
     def set_per_thermostat_mode(self, thermostat_number, automatic, setpoint):
         # type: (int, bool, int) -> None
@@ -370,10 +365,10 @@ class ThermostatControllerGateway(ThermostatController):
             thermostat = thermostat_pid.thermostat
             thermostat.automatic = automatic
             if automatic is False and setpoint is not None and 3 <= setpoint <= 5:
-                preset = thermostat.get_preset(preset_type=Preset.SETPOINT_TO_TYPE.get(setpoint, Preset.Types.SCHEDULE))
+                preset = thermostat.get_preset(preset_type=Preset.SETPOINT_TO_TYPE.get(setpoint, Preset.Types.AUTO))
                 thermostat.active_preset = preset
             else:
-                thermostat.active_preset = thermostat.get_preset(preset_type=Preset.Types.SCHEDULE)
+                thermostat.active_preset = thermostat.get_preset(preset_type=Preset.Types.AUTO)
             thermostat.save()
             thermostat_pid.update_thermostat(thermostat)
             thermostat_pid.tick()
@@ -523,16 +518,6 @@ class ThermostatControllerGateway(ThermostatController):
     def load_global_rtd10(self):  # type: () -> GlobalRTD10DTO
         raise UnsupportedException()
 
-    def refresh_set_configuration(self, thermostat):  # type: (Thermostat) -> None
-        thermostat_pid = self.thermostat_pids.get(thermostat.number)
-        if thermostat_pid is not None:
-            thermostat_pid.update_thermostat(thermostat)
-        else:
-            thermostat_pid = ThermostatPid(thermostat, self._pump_valve_controller)
-            self.thermostat_pids[thermostat.number] = thermostat_pid
-        self._sync_scheduler()
-        thermostat_pid.tick()
-
     def _thermostat_config_changed(self):
         gateway_event = GatewayEvent(GatewayEvent.Types.CONFIG_CHANGE, {'type': 'thermostats'})
         self._pubsub.publish_gateway_event(PubSub.GatewayTopics.CONFIG, gateway_event)
@@ -542,7 +527,7 @@ class ThermostatControllerGateway(ThermostatController):
         location = {'room_id': room}
         gateway_event = GatewayEvent(GatewayEvent.Types.THERMOSTAT_CHANGE,
                                      {'id': thermostat_number,
-                                      'status': {'preset': active_preset,
+                                      'status': {'preset': active_preset.upper(),
                                                  'current_setpoint': current_setpoint,
                                                  'actual_temperature': actual_temperature,
                                                  'output_0': percentages[0] if len(percentages) >= 1 else None,

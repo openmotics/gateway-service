@@ -135,19 +135,6 @@ def migrate(migrator, database, fake=False, **kwargs):
             )
 
     class Preset(BaseModel):
-        class Types(object):
-            MANUAL = 'manual'
-            SCHEDULE = 'schedule'
-            AWAY = 'away'
-            VACATION = 'vacation'
-            PARTY = 'party'
-
-        TYPE_TO_SETPOINT = {Types.AWAY: 3,
-                            Types.VACATION: 4,
-                            Types.PARTY: 5}
-        SETPOINT_TO_TYPE = {setpoint: preset_type
-                            for preset_type, setpoint in TYPE_TO_SETPOINT.items()}
-
         id = AutoField()
         type = CharField()
         heating_setpoint = FloatField(default=14.0)
