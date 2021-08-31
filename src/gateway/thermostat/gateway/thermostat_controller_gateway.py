@@ -151,6 +151,7 @@ class ThermostatControllerGateway(ThermostatController):
                     m, _ = divmod(int(seconds_of_day), 60)
                     h, m = divmod(m, 60)
                     mode = 'H' if schedule.mode == 'heating' else 'C'
+                    temperature_field = 'heating_temperature' if schedule.mode == 'heating' else 'cooling_temperature'
                     external_id = '{}.{}'.format(schedule.id, i)
                     if external_id in schedule_mapping:
                         thermostat_schedule = schedule_mapping.pop(external_id)
@@ -164,7 +165,7 @@ class ThermostatControllerGateway(ThermostatController):
                     thermostat_schedule.repeat = '{:02} {:02} {} {} {}'.format(m, h, '*', '*', day_of_week)
                     thermostat_schedule.arguments = {'name': 'set_setpoint_from_scheduler',
                                                      'parameters': {'thermostat': thermostat_number,
-                                                                    'temperature': new_setpoint}}
+                                                                    temperature_field: new_setpoint}}
 
                     thermostat_schedules.append(thermostat_schedule)
         if thermostat_schedules:
