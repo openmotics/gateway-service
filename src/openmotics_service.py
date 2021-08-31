@@ -21,18 +21,21 @@ from platform_utils import System
 System.import_libs()
 
 import logging.handlers
-import time
 import sys
+import time
 from signal import SIGTERM, signal
 
 from bus.om_bus_client import MessageClient
 from bus.om_bus_service import MessageService
 from gateway.initialize import initialize
-from gateway.migrations import RoomsMigrator, FeatureMigrator, InputMigrator, \
-    ScheduleMigrator, UserMigrator, ConfigMigrator, EnergyModulesMigrator, EsafeMigrator
+from gateway.migrations import ConfigMigrator, EnergyModulesMigrator, \
+    EsafeMigrator, FeatureMigrator, InputMigrator, RoomsMigrator, \
+    ScheduleMigrator, ThermostatsMigrator, UserMigrator
+from gateway.models import Feature
 from gateway.pubsub import PubSub
 from ioc import INJECTED, Inject
 from logs import Logs
+
 
 if False:  # MYPY
     from gateway.apartment_controller import ApartmentController
@@ -184,6 +187,12 @@ class OpenmoticsService(object):
         ConfigMigrator.migrate()
         EnergyModulesMigrator.migrate()
         EsafeMigrator.migrate()
+
+        thermostats_gateway_enabled = Feature.select(Feature.enabled) \
+            .where(Feature.name == Feature.THERMOSTATS_GATEWAY) \
+            .scalar()
+        if thermostats_gateway_enabled:
+            ThermostatsMigrator.migrate()
 
         # Start rest of the stack
         maintenance_controller.start()

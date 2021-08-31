@@ -87,7 +87,6 @@ class SchedulingController(object):
             'misfire_grace_time': 3600  # 1h
         })
         self._scheduler.add_listener(self._handle_schedule_event, EVENT_JOB_EXECUTED)
-        self.reload_schedules()
 
     def set_webinterface(self, web_interface):
         # type: (WebInterface) -> None
@@ -96,6 +95,7 @@ class SchedulingController(object):
     def start(self):
         # type: () -> None
         self._scheduler.start()
+        self.reload_schedules()
 
     def stop(self):
         # type: () -> None

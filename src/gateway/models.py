@@ -99,6 +99,8 @@ class Feature(BaseModel):
     name = CharField(unique=True)
     enabled = BooleanField()
 
+    THERMOSTATS_GATEWAY = 'thermostats_gateway'
+
 
 class Output(BaseModel):
     id = AutoField()
