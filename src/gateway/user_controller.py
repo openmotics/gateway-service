@@ -167,6 +167,8 @@ class UserController(object):
     def activate_user(self, user_id):
         try:
             user_orm = User.select().where(User.id == user_id).first()
+            user_dto = UserMapper.orm_to_dto(user_orm)
+            self.authentication_controller.remove_tokens_for_user(user_dto)
             user_orm.is_active = True
             user_orm.save()
             self.send_event()
