@@ -74,7 +74,7 @@ class DummyRebusController(RebusControllerInterface):
         # self.polling_thread.stop()
 
     def _send_lock_event(self, lock_id, status):
-        event = EsafeEvent(PubSub.EsafeTopics.LOCK, {'lock_id': lock_id, 'status': 'open' if status else 'closed'})
+        event = EsafeEvent(EsafeEvent.Types.LOCK_CHANGE, {'lock_id': lock_id, 'status': 'open' if status else 'closed'})
         logger.debug("Sending event: {}".format(event))
         self.pub_sub.publish_esafe_event(PubSub.EsafeTopics.LOCK, event)
 

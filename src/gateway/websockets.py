@@ -16,22 +16,34 @@
 """ Module contains all websocket related logic """
 
 from __future__ import absolute_import
+
 import msgpack
 import cherrypy
 import logging
+import ujson as json
 from ws4py import WS_VERSION
 from ws4py.server.cherrypyserver import WebSocketPlugin, WebSocketTool
 from ws4py.websocket import WebSocket
-from gateway.events import GatewayEvent
+
+from gateway.enums import BaseEnum
+from gateway.events import GatewayEvent, EsafeEvent
+
+if False:  # MyPy
+    from typing import Dict, List
 
 logger = logging.getLogger(__name__)
+
+
+class WebSocketEncoding(BaseEnum):
+    JSON = 'json'
+    MSGPACK = 'msgpack'
 
 
 class OMPlugin(WebSocketPlugin):
     def __init__(self, bus):
         WebSocketPlugin.__init__(self, bus)
         self.metrics_receivers = {}
-        self.events_receivers = {}
+        self.events_receivers = {}  # type Dict[str, Dict[str, Any]]  # Dict[client_id: str(uuid), Metadata]
         self.maintenance_receivers = {}
 
     def start(self):
@@ -135,6 +147,36 @@ class OMSocket(WebSocket):
 
         return True
 
+    def serialize_data(self, data):
+        """ This function will encode the data according to the serialization setting"""
+        if not hasattr(self, 'metadata'):
+            raise RuntimeError('Cannot encode data when metadata is not initialized')
+        if not isinstance(data, dict):
+            raise RuntimeError('Cannot serialize websocket data that are non dict values')
+        serialization = self.metadata['serialization']
+        if serialization == WebSocketEncoding.JSON:
+            return json.dumps(data).encode('utf-8')
+        elif serialization == WebSocketEncoding.MSGPACK:
+            return msgpack.dumps(data)
+        else:
+            raise RuntimeError('Unknown serialization method for websocket data: {}'.format(serialization))
+
+    def deserialize_data(self, serial_data):
+        """ This function will encode the data according to the serialization setting"""
+        if not hasattr(self, 'metadata'):
+            raise RuntimeError('Cannot encode data when metadata is not initialized')
+        serialization = self.metadata['serialization']
+        if serialization == WebSocketEncoding.JSON:
+            return json.loads(serial_data)
+        elif serialization == WebSocketEncoding.MSGPACK:
+            return msgpack.loads(serial_data)
+        else:
+            raise RuntimeError('Unknown deserialization method for websocket data: {}'.format(serialization))
+
+    def send_encoded(self, data):
+        serialized = self.serialize_data(data)
+        self.send(serialized, binary=True)
+
 
 # noinspection PyUnresolvedReferences
 class MetricsSocket(OMSocket):
@@ -171,11 +213,13 @@ class EventsSocket(OMSocket):
     def opened(self):
         if not hasattr(self, 'metadata'):
             return
+        metadata = {'token': self.metadata['token'],
+                    'subscribed_types': [],
+                    'socket': self,
+                    'serialization': self.metadata['serialization']}
         cherrypy.engine.publish('add-events-receiver',
                                 self.metadata['client_id'],
-                                {'token': self.metadata['token'],
-                                 'subscribed_types': [],
-                                 'socket': self})
+                                metadata)
 
     def closed(self, *args, **kwargs):
         _ = args, kwargs
@@ -187,23 +231,23 @@ class EventsSocket(OMSocket):
     def received_message(self, message):
         if not hasattr(self, 'metadata'):
             return
-        allowed_types = [GatewayEvent.Types.OUTPUT_CHANGE,
-                         GatewayEvent.Types.THERMOSTAT_CHANGE,
-                         GatewayEvent.Types.THERMOSTAT_GROUP_CHANGE,
-                         GatewayEvent.Types.SHUTTER_CHANGE,
-                         GatewayEvent.Types.INPUT_CHANGE]
+        allowed_types = {}  # type: Dict[str, List[str]]
+        for event_type in [GatewayEvent, EsafeEvent]:
+            allowed_types[event_type.NAMESPACE] = event_type.Types.get_values()
         try:
-            data = msgpack.loads(message.data)
+            data = self.deserialize_data(message.data)
             event = GatewayEvent.deserialize(data)
             if event.type == GatewayEvent.Types.ACTION:
                 if event.data['action'] == 'set_subscription':
-                    subscribed_types = [stype for stype in event.data['types'] if stype in allowed_types]
+                    requested_namespace = event.data.get('namespace', GatewayEvent.NAMESPACE)  # Default back to the gateway namespace, for other events the namespace needs to be specified
+                    subscribed_types = [stype for stype in event.data['types'] if stype in allowed_types[requested_namespace]]
                     cherrypy.engine.publish('update-events-receiver',
                                             self.metadata['client_id'],
-                                            {'subscribed_types': subscribed_types})
+                                            {'subscribed_types': subscribed_types, 'namespace': requested_namespace})
             elif event.type == GatewayEvent.Types.PING:
-                self.send(msgpack.dumps(GatewayEvent(event_type=GatewayEvent.Types.PONG,
-                                                     data=None).serialize()), binary=True)
+                # directly send pong reply
+                self.send_encoded(GatewayEvent(event_type=GatewayEvent.Types.PONG,
+                                               data=None).serialize())
         except Exception as ex:
             logger.exception('Error receiving message: %s', ex)
             # Ignore malformed data processing; in that case there's nothing that will happen

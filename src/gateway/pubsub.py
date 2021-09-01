@@ -20,6 +20,7 @@ import logging
 from six.moves.queue import Queue, Empty
 
 from gateway.daemon_thread import DaemonThread
+from gateway.enums import BaseEnum
 
 from ioc import Injectable, Singleton
 
@@ -49,7 +50,7 @@ class PubSub(object):
         CONFIG = 'config'  # type: GATEWAY_TOPIC
         STATE = 'state'  # type: GATEWAY_TOPIC
 
-    class EsafeTopics(object):
+    class EsafeTopics(BaseEnum):
         DELIVERY = 'delivery'   # type: ESAFE_TOPIC
         LOCK = 'lock'           # type: ESAFE_TOPIC
         CONFIG = 'config'       # type: ESAFE_TOPIC

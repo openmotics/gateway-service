@@ -22,14 +22,42 @@ if False:  # MYPY
 
 
 class BaseEnum(object):
-    _flat_elements = None
+    _key_elements = None
+    _value_elements = None
+
+    @classmethod
+    def _check_elements_initialized(cls):
+        if cls._key_elements is not None and cls._value_elements is not None:
+            return
+        try:
+            cls._key_elements = []
+            cls._value_elements = []
+            for elem, value in cls.__dict__.items():
+                if not elem.startswith('_') and not callable(getattr(cls, elem)):
+                    cls._key_elements.append(elem)
+                    cls._value_elements.append(value)
+        except Exception:
+            cls._key_elements = None
+            cls._values_elements = None
+            raise
+
+    @classmethod
+    def get_keys(cls):
+        """ Returns the list of the key attributes of the BaseEnum class"""
+        cls._check_elements_initialized()
+        return cls._key_elements
+
+    @classmethod
+    def get_values(cls):
+        """ Returns the list of the values of the BaseEnum class"""
+        cls._check_elements_initialized()
+        return cls._value_elements
 
     @classmethod
     def contains(cls, item):
-        if cls._flat_elements is None:
-            cls._flat_elements = [(elem, value) for elem, value in cls.__dict__.items() if not elem.startswith('__') and not callable(getattr(cls, elem))]
-            cls._flat_elements = reduce(lambda x, y: x+y, cls._flat_elements)
-        return item in cls._flat_elements
+        """ Checks if the item is in the keys or values of the defined BaseEnum """
+        cls._check_elements_initialized()
+        return item in cls._key_elements or item in cls._value_elements
 
 
 class ShutterEnums(object):
