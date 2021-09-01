@@ -28,6 +28,10 @@ from gateway.api.V1.webservice import RestAPIEndpoint, openmotics_api_v1, expose
 
 logger = logging.getLogger(__name__)
 
+if False:  #MyPy
+    from typing import Dict, List, Any
+    from gateway.dto import UserDTO
+    from gateway.authentication_controller import AuthenticationToken
 
 @expose
 class Users(RestAPIEndpoint):
@@ -68,19 +72,19 @@ class Users(RestAPIEndpoint):
                                       controller=self, action='delete_user',
                                       conditions={'method': ['DELETE']})
 
-    @openmotics_api_v1(auth=False, pass_role=True, check={'role': str, 'include_inactive': bool})
-    def get_users(self, auth_role=None, role=None, include_inactive=False):
-        if auth_role is None or auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
+    @openmotics_api_v1(auth=False, pass_token=True, check={'role': str, 'include_inactive': bool})
+    def get_users(self, auth_token=None, role=None, include_inactive=False):
+        if auth_token is None or auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             users = self.user_controller.load_users(roles=[User.UserRoles.USER], include_inactive=include_inactive)
         else:
             roles = [role] if role is not None else None
             users = self.user_controller.load_users(roles=roles, include_inactive=include_inactive)
 
-        users_serial = [UserSerializer.serialize(user) for user in users]
+        users_serial = [self.serialize_user_dto(user, auth_token) for user in users]
         return ApiResponse(body=users_serial)
 
-    @openmotics_api_v1(auth=False, pass_role=True)
-    def get_user(self, user_id, auth_role=None):
+    @openmotics_api_v1(auth=False, pass_token=True)
+    def get_user(self, user_id, auth_token=None):
         # return the requested user
         if user_id is None:
             raise WrongInputParametersException('Could not get the user_id from the request')
@@ -88,10 +92,10 @@ class Users(RestAPIEndpoint):
         if user is None:
             raise ItemDoesNotExistException('User with id {} does not exists'.format(user_id))
         # Filter the users when no role is provided or when the role is not admin
-        if auth_role is None or auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
+        if auth_token is None or auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             if user.role in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
                 raise UnAuthorizedException('Cannot request an admin or technician user when not authenticated as one')
-        user_serial = UserSerializer.serialize(user)
+        user_serial = self.serialize_user_dto(user, auth_token)
         return ApiResponse(body=user_serial)
 
     @openmotics_api_v1(auth=False, auth_level=AuthenticationLevel.HIGH, check={'role': str})
@@ -112,8 +116,8 @@ class Users(RestAPIEndpoint):
             raise ItemDoesNotExistException('Cannot request the pin code for user_id: {}: User does not exists'.format(user_id))
         return ApiResponse(body={'pin_code': user_dto.pin_code})
 
-    @openmotics_api_v1(auth=False, pass_role=True, expect_body_type='JSON')
-    def post_user(self, auth_role, request_body):
+    @openmotics_api_v1(auth=False, pass_token=True, expect_body_type='JSON')
+    def post_user(self, auth_token, request_body):
         # Authentication:
         # only ADMIN & TECHNICIAN can create new USER, ADMIN, TECHNICIAN user types,
         # anyone can create a new COURIER
@@ -144,7 +148,7 @@ class Users(RestAPIEndpoint):
         user_dto.set_password(random_password)
 
         # Authenticated as a technician or admin, creating the user
-        if auth_role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
+        if auth_token is not None and auth_token.user.role not in [User.UserRoles.ADMIN, User.UserRoles.TECHNICIAN, User.UserRoles.SUPER]:
             # if the user is not an admin or technician, check if the user to create is a COURIER
             if user_dto.role != User.UserRoles.COURIER:
                 raise UnAuthorizedException('As a normal user, you can only create a COURIER user')
@@ -153,7 +157,7 @@ class Users(RestAPIEndpoint):
             user_dto_saved = self.user_controller.save_user(user_dto)
         except RuntimeError as e:
             raise WrongInputParametersException('The user could not be saved: {}'.format(e))
-        user_dto_serial = UserSerializer.serialize(user_dto_saved)
+        user_dto_serial = self.serialize_user_dto(user_dto_saved, auth_token=auth_token)
         # explicitly add the pin code when a new user is created, this way, the generated pin code is known to the user when created.
         user_dto_serial['pin_code'] = user_dto.pin_code
         return ApiResponse(body=user_dto_serial)
@@ -196,7 +200,7 @@ class Users(RestAPIEndpoint):
                 setattr(user_dto_orig, field, getattr(user_dto, field))
         saved_user = self.user_controller.save_user(user_dto_orig)
         saved_user.clear_password()
-        return ApiResponse(body=UserSerializer.serialize(saved_user))
+        return ApiResponse(body=self.serialize_user_dto(saved_user, auth_token=auth_token))
 
     @openmotics_api_v1(auth=False, pass_role=False, pass_token=True)
     def delete_user(self, user_id, auth_token=None):
@@ -213,3 +217,10 @@ class Users(RestAPIEndpoint):
 
         self.user_controller.remove_user(user_to_delete_dto)
         return ApiResponse(status_code=204)
+
+    def serialize_user_dto(self, user_dto, auth_token):
+        # type: (UserDTO, AuthenticationToken) -> Dict[Any, Any]
+        _ = self
+        show_pin_code = auth_token is not None and auth_token.user.role == User.UserRoles.SUPER
+        user_serial = UserSerializer.serialize(user_dto, show_pin_code=show_pin_code)
+        return user_serial
