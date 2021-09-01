@@ -26,6 +26,7 @@ from gateway.output_controller import OutputController
 from gateway.pubsub import PubSub
 from gateway.thermostat.master.thermostat_controller_master import \
     ThermostatControllerMaster
+from master.classic.eeprom_controller import EepromController
 from ioc import SetTestMode, SetUpTestInjections
 
 
@@ -39,6 +40,7 @@ class ThermostatControllerMasterTest(unittest.TestCase):
         self._master_controller = mock.Mock(MasterClassicController)
         SetUpTestInjections(pubsub=self.pubsub,
                             master_controller=self._master_controller,
+                            eeprom_controller=mock.Mock(EepromController),
                             output_controller=mock.Mock(OutputController))
         self.controller = ThermostatControllerMaster()
 
