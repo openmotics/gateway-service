@@ -919,10 +919,13 @@ class WebInterface(object):
         self._thermostat_controller.set_current_setpoint(thermostat, temperature)
         return {'status': 'OK'}
 
-    @openmotics_api(auth=True, check=types(thermostat=int, temperature=float))
-    def set_setpoint_from_scheduler(self, thermostat, temperature):  # type: (int, float) -> Dict[str, str]
+    @openmotics_api(auth=True, check=types(thermostat=int, heating_temperature=float, cooling_temperature=float))
+    def set_setpoint_from_scheduler(self, thermostat, heating_temperature=None, cooling_temperature=None):
+        # type: (int, Optional[float], Optional[float]) -> Dict[str, str]
         """ Set the scheduled setpoint of a thermostat. """
-        self._thermostat_controller.set_setpoint_from_scheduler(thermostat, temperature)
+        self._thermostat_controller.set_setpoint_from_scheduler(thermostat,
+                                                                heating_temperature=heating_temperature,
+                                                                cooling_temperature=cooling_temperature)
         return {'status': 'OK'}
 
     @openmotics_api(auth=True, check=types(thermostat_on=bool, automatic=bool, setpoint=int, cooling_mode=bool, cooling_on=bool))
