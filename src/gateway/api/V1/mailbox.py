@@ -77,8 +77,7 @@ class MailBox(RestAPIEndpoint):
             raise ItemDoesNotExistException('Cannot find mailbox with rebus id: {}'.format(rebus_id))
         box = boxes[0]
         box_serial = MailboxSerializer.serialize(box)
-        status_code = 200 if box.is_open else 500
-        return ApiResponse(status_code=status_code, body=box_serial)
+        return ApiResponse(body=box_serial)
 
     @openmotics_api_v1(auth=True, pass_token=True, expect_body_type='JSON', check={'rebus_id': int})
     def put_open_mailbox(self, rebus_id, request_body, auth_token):
