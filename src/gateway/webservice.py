@@ -406,7 +406,7 @@ class WebInterface(object):
                 if receiver_info is None:
                     continue
                 try:
-                    if Config.get_entry('enable_http', 'false') == 'false' and cherrypy.request.remote.ip != '127.0.0.1' and not self._user_controller.check_token(receiver_info['token']):
+                    if cherrypy.request.remote.ip != '127.0.0.1' and not self._user_controller.check_token(receiver_info['token']):
                         raise cherrypy.HTTPError(401, 'invalid_token')
                     sources = self._metrics_controller.get_filter('source', receiver_info['source'])
                     metric_types = self._metrics_controller.get_filter('metric_type', receiver_info['metric_type'])
