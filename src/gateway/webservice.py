@@ -670,6 +670,7 @@ class WebInterface(object):
             'websocket_maintenance',  # Maintenance over websockets
             'shutter_positions',  # Shutter positions
             'ventilation',
+            'v1_api'
         ]
 
         master_version = self._module_controller.get_master_version()
