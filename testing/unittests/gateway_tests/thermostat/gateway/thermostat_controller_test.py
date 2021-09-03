@@ -127,23 +127,30 @@ class ThermostatControllerTest(unittest.TestCase):
             ScheduleDTO(id=11, external_id='X.X', start=0, action='LOCAL_API', name='')
         ]
         self._thermostat_controller._sync_thread = Mock()
+        schedule_dto = ThermostatScheduleDTO(temp_day_1=22.0,
+                                             start_day_1='06:30',
+                                             end_day_1='10:00',
+                                             temp_day_2=21.0,
+                                             start_day_2='16:00',
+                                             end_day_2='23:00',
+                                             temp_night=16.5)
         self._thermostat_controller.save_heating_thermostats([
             ThermostatDTO(id=thermostat.id,
-                          auto_mon=ThermostatScheduleDTO(temp_day_1=22.0,
-                                                         start_day_1='06:30',
-                                                         end_day_1='10:00',
-                                                         temp_day_2=21.0,
-                                                         start_day_2='16:00',
-                                                         end_day_2='23:00',
-                                                         temp_night=16.5))
+                          auto_mon=schedule_dto,
+                          auto_tue=schedule_dto,
+                          auto_wed=schedule_dto,
+                          auto_thu=schedule_dto,
+                          auto_fri=schedule_dto,
+                          auto_sat=schedule_dto,
+                          auto_sun=schedule_dto)
         ])
         self._thermostat_controller._sync_thread.request_single_run.assert_called_with()
         self._thermostat_controller.refresh_thermostats_from_db()
 
         schedules = self.scheduling_controller.save_schedules.call_args_list[0][0][0]
-        self.assertEqual(len(schedules), 2 * 5 * 7)
+        self.assertEqual(len(schedules), 5 * 7, [x.external_id for x in schedules])
         self.assertIn('1.0', [x.external_id for x in schedules])   # 1..7  heating
-        self.assertIn('14.4', [x.external_id for x in schedules])  # 8..14 cooling
+        self.assertIn('7.4', [x.external_id for x in schedules])
         schedule = next(x for x in schedules if x.name == 'H1 day 0 00:00')
         self.assertEqual(schedule.arguments, {'name': 'set_setpoint_from_scheduler',
                                               'parameters': {'thermostat': 1,
