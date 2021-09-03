@@ -95,10 +95,13 @@ class ModuleType(object):
     SHUTTER = 'shutter'
     DIM_CONTROL = 'dim_control'
     CAN_CONTROL = 'can_control'
+    MICRO_CAN = 'ucan'
     OPEN_COLLECTOR = 'open_collector'
     ENERGY = 'energy'
     POWER = 'power'
     P1_CONCENTRATOR = 'p1_concentrator'
+    MASTER_CORE = 'master_core'
+    MASTER_CLASSIC = 'master_classic'
     UNKNOWN = 'unknown'
 
 
@@ -161,3 +164,15 @@ class Languages(BaseEnum):
     DE = 'de'
     NL = 'nl'
     FR = 'fr'
+
+
+class UpdateEnums(object):
+    class States(object):
+        ERROR = 'ERROR'
+        UPDATING = 'UPDATING'
+        OK = 'OK'
+
+    class Modes(object):
+        FORCED = 'FORCED'
+        MANUAL = 'MANUAL'
+        AUTOMATIC = 'AUTOMATIC'

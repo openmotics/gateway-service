@@ -26,6 +26,7 @@ from master.core.ucan_command import UCANPalletCommandSpec, SID
 from master.core.ucan_communicator import UCANCommunicator
 from master.core.fields import UInt32Field
 from serial_utils import CommunicationTimedOutException
+from ioc import Inject, INJECTED
 
 if False:  # MYPY
     from typing import Optional
@@ -54,192 +55,190 @@ class UCANUpdater(object):
     BOOTLOADER_TIMEOUT_RUNTIME = 0  # Currently needed to switch to application mode
 
     @staticmethod
-    def update(cc_address, ucan_address, ucan_communicator, hex_filename, version, logger):
-        # type: (str, str, UCANCommunicator, str, Optional[str], Logger) -> bool
+    @Inject
+    def update(cc_address, ucan_address, hex_filename, version, logger, ucan_communicator=INJECTED):
+        # type: (str, str, str, Optional[str], Logger, UCANCommunicator) -> Optional[str]
         """ Flashes the content from an Intel HEX file to the specified uCAN """
 
-        # TODO: Inform the master that an update will be started
+        logger.info('Updating uCAN {0} at CC {1} to {2}'.format(
+            ucan_address, cc_address,
+            'v{0}'.format(version) if version is not None else 'unknown version')
+        )
+
+        if not os.path.exists(hex_filename):
+            raise RuntimeError('The given path does not point to an existing file')
+        intel_hex = IntelHex(hex_filename)
 
         try:
-            logger.info('Updating uCAN {0} at CC {1} to {2}'.format(
-                ucan_address, cc_address,
-                'v{0}'.format(version) if version is not None else 'unknown version')
-            )
+            in_bootloader = ucan_communicator.is_ucan_in_bootloader(cc_address=cc_address,
+                                                                    ucan_address=ucan_address)
+        except Exception:
+            raise RuntimeError('uCAN did not respond')
 
-            if not os.path.exists(hex_filename):
-                raise RuntimeError('The given path does not point to an existing file')
-            intel_hex = IntelHex(hex_filename)
-
-            try:
-                in_bootloader = ucan_communicator.is_ucan_in_bootloader(cc_address=cc_address,
-                                                                        ucan_address=ucan_address)
-            except Exception:
-                raise RuntimeError('uCAN did not respond')
-
-            if in_bootloader:
-                logger.info('Bootloader already active, skipping version check')
-            else:
-                current_version = None
-                try:
-                    response = ucan_communicator.do_command(cc_address=cc_address,
-                                                            command=UCANAPI.get_version(),
-                                                            identity=ucan_address,
-                                                            fields={})
-                    if response is None:
-                        raise RuntimeError()
-                    current_version = response['firmware_version']
-                    logger.info('Current uCAN version: v{0}'.format(current_version))
-                except Exception:
-                    logger.warning('Could not load uCAN version')
-
-                if current_version == version:
-                    logger.info('uCAN already up-to-date. Skipping')
-                    return True
-
-                logger.info('Bootloader not active, switching to bootloader')
-                ucan_communicator.do_command(cc_address=cc_address,
-                                             command=UCANAPI.set_bootloader_timeout(SID.NORMAL_COMMAND),
-                                             identity=ucan_address,
-                                             fields={'timeout': UCANUpdater.BOOTLOADER_TIMEOUT_UPDATE})
-                response = ucan_communicator.do_command(cc_address=cc_address,
-                                                        command=UCANAPI.reset(SID.NORMAL_COMMAND),
-                                                        identity=ucan_address,
-                                                        fields={},
-                                                        timeout=UCANUpdater.BOOTLOADER_APPLICATION_SWITCH_TIMEOUT)
-                if response is None:
-                    raise RuntimeError('Error resettings uCAN before flashing')
-                if response.get('application_mode', 1) != 0:
-                    raise RuntimeError('uCAN didn\'t enter bootloader after reset')
-                in_bootloader = ucan_communicator.is_ucan_in_bootloader(cc_address=cc_address,
-                                                                        ucan_address=ucan_address)
-                if not in_bootloader:
-                    raise RuntimeError('Could not enter bootloader')
-                logger.info('Bootloader active')
-
-            logger.info('Loading bootloader version...')
+        current_version = None  # type: Optional[str]
+        if in_bootloader:
+            logger.info('Bootloader already active, skipping version check')
+        else:
             try:
                 response = ucan_communicator.do_command(cc_address=cc_address,
-                                                        command=UCANAPI.get_bootloader_version(),
+                                                        command=UCANAPI.get_version(),
                                                         identity=ucan_address,
                                                         fields={})
                 if response is None:
                     raise RuntimeError()
-                if response['major'] == ord('v'):
-                    bootloader_version = '<= v1.3'  # Legacy version
-                else:
-                    bootloader_version = 'v{0}.{1}'.format(response['major'], response['minor'])
-                logger.info('Bootloader version: {0}'.format(bootloader_version))
+                current_version = response['firmware_version']
+                logger.info('Current uCAN version: v{0}'.format(current_version))
             except Exception:
-                logger.warning('Could not load bootloader version')
+                logger.warning('Could not load uCAN version')
 
-            logger.info('Erasing flash...')
+            logger.info('Bootloader not active, switching to bootloader')
             ucan_communicator.do_command(cc_address=cc_address,
-                                         command=UCANAPI.erase_flash(),
+                                         command=UCANAPI.set_bootloader_timeout(SID.NORMAL_COMMAND),
                                          identity=ucan_address,
-                                         fields={})
-            logger.info('Erasing flash... Done')
-
-            logger.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
-            logger.info('Flashing...')
-            uint32_helper = UInt32Field('')
-            empty_payload = bytearray([255] * UCANUpdater.MAX_FLASH_BYTES)
-            address_blocks = list(range(UCANUpdater.APPLICATION_START, UCANUpdater.BOOTLOADER_START, UCANUpdater.MAX_FLASH_BYTES))
-            total_amount = float(len(address_blocks))
-            for i in range(4):
-                intel_hex[UCANUpdater.BOOTLOADER_START - 8 + i] = intel_hex[i]  # Copy reset vector
-                intel_hex[UCANUpdater.BOOTLOADER_START - 4 + i] = 0x0  # Reserve some space for the CRC
-            crc = 0
-            total_payload = bytearray()
-            logged_percentage = -1
-            for index, start_address in enumerate(address_blocks):
-                end_address = min(UCANUpdater.BOOTLOADER_START, start_address + UCANUpdater.MAX_FLASH_BYTES) - 1
-
-                payload = bytearray(intel_hex.tobinarray(start=start_address,
-                                                         end=end_address))
-                if start_address < address_blocks[-1]:
-                    crc = UCANPalletCommandSpec.calculate_crc(data=payload,
-                                                              remainder=crc)
-                else:
-                    payload = payload[:-4]
-                    crc = UCANPalletCommandSpec.calculate_crc(data=payload,
-                                                              remainder=crc)
-                    payload += uint32_helper.encode(crc)
-
-                little_start_address = struct.unpack('<I', struct.pack('>I', start_address))[0]
-
-                if payload != empty_payload:
-                    # Since the uCAN flash area is erased, skip empty blocks
-                    tries = 0
-                    while True:
-                        tries += 1
-                        try:
-                            result = ucan_communicator.do_command(cc_address=cc_address,
-                                                                  command=UCANAPI.write_flash(len(payload)),
-                                                                  identity=ucan_address,
-                                                                  fields={'start_address': little_start_address,
-                                                                          'data': payload},
-                                                                  timeout=UCANUpdater.WRITE_FLASH_BLOCK_TIMEOUT)
-                            if result is None or not result['success']:
-                                raise RuntimeError('Failed to flash {0} bytes to address 0x{1:04X}'.format(len(payload), start_address))
-                            break
-                        except CommunicationTimedOutException as ex:
-                            logger.warning('Flashing... Address 0x{0:04X} failed: {1}'.format(start_address, ex))
-                            if tries >= 3:
-                                raise
-
-                total_payload += payload
-
-                percentage = int(index / total_amount * 100)
-                if percentage > logged_percentage:
-                    logger.info('Flashing... {0}%'.format(percentage))
-                    logged_percentage = percentage
-
-            logger.info('Flashing... Done')
-            crc = UCANPalletCommandSpec.calculate_crc(data=total_payload)
-            if crc != 0:
-                raise RuntimeError('Unexpected error in CRC calculation (0x{0:08X})'.format(crc))
-
-            # Prepare reset to application mode
-            logger.info('Reduce bootloader timeout to {0}s'.format(UCANUpdater.BOOTLOADER_TIMEOUT_RUNTIME))
-            ucan_communicator.do_command(cc_address=cc_address,
-                                         command=UCANAPI.set_bootloader_timeout(SID.BOOTLOADER_COMMAND),
-                                         identity=ucan_address,
-                                         fields={'timeout': UCANUpdater.BOOTLOADER_TIMEOUT_RUNTIME})
-            logger.info('Set safety counter allowing the application to immediately start on reset')
-            ucan_communicator.do_command(cc_address=cc_address,
-                                         command=UCANAPI.set_bootloader_safety_counter(),
-                                         identity=ucan_address,
-                                         fields={'safety_counter': 5})
-
-            # Switch to application mode
-            logger.info('Reset to application mode')
+                                         fields={'timeout': UCANUpdater.BOOTLOADER_TIMEOUT_UPDATE})
             response = ucan_communicator.do_command(cc_address=cc_address,
-                                                    command=UCANAPI.reset(SID.BOOTLOADER_COMMAND),
+                                                    command=UCANAPI.reset(SID.NORMAL_COMMAND),
                                                     identity=ucan_address,
                                                     fields={},
                                                     timeout=UCANUpdater.BOOTLOADER_APPLICATION_SWITCH_TIMEOUT)
             if response is None:
-                raise RuntimeError('Error resettings uCAN after flashing')
-            if response.get('application_mode', 0) != 1:
-                raise RuntimeError('uCAN didn\'t enter application mode after reset')
+                raise RuntimeError('Error resettings uCAN before flashing')
+            if response.get('application_mode', 1) != 0:
+                raise RuntimeError('uCAN didn\'t enter bootloader after reset')
+            in_bootloader = ucan_communicator.is_ucan_in_bootloader(cc_address=cc_address,
+                                                                    ucan_address=ucan_address)
+            if not in_bootloader:
+                raise RuntimeError('Could not enter bootloader')
+            logger.info('Bootloader active')
 
-            if ucan_address != '255.255.255':
-                try:
-                    response = ucan_communicator.do_command(cc_address=cc_address,
-                                                            command=UCANAPI.get_version(),
-                                                            identity=ucan_address,
-                                                            fields={})
-                    if response is None:
-                        raise RuntimeError()
-                    current_version = response['firmware_version']
-                    logger.info('New uCAN version: v{0}'.format(current_version))
-                except Exception:
-                    raise RuntimeError('Could not load new uCAN version')
+        logger.info('Loading bootloader version...')
+        try:
+            response = ucan_communicator.do_command(cc_address=cc_address,
+                                                    command=UCANAPI.get_bootloader_version(),
+                                                    identity=ucan_address,
+                                                    fields={})
+            if response is None:
+                raise RuntimeError()
+            if response['major'] == ord('v'):
+                bootloader_version = '<= v1.3'  # Legacy version
             else:
-                logger.info('Skip loading new version as address will have been changed by the application')
+                bootloader_version = 'v{0}.{1}'.format(response['major'], response['minor'])
+            logger.info('Bootloader version: {0}'.format(bootloader_version))
+        except Exception:
+            logger.warning('Could not load bootloader version')
 
-            logger.info('Update completed')
-            return True
-        except Exception as ex:
-            logger.error('Error flashing: {0}'.format(ex))
-            return False
+        logger.info('Erasing flash...')
+        ucan_communicator.do_command(cc_address=cc_address,
+                                     command=UCANAPI.erase_flash(),
+                                     identity=ucan_address,
+                                     fields={})
+        logger.info('Erasing flash... Done')
+
+        logger.info('Flashing contents of {0}'.format(os.path.basename(hex_filename)))
+        logger.info('Flashing...')
+        uint32_helper = UInt32Field('')
+        empty_payload = bytearray([255] * UCANUpdater.MAX_FLASH_BYTES)
+        address_blocks = list(range(UCANUpdater.APPLICATION_START, UCANUpdater.BOOTLOADER_START, UCANUpdater.MAX_FLASH_BYTES))
+        total_amount = float(len(address_blocks))
+        for i in range(4):
+            intel_hex[UCANUpdater.BOOTLOADER_START - 8 + i] = intel_hex[i]  # Copy reset vector
+            intel_hex[UCANUpdater.BOOTLOADER_START - 4 + i] = 0x0  # Reserve some space for the CRC
+        crc = 0
+        total_payload = bytearray()
+        logged_percentage = -1
+        for index, start_address in enumerate(address_blocks):
+            end_address = min(UCANUpdater.BOOTLOADER_START, start_address + UCANUpdater.MAX_FLASH_BYTES) - 1
+
+            payload = bytearray(intel_hex.tobinarray(start=start_address,
+                                                     end=end_address))
+            if start_address < address_blocks[-1]:
+                crc = UCANPalletCommandSpec.calculate_crc(data=payload,
+                                                          remainder=crc)
+            else:
+                payload = payload[:-4]
+                crc = UCANPalletCommandSpec.calculate_crc(data=payload,
+                                                          remainder=crc)
+                payload += uint32_helper.encode(crc)
+
+            little_start_address = struct.unpack('<I', struct.pack('>I', start_address))[0]
+
+            if payload != empty_payload:
+                # Since the uCAN flash area is erased, skip empty blocks
+                tries = 0
+                while True:
+                    tries += 1
+                    try:
+                        result = ucan_communicator.do_command(cc_address=cc_address,
+                                                              command=UCANAPI.write_flash(len(payload)),
+                                                              identity=ucan_address,
+                                                              fields={'start_address': little_start_address,
+                                                                      'data': payload},
+                                                              timeout=UCANUpdater.WRITE_FLASH_BLOCK_TIMEOUT)
+                        if result is None or not result['success']:
+                            raise RuntimeError('Failed to flash {0} bytes to address 0x{1:04X}'.format(len(payload), start_address))
+                        break
+                    except CommunicationTimedOutException as ex:
+                        logger.warning('Flashing... Address 0x{0:04X} failed: {1}'.format(start_address, ex))
+                        if tries >= 6:
+                            # After about 6 tries (~1 minute) we consider it to be failed
+                            raise
+
+            total_payload += payload
+
+            percentage = int(index / total_amount * 100)
+            if percentage > logged_percentage:
+                logger.info('Flashing... {0}%'.format(percentage))
+                logged_percentage = percentage
+
+        logger.info('Flashing... Done')
+        crc = UCANPalletCommandSpec.calculate_crc(data=total_payload)
+        if crc != 0:
+            raise RuntimeError('Unexpected error in CRC calculation (0x{0:08X})'.format(crc))
+
+        # Prepare reset to application mode
+        logger.info('Reduce bootloader timeout to {0}s'.format(UCANUpdater.BOOTLOADER_TIMEOUT_RUNTIME))
+        ucan_communicator.do_command(cc_address=cc_address,
+                                     command=UCANAPI.set_bootloader_timeout(SID.BOOTLOADER_COMMAND),
+                                     identity=ucan_address,
+                                     fields={'timeout': UCANUpdater.BOOTLOADER_TIMEOUT_RUNTIME})
+        logger.info('Set safety counter allowing the application to immediately start on reset')
+        ucan_communicator.do_command(cc_address=cc_address,
+                                     command=UCANAPI.set_bootloader_safety_counter(),
+                                     identity=ucan_address,
+                                     fields={'safety_counter': 5})
+
+        # Switch to application mode
+        logger.info('Reset to application mode')
+        response = ucan_communicator.do_command(cc_address=cc_address,
+                                                command=UCANAPI.reset(SID.BOOTLOADER_COMMAND),
+                                                identity=ucan_address,
+                                                fields={},
+                                                timeout=UCANUpdater.BOOTLOADER_APPLICATION_SWITCH_TIMEOUT)
+        if response is None:
+            raise RuntimeError('Error resettings uCAN after flashing')
+        if response.get('application_mode', 0) != 1:
+            raise RuntimeError('uCAN didn\'t enter application mode after reset')
+
+        current_version = None
+        if ucan_address != '255.255.255':
+            try:
+                response = ucan_communicator.do_command(cc_address=cc_address,
+                                                        command=UCANAPI.get_version(),
+                                                        identity=ucan_address,
+                                                        fields={})
+                if response is None:
+                    raise RuntimeError()
+                current_version = response['firmware_version']
+                logger.info('New uCAN version: v{0}'.format(current_version))
+            except Exception:
+                raise RuntimeError('Could not load new uCAN version')
+            if current_version != version:
+                raise RuntimeError('Post-update firmware version {0} does not match expected {1}'.format(
+                    current_version if current_version is not None else 'unknown',
+                    version
+                ))
+        else:
+            logger.info('Skip loading new version as address will have been changed by the application')
+
+        logger.info('Update completed')
+        return current_version

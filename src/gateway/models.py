@@ -149,6 +149,7 @@ class Module(BaseModel):
     hardware_version = CharField(null=True)
     order = IntegerField(null=True)
     last_online_update = IntegerField(null=True)
+    update_success = BooleanField(null=True)
 
 
 class EnergyModule(BaseModel):

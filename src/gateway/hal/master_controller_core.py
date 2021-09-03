@@ -42,7 +42,6 @@ from master.core.basic_action import BasicAction
 from master.core.can_feedback import CANFeedbackController
 from master.core.core_api import CoreAPI
 from master.core.core_communicator import BackgroundConsumer, CoreCommunicator, CoreCommandSpec
-from master.core.core_updater import CoreUpdater
 from master.core.errors import Error
 from master.core.events import Event as MasterCoreEvent
 from master.core.group_action import GroupActionController
@@ -50,7 +49,7 @@ from master.core.memory_file import MemoryFile, MemoryTypes
 from master.core.memory_models import CanControlModuleConfiguration, \
     GlobalConfiguration, InputConfiguration, InputModuleConfiguration, \
     OutputConfiguration, OutputModuleConfiguration, SensorConfiguration, \
-    SensorModuleConfiguration, ShutterConfiguration
+    SensorModuleConfiguration, ShutterConfiguration, UCanModuleConfiguration
 from master.core.memory_types import MemoryActivator, MemoryAddress
 from master.core.slave_communicator import SlaveCommunicator
 from master.core.slave_updater import SlaveUpdater
@@ -62,6 +61,7 @@ from logs import Logs
 
 if False:  # MYPY
     from typing import Any, Dict, List, Literal, Tuple, Optional, Type, Union, TypeVar
+    from master.core.core_updater import CoreUpdater
     T_co = TypeVar('T_co', bound=None, covariant=True)
     HEALTH = Literal['success', 'unstable', 'failure']
 
@@ -74,11 +74,12 @@ class MasterCoreController(MasterController):
     MASTER_UPDATING_TIMEOUT = 600
 
     @Inject
-    def __init__(self, master_communicator=INJECTED, slave_communicator=INJECTED, memory_file=INJECTED, pubsub=INJECTED):
-        # type: (CoreCommunicator, SlaveCommunicator, MemoryFile, PubSub) -> None
+    def __init__(self, master_communicator=INJECTED, slave_communicator=INJECTED, core_updater=INJECTED, memory_file=INJECTED, pubsub=INJECTED):
+        # type: (CoreCommunicator, SlaveCommunicator, CoreUpdater, MemoryFile, PubSub) -> None
         super(MasterCoreController, self).__init__(master_communicator)
         self._master_communicator = master_communicator
         self._slave_communicator = slave_communicator
+        self._core_updater = core_updater
         self._memory_file = memory_file
         self._pubsub = pubsub
         self._synchronization_thread = None  # type: Optional[DaemonThread]
@@ -121,7 +122,7 @@ class MasterCoreController(MasterController):
             #  the minute is over, log the amount of skipped errors (e.g. `X similar ERORR_CODE master errors were supressed`)
         )
         self._master_communicator.register_consumer(
-            BackgroundConsumer(CoreAPI.ucan_module_information(), 0, lambda i: logger.info('Got ucan module information: {0}'.format(i)))
+            BackgroundConsumer(CoreAPI.ucan_module_information(), 0, self._handle_ucan_information)
         )
         self._master_communicator.register_consumer(
             BackgroundConsumer(CoreAPI.module_added(), 0, self._handle_new_module)
@@ -197,16 +198,8 @@ class MasterCoreController(MasterController):
         elif core_event.type == MasterCoreEvent.Types.RESET_ACTION:
             if core_event.data.get('type') == MasterCoreEvent.ResetTypes.HEALTH_CHECK:
                 self._master_restarting_change(restarting=True)
-
-        elif core_event.type == MasterCoreEvent.Types.SLAVE_SEARCH:
-            if core_event.data.get('type') in [MasterCoreEvent.SearchType.DISABLED,
-                                               MasterCoreEvent.SearchType.STOPPED]:
-                # TODO: This will be replaced by a dedicated new "startup completed" event
-                # When the master is completely started up one or more SLAVE_SEARCH events will be received.
-                # These will be either:
-                # * DISABLED when auto discovery is inactive;
-                # * ACTIVE when auto discovery is started and STOPPED when it's finished.
-                # This means that DISABLED or STOPPED indicate that the master startup is finished.
+        elif core_event.type == MasterCoreEvent.Types.SYSTEM:
+            if core_event.data.get('type') == MasterCoreEvent.SystemEventTypes.STARTUP_COMPLETED:
                 self._master_restarting_change(restarting=False)
         elif core_event.type == MasterCoreEvent.Types.MODULE_DISCOVERY:
             # TODO: Add partial EEPROM invalidation to speed things up
@@ -1039,13 +1032,13 @@ class MasterCoreController(MasterController):
     def get_modules_information(self, address=None):  # type: (Optional[str]) -> List[ModuleDTO]
         """ Gets module information """
 
-        # TODO: Unclude uCAN version information
-
         def _default_if_255(value, default):
             return value if value != 255 else default
 
         self._firmware_versions = {}
         self._execute(command=CoreAPI.request_slave_firmware_versions(),
+                      fields={})
+        self._execute(command=CoreAPI.request_ucan_module_information(),
                       fields={})
 
         def _wait_for_version(address_, timeout=3):
@@ -1153,12 +1146,29 @@ class MasterCoreController(MasterController):
                 dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(can_control_module_info.address)
             information.append(dto)
 
+        nr_of_ucs = _default_if_255(global_configuration.number_of_ucan_modules, 0)
+        for module_id in range(nr_of_ucs):
+            ucan_configuration = UCanModuleConfiguration(module_id)
+            dto = ModuleDTO(source=ModuleDTO.Source.MASTER,
+                            address=ucan_configuration.address,
+                            module_type=ModuleType.MICRO_CAN,
+                            hardware_type=HardwareType.PHYSICAL,
+                            order=module_id)
+            dto.online, dto.hardware_version, dto.firmware_version = _wait_for_version(ucan_configuration.address)
+            information.append(dto)
+
         return information
 
     def _handle_firmware_information(self, information):  # type: (Dict[str, str]) -> None
         raw_version = information['version']
         version = None if raw_version == '0.0.0' else raw_version
+        logger.info('Got firmware information: {0} = {1}'.format(information['address'], version))
         self._firmware_versions[information['address']] = version
+
+    def _handle_ucan_information(self, information):  # type: (Dict[str, str]) -> None
+        address, version = information['ucan_address'], information['version']
+        logger.info('Got ucan firmware information: {0} = {1}'.format(address, version))
+        self._firmware_versions[address] = version
 
     def replace_module(self, old_address, new_address):  # type: (str, str) -> None
         raise NotImplementedError('Module replacement not supported')
@@ -1290,21 +1300,33 @@ class MasterCoreController(MasterController):
         # type: (str, str) -> None
         try:
             self._master_updating_change(updating=True)
-            CoreUpdater.update(hex_filename=hex_filename,
-                               version=version,
-                               raise_exception=True)
+            self._core_updater.update(hex_filename=hex_filename,
+                                      version=version)
         finally:
             self._master_updating_change(updating=False)
 
-    def update_slave_modules(self, firmware_type, module_type, hex_filename, version):
-        # type: (str, str, str, str) -> None
+    def update_slave_module(self, firmware_type, address, hex_filename, version):
+        # type: (str, str, str, str) -> Optional[str]
+        individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, address))
+        if firmware_type == 'ucan':
+            amount = GlobalConfiguration().number_of_ucan_modules
+            for module_id in range(amount if amount != 255 else 0):
+                ucan_configuration = UCanModuleConfiguration(module_id)
+                if ucan_configuration.address == address:
+                    cc_module = ucan_configuration.module
+                    cc_address = cc_module.address if cc_module is not None else '000.000.000.000'
+                    return SlaveUpdater.update_ucan(ucan_address=address,
+                                                    cc_address=cc_address,
+                                                    hex_filename=hex_filename,
+                                                    version=version)
+            return None
         parsed_version = tuple(int(part) for part in version.split('.'))
         gen3_firmware = parsed_version >= (6, 0, 0)
-        SlaveUpdater.update_all(firmware_type=firmware_type,
-                                module_type=module_type,
-                                hex_filename=hex_filename,
-                                gen3_firmware=gen3_firmware,
-                                version=version)
+        return SlaveUpdater.update(address=address,
+                                   hex_filename=hex_filename,
+                                   gen3_firmware=gen3_firmware,
+                                   version=version,
+                                   logger=individual_logger)
 
     def get_backup(self):
         data = bytearray()

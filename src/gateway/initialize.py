@@ -300,8 +300,8 @@ def setup_target_platform(target_platform, message_client_name):
 
     elif target_platform in Platform.CoreTypes:
         # FIXME don't create singleton for optional controller?
-        from master.core import ucan_communicator, slave_communicator
-        _ = ucan_communicator, slave_communicator
+        from master.core import ucan_communicator, slave_communicator, core_updater
+        _ = ucan_communicator, slave_communicator, core_updater
         core_cli_serial_port = config.get('OpenMotics', 'cli_serial')
         Injectable.value(cli_serial=Serial(core_cli_serial_port, 115200))
         Injectable.value(passthrough_service=None)  # Mark as "not needed"
@@ -381,8 +381,8 @@ def setup_minimal_master_platform(port):
         Injectable.value(maintenance_communicator=None)
         Injectable.value(master_controller=MasterDummyController())
     elif platform in Platform.CoreTypes:
-        from master.core import ucan_communicator
-        _ = ucan_communicator
+        from master.core import ucan_communicator, slave_communicator, core_updater
+        _ = ucan_communicator, slave_communicator, core_updater
         core_cli_serial_port = config.get('OpenMotics', 'cli_serial')
         Injectable.value(cli_serial=Serial(core_cli_serial_port, 115200))
         Injectable.value(master_communicator=CoreCommunicator())

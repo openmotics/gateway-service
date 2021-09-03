@@ -71,6 +71,7 @@ class Event(object):
         EEPROM_ACTIVATE = 'EEPROM_ACTIVATE'
         I2C_RESET = 'I2C_RESET'
         HEALTH = 'HEALTH'
+        STARTUP_COMPLETED = 'STARTUP_COMPLETED'
         UNKNOWN = 'UNKNOWN'
 
     class GenericDataTypes(object):
@@ -302,7 +303,10 @@ class Event(object):
                     'data': data}
         if self.type == Event.Types.SYSTEM:
             if action == 0:
-                return {'type': Event.SystemEventTypes.EEPROM_ACTIVATE}
+                parsed_data = {'type': Event.SystemEventTypes.EEPROM_ACTIVATE}
+                if data[0] == 1:
+                    parsed_data['type'] = Event.SystemEventTypes.STARTUP_COMPLETED
+                return parsed_data
             if action == 2:
                 return {'type': Event.SystemEventTypes.I2C_RESET,
                         'cause': data[0]}

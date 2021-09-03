@@ -36,7 +36,6 @@ from gateway.energy.energy_api import DAY, NIGHT, EnergyAPI
 from peewee import prefetch
 from serial_utils import CommunicationTimedOutException
 from ioc import INJECTED, Inject, Injectable, Singleton
-from logs import Logs
 
 if False:  # MYPY
     from typing import Dict, List, Any, Optional, Tuple, Generator
@@ -96,7 +95,7 @@ class EnergyModuleController(BaseController):
         date = datetime.now()
         energy_modules = EnergyModule.select(EnergyModule, Module) \
                                      .join_from(EnergyModule, Module) \
-                                     .where(EnergyModule.version != EnergyEnums.Version.P1_CONCENTRATOR)  # type: List[EnergyModule]
+                                     .where(Module.module_type != ModuleType.P1_CONCENTRATOR)  # type: List[EnergyModule]
         for energy_module in energy_modules:
             daynight = []  # type: List[int]
             for ct in sorted(energy_module.cts, key=lambda c: c.number):
@@ -161,33 +160,11 @@ class EnergyModuleController(BaseController):
 
     def update_module(self, module_version, module_address, firmware_filename, firmware_version):
         if not self._enabled:
-            return
-        self._energy_module_updater.bootload_module(module_version=module_version,
-                                                    module_address=module_address,
-                                                    hex_filename=firmware_filename,
-                                                    firmware_version=firmware_version)
-
-    def update_modules(self, module_version, firmware_filename, firmware_version):
-        if not self._enabled:
-            return {}
-        failures = {}
-        energy_modules = EnergyModule.select(EnergyModule, Module) \
-                                     .join_from(EnergyModule, Module) \
-                                     .where(EnergyModule.version == module_version)  # type: List[EnergyModule]
-        for energy_module in energy_modules:
-            module_address = energy_module.module.address
-            individual_logger = Logs.get_update_logger('{0}_{1}'.format(EnergyEnums.VERSION_TO_STRING[module_version], module_address))
-            try:
-                self.update_module(module_version=module_version,
-                                   module_address=module_address,
-                                   firmware_filename=firmware_filename,
-                                   firmware_version=firmware_version)
-                failures[module_address] = None
-            except Exception as ex:
-                if ex is not CommunicationTimedOutException:
-                    individual_logger.exception('Unexpected error when bootloading {0}: {1}'.format(module_address, ex))
-                failures[module_address] = ex
-        return failures
+            return None
+        return self._energy_module_updater.bootload_module(module_version=module_version,
+                                                           module_address=int(module_address),
+                                                           hex_filename=firmware_filename,
+                                                           firmware_version=firmware_version)
 
     def get_day_counters(self, energy_module):  # type: (EnergyModule) -> List[int]
         if not self._enabled:
@@ -257,9 +234,6 @@ class EnergyModuleController(BaseController):
             return []
 
         information = []
-        module_type_map = {EnergyEnums.Version.ENERGY_MODULE: ModuleType.ENERGY,
-                           EnergyEnums.Version.POWER_MODULE: ModuleType.POWER,
-                           EnergyEnums.Version.P1_CONCENTRATOR: ModuleType.P1_CONCENTRATOR}
         energy_modules = EnergyModule.select(EnergyModule, Module) \
                                      .join_from(EnergyModule, Module)  # type: List[EnergyModule]
         for energy_module in energy_modules:
@@ -272,7 +246,7 @@ class EnergyModuleController(BaseController):
                     online, firmware_version = False, None
                 information.append(ModuleDTO(source=ModuleDTO.Source.GATEWAY,
                                              address=energy_module.module.address,
-                                             module_type=module_type_map.get(energy_module.version),
+                                             module_type=energy_module.module.module_type,
                                              hardware_type=HardwareType.PHYSICAL,
                                              firmware_version=firmware_version,
                                              order=energy_module.number,
@@ -326,7 +300,7 @@ class EnergyModuleController(BaseController):
         realtime = []
         energy_modules = EnergyModule.select(EnergyModule, Module) \
                                      .join_from(EnergyModule, Module) \
-                                     .where(EnergyModule.version == EnergyEnums.Version.P1_CONCENTRATOR)  # type: List[EnergyModule]
+                                     .where(Module.module_type == ModuleType.P1_CONCENTRATOR)  # type: List[EnergyModule]
         for energy_module in energy_modules:
             try:
                 realtime += self._get_helper(energy_module.version).get_realtime_p1(energy_module)

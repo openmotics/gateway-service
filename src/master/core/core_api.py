@@ -278,6 +278,12 @@ class CoreAPI(object):
                                response_fields=[AddressField('cc_address'), ByteField('nr_can_bytes'), ByteField('sid'), RawByteArrayField('payload', 8)])
 
     @staticmethod
+    def request_ucan_module_information():  # type: () -> CoreCommandSpec
+        """ Requests information for all uCAN modules """
+        return CoreCommandSpec(instruction='CD',
+                               request_fields=[LiteralBytesField(0)])
+
+    @staticmethod
     def ucan_module_information():  # type: () -> CoreCommandSpec
         """ Receives information from a uCAN module """
         return CoreCommandSpec(instruction='CD',

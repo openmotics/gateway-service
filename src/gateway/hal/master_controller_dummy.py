@@ -233,8 +233,8 @@ class MasterDummyController(MasterController):
     def update_master(self, hex_filename, version):  # type: (str, str) -> None
         return None
 
-    def update_slave_modules(self, firmware_type, module_type, hex_filename, version):
-        # type: (str, str, str, str) -> None
+    def update_slave_module(self, firmware_type, address, hex_filename, version):
+        # type: (str, str, str, str) -> Optional[str]
         return None
 
     def load_airco_status(self):

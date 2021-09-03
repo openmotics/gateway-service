@@ -20,8 +20,6 @@ from __future__ import absolute_import
 import binascii
 import logging
 import os
-import shutil
-import subprocess
 import sys
 import time
 import uuid
@@ -50,13 +48,13 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     EnergyModuleSerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import GlobalRTD10DTO, RoomDTO, ScheduleDTO, \
-    UserDTO, InputStatusDTO
-from gateway.enums import ShutterEnums, UserEnums, ModuleType
+    UserDTO, InputStatusDTO, ModuleDTO
+from gateway.enums import ShutterEnums, UserEnums, ModuleType, UpdateEnums
 from gateway.exceptions import UnsupportedException, FeatureUnavailableException, \
     ItemDoesNotExistException, WrongInputParametersException, ParseException
 from gateway.exceptions import CommunicationFailure, InMaintenanceModeException
 from gateway.mappers.thermostat import ThermostatMapper
-from gateway.models import Config, Database, Feature, User
+from gateway.models import Config, Database, Feature, User, Module
 from gateway.uart_controller import UARTController
 from gateway.websockets import EventsSocket, MaintenanceSocket, \
     MetricsSocket, OMPlugin, OMSocketTool
@@ -64,6 +62,7 @@ from ioc import INJECTED, Inject, Injectable, Singleton
 from logs import Logs
 from platform_utils import Hardware, Platform, System
 from gateway.energy.energy_communicator import InAddressModeException
+from gateway.update_controller import UpdateController
 from serial_utils import CommunicationTimedOutException
 from toolbox import Toolbox
 
@@ -88,7 +87,6 @@ if False:  # MYPY
     from gateway.thermostat.thermostat_controller import ThermostatController
     from gateway.user_controller import UserController
     from gateway.ventilation_controller import VentilationController
-    from gateway.update_controller import UpdateController
     from plugins.base import PluginController
 
 logger = logging.getLogger(__name__)
@@ -707,6 +705,10 @@ class WebInterface(object):
         return self._module_controller.get_master_status()
 
     @openmotics_api(auth=True)
+    def get_system_status(self):
+        return {'updates': {'status': UpdateController.get_update_state()}}
+
+    @openmotics_api(auth=True)
     def get_input_status(self):
         # type: () -> Dict[str, List[Dict[str, Any]]]
         """
@@ -714,8 +716,8 @@ class WebInterface(object):
 
         :returns: 'status': list of dictionaries with the following keys: id, status.
         """
-        return {'status': [InputStateSerializer.serialize(input, None)
-                           for input in self._input_controller.get_input_statuses()]}
+        return {'status': [InputStateSerializer.serialize(input_, None)
+                           for input_ in self._input_controller.get_input_statuses()]}
 
     @openmotics_api(auth=True, check=types(id=int, is_on=bool))
     def set_input(self, id, is_on):
@@ -2106,10 +2108,10 @@ class WebInterface(object):
                                      'name': str(name)},
                 'platform': str(Platform.get_platform())}
 
-    @openmotics_api(auth=True, plugin_exposed=False)
-    def update(self, version):
+    @openmotics_api(auth=True, plugin_exposed=False, check=types(version=str, metadata='json'))
+    def update(self, version, metadata=None):
         """ Request to update to a given version """
-        self._update_controller.request_update(version)
+        self._update_controller.request_update(version, metadata)
         return {}
 
     @openmotics_api(auth=True)
@@ -2123,12 +2125,15 @@ class WebInterface(object):
         return {'output': '',
                 'version': gateway.__version__}
 
-    @openmotics_api(auth=True, plugin_exposed=False)
-    def update_firmware(self, module_type, firmware_version):
-        self._update_controller.update_module_firmware(module_type=module_type,
-                                                       target_version=firmware_version)
-        self._module_controller.request_sync_orm()
-        return {}
+    @openmotics_api(auth=True, plugin_exposed=False, check=types(module_type=str, firmware_version=str, module_address=str, force=bool))
+    def update_firmware(self, module_type, firmware_version, module_address=None, force=False):
+        mode = UpdateEnums.Modes.FORCED if force else UpdateEnums.Modes.MANUAL
+        successes, failures = self._update_controller.update_module_firmware(module_type=module_type,
+                                                                             target_version=firmware_version,
+                                                                             mode=mode,
+                                                                             module_address=module_address)
+        return {'successes': successes,
+                'failures': failures}
 
     @openmotics_api(auth=True)
     def set_timezone(self, timezone):

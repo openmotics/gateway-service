@@ -89,7 +89,7 @@ class ModuleController(BaseController):
                     module.firmware_version = dto.firmware_version
                     module.hardware_version = dto.hardware_version
                     module.last_online_update = int(time.time())
-                    module.save()
+                module.save()
                 amounts[dto.online] += 1
             logger.info('ORM sync (Modules): completed ({0} online, {1} offline, {2} emulated/virtual)'.format(
                 amounts[True], amounts[False], amounts[None]

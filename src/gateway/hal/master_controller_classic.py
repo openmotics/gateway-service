@@ -58,7 +58,7 @@ from master.classic.eeprom_models import CoolingConfiguration, \
 from master.classic.master_communicator import BackgroundConsumer, \
     MasterCommunicator
 from master.classic.master_heartbeat import MasterHeartbeat
-from master.classic.slave_updater import bootload_modules
+from master.classic.slave_updater import SlaveUpdater
 from master.classic.validationbits import ValidationBitStatus
 from serial_utils import CommunicationTimedOutException
 from logs import Logs
@@ -1200,8 +1200,6 @@ class MasterClassicController(MasterController):
             self._heartbeat.stop()
             self._master_communicator.update_mode_start()
 
-            _ = version  # TODO: Skip if version is identical
-
             port = controller_serial.port  # type: ignore
             baudrate = str(controller_serial.baudrate)  # type: ignore
             base_command = ['/opt/openmotics/bin/AN1310cl', '-d', port, '-b', baudrate]
@@ -1209,7 +1207,7 @@ class MasterClassicController(MasterController):
                        [2, 2, 3, 2], [2, 2, 3, 1],
                        [2, 2, 4, 2], [2, 2, 4, 1]]
 
-            individual_logger.info('Updating master...')
+            individual_logger.info('Updating master to {0}'.format(version))
             individual_logger.info('* Enter bootloader...')
             bootloader_active = False
             for timing in timings:
@@ -1282,18 +1280,19 @@ class MasterClassicController(MasterController):
             self._communication_enabled = True
 
     @Inject
-    def update_slave_modules(self, firmware_type, module_type, hex_filename, version):
-        # type: (str, str, str, str) -> None
+    def update_slave_module(self, firmware_type, address, hex_filename, version):
+        # type: (str, str, str, str) -> Optional[str]
         try:
             self._communication_enabled = False
             self._heartbeat.stop()
             parsed_version = tuple(int(part) for part in version.split('.'))
             gen3_firmware = parsed_version >= (6, 0, 0)
-            bootload_modules(module_type=module_type,
-                             filename=hex_filename,
-                             gen3_firmware=gen3_firmware,
-                             version=version,
-                             raise_exception=True)
+            individual_logger = Logs.get_update_logger('{0}_{1}'.format(firmware_type, address))
+            return SlaveUpdater.bootload(address=address,
+                                         filename=hex_filename,
+                                         gen3_firmware=gen3_firmware,
+                                         version=version,
+                                         logger=individual_logger)
         finally:
             self._heartbeat.start()
             self._communication_enabled = True

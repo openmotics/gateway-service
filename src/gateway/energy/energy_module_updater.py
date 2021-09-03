@@ -16,6 +16,9 @@
 Energy module update logic
 """
 from __future__ import absolute_import
+
+import os.path
+
 import intelhex
 import logging
 import time
@@ -25,7 +28,7 @@ from gateway.enums import EnergyEnums
 from logs import Logs
 
 if False:  # MYPY
-    from typing import Tuple, Optional
+    from typing import Tuple, Optional, List
     from gateway.energy.energy_communicator import EnergyCommunicator
 
 # Different name to reduce confusion between multiple used loggers
@@ -51,6 +54,9 @@ class EnergyModuleUpdater(object):
             return '{0}.{1}.{2}'.format(parsed_version[1], parsed_version[2], parsed_version[3]), str(parsed_version[0])
 
     def bootload_module(self, module_version, module_address, hex_filename, firmware_version):
+        if not os.path.exists(hex_filename):
+            raise RuntimeError('File {0} does not exists'.format(hex_filename))
+
         if module_version == EnergyEnums.Version.ENERGY_MODULE:
             return self._bootload_energy_module(module_address=module_address,
                                                 hex_filename=hex_filename,
@@ -62,34 +68,42 @@ class EnergyModuleUpdater(object):
         raise RuntimeError('Unknown or unsupported energy module version: {0}'.format(module_version))
 
     def _bootload_energy_module(self, module_address, hex_filename, version):
+        # type: (int, str, str) -> str
         individual_logger = Logs.get_update_logger('energy_{0}'.format(module_address))
-        firmware_version, hardware_version = self.get_module_firmware_version(module_address, EnergyEnums.Version.ENERGY_MODULE)
-        individual_logger.info('Version: {0} ({1})'.format(firmware_version, hardware_version))
-        if firmware_version == version:
-            individual_logger.info('Already up-to-date. Skipping')
-            return
-        individual_logger.info('Start bootloading')
-
+        in_booloader = False
         try:
-            individual_logger.info('Reading calibration data')
-            calibration_data = list(self._energy_communicator.do_command(module_address, EnergyAPI.read_eeprom(12, 100), *[256, 100]))
-            individual_logger.info('Calibration data: {0}'.format(','.join([str(d) for d in calibration_data])))
-        except Exception as ex:
-            individual_logger.info('Could not read calibration data: {0}'.format(ex))
-            calibration_data = None
+            firmware_version, hardware_version = self.get_module_firmware_version(module_address, EnergyEnums.Version.ENERGY_MODULE)
+            if hardware_version == 'OMFBC':
+                individual_logger.info('Already in bootloader: {0}'.format(firmware_version))
+                in_booloader = True
+            else:
+                individual_logger.info('Version: {0}'.format(firmware_version))
+        except Exception:
+            individual_logger.info('Could not load current version')
 
-        reader = HexReader(hex_filename)
+        calibration_data = None  # Optional[List[int]]
+        if not in_booloader:
+            try:
+                individual_logger.info('Reading calibration data')
+                calibration_data = list(self._energy_communicator.do_command(module_address, EnergyAPI.read_eeprom(12, 100), *[256, 100]))
+                individual_logger.info('Calibration data: {0}'.format(','.join([str(d) for d in calibration_data])))
+            except Exception as ex:
+                individual_logger.info('Could not read calibration data: {0}'.format(ex))
 
-        individual_logger.info('Going to bootloader')
-        self._energy_communicator.do_command(module_address, EnergyAPI.bootloader_goto(EnergyEnums.Version.ENERGY_MODULE), 10)
-        firmware_version, hardware_version = self.get_module_firmware_version(module_address, EnergyEnums.Version.ENERGY_MODULE)
-        individual_logger.info('Bootloader version: {0}'.format(firmware_version))
+        if not in_booloader:
+            individual_logger.info('Going to bootloader')
+            self._energy_communicator.do_command(module_address, EnergyAPI.bootloader_goto(EnergyEnums.Version.ENERGY_MODULE), 10)
+            firmware_version, hardware_version = self.get_module_firmware_version(module_address, EnergyEnums.Version.ENERGY_MODULE)
+            if hardware_version != 'OMFBC':
+                raise RuntimeError('Failed to enter bootloader')
+            individual_logger.info('Bootloader version: {0}'.format(firmware_version))
 
         try:
             individual_logger.info('Erasing code...')
             for page in range(6, 64):
                 self._energy_communicator.do_command(module_address, EnergyAPI.bootloader_erase_code(), page)
 
+            reader = HexReader(hex_filename)
             individual_logger.info('Writing code...')
             for address in range(0x1D006000, 0x1D03FFFB, 128):
                 data = reader.get_bytes_version_12(address)
@@ -104,12 +118,15 @@ class EnergyModuleUpdater(object):
                 tries += 1
                 individual_logger.info('Waiting for application...')
                 firmware_version, hardware_version = self.get_module_firmware_version(module_address, EnergyEnums.Version.ENERGY_MODULE)
-                individual_logger.info('Version: {0}'.format(firmware_version))
-                break
+                if hardware_version == 'OMFPC':
+                    individual_logger.info('Version: {0}'.format(firmware_version))
+                    break
+                if tries >= 6:
+                    raise RuntimeError('Failed to enter application')
             except Exception:
                 if tries >= 3:
                     raise
-                time.sleep(1)
+            time.sleep(1)
 
         if calibration_data is not None:
             time.sleep(1)
@@ -117,6 +134,7 @@ class EnergyModuleUpdater(object):
             self._energy_communicator.do_command(module_address, EnergyAPI.write_eeprom(12, 100), *([256] + calibration_data))
 
         individual_logger.info('Done')
+        return firmware_version
 
     def _bootload_p1_concentrator(self, module_address, hex_filename, version):
         _ = hex_filename  # Not yet in use

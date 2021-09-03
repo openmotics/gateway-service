@@ -19,6 +19,7 @@ from logging import handlers
 import os
 import re
 import constants
+import warnings
 
 if False:  # MYPY
     from typing import Union, Optional, Generator
@@ -51,6 +52,7 @@ class Logs(object):
         # Alter some system loggers
         requests_logger = logging.getLogger('requests.packages.urllib3.connectionpool')
         requests_logger.setLevel(logging.WARNING)
+        warnings.filterwarnings('ignore')  # Supressed so called `user warnings`
 
         # Setup basic stream handler
         logging.basicConfig(format=Logs.LOG_FORMAT, level=logging.INFO)
@@ -96,7 +98,7 @@ class Logs(object):
                 break
         if not handler_found:
             logger.addHandler(update_handler)
-        logger.propagate = False
+        logger.propagate = True
         return logger
 
     @staticmethod
@@ -119,7 +121,6 @@ class Logs(object):
 
     @staticmethod
     def set_loglevel(level, namespace):  # type: (Union[int, str], Optional[str]) -> Generator[Logger, None, None]
-        global_logger.info('Switching %s loglevel to %s', namespace, level)
         for logger_namespace in logging.root.manager.loggerDict:  # type: ignore
             if re.match("^{}.*".format(namespace), logger_namespace):
                 logger = logging.getLogger(logger_namespace)
