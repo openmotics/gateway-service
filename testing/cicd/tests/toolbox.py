@@ -420,10 +420,9 @@ class Toolbox(object):
     def discover_modules(self, output_modules=False, input_modules=False, shutter_modules=False, dimmer_modules=False, temp_modules=False, can_controls=False, ucans=False, timeout=120):
         logger.debug('Discovering modules')
         since = time.time()
-        # [WIP] tried to disable ucan logic for the factory reset test (CAN FX call)
-        # but it did not enable us to check the behaviour
         if ucans:
-            count = 0
+            # We actualy do NOT want to press the CC  BTN here since the CIT modules will be added first and the id's will be messed up
+            # count = 0
             ucan_inputs = []
             for module in INPUT_MODULE_LAYOUT:
                 if module.is_can:
@@ -432,9 +431,11 @@ class Toolbox(object):
             for ucan_input in ucan_inputs:
                 self.tester.toggle_output(ucan_input.tester_output_id, delay=0.5)
                 time.sleep(0.5)
-                count+=1
-                if (count%8)+1==0:
-                    self.tester.toggle_output(TESTER.Button.can, delay=0.5)
+                # count+=1
+                # if (count%8)+1==0:
+                #     self.tester.toggle_output(TESTER.Button.can, delay=0.5)
+                # if count==len(ucan_inputs)-1:
+                #     self.tester.toggle_output(TESTER.Button.can, delay=0.5)
             time.sleep(0.5)  # Give a brief moment for the CC to settle
 
         new_modules = []

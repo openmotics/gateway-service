@@ -329,6 +329,8 @@ _TEMPERATURE_MODULE_LAYOUTS = {
         Module(name='CC emulated temperature module', mtype='T', is_can=True,
                hardware_type=Module.HardwareType.EMULATED,
                temps=[]),
+        # There are 17 uCAN's in total, 7 with Humidity sensor, 9 with Temp sensor and one without a sensor
+        # Since there are 9 temp sensors, expect to have two CC emulated temp modules
         Module(name='CC emulated temperature module', mtype='T', is_can=True,
                hardware_type=Module.HardwareType.EMULATED,
                temps=[]),
