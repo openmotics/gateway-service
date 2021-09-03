@@ -24,7 +24,7 @@ import constants
 import time
 
 if False:  # MYPY
-    from typing import Union, Dict, List
+    from typing import Union, Dict, List, Tuple
 
 logger = logging.getLogger('openmotics')
 
@@ -50,13 +50,14 @@ class Hardware(object):
     GPIO_DIRECTION_PATH = '{0}/direction'.format(GPIO_BASE_PATH)
     GPIO_VALUE_PATH = '{0}/value'.format(GPIO_BASE_PATH)
 
-    class GPIO(object):
-        RS232_MODE = 77
-        P1_DATA_ENABLE = 113
-        P1_CABLE_CONNECTED = 115
-        CORE_POWER = 49
+    class CoreGPIO(object):
+        RS232_MODE = (77, False)
+        P1_DATA_ENABLE = (113, False)
+        P1_CABLE_CONNECTED = (115, False)
+        MASTER_POWER = (49, True)
 
-    INVERTED_GPIOS = [GPIO.CORE_POWER]  # List of all GPIOs that work inverted
+    class ClassicGPIO(object):
+        pass
 
     # eMMC registers
     EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B = 269
@@ -127,24 +128,26 @@ class Hardware(object):
             return None
 
     @staticmethod
-    def set_gpio_direction(gpio_pin, direction):  # type: (int, str) -> None
-        if not os.path.exists(Hardware.GPIO_BASE_PATH.format(gpio_pin)):
-            with open(Hardware.GPIO_EXPORT_PATH, 'w') as gpio:
-                gpio.write(str(gpio_pin))
-        with open(Hardware.GPIO_DIRECTION_PATH.format(gpio_pin), 'w') as gpio:
-            gpio.write(direction)
+    def set_gpio_direction(gpio, direction):  # type: (Tuple[int, bool], str) -> None
+        pin, inverted = gpio
+        if not os.path.exists(Hardware.GPIO_BASE_PATH.format(pin)):
+            with open(Hardware.GPIO_EXPORT_PATH, 'w') as gpio_file:
+                gpio_file.write(str(pin))
+        with open(Hardware.GPIO_DIRECTION_PATH.format(pin), 'w') as gpio_file:
+            gpio_file.write(direction)
 
     @staticmethod
-    def set_gpio(gpio_pin, value):  # type: (int, bool) -> None
-        Hardware.set_gpio_direction(gpio_pin=gpio_pin,
+    def set_gpio(gpio, value):  # type: (Tuple[int, bool], bool) -> None
+        pin, inverted = gpio
+        Hardware.set_gpio_direction(gpio=gpio,
                                     direction=Hardware.GPIO_DIRECTION.OUT)
-        if gpio_pin in Hardware.INVERTED_GPIOS:
+        if inverted:
             value = not value
-        with open(Hardware.GPIO_VALUE_PATH.format(gpio_pin), 'w') as gpio:
-            gpio.write('1' if value else '0')
+        with open(Hardware.GPIO_VALUE_PATH.format(pin), 'w') as gpio_file:
+            gpio_file.write('1' if value else '0')
 
     @staticmethod
-    def cycle_gpio(gpio_pin, cycle):  # type: (int, List[Union[bool, float]]) -> None
+    def cycle_gpio(gpio, cycle):  # type: (Tuple[int, bool], List[Union[bool, float]]) -> None
         """
         Will cycle a given GPIO through a certain pattern `cycle`. This pattern
         is a list of booleans and floats where every booilean will result in setting
@@ -152,18 +155,19 @@ class Hardware(object):
         Example:
         > [False, 2.0, True]  # This will immediately turn the GPIO off, wait 2 seconds,
         >                     # and turn it on again.
-        :param gpio_pin: The GPIO pin
+        :param gpio: The GPIO pin
         :param cycle: The cycle to follow
         """
-        Hardware.set_gpio_direction(gpio_pin=gpio_pin,
+        pin, inverted = gpio
+        Hardware.set_gpio_direction(gpio=gpio,
                                     direction=Hardware.GPIO_DIRECTION.OUT)
         for item in cycle:
             if isinstance(item, bool):
-                with open(Hardware.GPIO_VALUE_PATH.format(gpio_pin), 'w') as gpio:
+                with open(Hardware.GPIO_VALUE_PATH.format(pin), 'w') as gpio_file:
                     value = item
-                    if gpio_pin in Hardware.INVERTED_GPIOS:
+                    if inverted:
                         value = not value
-                    gpio.write('1' if value else '0')
+                    gpio_file.write('1' if value else '0')
             elif isinstance(item, float):
                 time.sleep(item)
             else:
@@ -174,7 +178,7 @@ class Hardware(object):
         current_platform = Platform.get_platform()
         if current_platform not in Platform.CoreTypes:
             raise RuntimeError('Platform {0} does not support the extension RS485 port')
-        Hardware.set_gpio(Hardware.GPIO.RS232_MODE, False)
+        Hardware.set_gpio(Hardware.CoreGPIO.RS232_MODE, False)
 
 
 class System(object):

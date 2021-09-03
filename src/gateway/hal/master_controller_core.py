@@ -1275,7 +1275,7 @@ class MasterCoreController(MasterController):
         cycle = [False]  # type: List[Union[bool, float]]
         if power_on:
             cycle += [2.0, True]
-        Hardware.cycle_gpio(Hardware.GPIO.CORE_POWER, cycle)
+        Hardware.cycle_gpio(Hardware.CoreGPIO.MASTER_POWER, cycle)
         self._master_communicator.reset_communication_statistics()
 
     def update_master(self, hex_filename, version):
