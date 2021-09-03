@@ -48,8 +48,8 @@ from gateway.api.serializers import GroupActionSerializer, InputSerializer, \
     EnergyModuleSerializer
 from gateway.authentication_controller import AuthenticationToken
 from gateway.dto import GlobalRTD10DTO, RoomDTO, ScheduleDTO, \
-    UserDTO, InputStatusDTO, ModuleDTO
-from gateway.enums import ShutterEnums, UserEnums, ModuleType
+    UserDTO, InputStatusDTO
+from gateway.enums import ShutterEnums, UserEnums, ModuleType, UpdateEnums
 from gateway.events import BaseEvent
 from gateway.exceptions import UnsupportedException, FeatureUnavailableException, \
     ItemDoesNotExistException, WrongInputParametersException, ParseException
